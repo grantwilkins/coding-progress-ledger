@@ -1,0 +1,19 @@
+{
+  "campaign": "load",
+  "commit_deadline_s": 30,
+  "live_validation": {
+    "lp_knee_indices": [
+      4,
+      5
+    ],
+    "policies": [
+      "lp",
+      "greedy",
+      "replay_only",
+      "kv_only"
+    ],
+    "repeats": 3
+  },
+  "planner_power_deadline_s": 35,
+  "schema": "queue-haul-capacity-sweep-v1"
+}

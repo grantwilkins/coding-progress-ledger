@@ -1,0 +1,3206 @@
+{
+  "calibration": {
+    "emergency_bound": 0.1140625,
+    "normal_bound": 0.1140625,
+    "provenance": "outputs/destination-v7-20260722/service/frontier.json retained measured stable boundary",
+    "request": {
+      "input_tokens": 2048,
+      "output_tokens": 32
+    },
+    "schema": "qh-load-calibration-v1",
+    "stable_bound": 0.1140625
+  },
+  "capacity_campaign": "load",
+  "commit_deadline_s": 30,
+  "manifest": {
+    "path": "queue-haul/outputs/coding-manifest.json",
+    "sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435"
+  },
+  "profile": {
+    "path": "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json",
+    "sha256": "99ec3d2e3099f01103e7a0609a9d99beabfe7ec86eeb372d65f5829090658ab8"
+  },
+  "scenarios": [
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "f8a059ec2e7d201d",
+      "method": "mixed",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "lp",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 0,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-e2695c8b8f4ee813",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "5807a67711127afc",
+      "method": "mixed",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "lp",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 1,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-659b30d50245a8df",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "be2493807d5ff648",
+      "method": "mixed",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "lp",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 2,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-8891f4c9eb5ddbd8",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "f8a059ec2e7d201d",
+      "method": "replay",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "replay",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "greedy",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 0,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-94c5ab5bf91217f0",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "5807a67711127afc",
+      "method": "replay",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "replay",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "greedy",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 1,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-26be0adcefb131e2",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "be2493807d5ff648",
+      "method": "replay",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "replay",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "greedy",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 2,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-10ddce4f6e7f56d9",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "f8a059ec2e7d201d",
+      "method": "replay",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "replay",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "replay_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 0,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-613c33d766ccd3b0",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "5807a67711127afc",
+      "method": "replay",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "replay",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "replay_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 1,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-5806664b8726cc23",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "be2493807d5ff648",
+      "method": "replay",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "replay",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "replay_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 2,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-bf14d8a27bfcb039",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "f8a059ec2e7d201d",
+      "method": "kv_transfer",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "kv_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 0,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-6712abd948087891",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "5807a67711127afc",
+      "method": "kv_transfer",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "kv_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 1,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-97140f564efd512c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 8,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.85,
+      "match_id": "be2493807d5ff648",
+      "method": "kv_transfer",
+      "move_concurrency": 8,
+      "moves": [
+        {
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "kv_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 2,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-08fe14599be87d31",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14336,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "source_index": 7,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 8
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "c35cf5fbe4593399",
+      "method": "mixed",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "lp",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 0,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-e935e3bbbc3b913f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "157a85ed96ea907c",
+      "method": "mixed",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "lp",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 1,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-269cba2c750a12c0",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "326e2ae1d19b85c4",
+      "method": "mixed",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "lp",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 2,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-b1e3055fe36d4e54",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "c35cf5fbe4593399",
+      "method": "replay",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "greedy",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 0,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-0d09d8690db55f15",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "157a85ed96ea907c",
+      "method": "replay",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "greedy",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 1,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-97d8b93d2155326c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "326e2ae1d19b85c4",
+      "method": "replay",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "greedy",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 2,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-b2767468958e5049",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "c35cf5fbe4593399",
+      "method": "replay",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "replay_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 0,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-c6813ee703859bed",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "157a85ed96ea907c",
+      "method": "replay",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "replay_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 1,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-3834604e2ab861a3",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "326e2ae1d19b85c4",
+      "method": "replay",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "replay",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "replay",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "replay",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "replay",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "replay",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "replay_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 2,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-cb2f9e9461e2f7a8",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "c35cf5fbe4593399",
+      "method": "kv_transfer",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "kv_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 0,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-e794bdc7d713994f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "157a85ed96ea907c",
+      "method": "kv_transfer",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "kv_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 1,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-0d7c2579dc1da70c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000,
+      "campaign": "capacity_load",
+      "concurrency": 7,
+      "condition": "load",
+      "configured_goodput_mbps": 10000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "load_fraction": 0.8999999999999999,
+      "match_id": "326e2ae1d19b85c4",
+      "method": "kv_transfer",
+      "move_concurrency": 7,
+      "moves": [
+        {
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+        },
+        {
+          "method": "kv_transfer",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "planned_measured_goodput_mbps": 10000,
+      "policy": "kv_only",
+      "power_interval_s": 0.1,
+      "prestage_all": true,
+      "repeat": 2,
+      "request_schedule": [],
+      "required_deadline_s": 30,
+      "reset_caches": true,
+      "scenario_id": "cap-11adc03ca5119b7c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 2048,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "source_index": 0,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "source_index": 1,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 4096,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "source_index": 2,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "source_index": 3,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 8192,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "source_index": 4,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "source_index": 5,
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 12288,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "source_index": 6,
+          "turn_index": 0
+        }
+      ],
+      "split": "measurement",
+      "verify_continuations": true,
+      "wait_cache_idle": true,
+      "warm_concurrency": 7
+    }
+  ],
+  "schema": "queue-haul-migration-plan-v3"
+}
