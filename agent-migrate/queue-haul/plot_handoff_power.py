@@ -18,10 +18,9 @@ COLORS = {"sweden": "#8C1515", "east": "#006CB8",
           "west": "#008566", "germany": "#008566"}
 REGIONS = {"sweden": "sweden-central", "east": "eastus-2",
            "west": "west-europe", "germany": "germany-west-central"}
-SPANS = (("Migration", "handoff_start", "handoff_end", "#DAD7CB", .5),
-         ("Switch", "pre_end", "handoff_start", "#007C92", .12),
-         ("Shutdown", "sleep_start", "sleep_ready", "#6F4E7C", .12))
-BIN_S = 5
+SPANS = (("Migration", "handoff_start", "handoff_end", "#DAD7CB", .5),)
+BIN_S = 1
+IDLE_MARGIN_W = 5
 
 
 def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
@@ -65,9 +64,9 @@ def reduce(run_root: Path) -> list[dict]:
     nodes = ("sweden", *sorted(result["scenario"]["background"]))
     paths = {node: run_root / "nodes" / node / "power.csv" for node in nodes}
     paths["sweden"] = run_root / "power.csv"
+    power = {node: read_power(path, base) for node, path in paths.items()}
     rows = []
-    for node, path in paths.items():
-        points = read_power(path, base)
+    for node, points in power.items():
         for phase, (start, end) in windows.items():
             values = [watts for seconds, watts in points if start <= seconds <= end]
             if not values:
@@ -105,19 +104,29 @@ def reduce(run_root: Path) -> list[dict]:
 
     marker = {name: (phase["wall_ns"] - base) / 1e9
               for name, phase in phases.items()}
-    xlim = (marker["handoff_start"] - BIN_S, marker["sleep_ready"] + BIN_S)
+    idle_w = next(row["median_power_w"] for row in rows
+                  if row["node"] == "sweden" and row["phase"] == "post")
+    idle_s = next(seconds for seconds, watts in zip(*bin_mean(power["sweden"]))
+                  if seconds >= marker["traffic_switched"]
+                  and watts <= idle_w + IDLE_MARGIN_W)
+    xlim = (marker["handoff_start"] - BIN_S, idle_s + BIN_S)
     plt.style.use("default")
     figure, axis = plt.subplots(figsize=(9, 4))
-    for node, path in paths.items():
-        axis.plot(*bin_mean(read_power(path, base)), lw=1.5,
+    for node, points in power.items():
+        axis.plot(*bin_mean(points), lw=1.5,
                   color=COLORS[node], label=REGIONS[node])
     for label, start, end, color, alpha in SPANS:
         if start in marker and end in marker:
             axis.axvspan(marker[start], marker[end], color=color, alpha=alpha,
                          label=label)
-    for name in ("pre_end", "handoff_start", "handoff_end", "post_start"):
+    for name in ("handoff_start", "handoff_end"):
         if name in marker:
             axis.axvline(marker[name], color="black", lw=.7, ls=":")
+    if "traffic_switched" in marker:
+        axis.axvline(marker["traffic_switched"], color="#007C92", lw=1.5,
+                    ls="--", label="Switch")
+        axis.axvspan(marker["traffic_switched"], idle_s, color="#6F4E7C",
+                    alpha=.12, label="Shutdown flush")
     style(axis, xlim, "Power per GPU (W)")
     axis.set_xlabel("Time (s)", size=16)
     axis.legend(frameon=False, fontsize=13, loc="upper center",
