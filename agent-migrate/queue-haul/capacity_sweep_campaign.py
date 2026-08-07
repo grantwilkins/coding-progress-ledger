@@ -36,6 +36,10 @@ DEFAULT_BUNDLE = ROOT / "outputs/destination-v7-20260722/content-free-manifest.j
 DEFAULT_SERVICE_PROFILE = ROOT / "outputs/destination-v7-20260722/baseline-profile.json"
 LOAD_BASE_FRACTIONS = (0, .25, .5, .65, .75, .8, .85, .875,
                        .9, .925, .95, .975)
+FULL_DRAIN_LOADS = (.85, .875, .8875, .9, .9125,
+                    .925, .9375, .95, .9625, .975)
+FULL_DRAIN_BANDWIDTHS_MBPS = (1000, 2500, 5000, 10000)
+FULL_DRAIN_POLICIES = ("replay_only", "kv_only")
 LIVE_REPEATS = 10
 MAX_LIVE_REPEATS = 30
 CI_WIDTH_W = 5
@@ -65,6 +69,12 @@ def credited_sessions(rows, deadline_s: float = COMMIT_DEADLINE_S) -> set[str]:
             and row.get("first_token_s") is not None
             and max(float(row["committed_s"]), float(row["first_token_s"]))
             <= deadline_s}
+
+
+def full_drain_times(rows) -> tuple[float, float, float]:
+    route = max(float(row["committed_s"]) for row in rows)
+    token = max(float(row["first_token_s"]) for row in rows)
+    return route, token, max(route, token)
 
 
 def shapley_watts(value) -> tuple[float, float]:
@@ -197,9 +207,12 @@ def _load_calibration(calibration: dict | None) -> dict:
     }}
 
 
-def arrival_trace(rho: float, repeat: int, calibration: dict) -> dict:
+def arrival_trace(rho: float, repeat: int, calibration: dict,
+                  horizon_s: float = LOAD_WARMUP_S + LOAD_WINDOW_S) -> dict:
     if not 0 <= rho < 1 or not 0 <= repeat < MAX_LIVE_REPEATS:
         raise ValueError("stationary load trace must have rho < 1 and a valid repeat")
+    if horizon_s < LOAD_WARMUP_S + LOAD_WINDOW_S:
+        raise ValueError("arrival horizon must include warmup and measurement")
     service = calibration["service_calibration"]
     total = float(service["total_s"])
     offsets = []
@@ -208,7 +221,7 @@ def arrival_trace(rho: float, repeat: int, calibration: dict) -> dict:
         block, within = divmod(repeat, LIVE_REPEATS)
         phase = ((within + .5) / LIVE_REPEATS + block / MAX_LIVE_REPEATS) % 1
         value = phase * interval
-        while value < LOAD_WARMUP_S + LOAD_WINDOW_S:
+        while value < horizon_s:
             offsets.append(value); value += interval
     measured = sum(LOAD_WARMUP_S <= value < LOAD_WARMUP_S + LOAD_WINDOW_S
                    for value in offsets)
@@ -258,16 +271,95 @@ def make_campaign(kind: str, calibration: dict | None = None,
     }
 
 
-def make_live_plan(campaign: dict, template: dict, repeat_map: dict | None = None,
-                   phase: str = "base", prior_plan_hashes=(),
-                   selection: dict | None = None) -> dict:
-    if campaign.get("schema") != SCHEMA:
-        raise ValueError("invalid capacity campaign")
+def make_full_drain_campaign(bandwidth_mbps: int,
+                             calibration: dict | None = None,
+                             profile_path: Path = DEFAULT_PROFILE) -> dict:
+    if bandwidth_mbps not in FULL_DRAIN_BANDWIDTHS_MBPS:
+        raise ValueError("unsupported full-drain bandwidth")
+    return {
+        "schema": SCHEMA, "campaign": "full_drain",
+        "commit_deadline_s": COMMIT_DEADLINE_S,
+        "hardware_timeout_s": RUN_TIMEOUT_S,
+        "trace_horizon_s": LOAD_WARMUP_S + RUN_TIMEOUT_S,
+        "bandwidth_mbps": bandwidth_mbps,
+        "loads": list(FULL_DRAIN_LOADS), "repeats": LIVE_REPEATS,
+        "policies": list(FULL_DRAIN_POLICIES),
+        "profile": {"path": str(profile_path),
+                    "sha256": profiler.file_hash(profile_path)},
+        "calibration": _load_calibration(calibration),
+    }
+
+
+def _frozen_sessions(template: dict) -> list[dict]:
     frozen = next((row["sessions"] for row in template["scenarios"]
                    if tuple(item["initial_tokens"] for item in row["sessions"])
                    == CONTEXTS), None)
     if frozen is None:
         raise ValueError("template does not contain the frozen context pack")
+    return frozen
+
+
+def make_full_drain_plan(campaign: dict, template: dict) -> dict:
+    if campaign.get("schema") != SCHEMA \
+            or campaign.get("campaign") != "full_drain":
+        raise ValueError("invalid full-drain campaign")
+    frozen = _frozen_sessions(template)
+    bandwidth = campaign["bandwidth_mbps"]
+    scenarios = []
+    for load in FULL_DRAIN_LOADS:
+        for repeat in range(LIVE_REPEATS):
+            trace = arrival_trace(
+                load, repeat, campaign["calibration"],
+                LOAD_WARMUP_S + RUN_TIMEOUT_S,
+            )
+            match_id = profiler.object_hash(
+                ["full_drain", bandwidth, load, repeat])[:16]
+            for policy in FULL_DRAIN_POLICIES:
+                method = "replay" if policy == "replay_only" else "kv_transfer"
+                scenarios.append({
+                    "scenario_id": "drain-" + profiler.object_hash(
+                        [match_id, policy])[:16],
+                    "match_id": match_id, "kind": "migration",
+                    "campaign": "capacity_full_drain", "split": "measurement",
+                    "condition": "full_drain", "policy": policy,
+                    "method": method, "load_fraction": load,
+                    "arrival_trace": trace,
+                    "configured_goodput_mbps": bandwidth,
+                    "planned_measured_goodput_mbps": bandwidth,
+                    "bandwidth_mbps": bandwidth,
+                    "required_deadline_s": COMMIT_DEADLINE_S,
+                    "deadline_s": RUN_TIMEOUT_S, "repeat": repeat,
+                    "sessions": [{**item, "source_index": i}
+                                 for i, item in enumerate(frozen)],
+                    "moves": [{"session_id": item["session_id"],
+                               "method": method, "order": i}
+                              for i, item in enumerate(frozen)],
+                    "allow_partial_moves": False,
+                    "concurrency": len(frozen), "move_concurrency": len(frozen),
+                    "serving_concurrency": 1, "activity": "none",
+                    "activity_tokens": 0, "request_schedule": [],
+                    "copy_policy": "initial_final", "final_state": "awake",
+                    "reset_caches": True, "verify_continuations": True,
+                    "wait_cache_idle": True, "prestage_all": True,
+                    "warm_concurrency": len(frozen), "power_interval_s": .1,
+                })
+    random.Random(0).shuffle(scenarios)
+    return {
+        "schema": profiler.PLAN_SCHEMA, "manifest": template["manifest"],
+        "profile": campaign["profile"], "capacity_campaign": "full_drain",
+        "calibration": campaign["calibration"],
+        "commit_deadline_s": COMMIT_DEADLINE_S,
+        "trace_horizon_s": LOAD_WARMUP_S + RUN_TIMEOUT_S,
+        "scenarios": scenarios,
+    }
+
+
+def make_live_plan(campaign: dict, template: dict, repeat_map: dict | None = None,
+                   phase: str = "base", prior_plan_hashes=(),
+                   selection: dict | None = None) -> dict:
+    if campaign.get("schema") != SCHEMA:
+        raise ValueError("invalid capacity campaign")
+    frozen = _frozen_sessions(template)
     by_index = {f"s{i}": row for i, row in enumerate(frozen)}
     lp = [row for row in campaign["rows"] if row["policy"] == "lp"]
     if repeat_map is None:
@@ -428,6 +520,21 @@ def write_live_plan(campaign: dict, template_path: Path, out: Path,
     return plan_
 
 
+def write_full_drain_campaign(bandwidth_mbps: int, template_path: Path,
+                              out: Path, calibration_path: Path | None = None,
+                              profile_path: Path = DEFAULT_PROFILE) -> dict:
+    calibration = json.loads(calibration_path.read_text()) if calibration_path else None
+    campaign = make_full_drain_campaign(
+        bandwidth_mbps, calibration, profile_path)
+    out.mkdir(parents=True, exist_ok=True)
+    profiler.write_json(out / "plan.json", campaign)
+    profiler.write_json(out / "summary.json", campaign)
+    template = json.loads(template_path.read_text())
+    profiler.write_json(out / "live_plan.json",
+                        make_full_drain_plan(campaign, template))
+    return campaign
+
+
 def make_adaptive_campaign(prior: dict, repeat_map: dict, phase: str,
                            selection: dict) -> dict:
     if not prior.get("capacity_campaign") == "load" or not prior.get("calibration"):
@@ -494,7 +601,8 @@ def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> 
     plan_ = json.loads(plan_path.read_text())
     calibration = plan_.get("calibration") or {}
     service_calibration = calibration.get("service_calibration")
-    if plan_["capacity_campaign"] == "load" and not service_calibration:
+    if plan_["capacity_campaign"] in {"load", "full_drain"} \
+            and not service_calibration:
         raise ValueError("loaded hardware run requires independent service calibration")
     bundle = json.loads(DEFAULT_BUNDLE.read_text())
     service = json.loads(DEFAULT_SERVICE_PROFILE.read_text())
@@ -524,6 +632,7 @@ def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> 
             bypass_lmcache=True, chat=True,
             arrival_schedule=tuple(trace["offsets_s"]),
             warmup_s=LOAD_WARMUP_S, measurement_s=LOAD_WINDOW_S,
+            schedule_horizon_s=plan_.get("trace_horizon_s"),
         )
         return original(stack, cfg, manifest, scenario, root, run_id,
                         destination_load=load, **kwargs)
@@ -561,6 +670,33 @@ def validate_live_rows(rows: list[dict]) -> None:
             raise RuntimeError("incomplete common-trace cell")
         if len({row["trace_id"] for row in cell}) != 1:
             raise RuntimeError("policies did not share an arrival trace")
+
+
+def validate_full_drain_rows(rows: list[dict], complete: bool = False) -> None:
+    if not rows:
+        raise RuntimeError("full-drain results are empty")
+    fields = ("configured_goodput_mbps", "load_fraction", "repeat", "policy")
+    keys = [tuple(row[field] for field in fields) for row in rows]
+    if len(keys) != len(set(keys)):
+        raise RuntimeError("duplicate full-drain result")
+    cells = {(row["configured_goodput_mbps"], row["load_fraction"], row["repeat"])
+             for row in rows}
+    for bandwidth, load, repeat in cells:
+        cell = [row for row in rows
+                if (row["configured_goodput_mbps"], row["load_fraction"], row["repeat"])
+                == (bandwidth, load, repeat)]
+        if {row["policy"] for row in cell} != set(FULL_DRAIN_POLICIES) \
+                or len({row["trace_id"] for row in cell}) != 1:
+            raise RuntimeError("incomplete full-drain common-trace cell")
+        if any(row["planned_sessions"] != len(CONTEXTS)
+               for row in cell):
+            raise RuntimeError("full drain must attempt all eight sessions")
+    if complete:
+        bandwidths = {row["configured_goodput_mbps"] for row in rows}
+        expected = {(bandwidth, load, repeat) for bandwidth in bandwidths
+                    for load in FULL_DRAIN_LOADS for repeat in range(LIVE_REPEATS)}
+        if cells != expected:
+            raise RuntimeError("full-drain grid is incomplete")
 
 
 def load_statistics(rows: list[dict]) -> dict:
@@ -669,6 +805,7 @@ def plot_live(rows: list[dict], out: Path, kind: str) -> None:
 
 def read_live_results(run_root: Path) -> tuple[str, list[dict]]:
     live = json.loads((run_root / "plan.json").read_text())
+    kind = live["capacity_campaign"]
     profile = ModelProfile.load(Path(live["profile"]["path"]))
     scenario = _scenario(profile, 10_000)
     initial = source_power(scenario, profile)
@@ -683,7 +820,12 @@ def read_live_results(run_root: Path) -> tuple[str, list[dict]]:
         if result.get("status") != "complete":
             raise RuntimeError(f"invalid live result {spec['scenario_id']}")
         raw = result["migrations"]
-        epoch = min(row["queued_ns"] for row in raw)
+        if kind == "full_drain" and (
+                not result.get("full_drain") or len(raw) != len(CONTEXTS)
+                or any(row.get("error") for row in raw)
+                or not profiler.valid_continuations(result, len(CONTEXTS))):
+            raise RuntimeError(f"incomplete full drain {spec['scenario_id']}")
+        epoch = result["started_ns"]
         continuation = {row["session_id"]: row for row in result["continuations"]}
         timings = [{
             "session_id": row["move"]["session_id"],
@@ -693,6 +835,9 @@ def read_live_results(run_root: Path) -> tuple[str, list[dict]]:
                 (continuation[row["move"]["session_id"]]["first_byte_ns"] - epoch) / 1e9,
         } for row in raw]
         credited = credited_sessions(timings)
+        last_route, last_token, drain = full_drain_times(timings)
+        if kind == "full_drain" and drain >= RUN_TIMEOUT_S:
+            raise RuntimeError(f"full drain exceeded timeout {spec['scenario_id']}")
         source_ids = {item["session_id"]: f"s{item['source_index']}"
                       for item in spec["sessions"]}
         methods = {source_ids[row["session_id"]]: row["method"] for row in timings}
@@ -727,13 +872,16 @@ def read_live_results(run_root: Path) -> tuple[str, list[dict]]:
             "replay_w": replay_w, "kv_w": kv_w,
             "unmet_w": max(0, target - achieved),
             "credited_sessions": len(credited), "planned_sessions": len(raw),
+            "last_route_commit_s": last_route,
+            "last_first_token_s": last_token,
+            "full_drain_s": drain,
             "episode_elapsed_s": result["elapsed_s"],
             "queue_at_start": load.get("queue_at_start"),
             "deadline_miss_sessions": len(raw) - len(credited),
-            "right_censored": result["elapsed_s"] >= RUN_TIMEOUT_S,
+            "right_censored": drain >= RUN_TIMEOUT_S,
             "destination_load": load or None,
         })
-    if live["capacity_campaign"] == "goodput":
+    if kind == "goodput":
         measured = {
             cap: statistics.median(row["measured_goodput_mbps"] for row in rows
                                    if row["configured_goodput_mbps"] == cap
@@ -742,10 +890,68 @@ def read_live_results(run_root: Path) -> tuple[str, list[dict]]:
         }
         for row in rows:
             row["measured_goodput_mbps"] = measured[row["configured_goodput_mbps"]]
-    return live["capacity_campaign"], rows
+    return kind, rows
+
+
+def plot_full_drain(rows: list[dict], out: Path) -> None:
+    bandwidths = sorted({row["configured_goodput_mbps"] for row in rows})
+    fig, axes = plt.subplots(2, len(bandwidths), figsize=(3.5 * len(bandwidths), 6),
+                             sharex="col", squeeze=False)
+    target = rows[0]["requested_shed_w"]
+    for column, bandwidth in enumerate(bandwidths):
+        selected = [row for row in rows
+                    if row["configured_goodput_mbps"] == bandwidth]
+        loads = sorted({row["load_fraction"] for row in selected})
+        for policy in FULL_DRAIN_POLICIES:
+            cells = [[row for row in selected if row["policy"] == policy
+                      and row["load_fraction"] == load] for load in loads]
+            x = [statistics.median(row["offered_rho"] for row in cell)
+                 for cell in cells]
+            for axis, field in zip(axes[:, column],
+                                   ("full_drain_s", "achieved_shed_w")):
+                ci = [median_ci(
+                    [row[field] for row in cell],
+                    int(profiler.object_hash([bandwidth, load, policy, field])[:8], 16),
+                ) for load, cell in zip(loads, cells)]
+                axis.plot(x, [row[0] for row in ci], marker="o",
+                          color=COLORS[policy], label=LABELS[policy])
+                axis.fill_between(x, [row[1] for row in ci], [row[2] for row in ci],
+                                  color=COLORS[policy], alpha=.16)
+        axes[0, column].axhline(COMMIT_DEADLINE_S, color="black", linestyle="--")
+        axes[1, column].axhline(target, color="black", linestyle="--")
+        axes[0, column].set_title(f"{bandwidth:g} Mbit/s")
+        axes[1, column].set_xlabel("Trace-derived offered load")
+        for axis in axes[:, column]:
+            axis.grid(alpha=.25)
+    axes[0, 0].set_ylabel("Full drain time (s)")
+    axes[1, 0].set_ylabel("Executable shed by 30 s (W)")
+    axes[0, 0].legend(frameon=False)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"full_drain_capacity.{suffix}", dpi=220)
+    plt.close(fig)
+
+
+def write_full_drain_results(rows: list[dict], out: Path) -> None:
+    validate_full_drain_rows(rows, complete=True)
+    out.mkdir(parents=True, exist_ok=True)
+    profiler.write_csv(out / "full_drain_capacity.csv", rows)
+    plot_full_drain(rows, out)
+    bandwidths = sorted({row["configured_goodput_mbps"] for row in rows})
+    profiler.write_json(out / "full_drain_summary.json", {
+        "schema": SCHEMA, "campaign": "full_drain", "episodes": len(rows),
+        "bandwidths_mbps": bandwidths, "load_points": len(FULL_DRAIN_LOADS),
+        "repeats_per_cell": LIVE_REPEATS,
+        "deadline_credited_sessions": sum(row["credited_sessions"] for row in rows),
+        "deadline_miss_sessions": sum(row["deadline_miss_sessions"] for row in rows),
+        "right_censored_episodes": sum(row["right_censored"] for row in rows),
+    })
 
 
 def write_live_results(rows: list[dict], out: Path, kind: str) -> None:
+    if kind == "full_drain":
+        write_full_drain_results(rows, out)
+        return
     if kind == "load":
         validate_live_rows(rows)
     out.mkdir(parents=True, exist_ok=True)
@@ -786,9 +992,27 @@ def merge_live(run_roots, out: Path) -> list[dict]:
     profiler.write_json(summary_path, summary)
     return rows
 
+
+def merge_full_drain(run_roots, out: Path) -> list[dict]:
+    parts = [read_live_results(root) for root in run_roots]
+    if {kind for kind, _ in parts} != {"full_drain"}:
+        raise ValueError("full-drain merge requires full-drain campaigns")
+    rows = [row for _, part in parts for row in part]
+    if {row["configured_goodput_mbps"] for row in rows} \
+            != set(FULL_DRAIN_BANDWIDTHS_MBPS):
+        raise RuntimeError("full-drain bandwidth grid is incomplete")
+    write_full_drain_results(rows, out)
+    summary_path = out / "full_drain_summary.json"
+    summary = json.loads(summary_path.read_text())
+    summary["source_runs"] = [
+        {"run_root": str(root), "plan_sha256": profiler.file_hash(root / "plan.json")}
+        for root in run_roots]
+    profiler.write_json(summary_path, summary)
+    return rows
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("campaign", choices=("load", "goodput"))
+    parser.add_argument("campaign", choices=("load", "goodput", "full-drain"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--calibration", type=Path)
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
@@ -797,8 +1021,33 @@ def main() -> None:
     parser.add_argument("--adaptive-stage", choices=("phase2a", "phase2b"))
     parser.add_argument("--prior-run-root", type=Path, nargs="+")
     parser.add_argument("--merge-run-root", type=Path, nargs="+")
+    parser.add_argument("--bandwidth-mbps", type=int,
+                        choices=FULL_DRAIN_BANDWIDTHS_MBPS)
     parser.add_argument("--allow-dirty", action="store_true")
     args = parser.parse_args()
+    if args.campaign == "full-drain":
+        if args.adaptive_stage or args.prior_run_root:
+            raise ValueError("full drain does not use adaptive phases")
+        if args.merge_run_root:
+            if args.run_root or args.live_template or args.bandwidth_mbps:
+                raise ValueError("full-drain merge accepts only roots and output")
+            merge_full_drain(args.merge_run_root, args.out)
+            return
+        existing = args.run_root and (args.out / "plan.json").exists()
+        if existing:
+            campaign = json.loads((args.out / "plan.json").read_text())
+        else:
+            if not args.live_template or args.bandwidth_mbps is None:
+                raise ValueError("full drain requires a template and bandwidth")
+            campaign = write_full_drain_campaign(
+                args.bandwidth_mbps, args.live_template, args.out,
+                args.calibration, args.profile)
+        if args.run_root:
+            if args.out.resolve() == args.run_root.resolve():
+                raise ValueError("plan and run roots must be distinct")
+            execute_live(args.out / "live_plan.json", args.run_root, args.allow_dirty)
+            reduce_live(args.run_root, campaign, args.out)
+        return
     if args.merge_run_root:
         if not args.campaign == "load" or args.adaptive_stage or args.prior_run_root \
                 or args.run_root or args.live_template:

@@ -781,6 +781,17 @@ def test_deterministic_trace_reports_scheduled_prefill_and_decode_rho(tmp_path):
     assert summary["offered_rho_decode"] == pytest.approx(.06)
     assert summary["offered_rho"] == pytest.approx(.08)
 
+
+def test_deterministic_trace_can_outlive_its_measurement_window(tmp_path):
+    sessions = [runner.Session("s", 4, 2, 3, 100, 0)]
+    load = runner.DestinationLoad(
+        "h", 1, "m", sessions, .04, 10, 5, tmp_path, 0,
+        rps=2.5, max_inflight=8, arrival_schedule=(0, 30, 40, 200),
+        warmup_s=30, measurement_s=30, schedule_horizon_s=210,
+    )
+    assert load.schedule_horizon_s == 210
+    assert load.summary()["offered_rho"] == pytest.approx(4 / 75)
+
 def test_close_is_safe_when_start_failed_before_the_thread_ran(tmp_path):
     """A prewarm that raises must not mask itself with a join error."""
     sessions = [runner.Session("s", 4, 2, 3, 100, 0)]

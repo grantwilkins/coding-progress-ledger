@@ -336,7 +336,8 @@ class DestinationLoad:
                  max_inflight: int = 0, prewarm_timeout_s: float = 300,
                  bypass_lmcache: bool = False, chat: bool = False,
                  arrival_schedule: tuple[float, ...] | None = None,
-                 warmup_s: float = 0, measurement_s: float = 0):
+                 warmup_s: float = 0, measurement_s: float = 0,
+                 schedule_horizon_s: float | None = None):
         work = np.mean([s.append_tokens / prefill_rate + s.output_tokens / decode_rate
                         for s in sessions])
         if min(target_rho, work, normal_bound) <= 0:
@@ -345,10 +346,12 @@ class DestinationLoad:
             raise ValueError("open-loop arrival rate must be positive")
         if (rps is None) != (max_inflight <= 0):
             raise ValueError("open-loop mode needs both rps and max_inflight")
+        horizon = schedule_horizon_s or warmup_s + measurement_s
         if arrival_schedule is not None and (
                 not rps or warmup_s <= 0 or measurement_s <= 0
+                or horizon < warmup_s + measurement_s
                 or tuple(sorted(arrival_schedule)) != arrival_schedule
-                or any(value < 0 or value >= warmup_s + measurement_s
+                or any(value < 0 or value >= horizon
                        for value in arrival_schedule)):
             raise ValueError("invalid deterministic arrival trace")
         self.host, self.port, self.model, self.sessions = host, port, model, sessions
@@ -362,6 +365,7 @@ class DestinationLoad:
         self.work, self.max_inflight = float(work), max_inflight
         self.arrival_schedule = arrival_schedule
         self.warmup_s, self.measurement_s = warmup_s, measurement_s
+        self.schedule_horizon_s = horizon
         self.epoch, self.queue_at_start = None, None
         self.stop, self.rows = threading.Event(), []
         self.admit, self.blocked_arrivals = threading.Event(), 0

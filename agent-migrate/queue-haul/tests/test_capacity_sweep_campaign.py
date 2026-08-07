@@ -7,14 +7,19 @@ import capacity_sweep_campaign as capacity
 from capacity_sweep_campaign import (
     COMMIT_DEADLINE_S,
     CONTEXTS,
+    FULL_DRAIN_BANDWIDTHS_MBPS,
+    FULL_DRAIN_LOADS,
     GOODPUT_CAPS_MBPS,
     LIVE_REPEATS,
     LOAD_BASE_FRACTIONS,
     adaptive_load_fractions,
     arrival_trace,
     credited_sessions,
+    full_drain_times,
     knee_indices,
     make_campaign,
+    make_full_drain_campaign,
+    make_full_drain_plan,
     make_live_plan,
     median_ci,
     phase2a_schedule,
@@ -23,6 +28,7 @@ from capacity_sweep_campaign import (
     source_session_rates,
     write_campaign,
     validate_live_rows,
+    validate_full_drain_rows,
     write_live_results,
 )
 
@@ -62,6 +68,13 @@ def test_deadline_credit_requires_continuation_and_route_commit_by_30_seconds():
     ]
     assert COMMIT_DEADLINE_S == 30
     assert credited_sessions(rows) == {"at"}
+
+
+def test_full_drain_time_is_the_later_of_last_commit_and_last_token():
+    assert full_drain_times([
+        {"committed_s": 32, "first_token_s": 31},
+        {"committed_s": 29, "first_token_s": 35},
+    ]) == (32, 35, 35)
 
 
 def test_two_group_shapley_exactly_attributes_nonlinear_power_shed():
@@ -151,6 +164,48 @@ def test_trace_rho_is_scheduled_service_work_and_median_ci_is_exact_for_constant
     assert trace["rho"] == pytest.approx(trace["rho_prefill"] + trace["rho_decode"])
     assert trace["rho"] == pytest.approx(.8, abs=.4 / 30)
     assert median_ci([7] * 10) == (7, 7, 7)
+
+
+def test_full_drain_plan_forces_all_eight_with_long_paired_traces(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}")
+    template = {
+        "manifest": {"path": str(manifest), "sha256": "hash"},
+        "scenarios": [{"sessions": [
+            {"session_id": f"m{i}", "job_class": "coding", "turn_index": 0,
+             "initial_tokens": context, "order": i}
+            for i, context in enumerate(CONTEXTS)
+        ]}],
+    }
+    campaign = make_full_drain_campaign(2500)
+    plan = make_full_drain_plan(campaign, template)
+    assert FULL_DRAIN_BANDWIDTHS_MBPS == (1000, 2500, 5000, 10000)
+    assert FULL_DRAIN_LOADS == (
+        .85, .875, .8875, .9, .9125, .925, .9375, .95, .9625, .975)
+    assert len(plan["scenarios"]) == len(FULL_DRAIN_LOADS) * 2 * LIVE_REPEATS
+    assert {row["bandwidth_mbps"] for row in plan["scenarios"]} == {2500}
+    assert all(len(row["sessions"]) == len(row["moves"]) == 8
+               and not row["allow_partial_moves"] for row in plan["scenarios"])
+    assert {row["policy"] for row in plan["scenarios"]} == {
+        "replay_only", "kv_only"}
+    for load in FULL_DRAIN_LOADS:
+        for repeat in range(LIVE_REPEATS):
+            cell = [row for row in plan["scenarios"]
+                    if row["load_fraction"] == load and row["repeat"] == repeat]
+            assert len({row["arrival_trace"]["trace_id"] for row in cell}) == 1
+            assert max(cell[0]["arrival_trace"]["offsets_s"]) > 180
+
+
+def test_full_drain_validation_requires_paired_complete_cells():
+    rows = [{
+        "scenario_id": policy, "configured_goodput_mbps": 1000,
+        "load_fraction": .9, "repeat": 0, "policy": policy,
+        "trace_id": "shared", "planned_sessions": 8, "full_drain_s": 31,
+    } for policy in ("replay_only", "kv_only")]
+    validate_full_drain_rows(rows)
+    rows[0]["planned_sessions"] = 7
+    with pytest.raises(RuntimeError, match="eight"):
+        validate_full_drain_rows(rows)
 
 
 def test_generated_campaign_has_positive_target_and_is_json_serializable():

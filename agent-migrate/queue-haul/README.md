@@ -555,6 +555,27 @@ If phase 2b selects no cells, omit its run root from the merge command. Base and
 phase plan roots keep `plan.json`, `modeled_capacity.csv`, `live_plan.json`, and
 `summary.json`; hardware and final roots add `live_capacity.csv`,
 `live_summary.json`, and the live PNG/PDF figures.
+
+The forced-full-drain appendix crosses
+.85,.875,.8875,.90,.9125,.925,.9375,.95,.9625,.975 offered load with
+1, 2.5, 5, and 10 Gbit/s. Each bandwidth shard has ten paired deterministic
+repeats of replay-only and KV-only, always attempts all eight sessions, credits
+shed at 30 seconds, and records the last route commit, last continuation token,
+and their maximum. Arrivals are generated through the 180-second hard timeout
+but normalized load is still measured only in the 30-second window. The 10
+Gbit/s shard is also the load-knee appendix. Run one shard per allocation, then
+merge all four roots:
+
+```
+uv run python queue-haul/capacity_sweep_campaign.py full-drain --bandwidth-mbps 1000 --out queue-haul/outputs/capacity-full-drain-1000 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-1000
+uv run python queue-haul/capacity_sweep_campaign.py full-drain --bandwidth-mbps 2500 --out queue-haul/outputs/capacity-full-drain-2500 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-2500
+uv run python queue-haul/capacity_sweep_campaign.py full-drain --bandwidth-mbps 5000 --out queue-haul/outputs/capacity-full-drain-5000 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-5000
+uv run python queue-haul/capacity_sweep_campaign.py full-drain --bandwidth-mbps 10000 --out queue-haul/outputs/capacity-full-drain-10000 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-10000
+uv run python queue-haul/capacity_sweep_campaign.py full-drain --merge-run-root /scratch/users/$USER/qh-capacity-full-drain-1000 /scratch/users/$USER/qh-capacity-full-drain-2500 /scratch/users/$USER/qh-capacity-full-drain-5000 /scratch/users/$USER/qh-capacity-full-drain-10000 --out queue-haul/outputs/capacity-full-drain-final
+```
+
+Each shard writes `full_drain_capacity.csv` and its PNG/PDF figure; the merged
+figure has one column per bandwidth with drain-time and 30-second-shed panels.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.
