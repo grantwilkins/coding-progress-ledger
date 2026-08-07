@@ -558,24 +558,30 @@ phase plan roots keep `plan.json`, `modeled_capacity.csv`, `live_plan.json`, and
 
 The forced-full-drain appendix crosses
 .85,.875,.8875,.90,.9125,.925,.9375,.95,.9625,.975 offered load with
-1, 2.5, 5, and 10 Gbit/s. Each bandwidth shard has ten paired deterministic
-repeats of replay-only and KV-only, always attempts all eight sessions, credits
-shed at 30 seconds, and records the last route commit, last continuation token,
-and their maximum. Arrivals are generated through the 180-second hard timeout
-but normalized load is still measured only in the 30-second window. The 10
-Gbit/s shard is also the load-knee appendix. Run one shard per allocation, then
-merge all four roots:
+1, 2.5, 5, and 10 Gbit/s. Five repeat-block shards each contain two repeats at
+all four bandwidths (160 episodes), preventing bandwidth from being confounded
+with allocation time. Bandwidth block order rotates from a deterministic random
+base, and each block randomizes its ten loads and two policies. Arrival traces
+are identical across policy and bandwidth for a load/repeat. Every episode
+attempts all eight sessions, credits shed at 30 seconds, records the last route
+commit and continuation token, and keeps arrivals active until the drain
+completes, up to the 180-second timeout. Normalized load still uses only the
+30-second measurement window.
+Run blocks 0 through 4 from the same commit, one per allocation, then merge the
+five roots:
 
 ```
-uv run python queue-haul/capacity_sweep_campaign.py full-drain --bandwidth-mbps 1000 --out queue-haul/outputs/capacity-full-drain-1000 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-1000
-uv run python queue-haul/capacity_sweep_campaign.py full-drain --bandwidth-mbps 2500 --out queue-haul/outputs/capacity-full-drain-2500 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-2500
-uv run python queue-haul/capacity_sweep_campaign.py full-drain --bandwidth-mbps 5000 --out queue-haul/outputs/capacity-full-drain-5000 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-5000
-uv run python queue-haul/capacity_sweep_campaign.py full-drain --bandwidth-mbps 10000 --out queue-haul/outputs/capacity-full-drain-10000 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-10000
-uv run python queue-haul/capacity_sweep_campaign.py full-drain --merge-run-root /scratch/users/$USER/qh-capacity-full-drain-1000 /scratch/users/$USER/qh-capacity-full-drain-2500 /scratch/users/$USER/qh-capacity-full-drain-5000 /scratch/users/$USER/qh-capacity-full-drain-10000 --out queue-haul/outputs/capacity-full-drain-final
+uv run python queue-haul/capacity_sweep_campaign.py full-drain --repeat-block 0 --out queue-haul/outputs/capacity-full-drain-block0 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-full-drain-block0
+uv run python queue-haul/capacity_sweep_campaign.py full-drain --merge-run-root /scratch/users/$USER/qh-capacity-full-drain-block0 /scratch/users/$USER/qh-capacity-full-drain-block1 /scratch/users/$USER/qh-capacity-full-drain-block2 /scratch/users/$USER/qh-capacity-full-drain-block3 /scratch/users/$USER/qh-capacity-full-drain-block4 --out queue-haul/outputs/capacity-full-drain-final
 ```
 
-Each shard writes `full_drain_capacity.csv` and its PNG/PDF figure; the merged
-figure has one column per bandwidth with drain-time and 30-second-shed panels.
+Replace `0` in the first command with each block number. Reusing its plan and
+run root resumes a block only when the commit and run metadata still match; an
+audited code change additionally requires `--resume-from-git-sha OLD_SHA`.
+`--bandwidth-mbps 10000` remains available for the standalone ten-repeat knee
+appendix. Each shard writes `full_drain_capacity.csv` and its PNG/PDF figure;
+the merge accepts exactly five complete blocks, checks profile, calibration,
+manifest, context, and trace provenance, and emits the 800-row final result.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.

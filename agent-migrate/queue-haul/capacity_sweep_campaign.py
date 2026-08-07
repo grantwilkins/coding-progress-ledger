@@ -40,6 +40,8 @@ FULL_DRAIN_LOADS = (.85, .875, .8875, .9, .9125,
                     .925, .9375, .95, .9625, .975)
 FULL_DRAIN_BANDWIDTHS_MBPS = (1000, 2500, 5000, 10000)
 FULL_DRAIN_POLICIES = ("replay_only", "kv_only")
+FULL_DRAIN_REPEAT_BLOCKS = 5
+FULL_DRAIN_REPEATS_PER_BLOCK = 2
 LIVE_REPEATS = 10
 MAX_LIVE_REPEATS = 30
 CI_WIDTH_W = 5
@@ -271,23 +273,51 @@ def make_campaign(kind: str, calibration: dict | None = None,
     }
 
 
-def make_full_drain_campaign(bandwidth_mbps: int,
+def make_full_drain_campaign(bandwidth_mbps: int | None = None,
                              calibration: dict | None = None,
-                             profile_path: Path = DEFAULT_PROFILE) -> dict:
-    if bandwidth_mbps not in FULL_DRAIN_BANDWIDTHS_MBPS:
+                             profile_path: Path = DEFAULT_PROFILE,
+                             repeat_block: int | None = None) -> dict:
+    if (bandwidth_mbps is None) == (repeat_block is None):
+        raise ValueError("select exactly one full-drain shard")
+    if bandwidth_mbps is not None \
+            and bandwidth_mbps not in FULL_DRAIN_BANDWIDTHS_MBPS:
         raise ValueError("unsupported full-drain bandwidth")
-    return {
+    if repeat_block is not None \
+            and repeat_block not in range(FULL_DRAIN_REPEAT_BLOCKS):
+        raise ValueError("unsupported full-drain repeat block")
+    repeats = (list(range(LIVE_REPEATS)) if repeat_block is None else
+               list(range(repeat_block * FULL_DRAIN_REPEATS_PER_BLOCK,
+                          (repeat_block + 1) * FULL_DRAIN_REPEATS_PER_BLOCK)))
+    bandwidths = ([bandwidth_mbps] if bandwidth_mbps is not None else
+                  list(FULL_DRAIN_BANDWIDTHS_MBPS))
+    result = {
         "schema": SCHEMA, "campaign": "full_drain",
         "commit_deadline_s": COMMIT_DEADLINE_S,
         "hardware_timeout_s": RUN_TIMEOUT_S,
         "trace_horizon_s": LOAD_WARMUP_S + RUN_TIMEOUT_S,
-        "bandwidth_mbps": bandwidth_mbps,
-        "loads": list(FULL_DRAIN_LOADS), "repeats": LIVE_REPEATS,
+        "bandwidths_mbps": bandwidths, "repeat_indices": repeats,
+        "repeat_block": repeat_block,
+        "loads": list(FULL_DRAIN_LOADS), "repeats": len(repeats),
         "policies": list(FULL_DRAIN_POLICIES),
         "profile": {"path": str(profile_path),
                     "sha256": profiler.file_hash(profile_path)},
         "calibration": _load_calibration(calibration),
     }
+    if bandwidth_mbps is not None:
+        result["bandwidth_mbps"] = bandwidth_mbps
+    return result
+
+
+def validate_full_drain_selector(campaign: dict, bandwidth_mbps: int | None,
+                                 repeat_block: int | None) -> None:
+    if bandwidth_mbps is not None and repeat_block is not None:
+        raise ValueError("full-drain selector conflicts with stored plan")
+    if bandwidth_mbps is not None and (
+            campaign.get("repeat_block") is not None
+            or campaign.get("bandwidth_mbps") != bandwidth_mbps):
+        raise ValueError("full-drain selector conflicts with stored plan")
+    if repeat_block is not None and campaign.get("repeat_block") != repeat_block:
+        raise ValueError("full-drain selector conflicts with stored plan")
 
 
 def _frozen_sessions(template: dict) -> list[dict]:
@@ -299,57 +329,83 @@ def _frozen_sessions(template: dict) -> list[dict]:
     return frozen
 
 
+def _full_drain_keys(bandwidths, repeats):
+    keys = []
+    for repeat in repeats:
+        order = list(bandwidths)
+        random.Random(repeat // len(FULL_DRAIN_BANDWIDTHS_MBPS)).shuffle(order)
+        shift = repeat % len(order)
+        order = order[shift:] + order[:shift]
+        for bandwidth in order:
+            block = [(bandwidth, load, repeat, policy)
+                     for load in FULL_DRAIN_LOADS
+                     for policy in FULL_DRAIN_POLICIES]
+            random.Random(int(profiler.object_hash(
+                ["full_drain_order", bandwidth, repeat])[:16], 16)).shuffle(block)
+            keys.extend(block)
+    return keys
+
+
 def make_full_drain_plan(campaign: dict, template: dict) -> dict:
     if campaign.get("schema") != SCHEMA \
             or campaign.get("campaign") != "full_drain":
         raise ValueError("invalid full-drain campaign")
     frozen = _frozen_sessions(template)
-    bandwidth = campaign["bandwidth_mbps"]
+    bandwidths = campaign.get("bandwidths_mbps") or [campaign["bandwidth_mbps"]]
+    repeats = campaign.get("repeat_indices", list(range(LIVE_REPEATS)))
+    traces = {(load, repeat): arrival_trace(
+        load, repeat, campaign["calibration"], LOAD_WARMUP_S + RUN_TIMEOUT_S)
+        for repeat in repeats for load in FULL_DRAIN_LOADS}
     scenarios = []
-    for load in FULL_DRAIN_LOADS:
-        for repeat in range(LIVE_REPEATS):
-            trace = arrival_trace(
-                load, repeat, campaign["calibration"],
-                LOAD_WARMUP_S + RUN_TIMEOUT_S,
-            )
-            match_id = profiler.object_hash(
-                ["full_drain", bandwidth, load, repeat])[:16]
-            for policy in FULL_DRAIN_POLICIES:
-                method = "replay" if policy == "replay_only" else "kv_transfer"
-                scenarios.append({
-                    "scenario_id": "drain-" + profiler.object_hash(
-                        [match_id, policy])[:16],
-                    "match_id": match_id, "kind": "migration",
-                    "campaign": "capacity_full_drain", "split": "measurement",
-                    "condition": "full_drain", "policy": policy,
-                    "method": method, "load_fraction": load,
-                    "arrival_trace": trace,
-                    "configured_goodput_mbps": bandwidth,
-                    "planned_measured_goodput_mbps": bandwidth,
-                    "bandwidth_mbps": bandwidth,
-                    "required_deadline_s": COMMIT_DEADLINE_S,
-                    "deadline_s": RUN_TIMEOUT_S, "repeat": repeat,
-                    "sessions": [{**item, "source_index": i}
-                                 for i, item in enumerate(frozen)],
-                    "moves": [{"session_id": item["session_id"],
-                               "method": method, "order": i}
-                              for i, item in enumerate(frozen)],
-                    "allow_partial_moves": False,
-                    "concurrency": len(frozen), "move_concurrency": len(frozen),
-                    "serving_concurrency": 1, "activity": "none",
-                    "activity_tokens": 0, "request_schedule": [],
-                    "copy_policy": "initial_final", "final_state": "awake",
-                    "reset_caches": True, "verify_continuations": True,
-                    "wait_cache_idle": True, "prestage_all": True,
-                    "warm_concurrency": len(frozen), "power_interval_s": .1,
-                })
-    random.Random(0).shuffle(scenarios)
+    for bandwidth, load, repeat, policy in _full_drain_keys(bandwidths, repeats):
+        match_id = profiler.object_hash(
+            ["full_drain", bandwidth, load, repeat])[:16]
+        method = "replay" if policy == "replay_only" else "kv_transfer"
+        scenarios.append({
+            "scenario_id": "drain-" + profiler.object_hash(
+                [match_id, policy])[:16],
+            "match_id": match_id, "kind": "migration",
+            "campaign": "capacity_full_drain", "split": "measurement",
+            "condition": "full_drain", "policy": policy,
+            "method": method, "load_fraction": load,
+            "arrival_trace": traces[load, repeat],
+            "configured_goodput_mbps": bandwidth,
+            "planned_measured_goodput_mbps": bandwidth,
+            "bandwidth_mbps": bandwidth,
+            "required_deadline_s": COMMIT_DEADLINE_S,
+            "deadline_s": RUN_TIMEOUT_S, "repeat": repeat,
+            "sessions": [{**item, "source_index": i}
+                         for i, item in enumerate(frozen)],
+            "moves": [{"session_id": item["session_id"],
+                       "method": method, "order": i}
+                      for i, item in enumerate(frozen)],
+            "allow_partial_moves": False,
+            "concurrency": len(frozen), "move_concurrency": len(frozen),
+            "serving_concurrency": 1, "activity": "none",
+            "activity_tokens": 0, "request_schedule": [],
+            "copy_policy": "initial_final", "final_state": "awake",
+            "reset_caches": True, "verify_continuations": True,
+            "wait_cache_idle": True, "prestage_all": True,
+            "warm_concurrency": len(frozen), "power_interval_s": .1,
+        })
+    provenance = {
+        "profile_sha256": campaign["profile"]["sha256"],
+        "manifest_sha256": template["manifest"]["sha256"],
+        "calibration_sha256": profiler.object_hash(campaign["calibration"]),
+        "contexts_sha256": profiler.object_hash(list(CONTEXTS)),
+        "session_manifest_sha256": profiler.object_hash(frozen),
+        "trace_horizon_s": LOAD_WARMUP_S + RUN_TIMEOUT_S,
+        "order": "repeat-rotated-bandwidth-blocks-v1",
+    }
     return {
         "schema": profiler.PLAN_SCHEMA, "manifest": template["manifest"],
         "profile": campaign["profile"], "capacity_campaign": "full_drain",
         "calibration": campaign["calibration"],
         "commit_deadline_s": COMMIT_DEADLINE_S,
         "trace_horizon_s": LOAD_WARMUP_S + RUN_TIMEOUT_S,
+        "bandwidths_mbps": list(bandwidths), "repeat_indices": list(repeats),
+        "repeat_block": campaign.get("repeat_block"),
+        "full_drain_provenance": provenance,
         "scenarios": scenarios,
     }
 
@@ -520,12 +576,13 @@ def write_live_plan(campaign: dict, template_path: Path, out: Path,
     return plan_
 
 
-def write_full_drain_campaign(bandwidth_mbps: int, template_path: Path,
+def write_full_drain_campaign(bandwidth_mbps: int | None, template_path: Path,
                               out: Path, calibration_path: Path | None = None,
-                              profile_path: Path = DEFAULT_PROFILE) -> dict:
+                              profile_path: Path = DEFAULT_PROFILE,
+                              repeat_block: int | None = None) -> dict:
     calibration = json.loads(calibration_path.read_text()) if calibration_path else None
     campaign = make_full_drain_campaign(
-        bandwidth_mbps, calibration, profile_path)
+        bandwidth_mbps, calibration, profile_path, repeat_block)
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_json(out / "plan.json", campaign)
     profiler.write_json(out / "summary.json", campaign)
@@ -594,11 +651,14 @@ def write_adaptive_phase(phase: str, prior_roots, template_path: Path,
     return campaign, live
 
 
-def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> None:
+def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False,
+                 resume_from_git_sha: str | None = None) -> None:
     import destination_runner as destination
     import migration_testbed as testbed
 
     plan_ = json.loads(plan_path.read_text())
+    if plan_["capacity_campaign"] == "full_drain":
+        validate_full_drain_plans([plan_])
     calibration = plan_.get("calibration") or {}
     service_calibration = calibration.get("service_calibration")
     if plan_["capacity_campaign"] in {"load", "full_drain"} \
@@ -640,7 +700,8 @@ def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> 
     profiler.run_scenario = run_loaded
     try:
         profiler.run_plan(plan_path, run_root, testbed.Config(), allow_dirty, [],
-                          fail_fast=True, stack_scenarios=64)
+                          resume_from_git_sha, fail_fast=True,
+                          stack_scenarios=64)
     finally:
         profiler.run_scenario = original
 
@@ -672,7 +733,8 @@ def validate_live_rows(rows: list[dict]) -> None:
             raise RuntimeError("policies did not share an arrival trace")
 
 
-def validate_full_drain_rows(rows: list[dict], complete: bool = False) -> None:
+def validate_full_drain_rows(rows: list[dict], complete: bool = False,
+                             bandwidths=None, repeats=None) -> None:
     if not rows:
         raise RuntimeError("full-drain results are empty")
     fields = ("configured_goodput_mbps", "load_fraction", "repeat", "policy")
@@ -691,12 +753,121 @@ def validate_full_drain_rows(rows: list[dict], complete: bool = False) -> None:
         if any(row["planned_sessions"] != len(CONTEXTS)
                for row in cell):
             raise RuntimeError("full drain must attempt all eight sessions")
+    for load, repeat in {(row["load_fraction"], row["repeat"]) for row in rows}:
+        if len({row["trace_id"] for row in rows
+                if (row["load_fraction"], row["repeat"]) == (load, repeat)}) != 1:
+            raise RuntimeError("bandwidths did not share an arrival trace")
     if complete:
-        bandwidths = {row["configured_goodput_mbps"] for row in rows}
+        bandwidths = set(bandwidths or
+                         {row["configured_goodput_mbps"] for row in rows})
+        repeats = set(range(LIVE_REPEATS) if repeats is None else repeats)
         expected = {(bandwidth, load, repeat) for bandwidth in bandwidths
-                    for load in FULL_DRAIN_LOADS for repeat in range(LIVE_REPEATS)}
+                    for load in FULL_DRAIN_LOADS for repeat in repeats}
         if cells != expected:
             raise RuntimeError("full-drain grid is incomplete")
+
+
+def _verified_file(record: dict, label: str) -> None:
+    path = Path(record.get("path", ""))
+    if not path.is_file() or profiler.file_hash(path) != record.get("sha256"):
+        raise RuntimeError(f"full-drain {label} hash mismatch")
+
+
+def validate_full_drain_plans(plans: list[dict], complete: bool = False) -> None:
+    if not plans:
+        raise RuntimeError("full-drain plans are empty")
+    signatures, blocks = set(), []
+    for plan_ in plans:
+        if plan_.get("capacity_campaign") != "full_drain":
+            raise RuntimeError("invalid full-drain plan")
+        _verified_file(plan_["profile"], "profile")
+        _verified_file(plan_["manifest"], "manifest")
+        service = plan_["calibration"]["service_calibration"]
+        _verified_file(service, "service calibration")
+        provenance = plan_.get("full_drain_provenance")
+        frozen = plan_["scenarios"][0]["sessions"]
+        expected = {
+            "profile_sha256": plan_["profile"]["sha256"],
+            "manifest_sha256": plan_["manifest"]["sha256"],
+            "calibration_sha256": profiler.object_hash(plan_["calibration"]),
+            "contexts_sha256": profiler.object_hash(list(CONTEXTS)),
+            "session_manifest_sha256": profiler.object_hash([
+                {key: value for key, value in row.items() if key != "source_index"}
+                for row in frozen]),
+            "trace_horizon_s": LOAD_WARMUP_S + RUN_TIMEOUT_S,
+            "order": "repeat-rotated-bandwidth-blocks-v1",
+        }
+        legacy = provenance is None and plan_.get("repeat_block") is None
+        if not legacy and provenance != expected:
+            raise RuntimeError("full-drain provenance mismatch")
+        scenarios = plan_["scenarios"]
+        bandwidths = set(plan_.get("bandwidths_mbps") or
+                         {row["bandwidth_mbps"] for row in scenarios})
+        repeats = set(plan_.get("repeat_indices") or
+                      {row["repeat"] for row in scenarios})
+        block = plan_.get("repeat_block")
+        expected_repeats = (set(range(LIVE_REPEATS)) if block is None else
+                            set(range(block * FULL_DRAIN_REPEATS_PER_BLOCK,
+                                      (block + 1) * FULL_DRAIN_REPEATS_PER_BLOCK)))
+        if (block is None and (len(bandwidths) != 1
+                               or not bandwidths <= set(FULL_DRAIN_BANDWIDTHS_MBPS))
+                or block is not None and (
+                    block not in range(FULL_DRAIN_REPEAT_BLOCKS)
+                    or bandwidths != set(FULL_DRAIN_BANDWIDTHS_MBPS))
+                or repeats != expected_repeats):
+            raise RuntimeError("invalid full-drain shard")
+        keys = [(row["bandwidth_mbps"], row["load_fraction"], row["repeat"],
+                 row["policy"]) for row in scenarios]
+        expected_keys = {(bandwidth, load, repeat, policy)
+                         for bandwidth in bandwidths for load in FULL_DRAIN_LOADS
+                         for repeat in repeats for policy in FULL_DRAIN_POLICIES}
+        if len(keys) != len(set(keys)) or set(keys) != expected_keys:
+            raise RuntimeError("full-drain plan grid is incomplete")
+        if not legacy and keys != _full_drain_keys(
+                plan_["bandwidths_mbps"], plan_["repeat_indices"]):
+            raise RuntimeError("full-drain scenario order changed")
+        if any(tuple(row["initial_tokens"] for row in scenario["sessions"])
+               != CONTEXTS for scenario in scenarios):
+            raise RuntimeError("full-drain context pack changed")
+        if any(profiler.object_hash([
+                {key: value for key, value in row.items() if key != "source_index"}
+                for row in scenario["sessions"]])
+               != expected["session_manifest_sha256"] for scenario in scenarios):
+            raise RuntimeError("full-drain session provenance changed")
+        for load in FULL_DRAIN_LOADS:
+            for repeat in repeats:
+                trace = arrival_trace(load, repeat, plan_["calibration"],
+                                      LOAD_WARMUP_S + RUN_TIMEOUT_S)
+                if any(row["arrival_trace"] != trace for row in scenarios
+                       if row["load_fraction"] == load
+                       and row["repeat"] == repeat):
+                    raise RuntimeError("full-drain trace provenance mismatch")
+        signatures.add((plan_["profile"]["sha256"],
+                        plan_["manifest"]["sha256"],
+                        profiler.object_hash(plan_["calibration"]),
+                        expected["contexts_sha256"],
+                        expected["session_manifest_sha256"]))
+        blocks.append(plan_.get("repeat_block"))
+    if len(signatures) != 1:
+        raise RuntimeError("full-drain plans disagree on provenance")
+    if complete and (len(plans) != FULL_DRAIN_REPEAT_BLOCKS
+                     or set(blocks) != set(range(FULL_DRAIN_REPEAT_BLOCKS))):
+        raise RuntimeError("full-drain repeat blocks are incomplete")
+
+
+def validate_full_drain_run_metadata(run_root: Path, plan_: dict,
+                                     metadata: dict) -> None:
+    plan_path = run_root / "plan.json"
+    actual = json.loads(plan_path.read_text())
+    _verified_file(plan_["manifest"], "manifest")
+    expected = {
+        "plan_sha256": profiler.file_hash(plan_path),
+        "plan_object_sha256": profiler.object_hash(actual),
+        "manifest_sha256": profiler.file_hash(Path(plan_["manifest"]["path"])),
+    }
+    if actual != plan_ or any(metadata.get(key) != value
+                              for key, value in expected.items()):
+        raise RuntimeError("full-drain run metadata mismatch")
 
 
 def load_statistics(rows: list[dict]) -> dict:
@@ -806,6 +977,8 @@ def plot_live(rows: list[dict], out: Path, kind: str) -> None:
 def read_live_results(run_root: Path) -> tuple[str, list[dict]]:
     live = json.loads((run_root / "plan.json").read_text())
     kind = live["capacity_campaign"]
+    if kind == "full_drain":
+        validate_full_drain_plans([live])
     profile = ModelProfile.load(Path(live["profile"]["path"]))
     scenario = _scenario(profile, 10_000)
     initial = source_power(scenario, profile)
@@ -880,6 +1053,11 @@ def read_live_results(run_root: Path) -> tuple[str, list[dict]]:
             "deadline_miss_sessions": len(raw) - len(credited),
             "right_censored": drain >= RUN_TIMEOUT_S,
             "destination_load": load or None,
+            "profile_sha256": live["profile"]["sha256"],
+            "manifest_sha256": live["manifest"]["sha256"],
+            "calibration_sha256": profiler.object_hash(live.get("calibration")),
+            "contexts_sha256": (live.get("full_drain_provenance") or {}).get(
+                "contexts_sha256"),
         })
     if kind == "goodput":
         measured = {
@@ -932,8 +1110,10 @@ def plot_full_drain(rows: list[dict], out: Path) -> None:
     plt.close(fig)
 
 
-def write_full_drain_results(rows: list[dict], out: Path) -> None:
-    validate_full_drain_rows(rows, complete=True)
+def write_full_drain_results(rows: list[dict], out: Path,
+                             bandwidths=None, repeats=None) -> None:
+    validate_full_drain_rows(rows, complete=True, bandwidths=bandwidths,
+                             repeats=repeats)
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_csv(out / "full_drain_capacity.csv", rows)
     plot_full_drain(rows, out)
@@ -941,7 +1121,8 @@ def write_full_drain_results(rows: list[dict], out: Path) -> None:
     profiler.write_json(out / "full_drain_summary.json", {
         "schema": SCHEMA, "campaign": "full_drain", "episodes": len(rows),
         "bandwidths_mbps": bandwidths, "load_points": len(FULL_DRAIN_LOADS),
-        "repeats_per_cell": LIVE_REPEATS,
+        "repeat_indices": sorted(set(row["repeat"] for row in rows)),
+        "repeats_per_cell": len(set(row["repeat"] for row in rows)),
         "deadline_credited_sessions": sum(row["credited_sessions"] for row in rows),
         "deadline_miss_sessions": sum(row["deadline_miss_sessions"] for row in rows),
         "right_censored_episodes": sum(row["right_censored"] for row in rows),
@@ -974,7 +1155,15 @@ def write_live_results(rows: list[dict], out: Path, kind: str) -> None:
 
 def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
     kind, rows = read_live_results(run_root)
-    write_live_results(rows, out, kind)
+    if kind == "full_drain":
+        plan_ = json.loads((run_root / "plan.json").read_text())
+        write_full_drain_results(
+            rows, out,
+            plan_.get("bandwidths_mbps") or
+            {row["configured_goodput_mbps"] for row in rows},
+            plan_.get("repeat_indices") or {row["repeat"] for row in rows})
+    else:
+        write_live_results(rows, out, kind)
     return rows
 
 
@@ -994,6 +1183,17 @@ def merge_live(run_roots, out: Path) -> list[dict]:
 
 
 def merge_full_drain(run_roots, out: Path) -> list[dict]:
+    if len(run_roots) != len(set(map(str, run_roots))):
+        raise ValueError("full-drain merge roots must be distinct")
+    plans = [json.loads((root / "plan.json").read_text()) for root in run_roots]
+    validate_full_drain_plans(plans, complete=True)
+    metadata = [json.loads((root / "run_metadata.json").read_text())
+                for root in run_roots]
+    for root, plan_, record in zip(run_roots, plans, metadata):
+        validate_full_drain_run_metadata(root, plan_, record)
+    if any(row.get("dirty") for row in metadata) \
+            or len({row["git_sha"] for row in metadata}) != 1:
+        raise RuntimeError("full-drain blocks must use one clean git commit")
     parts = [read_live_results(root) for root in run_roots]
     if {kind for kind, _ in parts} != {"full_drain"}:
         raise ValueError("full-drain merge requires full-drain campaigns")
@@ -1001,7 +1201,8 @@ def merge_full_drain(run_roots, out: Path) -> list[dict]:
     if {row["configured_goodput_mbps"] for row in rows} \
             != set(FULL_DRAIN_BANDWIDTHS_MBPS):
         raise RuntimeError("full-drain bandwidth grid is incomplete")
-    write_full_drain_results(rows, out)
+    write_full_drain_results(rows, out, FULL_DRAIN_BANDWIDTHS_MBPS,
+                             range(LIVE_REPEATS))
     summary_path = out / "full_drain_summary.json"
     summary = json.loads(summary_path.read_text())
     summary["source_runs"] = [
@@ -1023,31 +1224,45 @@ def main() -> None:
     parser.add_argument("--merge-run-root", type=Path, nargs="+")
     parser.add_argument("--bandwidth-mbps", type=int,
                         choices=FULL_DRAIN_BANDWIDTHS_MBPS)
+    parser.add_argument("--repeat-block", type=int,
+                        choices=range(FULL_DRAIN_REPEAT_BLOCKS))
+    parser.add_argument("--resume-from-git-sha")
     parser.add_argument("--allow-dirty", action="store_true")
     args = parser.parse_args()
     if args.campaign == "full-drain":
         if args.adaptive_stage or args.prior_run_root:
             raise ValueError("full drain does not use adaptive phases")
         if args.merge_run_root:
-            if args.run_root or args.live_template or args.bandwidth_mbps:
+            if (args.run_root or args.live_template or args.bandwidth_mbps
+                    or args.repeat_block is not None or args.resume_from_git_sha):
                 raise ValueError("full-drain merge accepts only roots and output")
-            merge_full_drain(args.merge_run_root, args.out)
+            roots = [root.resolve() for root in args.merge_run_root]
+            if args.out.resolve() in roots:
+                raise ValueError("merge roots and output must be distinct")
+            merge_full_drain(roots, args.out)
             return
         existing = args.run_root and (args.out / "plan.json").exists()
         if existing:
             campaign = json.loads((args.out / "plan.json").read_text())
+            validate_full_drain_selector(
+                campaign, args.bandwidth_mbps, args.repeat_block)
         else:
-            if not args.live_template or args.bandwidth_mbps is None:
-                raise ValueError("full drain requires a template and bandwidth")
+            if not args.live_template or ((args.bandwidth_mbps is None)
+                                          == (args.repeat_block is None)):
+                raise ValueError(
+                    "full drain requires a template and exactly one shard selector")
             campaign = write_full_drain_campaign(
                 args.bandwidth_mbps, args.live_template, args.out,
-                args.calibration, args.profile)
+                args.calibration, args.profile, args.repeat_block)
         if args.run_root:
             if args.out.resolve() == args.run_root.resolve():
                 raise ValueError("plan and run roots must be distinct")
-            execute_live(args.out / "live_plan.json", args.run_root, args.allow_dirty)
+            execute_live(args.out / "live_plan.json", args.run_root,
+                         args.allow_dirty, args.resume_from_git_sha)
             reduce_live(args.run_root, campaign, args.out)
         return
+    if args.repeat_block is not None or args.bandwidth_mbps is not None:
+        raise ValueError("full-drain shard selectors require full-drain")
     if args.merge_run_root:
         if not args.campaign == "load" or args.adaptive_stage or args.prior_run_root \
                 or args.run_root or args.live_template:
@@ -1080,7 +1295,8 @@ def main() -> None:
     if args.run_root:
         if not args.live_template and not (args.out / "live_plan.json").exists():
             raise ValueError("hardware execution requires --live-template or live_plan.json")
-        execute_live(args.out / "live_plan.json", args.run_root, args.allow_dirty)
+        execute_live(args.out / "live_plan.json", args.run_root,
+                     args.allow_dirty, args.resume_from_git_sha)
         reduce_live(args.run_root, campaign, args.out)
 
 

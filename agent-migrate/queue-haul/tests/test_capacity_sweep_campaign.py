@@ -29,6 +29,9 @@ from capacity_sweep_campaign import (
     write_campaign,
     validate_live_rows,
     validate_full_drain_rows,
+    validate_full_drain_plans,
+    validate_full_drain_run_metadata,
+    validate_full_drain_selector,
     write_live_results,
 )
 
@@ -166,17 +169,22 @@ def test_trace_rho_is_scheduled_service_work_and_median_ci_is_exact_for_constant
     assert median_ci([7] * 10) == (7, 7, 7)
 
 
-def test_full_drain_plan_forces_all_eight_with_long_paired_traces(tmp_path):
+def full_drain_template(tmp_path):
     manifest = tmp_path / "manifest.json"
     manifest.write_text("{}")
-    template = {
-        "manifest": {"path": str(manifest), "sha256": "hash"},
+    return {
+        "manifest": {"path": str(manifest),
+                     "sha256": capacity.profiler.file_hash(manifest)},
         "scenarios": [{"sessions": [
             {"session_id": f"m{i}", "job_class": "coding", "turn_index": 0,
              "initial_tokens": context, "order": i}
             for i, context in enumerate(CONTEXTS)
         ]}],
     }
+
+
+def test_full_drain_plan_forces_all_eight_with_long_paired_traces(tmp_path):
+    template = full_drain_template(tmp_path)
     campaign = make_full_drain_campaign(2500)
     plan = make_full_drain_plan(campaign, template)
     assert FULL_DRAIN_BANDWIDTHS_MBPS == (1000, 2500, 5000, 10000)
@@ -194,6 +202,112 @@ def test_full_drain_plan_forces_all_eight_with_long_paired_traces(tmp_path):
                     if row["load_fraction"] == load and row["repeat"] == repeat]
             assert len({row["arrival_trace"]["trace_id"] for row in cell}) == 1
             assert max(cell[0]["arrival_trace"]["offsets_s"]) > 180
+
+
+def test_full_drain_repeat_blocks_cross_bandwidth_without_trace_confounding(tmp_path):
+    template = full_drain_template(tmp_path)
+    plans = [make_full_drain_plan(
+        make_full_drain_campaign(repeat_block=block), template)
+        for block in range(5)]
+    plan = plans[2]
+    assert plan["repeat_block"] == 2
+    assert plan["repeat_indices"] == [4, 5]
+    assert len(plan["scenarios"]) == 160
+    assert {row["bandwidth_mbps"] for row in plan["scenarios"]} \
+        == set(FULL_DRAIN_BANDWIDTHS_MBPS)
+    for repeat in (4, 5):
+        selected = [row for row in plan["scenarios"] if row["repeat"] == repeat]
+        blocks = [selected[index]["bandwidth_mbps"]
+                  for index in range(0, len(selected), 20)]
+        assert len(blocks) == len(set(blocks)) == 4
+        for load in FULL_DRAIN_LOADS:
+            cell = [row for row in selected if row["load_fraction"] == load]
+            assert len(cell) == 8
+            assert len({row["arrival_trace"]["trace_id"] for row in cell}) == 1
+    positions = {bandwidth: [] for bandwidth in FULL_DRAIN_BANDWIDTHS_MBPS}
+    for candidate in plans:
+        for repeat in candidate["repeat_indices"]:
+            selected = [row for row in candidate["scenarios"]
+                        if row["repeat"] == repeat]
+            order = [selected[index]["bandwidth_mbps"]
+                     for index in range(0, len(selected), 20)]
+            for position, bandwidth in enumerate(order):
+                positions[bandwidth].append(position)
+    assert all(max(map(values.count, range(4)))
+               - min(map(values.count, range(4))) <= 1
+               for values in positions.values())
+    validate_full_drain_plans(plans, complete=True)
+
+
+def test_full_drain_plan_validation_checks_stored_profile_hash(tmp_path):
+    template = full_drain_template(tmp_path)
+    plan = make_full_drain_plan(
+        make_full_drain_campaign(repeat_block=0), template)
+    assert plan["full_drain_provenance"]["profile_sha256"] \
+        == plan["profile"]["sha256"]
+    plan["profile"]["sha256"] = "wrong"
+    with pytest.raises(RuntimeError, match="profile"):
+        validate_full_drain_plans([plan])
+
+
+@pytest.mark.parametrize("fault", ["calibration", "manifest", "context", "trace"])
+def test_full_drain_plan_validation_checks_all_provenance(tmp_path, fault):
+    template = full_drain_template(tmp_path)
+    plan = make_full_drain_plan(
+        make_full_drain_campaign(repeat_block=0), template)
+    if fault == "calibration":
+        plan["calibration"]["service_calibration"]["total_s"] += 1
+    elif fault == "manifest":
+        plan["manifest"]["sha256"] = "wrong"
+    elif fault == "context":
+        plan["scenarios"][0]["sessions"][0]["initial_tokens"] += 1
+    else:
+        plan["scenarios"][0]["arrival_trace"]["trace_id"] = "wrong"
+    with pytest.raises(RuntimeError):
+        validate_full_drain_plans([plan])
+
+
+def test_full_drain_plan_validation_checks_exact_scenario_order(tmp_path):
+    plan = make_full_drain_plan(
+        make_full_drain_campaign(repeat_block=0), full_drain_template(tmp_path))
+    plan["scenarios"][0], plan["scenarios"][1] = (
+        plan["scenarios"][1], plan["scenarios"][0])
+    with pytest.raises(RuntimeError, match="order"):
+        validate_full_drain_plans([plan])
+
+
+@pytest.mark.parametrize("field", [
+    "plan_sha256", "plan_object_sha256", "manifest_sha256",
+])
+def test_full_drain_run_metadata_is_bound_to_plan(field, tmp_path):
+    root = tmp_path / "run"
+    root.mkdir()
+    plan = make_full_drain_plan(
+        make_full_drain_campaign(repeat_block=0), full_drain_template(tmp_path))
+    capacity.profiler.write_json(root / "plan.json", plan)
+    metadata = {
+        "plan_sha256": capacity.profiler.file_hash(root / "plan.json"),
+        "plan_object_sha256": capacity.profiler.object_hash(plan),
+        "manifest_sha256": plan["manifest"]["sha256"],
+    }
+    validate_full_drain_run_metadata(root, plan, metadata)
+    metadata[field] = "wrong"
+    with pytest.raises(RuntimeError, match="metadata"):
+        validate_full_drain_run_metadata(root, plan, metadata)
+
+
+def test_full_drain_resume_selector_must_match_stored_plan():
+    block = make_full_drain_campaign(repeat_block=2)
+    validate_full_drain_selector(block, None, 2)
+    validate_full_drain_selector(block, None, None)
+    with pytest.raises(ValueError, match="selector"):
+        validate_full_drain_selector(block, None, 3)
+    bandwidth = make_full_drain_campaign(10_000)
+    validate_full_drain_selector(bandwidth, 10_000, None)
+    with pytest.raises(ValueError, match="selector"):
+        validate_full_drain_selector(bandwidth, 5000, None)
+    with pytest.raises(ValueError, match="selector"):
+        validate_full_drain_selector(block, 10_000, 2)
 
 
 def test_full_drain_validation_requires_paired_complete_cells():
