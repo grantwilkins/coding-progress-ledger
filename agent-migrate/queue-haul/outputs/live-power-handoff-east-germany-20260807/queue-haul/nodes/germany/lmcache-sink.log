@@ -1,0 +1,258 @@
+[32;20m[2026-08-07 21:45:58,665] LMCache INFO:[0m  torch_dev=StubCPUDevice(device_type=cpu), torch_device_type=cpu [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-08-07 21:45:58,844] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-07 21:45:58,844] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-07 21:45:58,844] LMCache INFO:[0m Skipping backend lmcache.c_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+
+ _     __  __    ____           _          
+| |   |  \/  |  / ___|__ _  ___| |__   ___      LMCache v0.5.1
+| |   | |\/| | | |   / _` |/ __| '_ \ / _ \     Website:  https://lmcache.ai/
+| |___| |  | | | |__| (_| | (__| | | |  __/     Recipes:  https://docs.lmcache.ai/recipes
+|_____|_|  |_|  \____\__,_|\___|_| |_|\___|     LinkedIn: https://www.linkedin.com/company/lmcache-lab
+Set LMCACHE_DISABLE_BANNER=1 to hide this banner.
+
+[32;20m[2026-08-07 21:45:59,659] LMCache INFO:[0m multi_layer_block_kv_transfer mode: tensor [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+[32;20m[2026-08-07 21:46:01,381] LMCache INFO:[0m Discovered API module: cache_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,382] LMCache INFO:[0m Discovered API module: env_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,383] LMCache INFO:[0m Discovered API module: loglevel_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,384] LMCache INFO:[0m Discovered API module: metrics_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,386] LMCache INFO:[0m Discovered API module: periodic_thread_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,386] LMCache INFO:[0m Discovered API module: run_script_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,387] LMCache INFO:[0m Discovered API module: thread_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,388] LMCache INFO:[0m Discovered API module: common_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,389] LMCache INFO:[0m Discovered API module: config_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,391] LMCache INFO:[0m Discovered API module: info_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,393] LMCache INFO:[0m Discovered API module: quota_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-07 21:46:01,396] LMCache INFO:[0m Discovered API module: reconfigure_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[33;20m[2026-08-07 21:46:01,412] LMCache WARNING:[0m LazyMemoryAllocator requires memory pinning which is not supported on the current backend. Disabling l1-use-lazy. [3m(config.py:155:lmcache.v1.distributed.config)[0m
+[32;20m[2026-08-07 21:46:01,413] LMCache INFO:[0m Starting LMCache HTTP server on http://10.3.0.4:8081 [3m(http_server.py:258:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Started server process [59057]
+INFO:     Waiting for application startup.
+[32;20m[2026-08-07 21:46:01,429] LMCache INFO:[0m Starting LMCache HTTP server... (accelerator available: False) [3m(http_server.py:73:lmcache.v1.multiprocess.http_server)[0m
+[32;20m[2026-08-07 21:46:01,445] LMCache INFO:[0m OTel MeterProvider initialised with Prometheus fallback (standalone metrics HTTP server disabled; /metrics must be exposed by the caller), resource={'telemetry.sdk.language': 'python', 'telemetry.sdk.name': 'opentelemetry', 'telemetry.sdk.version': '1.40.0', 'service.instance.id': 'queue-haul-sink', 'service.name': 'unknown_service'} [3m(otel_init.py:114:lmcache.v1.mp_observability.otel_init)[0m
+[32;20m[2026-08-07 21:46:01,446] LMCache INFO:[0m Checking if shm capacity is larger than L1 request [3m(server.py:329:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-08-07 21:46:01,447] LMCache INFO:[0m Starting L1EvictionController... [3m(eviction_controller.py:53:lmcache.v1.distributed.storage_controllers.eviction_controller)[0m
+[32;20m[2026-08-07 21:46:01,449] LMCache INFO:[0m Created RESP L2 adapter: 10.0.0.4:8302 (workers=8) [3m(resp_l2_adapter.py:163:lmcache.v1.distributed.l2_adapters.resp_l2_adapter)[0m
+[32;20m[2026-08-07 21:46:01,449] LMCache INFO:[0m Starting L2EvictionController... [3m(eviction_controller.py:233:lmcache.v1.distributed.storage_controllers.eviction_controller)[0m
+[32;20m[2026-08-07 21:46:01,449] LMCache INFO:[0m Starting StoreController... [3m(store_controller.py:305:lmcache.v1.distributed.storage_controllers.store_controller)[0m
+[32;20m[2026-08-07 21:46:01,450] LMCache INFO:[0m Starting PrefetchController... [3m(prefetch_controller.py:555:lmcache.v1.distributed.storage_controllers.prefetch_controller)[0m
+[32;20m[2026-08-07 21:46:01,450] LMCache INFO:[0m Using blake3 hash function [3m(token_hasher.py:79:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-08-07 21:46:01,451] LMCache INFO:[0m Computed NONE_HASH=b"~>\xff\x9e\xf7a:P4\x0e\xb1&w\xee\x03\xb8:\xc7Y\xfc\xba\x9b\xb3'\x05\xf0rH\xd5mG;" using hash function [3m(token_hasher.py:180:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-08-07 21:46:01,451] LMCache INFO:[0m TokenHasher initialized: chunk_size=256, hash_algorithm=blake3 [3m(token_hasher.py:67:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-08-07 21:46:01,451] LMCache INFO:[0m PeriodicThread SessionManager-cleanup-thread-7602b3c47d0 entering main loop (interval=60.0s) [3m(periodic_thread.py:284:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-08-07 21:46:01,451] LMCache INFO:[0m Started PeriodicThread: SessionManager-cleanup-thread-7602b3c47d0 (level=medium, interval=60.0s, init_wait=0.0s) [3m(periodic_thread.py:244:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-08-07 21:46:01,451] LMCache INFO:[0m Supported transfer mode: engine_driven [3m(server.py:206:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-08-07 21:46:01,452] LMCache INFO:[0m PeriodicThread lmcache-mp-worker-reaper entering main loop (interval=30.0s) [3m(periodic_thread.py:284:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-08-07 21:46:01,452] LMCache INFO:[0m Started PeriodicThread: lmcache-mp-worker-reaper (level=medium, interval=30.0s, init_wait=0.0s) [3m(periodic_thread.py:244:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-08-07 21:46:01,455] LMCache INFO:[0m Created AffinityThreadPool 'affinity-pool-0' with 8 worker slots: up to 8 distinct affinity keys each bind to their own thread before slots are shared. Compare this against the number of clients expected to connect to confirm routing. [3m(affinity_pool.py:60:lmcache.v1.multiprocess.affinity_pool)[0m
+[32;20m[2026-08-07 21:46:01,455] LMCache INFO:[0m LMCache ZMQ cache server is running on tcp://127.0.0.1:5556 [3m(server.py:385:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-08-07 21:46:01,456] LMCache INFO:[0m LMCache cache server is running... [3m(server.py:400:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-08-07 21:46:01,456] LMCache INFO:[0m LMCache HTTP server initialized [3m(http_server.py:166:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://10.3.0.4:8081 (Press CTRL+C to quit)
+[32;20m[2026-08-07 21:46:31,929] LMCache INFO:[0m Using shm non-GPU transfer strategy [3m(server_transfer.py:66:lmcache.v1.multiprocess.modules.server_transfer)[0m
+[32;20m[2026-08-07 21:46:31,929] LMCache INFO:[0m Registered non-GPU context for instance 2771948003217985410 (model=/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee, world_size=1) [3m(engine_driven_transfer.py:376:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-07 21:47:08,506] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-07 21:47:08,506] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-07 21:47:08,506] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-07 21:47:08,506] LMCache INFO:[0m  - Total free size: 33792.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-07 21:47:08,506] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-07 21:47:08,506] LMCache WARNING:[0m L1Manager: force-clearing all 0 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-07 21:47:08,506] LMCache INFO:[0m L1Manager: cleared 0 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-07 21:47:08,506] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-07 21:47:08,506] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-07 21:47:08,507] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-07 21:47:08,507] LMCache INFO:[0m  - Total free size: 33792.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-07 21:47:08,507] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-07 21:47:08,507] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:54522 - "POST /cache/clear HTTP/1.1" 200 OK
+[33;20m[2026-08-07 21:47:12,638] LMCache WARNING:[0m Session chatcmpl-9a549ec15a52fa44-840b2760 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:13,287] LMCache WARNING:[0m Session chatcmpl-b147f6819194ce06-a8de809d not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:13,318] LMCache WARNING:[0m Session chatcmpl-958679b8834d64f6-978a02a0 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:13,376] LMCache WARNING:[0m Session chatcmpl-9bc3c75c79caab7b-be90a3eb not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:13,406] LMCache WARNING:[0m Session chatcmpl-b9bc2f518f799324-a5e08d62 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:14,078] LMCache WARNING:[0m Session chatcmpl-9be58a9e4c85650b-b437af17 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:14,776] LMCache WARNING:[0m Session chatcmpl-aac44497fd210ae5-9922419a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:15,478] LMCache WARNING:[0m Session chatcmpl-b79c418df2def3e4-a51e3150 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:16,182] LMCache WARNING:[0m Session chatcmpl-92a2240e357216a2-9a413930 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:16,886] LMCache WARNING:[0m Session chatcmpl-9a577acfcd92a38c-84f9cb0c not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:17,609] LMCache WARNING:[0m Session chatcmpl-b91885064a50dd18-8baa7f1e not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:18,325] LMCache WARNING:[0m Session chatcmpl-b363a98ec866cbcd-9c3a2c7c not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:18,981] LMCache WARNING:[0m Session chatcmpl-804f61b481b8f493-b7005d79 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:19,741] LMCache WARNING:[0m Session chatcmpl-b677b32e782e475d-812af40a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:20,448] LMCache WARNING:[0m Session chatcmpl-b4c5d53100622dc4-b24cd550 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:21,166] LMCache WARNING:[0m Session chatcmpl-b19178f80107677d-82261d61 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:21,866] LMCache WARNING:[0m Session chatcmpl-a3abd457d3b84571-88592ba3 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:22,559] LMCache WARNING:[0m Session chatcmpl-b378cbb806bb7d7d-bddd2ea3 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:23,256] LMCache WARNING:[0m Session chatcmpl-b27f64b0073cc479-afe06c02 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:23,954] LMCache WARNING:[0m Session chatcmpl-afcec44b4a89c332-bac284e9 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:24,679] LMCache WARNING:[0m Session chatcmpl-9b400fb7b2571622-a1ce5bc5 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:25,379] LMCache WARNING:[0m Session chatcmpl-85ee3ea73fe50f20-9813e755 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:26,091] LMCache WARNING:[0m Session chatcmpl-b20c2a291ab029e8-a51aefbc not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:26,797] LMCache WARNING:[0m Session chatcmpl-b316c231d182414f-b87bcfdb not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:27,538] LMCache WARNING:[0m Session chatcmpl-83d65dfc9bf5b636-97f2f4ff not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:28,241] LMCache WARNING:[0m Session chatcmpl-96dea5800478617d-bdd072a2 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:28,919] LMCache WARNING:[0m Session chatcmpl-ba4fa674937a75b7-ae573bdc not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:29,621] LMCache WARNING:[0m Session chatcmpl-bee63748fc86fe27-b3d0bfec not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:30,327] LMCache WARNING:[0m Session chatcmpl-b7fe39fd16a0581a-9912a70b not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:31,030] LMCache WARNING:[0m Session chatcmpl-b8d3603a5409a909-aca61c86 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:31,759] LMCache WARNING:[0m Session chatcmpl-8f7bc4e21eba3d0d-ac30a317 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:32,466] LMCache WARNING:[0m Session chatcmpl-870751a64a44a9c0-a485ef79 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:33,163] LMCache WARNING:[0m Session chatcmpl-b526cd31557a6ca6-aa0d9f6a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:33,863] LMCache WARNING:[0m Session chatcmpl-894061bd979c0678-b150d709 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:34,559] LMCache WARNING:[0m Session chatcmpl-ab65b8492683591a-946cc07d not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:35,259] LMCache WARNING:[0m Session chatcmpl-82e9ac3f2e4da58d-81644f4b not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:35,989] LMCache WARNING:[0m Session chatcmpl-aa21e4d140cbc25e-b4af7bc0 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:36,683] LMCache WARNING:[0m Session chatcmpl-aac4a70f3d0464f7-ad48217a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:37,383] LMCache WARNING:[0m Session chatcmpl-ae9c90de7543c490-ab0807fc not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:38,110] LMCache WARNING:[0m Session chatcmpl-85dc378032e4a8d3-8623283b not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:38,807] LMCache WARNING:[0m Session chatcmpl-bc97ba3ebe2ce913-b0345a42 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:39,509] LMCache WARNING:[0m Session chatcmpl-b8a9ec4f2d3cc949-89edaa13 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:40,236] LMCache WARNING:[0m Session chatcmpl-84e6829e5bb1c18c-9c2f86c6 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:40,943] LMCache WARNING:[0m Session chatcmpl-a37d1ed97d7214eb-856adf5f not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:41,647] LMCache WARNING:[0m Session chatcmpl-885c90911597a50a-b87b0de2 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:42,347] LMCache WARNING:[0m Session chatcmpl-9343926cc5bbeeaf-9b1105a2 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:43,056] LMCache WARNING:[0m Session chatcmpl-80c780bd45cc390b-b22ecef0 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:43,781] LMCache WARNING:[0m Session chatcmpl-a9be824951885a74-b674a605 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:44,483] LMCache WARNING:[0m Session chatcmpl-969e05a25f065a3b-a7cc3dd6 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:45,187] LMCache WARNING:[0m Session chatcmpl-ac20800672583d8b-966abd89 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:45,892] LMCache WARNING:[0m Session chatcmpl-acaa0ae79c4a82d1-b0b0ad3c not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:46,660] LMCache WARNING:[0m Session chatcmpl-844b8681c0f864b8-af9bbf8c not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:47,434] LMCache WARNING:[0m Session chatcmpl-aa9ce238c4c1d844-84af202b not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:48,215] LMCache WARNING:[0m Session chatcmpl-9e1af7b54daff566-859260e1 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:48,930] LMCache WARNING:[0m Session chatcmpl-94c1d8a0c9d362ee-b1134122 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:49,655] LMCache WARNING:[0m Session chatcmpl-b853488cb3ccaeb6-bdc48ab5 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:50,381] LMCache WARNING:[0m Session chatcmpl-a1888a2fe5db6d05-984036bd not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:51,076] LMCache WARNING:[0m Session chatcmpl-9951fbfb33d21f80-abd0fe1f not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:51,803] LMCache WARNING:[0m Session chatcmpl-af5d92c122073b77-89fdfeaa not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:47:51,904] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 5387.3 ms (external_request_id=chatcmpl-ac89a44b979cbe5e-87f914d7, prefetch_request_id=0) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:47:51,912] LMCache INFO:[0m AffinityThreadPool: affinity_key=-7409379355670956625 assigned to worker slot 0 of 8 (thread affinity-pool-0-0); 1 distinct key(s) now bound [3m(affinity_pool.py:108:lmcache.v1.multiprocess.affinity_pool)[0m
+[32;20m[2026-08-07 21:47:51,987] LMCache INFO:[0m Retrieved 31488 tokens in 0.068 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:47:52,574] LMCache WARNING:[0m Session chatcmpl-adbc8d306c2e4e01-b9cc50e8 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:53,255] LMCache WARNING:[0m Session chatcmpl-a89e1cf0db3e1c77-9ec08689 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:53,966] LMCache WARNING:[0m Session chatcmpl-91ffcea02ad7bcca-b349d8e3 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:47:54,484] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 7961.2 ms (external_request_id=chatcmpl-a6992ccc7d78ef07-962f6acf, prefetch_request_id=1) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:47:54,558] LMCache INFO:[0m Retrieved 31488 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:47:54,654] LMCache WARNING:[0m Session chatcmpl-8bac59bb0f6025db-9c81c901 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:55,351] LMCache WARNING:[0m Session chatcmpl-a36351397649bc5b-a0f38053 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:56,044] LMCache WARNING:[0m Session chatcmpl-8e006ebe5739adee-aabe3d39 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:56,641] LMCache WARNING:[0m Session chatcmpl-a86f769ea0aa866a-811b6956 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:57,332] LMCache WARNING:[0m Session chatcmpl-9fe0bf7c6e97cfcd-969771e9 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:47:57,711] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 11182.9 ms (external_request_id=chatcmpl-a7e117232962842f-8990b8f4, prefetch_request_id=2) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:47:57,786] LMCache INFO:[0m Retrieved 31488 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:47:58,127] LMCache WARNING:[0m Session chatcmpl-891fc5fc495d2e22-9d60673f not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:58,809] LMCache WARNING:[0m Session chatcmpl-9e5c7759fd12ec41-ac946256 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:47:59,514] LMCache WARNING:[0m Session chatcmpl-84588ccaaeade82b-b9644da1 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:00,128] LMCache WARNING:[0m Session chatcmpl-a9f673223971fe14-bec7b4a9 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:00,589] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 14056.5 ms (external_request_id=chatcmpl-b33c3b6cab8b5951-84a32f77, prefetch_request_id=3) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:00,660] LMCache INFO:[0m Retrieved 30720 tokens in 0.063 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:00,895] LMCache WARNING:[0m Session chatcmpl-8b16a6f111f4b0f3-bcbee82a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:01,570] LMCache WARNING:[0m Session chatcmpl-a3054c745e53c08b-abd61d2a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:02,241] LMCache WARNING:[0m Session chatcmpl-abc688a161c6316c-9d0f4352 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:02,850] LMCache WARNING:[0m Session chatcmpl-83ce9c237ee9ce4c-a5b20ea6 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:03,531] LMCache WARNING:[0m Session chatcmpl-bcc59c34b8e6d654-9c7b750e not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:04,209] LMCache WARNING:[0m Session chatcmpl-b53564c2b5d58b57-b013d72b not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:04,941] LMCache WARNING:[0m Session chatcmpl-8a54c48eceaead5d-91e5fa49 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:05,667] LMCache WARNING:[0m Session chatcmpl-97265021ef060a2e-80b6c681 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:06,406] LMCache WARNING:[0m Session chatcmpl-a6d6e59d9ade8a69-828b5307 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:07,106] LMCache WARNING:[0m Session chatcmpl-95677764fe7b8639-bbe98ecc not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:07,807] LMCache WARNING:[0m Session chatcmpl-bdb0ca1659ba95f6-9639a368 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:08,503] LMCache WARNING:[0m Session chatcmpl-a1ebc42db58a1a32-99800a99 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:09,201] LMCache WARNING:[0m Session chatcmpl-81bca9521177a5c8-99ac6764 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:09,929] LMCache WARNING:[0m Session chatcmpl-af7a6c8d38400630-8247bfaa not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:10,740] LMCache WARNING:[0m Session chatcmpl-aa826ad88c3fda6d-92734d87 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:11,519] LMCache WARNING:[0m Session chatcmpl-ab3f550be03d1ba0-8e94e826 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:12,266] LMCache WARNING:[0m Session chatcmpl-856b8c1391084e0e-8edbdd60 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:12,959] LMCache WARNING:[0m Session chatcmpl-b1fe2823eaffe923-a9926355 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:13,686] LMCache WARNING:[0m Session chatcmpl-afb2dd1825b51aab-8f2bcaf4 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:14,412] LMCache WARNING:[0m Session chatcmpl-9a6ccfed437fa231-b315ed67 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:15,136] LMCache WARNING:[0m Session chatcmpl-972a0f518018edae-8831e6bb not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:15,203] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 5193.8 ms (external_request_id=chatcmpl-b226276a5aaa1fa1-89425d0a, prefetch_request_id=4) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:15,278] LMCache INFO:[0m Retrieved 31488 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:15,893] LMCache WARNING:[0m Session chatcmpl-bd13d7fc7adc4872-a15cda75 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:16,562] LMCache WARNING:[0m Session chatcmpl-ab0de224e439b24c-8541bc2f not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:17,270] LMCache WARNING:[0m Session chatcmpl-864810d6ad43ed9a-a594fedc not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:17,884] LMCache WARNING:[0m Session chatcmpl-a8822d36c5e02ed7-9b3c8751 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:18,210] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 8195.5 ms (external_request_id=chatcmpl-8be50ba25fe4db1a-8dcc9c1b, prefetch_request_id=5) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:18,284] LMCache INFO:[0m Retrieved 31488 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:18,663] LMCache WARNING:[0m Session chatcmpl-bd911beba58a7f14-80311891 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:19,357] LMCache WARNING:[0m Session chatcmpl-a624ed418df2d062-b92cb0bb not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:20,083] LMCache WARNING:[0m Session chatcmpl-b5a15752fc25fb8f-85b10424 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:20,684] LMCache WARNING:[0m Session chatcmpl-9c95020bd1d76ff3-80d90825 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:20,843] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 10824.7 ms (external_request_id=chatcmpl-b900e48d17319b5e-b6bf5e60, prefetch_request_id=6) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:20,919] LMCache INFO:[0m Retrieved 31488 tokens in 0.068 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:21,479] LMCache WARNING:[0m Session chatcmpl-9781b2ac37b66d75-9f33d082 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:22,139] LMCache WARNING:[0m Session chatcmpl-978263dfe35ff44e-abf8f0bd not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:22,804] LMCache WARNING:[0m Session chatcmpl-8653405980a9fd27-a5846635 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:23,406] LMCache WARNING:[0m Session chatcmpl-b751f52f0e2c583b-a551289e not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:23,618] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 13596.4 ms (external_request_id=chatcmpl-b2d8c0463036d183-81210c0c, prefetch_request_id=7) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:23,693] LMCache INFO:[0m Retrieved 30720 tokens in 0.067 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:24,169] LMCache WARNING:[0m Session chatcmpl-8e14ae01f46e1385-a2eed2b8 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:24,859] LMCache WARNING:[0m Session chatcmpl-9060e192bbd843d0-b58635f9 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:25,519] LMCache WARNING:[0m Session chatcmpl-90b7769e5b3cd054-891b2645 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:26,155] LMCache WARNING:[0m Session chatcmpl-b643b8105aecbbbb-828761ff not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:26,871] LMCache WARNING:[0m Session chatcmpl-996cc8467bb4fe14-91966f89 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:27,561] LMCache WARNING:[0m Session chatcmpl-bccec9fbe2ad2e6c-b32e6975 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:28,278] LMCache WARNING:[0m Session chatcmpl-87052290a7ce6d2c-9e9798f3 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:28,994] LMCache WARNING:[0m Session chatcmpl-87a3de52d9cf9353-a030386e not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:29,667] LMCache WARNING:[0m Session chatcmpl-8e709261c8e23064-b774e4d6 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:30,373] LMCache WARNING:[0m Session chatcmpl-8a8faddfcdac0775-94c8e05a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:31,086] LMCache WARNING:[0m Session chatcmpl-ad7086ff81cd0db9-8bd30346 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:31,805] LMCache WARNING:[0m Session chatcmpl-b44c72d3480ce1be-9e7c949a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:32,526] LMCache WARNING:[0m Session chatcmpl-ac8855d21a2da44e-be7d0eba not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:33,222] LMCache WARNING:[0m Session chatcmpl-a24a3295f4387584-80961993 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:33,934] LMCache WARNING:[0m Session chatcmpl-a4f2e345064f7852-83db90fa not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:34,703] LMCache WARNING:[0m Session chatcmpl-ba06639acef659ec-aedbe577 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:35,525] LMCache WARNING:[0m Session chatcmpl-84ddc013643a9719-b448330b not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:36,344] LMCache WARNING:[0m Session chatcmpl-97514012983582f7-8fcd2bf3 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:37,017] LMCache WARNING:[0m Session chatcmpl-b74b1e4fd9d29eb0-a455002b not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:37,687] LMCache WARNING:[0m Session chatcmpl-871e452921a61474-9e8d0842 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:38,409] LMCache WARNING:[0m Session chatcmpl-b93d0eeae3889e6d-851730a5 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:39,120] LMCache WARNING:[0m Session chatcmpl-a8484e2f98e15719-a2aedd4f not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:39,344] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 5046.6 ms (external_request_id=chatcmpl-974879e51d25d417-ace7553e, prefetch_request_id=8) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:39,418] LMCache INFO:[0m Retrieved 30720 tokens in 0.063 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:39,888] LMCache WARNING:[0m Session chatcmpl-b97ece74a35b3cf8-b371473a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:40,579] LMCache WARNING:[0m Session chatcmpl-9a8cc5580a773108-85dd5ef8 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:41,238] LMCache WARNING:[0m Session chatcmpl-bf639b64f18d1500-a8e684f0 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:41,901] LMCache WARNING:[0m Session chatcmpl-84dc8feb5eb1e7a7-8fe59e22 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:42,186] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 7882.8 ms (external_request_id=chatcmpl-ba40c8e1dc3d4696-b8b9c5da, prefetch_request_id=9) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:42,261] LMCache INFO:[0m Retrieved 31488 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:42,668] LMCache WARNING:[0m Session chatcmpl-b30cd07c4d7ed43e-88ed6c29 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:43,400] LMCache WARNING:[0m Session chatcmpl-bdff77bf11c0b0d6-a7941a6a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:44,100] LMCache WARNING:[0m Session chatcmpl-b3feb0d58a9ce546-99034188 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:44,735] LMCache WARNING:[0m Session chatcmpl-9f4af5011d707adf-ade91d35 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:45,212] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 10905.1 ms (external_request_id=chatcmpl-8d6e3229b0ace645-852bc5b7, prefetch_request_id=10) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:45,287] LMCache INFO:[0m Retrieved 31488 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:45,506] LMCache WARNING:[0m Session chatcmpl-b1d294f3f124267f-9a41b2cf not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:46,183] LMCache WARNING:[0m Session chatcmpl-b4a64cd992a2c906-ae3f9e43 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:46,889] LMCache WARNING:[0m Session chatcmpl-8e97a15e533b4802-bd1daffa not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:47,504] LMCache WARNING:[0m Session chatcmpl-86d1fb1b8c97cedf-af2705d2 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:48,206] LMCache WARNING:[0m Session chatcmpl-9b14044574566427-92dee5ff not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[32;20m[2026-08-07 21:48:48,268] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 13957.2 ms (external_request_id=chatcmpl-af4349f6efdf6ec0-8dda4ab3, prefetch_request_id=11) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-07 21:48:48,341] LMCache INFO:[0m Retrieved 31488 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[33;20m[2026-08-07 21:48:48,949] LMCache WARNING:[0m Session chatcmpl-8499983d2ca58376-a220cbce not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:49,604] LMCache WARNING:[0m Session chatcmpl-836542c4cae39712-87f3caa2 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:50,239] LMCache WARNING:[0m Session chatcmpl-8e753b22b3cd7997-9b86d5bd not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:50,895] LMCache WARNING:[0m Session chatcmpl-ad697a334086f087-826bcbf6 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:51,606] LMCache WARNING:[0m Session chatcmpl-8c143f488abf3fb0-a23e0f51 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:52,298] LMCache WARNING:[0m Session chatcmpl-a981830f0439da52-9f1047a0 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:53,019] LMCache WARNING:[0m Session chatcmpl-85f525e89a7e43ae-a3db5072 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:53,744] LMCache WARNING:[0m Session chatcmpl-816569cb315065dc-834da9c8 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:54,438] LMCache WARNING:[0m Session chatcmpl-aa2863f9ca48b58f-971c8764 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:55,157] LMCache WARNING:[0m Session chatcmpl-80a04b792ffc3699-807c82b7 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:55,850] LMCache WARNING:[0m Session chatcmpl-b9ef8de993824283-ab4982e6 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:56,570] LMCache WARNING:[0m Session chatcmpl-9dd53d7db9ea153a-98e0fa7d not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:57,275] LMCache WARNING:[0m Session chatcmpl-b66876d8dc2067f0-a3931f9a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:58,012] LMCache WARNING:[0m Session chatcmpl-b842b7001fca258a-91b67e91 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:58,712] LMCache WARNING:[0m Session chatcmpl-abcf2b9ca9be97d3-a134124a not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:48:59,400] LMCache WARNING:[0m Session chatcmpl-b2eb8d88c97498b3-a98b4579 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:49:00,088] LMCache WARNING:[0m Session chatcmpl-bd922d843656a8de-a234c385 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:49:00,811] LMCache WARNING:[0m Session chatcmpl-9416a12608076b83-a099cc28 not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+[33;20m[2026-08-07 21:49:01,484] LMCache WARNING:[0m Session chatcmpl-93f9d82a7282a9b6-8397824e not found, skipping touch [3m(lookup.py:524:lmcache.v1.multiprocess.modules.lookup)[0m
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+[32;20m[2026-08-07 21:49:14,382] LMCache INFO:[0m Shutting down LMCache HTTP server... [3m(http_server.py:171:lmcache.v1.multiprocess.http_server)[0m
+[32;20m[2026-08-07 21:49:14,932] LMCache INFO:[0m LMCache HTTP server stopped [3m(http_server.py:193:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59057]
+/home/azureuser/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked shared_memory objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

@@ -575,6 +575,12 @@ destination power rose from 128.2 W to 283.4 W. The three replay moves
 recomputed 10,662 tokens; the five KV moves computed 713 tokens while reusing
 2.72 GB of KV. The retained paired 10 Hz samples have 95.6% coverage and the
 bundle includes phase-level engine queue depth and checksum-pinned raw data.
+`outputs/live-power-handoff-east-germany-20260807/` retains the three-A100
+Sweden-to-East-US-2/West-Germany campaign with 80% source and 50% load at each
+destination. Queue Haul admitted all eight sessions in 29.669 s and KV-only in
+25.159 s; replay-only admitted six before the fixed 30-second deadline. The
+bundle includes raw `power.csv`, load and transfer telemetry, plots for both
+completed arms, and the exact plan and composed non-formal calibration used.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast
