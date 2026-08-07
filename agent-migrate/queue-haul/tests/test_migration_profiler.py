@@ -445,7 +445,8 @@ def test_session_probe_appends_one_final_instruction():
     assert session.probe(base) == base + [{"role": "user", "content": "Reply with session state code CODE."}]
     assert session.probe(base, "Continue CODE") == base + [{"role": "user", "content": "Continue CODE"}]
     assert c.chat_payload(c.b.Config(), base, 1)["reasoning_effort"] == "low"
-    assert c.chat_payload(c.b.Config(), base, 1, True)["kv_transfer_params"] == {"qh_bypass_lmcache": True}
+    assert c.chat_payload(c.b.Config(), base, 1, True)["vllm_xargs"] == {"qh_bypass_lmcache": 1}
+    assert c.chat_payload(c.b.Config(), base, 1, cache_salt="salt")["cache_salt"] == "salt"
 
 
 def test_session_request_requires_http_success_not_exact_model_text(monkeypatch):
@@ -461,6 +462,48 @@ def test_session_request_requires_http_success_not_exact_model_text(monkeypatch)
     monkeypatch.setattr(c, "stream_chat", lambda *_args: (failed, "CODE"))
     with pytest.raises(RuntimeError, match="HTTP 500"):
         session.request(1, [], "probe")
+
+
+def test_continuations_verify_in_parallel_and_preserve_order():
+    barrier = threading.Barrier(2)
+
+    class Session:
+        route = 7
+
+        def __init__(self, session_id):
+            self.session_id, self.messages = session_id, []
+
+        def continuation(self):
+            barrier.wait(timeout=1)
+            self.messages.append({"role": "assistant", "content": self.session_id})
+            return c.RequestResult(self.session_id, 200, "h", 1, 2)
+
+    sessions = {name: Session(name) for name in ("a", "b")}
+    scenario = {"kind": "migration", "sessions": [
+        {"session_id": "b", "order": 1},
+        {"session_id": "a", "order": 0},
+    ]}
+
+    rows = c.verify_continuations(
+        scenario, sessions, SimpleNamespace(api_proxy_port=7, src_port=8),
+    )
+
+    assert [row["session_id"] for row in rows] == ["a", "b"]
+    assert {row["committed_context_hash"] for row in rows} == {
+        c.messages_hash([])}
+
+
+def test_sessions_warm_in_parallel():
+    barrier = threading.Barrier(2)
+
+    class Session:
+        def warm(self):
+            barrier.wait(timeout=1)
+
+    c.warm_sessions([Session(), Session()], 2)
+
+    with pytest.raises(ValueError, match="warm concurrency"):
+        c.warm_sessions([], 0)
 
 
 def test_cli_only_exposes_new_commands():
@@ -712,8 +755,8 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
     def request(*_args, **_kwargs):
         calls.append("request")
         return c.RequestResult(
-            "r", 200, "h", 3, 4, prompt_tokens=520,
-            cached_tokens=512,
+            "r", 200, "h", 3, 4, prompt_tokens=768,
+            cached_tokens=768,
         ), "CODE"
 
     session.request = request
@@ -727,6 +770,11 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
         or {"total_keys": 2, "found_keys": 0},
     )
     monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 512)
+    rows = c.b.resp_rows(transfers)
+    monkeypatch.setattr(
+        c.b, "resp_rows",
+        lambda _path: rows if calls.count("request") == 0 else rows + [{**rows[0], "key_hashes": "k2"}],
+    )
     runtime = c.LiveRuntime(
         {"s": session},
         SimpleNamespace(api_proxy_port=1),
@@ -743,7 +791,7 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
     assert session.copied_keys == {"stale", "k1", "k2"}
     assert session.copied_token_ids == [0] * 512
     assert (result.logical_kv_chunks, result.logical_kv_bytes,
-            result.processed_tokens) == (2, 20, 8)
+            result.processed_tokens) == (2, 20, 0)
 
 
 def test_request_schedule_is_relative_to_post_warm_epoch(tmp_path):

@@ -133,6 +133,9 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(
     assert {row["bandwidth_mbps"] for row in plan["scenarios"]} \
         == {5_000, 10_000}
     assert set(bandwidths) == {5_000, 10_000}
+    scenario_bandwidths = [row["bandwidth_mbps"] for row in plan["scenarios"]]
+    assert sum(i == 0 or value != scenario_bandwidths[i - 1]
+               for i, value in enumerate(scenario_bandwidths)) == 2
     queue_moves = [
         move for row in plan["scenarios"] if row["policy"] == "queue_haul"
         for move in row["moves"] if move["method"] == "kv_transfer"
@@ -228,6 +231,22 @@ def test_isolated_fastest_chooses_per_session_then_orders_by_chosen_duration(
         ("a", "kv_transfer", 1),
         ("c", "replay", 2),
     ]
+
+
+def test_isolated_fastest_is_optional_not_default(tmp_path):
+    default = make_plan(manifest(tmp_path), episodes=1, sessions=4)
+    selected = make_plan(
+        manifest(tmp_path), episodes=1, sessions=4,
+        policies=("isolated_fastest",),
+    )
+
+    assert "isolated_fastest" not in default["policies"]
+    assert selected["policies"] == ["isolated_fastest"]
+    assert len(selected["scenarios"]) == 2
+    assert campaign.parse_args([
+        "prepare", "--out", str(tmp_path),
+        "--policies", "isolated_fastest",
+    ]).policies == ["isolated_fastest"]
 
 
 def test_prepare_cli_accepts_frozen_model_profile(tmp_path):
@@ -423,6 +442,54 @@ def test_deadline_attainment_uses_episode_target_and_inclusive_deadline():
         == pytest.approx([.4375, .4375, .59375, .75])
 
 
+
+def test_common_packing_chart_uses_120_matched_rows_and_five_point_band(
+        tmp_path, monkeypatch):
+    packing, baseline, out = (
+        tmp_path / "packing", tmp_path / "baseline", tmp_path / "out"
+    )
+    matches = [f"m{i}" for i in range(120)]
+    values = {
+        "queue_haul": .5, "greedy": .56, "isolated_fastest": .54,
+        "kv_only": .44, "replay_only": .5,
+    }
+    for root, policies in (
+        (packing, ("queue_haul", "greedy", "kv_only", "replay_only")),
+        (baseline, ("isolated_fastest",)),
+    ):
+        root.mkdir()
+        (root / "plan.json").write_text(json.dumps({
+            "episodes": 120, "policies": list(policies),
+            "scenarios": [{"match_id": match} for match in matches],
+        }))
+        campaign.profiler.write_csv(root / "policy_attainment.csv", [
+            {"match_id": match, "policy": policy,
+             "power_attainment_fraction": values[policy]}
+            for policy in policies for match in matches
+        ])
+        campaign.profiler.write_csv(root / "policy_episodes.csv", [
+            {"match_id": match, "policy": policy, "status": "complete"}
+            for policy in policies for match in matches
+        ])
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+
+    rows = campaign.common_packing_comparison(packing, baseline, out)
+
+    assert [row["policy"] for row in rows] == list(campaign.PACKING_POLICIES)
+    assert {row["observations"] for row in rows} == {120}
+    assert {
+        row["policy"]: (row["better"], row["similar"], row["worse"])
+        for row in rows
+    } == {
+        "queue_haul": (0, 120, 0), "greedy": (120, 0, 0),
+        "isolated_fastest": (0, 120, 0), "kv_only": (0, 0, 120),
+        "replay_only": (0, 120, 0),
+    }
+    labels = [row.get_text() for row in campaign.plt.gcf().axes[0].get_yticklabels()]
+    assert labels[2] == "Per-session fastest (n=120)"
+    assert (out / "policy_hardware_common_packing.pdf").exists()
+
+
 def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     rows = [
         {"scenario_id": "a", "policy": "queue_haul",
@@ -446,16 +513,19 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     assert CDF_COLORS == {
         "queue_haul": "#B1040E", "greedy": "#008566",
         "greedy_lagrangian": "#620059",
+        "isolated_fastest": "#5E3C99",
         "kv_only": "#006CB8", "replay_only": "#E98300",
     }
     assert CDF_LABELS == {
         "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
         "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
+        "isolated_fastest": "Per-session fastest",
         "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
     }
     assert CDF_LINESTYLES == {
         "queue_haul": "-", "greedy": "--",
         "greedy_lagrangian": (0, (3, 1, 1, 1)),
+        "isolated_fastest": (0, (5, 1)),
         "kv_only": "-.", "replay_only": ":",
     }
 

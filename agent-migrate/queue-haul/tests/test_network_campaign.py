@@ -518,6 +518,33 @@ def test_serve_window_routes_every_session(monkeypatch):
                                  ("b", "west", 2, "B")}
 
 
+def test_handoff_uses_queue_haul_deadline_and_cache_isolated_load(monkeypatch, tmp_path):
+    plan = {"scenarios": [
+        {"policy": "kv_only", "bandwidth": "natural", "deadline_s": 30},
+        {"policy": "queue_haul", "bandwidth": "natural", "deadline_s": 30},
+    ]}
+    scenario = n.handoff_scenario(plan, cluster(tmp_path), .5)
+    assert scenario["policy"] == "queue_haul"
+    assert scenario["deadline_s"] == 30
+    assert scenario["background"] == {"east": [.5, 0], "west": [.5, 0]}
+    assert n.HANDOFF_ENV == {
+        "QH_KV_ROLE_SOURCE": "kv_both", "QH_KV_ROLE_SINK": "kv_both",
+        "QH_LMCACHE_L1_GB": "33", "QH_PREFIX_CACHING": "off",
+        "QH_REDIS_MAXMEMORY_GB": "32",
+    }
+
+    seen = {}
+    result = n.profiler.RequestResult("r", 200, "", 1, 2)
+    monkeypatch.setattr(n.profiler, "stream_chat", lambda *args:
+                        seen.update(args=args) or (result, ""))
+    load = n.SinkLoad(SimpleNamespace(), 1, 1000, .5, tmp_path / "load.jsonl")
+    load._request(7)
+    assert seen["args"][6:] == (True, "load-7")
+    assert seen["args"][2][0]["role"] == "system"
+    load.stop_admissions()
+    assert load.stop.is_set()
+
+
 def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
     scenario = {
         "scenario_id": "s", "condition_index": 0, "repeat": 0,

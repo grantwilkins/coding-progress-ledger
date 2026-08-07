@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 292, in main
+    print(json.dumps(run(args.run_root), indent=2, sort_keys=True))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 281, in run
+    raise RuntimeError(f"MP campaign acceptance failed: {final}")
+RuntimeError: MP campaign acceptance failed: {'ok': False, 'gates': {'three_repeats_each': True, 'distinct_session_overlap': True, 'aggregate_throughput_gain': True, 'token_accounting': False, 'remote_wire_accounting': True, 'continuations_correct': True}, 'serialized_ceiling_bps': 111221382.52871132, 'parallel_median_bps': {2: 270860436.08456826, 4: 1210391813.164305}, 'best_parallel_median_bps': 1210391813.164305}

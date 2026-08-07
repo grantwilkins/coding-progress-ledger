@@ -1,0 +1,237 @@
+[32;20m[2026-07-20 03:34:17,689] LMCache INFO:[0m  torch_dev=StubCPUDevice(device_type=cpu), torch_device_type=cpu [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-07-20 03:34:17,954] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-07-20 03:34:17,954] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-07-20 03:34:17,954] LMCache INFO:[0m Skipping backend lmcache.c_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+
+ _     __  __    ____           _          
+| |   |  \/  |  / ___|__ _  ___| |__   ___      LMCache v0.5.1
+| |   | |\/| | | |   / _` |/ __| '_ \ / _ \     Website:  https://lmcache.ai/
+| |___| |  | | | |__| (_| | (__| | | |  __/     Recipes:  https://docs.lmcache.ai/recipes
+|_____|_|  |_|  \____\__,_|\___|_| |_|\___|     LinkedIn: https://www.linkedin.com/company/lmcache-lab
+Set LMCACHE_DISABLE_BANNER=1 to hide this banner.
+
+[32;20m[2026-07-20 03:34:18,954] LMCache INFO:[0m multi_layer_block_kv_transfer mode: tensor [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+[32;20m[2026-07-20 03:34:23,632] LMCache INFO:[0m Discovered API module: cache_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,647] LMCache INFO:[0m Discovered API module: env_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,648] LMCache INFO:[0m Discovered API module: loglevel_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,649] LMCache INFO:[0m Discovered API module: metrics_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,653] LMCache INFO:[0m Discovered API module: periodic_thread_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,654] LMCache INFO:[0m Discovered API module: run_script_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,662] LMCache INFO:[0m Discovered API module: thread_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,665] LMCache INFO:[0m Discovered API module: common_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,666] LMCache INFO:[0m Discovered API module: config_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,670] LMCache INFO:[0m Discovered API module: info_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,672] LMCache INFO:[0m Discovered API module: quota_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-07-20 03:34:23,675] LMCache INFO:[0m Discovered API module: reconfigure_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[33;20m[2026-07-20 03:34:23,700] LMCache WARNING:[0m LazyMemoryAllocator requires memory pinning which is not supported on the current backend. Disabling l1-use-lazy. [3m(config.py:155:lmcache.v1.distributed.config)[0m
+[32;20m[2026-07-20 03:34:23,703] LMCache INFO:[0m Starting LMCache HTTP server on http://127.0.0.1:16045 [3m(http_server.py:258:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Started server process [32781]
+INFO:     Waiting for application startup.
+[32;20m[2026-07-20 03:34:23,770] LMCache INFO:[0m Starting LMCache HTTP server... (accelerator available: False) [3m(http_server.py:73:lmcache.v1.multiprocess.http_server)[0m
+[32;20m[2026-07-20 03:34:23,787] LMCache INFO:[0m OTel MeterProvider initialised with Prometheus fallback (standalone metrics HTTP server disabled; /metrics must be exposed by the caller), resource={'telemetry.sdk.language': 'python', 'telemetry.sdk.name': 'opentelemetry', 'telemetry.sdk.version': '1.40.0', 'service.instance.id': 'queue-haul-source', 'service.name': 'unknown_service'} [3m(otel_init.py:114:lmcache.v1.mp_observability.otel_init)[0m
+[32;20m[2026-07-20 03:34:23,788] LMCache INFO:[0m Checking if shm capacity is larger than L1 request [3m(server.py:329:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-07-20 03:34:23,791] LMCache INFO:[0m Starting L1EvictionController... [3m(eviction_controller.py:53:lmcache.v1.distributed.storage_controllers.eviction_controller)[0m
+[32;20m[2026-07-20 03:34:23,793] LMCache INFO:[0m Created RESP L2 adapter: 127.0.0.1:16265 (workers=8) [3m(resp_l2_adapter.py:163:lmcache.v1.distributed.l2_adapters.resp_l2_adapter)[0m
+[32;20m[2026-07-20 03:34:23,793] LMCache INFO:[0m Starting L2EvictionController... [3m(eviction_controller.py:233:lmcache.v1.distributed.storage_controllers.eviction_controller)[0m
+[32;20m[2026-07-20 03:34:23,794] LMCache INFO:[0m Starting StoreController... [3m(store_controller.py:305:lmcache.v1.distributed.storage_controllers.store_controller)[0m
+[32;20m[2026-07-20 03:34:23,794] LMCache INFO:[0m Starting PrefetchController... [3m(prefetch_controller.py:555:lmcache.v1.distributed.storage_controllers.prefetch_controller)[0m
+[32;20m[2026-07-20 03:34:23,794] LMCache INFO:[0m Using blake3 hash function [3m(token_hasher.py:79:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-07-20 03:34:23,795] LMCache INFO:[0m Computed NONE_HASH=b"~>\xff\x9e\xf7a:P4\x0e\xb1&w\xee\x03\xb8:\xc7Y\xfc\xba\x9b\xb3'\x05\xf0rH\xd5mG;" using hash function [3m(token_hasher.py:180:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-07-20 03:34:23,796] LMCache INFO:[0m TokenHasher initialized: chunk_size=256, hash_algorithm=blake3 [3m(token_hasher.py:67:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-07-20 03:34:23,796] LMCache INFO:[0m PeriodicThread SessionManager-cleanup-thread-7f3a11aac5f0 entering main loop (interval=60.0s) [3m(periodic_thread.py:284:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-07-20 03:34:23,796] LMCache INFO:[0m Started PeriodicThread: SessionManager-cleanup-thread-7f3a11aac5f0 (level=medium, interval=60.0s, init_wait=0.0s) [3m(periodic_thread.py:244:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-07-20 03:34:23,796] LMCache INFO:[0m Supported transfer mode: engine_driven [3m(server.py:206:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-07-20 03:34:23,797] LMCache INFO:[0m PeriodicThread lmcache-mp-worker-reaper entering main loop (interval=30.0s) [3m(periodic_thread.py:284:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-07-20 03:34:23,797] LMCache INFO:[0m Started PeriodicThread: lmcache-mp-worker-reaper (level=medium, interval=30.0s, init_wait=0.0s) [3m(periodic_thread.py:244:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-07-20 03:34:23,800] LMCache INFO:[0m Created AffinityThreadPool 'affinity-pool-0' with 8 worker slots: up to 8 distinct affinity keys each bind to their own thread before slots are shared. Compare this against the number of clients expected to connect to confirm routing. [3m(affinity_pool.py:60:lmcache.v1.multiprocess.affinity_pool)[0m
+[32;20m[2026-07-20 03:34:23,800] LMCache INFO:[0m LMCache ZMQ cache server is running on tcp://127.0.0.1:13520 [3m(server.py:385:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-07-20 03:34:23,800] LMCache INFO:[0m LMCache cache server is running... [3m(server.py:400:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-07-20 03:34:23,801] LMCache INFO:[0m LMCache HTTP server initialized [3m(http_server.py:166:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:16045 (Press CTRL+C to quit)
+[32;20m[2026-07-20 03:35:10,338] LMCache INFO:[0m Using shm non-GPU transfer strategy [3m(server_transfer.py:66:lmcache.v1.multiprocess.modules.server_transfer)[0m
+[32;20m[2026-07-20 03:35:10,338] LMCache INFO:[0m Registered non-GPU context for instance 448622716545590572 (model=/scratch/users/gfw/ptsim/hf/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee, world_size=1) [3m(engine_driven_transfer.py:376:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:06,601] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:36:06,601] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:36:06,601] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:36:06,601] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:36:06,601] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-07-20 03:36:06,602] LMCache WARNING:[0m L1Manager: force-clearing all 0 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:36:06,602] LMCache INFO:[0m L1Manager: cleared 0 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:36:06,602] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:36:06,602] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:36:06,602] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:36:06,602] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:36:06,602] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:36:06,602] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     127.0.0.1:34692 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-07-20 03:36:07,249] LMCache INFO:[0m AffinityThreadPool: affinity_key=8885757077954107176 assigned to worker slot 0 of 8 (thread affinity-pool-0-0); 1 distinct key(s) now bound [3m(affinity_pool.py:108:lmcache.v1.multiprocess.affinity_pool)[0m
+[32;20m[2026-07-20 03:36:07,322] LMCache INFO:[0m Stored 8192 tokens in 0.067 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:08,262] LMCache INFO:[0m Stored 8192 tokens in 0.066 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:11,090] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:12,030] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:12,090] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:14,770] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:15,705] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:15,763] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:18,467] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:19,404] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:36:19,461] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:30,409] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:37:30,409] LMCache INFO:[0m  - Total active allocations: 256 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:37:30,409] LMCache INFO:[0m  - Total allocated size: 3072.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:37:30,409] LMCache INFO:[0m  - Total free size: 13312.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:37:30,410] LMCache INFO:[0m L1Manager memcheck: total objects = 256, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-07-20 03:37:30,410] LMCache WARNING:[0m L1Manager: force-clearing all 256 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:37:30,411] LMCache INFO:[0m L1Manager: cleared 256 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:37:30,412] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:37:30,412] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:37:30,412] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:37:30,412] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:37:30,412] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:37:30,412] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     127.0.0.1:34768 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-07-20 03:37:31,090] LMCache INFO:[0m Stored 8192 tokens in 0.064 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:32,025] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:34,771] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:35,706] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:35,763] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:38,446] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:39,384] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:39,443] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:42,128] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:43,066] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:37:43,126] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:35,957] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:38:35,957] LMCache INFO:[0m  - Total active allocations: 256 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:38:35,957] LMCache INFO:[0m  - Total allocated size: 3072.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:38:35,958] LMCache INFO:[0m  - Total free size: 13312.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:38:35,958] LMCache INFO:[0m L1Manager memcheck: total objects = 256, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-07-20 03:38:35,958] LMCache WARNING:[0m L1Manager: force-clearing all 256 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:38:35,959] LMCache INFO:[0m L1Manager: cleared 256 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:38:35,960] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:38:35,960] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:38:35,960] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:38:35,960] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:38:35,960] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:38:35,961] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     127.0.0.1:34842 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-07-20 03:38:36,631] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:37,566] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:40,317] LMCache INFO:[0m Stored 8192 tokens in 0.064 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:41,250] LMCache INFO:[0m Stored 7936 tokens in 0.062 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:41,301] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:43,980] LMCache INFO:[0m Stored 8192 tokens in 0.064 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:44,913] LMCache INFO:[0m Stored 7936 tokens in 0.062 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:44,971] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:47,657] LMCache INFO:[0m Stored 8192 tokens in 0.064 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:48,589] LMCache INFO:[0m Stored 7936 tokens in 0.062 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:38:48,647] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:17,446] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:40:17,446] LMCache INFO:[0m  - Total active allocations: 256 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:40:17,446] LMCache INFO:[0m  - Total allocated size: 3072.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:40:17,447] LMCache INFO:[0m  - Total free size: 13312.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:40:17,447] LMCache INFO:[0m L1Manager memcheck: total objects = 256, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-07-20 03:40:17,447] LMCache WARNING:[0m L1Manager: force-clearing all 256 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:40:17,448] LMCache INFO:[0m L1Manager: cleared 256 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:40:17,449] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:40:17,449] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:40:17,449] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:40:17,449] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:40:17,449] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:40:17,449] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     127.0.0.1:34932 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-07-20 03:40:18,127] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:19,057] LMCache INFO:[0m Stored 8192 tokens in 0.064 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:21,824] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:22,765] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:22,823] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:25,511] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:26,448] LMCache INFO:[0m Stored 7936 tokens in 0.064 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:26,509] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:29,206] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:30,143] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:40:30,204] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:00,178] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:00,178] LMCache INFO:[0m  - Total active allocations: 256 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:00,178] LMCache INFO:[0m  - Total allocated size: 3072.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:00,178] LMCache INFO:[0m  - Total free size: 13312.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:00,178] LMCache INFO:[0m L1Manager memcheck: total objects = 256, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-07-20 03:41:00,179] LMCache WARNING:[0m L1Manager: force-clearing all 256 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:41:00,179] LMCache INFO:[0m L1Manager: cleared 256 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:41:00,180] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:00,181] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:00,181] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:00,181] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:00,181] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:41:00,181] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     127.0.0.1:34988 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-07-20 03:41:00,861] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:01,796] LMCache INFO:[0m Stored 8192 tokens in 0.066 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:04,562] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:05,497] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:05,556] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:08,268] LMCache INFO:[0m Stored 8192 tokens in 0.066 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:09,204] LMCache INFO:[0m Stored 7936 tokens in 0.064 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:09,262] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:11,961] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:12,895] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:12,956] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:46,878] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:46,878] LMCache INFO:[0m  - Total active allocations: 256 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:46,878] LMCache INFO:[0m  - Total allocated size: 3072.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:46,878] LMCache INFO:[0m  - Total free size: 13312.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:46,879] LMCache INFO:[0m L1Manager memcheck: total objects = 256, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-07-20 03:41:46,879] LMCache WARNING:[0m L1Manager: force-clearing all 256 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:41:46,880] LMCache INFO:[0m L1Manager: cleared 256 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:41:46,881] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:46,881] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:46,881] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:46,881] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:41:46,881] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:41:46,881] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     127.0.0.1:35044 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-07-20 03:41:47,704] LMCache INFO:[0m Stored 8192 tokens in 0.064 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:48,638] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:51,406] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:52,343] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:52,401] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:55,102] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:56,038] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:56,097] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:58,802] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:59,740] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:41:59,802] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:25,849] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:42:25,849] LMCache INFO:[0m  - Total active allocations: 256 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:42:25,849] LMCache INFO:[0m  - Total allocated size: 3072.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:42:25,849] LMCache INFO:[0m  - Total free size: 13312.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:42:25,849] LMCache INFO:[0m L1Manager memcheck: total objects = 256, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-07-20 03:42:25,849] LMCache WARNING:[0m L1Manager: force-clearing all 256 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:42:25,850] LMCache INFO:[0m L1Manager: cleared 256 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:42:25,851] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:42:25,851] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:42:25,851] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:42:25,851] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-07-20 03:42:25,851] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-07-20 03:42:25,851] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     127.0.0.1:35100 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-07-20 03:42:26,545] LMCache INFO:[0m Stored 8192 tokens in 0.066 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:27,483] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:30,254] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:31,188] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:31,242] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:33,943] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:34,877] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:34,931] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:37,633] LMCache INFO:[0m Stored 8192 tokens in 0.065 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:38,567] LMCache INFO:[0m Stored 7936 tokens in 0.063 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-07-20 03:42:38,621] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+[32;20m[2026-07-20 03:47:18,625] LMCache INFO:[0m Shutting down LMCache HTTP server... [3m(http_server.py:171:lmcache.v1.multiprocess.http_server)[0m
+[32;20m[2026-07-20 03:47:18,854] LMCache INFO:[0m LMCache HTTP server stopped [3m(http_server.py:193:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Application shutdown complete.
+INFO:     Finished server process [32781]
+/usr/lib/python3.12/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked shared_memory objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

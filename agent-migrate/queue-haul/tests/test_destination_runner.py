@@ -17,6 +17,7 @@ Plausible wrong implementations:
 import pytest
 import json
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -71,6 +72,17 @@ def test_prewarm_rejects_status_200_without_token_work(monkeypatch):
 
     with pytest.raises(RuntimeError, match="failed to prewarm"):
         runner.prewarm("h", 1, "m", [runner.Session("s", 4, 2, 3, 100, 0)])
+
+
+def test_agentic_chat_turn_is_unique_and_compute_heavy():
+    session = runner.Session("s", 4, 2048, 32, 100, 0)
+
+    first = runner.agentic_messages(session, 1)
+    second = runner.agentic_messages(session, 2)
+
+    assert first != second and first != runner.agentic_messages(session, 33)
+    assert first[0]["role"] == "system"
+    assert first[1]["content"].count(" x") == 2048
 
 
 def test_service_reset_clears_remote_and_local_caches(monkeypatch, tmp_path):
@@ -527,7 +539,7 @@ def test_destination_load_close_uses_request_timeout(tmp_path):
     load = runner.DestinationLoad.__new__(runner.DestinationLoad)
     load.stop, load.failure, load.rows = threading.Event(), None, []
     load.chunk_s, load.timeout_s, load.root = 15, 720, tmp_path
-    load.thread = SimpleNamespace(join=joined.append, is_alive=lambda: False)
+    load.thread = SimpleNamespace(join=joined.append, is_alive=lambda: False, ident=1)
     load.sampler = SimpleNamespace(close=lambda: None)
     load.close()
     assert joined == [745]
@@ -537,7 +549,7 @@ def test_destination_load_close_hard_fails_if_request_outlives_timeout(tmp_path)
     load = runner.DestinationLoad.__new__(runner.DestinationLoad)
     load.stop, load.failure, load.rows = threading.Event(), None, []
     load.chunk_s, load.timeout_s, load.root = 0, 0, tmp_path
-    load.thread = SimpleNamespace(join=lambda _: None, is_alive=lambda: True)
+    load.thread = SimpleNamespace(join=lambda _: None, is_alive=lambda: True, ident=1)
     load.sampler = SimpleNamespace(close=lambda: None)
     with pytest.raises(RuntimeError, match="foreground failed"):
         load.close()
@@ -658,3 +670,122 @@ def test_rho_uses_token_counter_differences_and_requires_thirty_seconds():
         runner.require_rho(rows, 1.051, 2, 2)
     with pytest.raises(ValueError, match="thirty"):
         runner.measured_rho([rows[0], {**rows[1], "monotonic_ns": 29_000_000_000}], 2, 2)
+
+
+def open_load(tmp_path, rps, max_inflight, seed=0):
+    load = runner.DestinationLoad.__new__(runner.DestinationLoad)
+    load.host, load.port, load.model = "h", 1, "m"
+    load.sessions = [runner.Session("s", 4, 2, 3, 100, 0)]
+    load.rate, load.max_inflight, load.seed = rps, max_inflight, seed
+    load.timeout_s, load.rows = 720, []
+    load.stop, load.admit = threading.Event(), threading.Event()
+    load.admit.set()
+    load.blocked_arrivals = 0
+    load.root = tmp_path
+    return load
+
+
+@contextmanager
+def running(load, release=None):
+    """Always tear the arrival thread down, so a failure cannot leak into the next test."""
+    thread = threading.Thread(target=load._run_open, daemon=True)
+    thread.start()
+    try:
+        yield thread
+    finally:
+        load.stop.set()
+        if release is not None:
+            release.set()
+        thread.join(10)
+        assert not thread.is_alive(), "arrival thread outlived its stop signal"
+
+
+def wait_until(predicate, timeout=5):
+    deadline = time.monotonic() + timeout
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(.01)
+    return predicate()
+
+
+def test_open_loop_arrivals_do_not_wait_on_completions(monkeypatch, tmp_path):
+    """A slow server must not throttle the offered arrival process."""
+    released, launched = threading.Event(), []
+    def slow(*_args):
+        launched.append(1)
+        released.wait(10)
+        return {"status": 200}
+    monkeypatch.setattr(runner, "issue", slow)
+    load = open_load(tmp_path, rps=200, max_inflight=8)
+    with running(load, released):
+        assert wait_until(lambda: len(launched) == 8), \
+            f"arrivals stalled at {len(launched)} before the in-flight cap"
+
+
+def test_open_loop_caps_in_flight_and_counts_blocked_arrivals(monkeypatch, tmp_path):
+    released, inflight, peak, lock = threading.Event(), [], [], threading.Lock()
+    def held(*_args):
+        with lock:
+            inflight.append(1)
+            peak.append(len(inflight))
+        released.wait(10)
+        with lock:
+            inflight.pop()
+        return {"status": 200}
+    monkeypatch.setattr(runner, "issue", held)
+    load = open_load(tmp_path, rps=200, max_inflight=3)
+    with running(load, released):
+        assert wait_until(lambda: load.blocked_arrivals > 0), \
+            "an arrival blocked by the cap was never recorded"
+        assert max(peak) <= 3, f"in-flight reached {max(peak)}, above the cap"
+
+
+def test_pause_stops_arrivals_and_resume_restarts_them(monkeypatch, tmp_path):
+    launched = []
+    monkeypatch.setattr(runner, "issue", lambda *a: launched.append(1) or {"status": 200})
+    load = open_load(tmp_path, rps=200, max_inflight=8)
+    load.pause()
+    with running(load):
+        time.sleep(.3)
+        assert launched == [], f"paused load issued {len(launched)} requests"
+        load.resume()
+        assert wait_until(lambda: bool(launched)), "resumed load never issued a request"
+
+
+def test_open_loop_mode_requires_both_rate_and_cap():
+    sessions = [runner.Session("s", 4, 2, 3, 100, 0)]
+    with pytest.raises(ValueError, match="open-loop mode"):
+        runner.DestinationLoad("h", 1, "m", sessions, 1, 1, 1, Path("/tmp"), 0, rps=4)
+    with pytest.raises(ValueError, match="open-loop mode"):
+        runner.DestinationLoad("h", 1, "m", sessions, 1, 1, 1, Path("/tmp"), 0,
+                               max_inflight=8)
+
+
+def test_open_loop_rate_overrides_the_rho_derived_rate(tmp_path):
+    sessions = [runner.Session("s", 4, 2, 3, 100, 0)]
+    load = runner.DestinationLoad("h", 1, "m", sessions, 16.5, 10, 10, tmp_path, 0,
+                                  rps=4, max_inflight=32)
+    assert load.rate == 4 and load.summary()["offered_rps"] == 4
+    closed = runner.DestinationLoad("h", 1, "m", sessions, 16.5, 10, 10, tmp_path, 0)
+    assert closed.rate == pytest.approx(16.5 / closed.work)
+
+
+def test_close_is_safe_when_start_failed_before_the_thread_ran(tmp_path):
+    """A prewarm that raises must not mask itself with a join error."""
+    sessions = [runner.Session("s", 4, 2, 3, 100, 0)]
+    load = runner.DestinationLoad("h", 1, "m", sessions, 1, 1, 1, tmp_path, 0)
+    assert load.thread.ident is None
+    load.close()
+
+
+def test_prewarm_uses_its_own_shorter_timeout(tmp_path, monkeypatch):
+    """A wedged engine should fail in minutes, not one request timeout per session."""
+    seen = []
+    monkeypatch.setattr(runner, "prewarm",
+                        lambda host, port, model, sessions, timeout: seen.append(timeout))
+    monkeypatch.setattr(runner.MetricsSampler, "start", lambda self: None)
+    sessions = [runner.Session("s", 4, 2, 3, 100, 0)]
+    load = runner.DestinationLoad("h", 1, "m", sessions, 1, 1, 1, tmp_path, 0,
+                                  timeout_s=720, prewarm_timeout_s=300)
+    load.start()
+    load.stop.set(); load.thread.join(5)
+    assert seen == [300]

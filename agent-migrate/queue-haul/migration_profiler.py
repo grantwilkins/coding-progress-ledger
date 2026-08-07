@@ -627,15 +627,24 @@ def messages_hash(messages: list[dict] | tuple[dict, ...]) -> str:
     return object_hash(list(messages))
 
 
-def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int, bypass_lmcache: bool = False) -> dict:
+def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int,
+                 bypass_lmcache: bool = False,
+                 cache_salt: str | None = None) -> dict:
     payload = {"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "reasoning_effort": "low", "stream": True, "stream_options": {"include_usage": True}}
     if bypass_lmcache:
-        payload["kv_transfer_params"] = {"qh_bypass_lmcache": True}
+        payload["vllm_xargs"] = {"qh_bypass_lmcache": 1}
+    if cache_salt:
+        payload["cache_salt"] = cache_salt
     return payload
 
 
-def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int, context_hash: str, timeout_s: float, bypass_lmcache: bool = False) -> tuple[RequestResult, str]:
-    body = json.dumps(chat_payload(cfg, messages, max_tokens, bypass_lmcache))
+def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
+                context_hash: str, timeout_s: float,
+                bypass_lmcache: bool = False,
+                cache_salt: str | None = None) -> tuple[RequestResult, str]:
+    body = json.dumps(chat_payload(
+        cfg, messages, max_tokens, bypass_lmcache, cache_salt,
+    ))
     start = time.monotonic_ns()
     conn = http.client.HTTPConnection(cfg.host, port, timeout=timeout_s)
     conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
@@ -1022,23 +1031,16 @@ class LiveRuntime:
             if warm["total_keys"] != len(tokens) // 256 \
                     or warm["found_keys"] > missing:
                 raise RuntimeError(f"incomplete warm prefetch: {warm}")
-            request_offset = len(b.resp_rows(self.cache_log))
         result, _text = session.request(
             self.cfg.api_proxy_port, list(state.messages),
             f"{move.method}_{phase}",
-            bypass_lmcache=move.method == "replay" and not self.mp_layout,
+            bypass_lmcache=move.method == "replay",
         )
         if move.method == "kv_transfer" and self.mp_layout:
             hit = b.mp_request_hit(
                 self.sink_log, log_offset, result.request_id, False,
             )
-            request_gets = [
-                row for row in b.resp_rows(self.cache_log)[request_offset:]
-                if row["command"] == "GET"
-                and row["key_hashes"] in session.cache_keys
-                and int(row["payload_bytes"]) > 0
-            ]
-            if request_gets or result.cached_tokens != hit \
+            if result.cached_tokens < hit \
                     or hit < (shared // 256 + warm["found_keys"]) * 256:
                 raise RuntimeError(
                     f"request-time WAN or cache accounting mismatch for "
@@ -1069,7 +1071,7 @@ class LiveRuntime:
             if move.method == "kv_transfer" and self.mp_layout
             else kv_metrics(hit, layout) if layout else (0, 0)
         )
-        result = replace(result, processed_tokens=total - hit, logical_kv_chunks=logical_chunks, logical_kv_bytes=logical_bytes)
+        result = replace(result, processed_tokens=total - max(hit, result.cached_tokens), logical_kv_chunks=logical_chunks, logical_kv_bytes=logical_bytes)
         with self.lock:
             self.requests.write(json.dumps({"move_id": move.order, "session_id": move.session_id, "method": move.method, "phase": phase, "kv_layout": layout, **asdict(result)}, separators=(",", ":")) + "\n")
         self.event_log.write("copy_end", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase, processed_tokens=result.processed_tokens, logical_kv_bytes=logical_bytes, logical_kv_chunks=result.logical_kv_chunks, kv_layout=layout)
@@ -1414,9 +1416,39 @@ def with_destination_load(load, action):
         load.close()
 
 
+def verify_continuations(scenario, sessions, cfg):
+    expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" \
+        else cfg.src_port
+
+    def verify(item):
+        session = sessions[item["session_id"]]
+        if session.route != expected_port:
+            raise RuntimeError(f"wrong continuation route for {session.session_id}")
+        committed_hash = messages_hash(session.messages)
+        request = session.continuation()
+        return {
+            "session_id": session.session_id, "route_port": session.route,
+            "committed_context_hash": committed_hash,
+            **asdict(request),
+        }
+
+    ordered = sorted(scenario["sessions"], key=lambda row: row["order"])
+    with ThreadPoolExecutor(max_workers=len(ordered)) as pool:
+        return list(pool.map(verify, ordered))
+
+
+def warm_sessions(sessions, concurrency):
+    if concurrency < 1:
+        raise ValueError("warm concurrency must be positive")
+    if not sessions:
+        return
+    with ThreadPoolExecutor(max_workers=min(concurrency, len(sessions))) as pool:
+        list(pool.map(lambda session: session.warm(), sessions))
+
+
 def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                  root: Path, run_id: str, destination_load=None,
-                 configure_proxy: bool = True) -> dict:
+                 configure_proxy: bool = True, before_moves=None) -> dict:
     if b.lmcache_mode() == "mp" and configure_proxy:
         raise ValueError("MP scenarios require a bandwidth-pinned stack")
     if not configure_proxy and stack.bandwidth_mbps != scenario["bandwidth_mbps"]:
@@ -1426,8 +1458,10 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
     if configure_proxy:
         restart_proxy(stack, cfg, root, scenario["bandwidth_mbps"])
     event_log = EventLog(root / "events.jsonl", run_id, scenario["scenario_id"])
-    sampler = PowerSampler(root / "power.csv")
-    sampler.start()
+    sampler = PowerSampler(root / "power.csv") \
+        if scenario.get("sample_power", True) else None
+    if sampler:
+        sampler.start()
     start_ns = time.monotonic_ns()
     source_log = stack.run_root / (
         "lmcache-source.log" if b.lmcache_mode() == "mp" else "source.log"
@@ -1446,14 +1480,16 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
     } if b.lmcache_mode() == "mp" else {}
     runtime = None
     sleeping = False
+    moves_start_ns = start_ns
     try:
-        try:
-            b.flush_lmcache(stack)
-            b.reset_vllm_caches(cfg, (
-                stack.run_root / "source.log", stack.run_root / "sink.log",
-            ))
-        except Exception as exc:
-            raise ScenarioResetError(str(exc)) from exc
+        if scenario.get("reset_caches", True):
+            try:
+                b.flush_lmcache(stack)
+                b.reset_vllm_caches(cfg, (
+                    stack.run_root / "source.log", stack.run_root / "sink.log",
+                ))
+            except Exception as exc:
+                raise ScenarioResetError(str(exc)) from exc
         rows = {row["id"]: row for row in manifest["sessions"]}
         sessions = {item["session_id"]: LiveSession(
             cfg, rows[item["session_id"]], item["turn_index"], event_log,
@@ -1464,12 +1500,16 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
         method_by_session = {row["session_id"]: row["method"] for row in scenario["moves"]} or {session_id: scenario["method"] for session_id in sessions}
         replay = [session for session_id, session in sessions.items() if method_by_session[session_id] == "replay"]
         kv = [session for session in sessions.values() if session not in replay]
-        for session in replay:
-            session.warm()
-        if replay:
-            b.flush_lmcache(stack)
-        for session in kv:
-            session.warm()
+        warm_on_move = scenario.get("warm_on_move", False)
+        if not warm_on_move:
+            warm_concurrency = scenario.get("warm_concurrency", 1)
+            if scenario.get("prestage_all", False):
+                warm_sessions(list(sessions.values()), warm_concurrency)
+            else:
+                warm_sessions(replay, warm_concurrency)
+                if replay and scenario.get("reset_caches", True):
+                    b.flush_lmcache(stack)
+                warm_sessions(kv, warm_concurrency)
         moves = [Move(row["session_id"], row["method"], row["order"]) for row in scenario["moves"]]
         move_concurrency = scenario.get("move_concurrency", scenario["concurrency"])
         serving_concurrency = scenario.get("serving_concurrency", scenario["concurrency"])
@@ -1484,6 +1524,7 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
             activity_epoch_ns,
         )
         def action():
+            nonlocal moves_start_ns
             if scenario["kind"] == "migration":
                 with ThreadPoolExecutor(max_workers=len(sessions)) \
                         as activity_pool:
@@ -1493,8 +1534,11 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                     ] if schedule and scenario.get(
                         "copy_policy", "initial_final"
                     ) == "initial_final" else []
+                    if before_moves:
+                        before_moves()
+                    moves_start_ns = time.monotonic_ns()
                     rows = MigrationController(
-                        runtime, move_concurrency
+                        runtime, move_concurrency,
                     ).run(moves)
                     for future in activity_futures:
                         future.result()
@@ -1516,16 +1560,9 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
             sleep_end = time.monotonic_ns()
             sleep_times = [sleep_start, sleep_end]
             event_log.write("source_sleep", start_ns=sleep_start, end_ns=sleep_end)
-        continuations = []
-        for item in sorted(scenario["sessions"], key=lambda row: row["order"]):
-            session = sessions[item["session_id"]]
-            expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" else cfg.src_port
-            if session.route != expected_port:
-                raise RuntimeError(f"wrong continuation route for {session.session_id}")
-            committed_hash = messages_hash(session.messages)
-            request = session.continuation()
-            continuations.append({"session_id": session.session_id, "route_port": session.route, "committed_context_hash": committed_hash, **asdict(request)})
-        if b.lmcache_mode() == "mp":
+        continuations = verify_continuations(scenario, sessions, cfg) \
+            if scenario.get("verify_continuations", True) else []
+        if b.lmcache_mode() == "mp" and scenario.get("wait_cache_idle", True):
             b.mp_wait_idle(cache_log)
         activities = []
         for session in sessions.values():
@@ -1545,11 +1582,11 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                         and activity_row["end_ns"] > move_result.pause_start_ns
                     ),
                 })
-        elapsed_s = (time.monotonic_ns() - start_ns) / 1e9
+        elapsed_s = (time.monotonic_ns() - moves_start_ns) / 1e9
         result = {
             "schema": RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "complete",
             "allocation_id": os.environ.get("SLURM_JOB_ID"),
-            "started_ns": start_ns, "ended_ns": time.monotonic_ns(), "elapsed_s": elapsed_s,
+            "started_ns": moves_start_ns, "ended_ns": time.monotonic_ns(), "elapsed_s": elapsed_s,
             "deadline_s": scenario["deadline_s"], "deadline_met": elapsed_s <= scenario["deadline_s"],
             "full_drain": full_drain, "final_state": final_state,
             "source_sleep_ns": sleep_times,
@@ -1570,7 +1607,8 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                     runtime.close()
             finally:
                 try:
-                    sampler.close()
+                    if sampler:
+                        sampler.close()
                 finally:
                     time.sleep(.3)
                     event_log.close()

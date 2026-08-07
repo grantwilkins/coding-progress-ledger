@@ -1,0 +1,79 @@
+{
+  "acceptance": {
+    "kv_elapsed_s": 4.963487148284912,
+    "kv_expected_link_s": 0.9663689472,
+    "kv_observed_bytes_per_s": 144928304.59791553,
+    "ok": false,
+    "source_warmed_before_sink": false
+  },
+  "endpoints": {
+    "api_proxy": 16365,
+    "kv_proxy": 16265,
+    "sink": 16165,
+    "source": 16065
+  },
+  "evidence": {
+    "api_proxy_bytes": 28875,
+    "kv_proxy_bytes": 1207961184,
+    "sink_connector": false,
+    "sink_retrieved": true,
+    "source_connector": false,
+    "source_stored": true
+  },
+  "kv_delta": {
+    "api/client_to_target": 53116,
+    "api/target_to_client": 768,
+    "kv/client_to_target": 40032,
+    "kv/target_to_client": 1207961184
+  },
+  "kv_link": {
+    "bytes": 1207962048,
+    "bytes_per_s": 144928304.59791553,
+    "window_s": 8.334893941879272
+  },
+  "lambda_src_bytes_per_s": 1250000000.0,
+  "mbps": 10000.0,
+  "proxy_total_delta": {
+    "api/client_to_target": 81991,
+    "api/target_to_client": 768,
+    "kv/client_to_target": 1208050104,
+    "kv/target_to_client": 1207962224
+  },
+  "replay_delta": {
+    "api/client_to_target": 28875,
+    "api/target_to_client": 0,
+    "kv/client_to_target": 9240,
+    "kv/target_to_client": 176
+  },
+  "schema": "queue-haul-stage1b-smoke2-v1",
+  "sink_kv": {
+    "content": "",
+    "elapsed_s": 4.963487148284912,
+    "end_ts": 1784537688.4550943,
+    "prompt_sha256": "5893f544213c590c5f74c4932dab1e9b0cf78b8005289f6a2c5f5b97cd691385",
+    "request_bytes": 52973,
+    "response_text": "",
+    "start_ts": 1784537683.4916072,
+    "status": 200
+  },
+  "sink_replay": {
+    "content": "",
+    "elapsed_s": 1.1877491474151611,
+    "end_ts": 1784537692.6581495,
+    "prompt_sha256": "475b1864e47180c9264952c6ecd7ccafb4f264a8b916d1d0ff5fe2491e7a8e5f",
+    "request_bytes": 28732,
+    "response_text": "",
+    "start_ts": 1784537691.4704003,
+    "status": 200
+  },
+  "source": {
+    "content": "",
+    "elapsed_s": 5.355763912200928,
+    "end_ts": 1784537681.482823,
+    "prompt_sha256": "5893f544213c590c5f74c4932dab1e9b0cf78b8005289f6a2c5f5b97cd691385",
+    "request_bytes": 52973,
+    "response_text": "",
+    "start_ts": 1784537676.127059,
+    "status": 200
+  }
+}

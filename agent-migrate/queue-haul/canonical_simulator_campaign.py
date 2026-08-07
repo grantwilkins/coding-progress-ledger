@@ -166,7 +166,7 @@ def policy_runs(profile, workload, sessions, seed, target_fractions):
                 planned,
                 expected_source_power_at_deadline_w=
                     result.modeled_source_power_at_deadline_w,
-                feasible=planned.planned_source_power_w <= scenario_.power_limit_w
+                feasible=planned.planned_source_power_w <= scenario_.power_limit_w + 1e-8
                 and result.deadline_met,
             )
             rows.append(enrich(

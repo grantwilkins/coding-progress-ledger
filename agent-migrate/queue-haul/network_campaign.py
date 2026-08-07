@@ -26,6 +26,7 @@ from pathlib import Path
 import migration_testbed as testbed
 import migration_profiler as profiler
 import policy_hardware_campaign as policy_campaign
+from destination_runner import MetricsSampler
 from destination import (DestinationArchitecture, DestinationPool,
                          DestinationReplica, dedicated_sink_architecture)
 from planner import plan as solve
@@ -52,6 +53,12 @@ WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 )}
 EXPECTED_RUNTIME = {"vllm": "0.22.0", "lmcache": "0.5.1"}
+HANDOFF_DEADLINE_S = 30
+HANDOFF_ENV = {
+    "QH_KV_ROLE_SOURCE": "kv_both", "QH_KV_ROLE_SINK": "kv_both",
+    "QH_LMCACHE_L1_GB": "33", "QH_PREFIX_CACHING": "off",
+    "QH_REDIS_MAXMEMORY_GB": "32",
+}
 
 
 def write_checkpoint(path: Path, value: dict) -> None:
@@ -799,6 +806,8 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
             remote_root = Path(node.run_root) / run_root.name / node_id
             remote_roots[node_id] = remote_root
             command = ssh_command(node, key, [
+                "env", *(f"{name}={os.environ[name]}" for name in HANDOFF_ENV
+                         if name in os.environ),
                 "uv", "run", "python", "queue-haul/network_campaign.py",
                 "node-serve", "--node-id", node_id, "--bind-host", node.host,
                 "--source-host", cluster.source.host, "--kv-port",
@@ -1082,11 +1091,14 @@ class SinkLoad:
         self.thread.start()
 
     def _request(self, index: int) -> dict:
-        messages = [{"role": "user", "content":
-                     f"load-{index} " + "x " * 512}]
+        messages = [
+            {"role": "system", "content": "You are a tool-using coding agent."},
+            {"role": "user", "content":
+             f"Agentic trace turn {index}: analyze tool output. " + "x " * 512},
+        ]
         result, _ = profiler.stream_chat(
             self.cfg, self.port, messages, 64,
-            profiler.messages_hash(messages), 600)
+            profiler.messages_hash(messages), 600, True, f"load-{index}")
         if result.status_code != 200:
             raise RuntimeError(f"sink load request failed: {result.status_code}")
         return asdict(result)
@@ -1118,6 +1130,9 @@ class SinkLoad:
             raise TimeoutError("sink load did not stop")
         if self.error:
             raise RuntimeError("sink load failed") from self.error
+
+    def stop_admissions(self) -> None:
+        self.stop.set()
 
 
 def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
@@ -1254,6 +1269,16 @@ def observed_demand(rows: list[dict], seconds: float) -> dict[str, tuple[float, 
             for session_id, values in demand.items()}
 
 
+def handoff_scenario(plan: dict, cluster: Cluster, destination_load: float) -> dict:
+    scenario = next(row for row in plan["scenarios"]
+                    if row["policy"] == "queue_haul"
+                    and row["bandwidth"] == "natural"
+                    and row["deadline_s"] == HANDOFF_DEADLINE_S)
+    return {**scenario, "deadline_s": HANDOFF_DEADLINE_S,
+            "background": {node.id: [destination_load, 0]
+                           for node in cluster.destinations}}
+
+
 def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
                 plan_path: Path, manifest_path: Path, run_root: Path,
                 window_s: float = 300, destination_load: float = .5,
@@ -1270,15 +1295,11 @@ def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
     calibration = json.loads(calibration_path.read_text())
     validate_resume(plan["network_contract"], freeze_contract(calibration))
     host_check(cluster, key)
-    scenario = next(row for row in plan["scenarios"]
-                    if row["policy"] == "kv_only"
-                    and row["bandwidth"] == "natural")
-    scenario = {**scenario, "deadline_s": window_s,
-                "background": {node.id: [destination_load, 0]
-                               for node in cluster.destinations}}
+    scenario = handoff_scenario(plan, cluster, destination_load)
+    os.environ.update(HANDOFF_ENV)
     stack = start_cluster(cluster, key, plan["network_contract"], "natural",
                           run_root, power_interval_s)
-    loads, sleeping, result = {}, False, None
+    loads, metrics, source_load, sleeping, result = {}, {}, None, False, None
     try:
         _clear_cluster(stack)
         records = {row["id"]: row for row in manifest["sessions"]}
@@ -1293,6 +1314,21 @@ def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
                 stack.cfg, stack.ports[node.id]["api"], prefill_tps,
                 destination_load, run_root / f"sink_load_{node.id}.jsonl")
             loads[node.id].start()
+        source_load = SinkLoad(
+            stack.cfg, stack.cfg.src_port, prefill_tps, .8,
+            run_root / "source_load.jsonl")
+        source_load.start()
+        metrics = {
+            "sweden": MetricsSampler(
+                stack.cfg.host, stack.cfg.src_port,
+                run_root / "metrics_sweden.csv", power_interval_s),
+            **{node.id: MetricsSampler(
+                stack.cfg.host, stack.ports[node.id]["api"],
+                run_root / f"metrics_{node.id}.csv", power_interval_s)
+               for node in cluster.destinations},
+        }
+        for sampler in metrics.values():
+            sampler.start()
         phase = {}
         mark = lambda name: phase.update({name: {
             "monotonic_ns": time.monotonic_ns(), "wall_ns": time.time_ns()}})
@@ -1302,6 +1338,7 @@ def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
             {session_id: ("sweden", stack.cfg.src_port)
              for session_id in messages}, window_s, "pre")
         mark("pre_end")
+        mark("handoff_start")
         nodes = cluster.destinations
         with ThreadPoolExecutor(max_workers=len(nodes)) as pool:
             snapshots = dict(zip(
@@ -1314,38 +1351,67 @@ def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
                       - phase["pre_start"]["monotonic_ns"]) / 1e9))
         write_checkpoint(run_root / "decision.json", {
             "background": snapshots, "moves": moves})
-        mark("handoff_start")
+        if not moves or not all(move["deadline_admitted"] for move in moves):
+            raise RuntimeError("Queue-Haul did not admit the full 30-second shed")
         routes = {move["session_id"]: (
             move["destination_instance"],
             stack.ports[move["destination_instance"]]["api"])
             for move in moves}
         handoff = _serve_window(stack, messages, codes, routes, 0.001, "handoff")
         mark("handoff_end")
-        mark("sleep_start")
-        testbed.set_source_sleep(stack.cfg, True)
-        sleeping = True
-        mark("sleep_ready")
+        migration_s = (phase["handoff_end"]["monotonic_ns"]
+                       - phase["handoff_start"]["monotonic_ns"]) / 1e9
+        if migration_s > HANDOFF_DEADLINE_S:
+            raise RuntimeError(
+                f"handoff missed {HANDOFF_DEADLINE_S} s deadline: "
+                f"{migration_s:.3f} s")
+        mark("switch_start")
+        source_load.stop_admissions()
+        mark("traffic_switched")
+
+        def power_down():
+            nonlocal sleeping
+            source_load.close()
+            mark("source_drained")
+            mark("sleep_start")
+            testbed.set_source_sleep(stack.cfg, True)
+            sleeping = True
+            mark("sleep_ready")
+
         mark("post_start")
-        post = _serve_window(
-            stack, messages, codes, routes, window_s, "post")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            post_future = pool.submit(
+                _serve_window, stack, messages, codes, routes, window_s, "post")
+            sleep_future = pool.submit(power_down)
+            post = post_future.result()
+            sleep_future.result()
         mark("post_end")
-        result = {"schema": "queue-haul-three-node-handoff-v1",
+        result = {"schema": "queue-haul-three-node-handoff-v2",
                   "status": "complete", "window_s": window_s,
                   "destination_load": destination_load,
-                  "power_interval_s": power_interval_s, "phases": phase,
+                  "source_load": .8, "power_interval_s": power_interval_s,
+                  "migration_s": migration_s,
+                  "deadline_s": HANDOFF_DEADLINE_S, "deadline_met": True,
+                  "cache": HANDOFF_ENV, "phases": phase,
                   "scenario": scenario, "decision": {
                       "background": snapshots, "moves": moves},
                   "requests": pre + handoff + post}
     finally:
         try:
+            if source_load and source_load.thread.is_alive():
+                source_load.close()
             for load in loads.values():
                 load.close()
         finally:
             try:
-                if sleeping:
-                    testbed.set_source_sleep(stack.cfg, False)
+                for sampler in metrics.values():
+                    sampler.close()
             finally:
-                stop_cluster(stack)
+                try:
+                    if sleeping:
+                        testbed.set_source_sleep(stack.cfg, False)
+                finally:
+                    stop_cluster(stack)
     write_checkpoint(run_root / "result.json", result)
     return result
 

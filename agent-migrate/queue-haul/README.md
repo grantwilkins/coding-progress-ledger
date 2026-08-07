@@ -273,8 +273,9 @@ node identity, model, or runtime changed. A synchronized commit update remains
 visible in the audit checks. Azure Scheduled Events are
 logged on all three hosts and an active Spot event fails the attempt.
 
-After the joint campaign, run the measured three-node handoff with 100-ms power
-sampling, five-minute pre/post windows, natural links, and 50% destination load:
+After the joint campaign, run the Queue-Haul three-node handoff with a 30-second
+full-shed deadline, 100-ms power sampling, five-minute pre/post windows, natural
+links, and 50% destination load:
 
 ```bash
 uv run python queue-haul/network_campaign.py handoff \
@@ -288,15 +289,21 @@ uv run python queue-haul/plot_handoff_power.py \
   --run-root /datadrive/queue-haul-network/handoff-001
 ```
 
-The harness serves eight pinned agentic sessions on Sweden for five minutes,
-routes their KV state to dynamically selected destinations while both sustain
-50% background inference, sleeps Sweden, and verifies another five minutes of
-destination service. Raw source/East/West samples and verified requests retain
-synchronized phase timestamps. Handoff planning uses each session's measured
-uncached-prefill and decode rates from the Sweden window; destination background
-work converts the load generator's requested prefill rate through the measured
-service curve. The measured Sweden window itself populates KV state; there is no
-separate request warmup before it.
+The harness keeps eight pinned agentic sessions plus an independent 80%-load
+agentic stream serving on Sweden for five minutes while both destinations sustain
+50% background inference. The 30-second handoff clock starts before live metrics
+and Queue-Haul LP planning, covers all parallel replay/KV reconstruction, and
+hard-fails unless all eight sessions are admitted and complete by the deadline.
+Destination background service never pauses. At the traffic switch, destination
+session service starts immediately while source admissions stop and Sweden drains
+and sleeps concurrently.
+
+Handoff processes pin `kv_both`, 33 GB L1 pools, a 32 GB Redis cap, and disabled
+vLLM prefix caching. Unrelated source and destination loads bypass LMCache so
+they cannot evict migration state. The reducer shades migration, switch, and
+source power-fall windows, writes phase queue depth, and requires Sweden to
+start at or above 200 W and shed at least 50 W. The measured Sweden window
+itself populates the migrating KV state; there is no separate warmup before it.
 
 Only the Azure campaign uses
 `profiles/gpt_oss_20b_a100_tp1_azure_300w.json`, calibrated on an Azure
@@ -534,6 +541,17 @@ The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.
 The parity plot compares Queue-Haul LP with greedy only.
+`outputs/live-power-shed/` retains the 2026-08-06 two-A100 seamless full-shed
+run. The Queue-Haul LP arm moved all eight sessions under continuous 4 rps
+source and 1 rps destination agentic load with `kv_both` and 33 GB L1 pools;
+there is no pre-migration flush, pause, or drain. After 300 s with both sites
+serving, the parallel migration took 4.656 s, the traffic switch took 70 us,
+and the source drained naturally in 3.002 s before a stable five-minute
+destination hold. Mean source power fell from 255.8 W to 85.8 W while mean
+destination power rose from 128.2 W to 283.4 W. The three replay moves
+recomputed 10,662 tokens; the five KV moves computed 713 tokens while reusing
+2.72 GB of KV. The retained paired 10 Hz samples have 95.6% coverage and the
+bundle includes phase-level engine queue depth and checksum-pinned raw data.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast
@@ -548,14 +566,30 @@ range at 1/2.5 Gbit/s, through 8K at 5 Gbit/s, and through 4K at 10 Gbit/s; the
 8K 10-Gbit/s cell is effectively tied. The derived profile
 `profiles/gpt_oss_20b_a100_tp1_crossover.json` replaces serial replay rate,
 replay/KV completion, KV ingestion lower bound, and route-switch timing while
-preserving the existing catch-up, power, and capacity evidence. The pinned
+preserving the existing catch-up, power, and capacity evidence. `--policies isolated_fastest` enables the per-session-fastest policy without
+changing the default policy set. The pinned
 `outputs/policy-hardware-width8-packing-plan/` runs three paired width-8 episodes
 for Tiny, Small, Medium, Mixed, and Large packs at 1/2.5/5/10 Gbit/s and 19/30-s
 requirements: 600 scenarios in total. Job 36822272 completed all 600 scenarios
 without failures in 8:08:22. Its checksum-pinned reduced bundle is under
 `outputs/policy-hardware-width8-packing-20260730/`; compressed results, GPU
 samples, proxy byte counters, and RESP transfer records retain the raw evidence
-without runtime debug logs. Its bandwidth-faceted destination-TTFT CDF pools
+without runtime debug logs. The matched 120-episode, 240-scenario baseline plan is pinned under
+`outputs/policy-hardware-width8-isolated-fastest-plan/`. Its bandwidth-grouped
+order has four bandwidth blocks instead of 93 bandwidth runs; the 30-scenario
+hygiene rotation yields eight model-stack starts. Its launcher reduces all
+episodes, hard-validates three complete repetitions per condition and clean
+plan/profile provenance, writes checksums, and rebuilds the comparison from the
+common packing cohort only (120 observations per method). The comparison uses
+±5 percentage points relative to Queue-Haul LP for better/similar/worse and
+shows every sample count; frontier and partial-network rows are excluded. The
+completed allocation 37874352 produced 240/240 scenarios with no failures and
+120 validated attainment rows across 40 conditions with three repetitions each.
+Its reduced, checksum-pinned bundle is under
+`outputs/policy-hardware-width8-isolated-fastest-20260806/`, including the
+common-cohort chart and compressed result, power, proxy-byte, and RESP-transfer
+evidence.
+Its bandwidth-faceted destination-TTFT CDF pools
 all five workloads, both deadlines, and three episodes within each bandwidth;
 the companion pooled CDF combines all four bandwidths. Regenerate that CDF
 with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample

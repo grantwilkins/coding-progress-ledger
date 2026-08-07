@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1h_mp_incremental.py", line 210, in main
+    print(json.dumps({"ok": run(args.run_root)["ok"]}, indent=2))
+                            ^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1h_mp_incremental.py", line 190, in run
+    stages, staged = incremental(cfg, stack)
+                     ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1h_mp_incremental.py", line 138, in incremental
+    raise RuntimeError(f"stage {target} not exact L1-only: sizes={sizes}, L1={l1}, expected={len(missing_gpu)}, L2={cache['l2_blocks']}, request_WAN={len(request_gets)}")
+RuntimeError: stage 13653 not exact L1-only: sizes={12582912}, L1=53, expected=5, L2=0, request_WAN=0

@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -196,11 +197,23 @@ class MetricsSampler:
             writer.writeheader(); writer.writerows(self.rows)
 
 
+def completion_payload(model: str, prompt: list[int], output_tokens: int,
+                       forced: int, bypass_lmcache: bool = False) -> dict:
+    payload = {"model": model, "prompt": prompt, "max_tokens": output_tokens,
+               "ignore_eos": True, "temperature": 0, "allowed_token_ids": [forced],
+               "stream": True, "stream_options": {"include_usage": True}}
+    if bypass_lmcache:
+        payload["kv_transfer_params"] = {
+            "qh_bypass_lmcache": True, "lmcache.skip_save": True,
+        }
+    return payload
+
+
 def _completion(host: str, port: int, model: str, prompt: list[int], output_tokens: int,
-                forced: int, timeout_s: float) -> dict:
-    body = json.dumps({"model": model, "prompt": prompt, "max_tokens": output_tokens,
-                       "ignore_eos": True, "temperature": 0, "allowed_token_ids": [forced],
-                       "stream": True, "stream_options": {"include_usage": True}})
+                forced: int, timeout_s: float, bypass_lmcache: bool = False) -> dict:
+    body = json.dumps(completion_payload(
+        model, prompt, output_tokens, forced, bypass_lmcache,
+    ))
     start, first, usage, chunks, done = time.monotonic_ns(), None, {}, [], False
     connection = http.client.HTTPConnection(host, port, timeout=timeout_s)
     connection.request("POST", "/v1/completions", body, {"Content-Type": "application/json"})
@@ -229,10 +242,60 @@ def _completion(host: str, port: int, model: str, prompt: list[int], output_toke
             "mean_tpot_s": (end - (first or end)) / 1e9 / max(1, completion_tokens - 1)}
 
 
+def agentic_messages(session: Session, index: int) -> list[dict]:
+    return [
+        {"role": "system", "content": "You are a tool-using coding agent."},
+        {"role": "user", "content":
+         f"Session {session.session_id} turn {index}; analyze tool results."
+         + " x" * session.append_tokens},
+    ]
+
+
+def issue_chat(host: str, port: int, model: str, session: Session, index: int,
+               scheduled_ns: int, timeout_s: float,
+               bypass_lmcache: bool = False) -> dict:
+    messages = agentic_messages(session, index)
+    result, error = profiler.stream_chat(
+        SimpleNamespace(host=host, model=model), port, messages,
+        session.output_tokens, profiler.messages_hash(messages), timeout_s,
+        bypass_lmcache,
+    )
+    return {
+        "status": result.status_code,
+        "error": "" if result.status_code == 200 else error,
+        "start_ns": result.start_ns, "first_ns": result.first_byte_ns,
+        "end_ns": result.end_ns, "prompt_tokens": result.prompt_tokens,
+        "output_tokens": result.output_tokens, "cached_tokens": result.cached_tokens,
+        "done": result.status_code == 200, "request_index": index,
+        "session_id": session.session_id, "scheduled_ns": scheduled_ns,
+        "input_tokens": session.append_tokens,
+        "planned_prompt_tokens": result.prompt_tokens,
+        "planned_output_tokens": session.output_tokens,
+        "ttft_s": (result.first_byte_ns - result.start_ns) * 1e-9,
+        "mean_tpot_s": (result.end_ns - result.first_byte_ns) * 1e-9
+            / max(1, result.output_tokens - 1),
+    }
+
+
+def issue(host: str, port: int, model: str, session: Session, index: int,
+          scheduled_ns: int, timeout_s: float,
+          bypass_lmcache: bool = False) -> dict:
+    prompt, forced = session.prompt(index)
+    row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s,
+                      bypass_lmcache)
+    row.update({"request_index": index, "session_id": session.session_id,
+                "scheduled_ns": scheduled_ns, "input_tokens": session.append_tokens,
+                "planned_prompt_tokens": len(prompt),
+                "planned_output_tokens": session.output_tokens,
+                "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
+    return row
+
+
 def drive(host: str, port: int, model: str, sessions: list[Session], rate: float,
           count: int, seed: int, timeout_s: float = 720,
           scheduler=poisson_schedule, window_s: float | None = None,
-          stop: threading.Event | None = None) -> list[dict]:
+          stop: threading.Event | None = None,
+          bypass_lmcache: bool = False, request=issue) -> list[dict]:
     schedule = poisson_window(rate, window_s, seed) if window_s else scheduler(rate, count, seed)
     count, epoch = len(schedule), time.monotonic()
     def one(index):
@@ -242,26 +305,21 @@ def drive(host: str, port: int, model: str, sessions: list[Session], rate: float
             return None
         if not stop:
             time.sleep(delay)
-        session = sessions[index % len(sessions)]
-        prompt, forced = session.prompt(index)
-        row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s)
-        row.update({"request_index": index, "session_id": session.session_id,
-                    "scheduled_ns": int(scheduled * 1e9), "input_tokens": session.append_tokens,
-                    "planned_prompt_tokens": len(prompt),
-                    "planned_output_tokens": session.output_tokens,
-                    "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
-        return row
+        return request(host, port, model, sessions[index % len(sessions)], index,
+                     int(scheduled * 1e9), timeout_s, bypass_lmcache)
     if not count:
         return []
     with ThreadPoolExecutor(max_workers=min(256, count)) as pool:
         return [row for row in pool.map(one, range(count)) if row is not None]
 
 
-def prewarm(host: str, port: int, model: str, sessions: list[Session], timeout_s=720) -> list[dict]:
+def prewarm(host: str, port: int, model: str, sessions: list[Session], timeout_s=720,
+            bypass_lmcache: bool = False) -> list[dict]:
     rows = []
     for session in sessions:
         prompt, forced = session.prompt(-1)
-        row = _completion(host, port, model, prompt[:session.prefix_tokens], 1, forced, timeout_s)
+        row = _completion(host, port, model, prompt[:session.prefix_tokens], 1, forced,
+                          timeout_s, bypass_lmcache)
         if row["status"] != 200 or row["error"] or not row.get("done") \
                 or row.get("prompt_tokens") != session.prefix_tokens \
                 or row.get("output_tokens") != 1:
@@ -274,36 +332,98 @@ class DestinationLoad:
     def __init__(self, host: str, port: int, model: str, sessions: list[Session],
                  target_rho: float, prefill_rate: float, decode_rate: float,
                  root: Path, seed: int, chunk_s: float = 15, normal_bound: float = 1,
-                 timeout_s: float = 720):
+                 timeout_s: float = 720, rps: float | None = None,
+                 max_inflight: int = 0, prewarm_timeout_s: float = 300,
+                 bypass_lmcache: bool = False, chat: bool = False):
         work = np.mean([s.append_tokens / prefill_rate + s.output_tokens / decode_rate
                         for s in sessions])
         if min(target_rho, work, normal_bound) <= 0:
             raise ValueError("destination load needs positive target and work")
+        if rps is not None and rps <= 0:
+            raise ValueError("open-loop arrival rate must be positive")
+        if (rps is None) != (max_inflight <= 0):
+            raise ValueError("open-loop mode needs both rps and max_inflight")
         self.host, self.port, self.model, self.sessions = host, port, model, sessions
         self.target, self.prefill_rate, self.decode_rate = target_rho, prefill_rate, decode_rate
         self.normal_bound = normal_bound
         self.root, self.seed, self.chunk_s, self.timeout_s = root, seed, chunk_s, timeout_s
-        self.rate, self.stop, self.rows = target_rho * normal_bound / work, threading.Event(), []
+        self.prewarm_timeout_s = prewarm_timeout_s
+        self.bypass_lmcache = bypass_lmcache
+        self.request = issue_chat if chat else issue
+        self.rate = rps if rps else target_rho * normal_bound / work
+        self.work, self.max_inflight = float(work), max_inflight
+        self.stop, self.rows = threading.Event(), []
+        self.admit, self.blocked_arrivals = threading.Event(), 0
+        self.admit.set()
         self.sampler = MetricsSampler(host, port, root / "engine.csv")
         self.thread, self.failure = threading.Thread(target=self._run, daemon=True), None
         self.achieved = None
 
     def start(self):
         self.root.mkdir(parents=True, exist_ok=True)
-        prewarm(self.host, self.port, self.model, self.sessions, self.timeout_s)
+        if self.request is issue_chat:
+            row = self.request(self.host, self.port, self.model, self.sessions[0],
+                               -1, time.time_ns(), self.prewarm_timeout_s,
+                               self.bypass_lmcache)
+            if row["status"] != 200 or row["error"]:
+                raise RuntimeError("failed to prewarm agentic chat load")
+        elif self.bypass_lmcache:
+            prewarm(self.host, self.port, self.model, self.sessions,
+                    self.prewarm_timeout_s, True)
+        else:
+            prewarm(self.host, self.port, self.model, self.sessions,
+                    self.prewarm_timeout_s)
         self.sampler.start(); self.thread.start()
+
+    def pause(self):
+        """Stop new arrivals; in-flight requests keep draining."""
+        self.admit.clear()
+
+    def resume(self):
+        self.admit.set()
 
     def _run(self):
         try:
-            index = 0
-            while not self.stop.is_set():
-                count = max(1, math.ceil(self.rate * self.chunk_s))
-                self.rows += drive(self.host, self.port, self.model, self.sessions,
-                                   self.rate, count, self.seed + index, self.timeout_s,
-                                   stop=self.stop)
-                index += 1
+            self._run_open() if self.max_inflight else self._run_chunked()
         except Exception as exc:
             self.failure = exc
+
+    def _run_chunked(self):
+        index = 0
+        while not self.stop.is_set():
+            count = max(1, math.ceil(self.rate * self.chunk_s))
+            self.rows += drive(self.host, self.port, self.model, self.sessions,
+                               self.rate, count, self.seed + index, self.timeout_s,
+                               stop=self.stop, bypass_lmcache=getattr(self, "bypass_lmcache", False),
+                               request=getattr(self, "request", issue))
+            index += 1
+
+    def _run_open(self):
+        """Poisson arrivals that never wait on completions, capped by max_inflight."""
+        rng, gate, lock = random.Random(self.seed), threading.Semaphore(self.max_inflight), threading.Lock()
+        def one(index, scheduled_ns):
+            try:
+                row = getattr(self, "request", issue)(self.host, self.port, self.model,
+                            self.sessions[index % len(self.sessions)], index,
+                            scheduled_ns, self.timeout_s, getattr(self, "bypass_lmcache", False))
+                with lock:
+                    self.rows.append(row)
+            finally:
+                gate.release()
+        with ThreadPoolExecutor(max_workers=self.max_inflight) as pool:
+            index = 0
+            while not self.stop.wait(rng.expovariate(self.rate)):
+                while not self.admit.is_set():
+                    if self.stop.wait(.1):
+                        return
+                scheduled_ns = time.time_ns()
+                if not gate.acquire(blocking=False):
+                    self.blocked_arrivals += 1
+                    while not gate.acquire(blocking=False):
+                        if self.stop.wait(.05):
+                            return
+                pool.submit(one, index, scheduled_ns)
+                index += 1
 
     def wait_ready(self):
         deadline = time.monotonic() + 90
@@ -320,14 +440,19 @@ class DestinationLoad:
         ) from self.failure
 
     def close(self):
-        self.stop.set(); self.thread.join(self.chunk_s + self.timeout_s + 10); self.sampler.close()
+        self.stop.set()
+        if getattr(self.thread, "ident", 1) is None:
+            return  # start() raised before the arrival thread ran; nothing to join
+        self.thread.join(self.chunk_s + self.timeout_s + 10); self.sampler.close()
         if self.thread.is_alive() or self.failure:
             raise RuntimeError("destination foreground failed") from self.failure
         (self.root / "requests.json").write_text(json.dumps(self.rows, indent=2) + "\n")
 
     def summary(self):
         return {"target_rho": self.target, "achieved_rho": self.achieved,
-                "request_count": len(self.rows),
+                "offered_rps": self.rate, "max_inflight": self.max_inflight,
+                "blocked_arrivals": self.blocked_arrivals,
+                "work_per_request_s": self.work, "request_count": len(self.rows),
                 "queue_at_start": self.sampler.rows[0].get("vllm:num_requests_waiting") if self.sampler.rows else None}
 
 

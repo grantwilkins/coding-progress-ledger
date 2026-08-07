@@ -104,7 +104,8 @@ class Runtime(Protocol):
 
 
 class MigrationController:
-    def __init__(self, runtime: Runtime, concurrency: int, clock: Callable[[], int] = time.monotonic_ns):
+    def __init__(self, runtime: Runtime, concurrency: int,
+                 clock: Callable[[], int] = time.monotonic_ns):
         if concurrency < 1:
             raise ValueError("concurrency must be positive")
         self.runtime = runtime

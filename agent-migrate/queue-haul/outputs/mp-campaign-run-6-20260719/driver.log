@@ -1,0 +1,52 @@
+WARNING: Skipping mount /tmp [tmp]: /tmp doesn't exist in container
+WARNING: Skipping mount /var/tmp [tmp]: /var/tmp doesn't exist in container
+[32;20m[2026-07-20 04:16:44,741] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/opt/venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-07-20 04:16:44,761] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/opt/venv/lib/python3.12/site-packages/lmcache/__init__.py", line 144, in <module>
+    _ops = _get_backend()
+           ^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/lmcache/__init__.py", line 84, in _get_backend
+    default_module = importlib.import_module("lmcache.python_ops_fallback")
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/lmcache/python_ops_fallback.py", line 2267, in <module>
+    @njit(cache=True)
+     ^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/numba/core/decorators.py", line 227, in wrapper
+    disp.enable_caching()
+  File "/opt/venv/lib/python3.12/site-packages/numba/core/dispatcher.py", line 811, in enable_caching
+    self._cache = FunctionCache(self.py_func)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/numba/core/caching.py", line 687, in __init__
+    self._impl = self._impl_class(py_func)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/numba/core/caching.py", line 423, in __init__
+    raise RuntimeError("cannot cache function %r: no locator available "
+RuntimeError: cannot cache function '_encode_single_channel': no locator available for file '/opt/venv/lib/python3.12/site-packages/lmcache/python_ops_fallback.py'
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 296, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 288, in main
+    print(json.dumps(run(args.run_root), indent=2, sort_keys=True))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 240, in run
+    stack = b.start_stack(cfg, root, 10000)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 1091, in start_stack
+    preflight(cfg, required_gpus=2)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 411, in preflight
+    versions = runtime_versions(cfg)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 396, in runtime_versions
+    output = subprocess.check_output(apptainer_cmd(cfg, script, nv=False), text=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['apptainer', 'exec', '--bind', '/scratch/users/gfw:/scratch/users/gfw', PosixPath('/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129.sandbox'), 'bash', '-lc', 'python -c \'from importlib.metadata import version; from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector; print(\'"\'"\'QH_RUNTIME_VERSIONS\'"\'"\', version(\'"\'"\'vllm\'"\'"\'), version(\'"\'"\'lmcache\'"\'"\'))\'']' returned non-zero exit status 1.

@@ -58,7 +58,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "LMCacheConnectorV1" in source
     assert "LMCacheMPConnector" not in source
     assert "kv_producer" in source and "engine_id\":\"s0" in source
-    assert "kv_both" in sink and "engine_id\":\"d0" in sink
+    assert "kv_consumer" in sink and "engine_id\":\"d0" in sink
     assert "kv_both" in smoke and "engine_id\":\"e0" in smoke
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:5655" in source
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:8300" in sink
@@ -85,16 +85,28 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "stage1b-src" in source and "stage1b-sink" in sink
 
 
+def test_vllm_commands_can_disable_local_prefix_cache(monkeypatch):
+    monkeypatch.setenv("QH_PREFIX_CACHING", "off")
+
+    assert "--no-enable-prefix-caching" in cmd_text(
+        s.vllm_cmd(s.Config(), "source")
+    )
+
+    monkeypatch.setenv("QH_PREFIX_CACHING", "invalid")
+    with pytest.raises(ValueError, match="QH_PREFIX_CACHING"):
+        s.vllm_cmd(s.Config(), "source")
+
+
 def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
     source = cmd_text(s.vllm_cmd(s.Config(), "source"))
 
     assert "lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif" in source
     assert "LMCacheMPConnector" in source
-    assert "lmcache.integration.vllm.lmcache_mp_connector" in source
+    assert "connector_patch" in source
     assert "lmcache.mp.host" in source and "lmcache.mp.port" in source
     assert "engine_driven" in source
-    assert "lmcache_compat" not in source
+    assert "PYTHONPATH=" in source and "lmcache_compat" in source
     assert "cuda-12.9/compat" in source
     assert "--gpu-memory-utilization 0.75" in source
     assert "--block-size 16" in source
@@ -317,7 +329,7 @@ def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
     assert "--supported-transfer-mode engine_driven" in source
     assert '"port":8300' in source
     assert "--port 5556" in sink
-    assert "--l1-size-gb 32" in sink
+    assert "--l1-size-gb 16" in sink
     assert '"port":8300' in sink
     assert "--http-port 8080" in source and "--http-port 8081" in sink
     assert "--nv" not in source and "CUDA_VISIBLE_DEVICES=" in source
@@ -514,6 +526,21 @@ def test_runtime_versions_are_pinned(monkeypatch):
     assert s.runtime_versions(s.Config()) == s.RUNTIME_VERSIONS
     assert "LMCServerConnector._qh_patched" in s.shell(commands[0])
     assert "LMCacheConnectorV1Impl._qh_bypass_patched" in s.shell(commands[0])
+    assert "lmcache_compat" in s.shell(commands[0])
+
+
+def test_mp_runtime_requires_lookup_bypass_patch(monkeypatch):
+    commands = []
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setattr(
+        s.subprocess, "check_output",
+        lambda command, **_kwargs: commands.append(command)
+        or "QH_RUNTIME_VERSIONS 0.22.0+cu129 0.5.1\n",
+    )
+
+    assert s.runtime_versions(s.Config()) == s.MP_RUNTIME_VERSIONS
+    assert "LMCacheMPConnector._qh_bypass_patched" in s.shell(commands[0])
+    assert "lmcache_compat" in s.shell(commands[0])
 
 
 def test_duplicate_ports_and_passthrough_overrides_hard_fail():
@@ -667,3 +694,59 @@ def test_smoke2_live_cli_is_wired_with_1gbps_default():
     assert args.cmd == "smoke2-live"
     assert args.mbps == 1000.0
     assert str(args.run_root) == "/tmp/live-proof"
+
+
+def test_kv_role_overrides_let_both_engines_store_and_load(monkeypatch):
+    """kv_both is needed when source and destination both serve live traffic."""
+    monkeypatch.setenv("QH_KV_ROLE_SOURCE", "kv_both")
+    monkeypatch.setenv("QH_KV_ROLE_SINK", "kv_both")
+    cfg = s.Config()
+    source = " ".join(map(str, s.vllm_cmd(cfg, "source")))
+    sink = " ".join(map(str, s.vllm_cmd(cfg, "sink")))
+    assert "kv_both" in source and "kv_producer" not in source
+    assert "kv_both" in sink and "kv_consumer" not in sink
+    assert "engine_id\":\"s0" in source and "engine_id\":\"d0" in sink
+
+
+def test_kv_roles_default_to_producer_and_consumer(monkeypatch):
+    monkeypatch.delenv("QH_KV_ROLE_SOURCE", raising=False)
+    monkeypatch.delenv("QH_KV_ROLE_SINK", raising=False)
+    assert s.kv_role_for("source") == "kv_producer"
+    assert s.kv_role_for("sink") == "kv_consumer"
+    assert s.kv_role_for("smoke1") == "kv_both"
+
+
+def test_l1_cache_size_is_configurable(monkeypatch):
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setenv("QH_LMCACHE_L1_GB", "36")
+    cmd = " ".join(map(str, s.mp_server_cmd(s.Config(), "source")))
+    assert "--l1-size-gb 36" in cmd
+    monkeypatch.delenv("QH_LMCACHE_L1_GB")
+    assert "--l1-size-gb 16" in " ".join(map(str, s.mp_server_cmd(s.Config(), "source")))
+
+
+def test_redis_l2_is_unbounded_by_default(monkeypatch):
+    monkeypatch.delenv("QH_REDIS_MAXMEMORY_GB", raising=False)
+    cmd = " ".join(map(str, s.redis_cmd(s.Config())))
+    assert "--maxmemory" not in cmd
+
+
+def test_redis_l2_cap_bounds_the_duplicate_of_l1(monkeypatch):
+    """kv_both on both engines mirrors the L1 working set into L2."""
+    monkeypatch.setenv("QH_REDIS_MAXMEMORY_GB", "8")
+    cmd = " ".join(map(str, s.redis_cmd(s.Config())))
+    assert "--maxmemory 8gb" in cmd and "--maxmemory-policy allkeys-lru" in cmd
+
+
+def test_reset_vllm_caches_can_target_a_port_subset(monkeypatch):
+    """The destination keeps serving while the source is reset for a shed."""
+    posted, cfg = [], s.Config()
+    monkeypatch.setattr(s, "http_text",
+                        lambda host, port, method, path: posted.append(port))
+    monkeypatch.setattr(s, "reset_result", lambda _text: True)
+    log = Path(__file__).resolve()
+    s.reset_vllm_caches(cfg, (log,), (cfg.src_port,))
+    assert posted == [cfg.src_port]
+    posted.clear()
+    s.reset_vllm_caches(cfg, (log, log))
+    assert posted == [cfg.src_port, cfg.sink_port]

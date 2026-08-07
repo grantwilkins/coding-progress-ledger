@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 288, in main
+    print(json.dumps(run(args.run_root), indent=2, sort_keys=True))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 252, in run
+    warms.append(add_source_keys(stack, cfg, prompts[session], session, owners))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 117, in add_source_keys
+    result, _ = b.warm_source(cfg, stack.run_root, prompt, f"warm {session}")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 1136, in warm_source
+    check_chat(source, label)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 1129, in check_chat
+    raise RuntimeError(f"{label} failed {result['status']}: {result['response_text']}")
+RuntimeError: warm mp16k-0 failed 400: {"error":{"message":"Harmony does not support reasoning_effort='none'","type":"BadRequestError","param":null,"code":400}}

@@ -1,0 +1,39 @@
+{
+  "config": {
+    "api_proxy_port": 43752,
+    "cache_root": "/scratch/users/gfw/ptsim/cache",
+    "hf_home": "/scratch/users/gfw/ptsim/hf",
+    "host": "127.0.0.1",
+    "kv_proxy_port": 43652,
+    "lmc_port": 41007,
+    "max_model_len": 32768,
+    "max_num_batched_tokens": 8192,
+    "max_num_seqs": 256,
+    "model": "openai/gpt-oss-20b",
+    "sandbox": "/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif",
+    "scratch_bind": "/scratch/users/gfw",
+    "sink_lmc_http_port": 43433,
+    "sink_lmc_port": 40908,
+    "sink_port": 43552,
+    "smoke_port": 43472,
+    "src_lmc_http_port": 43432,
+    "src_lmc_port": 40909,
+    "src_port": 43452
+  },
+  "dirty": false,
+  "extra_vllm_args": [],
+  "fail_fast": false,
+  "git_sha": "3ca69246c52d0804092c627fba045b60a92ec1ff",
+  "git_shas": [
+    "3ca69246c52d0804092c627fba045b60a92ec1ff"
+  ],
+  "lmcache_mode": "mp",
+  "manifest_sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435",
+  "node_power": false,
+  "plan_object_sha256": "9e7602ba57879f64cf1ee17b1c93f240e48b81586220ea4b6014658c332b26ae",
+  "plan_sha256": "a2338f04c1c58cc431ae2063336cb9aca0e32487f93bc959406e95a093106c7a",
+  "power_state_cycles": 0,
+  "power_state_window_s": 60,
+  "schema": "queue-haul-migration-run-v3",
+  "stack_scenarios": 30
+}

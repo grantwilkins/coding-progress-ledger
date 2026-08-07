@@ -34,6 +34,16 @@ def test_replay_bypass_is_explicit():
     assert bypass_lmcache(request)
     assert not bypass_lmcache(type("Request", (), {"kv_transfer_params": None})())
 
+    mp_request = type("Request", (), {
+        "sampling_params": type("Sampling", (), {"extra_args": {
+            "kv_transfer_params": {"qh_bypass_lmcache": True},
+        }})(),
+    })()
+    assert bypass_lmcache(mp_request)
+    mp_request.sampling_params.extra_args = {"qh_bypass_lmcache": 1}
+    assert bypass_lmcache(mp_request)
+
+
 
 def test_adapter_patch_is_deferred_until_import():
     original = builtins.__import__
