@@ -21,7 +21,7 @@ REGIONS = {"sweden": "sweden-central", "east": "eastus-2",
 SPANS = (("Migration", "handoff_start", "handoff_end", "#DAD7CB", .5),
          ("Switch", "pre_end", "handoff_start", "#007C92", .12),
          ("Shutdown", "sleep_start", "sleep_ready", "#6F4E7C", .12))
-PLOT_START_S = 30
+BIN_S = 5
 
 
 def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
@@ -33,13 +33,11 @@ def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
             for row in rows]
 
 
-def bin_mean(points: list[tuple[float, float]],
-             start: float = PLOT_START_S) -> tuple[list[float], list[float]]:
+def bin_mean(points: list[tuple[float, float]]) -> tuple[list[float], list[float]]:
     bins = {}
     for seconds, value in points:
-        if seconds >= start:
-            bins.setdefault(int(seconds), []).append(value)
-    return ([index + .5 for index in sorted(bins)],
+        bins.setdefault(int(seconds // BIN_S), []).append(value)
+    return ([index * BIN_S + BIN_S / 2 for index in sorted(bins)],
             [statistics.fmean(bins[index]) for index in sorted(bins)])
 
 
@@ -107,7 +105,7 @@ def reduce(run_root: Path) -> list[dict]:
 
     marker = {name: (phase["wall_ns"] - base) / 1e9
               for name, phase in phases.items()}
-    xlim = (PLOT_START_S, marker["post_end"])
+    xlim = (marker["handoff_start"] - BIN_S, marker["sleep_ready"] + BIN_S)
     plt.style.use("default")
     figure, axis = plt.subplots(figsize=(9, 4))
     for node, path in paths.items():

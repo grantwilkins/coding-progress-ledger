@@ -1,12 +1,13 @@
 """
 Claim:
-Handoff plots align each region's 1-second power means to event timestamps.
+Handoff plots align each region's 5-second power means to event timestamps and
+focus on the migration-through-shutdown interval.
 
 Plausible wrong implementations:
 - use the wrong event as the shared time origin
-- place a sample in the wrong 1-second bin
+- place a boundary sample in the wrong 5-second bin
 - assign a destination's samples to the wrong region
-- aggregate power across regions instead of within each region and second
+- aggregate power across regions instead of within each region and time bin
 """
 
 import csv
@@ -15,7 +16,7 @@ import json
 import plot_handoff_power as p
 
 
-def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
+def test_reduce_aligns_power_regions_and_queue_depth(tmp_path, monkeypatch):
     phases = {name: {"wall_ns": value, "monotonic_ns": value} for name, value in {
         "pre_start": 1_000_000_000, "pre_end": 2_000_000_000,
         "handoff_start": 2_000_000_000, "handoff_end": 2_500_000_000,
@@ -50,6 +51,7 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
             for index, moment in enumerate(moments):
                 writer.writerow((moment, index + 1, index))
 
+    monkeypatch.setattr(p.plt, "close", lambda _: None)
     rows = p.reduce(tmp_path)
 
     assert len(rows) == 12
@@ -61,3 +63,9 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
         queue = list(csv.DictReader(handle))
     assert len(queue) == 12
     assert (tmp_path / "power_handoff.png").is_file()
+    assert p.plt.gcf().axes[0].get_xlim() == (-4, 7)
+
+
+def test_bin_mean_uses_fixed_five_second_windows():
+    assert p.bin_mean([(4.9, 10), (5, 20), (9.9, 40), (10, 80)]) == (
+        [2.5, 7.5, 12.5], [10, 30, 80])
