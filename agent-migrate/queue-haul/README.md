@@ -516,6 +516,27 @@ evidence also includes an episode migration-makespan-per-modeled-watt CDF and
 supports timing and projected, not realized, power attainment.
 The pinned 2026-07-30 bundles predate `greedy_lagrangian`; they do not constitute
 hardware evidence for it. A new two-A100 run is required for that claim.
+`capacity_sweep_campaign.py` runs two separate fixed-30-second capacity
+campaigns: normalized destination offered load at 10 Gbit/s and measured
+effective goodput at an idle destination. Both freeze the mixed eight-session
+context pack and a 4 rps source workload split into eight equal 128-input,
+2-output streams. The modeled grid reports maximum executable nonlinear source
+power shed for Queue-Haul LP, static greedy, replay-only, and KV-only; the
+companion chart uses two-group Shapley values for exact replay/KV attribution.
+Only a route commit and destination continuation token by 30 seconds earn
+credit. Live episodes may queue and finish through 180 seconds, retain late work
+as an observation, and sample both GPUs at 10 Hz. Each live campaign runs three
+repeats of all four policies at the two LP knee cells (24 episodes).
+
+```
+uv run python queue-haul/capacity_sweep_campaign.py load --out queue-haul/outputs/capacity-load-20260806 --calibration load-calibration.json --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json
+uv run python queue-haul/capacity_sweep_campaign.py goodput --out queue-haul/outputs/capacity-goodput-20260806 --calibration goodput-calibration.json --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json
+# Add --run-root /scratch/users/$USER/<run> on a clean two-A100 allocation.
+```
+
+Each output keeps `plan.json`, `modeled_capacity.csv`, `live_plan.json`, the
+main and stacked PNG/PDF plots, and, after hardware execution,
+`live_capacity.csv` plus `live_summary.json`.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.

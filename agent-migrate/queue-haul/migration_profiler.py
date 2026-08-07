@@ -1458,7 +1458,8 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
     if configure_proxy:
         restart_proxy(stack, cfg, root, scenario["bandwidth_mbps"])
     event_log = EventLog(root / "events.jsonl", run_id, scenario["scenario_id"])
-    sampler = PowerSampler(root / "power.csv") \
+    sampler = PowerSampler(root / "power.csv",
+                           scenario.get("power_interval_s", .25)) \
         if scenario.get("sample_power", True) else None
     if sampler:
         sampler.start()
