@@ -1509,7 +1509,7 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
         if not warm_on_move:
             warm_concurrency = scenario.get("warm_concurrency", 1)
             if scenario.get("prestage_all", False):
-                warm_sessions(replay + kv, warm_concurrency)
+                warm_sessions(list(sessions.values()), warm_concurrency)
             else:
                 warm_sessions(replay, warm_concurrency)
                 if replay and scenario.get("reset_caches", True):
