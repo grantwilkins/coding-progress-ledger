@@ -1115,7 +1115,11 @@ def _lp(table: CandidateTable, target: float, stats=None):
         problem = solve(gains @ x, base, True)
         best = float(problem.value)
         problem = solve(work @ x, base + [gains @ x >= best - 1e-7])
-    selected = _round_lp(table, target, np.asarray(x.value))
+    values = None if x.value is None else np.asarray(x.value)
+    if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) \
+            or values is None or not np.isfinite(values).all():
+        return _lp_highs(table, target, stats)
+    selected = _round_lp(table, target, values)
     if stats is not None:
         stats.update(wall_s=perf_counter() - started, native_s=native_s,
                      solves=solves, iterations=iterations)

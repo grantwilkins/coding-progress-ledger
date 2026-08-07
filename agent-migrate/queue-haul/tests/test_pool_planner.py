@@ -240,6 +240,33 @@ def test_highs_lp_matches_target_problem_and_max_gain_fallback():
     assert _lp_highs(table, 3) == {1, 2}
     assert _lp_highs(table, 4) == {1, 2}
 
+@pytest.mark.parametrize("status, values", [
+    ("failed", np.zeros(3)),
+    (pool_planner.cp.OPTIMAL, None),
+    (pool_planner.cp.OPTIMAL, np.full(3, np.nan)),
+])
+def test_clarabel_invalid_final_solution_falls_back_to_highs(
+    monkeypatch, status, values,
+):
+    table, stats, called = _hand_lp_table(), {}, []
+
+    class FailedProblem:
+        solver_stats = SimpleNamespace(solve_time=0, num_iters=0)
+
+        def __init__(self, objective, constraints):
+            self.objective, self.status, self.value = objective, status, None
+
+        def solve(self, **kwargs):
+            for variable in self.objective.args[0].variables():
+                variable.save_value(values)
+
+    expected = {1, 2}
+    monkeypatch.setattr(pool_planner.cp, "Problem", FailedProblem)
+    monkeypatch.setattr(pool_planner, "_lp_highs", lambda t, target, s: (
+        called.append((t, target, s)) or expected))
+
+    assert pool_planner._lp(table, 3, stats) == expected
+    assert called == [(table, 3, stats)]
 
 @pytest.mark.parametrize("target, shortfall", ((3, 0), (4, 1)))
 def test_column_generation_matches_flat_lp_and_certifies_both_phases(
