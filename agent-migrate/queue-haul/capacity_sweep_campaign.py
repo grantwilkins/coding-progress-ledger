@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -375,6 +376,22 @@ def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> 
             normal_bound=stable, rps=fraction * stable / work, max_inflight=64,
             bypass_lmcache=True, chat=True,
         )
+        if load:
+            def wait_observed():
+                deadline = time.monotonic() + 90
+                while time.monotonic() < deadline and not load.failure:
+                    metrics = load.sampler.rows
+                    if len(metrics) > 1 and (
+                        metrics[-1]["monotonic_ns"] - metrics[0]["monotonic_ns"]
+                    ) >= 30e9:
+                        load.achieved = destination.measured_rho(
+                            metrics, *rates, stable,
+                        )
+                        return
+                    time.sleep(.25)
+                raise RuntimeError("destination load observation failed") \
+                    from load.failure
+            load.wait_ready = wait_observed
         return original(stack, cfg, manifest, scenario, root, run_id,
                         destination_load=load, **kwargs)
 
@@ -440,6 +457,8 @@ def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
             "unmet_w": max(0, target - achieved),
             "credited_sessions": len(credited), "planned_sessions": len(raw),
             "episode_elapsed_s": result["elapsed_s"],
+            "measured_load_fraction": (result.get("destination_load") or {}).get(
+                "achieved_rho", 0),
             "deadline_miss_sessions": len(raw) - len(credited),
             "right_censored": result["elapsed_s"] >= RUN_TIMEOUT_S,
             "destination_load": result.get("destination_load"),
