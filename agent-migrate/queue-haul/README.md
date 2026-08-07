@@ -84,44 +84,49 @@ contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/netw
 [Linux PTP/chrony](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/time-sync),
 and [Spot Scheduled Events](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/scheduled-events).
 
-The frozen node map in `queue-haul/azure_network_cluster.json` is:
+The node map across the provided cluster files is:
 
 | role | region | private IP |
 |---|---|---|
 | source/power-down | Sweden Central | `10.0.0.4` |
 | destination | East US 2 | `10.1.0.4` |
 | destination | West Europe | `10.2.0.4` |
+| optional destination | Germany West Central | `10.3.0.4` |
 
-`check` compares every entry with Azure IMDS and hard-fails before calibration
-if the actual West/Sweden address assignment differs. In that case, correct the
-two destination records; do not bypass the check.
+Use `azure_network_cluster_germany.json` for an isolated Germany run when West
+Europe is unavailable.
+
+`check` compares every selected entry with Azure IMDS and hard-fails before
+calibration if an address assignment differs. Correct the selected node record;
+do not bypass the check.
 
 ### One-time portal work for the Azure account owner
 
 The account owner must complete these items. The experiment operator does not
 need `az` permissions.
 
-1. Use three `Standard_NC24ads_A100_v4` Spot VMs with one visible A100 each,
+1. Use `Standard_NC24ads_A100_v4` Spot VMs with one visible A100 each,
    Azure Linux 3.0, persistent `/datadrive`, eviction policy `Deallocate`, and
    no delete-on-eviction data disk.
 2. Configure bidirectional Global VNet Peering between the Sweden Central VNet and
-   each destination VNet. Both peerings must show `Connected`; address spaces
+   each selected destination VNet. Each peering must show `Connected`; address spaces
    must not overlap. Destination-to-destination peering is unnecessary.
 3. Do not add a public data-plane address, NAT gateway, VPN, load balancer, or
    TLS terminator. SSH can use the existing private access path. Private Azure
    backbone traffic is not application-layer encryption; that is acceptable for
    this measurement-only, private-VNet deployment.
 4. Restrict NSGs to these experiment flows. Source egress goes only to each
-   destination on TCP `22,5201,8081,8200` and ICMP. East US 2 permits source
-   `10.0.0.4/32` on those ports; West Europe does the same. Sweden Central
-   permits TCP `8301` from East `10.1.0.4/32` and TCP `8302` from West
-   `10.2.0.4/32`. Ports `5556,5557,5655,8080,8100,8401,8402` remain
+   destination on TCP `22,5201,8081,8200` and ICMP. Each selected destination
+   permits source `10.0.0.4/32` on those ports. Sweden Central
+   permits TCP `8301` from East `10.1.0.4/32`, West `10.2.0.4/32`, or Germany
+   `10.3.0.4/32`, according to the selected isolated cluster. The joint cluster
+   also uses TCP `8302` from West. Ports `5556,5557,5655,8080,8100,8401,8402` remain
    host-local. Do not expose any experiment port to `0.0.0.0/0`.
-5. Confirm all three VMs have the repository at
+5. Confirm all selected VMs have the repository at
    `/home/azureuser/coding-progress-ledger/agent-migrate`, the same commit, and
-   the source has `~/.ssh/azrs` plus verified host keys for both destinations.
+   the source has `~/.ssh/azrs` plus verified host keys for each destination.
 
-### Install all three hosts
+### Install each selected host
 
 Run from the `agent-migrate` repository on every VM as `azureuser`, not root:
 
@@ -142,9 +147,11 @@ that the same commit is checked out everywhere:
 ```bash
 ssh -i ~/.ssh/azrs azureuser@10.1.0.4 true
 ssh -i ~/.ssh/azrs azureuser@10.2.0.4 true
+ssh -i ~/.ssh/azrs azureuser@10.3.0.4 true
 git rev-parse HEAD
 ssh -i ~/.ssh/azrs azureuser@10.1.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
 ssh -i ~/.ssh/azrs azureuser@10.2.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
+ssh -i ~/.ssh/azrs azureuser@10.3.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
 ```
 
 ### Calibrate, smoke-test, and run

@@ -111,7 +111,7 @@ class Cluster:
             raise ValueError("cluster node ids and hosts must be unique")
         if value.source.region != "swedencentral" \
                 or not {node.region for node in value.destinations} \
-                <= {"eastus2", "westeurope"}:
+                <= {"eastus2", "westeurope", "germanywestcentral"}:
             raise ValueError("cluster regions do not match the frozen topology")
         return value
 

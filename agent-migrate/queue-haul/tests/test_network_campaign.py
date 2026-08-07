@@ -112,6 +112,10 @@ def test_cluster_pins_actual_roles_and_rejects_ambiguous_hosts(tmp_path):
     raw["destinations"] = raw["destinations"][:1]
     assert [node.id for node in n.Cluster.parse(raw).destinations] == ["east"]
 
+    germany = n.Cluster.load(n.ROOT / "azure_network_cluster_germany.json")
+    assert [(node.id, node.region, node.host) for node in germany.destinations] == [
+        ("germany", "germanywestcentral", "10.3.0.4")]
+
 
 def test_contract_uses_simultaneous_route_and_aggregate_goodput():
     contract = n.freeze_contract(calibration())
