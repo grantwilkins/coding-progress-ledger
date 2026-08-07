@@ -589,8 +589,15 @@ def validate_plan(plan: dict, manifest: dict) -> None:
                      or {row["method"] for row in scenario["moves"]}
                      != {"kv_transfer"}):
             raise ValueError(f"invalid append policy in {scenario['scenario_id']}")
-        if scenario["kind"] == "migration" and len(scenario["moves"]) != len(rows):
-            raise ValueError(f"migration {scenario['scenario_id']} does not move every selected session")
+        move_ids = [row["session_id"] for row in scenario["moves"]]
+        if scenario["kind"] == "migration" and (
+                not move_ids or len(set(move_ids)) != len(move_ids)
+                or not set(move_ids) <= {row["session_id"] for row in rows}
+                or not scenario.get("allow_partial_moves")
+                and len(move_ids) != len(rows)):
+            raise ValueError(
+                f"migration {scenario['scenario_id']} has invalid selected moves"
+            )
         if len({row.get("method") for row in scenario["moves"]}) > 1:
             pass  # Hand-authored mixed plans are valid; generated profiles use one method.
         for row in rows:

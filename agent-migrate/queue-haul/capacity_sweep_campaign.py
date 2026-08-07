@@ -306,6 +306,7 @@ def make_live_plan(campaign: dict, template: dict) -> dict:
                 "required_deadline_s": COMMIT_DEADLINE_S,
                 "deadline_s": RUN_TIMEOUT_S, "repeat": repeat,
                 "sessions": sessions, "moves": moves,
+                "allow_partial_moves": True,
                 "concurrency": len(moves), "move_concurrency": len(moves),
                 "serving_concurrency": 1, "activity": "none",
                 "activity_tokens": 0, "request_schedule": [],

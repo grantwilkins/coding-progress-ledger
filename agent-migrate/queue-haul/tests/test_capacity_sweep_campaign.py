@@ -104,7 +104,7 @@ def test_live_plan_is_dense_common_trace_matrix_with_complete_source_set(tmp_pat
     assert {row["required_deadline_s"] for row in plan["scenarios"]} == {30}
     assert {row["deadline_s"] for row in plan["scenarios"]} == {180}
     assert all(len(row["sessions"]) == 8 and len(row["moves"]) == 1
-               for row in plan["scenarios"])
+               and row["allow_partial_moves"] for row in plan["scenarios"])
     assert {row["load_fraction"] for row in plan["scenarios"]} == {0, .25, .5, .75}
     for load in (0, .25, .5, .75):
         for repeat in range(LIVE_REPEATS):
