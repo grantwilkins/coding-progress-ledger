@@ -530,19 +530,31 @@ route commits and first destination continuation token both arrive by the
 deadline. The live figure uses trace-derived load, median shed, bootstrap 95%
 confidence bands, and the 147.2 W requested-shed line; LP and Greedy component
 panels report replay, KV, and unmet watts. After the dense base run, add
-midpoints where shed changes by more than 5 W and extend knee cells to 20--30
-repeats while a 95% interval remains wider than 5 W. All 480 base episodes are
-checkpointed independently and completed scenario IDs are skipped on resume.
+the midpoint of every adjacent pair where any policy's measured median shed
+changes by more than 5 W. The empirical LP knee is the last base load whose
+median reaches requested shed (within 1e-6 W) and the following load; failure
+to bracket it is a hard error. Phase 2a runs repeats 10--19 for both knee loads
+and every base load where any policy's 95% interval is wider than 5 W, plus
+repeats 0--9 for the midpoints. Phase 2b runs repeats 20--29 only where the
+combined base and phase-2a interval remains wider than 5 W. Every selected
+load/repeat remains a four-policy common-trace cell with all eight source
+sessions. Plans, hardware runs, and the final merged bundle use separate roots;
+plans record the exact repeat map, selection reasons, and prior-plan hashes.
+All 480 base episodes are checkpointed independently and completed scenario IDs
+are skipped on resume.
 
 ```
-uv run python queue-haul/capacity_sweep_campaign.py load --out queue-haul/outputs/capacity-load-20260806 --calibration load-calibration.json --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json
+uv run python queue-haul/capacity_sweep_campaign.py load --out queue-haul/outputs/capacity-load-publication-20260807 --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-load-publication-20260807
+uv run python queue-haul/capacity_sweep_campaign.py load --adaptive-stage phase2a --prior-run-root /scratch/users/$USER/qh-capacity-load-publication-20260807 --out queue-haul/outputs/capacity-load-publication-20260807-phase2a --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-load-publication-20260807-phase2a
+uv run python queue-haul/capacity_sweep_campaign.py load --adaptive-stage phase2b --prior-run-root /scratch/users/$USER/qh-capacity-load-publication-20260807 /scratch/users/$USER/qh-capacity-load-publication-20260807-phase2a --out queue-haul/outputs/capacity-load-publication-20260807-phase2b --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json --run-root /scratch/users/$USER/qh-capacity-load-publication-20260807-phase2b
+uv run python queue-haul/capacity_sweep_campaign.py load --merge-run-root /scratch/users/$USER/qh-capacity-load-publication-20260807 /scratch/users/$USER/qh-capacity-load-publication-20260807-phase2a /scratch/users/$USER/qh-capacity-load-publication-20260807-phase2b --out queue-haul/outputs/capacity-load-publication-20260807-final
 uv run python queue-haul/capacity_sweep_campaign.py goodput --out queue-haul/outputs/capacity-goodput-20260806 --calibration goodput-calibration.json --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json
-# Add --run-root /scratch/users/$USER/<run> on a clean two-A100 allocation.
 ```
 
-Each output keeps `plan.json`, `modeled_capacity.csv`, `live_plan.json`, the
-main and stacked PNG/PDF plots, and, after hardware execution,
-`live_capacity.csv` plus `live_summary.json`.
+If phase 2b selects no cells, omit its run root from the merge command. Base and
+phase plan roots keep `plan.json`, `modeled_capacity.csv`, `live_plan.json`, and
+`summary.json`; hardware and final roots add `live_capacity.csv`,
+`live_summary.json`, and the live PNG/PDF figures.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.

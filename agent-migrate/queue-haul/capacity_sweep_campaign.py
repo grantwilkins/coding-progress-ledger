@@ -37,6 +37,9 @@ DEFAULT_SERVICE_PROFILE = ROOT / "outputs/destination-v7-20260722/baseline-profi
 LOAD_BASE_FRACTIONS = (0, .25, .5, .65, .75, .8, .85, .875,
                        .9, .925, .95, .975)
 LIVE_REPEATS = 10
+MAX_LIVE_REPEATS = 30
+CI_WIDTH_W = 5
+FULL_SHED_TOLERANCE_W = 1e-6
 LOAD_WARMUP_S = LOAD_WINDOW_S = 30
 POLICIES = {
     "lp": "lp_work_first", "greedy": "greedy",
@@ -194,16 +197,17 @@ def _load_calibration(calibration: dict | None) -> dict:
     }}
 
 
-def arrival_trace(rho: float, repeat: int, calibration: dict,
-                  repeats: int = LIVE_REPEATS) -> dict:
-    if not 0 <= rho < 1 or not 0 <= repeat < repeats:
+def arrival_trace(rho: float, repeat: int, calibration: dict) -> dict:
+    if not 0 <= rho < 1 or not 0 <= repeat < MAX_LIVE_REPEATS:
         raise ValueError("stationary load trace must have rho < 1 and a valid repeat")
     service = calibration["service_calibration"]
     total = float(service["total_s"])
     offsets = []
     if rho:
         interval = total / rho
-        value = (repeat + .5) / repeats * interval
+        block, within = divmod(repeat, LIVE_REPEATS)
+        phase = ((within + .5) / LIVE_REPEATS + block / MAX_LIVE_REPEATS) % 1
+        value = phase * interval
         while value < LOAD_WARMUP_S + LOAD_WINDOW_S:
             offsets.append(value); value += interval
     measured = sum(LOAD_WARMUP_S <= value < LOAD_WARMUP_S + LOAD_WINDOW_S
@@ -254,7 +258,9 @@ def make_campaign(kind: str, calibration: dict | None = None,
     }
 
 
-def make_live_plan(campaign: dict, template: dict) -> dict:
+def make_live_plan(campaign: dict, template: dict, repeat_map: dict | None = None,
+                   phase: str = "base", prior_plan_hashes=(),
+                   selection: dict | None = None) -> dict:
     if campaign.get("schema") != SCHEMA:
         raise ValueError("invalid capacity campaign")
     frozen = next((row["sessions"] for row in template["scenarios"]
@@ -264,16 +270,34 @@ def make_live_plan(campaign: dict, template: dict) -> dict:
         raise ValueError("template does not contain the frozen context pack")
     by_index = {f"s{i}": row for i, row in enumerate(frozen)}
     lp = [row for row in campaign["rows"] if row["policy"] == "lp"]
-    chosen = (range(len(lp)) if campaign["campaign"] == "load"
-              else campaign["live_validation"]["lp_knee_indices"])
-    keys = {(lp[i]["load_fraction"], lp[i]["configured_goodput_mbps"],
-             lp[i]["measured_goodput_mbps"]) for i in chosen}
+    if repeat_map is None:
+        chosen = (range(len(lp)) if campaign["campaign"] == "load"
+                  else campaign["live_validation"]["lp_knee_indices"])
+        keys = {(lp[i]["load_fraction"], lp[i]["configured_goodput_mbps"],
+                 lp[i]["measured_goodput_mbps"]) for i in chosen}
+        repeats = {key: tuple(range(campaign["live_validation"]["repeats"]))
+                   for key in keys}
+    else:
+        if campaign["campaign"] != "load":
+            raise ValueError("adaptive repeats require a load campaign")
+        keys = {(row["load_fraction"], row["configured_goodput_mbps"],
+                 row["measured_goodput_mbps"]) for row in lp
+                if row["load_fraction"] in repeat_map}
+        if {key[0] for key in keys} != set(repeat_map):
+            raise ValueError("adaptive schedule contains an unmodeled load")
+        repeats = {key: tuple(repeat_map[key[0]]) for key in keys}
+        if any(not values or len(values) != len(set(values)) or
+               not set(values) <= set(range(MAX_LIVE_REPEATS))
+               for values in repeats.values()):
+            raise ValueError("adaptive repeat schedule is invalid")
     selected = [row for row in campaign["rows"]
                 if (row["load_fraction"], row["configured_goodput_mbps"],
                     row["measured_goodput_mbps"]) in keys]
     scenarios = []
     for row in selected:
-        for repeat in range(campaign["live_validation"]["repeats"]):
+        key = (row["load_fraction"], row["configured_goodput_mbps"],
+               row["measured_goodput_mbps"])
+        for repeat in repeats[key]:
             moves = [{"session_id": by_index[move["session_id"]]["session_id"],
                       "method": move["method"], "order": order}
                      for order, move in enumerate(row["moves"])]
@@ -315,15 +339,23 @@ def make_live_plan(campaign: dict, template: dict) -> dict:
                 "wait_cache_idle": True, "prestage_all": True,
                 "warm_concurrency": len(moves), "power_interval_s": .1,
             })
-    expected = (len(keys) * len(campaign["live_validation"]["policies"])
-                * campaign["live_validation"]["repeats"])
+    expected = sum(map(len, repeats.values())) * len(POLICIES)
     if len(scenarios) != expected:
         raise ValueError("live validation matrix is incomplete")
     random.Random(0).shuffle(scenarios)
-    return {"schema": profiler.PLAN_SCHEMA, "manifest": template["manifest"],
-            "profile": campaign["profile"], "capacity_campaign": campaign["campaign"],
-            "calibration": campaign.get("calibration"),
-            "commit_deadline_s": COMMIT_DEADLINE_S, "scenarios": scenarios}
+    result = {"schema": profiler.PLAN_SCHEMA, "manifest": template["manifest"],
+              "profile": campaign["profile"],
+              "capacity_campaign": campaign["campaign"],
+              "calibration": campaign.get("calibration"),
+              "commit_deadline_s": COMMIT_DEADLINE_S, "scenarios": scenarios}
+    if repeat_map is not None:
+        result.update({"adaptive_phase": phase,
+                       "prior_plan_sha256": list(prior_plan_hashes),
+                       "adaptive_selection": selection,
+                       "load_repeat_schedule": [
+                           {"load_fraction": load, "repeats": list(repeat_map[load])}
+                           for load in sorted(repeat_map)]})
+    return result
 
 
 def write_campaign(kind: str, out: Path, calibration_path: Path | None = None,
@@ -386,11 +418,73 @@ def plot_campaign(campaign: dict, out: Path) -> None:
     plt.close(fig)
 
 
-def write_live_plan(campaign: dict, template_path: Path, out: Path) -> dict:
+def write_live_plan(campaign: dict, template_path: Path, out: Path,
+                    repeat_map: dict | None = None, phase: str = "base",
+                    prior_plan_hashes=(), selection=None) -> dict:
     template = json.loads(template_path.read_text())
-    plan_ = make_live_plan(campaign, template)
+    plan_ = make_live_plan(campaign, template, repeat_map, phase,
+                           prior_plan_hashes, selection)
     profiler.write_json(out / "live_plan.json", plan_)
     return plan_
+
+
+def make_adaptive_campaign(prior: dict, repeat_map: dict, phase: str,
+                           selection: dict) -> dict:
+    if not prior.get("capacity_campaign") == "load" or not prior.get("calibration"):
+        raise ValueError("adaptive phase requires a calibrated load plan")
+    profile_path = Path(prior["profile"]["path"])
+    profile = ModelProfile.load(profile_path)
+    rows = [_model_cell(profile, policy, load, 10_000, 10_000)
+            for load in sorted(repeat_map) for policy in POLICIES]
+    return {
+        "schema": SCHEMA, "campaign": "load",
+        "commit_deadline_s": COMMIT_DEADLINE_S,
+        "planner_power_deadline_s": PLANNER_DEADLINE_S,
+        "hardware_timeout_s": RUN_TIMEOUT_S,
+        "profile": prior["profile"], "calibration": prior["calibration"],
+        "live_validation": {"policies": list(POLICIES), "adaptive_phase": phase},
+        "adaptive_selection": selection, "rows": rows,
+    }
+
+
+def write_adaptive_phase(phase: str, prior_roots, template_path: Path,
+                         out: Path) -> tuple[dict, dict]:
+    expected = 1 if phase == "phase2a" else 2
+    roots = [root.resolve() for root in prior_roots]
+    if len(roots) != expected or len(set(roots)) != expected:
+        raise ValueError(f"{phase} requires {expected} distinct prior run roots")
+    parts = [read_live_results(root) for root in roots]
+    if {kind for kind, _ in parts} != {"load"}:
+        raise ValueError("adaptive phase requires load results")
+    rows = merge_live_rows([rows for _, rows in parts])
+    if phase == "phase2a":
+        repeat_map, selection = phase2a_schedule(rows)
+    else:
+        repeat_map = phase2b_schedule(rows)
+        selection = {"wide_loads": sorted(repeat_map)}
+    if not repeat_map:
+        raise ValueError(f"{phase} selected no cells")
+    plan_paths = [root / "plan.json" for root in roots]
+    plans = [json.loads(path.read_text()) for path in plan_paths]
+    signatures = {(profiler.object_hash(plan["profile"]),
+                   profiler.object_hash(plan.get("calibration"))) for plan in plans}
+    if len(signatures) != 1:
+        raise ValueError("prior plans disagree on profile or calibration")
+    hashes = [profiler.file_hash(path) for path in plan_paths]
+    selection.update({"ci_width_threshold_w": CI_WIDTH_W,
+                      "full_shed_tolerance_w": FULL_SHED_TOLERANCE_W})
+    campaign = make_adaptive_campaign(plans[0], repeat_map, phase, selection)
+    campaign["prior_plan_sha256"] = hashes
+    out.mkdir(parents=True, exist_ok=True)
+    profiler.write_json(out / "plan.json", campaign)
+    profiler.write_csv(out / "modeled_capacity.csv", campaign["rows"])
+    profiler.write_json(out / "summary.json", {
+        "schema": SCHEMA, "campaign": "load", "adaptive_phase": phase,
+        "selection": selection, "prior_plan_sha256": hashes,
+    })
+    live = write_live_plan(campaign, template_path, out, repeat_map, phase,
+                           hashes, selection)
+    return campaign, live
 
 
 def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> None:
@@ -453,21 +547,82 @@ def median_ci(values, seed: int = 0,
     return float(np.median(values)), float(low), float(high)
 
 
+def validate_live_rows(rows: list[dict]) -> None:
+    if not rows:
+        raise RuntimeError("live results are empty")
+    triples = [(row["load_fraction"], row["repeat"], row["policy"])
+               for row in rows]
+    if len(triples) != len(set(triples)):
+        raise RuntimeError("duplicate load/repeat/policy result")
+    for load, repeat in sorted({pair[:2] for pair in triples}):
+        cell = [row for row in rows if row["load_fraction"] == load
+                and row["repeat"] == repeat]
+        if len(cell) != len(POLICIES) or {row["policy"] for row in cell} != set(POLICIES):
+            raise RuntimeError("incomplete common-trace cell")
+        if len({row["trace_id"] for row in cell}) != 1:
+            raise RuntimeError("policies did not share an arrival trace")
+
+
+def load_statistics(rows: list[dict]) -> dict:
+    validate_live_rows(rows)
+    return {load: {policy: dict(zip(("median", "low", "high"), median_ci(
+        [row["achieved_shed_w"] for row in rows
+         if row["load_fraction"] == load and row["policy"] == policy],
+        int(profiler.object_hash([policy, load])[:8], 16))))
+        for policy in POLICIES}
+        for load in sorted({row["load_fraction"] for row in rows})}
+
+
+def phase2a_schedule(rows: list[dict]) -> tuple[dict, dict]:
+    stats = load_statistics(rows)
+    loads = tuple(stats)
+    if loads != LOAD_BASE_FRACTIONS or any(
+            {row["repeat"] for row in rows if row["load_fraction"] == load}
+            != set(range(LIVE_REPEATS)) for load in loads):
+        raise ValueError("phase2a requires the complete base grid")
+    targets = {float(row["requested_shed_w"]) for row in rows}
+    if len(targets) != 1:
+        raise ValueError("live results disagree on requested shed")
+    target = targets.pop()
+    full = [index for index, load in enumerate(loads)
+            if stats[load]["lp"]["median"] >= target - FULL_SHED_TOLERANCE_W]
+    if not full or max(full) == len(loads) - 1:
+        raise ValueError("base grid does not bracket the LP full-shed knee")
+    knee = {loads[max(full)], loads[max(full) + 1]}
+    wide = {load for load in loads if any(
+        stats[load][policy]["high"] - stats[load][policy]["low"] > CI_WIDTH_W
+        for policy in POLICIES)}
+    intervals = {(left, right) for left, right in zip(loads, loads[1:]) if any(
+        abs(stats[left][policy]["median"] - stats[right][policy]["median"])
+        > CI_WIDTH_W for policy in POLICIES)}
+    midpoints = {(left + right) / 2 for left, right in intervals}
+    schedule = {load: tuple(range(10, 20)) for load in sorted(knee | wide)}
+    schedule.update({load: tuple(range(10)) for load in sorted(midpoints)})
+    return schedule, {
+        "knee_loads": sorted(knee), "wide_loads": sorted(wide),
+        "midpoint_loads": sorted(midpoints),
+        "midpoint_intervals": [list(pair) for pair in sorted(intervals)],
+    }
+
+
+def phase2b_schedule(rows: list[dict]) -> dict:
+    stats = load_statistics(rows)
+    return {load: tuple(range(20, 30)) for load in stats if any(
+        stats[load][policy]["high"] - stats[load][policy]["low"] > CI_WIDTH_W
+        for policy in POLICIES)}
+
+
+def merge_live_rows(parts) -> list[dict]:
+    rows = [row for part in parts for row in part]
+    validate_live_rows(rows)
+    return rows
+
+
 def plot_live(rows: list[dict], out: Path, kind: str) -> None:
     if kind != "load":
         return
     loads = sorted({row["load_fraction"] for row in rows})
-    expected = {(load, repeat, policy) for load in loads
-                for repeat in range(LIVE_REPEATS) for policy in POLICIES}
-    actual = {(row["load_fraction"], row["repeat"], row["policy"]) for row in rows}
-    if actual != expected:
-        raise RuntimeError("live load results are not a complete common-trace matrix")
-    for load in loads:
-        for repeat in range(LIVE_REPEATS):
-            if len({row["trace_id"] for row in rows
-                    if row["load_fraction"] == load
-                    and row["repeat"] == repeat}) != 1:
-                raise RuntimeError("policies did not share an arrival trace")
+    validate_live_rows(rows)
     target = rows[0]["requested_shed_w"]
     fig, ax = plt.subplots(figsize=(6.4, 4.2))
     for policy in POLICIES:
@@ -512,7 +667,7 @@ def plot_live(rows: list[dict], out: Path, kind: str) -> None:
     plt.close(fig)
 
 
-def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
+def read_live_results(run_root: Path) -> tuple[str, list[dict]]:
     live = json.loads((run_root / "plan.json").read_text())
     profile = ModelProfile.load(Path(live["profile"]["path"]))
     scenario = _scenario(profile, 10_000)
@@ -587,20 +742,48 @@ def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
         }
         for row in rows:
             row["measured_goodput_mbps"] = measured[row["configured_goodput_mbps"]]
+    return live["capacity_campaign"], rows
+
+
+def write_live_results(rows: list[dict], out: Path, kind: str) -> None:
+    if kind == "load":
+        validate_live_rows(rows)
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_csv(out / "live_capacity.csv", rows)
-    plot_live(rows, out, live["capacity_campaign"])
+    plot_live(rows, out, kind)
+    repeats = {str(load): len({row["repeat"] for row in rows
+                              if row["load_fraction"] == load})
+               for load in sorted({row["load_fraction"] for row in rows})}
+    counts = list(repeats.values())
     profiler.write_json(out / "live_summary.json", {
-        "schema": SCHEMA, "campaign": live["capacity_campaign"],
+        "schema": SCHEMA, "campaign": kind,
         "episodes": len(rows), "complete": len(rows),
-        "load_points": len({row["load_fraction"] for row in rows}),
-        "repeats_per_cell": min(
-            sum(row["policy"] == "lp" and row["load_fraction"] == load
-                for row in rows)
-            for load in {row["load_fraction"] for row in rows}),
+        "load_points": len(repeats), "repeats_by_load": repeats,
+        "min_repeats_per_cell": min(counts),
+        "max_repeats_per_cell": max(counts),
         "deadline_credited_sessions": sum(row["credited_sessions"] for row in rows),
         "right_censored_episodes": sum(row["right_censored"] for row in rows),
     })
+
+
+def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
+    kind, rows = read_live_results(run_root)
+    write_live_results(rows, out, kind)
+    return rows
+
+
+def merge_live(run_roots, out: Path) -> list[dict]:
+    parts = [read_live_results(root) for root in run_roots]
+    if {kind for kind, _ in parts} != {"load"}:
+        raise ValueError("adaptive merge requires load campaigns")
+    rows = merge_live_rows([rows for _, rows in parts])
+    write_live_results(rows, out, "load")
+    summary_path = out / "live_summary.json"
+    summary = json.loads(summary_path.read_text())
+    summary["source_runs"] = [
+        {"run_root": str(root), "plan_sha256":
+         profiler.file_hash(root / "plan.json")} for root in run_roots]
+    profiler.write_json(summary_path, summary)
     return rows
 
 def main() -> None:
@@ -611,13 +794,40 @@ def main() -> None:
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
     parser.add_argument("--live-template", type=Path)
     parser.add_argument("--run-root", type=Path)
+    parser.add_argument("--adaptive-stage", choices=("phase2a", "phase2b"))
+    parser.add_argument("--prior-run-root", type=Path, nargs="+")
+    parser.add_argument("--merge-run-root", type=Path, nargs="+")
     parser.add_argument("--allow-dirty", action="store_true")
     args = parser.parse_args()
-    campaign = json.loads((args.out / "plan.json").read_text()) \
-        if args.run_root and (args.out / "plan.json").exists() \
-        else write_campaign(args.campaign, args.out, args.calibration, args.profile)
-    if args.live_template:
-        write_live_plan(campaign, args.live_template, args.out)
+    if args.merge_run_root:
+        if not args.campaign == "load" or args.adaptive_stage or args.prior_run_root \
+                or args.run_root or args.live_template:
+            raise ValueError("merge accepts only load, --out, and --merge-run-root")
+        roots = [root.resolve() for root in args.merge_run_root]
+        if len(roots) != len(set(roots)) or args.out.resolve() in roots:
+            raise ValueError("merge roots and output must be distinct")
+        merge_live(roots, args.out)
+        return
+    if args.adaptive_stage:
+        if not args.campaign == "load" or not args.prior_run_root \
+                or not args.live_template:
+            raise ValueError("adaptive phase requires load, prior roots, and template")
+        roots = {root.resolve() for root in args.prior_run_root}
+        current = {args.out.resolve()}
+        if args.run_root:
+            current.add(args.run_root.resolve())
+        if len(current) != 1 + bool(args.run_root) or current & roots:
+            raise ValueError("adaptive plan, run, and prior roots must be distinct")
+        campaign, _ = write_adaptive_phase(
+            args.adaptive_stage, args.prior_run_root, args.live_template, args.out)
+    else:
+        if args.prior_run_root:
+            raise ValueError("--prior-run-root requires --adaptive-stage")
+        campaign = json.loads((args.out / "plan.json").read_text()) \
+            if args.run_root and (args.out / "plan.json").exists() \
+            else write_campaign(args.campaign, args.out, args.calibration, args.profile)
+        if args.live_template:
+            write_live_plan(campaign, args.live_template, args.out)
     if args.run_root:
         if not args.live_template and not (args.out / "live_plan.json").exists():
             raise ValueError("hardware execution requires --live-template or live_plan.json")
