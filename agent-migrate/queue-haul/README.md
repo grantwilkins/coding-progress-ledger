@@ -84,44 +84,50 @@ contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/netw
 [Linux PTP/chrony](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/time-sync),
 and [Spot Scheduled Events](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/scheduled-events).
 
-The frozen node map in `queue-haul/azure_network_cluster.json` is:
+The node map across the provided cluster files is:
 
 | role | region | private IP |
 |---|---|---|
 | source/power-down | Sweden Central | `10.0.0.4` |
 | destination | East US 2 | `10.1.0.4` |
 | destination | West Europe | `10.2.0.4` |
+| optional destination | Germany West Central | `10.3.0.4` |
 
-`check` compares every entry with Azure IMDS and hard-fails before calibration
-if the actual West/Sweden address assignment differs. In that case, correct the
-two destination records; do not bypass the check.
+Use `azure_network_cluster_germany.json` for an isolated Germany run when West
+Europe is unavailable, or `azure_network_cluster_east_germany.json` for the
+two-destination East US 2 and Germany campaign.
+
+`check` compares every selected entry with Azure IMDS and hard-fails before
+calibration if an address assignment differs. Correct the selected node record;
+do not bypass the check.
 
 ### One-time portal work for the Azure account owner
 
 The account owner must complete these items. The experiment operator does not
 need `az` permissions.
 
-1. Use three `Standard_NC24ads_A100_v4` Spot VMs with one visible A100 each,
+1. Use `Standard_NC24ads_A100_v4` Spot VMs with one visible A100 each,
    Azure Linux 3.0, persistent `/datadrive`, eviction policy `Deallocate`, and
    no delete-on-eviction data disk.
 2. Configure bidirectional Global VNet Peering between the Sweden Central VNet and
-   each destination VNet. Both peerings must show `Connected`; address spaces
+   each selected destination VNet. Each peering must show `Connected`; address spaces
    must not overlap. Destination-to-destination peering is unnecessary.
 3. Do not add a public data-plane address, NAT gateway, VPN, load balancer, or
    TLS terminator. SSH can use the existing private access path. Private Azure
    backbone traffic is not application-layer encryption; that is acceptable for
    this measurement-only, private-VNet deployment.
 4. Restrict NSGs to these experiment flows. Source egress goes only to each
-   destination on TCP `22,5201,8081,8200` and ICMP. East US 2 permits source
-   `10.0.0.4/32` on those ports; West Europe does the same. Sweden Central
-   permits TCP `8301` from East `10.1.0.4/32` and TCP `8302` from West
-   `10.2.0.4/32`. Ports `5556,5557,5655,8080,8100,8401,8402` remain
+   destination on TCP `22,5201,8081,8200` and ICMP. Each selected destination
+   permits source `10.0.0.4/32` on those ports. Sweden Central
+   permits TCP `8301` from East `10.1.0.4/32`, West `10.2.0.4/32`, or Germany
+   `10.3.0.4/32`, according to the selected isolated cluster. The joint cluster
+   also uses TCP `8302` from West. Ports `5556,5557,5655,8080,8100,8401,8402` remain
    host-local. Do not expose any experiment port to `0.0.0.0/0`.
-5. Confirm all three VMs have the repository at
+5. Confirm all selected VMs have the repository at
    `/home/azureuser/coding-progress-ledger/agent-migrate`, the same commit, and
-   the source has `~/.ssh/azrs` plus verified host keys for both destinations.
+   the source has `~/.ssh/azrs` plus verified host keys for each destination.
 
-### Install all three hosts
+### Install each selected host
 
 Run from the `agent-migrate` repository on every VM as `azureuser`, not root:
 
@@ -142,9 +148,11 @@ that the same commit is checked out everywhere:
 ```bash
 ssh -i ~/.ssh/azrs azureuser@10.1.0.4 true
 ssh -i ~/.ssh/azrs azureuser@10.2.0.4 true
+ssh -i ~/.ssh/azrs azureuser@10.3.0.4 true
 git rev-parse HEAD
 ssh -i ~/.ssh/azrs azureuser@10.1.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
 ssh -i ~/.ssh/azrs azureuser@10.2.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
+ssh -i ~/.ssh/azrs azureuser@10.3.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
 ```
 
 ### Calibrate, smoke-test, and run
@@ -266,30 +274,52 @@ node identity, model, or runtime changed. A synchronized commit update remains
 visible in the audit checks. Azure Scheduled Events are
 logged on all three hosts and an active Spot event fails the attempt.
 
-After the joint campaign, run the Queue-Haul three-node handoff with a 30-second
-full-shed deadline, 100-ms power sampling, five-minute pre/post windows, natural
-links, and 50% destination load:
+The handoff accepts any validated two-destination cluster. For East US 2 and
+Germany West Central, create one fresh calibration and matched plan after East
+comes online, then pass the same repeat to Queue-Haul, KV-only, and replay-only:
 
 ```bash
-uv run python queue-haul/network_campaign.py handoff \
-  --cluster queue-haul/azure_network_cluster.json \
+uv run python queue-haul/network_campaign.py check \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --ssh-key ~/.ssh/azrs
+uv run python queue-haul/network_campaign.py calibrate \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
   --ssh-key ~/.ssh/azrs \
-  --calibration /datadrive/queue-haul-network/control/calibration-post-west-001.json \
-  --plan /datadrive/queue-haul-network/control/plan-joint-001.json \
+  --out /datadrive/queue-haul-network/control/calibration-east-germany-001.json
+uv run python queue-haul/network_campaign.py prepare --design joint \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
   --manifest queue-haul/outputs/coding-manifest.json \
-  --run-root /datadrive/queue-haul-network/handoff-001
-uv run python queue-haul/plot_handoff_power.py \
-  --run-root /datadrive/queue-haul-network/handoff-001
+  --out /datadrive/queue-haul-network/control/plan-east-germany-001.json
+uv run python queue-haul/network_campaign.py smoke \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --ssh-key ~/.ssh/azrs \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+  --bandwidth natural \
+  --run-root /datadrive/queue-haul-network/smoke-east-germany-natural-001
+
+for policy in queue_haul kv_only replay_only; do
+  uv run python queue-haul/network_campaign.py handoff \
+    --cluster queue-haul/azure_network_cluster_east_germany.json \
+    --ssh-key ~/.ssh/azrs \
+    --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+    --plan /datadrive/queue-haul-network/control/plan-east-germany-001.json \
+    --manifest queue-haul/outputs/coding-manifest.json \
+    --policy "$policy" --repeat 0 \
+    --run-root "/datadrive/queue-haul-network/handoff-east-germany-$policy-001"
+  uv run python queue-haul/plot_handoff_power.py \
+    --run-root "/datadrive/queue-haul-network/handoff-east-germany-$policy-001"
+done
 ```
 
-The harness keeps eight pinned agentic sessions plus an independent 80%-load
-agentic stream serving on Sweden for five minutes while both destinations sustain
-50% background inference. The 30-second handoff clock starts before live metrics
-and Queue-Haul LP planning, covers all parallel replay/KV reconstruction, and
-hard-fails unless all eight sessions are admitted and complete by the deadline.
+Each policy uses the same eight pinned agentic sessions. An independent 80%-load
+stream serves on Sweden while both destinations sustain 50% background inference.
+The 30-second handoff clock includes live metrics, policy planning, and parallel
+reconstruction, and hard-fails unless all sessions are admitted and complete.
 Destination background service never pauses. At the traffic switch, destination
-session service starts immediately while source admissions stop and Sweden drains
-and sleeps concurrently.
+service starts immediately while source admissions stop and Sweden drains and
+sleeps concurrently. Defaults retain five-minute pre/post windows and 100-ms
+power sampling.
 
 Handoff processes pin `kv_both`, 33 GB L1 pools, a 32 GB Redis cap, and disabled
 vLLM prefix caching. Unrelated source and destination loads bypass LMCache so
@@ -298,11 +328,25 @@ source power-fall windows, writes phase queue depth, and requires Sweden to
 start at or above 200 W and shed at least 50 W. The measured Sweden window
 itself populates the migrating KV state; there is no separate warmup before it.
 
-The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
-under `/datadrive/queue-haul-network/control/power-cal-300w-*` plus the measured
-`handoff-008` endpoint: 98.1 W model-resident idle and 179.1 W at
-`ell=0.6468`. The two-point curve is the conservative concave envelope of the
-old low-load samples and this endpoint. Bare GPU idle is outside this curve.
+Only the Azure campaign uses
+`profiles/gpt_oss_20b_a100_tp1_azure_300w.json`, calibrated on an Azure
+NVIDIA A100 80GB PCIe whose `nvidia-smi` power limit is 300 W. The generic
+`gpt_oss_20b_a100_tp1.json` retains the original non-Azure A100 calibration.
+The Azure profile uses the cache-cold fixed-rate sweep at
+`/datadrive/queue-haul-network/control/power-cal-300w-rate-001`: 18 rates from
+0.25 to 20 requests/s, 20-second windows, a 1,100-word synthetic prompt body
+with a unique leading hash, 64-token outputs, and zero cached prompt tokens. Its
+conservative concave envelope reaches 300.24 W at `ell=10.0543`; the 14--20
+requests/s deep-queue points independently remain near 299 W. The 98.1 W
+model-resident idle anchor comes from
+`power-cal-300w-002`; bare GPU idle is outside this curve. Reproduce and reduce
+the sweep with the commands below. The runner hard-fails unless `nvidia-smi`
+reports exactly one NVIDIA A100 80GB PCIe with a 300 W power limit.
+
+```bash
+uv run python power_rate_sweep.py --out PATH --window-s 20 --warmup-s 5 --workers 512 --rates 0.25 0.5 0.75 1 1.5 2 3 4 5 6 7 8 9 10 12 14 16 20
+uv run python power_rate_sweep.py --out PATH --reduce-only --prefill-capacity-tps 1448.32 --decode-capacity-tps 1260.38 --idle-power-w 98.11623555 --curve-max-rate 12
+```
 
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
 single-link campaigns plus the successful `handoff-009` and bidirectional-cache
@@ -597,6 +641,12 @@ destination power rose from 128.2 W to 283.4 W. The three replay moves
 recomputed 10,662 tokens; the five KV moves computed 713 tokens while reusing
 2.72 GB of KV. The retained paired 10 Hz samples have 95.6% coverage and the
 bundle includes phase-level engine queue depth and checksum-pinned raw data.
+`outputs/live-power-handoff-east-germany-20260807/` retains the three-A100
+Sweden-to-East-US-2/West-Germany campaign with 80% source and 50% load at each
+destination. Queue Haul admitted all eight sessions in 29.669 s and KV-only in
+25.159 s; replay-only admitted six before the fixed 30-second deadline. The
+bundle includes raw `power.csv`, load and transfer telemetry, plots for both
+completed arms, and the exact plan and composed non-formal calibration used.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast

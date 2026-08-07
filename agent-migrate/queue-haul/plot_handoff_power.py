@@ -14,9 +14,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-COLORS = {"sweden": "#8C1515", "east": "#006CB8", "west": "#008566"}
-
-
 def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
     with path.open() as handle:
         rows = list(csv.DictReader(handle))
@@ -38,9 +35,9 @@ def reduce(run_root: Path) -> list[dict]:
     windows = {name: ((phases[start]["wall_ns"] - base) / 1e9,
                       (phases[end]["wall_ns"] - base) / 1e9)
                for name, (start, end) in names.items()}
-    paths = {"sweden": run_root / "power.csv",
-             "east": run_root / "nodes/east/power.csv",
-             "west": run_root / "nodes/west/power.csv"}
+    nodes = ("sweden", *sorted(result["scenario"]["background"]))
+    paths = {node: run_root / "nodes" / node / "power.csv" for node in nodes}
+    paths["sweden"] = run_root / "power.csv"
     rows = []
     for node, path in paths.items():
         points = read_power(path, base)
@@ -82,9 +79,11 @@ def reduce(run_root: Path) -> list[dict]:
 
     plt.style.use("seaborn-v0_8-whitegrid")
     figure, axis = plt.subplots(figsize=(11, 4.5))
+    colors = dict(zip(nodes, plt.get_cmap("tab10").colors))
+    colors["sweden"] = "#8C1515"
     for node, path in paths.items():
         points = read_power(path, base)
-        axis.plot(*zip(*points), color=COLORS[node], linewidth=1,
+        axis.plot(*zip(*points), color=colors[node], linewidth=1,
                   alpha=.8, label=node.title())
     if "traffic_switched" in phases:
         regions = (("Migration", "handoff_start", "handoff_end", "#E98300", None),
@@ -101,6 +100,7 @@ def reduce(run_root: Path) -> list[dict]:
         axis.axvline((phases["sleep_ready"]["wall_ns"] - base) / 1e9,
                     color="#E98300", linestyle=":", label="Sweden sleep")
     axis.set(xlabel="Seconds from inference window start", ylabel="GPU power (W)")
+    axis.set_title(result["scenario"]["policy"].replace("_", " ").title())
     axis.legend(frameon=False, ncol=3)
     figure.tight_layout()
     figure.savefig(run_root / "power_handoff.png", dpi=200)

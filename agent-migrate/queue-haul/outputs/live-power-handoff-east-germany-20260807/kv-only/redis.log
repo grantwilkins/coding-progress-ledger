@@ -1,0 +1,11 @@
+15789:C 07 Aug 2026 21:51:40.039 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+15789:C 07 Aug 2026 21:51:40.040 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo
+15789:C 07 Aug 2026 21:51:40.040 * Valkey version=8.0.10, bits=64, commit=00000000, modified=0, pid=15789, just started
+15789:C 07 Aug 2026 21:51:40.040 * Configuration loaded
+15789:M 07 Aug 2026 21:51:40.040 * monotonic clock: POSIX clock_gettime
+15789:M 07 Aug 2026 21:51:40.040 * Running mode=standalone, port=5655.
+15789:M 07 Aug 2026 21:51:40.041 * Server initialized
+15789:M 07 Aug 2026 21:51:40.041 * Ready to accept connections tcp
+15789:signal-handler (1786139776) Received SIGTERM scheduling shutdown...
+15789:M 07 Aug 2026 21:56:16.229 * User requested shutdown...
+15789:M 07 Aug 2026 21:56:16.230 # Valkey is now ready to exit, bye bye...
