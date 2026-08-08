@@ -657,6 +657,18 @@ attempts all eight sessions, credits shed at 30 seconds, records the last route
 commit and continuation token, and keeps arrivals active until the drain
 completes, up to the 180-second timeout. Normalized load still uses only the
 30-second measurement window.
+
+The retained 2026-08-08 hardware evidence includes the complete standalone
+10-Gbit/s appendix (200 episodes and all 1,600 sessions credited by 30 seconds)
+and balanced blocks 0--1 (320 episodes and four repeats per exact
+load/bandwidth/policy cell). Across the balanced blocks, all 40 replay-only
+episodes at 1 Gbit/s drain in 32.919--33.501 seconds and miss the all-session
+deadline, while all 40 KV-only episodes drain in 27.256--28.267 seconds and
+meet it. Every episode at 2.5, 5, and 10 Gbit/s meets the deadline. These two
+blocks support the qualitative bandwidth boundary but not a ten-repeat
+confidence claim; they are retained separately rather than presented as the
+five-block merged result.
+
 Run blocks 0 through 4 from the same commit, one per allocation, then merge the
 five roots:
 
