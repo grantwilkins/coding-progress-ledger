@@ -12,9 +12,11 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
 from profiles import ModelProfile
 
@@ -42,11 +44,16 @@ LINESTYLES = dict(zip(SCHEDULERS, ("-", "--", "-.", ":")))
 ACTIONS = ("replay", "kv_transfer", "not_moved")
 ACTION_LABELS = ("Replay", "KV transfer", "Not moved")
 ACTION_COLORS = ("#E98300", "#006CB8", "#999999")
+CAMPAIGN_COLORS = {"bandwidth": "#E98300", "load": "#006CB8"}
 FIELDS = (
     "campaign", "split", "deadline_s", "scheduler", "independent_value",
     "observations", "time_to_full_power_s", "deadline_attainment_fraction",
     "watts_shed_by_deadline", "target_w", "replay_action_fraction",
     "kv_transfer_action_fraction", "not_moved_action_fraction",
+)
+HEATMAP_FIELDS = (
+    "campaign", "deadline_s", "scheduler", "action", "bandwidth_gbps",
+    "destination_prefill_tokens_per_s", "action_fraction", "observations",
 )
 
 
@@ -223,9 +230,80 @@ def summarize_full_drain(rows: list[dict], scenarios: list[dict],
     return output
 
 
-def _write_csv(path: Path, rows: list[dict]) -> None:
+def action_heatmap_rows(load_rows: list[dict], load_scenarios: list[dict],
+                        bandwidth_rows: list[dict],
+                        prefill_capacity_tps: float,
+                        deadline_s: float = 30) -> list[dict]:
+    if prefill_capacity_tps <= 0:
+        raise ValueError("prefill capacity must be positive")
+    plans = {row["scenario_id"]: row for row in load_scenarios}
+    if len(plans) != len(load_scenarios) or {
+            row["scenario_id"] for row in load_rows} != set(plans):
+        raise ValueError("load results and plan do not match")
+    groups = defaultdict(list)
+    for row in load_rows:
+        groups[float(row["load_fraction"]), row["policy"]].append(row)
+    output = []
+
+    def add(campaign, scheduler, bandwidth, prefill, fractions, observations):
+        output.extend({
+            "campaign": campaign, "deadline_s": deadline_s,
+            "scheduler": scheduler, "action": action,
+            "bandwidth_gbps": bandwidth,
+            "destination_prefill_tokens_per_s": prefill,
+            "action_fraction": fractions[action],
+            "observations": observations,
+        } for action in ACTIONS)
+
+    for (_, policy), cells in sorted(groups.items()):
+        scheduler = "queue_haul" if policy == "lp" else policy
+        if scheduler not in QH_SCHEDULERS:
+            continue
+        selected = [plans[row["scenario_id"]] for row in cells]
+        if {float(row["required_deadline_s"]) for row in selected} \
+                != {deadline_s}:
+            raise ValueError("load action cell has the wrong deadline")
+        bandwidths = {float(row["configured_goodput_mbps"]) / 1000
+                      for row in cells}
+        if len(bandwidths) != 1:
+            raise ValueError("load action cell mixes bandwidths")
+        prefill = statistics.median(
+            float(row["offered_rho_prefill"]) for row in cells
+        ) * prefill_capacity_tps
+        if prefill < 0:
+            raise ValueError("destination prefill throughput cannot be negative")
+        if prefill:
+            add("load", scheduler, bandwidths.pop(), prefill,
+                action_fractions(selected), len(cells))
+    selected = [row for row in bandwidth_rows
+                if float(row["deadline_s"]) == deadline_s]
+    for row in _pooled_actions(selected):
+        if row["scheduler"] in QH_SCHEDULERS:
+            add("bandwidth", row["scheduler"], row["independent_value"], 0,
+                {action: row[f"{action}_action_fraction"]
+                 for action in ACTIONS}, row["observations"])
+    keys = [(row["scheduler"], row["action"], row["bandwidth_gbps"],
+             row["destination_prefill_tokens_per_s"]) for row in output]
+    if len(keys) != len(set(keys)):
+        raise ValueError("action heatmap has duplicate operating points")
+    cells = defaultdict(list)
+    for row in output:
+        cells[row["scheduler"], row["bandwidth_gbps"],
+              row["destination_prefill_tokens_per_s"]].append(row)
+    if any({row["action"] for row in rows} != set(ACTIONS)
+           or not math.isclose(sum(row["action_fraction"] for row in rows), 1)
+           for rows in cells.values()):
+        raise ValueError("action heatmap fractions must sum to one")
+    return sorted(output, key=lambda row: (
+        QH_SCHEDULERS.index(row["scheduler"]),
+        ACTIONS.index(row["action"]), row["destination_prefill_tokens_per_s"],
+        row["bandwidth_gbps"],
+    ))
+
+
+def _write_csv(path: Path, rows: list[dict], fields=FIELDS) -> None:
     with path.open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, FIELDS, lineterminator="\n")
+        writer = csv.DictWriter(stream, fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -389,12 +467,76 @@ def _pooled_actions(rows):
     return output
 
 
+def _action_heatmap(rows, out):
+    bandwidths = sorted({row["bandwidth_gbps"] for row in rows})
+    prefills = sorted({row["destination_prefill_tokens_per_s"] for row in rows})
+    x_index = {value: index for index, value in enumerate(bandwidths)}
+    y_index = {value: index for index, value in enumerate(prefills)}
+    cmap = plt.get_cmap("viridis").copy()
+    cmap.set_bad("#dddddd")
+    figure, axes = plt.subplots(2, 3, figsize=(11, 8.5), sharex=True, sharey=True)
+    for row_index, scheduler in enumerate(QH_SCHEDULERS):
+        for column, (action, label) in enumerate(zip(ACTIONS, ACTION_LABELS)):
+            axis = axes[row_index, column]
+            matrix = np.full((len(prefills), len(bandwidths)), np.nan)
+            panel = [row for row in rows if row["scheduler"] == scheduler
+                     and row["action"] == action]
+            for row in panel:
+                x = x_index[row["bandwidth_gbps"]]
+                y = y_index[row["destination_prefill_tokens_per_s"]]
+                value = row["action_fraction"]
+                matrix[y, x] = value
+                axis.text(x, y, f"{100 * value:.0f}%", ha="center", va="center",
+                          color="white" if value < .55 else "black", fontsize=8)
+                axis.add_patch(Rectangle(
+                    (x - .5, y - .5), 1, 1, fill=False,
+                    edgecolor=CAMPAIGN_COLORS[row["campaign"]], linewidth=2,
+                ))
+            image = axis.imshow(matrix, origin="lower", aspect="auto", cmap=cmap,
+                                vmin=0, vmax=1)
+            axis.set_title(label)
+            axis.set_xticks(range(len(bandwidths)),
+                            [f"{value:g}" for value in bandwidths])
+            axis.set_yticks(range(len(prefills)), [
+                "0" if not value else f"{value / 1000:.2f}k"
+                for value in prefills
+            ])
+            if column == 0:
+                axis.set_ylabel(
+                    f"{LABELS[scheduler]}\nDestination offered prefill (tokens/s)")
+            if row_index == 1:
+                axis.set_xlabel("Bandwidth (Gbit/s)")
+    figure.suptitle("Observed action selection at the 30 s deadline")
+    figure.subplots_adjust(left=.16, right=.88, bottom=.21, top=.91,
+                           wspace=.08, hspace=.18)
+    colorbar = figure.colorbar(image, ax=axes, fraction=.025, pad=.025)
+    colorbar.set_label("Action fraction")
+    figure.legend([
+        Rectangle((0, 0), 1, 1, fill=False,
+                  edgecolor=CAMPAIGN_COLORS["bandwidth"], linewidth=2),
+        Rectangle((0, 0), 1, 1, fill=False,
+                  edgecolor=CAMPAIGN_COLORS["load"], linewidth=2),
+        Rectangle((0, 0), 1, 1, facecolor="#dddddd"),
+    ], ["Bandwidth sweep (zero prefill)", "Load sweep (10 Gbit/s)",
+        "Not measured"], loc="lower center", bbox_to_anchor=(.5, .015), ncol=3,
+        frameon=False)
+    figure.text(.5, .105,
+                "Discrete measured operating points; no interpolation. "
+                "10 Gbit/s, zero prefill uses the balanced bandwidth cohort.",
+                ha="center", fontsize=8, color="#555555")
+    for suffix in ("png", "pdf"):
+        figure.savefig(out.with_suffix(f".{suffix}"), dpi=220,
+                       bbox_inches="tight")
+    plt.close(figure)
+
+
 def write(load_root: Path = LOAD_ROOT, bandwidth_root: Path = BANDWIDTH_ROOT,
           full_drain_roots=FULL_DRAIN_ROOTS, out: Path = OUT):
     out.mkdir(parents=True, exist_ok=True)
     load_plan = json.loads((load_root / "live_plan.json").read_text())
     load_model = _profile(load_plan["profile"])
-    load = summarize_load(_csv(load_root / "live_capacity.csv"),
+    load_results = _csv(load_root / "live_capacity.csv")
+    load = summarize_load(load_results,
                           load_plan["scenarios"], load_model.power_window_s)
     bandwidth_plan = json.loads((bandwidth_root / "plan.json").read_text())
     bandwidth_model = _profile(bandwidth_plan["model_profile"])
@@ -405,6 +547,11 @@ def write(load_root: Path = LOAD_ROOT, bandwidth_root: Path = BANDWIDTH_ROOT,
     bandwidth = summarize_bandwidth(
         bandwidth_plan, bandwidth_episodes, bandwidth_attainment, target,
         bandwidth_model.power_window_s)
+    heatmap = action_heatmap_rows(
+        load_results, load_plan["scenarios"], bandwidth,
+        float(load_plan["calibration"]["service_calibration"]
+              ["prefill_tokens_per_s"]),
+    )
     bandwidth_observed = bandwidth_observations(
         bandwidth_plan, bandwidth_episodes, bandwidth_attainment, target,
         bandwidth_model.power_window_s)
@@ -419,6 +566,9 @@ def write(load_root: Path = LOAD_ROOT, bandwidth_root: Path = BANDWIDTH_ROOT,
     _write_csv(out / "load_curves.csv", load)
     _write_csv(out / "bandwidth_curves.csv", bandwidth)
     _write_csv(out / "full_drain_bandwidth_curves.csv", full_drain)
+    _write_csv(out / "action_selection_bandwidth_prefill_heatmap.csv",
+               heatmap, HEATMAP_FIELDS)
+    _action_heatmap(heatmap, out / "action_selection_bandwidth_prefill_heatmap")
     _scheduler_plot(load, "time_to_full_power_s", "Time to full power shed (s)",
                     out / "load_time_to_full_power", "Normalized offered load",
                     ("controlled_destination_load",))

@@ -672,6 +672,10 @@ figures split by destination load; width-8 figures split by context profile and
 19/30-second campaign. The primary width-8 ECDFs pool the balanced context
 profiles at equal frequency within each bandwidth panel (15 episodes per
 scheduler); the faceted curves and CSV retain the context-specific results.
+The combined action heatmap shows the observed L-shaped 30-second design:
+zero-prefill bandwidth cells and positive-prefill 10-Gbit/s load cells, with
+unmeasured combinations left gray rather than interpolated. Prefill throughput
+uses the load campaign's pinned service-rate calibration.
 Coincident scheduler curves are horizontally offset slightly for visibility;
 the CSV retains exact operating points. Run
 `uv run python queue-haul/plot_capacity_operating_curves.py`; outputs go to

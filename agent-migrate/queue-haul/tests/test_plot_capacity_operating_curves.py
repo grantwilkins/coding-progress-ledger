@@ -2,13 +2,14 @@
 Claim:
 Operating curves preserve each campaign cell, count only complete full-target
 episodes, include the trailing power window, report deadline shed in watts,
-and normalize every planned action over all offered sessions.
+normalize every planned action over all offered sessions, and show only observed
+bandwidth/prefill action cells using the campaign's prefill calibration.
 
 Plausible wrong implementations:
-- Treat a fast partial plan as full-power attainment.
-- Omit the trailing power window from full-power time.
-- Pool context profiles or deadlines in the bandwidth campaign.
-- Plot normalized attainment as watts without applying the power target.
+- Treat partial work as full attainment or omit the trailing power window.
+- Fill unmeasured heatmap cells by interpolating between the two sweeps.
+- Use total load or divide by, rather than multiply by, prefill capacity.
+- Mix 19/30-second cohorts or pool unbalanced context profiles.
 - Normalize actions over moved sessions and hide the not-moved choice.
 """
 
@@ -16,6 +17,7 @@ import pytest
 
 from plot_capacity_operating_curves import (
     _cdf,
+    action_heatmap_rows,
     action_fractions,
     bandwidth_observations,
     summarize_bandwidth,
@@ -126,3 +128,45 @@ def test_pooled_cdf_keeps_failures_as_missing_mass_and_requires_balance():
     with pytest.raises(ValueError, match="balanced"):
         bandwidth_observations(
             {"scenarios": plans}, episodes, attainment, 100, 5)
+
+
+def test_action_heatmap_keeps_sparse_observations_and_calibrates_prefill():
+    plans = [
+        scenario("zero", policy="lp", load=0, sessions=4, methods=()),
+        scenario("loaded", policy="lp", load=.5, sessions=4,
+                 methods=("replay", "kv_transfer", "kv_transfer")),
+    ]
+    load = [
+        {"scenario_id": "zero", "policy": "lp", "load_fraction": 0,
+         "configured_goodput_mbps": 10000, "offered_rho_prefill": 0},
+        {"scenario_id": "loaded", "policy": "lp", "load_fraction": .5,
+         "configured_goodput_mbps": 10000, "offered_rho_prefill": .3,
+         "offered_rho": .9},
+    ]
+    bandwidth = [{
+        "deadline_s": deadline, "scheduler": "queue_haul", "split": "small",
+        "independent_value": bandwidth_gbps, "observations": 2,
+        "replay_action_fraction": replay, "kv_transfer_action_fraction": 1 - replay,
+        "not_moved_action_fraction": 0,
+    } for deadline, bandwidth_gbps, replay in (
+        (30, 1, 1), (30, 10, .5), (19, 1, 0),
+    )]
+    rows = action_heatmap_rows(load, plans, bandwidth, prefill_capacity_tps=100)
+    coordinates = {(row["bandwidth_gbps"],
+                    row["destination_prefill_tokens_per_s"])
+                   for row in rows}
+    assert coordinates == {(1, 0), (10, 0), (10, 30)}
+    assert (1, 30) not in coordinates
+    assert {row["campaign"] for row in rows
+            if row["bandwidth_gbps"] == 10
+            and row["destination_prefill_tokens_per_s"] == 0} == {"bandwidth"}
+    cells = {}
+    for row in rows:
+        cells.setdefault((row["bandwidth_gbps"],
+                          row["destination_prefill_tokens_per_s"]), {})[
+                              row["action"]] = row["action_fraction"]
+    assert cells[1, 0] == {"replay": 1, "kv_transfer": 0, "not_moved": 0}
+    assert cells[10, 30] == {
+        "replay": .25, "kv_transfer": .5, "not_moved": .25,
+    }
+    assert all(sum(fractions.values()) == 1 for fractions in cells.values())
