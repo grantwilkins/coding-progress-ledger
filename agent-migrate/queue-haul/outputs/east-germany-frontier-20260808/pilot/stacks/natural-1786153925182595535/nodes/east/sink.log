@@ -1,0 +1,189 @@
+[32;20m[2026-08-08 01:53:45,096] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/home/azureuser/coding-progress-ledger/agent-migrate/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-08-08 01:53:45,117] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-08-08 01:53:45,290] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-08 01:53:45,290] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-08 01:53:45,293] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-08-08 01:53:51,332] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+(APIServer pid=20345) INFO 08-08 01:53:52 [utils.py:344] 
+(APIServer pid=20345) INFO 08-08 01:53:52 [utils.py:344]        █     █     █▄   ▄█
+(APIServer pid=20345) INFO 08-08 01:53:52 [utils.py:344]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.22.0
+(APIServer pid=20345) INFO 08-08 01:53:52 [utils.py:344]   █▄█▀ █     █     █     █  model   /datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee
+(APIServer pid=20345) INFO 08-08 01:53:52 [utils.py:344]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=20345) INFO 08-08 01:53:52 [utils.py:344] 
+(APIServer pid=20345) INFO 08-08 01:53:52 [utils.py:278] non-default args: {'model_tag': '/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee', 'enable_prompt_tokens_details': True, 'host': '10.1.0.4', 'port': 8200, 'model': '/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee', 'max_model_len': 32768, 'enforce_eager': True, 'served_model_name': ['openai/gpt-oss-20b'], 'block_size': 16, 'gpu_memory_utilization': 0.75, 'enable_prefix_caching': False, 'max_num_batched_tokens': 8192, 'max_num_seqs': 256, 'enable_chunked_prefill': True, 'disable_hybrid_kv_cache_manager': True, 'kv_transfer_config': KVTransferConfig(kv_connector='LMCacheMPConnector', engine_id='452d5537-a079-4346-8082-67f406a52ec0', kv_buffer_device='cuda', kv_buffer_size=1000000000.0, kv_role='kv_both', kv_rank=None, kv_parallel_size=1, kv_ip='127.0.0.1', kv_port=14579, kv_connector_extra_config={'lmcache.mp.host': 'tcp://127.0.0.1', 'lmcache.mp.port': 5556, 'lmcache.mp.mp_transfer_mode': 'engine_driven'}, kv_connector_module_path='connector_patch', enable_permute_local_kv=False, kv_load_failure_policy='fail')}
+(APIServer pid=20345) INFO 08-08 01:53:52 [model.py:617] Resolved architecture: GptOssForCausalLM
+(APIServer pid=20345) INFO 08-08 01:53:52 [model.py:1752] Using max model len 32768
+(APIServer pid=20345) INFO 08-08 01:53:53 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=8192.
+(APIServer pid=20345) INFO 08-08 01:53:53 [config.py:169] Overriding max cuda graph capture size to 1024 for performance.
+(APIServer pid=20345) INFO 08-08 01:53:53 [vllm.py:977] Asynchronous scheduling is enabled.
+(APIServer pid=20345) WARNING 08-08 01:53:53 [vllm.py:1033] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=20345) WARNING 08-08 01:53:53 [vllm.py:1058] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=20345) INFO 08-08 01:53:53 [kernel.py:270] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'])
+(APIServer pid=20345) INFO 08-08 01:53:53 [vllm.py:1234] Cudagraph is disabled under eager mode
+(APIServer pid=20345) INFO 08-08 01:53:53 [compilation.py:312] Enabled custom fusions: norm_quant, act_quant
+[32;20m[2026-08-08 01:53:59,753] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/home/azureuser/coding-progress-ledger/agent-migrate/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-08-08 01:53:59,773] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-08-08 01:53:59,824] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/home/azureuser/coding-progress-ledger/agent-migrate/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-08-08 01:53:59,850] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-08-08 01:53:59,949] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-08 01:53:59,949] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-08 01:53:59,952] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-08-08 01:54:00,029] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-08 01:54:00,029] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-08 01:54:00,031] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-08-08 01:54:05,943] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+[32;20m[2026-08-08 01:54:05,994] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+(EngineCore pid=20542) INFO 08-08 01:54:07 [core.py:112] Initializing a V1 LLM engine (v0.22.0) with config: model='/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee', speculative_config=None, tokenizer='/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=32768, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=gpt_oss_mxfp4, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='openai_gptoss', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=openai/gpt-oss-20b, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False, 'fuse_rope_kvcache_cat_mla': False, 'fuse_act_padding': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto', linear_backend='auto')
+(EngineCore pid=20542) INFO 08-08 01:54:07 [parallel_state.py:1422] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://10.1.0.4:57127 backend=nccl
+[W808 01:54:07.252066359 socket.cpp:764] [c10d] The client socket cannot be initialized to connect to [vmssae9f0000000.internal.cloudapp.net]:57127 (errno: 97 - Address family not supported by protocol).
+(EngineCore pid=20542) INFO 08-08 01:54:07 [parallel_state.py:1735] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank 0, EPLB rank N/A
+(EngineCore pid=20542) INFO 08-08 01:54:08 [topk_topp_sampler.py:70] FlashInfer top-p/top-k sampling disabled via VLLM_USE_FLASHINFER_SAMPLER=0; using PyTorch-native sampler.
+(EngineCore pid=20542) INFO 08-08 01:54:08 [gpu_model_runner.py:5037] Starting to load model /datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee...
+(EngineCore pid=20542) INFO 08-08 01:54:09 [cuda.py:378] Using TRITON_ATTN attention backend out of potential backends: ['TRITON_ATTN'].
+(EngineCore pid=20542) INFO 08-08 01:54:09 [mxfp4.py:547] Using 'MARLIN' Mxfp4 MoE backend.
+(EngineCore pid=20542) INFO 08-08 01:54:09 [weight_utils.py:922] Filesystem type for checkpoints: XFS. Checkpoint size: 12.82 GiB. Available RAM: 208.68 GiB.
+(EngineCore pid=20542) INFO 08-08 01:54:09 [weight_utils.py:945] Auto-prefetch is disabled because the filesystem (XFS) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+(EngineCore pid=20542) Loading safetensors checkpoint shards:   0% Completed | 0/3 [00:00<?, ?it/s]
+(EngineCore pid=20542) Loading safetensors checkpoint shards:  33% Completed | 1/3 [00:00<00:00,  2.01it/s]
+(EngineCore pid=20542) Loading safetensors checkpoint shards:  67% Completed | 2/3 [00:01<00:00,  1.67it/s]
+(EngineCore pid=20542) Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:01<00:00,  1.68it/s]
+(EngineCore pid=20542) Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:01<00:00,  1.70it/s]
+(EngineCore pid=20542) 
+(EngineCore pid=20542) INFO 08-08 01:54:11 [default_loader.py:397] Loading weights took 1.92 seconds
+(EngineCore pid=20542) INFO 08-08 01:54:11 [mxfp4.py:1695] Using MoEPrepareAndFinalizeNoDPEPModular
+(EngineCore pid=20542) INFO 08-08 01:54:12 [gpu_model_runner.py:5132] Model loading took 13.8 GiB memory and 3.118019 seconds
+(EngineCore pid=20542) INFO 08-08 01:54:14 [gpu_worker.py:466] Available KV cache memory: 44.17 GiB
+(EngineCore pid=20542) WARNING 08-08 01:54:14 [kv_cache_utils.py:1339] Hybrid KV cache manager is disabled for this hybrid model, This means we do not enable any optimizations for saving KV cache memory (e.g., dropping the KV cache outside the sliding window). The compute of layers like sliding window is still saved.
+(EngineCore pid=20542) INFO 08-08 01:54:14 [kv_cache_utils.py:1733] GPU KV cache size: 964,976 tokens
+(EngineCore pid=20542) INFO 08-08 01:54:14 [kv_cache_utils.py:1734] Maximum concurrency for 32,768 tokens per request: 29.45x
+(EngineCore pid=20542) INFO 08-08 01:54:14 [factory.py:62] Creating v1 connector with name: LMCacheMPConnector and engine_id: 452d5537-a079-4346-8082-67f406a52ec0
+(EngineCore pid=20542) WARNING 08-08 01:54:14 [base.py:190] Initializing KVConnectorBase_V1. This API is experimental and subject to change in the future as we iterate the design.
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,096] LMCache INFO:[0m lmcache.mp.mq_timeout = 300.0 [3m(vllm_multi_process_adapter.py:120:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,097] LMCache INFO:[0m lmcache.mp.heartbeat_interval = 10.0 [3m(vllm_multi_process_adapter.py:120:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,097] LMCache INFO:[0m lmcache.mp.mp_transfer_mode = engine_driven (overridden, default: auto) [3m(vllm_multi_process_adapter.py:112:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,097] LMCache INFO:[0m LMCache MP worker adapter created with instance_id=1609567756122983933 [3m(vllm_multi_process_adapter.py:1106:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(EngineCore pid=20542) INFO 08-08 01:54:14 [utils.py:44] Connectors do not specify a kv cache layout, defaulting to NHD.
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,108] LMCache INFO:[0m Registering kv caches! [3m(lmcache_mp_connector.py:710:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,108] LMCache INFO:[0m Engine KV Format: EngineKVFormat.NL_X_NB_TWO_BS_NH_HS NL x [NB, 2, BS, NH, HS] [3m(detection.py:44:lmcache.v1.gpu_connector.kv_format.detection)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,109] LMCache INFO:[0m Engine KV Format: EngineKVFormat.NL_X_NB_TWO_BS_NH_HS NL x [NB, 2, BS, NH, HS] [3m(detection.py:44:lmcache.v1.gpu_connector.kv_format.detection)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,110] LMCache INFO:[0m Registering kv caches [3m(vllm_multi_process_adapter.py:1246:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,110] LMCache INFO:[0m Creating transfer context (device_type=cuda, mode=engine_driven) [3m(worker_transfer.py:557:lmcache.v1.multiprocess.transfer_context.worker_transfer)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,110] LMCache INFO:[0m Engine KV Format: EngineKVFormat.NL_X_NB_TWO_BS_NH_HS NL x [NB, 2, BS, NH, HS] [3m(detection.py:44:lmcache.v1.gpu_connector.kv_format.detection)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:14,111] LMCache INFO:[0m Creating EngineDrivenContextShm (shm_name=lmcache_l1_pool_20235, pool_size=35433480192) [3m(base.py:235:lmcache.v1.multiprocess.transfer_context.base)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:37,787] LMCache INFO:[0m SHM pinned=True for shm_name=lmcache_l1_pool_20235 [3m(shm.py:117:lmcache.v1.multiprocess.transfer_context.shm)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:37,788] LMCache INFO:[0m Worker non-GPU transfer context registered (instance_id=1609567756122983933, mode=SHM) [3m(worker_transfer.py:426:lmcache.v1.multiprocess.transfer_context.worker_transfer)[0m
+(EngineCore pid=20542) INFO 08-08 01:54:37 [jit_monitor.py:54] Kernel JIT monitor activated — Triton JIT compilations during inference will be logged as warnings.
+(EngineCore pid=20542) INFO 08-08 01:54:37 [core.py:309] init engine (profile, create kv cache, warmup model) took 25.51 s
+(EngineCore pid=20542) INFO 08-08 01:54:39 [factory.py:62] Creating v1 connector with name: LMCacheMPConnector and engine_id: 452d5537-a079-4346-8082-67f406a52ec0
+(EngineCore pid=20542) WARNING 08-08 01:54:39 [base.py:190] Initializing KVConnectorBase_V1. This API is experimental and subject to change in the future as we iterate the design.
+(EngineCore pid=20542) 
+(EngineCore pid=20542)  _     __  __    ____           _          
+(EngineCore pid=20542) | |   |  \/  |  / ___|__ _  ___| |__   ___      LMCache v0.5.1
+(EngineCore pid=20542) | |   | |\/| | | |   / _` |/ __| '_ \ / _ \     Website:  https://lmcache.ai/
+(EngineCore pid=20542) | |___| |  | | | |__| (_| | (__| | | |  __/     Recipes:  https://docs.lmcache.ai/recipes
+(EngineCore pid=20542) |_____|_|  |_|  \____\__,_|\___|_| |_|\___|     LinkedIn: https://www.linkedin.com/company/lmcache-lab
+(EngineCore pid=20542) Set LMCACHE_DISABLE_BANNER=1 to hide this banner.
+(EngineCore pid=20542) 
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:39,857] LMCache INFO:[0m lmcache.mp.mq_timeout = 300.0 [3m(vllm_multi_process_adapter.py:120:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:39,857] LMCache INFO:[0m lmcache.mp.heartbeat_interval = 10.0 [3m(vllm_multi_process_adapter.py:120:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:39,857] LMCache INFO:[0m lmcache.mp.mp_transfer_mode = engine_driven (overridden, default: auto) [3m(vllm_multi_process_adapter.py:112:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(EngineCore pid=20542) INFO 08-08 01:54:40 [vllm.py:977] Asynchronous scheduling is enabled.
+(EngineCore pid=20542) WARNING 08-08 01:54:40 [vllm.py:1033] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(EngineCore pid=20542) WARNING 08-08 01:54:40 [vllm.py:1058] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(EngineCore pid=20542) INFO 08-08 01:54:40 [kernel.py:270] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'])
+(EngineCore pid=20542) INFO 08-08 01:54:40 [vllm.py:1234] Cudagraph is disabled under eager mode
+(EngineCore pid=20542) INFO 08-08 01:54:40 [compilation.py:312] Enabled custom fusions: norm_quant, act_quant
+(APIServer pid=20345) INFO 08-08 01:54:40 [api_server.py:592] Supported tasks: ['generate']
+(APIServer pid=20345) WARNING 08-08 01:54:40 [__init__.py:14] SECURITY WARNING: Development endpoints are enabled! This should NOT be used in production!
+(APIServer pid=20345) WARNING 08-08 01:54:40 [serving.py:220] For gpt-oss, we ignore --enable-auto-tool-choice and always enable tool use.
+(APIServer pid=20345) INFO 08-08 01:54:42 [hf.py:488] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=20345) INFO 08-08 01:54:42 [api_server.py:596] Starting vLLM server on http://10.1.0.4:8200
+(APIServer pid=20345) INFO 08-08 01:54:42 [launcher.py:37] Available routes are:
+(APIServer pid=20345) INFO 08-08 01:54:42 [launcher.py:46] Route: /openapi.json, Methods: GET, HEAD
+(APIServer pid=20345) INFO 08-08 01:54:42 [launcher.py:46] Route: /docs, Methods: GET, HEAD
+(APIServer pid=20345) INFO 08-08 01:54:42 [launcher.py:46] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+(APIServer pid=20345) INFO 08-08 01:54:42 [launcher.py:46] Route: /redoc, Methods: GET, HEAD
+(APIServer pid=20345) INFO 08-08 01:54:42 [launcher.py:46] Route: /metrics, Methods: GET
+(APIServer pid=20345) INFO:     Started server process [20345]
+(APIServer pid=20345) INFO:     Waiting for application startup.
+(APIServer pid=20345) INFO:     Application startup complete.
+(APIServer pid=20345) INFO:     10.1.0.4:57660 - "GET /health HTTP/1.1" 200 OK
+(APIServer pid=20345) INFO 08-08 01:54:43 [api_router.py:39] Resetting prefix cache...
+(EngineCore pid=20542) INFO 08-08 01:54:43 [block_pool.py:482] Successfully reset prefix cache
+(APIServer pid=20345) INFO:     10.0.0.4:35528 - "POST /reset_prefix_cache HTTP/1.1" 200 OK
+(APIServer pid=20345) INFO:     10.0.0.4:35538 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:44,234] LMCache INFO:[0m Reqid: chatcmpl-a76646d448de90da-b8b29ef0, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(EngineCore pid=20542) WARNING 08-08 01:54:44 [jit_monitor.py:103] Triton kernel JIT compilation during inference: _compute_slot_mapping_kernel. This causes a latency spike; consider extending warmup to cover this shape/config.
+(EngineCore pid=20542) WARNING 08-08 01:54:44 [jit_monitor.py:103] Triton kernel JIT compilation during inference: kernel_unified_attention. This causes a latency spike; consider extending warmup to cover this shape/config.
+(EngineCore pid=20542) WARNING 08-08 01:54:44 [jit_monitor.py:103] Triton kernel JIT compilation during inference: reduce_segments. This causes a latency spike; consider extending warmup to cover this shape/config.
+(APIServer pid=20345) INFO:     10.0.0.4:35542 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:44,636] LMCache INFO:[0m Reqid: chatcmpl-9faa5166668e6d6f-84989f63, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35546 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:45,026] LMCache INFO:[0m Reqid: chatcmpl-86f995f26100d197-ba87e64d, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35548 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:45,429] LMCache INFO:[0m Reqid: chatcmpl-a415d0acb2375e2b-84fafc82, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35556 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:45,802] LMCache INFO:[0m Reqid: chatcmpl-b4bbd9b8a8b75b35-a84b3771, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35558 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:46,187] LMCache INFO:[0m Reqid: chatcmpl-b495a5f6fd0325d4-9d9f2aaa, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35560 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:46,597] LMCache INFO:[0m Reqid: chatcmpl-b16f2c33ed986acf-80595e52, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35576 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:46,976] LMCache INFO:[0m Reqid: chatcmpl-afcff393ab5c68bb-874852b2, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35584 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:47,382] LMCache INFO:[0m Reqid: chatcmpl-821ea1ac73ef10d7-9749b8fb, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35596 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:47,758] LMCache INFO:[0m Reqid: chatcmpl-a3c86e141374cf12-a398c569, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35610 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:48,161] LMCache INFO:[0m Reqid: chatcmpl-aa52b03db520a28f-a2eb1808, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35612 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:48,558] LMCache INFO:[0m Reqid: chatcmpl-a4ffc67cae840e2d-bfe8e19d, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35614 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:48,949] LMCache INFO:[0m Reqid: chatcmpl-b3767453f8e9780c-afcaf97f, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35624 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=20345) INFO:     10.0.0.4:35628 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:49,348] LMCache INFO:[0m Reqid: chatcmpl-9f9a271d3b750aff-98e16397, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35636 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:49,719] LMCache INFO:[0m Reqid: chatcmpl-999b5b89e6f003bc-ba9bfca9, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35648 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:50,126] LMCache INFO:[0m Reqid: chatcmpl-b857b643ff09680a-8a2b4610, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35650 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:50,502] LMCache INFO:[0m Reqid: chatcmpl-b244fce8325407b3-adaecf7a, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35662 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=20345) INFO:     10.0.0.4:35678 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:50,908] LMCache INFO:[0m Reqid: chatcmpl-819001ee5118c245-ba793386, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35694 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:51,314] LMCache INFO:[0m Reqid: chatcmpl-a9ffa2743f438fa3-b760519e, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35706 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:51,681] LMCache INFO:[0m Reqid: chatcmpl-92b004fc7c6a3f6f-b9bfbc32, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35718 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=20345) INFO:     10.0.0.4:35726 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:52,085] LMCache INFO:[0m Reqid: chatcmpl-af7d2a2bd649403a-9f166364, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:35738 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:52,488] LMCache INFO:[0m Reqid: chatcmpl-9773b094e09d403f-a2526095, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:55046 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:52,861] LMCache INFO:[0m Reqid: chatcmpl-b9b3cdaa31bd2237-aa2e8c14, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:55058 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:53,266] LMCache INFO:[0m Reqid: chatcmpl-8ea202a14434b831-b26239f1, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO 08-08 01:54:53 [loggers.py:271] Engine 000: Avg prompt throughput: 1061.1 tokens/s, Avg generation throughput: 102.9 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.3%, Prefix cache hit rate: 0.0%, External prefix cache hit rate: 0.0%
+(APIServer pid=20345) INFO:     10.0.0.4:55070 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=20345) INFO:     10.0.0.4:55080 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:53,646] LMCache INFO:[0m Reqid: chatcmpl-ad0e4cbf0ffbe16d-8846f13a, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:55090 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:54,051] LMCache INFO:[0m Reqid: chatcmpl-9b07532c6e43a81e-a8f4a572, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:55106 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:54,450] LMCache INFO:[0m Reqid: chatcmpl-bd39859005ce5b14-9f6ee029, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:55110 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(APIServer pid=20345) INFO:     10.0.0.4:55120 - "GET /metrics HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:54,831] LMCache INFO:[0m Reqid: chatcmpl-b95a86180e707373-acd4341d, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(APIServer pid=20345) INFO:     10.0.0.4:55132 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(EngineCore pid=20542) [32;20m[2026-08-08 01:54:55,242] LMCache INFO:[0m Reqid: chatcmpl-80183c3b60627c66-bd646618, Total tokens 604, LMCache hit tokens: 0 [3m(connector_patch.py:163:lmcache.integration.vllm.lmcache_mp_connector)[0m
+(EngineCore pid=20542) INFO 08-08 01:55:02 [core.py:1266] Shutdown initiated (timeout=0)
+(EngineCore pid=20542) INFO 08-08 01:55:02 [core.py:1289] Shutdown complete
+(EngineCore pid=20542) [32;20m[2026-08-08 01:55:02,145] LMCache INFO:[0m Unregistering kv caches [3m(vllm_multi_process_adapter.py:1709:lmcache.integration.vllm.vllm_multi_process_adapter)[0m
+(APIServer pid=20345) INFO 08-08 01:55:02 [launcher.py:137] Shutting down FastAPI HTTP server.
+(APIServer pid=20345) INFO:     Shutting down
+(APIServer pid=20345) INFO:     Waiting for application shutdown.
+(APIServer pid=20345) INFO:     Application shutdown complete.
+/home/azureuser/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

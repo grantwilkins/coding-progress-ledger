@@ -1,0 +1,380 @@
+{
+  "checks": [
+    {
+      "calibration": {
+        "contract": {
+          "aggregate": {
+            "controlled_mbps": {
+              "40": 4300,
+              "80": 8700
+            },
+            "natural_mbps": 10967.371696787159
+          },
+          "paths": {
+            "east": {
+              "controlled_mbps": {
+                "40": 900,
+                "80": 1800
+              },
+              "natural_mbps": 2280.176174037911,
+              "rtt_ms": 98.0
+            },
+            "germany": {
+              "controlled_mbps": {
+                "40": 3400,
+                "80": 6900
+              },
+              "natural_mbps": 8733.31359588583,
+              "rtt_ms": 25.1
+            }
+          },
+          "schema": "queue-haul-network-contract-v1"
+        },
+        "path": "/datadrive/queue-haul-network/control/calibration-east-germany-frontier-001.json",
+        "sha256": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a"
+      },
+      "hosts": {
+        "east": {
+          "clock_uncertainty_ms": 0.026858,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "509923a209fae16191450c80774f7e8d5675dcb5",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.1.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "eastus2",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        },
+        "germany": {
+          "clock_uncertainty_ms": 0.013944999999999999,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "509923a209fae16191450c80774f7e8d5675dcb5",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.3.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "GermanyWestCentral",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        },
+        "sweden": {
+          "clock_uncertainty_ms": 0.013874999999999998,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "509923a209fae16191450c80774f7e8d5675dcb5",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.0.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "SwedenCentral",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        }
+      },
+      "wall_ns": 1786152401903739094
+    },
+    {
+      "calibration": {
+        "contract": {
+          "aggregate": {
+            "controlled_mbps": {
+              "40": 4300,
+              "80": 8700
+            },
+            "natural_mbps": 10967.371696787159
+          },
+          "paths": {
+            "east": {
+              "controlled_mbps": {
+                "40": 900,
+                "80": 1800
+              },
+              "natural_mbps": 2280.176174037911,
+              "rtt_ms": 98.0
+            },
+            "germany": {
+              "controlled_mbps": {
+                "40": 3400,
+                "80": 6900
+              },
+              "natural_mbps": 8733.31359588583,
+              "rtt_ms": 25.1
+            }
+          },
+          "schema": "queue-haul-network-contract-v1"
+        },
+        "path": "/datadrive/queue-haul-network/control/calibration-east-germany-frontier-001.json",
+        "sha256": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a"
+      },
+      "hosts": {
+        "east": {
+          "clock_uncertainty_ms": 0.017857,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "509923a209fae16191450c80774f7e8d5675dcb5",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.1.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "eastus2",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        },
+        "germany": {
+          "clock_uncertainty_ms": 0.026697,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "509923a209fae16191450c80774f7e8d5675dcb5",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.3.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "GermanyWestCentral",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        },
+        "sweden": {
+          "clock_uncertainty_ms": 0.013528,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "509923a209fae16191450c80774f7e8d5675dcb5",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.0.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "SwedenCentral",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        }
+      },
+      "wall_ns": 1786152439460060045
+    },
+    {
+      "calibration": {
+        "contract": {
+          "aggregate": {
+            "controlled_mbps": {
+              "40": 4300,
+              "80": 8700
+            },
+            "natural_mbps": 10967.371696787159
+          },
+          "paths": {
+            "east": {
+              "controlled_mbps": {
+                "40": 900,
+                "80": 1800
+              },
+              "natural_mbps": 2280.176174037911,
+              "rtt_ms": 98.0
+            },
+            "germany": {
+              "controlled_mbps": {
+                "40": 3400,
+                "80": 6900
+              },
+              "natural_mbps": 8733.31359588583,
+              "rtt_ms": 25.1
+            }
+          },
+          "schema": "queue-haul-network-contract-v1"
+        },
+        "path": "/datadrive/queue-haul-network/control/calibration-east-germany-frontier-001.json",
+        "sha256": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a"
+      },
+      "hosts": {
+        "east": {
+          "clock_uncertainty_ms": 0.009448999999999999,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.1.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "eastus2",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        },
+        "germany": {
+          "clock_uncertainty_ms": 0.012737,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.3.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "GermanyWestCentral",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        },
+        "sweden": {
+          "clock_uncertainty_ms": 0.015101,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.0.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "SwedenCentral",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        }
+      },
+      "wall_ns": 1786176937830879774
+    },
+    {
+      "calibration": {
+        "contract": {
+          "aggregate": {
+            "controlled_mbps": {
+              "40": 4300,
+              "80": 8700
+            },
+            "natural_mbps": 10967.371696787159
+          },
+          "paths": {
+            "east": {
+              "controlled_mbps": {
+                "40": 900,
+                "80": 1800
+              },
+              "natural_mbps": 2280.176174037911,
+              "rtt_ms": 98.0
+            },
+            "germany": {
+              "controlled_mbps": {
+                "40": 3400,
+                "80": 6900
+              },
+              "natural_mbps": 8733.31359588583,
+              "rtt_ms": 25.1
+            }
+          },
+          "schema": "queue-haul-network-contract-v1"
+        },
+        "path": "/datadrive/queue-haul-network/control/calibration-east-germany-frontier-001.json",
+        "sha256": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a"
+      },
+      "hosts": {
+        "east": {
+          "clock_uncertainty_ms": 0.01194,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.1.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "eastus2",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        },
+        "germany": {
+          "clock_uncertainty_ms": 0.015645,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.3.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "GermanyWestCentral",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        },
+        "sweden": {
+          "clock_uncertainty_ms": 0.06900200000000001,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+          "gpu": "NVIDIA A100 80GB PCIe",
+          "gpu_memory_mib": 81920,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.0.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "SwedenCentral",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC24ads_A100_v4"
+        }
+      },
+      "wall_ns": 1786202741932579838
+    }
+  ],
+  "dirty": false,
+  "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+  "hosts": {
+    "east": {
+      "datadrive": true,
+      "dirty": false,
+      "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "gpu_memory_mib": 81920,
+      "lmcache": "0.5.1",
+      "priority": "Spot",
+      "private_ip": "10.1.0.4",
+      "ptp": "/dev/ptp0",
+      "region": "eastus2",
+      "vllm": "0.22.0",
+      "vm_size": "Standard_NC24ads_A100_v4"
+    },
+    "germany": {
+      "datadrive": true,
+      "dirty": false,
+      "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "gpu_memory_mib": 81920,
+      "lmcache": "0.5.1",
+      "priority": "Spot",
+      "private_ip": "10.3.0.4",
+      "ptp": "/dev/ptp0",
+      "region": "GermanyWestCentral",
+      "vllm": "0.22.0",
+      "vm_size": "Standard_NC24ads_A100_v4"
+    },
+    "sweden": {
+      "datadrive": true,
+      "dirty": false,
+      "git_sha": "0b5d0d76204aa336a14c1c48aa461552df0fe3c3",
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "gpu_memory_mib": 81920,
+      "lmcache": "0.5.1",
+      "priority": "Spot",
+      "private_ip": "10.0.0.4",
+      "ptp": "/dev/ptp0",
+      "region": "SwedenCentral",
+      "vllm": "0.22.0",
+      "vm_size": "Standard_NC24ads_A100_v4"
+    }
+  },
+  "plan_sha256": "2d172410bf6074fa99f38f6dbf2e6fad50bbee570f2d204b016393e6db0642db",
+  "schema": "queue-haul-network-run-v1"
+}

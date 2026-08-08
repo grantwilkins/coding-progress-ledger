@@ -1,0 +1,972 @@
+{
+  "background": {
+    "east": {
+      "kv_fraction": 0.0,
+      "running": 0.0,
+      "waiting": 0.0,
+      "warning": false
+    },
+    "germany": {
+      "kv_fraction": 0.0,
+      "running": 0.0,
+      "waiting": 0.0,
+      "warning": false
+    }
+  },
+  "connections": [
+    {
+      "client_rtt_us": "",
+      "client_rttvar_us": "",
+      "client_snd_cwnd": "",
+      "client_to_target_bytes": "16990",
+      "client_total_retrans": "",
+      "connection_id": "fd1a9a841de9aff6",
+      "end_ns": "4465432535172",
+      "key_hash": "",
+      "route": "api/germany",
+      "start_ns": "4460201607386",
+      "target_rtt_us": "",
+      "target_rttvar_us": "",
+      "target_snd_cwnd": "",
+      "target_to_client_bytes": "4024",
+      "target_total_retrans": ""
+    },
+    {
+      "client_rtt_us": "",
+      "client_rttvar_us": "",
+      "client_snd_cwnd": "",
+      "client_to_target_bytes": "16989",
+      "client_total_retrans": "",
+      "connection_id": "b0d977b540ccb304",
+      "end_ns": "4465461263046",
+      "key_hash": "",
+      "route": "api/germany",
+      "start_ns": "4460203564803",
+      "target_rtt_us": "",
+      "target_rttvar_us": "",
+      "target_snd_cwnd": "",
+      "target_to_client_bytes": "4024",
+      "target_total_retrans": ""
+    },
+    {
+      "client_rtt_us": "",
+      "client_rttvar_us": "",
+      "client_snd_cwnd": "",
+      "client_to_target_bytes": "16989",
+      "client_total_retrans": "",
+      "connection_id": "b252f6890cd31bb6",
+      "end_ns": "4465461785732",
+      "key_hash": "",
+      "route": "api/germany",
+      "start_ns": "4460201136345",
+      "target_rtt_us": "",
+      "target_rttvar_us": "",
+      "target_snd_cwnd": "",
+      "target_to_client_bytes": "3310",
+      "target_total_retrans": ""
+    },
+    {
+      "client_rtt_us": "",
+      "client_rttvar_us": "",
+      "client_snd_cwnd": "",
+      "client_to_target_bytes": "16990",
+      "client_total_retrans": "",
+      "connection_id": "e00ca32b764d896e",
+      "end_ns": "4465489636817",
+      "key_hash": "",
+      "route": "api/germany",
+      "start_ns": "4460202669209",
+      "target_rtt_us": "",
+      "target_rttvar_us": "",
+      "target_snd_cwnd": "",
+      "target_to_client_bytes": "4024",
+      "target_total_retrans": ""
+    },
+    {
+      "client_rtt_us": "",
+      "client_rttvar_us": "",
+      "client_snd_cwnd": "",
+      "client_to_target_bytes": "16989",
+      "client_total_retrans": "",
+      "connection_id": "9fd44eb401a71f0d",
+      "end_ns": "4465517921754",
+      "key_hash": "",
+      "route": "api/germany",
+      "start_ns": "4460201412822",
+      "target_rtt_us": "",
+      "target_rttvar_us": "",
+      "target_snd_cwnd": "",
+      "target_to_client_bytes": "4024",
+      "target_total_retrans": ""
+    },
+    {
+      "client_rtt_us": "",
+      "client_rttvar_us": "",
+      "client_snd_cwnd": "",
+      "client_to_target_bytes": "16990",
+      "client_total_retrans": "",
+      "connection_id": "eff60b6709640b56",
+      "end_ns": "4465575022839",
+      "key_hash": "",
+      "route": "api/germany",
+      "start_ns": "4460203684076",
+      "target_rtt_us": "",
+      "target_rttvar_us": "",
+      "target_snd_cwnd": "",
+      "target_to_client_bytes": "4024",
+      "target_total_retrans": ""
+    },
+    {
+      "client_rtt_us": "",
+      "client_rttvar_us": "",
+      "client_snd_cwnd": "",
+      "client_to_target_bytes": "16990",
+      "client_total_retrans": "",
+      "connection_id": "804200b83f529a11",
+      "end_ns": "4465604107410",
+      "key_hash": "",
+      "route": "api/germany",
+      "start_ns": "4460204264660",
+      "target_rtt_us": "",
+      "target_rttvar_us": "",
+      "target_snd_cwnd": "",
+      "target_to_client_bytes": "4024",
+      "target_total_retrans": ""
+    },
+    {
+      "client_rtt_us": "",
+      "client_rttvar_us": "",
+      "client_snd_cwnd": "",
+      "client_to_target_bytes": "16990",
+      "client_total_retrans": "",
+      "connection_id": "27b988f34c0e918e",
+      "end_ns": "4465635028009",
+      "key_hash": "",
+      "route": "api/germany",
+      "start_ns": "4460202585283",
+      "target_rtt_us": "",
+      "target_rttvar_us": "",
+      "target_snd_cwnd": "",
+      "target_to_client_bytes": "4024",
+      "target_total_retrans": ""
+    }
+  ],
+  "deadline_met": true,
+  "ended_ns": 4467175848997,
+  "kv_evidence_warnings": 0,
+  "load_warnings": [],
+  "migration_s": 6.976149306,
+  "realized_shed_w": 61.856632454374676,
+  "request_failures": 0,
+  "requested_shed_w": 49.48530596349974,
+  "requests": [
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 0,
+      "path": [
+        "link/germany"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "request": {
+        "cached_tokens": 0,
+        "context_hash": "65e64548f8df571c6e2cdd8751eac8780b8b06545fde3cf94737a8ec6e3147d2",
+        "end_ns": 4465517776081,
+        "first_byte_ns": 4465432505917,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 22,
+        "probe_attempts": 1,
+        "processed_tokens": 0,
+        "prompt_tokens": 8323,
+        "request_id": "chatcmpl-a7831eee51ae25af",
+        "start_ns": 4460200915658,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 4463204719696
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 4464949585035
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465060330506
+          },
+          {
+            "byte_count": 233,
+            "monotonic_ns": 4465084113992
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465108951236
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465135985566
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 4465163405375
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465188660059
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465214272252
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465242608514
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 4465403901725
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465432505917
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465461343726
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465488995589
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465517680954
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 4465517718333
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 4465517737039
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-f6"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 1,
+      "path": [
+        "link/germany"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "request": {
+        "cached_tokens": 0,
+        "context_hash": "de8f6c9a99b7116adbcb9d2ddf99d55e56921618d0a33ca8d040d5fc71a3ddef",
+        "end_ns": 4465461732006,
+        "first_byte_ns": 4465377504581,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 19,
+        "probe_attempts": 1,
+        "processed_tokens": 0,
+        "prompt_tokens": 8323,
+        "request_id": "chatcmpl-be1f3507dae62598",
+        "start_ns": 4460200608614,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 4463786870594
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 4465060689802
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465084354336
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 4465109021903
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465136085056
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465163757738
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465189010780
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 4465351472694
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465377504581
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465404408306
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465432720853
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465461572418
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 4465461605270
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 4465461623784
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-f5"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 2,
+      "path": [
+        "link/germany"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "request": {
+        "cached_tokens": 0,
+        "context_hash": "20c28f821f230dd50c8fe7189868b3a81833c43e50aa540f747e9dd629bbc99f",
+        "end_ns": 4465432346699,
+        "first_byte_ns": 4465350965061,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 22,
+        "probe_attempts": 1,
+        "processed_tokens": 0,
+        "prompt_tokens": 8318,
+        "request_id": "chatcmpl-b62aece74cd7ca77",
+        "start_ns": 4460201259150,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 4461465576126
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 4463204819958
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4463786382552
+          },
+          {
+            "byte_count": 233,
+            "monotonic_ns": 4464366742806
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4464949454065
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465060266562
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 4465084197623
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465108719047
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465135902866
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465163478501
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 4465322964246
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465350965061
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465376994353
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465403838807
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465432224762
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 4465432259286
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 4465432293510
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-f2"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 3,
+      "path": [
+        "link/germany"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "request": {
+        "cached_tokens": 0,
+        "context_hash": "2b4f5b16b9446a899c9401dd2ead9eb4e7e8dc921df511c9d7fa0e1b63fc5497",
+        "end_ns": 4465634885408,
+        "first_byte_ns": 4465547380358,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 22,
+        "probe_attempts": 1,
+        "processed_tokens": 0,
+        "prompt_tokens": 8319,
+        "request_id": "chatcmpl-8c62fbe265c15b84",
+        "start_ns": 4460201663555,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 4465062061996
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 4465137349819
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465164399367
+          },
+          {
+            "byte_count": 233,
+            "monotonic_ns": 4465190189993
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465215980127
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465243566098
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 4465271883554
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465298368728
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465324670218
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465352797910
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 4465519396874
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465547380358
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465576574954
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465605762767
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465634783297
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 4465634817611
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 4465634838671
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-f4"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 4,
+      "path": [
+        "link/germany"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "request": {
+        "cached_tokens": 0,
+        "context_hash": "171fb9f6bb1daa2808e592a355ad126583e30fba84056154296e7f634fbc504b",
+        "end_ns": 4465489516943,
+        "first_byte_ns": 4465404337249,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 22,
+        "probe_attempts": 1,
+        "processed_tokens": 0,
+        "prompt_tokens": 8324,
+        "request_id": "chatcmpl-9e535de6037f1385",
+        "start_ns": 4460202123555,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 4462624493275
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 4464367180985
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4464949818090
+          },
+          {
+            "byte_count": 233,
+            "monotonic_ns": 4465060734601
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465084402261
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465109082822
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 4465136136948
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465163536280
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465188938239
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465214683811
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 4465377578073
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465404337249
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465432799916
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465461672731
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465489423359
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 4465489459095
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 4465489477680
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-f0"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 5,
+      "path": [
+        "link/germany"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "request": {
+        "cached_tokens": 0,
+        "context_hash": "c0d3f263d50ffa849955ff5ae72acaaf9063524663e7016cc3be04ed9b8dd228",
+        "end_ns": 4465461127292,
+        "first_byte_ns": 4465376926656,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 22,
+        "probe_attempts": 1,
+        "processed_tokens": 0,
+        "prompt_tokens": 8321,
+        "request_id": "chatcmpl-9cb42fab22d0a793",
+        "start_ns": 4460202746403,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 4462044764584
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 4463786276364
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4464366552281
+          },
+          {
+            "byte_count": 233,
+            "monotonic_ns": 4464949252704
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465060185706
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465083860769
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 4465108517315
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465135516910
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465163860565
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465188843612
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 4465350879721
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465376926656
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465403764368
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465432146505
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465461020743
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 4465461058042
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 4465461084872
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-f7"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 6,
+      "path": [
+        "link/germany"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "request": {
+        "cached_tokens": 0,
+        "context_hash": "cfe6369efcf8e178c50cd87b69cd7d81330868c0482fa9cedee187cfae5e39c7",
+        "end_ns": 4465574958794,
+        "first_byte_ns": 4465488779921,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 22,
+        "probe_attempts": 1,
+        "processed_tokens": 0,
+        "prompt_tokens": 8324,
+        "request_id": "chatcmpl-9df3598ee3810066",
+        "start_ns": 4460203117161,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 4464366635821
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 4465083982471
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465108628348
+          },
+          {
+            "byte_count": 233,
+            "monotonic_ns": 4465135782622
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465163629960
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465188746736
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 4465214115073
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465242408686
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465270438946
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465296519283
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 4465461229528
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465488779921
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465517486986
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465545477673
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465574724056
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 4465574768188
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 4465574790660
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-f3"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 7,
+      "path": [
+        "link/germany"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "request": {
+        "cached_tokens": 0,
+        "context_hash": "ed567f8a7770f0fdec855526e604c48128d17aa3b5d36a0e7b5365bc505f7f3f",
+        "end_ns": 4465603934211,
+        "first_byte_ns": 4465517584508,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 22,
+        "probe_attempts": 1,
+        "processed_tokens": 0,
+        "prompt_tokens": 8320,
+        "request_id": "chatcmpl-8ad55b1576b9ae44",
+        "start_ns": 4460203626468,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 4464949355857
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 4465108862295
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465135666895
+          },
+          {
+            "byte_count": 233,
+            "monotonic_ns": 4465163972289
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465189096049
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 4465214181497
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 4465242496980
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465270518564
+          },
+          {
+            "byte_count": 230,
+            "monotonic_ns": 4465296607537
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465322885083
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 4465488871562
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465517584508
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 4465545567681
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 4465574875028
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 4465603808055
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 4465603849462
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 4465603873588
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-f1"
+    }
+  ],
+  "resp_transfers": [],
+  "scenario_id": "b3276759fb6f1ef4",
+  "schema": "queue-haul-network-result-v2",
+  "source_sleep_ns": [
+    null,
+    null
+  ],
+  "started_ns": 4460199699691,
+  "status": "complete",
+  "target_met": true,
+  "wire_bytes": {
+    "api/east/client_to_target": 0,
+    "api/east/target_to_client": 0,
+    "api/germany/client_to_target": 135917,
+    "api/germany/target_to_client": 31478,
+    "kv/east/client_to_target": 0,
+    "kv/east/target_to_client": 0,
+    "kv/germany/client_to_target": 0,
+    "kv/germany/target_to_client": 0
+  }
+}

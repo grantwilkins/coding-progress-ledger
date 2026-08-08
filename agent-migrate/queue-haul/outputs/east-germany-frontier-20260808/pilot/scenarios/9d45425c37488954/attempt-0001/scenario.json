@@ -1,0 +1,94 @@
+{
+  "background": {
+    "east": [
+      0.9,
+      0
+    ],
+    "germany": [
+      0.9,
+      0
+    ]
+  },
+  "bandwidth": "natural",
+  "bandwidth_mbps": {
+    "east": 2280.176174037911,
+    "germany": 8733.31359588583
+  },
+  "condition_index": 8,
+  "deadline_s": 30,
+  "design": "frontier",
+  "pack": "8x16k",
+  "planner_seed": 13517494653422551596,
+  "policy": "queue_haul_power_blind",
+  "repeat": 0,
+  "requested_shed_fraction": 0.8,
+  "scenario_id": "9d45425c37488954",
+  "sessions": [
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-f0",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-f1",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-f2",
+      "template_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-f3",
+      "template_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 4,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-f4",
+      "template_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 5,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-f5",
+      "template_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 6,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-f6",
+      "template_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 7,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-f7",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    }
+  ],
+  "source_load": 0.8,
+  "workload": "agentic_tool_loop"
+}
