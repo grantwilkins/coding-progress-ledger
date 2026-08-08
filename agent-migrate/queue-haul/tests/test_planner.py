@@ -87,6 +87,26 @@ def test_lp_objective_variants_have_the_stated_priority():
     assert peak[1] > 1 - 1e-5
 
 
+def test_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):
+    scenario = replace(problem(), sessions=(
+        SimSession("a", "s0", 10, 5, 0, 100),
+        SimSession("b", "s1", 10, 45, 0, 100),
+    ))
+    seen = {}
+    original = planner._solve_lp
+
+    def capture(solver, gains, *args, **kwargs):
+        seen.update(solver=solver, gains=gains.copy())
+        return original(solver, gains, *args, **kwargs)
+
+    monkeypatch.setattr(planner, "_solve_lp", capture)
+    plan(scenario, model(tmp_path, tp=1), PATHS, "lp_power_blind")
+
+    expected = ExpectedPower(scenario, model(tmp_path, tp=1)).drain_gain(("a", "b")) / 2
+    assert seen["solver"] == "lp_work_first"
+    assert seen["gains"] == pytest.approx([expected, expected])
+
+
 def test_lexicographic_lp_retains_last_feasible_stage(monkeypatch):
     original, calls = planner.cp.Problem.solve, 0
 

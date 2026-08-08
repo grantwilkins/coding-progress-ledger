@@ -20,7 +20,7 @@ from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, Plan
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
 SOLVERS = ("random", "greedy", "lp")
-LP_SOLVERS = ("lp", "lp_peak_first", "lp_work_first")
+LP_SOLVERS = ("lp", "lp_peak_first", "lp_work_first", "lp_power_blind")
 POOL_SOLVERS = ("greedy_lagrangian",)
 BASELINE_SOLVERS = ("isolated_fastest", "replay_only", "kv_only")
 ALL_SOLVERS = SOLVERS + LP_SOLVERS[1:] + BASELINE_SOLVERS + POOL_SOLVERS
@@ -592,11 +592,14 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
         scenario, profile, routes, sessions, destinations, case, horizon,
     )
     gains = np.array([power.marginal(session.session_id) for session in sessions])
+    if solver == "lp_power_blind":
+        gains[:] = power.drain_gain(session.session_id for session in sessions) / n
     target = initial - scenario.power_limit_w
     work = durations.reshape(-1)
     chosen, usage = _round_lp(
         _solve_lp(
-            solver, gains, work, valid, resources, target,
+            "lp_work_first" if solver == "lp_power_blind" else solver,
+            gains, work, valid, resources, target,
         ),
         valid, resources, gains, work, target,
     )
