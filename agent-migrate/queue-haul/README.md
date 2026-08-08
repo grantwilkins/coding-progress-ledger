@@ -664,6 +664,19 @@ phase plan roots keep `plan.json`, `modeled_capacity.csv`, `live_plan.json`, and
 `summary.json`; hardware and final roots add `live_capacity.csv`,
 `live_summary.json`, and the live PNG/PDF figures.
 
+`plot_capacity_operating_curves.py` compares the completed 2xA100 load campaign,
+balanced full-drain bandwidth blocks 0--1, and width-8 bandwidth scheduler
+campaign. It writes scheduler-colored time-to-full-power and deadline-shed
+curves plus Queue-Haul replay/KV/not-moved action shares. Full-drain bandwidth
+figures split by destination load; width-8 figures split by context profile and
+19/30-second campaign. The primary width-8 ECDFs pool the balanced context
+profiles at equal frequency within each bandwidth panel (15 episodes per
+scheduler); the faceted curves and CSV retain the context-specific results.
+Coincident scheduler curves are horizontally offset slightly for visibility;
+the CSV retains exact operating points. Run
+`uv run python queue-haul/plot_capacity_operating_curves.py`; outputs go to
+`queue-haul/outputs/capacity-operating-curves-20260808/`.
+
 The forced-full-drain appendix crosses
 .85,.875,.8875,.90,.9125,.925,.9375,.95,.9625,.975 offered load with
 1, 2.5, 5, and 10 Gbit/s. Five repeat-block shards each contain two repeats at
