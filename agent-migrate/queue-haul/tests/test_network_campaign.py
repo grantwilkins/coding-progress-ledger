@@ -422,6 +422,36 @@ def test_frontier_refinement_adds_boundary_midpoint_and_five_repeats(tmp_path):
     assert {row["policy"] for row in midpoint} == set(n.FRONTIER_POLICIES)
 
 
+def test_frontier_refinement_caps_many_boundaries_in_matched_blocks(tmp_path):
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
+        seed=7, design="frontier")
+    root = tmp_path / "run"
+    for scenario in plan["scenarios"]:
+        load = next(iter(scenario["background"].values()))[0]
+        result = root / "scenarios" / scenario["scenario_id"] \
+            / "attempt-0001" / "result.json"
+        result.parent.mkdir(parents=True)
+        result.write_text(json.dumps({
+            "status": "complete", "target_met": load < .9,
+            "realized_shed_w": 50,
+            "requests": [{"destination_instance": "east",
+                          "method": "kv_transfer" if load >= .9 else "replay",
+                          "request": {}}],
+        }))
+
+    refined = n.frontier_refinement(plan, root)
+    blocks = {}
+    for row in refined["scenarios"]:
+        blocks.setdefault((row["condition_index"], row["repeat"]), set()) \
+            .add(row["policy"])
+
+    assert len(refined["scenarios"]) == n.FRONTIER_REFINEMENT_EPISODES
+    assert all(policies == set(n.FRONTIER_POLICIES)
+               for policies in blocks.values())
+    assert any(row["condition_index"] >= 37 for row in refined["scenarios"])
+
+
 def test_frontier_reduction_plots_mechanism_and_attainment(tmp_path):
     plan = n.make_plan(
         campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),

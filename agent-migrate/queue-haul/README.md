@@ -340,12 +340,14 @@ uv run python queue-haul/network_campaign.py refine \
 
 Reduction writes raw episode CSV plus PNG/PDF prefill--network mechanism and
 target-attainment figures. Refinement adds 0.875 or 0.925 load midpoints where
-an action or attainment boundary appears, takes selected cells to five repeats,
-then takes them to ten only when action remains unstable or the 95% shed-width
-exceeds 10 W. Deadline misses, target misses, individual request failures, load
-drift, queueing, and missing secondary telemetry remain observations. Invalid
-identity or inputs, unusable primary outcomes, and failure of more than half of
-the planned episodes stop the campaign.
+an action or attainment boundary appears and caps the first adaptive stage at
+65 matched episodes, for 250 pilot-plus-refinement episodes total. New midpoint
+cells receive repeats first. A second refinement takes unstable cells to ten
+repeats when the action changes or the 95% shed-width exceeds 10 W. Deadline
+misses, target misses, individual request failures, load drift, queueing, and
+missing secondary telemetry remain observations. Invalid identity or inputs,
+unusable primary outcomes, and failure of more than half of the planned
+episodes stop the campaign.
 
 Each policy uses the same eight pinned agentic sessions. An independent 80%-load
 stream serves on Sweden while both destinations sustain 50% background inference.

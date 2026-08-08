@@ -58,6 +58,7 @@ FRONTIER_PACKS = (
 )
 FRONTIER_LOADS = (0, .5, .85, .9, .95)
 FRONTIER_FAILURE_GATE = .5
+FRONTIER_REFINEMENT_EPISODES = 65
 ROOT = Path(__file__).parent
 MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
 WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
@@ -1669,6 +1670,11 @@ def frontier_refinement(plan: dict, run_root: Path) -> dict:
                 scenarios.append(row)
     if not scenarios:
         raise RuntimeError("no frontier boundary needs refinement")
+    if plan.get("phase", "pilot") == "pilot":
+        scenarios.sort(key=lambda row: (
+            row["condition_index"] in original_conditions, row["repeat"],
+            row["condition_index"], FRONTIER_POLICIES.index(row["policy"])))
+        scenarios = scenarios[:FRONTIER_REFINEMENT_EPISODES]
     output = {**plan, "phase": "refinement", "scenarios": scenarios,
               "repeats": len(repeats)}
     validate_plan(output)
