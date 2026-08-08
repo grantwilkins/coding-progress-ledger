@@ -358,6 +358,13 @@ condition/repeat block in the pilot and capped refinement. It plans against a
 nonbinding 600-second horizon while execution and attainment retain the measured
 30-second deadline.
 
+`plot_network_power_attainment_cdf.py` combines the pilot, refinement, and
+deadline-blind phases into matched 50-episode-per-policy ECDFs. Each event is the
+earliest common-epoch completion at which nonlinear modeled source-power shed
+reaches the 80% target; late events remain and unattained targets are missing
+mass. Run `uv run python queue-haul/plot_network_power_attainment_cdf.py`; it
+writes CSV, PNG, and PDF outputs to the frontier campaign root.
+
 Each policy uses the same eight pinned agentic sessions. An independent 80%-load
 stream serves on Sweden while both destinations sustain 50% background inference.
 The 30-second handoff clock includes live metrics, policy planning, and parallel
