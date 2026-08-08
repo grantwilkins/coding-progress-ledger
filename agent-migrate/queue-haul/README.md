@@ -336,6 +336,10 @@ uv run python queue-haul/network_campaign.py refine \
   --plan /datadrive/queue-haul-network/control/frontier-pilot.json \
   --run-root /datadrive/queue-haul-network/frontier-pilot-001 \
   --out /datadrive/queue-haul-network/control/frontier-refinement.json
+uv run python queue-haul/network_campaign.py deadline-blind \
+  --plan /datadrive/queue-haul-network/control/frontier-pilot.json \
+  --plan /datadrive/queue-haul-network/control/frontier-refinement.json \
+  --out /datadrive/queue-haul-network/control/frontier-deadline-blind.json
 ```
 
 Reduction writes raw episode CSV plus PNG/PDF prefill--network mechanism and
@@ -348,6 +352,11 @@ misses, target misses, individual request failures, load drift, queueing, and
 missing secondary telemetry remain observations. Invalid identity or inputs,
 unusable primary outcomes, and failure of more than half of the planned
 episodes stop the campaign.
+
+The deadline-blind plan selects one Queue-Haul ablation for every unique
+condition/repeat block in the pilot and capped refinement. It plans against a
+nonbinding 600-second horizon while execution and attainment retain the measured
+30-second deadline.
 
 Each policy uses the same eight pinned agentic sessions. An independent 80%-load
 stream serves on Sweden while both destinations sustain 50% background inference.

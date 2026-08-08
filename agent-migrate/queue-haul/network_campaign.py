@@ -59,6 +59,8 @@ FRONTIER_PACKS = (
 FRONTIER_LOADS = (0, .5, .85, .9, .95)
 FRONTIER_FAILURE_GATE = .5
 FRONTIER_REFINEMENT_EPISODES = 65
+DEADLINE_BLIND_POLICY = "queue_haul_deadline_blind"
+DEADLINE_BLIND_HORIZON_S = 600
 ROOT = Path(__file__).parent
 MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
 WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
@@ -605,7 +607,10 @@ def validate_plan(plan: dict) -> None:
                     or row["deadline_s"] != 30 \
                     or row["requested_shed_fraction"] != .8:
                 raise ValueError("frontier scenario contract changed")
-        if any({row["policy"] for row in rows} != set(FRONTIER_POLICIES)
+        policies = ({DEADLINE_BLIND_POLICY}
+                    if plan.get("phase") == "deadline_blind"
+                    else set(FRONTIER_POLICIES))
+        if any({row["policy"] for row in rows} != policies
                or len({tuple((item["session_id"], item["initial_tokens"])
                               for item in row["sessions"]) for row in rows}) != 1
                for rows in blocks.values()):
@@ -1108,14 +1113,20 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     ) for node in destinations)
     architecture = DestinationArchitecture(
         template.schema, template.source_compatibility, template.types, pools)
+    deadline_blind = scenario["policy"] == DEADLINE_BLIND_POLICY
     solver = {
         "queue_haul": "lp_work_first", "greedy": "greedy",
         "greedy_lagrangian": "greedy_lagrangian", "random": "random",
         "kv_only": "kv_only", "replay_only": "replay_only",
         "queue_haul_power_blind": "lp_power_blind",
+        DEADLINE_BLIND_POLICY: "lp_work_first",
     }[scenario["policy"]]
     routes = {("source", node): (f"link/{node}",) for node in destinations}
-    result = solve(problem, profile, routes, solver, seed=seed,
+    planning_problem = replace(
+        problem, deadline_s=DEADLINE_BLIND_HORIZON_S,
+        end_s=max(problem.end_s, DEADLINE_BLIND_HORIZON_S),
+    ) if deadline_blind else problem
+    result = solve(planning_problem, profile, routes, solver, seed=seed,
                    destination=architecture)
     planned = list(result.moves)
     admitted = {move.session_id for move in planned}
@@ -1681,6 +1692,34 @@ def frontier_refinement(plan: dict, run_root: Path) -> dict:
     return output
 
 
+def deadline_blind_plan(plans: list[dict]) -> dict:
+    if not plans:
+        raise ValueError("deadline-blind plan requires frontier inputs")
+    for plan in plans:
+        validate_plan(plan)
+        if plan["design"] != "frontier":
+            raise ValueError("deadline-blind plan requires frontier inputs")
+    templates = {}
+    for plan in plans:
+        for row in plan["scenarios"]:
+            if row["policy"] == "queue_haul":
+                templates.setdefault((row["condition_index"], row["repeat"]), row)
+    scenarios = []
+    for (condition, repeat), template in sorted(templates.items()):
+        row = {**template, "policy": DEADLINE_BLIND_POLICY,
+               "planner_seed": profiler.stable_seed(
+                   plans[0]["seed"], condition, repeat, DEADLINE_BLIND_POLICY)}
+        row["scenario_id"] = _hash([
+            "deadline-blind", condition, repeat, row["sessions"],
+        ])[:16]
+        scenarios.append(row)
+    output = {**plans[0], "phase": "deadline_blind",
+              "policies": [DEADLINE_BLIND_POLICY], "repeats": 1,
+              "scenarios": scenarios}
+    validate_plan(output)
+    return output
+
+
 def _next_attempt(root: Path) -> int:
     attempts = [int(path.name.rsplit("-", 1)[-1])
                 for path in root.glob("attempt-*") if path.is_dir()]
@@ -1710,9 +1749,11 @@ def plot_frontier(plan: dict, evidence: list[tuple[dict, dict]], out: Path) -> N
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    plot_policies = (*FRONTIER_POLICIES, DEADLINE_BLIND_POLICY)
     profile, colors = ModelProfile.load(MODEL_PATH), {
-        policy: color for policy, color in zip(FRONTIER_POLICIES, (
-            "#B1040E", "#008566", "#E98300", "#006CB8", "#6F42C1"))}
+        policy: color for policy, color in zip(plot_policies, (
+            "#B1040E", "#008566", "#E98300", "#006CB8", "#6F42C1",
+            "#17BECF"))}
     fig, axis = plt.subplots(figsize=(7, 4.5))
     for scenario, result in evidence:
         for move in result.get("requests", []):
@@ -1740,7 +1781,7 @@ def plot_frontier(plan: dict, evidence: list[tuple[dict, dict]], out: Path) -> N
     plt.close(fig)
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
-    for policy in FRONTIER_POLICIES:
+    for policy in plan["policies"]:
         rows = [(scenario, result) for scenario, result in evidence
                 if scenario["policy"] == policy]
         sizes = sorted({sum(item["initial_tokens"] for item in scenario["sessions"])
@@ -2016,6 +2057,9 @@ def parse_args(argv=None):
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
+    command = sub.add_parser("deadline-blind")
+    command.add_argument("--plan", type=Path, action="append", required=True)
+    command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("handoff")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -2072,6 +2116,13 @@ def main(argv=None) -> None:
         refined = write_frontier_refinement(
             args.plan, args.run_root, args.out)
         print(json.dumps({"scenarios": len(refined["scenarios"]),
+                          "out": str(args.out)}, sort_keys=True))
+    elif args.command == "deadline-blind":
+        plan = deadline_blind_plan([
+            json.loads(path.read_text()) for path in args.plan])
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+        print(json.dumps({"scenarios": len(plan["scenarios"]),
                           "out": str(args.out)}, sort_keys=True))
     elif args.command == "handoff":
         print(json.dumps(run_handoff(

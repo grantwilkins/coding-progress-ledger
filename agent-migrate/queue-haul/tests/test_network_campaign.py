@@ -569,6 +569,46 @@ def test_frontier_planner_targets_power_and_does_not_force_evacuation(monkeypatc
     assert seen["problem"].power_limit_w > 0
 
 
+def test_deadline_blind_planner_uses_nonbinding_horizon(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(n, "solve", lambda problem, *_args, **_kwargs:
+                        seen.update(problem=problem) or SimpleNamespace(moves=[]))
+    scenario = {
+        "design": "frontier", "policy": n.DEADLINE_BLIND_POLICY,
+        "deadline_s": 30, "requested_shed_fraction": .8,
+        "sessions": [{"session_id": "s0", "initial_tokens": 8192}],
+        "bandwidth_mbps": {"east": 1000, "west": 2000},
+        "background": {"east": (0, 0), "west": (0, 0)},
+    }
+
+    n.plan_joint_scenario(
+        scenario, {node: {"kv_fraction": 0} for node in ("east", "west")},
+        n.ModelProfile.load(n.MODEL_PATH), 1)
+
+    assert scenario["deadline_s"] == 30
+    assert seen["problem"].deadline_s == n.DEADLINE_BLIND_HORIZON_S
+
+
+def test_deadline_blind_plan_matches_each_input_block(tmp_path):
+    pilot = n.make_plan(
+        campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
+        seed=7, design="frontier")
+    template = next(row for row in pilot["scenarios"]
+                    if row["policy"] == "queue_haul")
+    refinement = {**pilot, "phase": "refinement", "scenarios": [
+        {**template, "policy": policy, "repeat": 1,
+         "scenario_id": f"refined-{policy}"}
+        for policy in n.FRONTIER_POLICIES
+    ]}
+
+    plan = n.deadline_blind_plan([pilot, refinement])
+
+    assert plan["phase"] == "deadline_blind"
+    assert len(plan["scenarios"]) == 38
+    assert {row["policy"] for row in plan["scenarios"]} == {
+        n.DEADLINE_BLIND_POLICY}
+
+
 def test_observed_demand_uses_uncached_prefill_and_decode_tokens():
     rows = [
         {"session_id": "a", "prompt_tokens": 100, "cached_tokens": 80,
