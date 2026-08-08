@@ -367,6 +367,79 @@ def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path)
         n.make_plan(path, contract, seed=7)
 
 
+def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(tmp_path):
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
+        seed=7, design="frontier")
+
+    assert len(plan["scenarios"]) == 185
+    assert plan["policies"] == list(n.FRONTIER_POLICIES)
+    assert {row["bandwidth"] for row in plan["scenarios"]} == {"natural"}
+    assert {row["deadline_s"] for row in plan["scenarios"]} == {30}
+    assert {row["source_load"] for row in plan["scenarios"]} == {.8}
+    assert {row["requested_shed_fraction"] for row in plan["scenarios"]} == {.8}
+    blocks = {}
+    for row in plan["scenarios"]:
+        blocks.setdefault(row["condition_index"], []).append(row)
+    assert len(blocks) == 37
+    assert all(len(rows) == 5 for rows in blocks.values())
+    assert {len(rows[0]["sessions"]) for rows in blocks.values()} == {4, 8, 16}
+    canonical = [rows[0] for rows in blocks.values() if rows[0]["pack"] == "8x16k"]
+    pairs = {tuple(value[0] for value in row["background"].values())
+             for row in canonical}
+    asymmetric = (.5, .85, .9, .95)
+    assert pairs == {(load, load) for load in n.FRONTIER_LOADS} | {
+        (.5, load) for load in asymmetric
+    } | {(load, .5) for load in asymmetric}
+
+
+def test_frontier_refinement_adds_boundary_midpoint_and_five_repeats(tmp_path):
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
+        seed=7, design="frontier")
+    root = tmp_path / "run"
+    for scenario in plan["scenarios"]:
+        loads = tuple(value[0] for value in scenario["background"].values())
+        changed = scenario["pack"] == "4x16k" and loads[0] == loads[1] \
+            and loads[0] >= .9
+        result = root / "scenarios" / scenario["scenario_id"] \
+            / "attempt-0001" / "result.json"
+        result.parent.mkdir(parents=True)
+        result.write_text(json.dumps({
+            "status": "complete", "target_met": True, "realized_shed_w": 50,
+            "requests": [{"destination_instance": "east",
+                          "method": "kv_transfer" if changed else "replay",
+                          "request": {}}],
+        }))
+
+    refined = n.frontier_refinement(plan, root)
+
+    assert refined["phase"] == "refinement"
+    assert len(refined["scenarios"]) == 65
+    midpoint = [row for row in refined["scenarios"]
+                if {value[0] for value in row["background"].values()} == {.875}]
+    assert {row["repeat"] for row in midpoint} == set(range(5))
+    assert {row["policy"] for row in midpoint} == set(n.FRONTIER_POLICIES)
+
+
+def test_frontier_reduction_plots_mechanism_and_attainment(tmp_path):
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
+        seed=7, design="frontier")
+    scenario = next(row for row in plan["scenarios"]
+                    if row["policy"] == "queue_haul")
+    result = {"target_met": True, "requests": [{
+        "destination_instance": "east", "method": "replay", "request": {},
+    }]}
+
+    n.plot_frontier(plan, [(scenario, result)], tmp_path)
+
+    assert all((tmp_path / f"{name}.{suffix}").is_file()
+               for name in ("prefill_network_mechanism",
+                            "frontier_target_attainment")
+               for suffix in ("png", "pdf"))
+
+
 def test_isolated_plan_is_54_paired_route_relative_migrations(tmp_path):
     path = campaign_manifest(tmp_path, 4)
     contract = n.freeze_contract(calibration())
@@ -439,6 +512,31 @@ def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
             for pool in seen["architecture"].pools} == {
                 tuple(dtype.work(profile.case().F * rho, 0, 512))
                 for rho in (.2, .4)}
+
+
+def test_frontier_planner_targets_power_and_does_not_force_evacuation(monkeypatch):
+    move = SimpleNamespace(
+        session_id="s0", destination_instance="east",
+        destination_pool="pool/east", method="replay", order=0,
+        path=("link/east",), rate_limit_bytes_per_s=None, quiesce_s=None)
+    seen = {}
+    monkeypatch.setattr(n, "solve", lambda problem, *_args, **_kwargs:
+                        seen.update(problem=problem) or SimpleNamespace(moves=[move]))
+    scenario = {
+        "design": "frontier", "policy": "queue_haul", "deadline_s": 30,
+        "requested_shed_fraction": .8,
+        "sessions": [{"session_id": session, "initial_tokens": 8192}
+                     for session in ("s0", "s1")],
+        "bandwidth_mbps": {"east": 1000, "west": 2000},
+        "background": {"east": (0, 0), "west": (0, 0)},
+    }
+
+    result = n.plan_joint_scenario(
+        scenario, {node: {"kv_fraction": 0} for node in ("east", "west")},
+        n.ModelProfile.load(n.MODEL_PATH), 1)
+
+    assert [row["session_id"] for row in result] == ["s0"]
+    assert seen["problem"].power_limit_w > 0
 
 
 def test_observed_demand_uses_uncached_prefill_and_decode_tokens():
@@ -625,8 +723,8 @@ def test_progress_checkpoint_is_atomic_and_counts_latest_results(tmp_path):
 def test_chat_explicitly_probes_state_code(monkeypatch):
     seen = {}
 
-    def stream(_cfg, _port, messages, tokens, _hash, _timeout):
-        seen.update(messages=messages, tokens=tokens)
+    def stream(_cfg, _port, messages, tokens, _hash, _timeout, bypass):
+        seen.update(messages=messages, tokens=tokens, bypass=bypass)
         now = n.time.monotonic_ns()
         return n.profiler.RequestResult("r", 200, "", now, now), "CODE"
 
@@ -637,7 +735,11 @@ def test_chat_explicitly_probes_state_code(monkeypatch):
     assert seen == {"messages": [
         {"role": "user", "content": "context"},
         {"role": "user", "content":
-         "Reply only with session state code CODE."}], "tokens": 128}
+            "Reply only with session state code CODE."}], "tokens": 128,
+                    "bypass": False}
+
+    n._chat(object(), 1, [], "CODE", 1, True)
+    assert seen["bypass"] is True
 
 
 def test_chat_retries_one_invalid_probe(monkeypatch):

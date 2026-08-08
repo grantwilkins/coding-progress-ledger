@@ -29,7 +29,7 @@ import policy_hardware_campaign as policy_campaign
 from destination_runner import MetricsSampler
 from destination import (DestinationArchitecture, DestinationPool,
                          DestinationReplica, dedicated_sink_architecture)
-from planner import plan as solve
+from planner import plan as solve, source_power
 from profiles import ModelProfile, WorkloadProfile
 from simulate import NetworkLink, PowerNode, ServingInstance
 
@@ -47,6 +47,17 @@ POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only",
     "random",
 )
+FRONTIER_POLICIES = (
+    "queue_haul", "greedy", "replay_only", "kv_only",
+    "queue_haul_power_blind",
+)
+FRONTIER_PACKS = (
+    ("4x16k", 4, 16_384), ("8x16k", 8, 16_384),
+    ("16x16k", 16, 16_384), ("8x8k", 8, 8_192),
+    ("8x24k", 8, 24_576), ("8x31k", 8, 31_488),
+)
+FRONTIER_LOADS = (0, .5, .85, .9, .95)
+FRONTIER_FAILURE_GATE = .5
 ROOT = Path(__file__).parent
 MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
 WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
@@ -450,12 +461,50 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         raise ValueError("invalid session count")
     scenarios = []
     destinations = tuple(sorted(contract["paths"]))
-    if design not in {"joint", "isolated"} or len(destinations) != (
-        2 if design == "joint" else 1
+    if design not in {"joint", "isolated", "frontier"} or len(destinations) != (
+        2 if design in {"joint", "frontier"} else 1
     ):
         raise ValueError(f"{design} design requires "
-                         f"{'two destinations' if design == 'joint' else 'one destination'}")
-    if design == "isolated":
+                         f"{'two destinations' if design in {'joint', 'frontier'} else 'one destination'}")
+    if design == "frontier":
+        if not available:
+            raise ValueError("frontier design needs a manifest template")
+        load_pairs = [(load, load) for load in FRONTIER_LOADS]
+        asymmetric_loads = (.5, .85, .9, .95)
+        asymmetric = [(a, b) for a, b in (
+            *((.5, load) for load in asymmetric_loads),
+            *((load, .5) for load in asymmetric_loads[1:]),
+        )]
+        conditions = [
+            (pack, loads) for pack in FRONTIER_PACKS for loads in load_pairs
+        ] + [
+            (next(pack for pack in FRONTIER_PACKS if pack[0] == "8x16k"), loads)
+            for loads in asymmetric
+        ]
+        for condition_index, ((pack_id, count, context), loads) in enumerate(conditions):
+            session_rows = [{
+                "session_id": f"{available[index % len(available)]['id']}-f{index}",
+                "template_id": available[index % len(available)]["id"],
+                "job_class": available[index % len(available)]["job_class"],
+                "turn_index": 0, "initial_tokens": context, "order": index,
+            } for index in range(count)]
+            background = dict(zip(destinations, ((loads[0], 0), (loads[1], 0))))
+            for policy in FRONTIER_POLICIES:
+                scenarios.append({
+                    "scenario_id": _hash([
+                        design, condition_index, policy, session_rows,
+                    ])[:16],
+                    "design": design, "condition_index": condition_index,
+                    "repeat": 0, "pack": pack_id, "policy": policy,
+                    "workload": "agentic_tool_loop", "bandwidth": "natural",
+                    "bandwidth_mbps": _bandwidths(contract, "natural"),
+                    "deadline_s": HANDOFF_DEADLINE_S, "background": background,
+                    "source_load": .8, "requested_shed_fraction": .8,
+                    "planner_seed": profiler.stable_seed(
+                        seed, condition_index, policy),
+                    "sessions": session_rows,
+                })
+    elif design == "isolated":
         destination = destinations[0]
         for bandwidth in ("controlled_80", "controlled_40", "natural"):
             for context in (2048, 8192, 32768):
@@ -523,9 +572,10 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                      "sha256": profiler.file_hash(manifest_path)},
         "model_profile": {"path": str(MODEL_PATH),
                           "sha256": profiler.file_hash(MODEL_PATH)},
-        "network_contract": contract, "policies": list(POLICIES),
+        "network_contract": contract,
+        "policies": list(FRONTIER_POLICIES if design == "frontier" else POLICIES),
         "conditions": target_conditions(destinations) if design == "joint" else [],
-        "repeats": REPEATS,
+        "repeats": 1 if design == "frontier" else REPEATS,
         "sessions_per_scenario": sessions, "scenarios": scenarios,
     }
     validate_plan(output)
@@ -537,10 +587,29 @@ def validate_plan(plan: dict) -> None:
         raise ValueError("invalid network plan schema")
     scenarios = plan.get("scenarios", [])
     design = plan.get("design")
-    expected = 126 if design == "joint" else 54 if design == "isolated" else 0
+    expected = 126 if design == "joint" else 54 if design == "isolated" \
+        else (185 if plan.get("phase", "pilot") == "pilot" else
+              len(scenarios)) if design == "frontier" else 0
     if len(scenarios) != expected \
             or len({row["scenario_id"] for row in scenarios}) != len(scenarios):
         raise ValueError(f"network plan must contain exactly {expected} unique scenarios")
+    if design == "frontier":
+        contract = plan["network_contract"]
+        blocks = {}
+        for row in scenarios:
+            key = (row["condition_index"], row["repeat"])
+            blocks.setdefault(key, []).append(row)
+            if row["bandwidth"] != "natural" \
+                    or row["bandwidth_mbps"] != _bandwidths(contract, "natural") \
+                    or row["deadline_s"] != 30 \
+                    or row["requested_shed_fraction"] != .8:
+                raise ValueError("frontier scenario contract changed")
+        if any({row["policy"] for row in rows} != set(FRONTIER_POLICIES)
+               or len({tuple((item["session_id"], item["initial_tokens"])
+                              for item in row["sessions"]) for row in rows}) != 1
+               for rows in blocks.values()):
+            raise ValueError("frontier policy block is incomplete or unmatched")
+        return
     if design == "isolated":
         if len(plan["network_contract"]["paths"]) != 1 or any(
             row.get("destination") not in plan["network_contract"]["paths"]
@@ -928,12 +997,13 @@ def _clear_cluster(stack: ClusterStack) -> None:
 
 
 def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
-          timeout_s: float) -> dict:
+          timeout_s: float, bypass_lmcache: bool = False) -> dict:
     messages = messages + [{"role": "user", "content":
                             f"Reply only with session state code {code}."}]
     for attempt in range(2):
         result, text = profiler.stream_chat(
-            cfg, port, messages, 128, profiler.messages_hash(messages), timeout_s)
+            cfg, port, messages, 128, profiler.messages_hash(messages), timeout_s,
+            bypass_lmcache)
         if result.status_code == 200 and code in text:
             return {**asdict(result), "state_code_verified": True,
                     "probe_attempts": attempt + 1}
@@ -1003,6 +1073,14 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
             session, expected_f=demand[session.session_id][0],
             expected_g=demand[session.session_id][1],
         ) for session in base.sessions))
+    frontier = scenario.get("design") == "frontier"
+    requested_shed_w = None
+    if "requested_shed_fraction" in scenario:
+        initial = source_power(base, profile)
+        minimum = source_power(
+            base, profile, (session.session_id for session in base.sessions))
+        requested_shed_w = scenario["requested_shed_fraction"] * (initial - minimum)
+        base = replace(base, power_limit_w=initial - requested_shed_w)
     destinations = tuple(sorted(scenario["bandwidth_mbps"]))
     links = tuple(NetworkLink(
         f"link/{node}", scenario["bandwidth_mbps"][node] * 125_000,
@@ -1033,15 +1111,15 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
         "queue_haul": "lp_work_first", "greedy": "greedy",
         "greedy_lagrangian": "greedy_lagrangian", "random": "random",
         "kv_only": "kv_only", "replay_only": "replay_only",
+        "queue_haul_power_blind": "lp_power_blind",
     }[scenario["policy"]]
     routes = {("source", node): (f"link/{node}",) for node in destinations}
     result = solve(problem, profile, routes, solver, seed=seed,
                    destination=architecture)
     planned = list(result.moves)
     admitted = {move.session_id for move in planned}
-    missing = tuple(row for row in problem.sessions
-                    if row.session_id not in admitted)
-    if missing:
+    missing = tuple(row for row in problem.sessions if row.session_id not in admitted)
+    if missing and not frontier:
         late = replace(problem, sessions=missing, deadline_s=600, end_s=600)
         planned.extend(replace(move, order=move.order + len(planned)) for move in solve(
             late, profile, routes, solver, seed=seed, destination=architecture,
@@ -1056,14 +1134,17 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
         "planned_quiesce_s": move.quiesce_s,
         "deadline_admitted": move.session_id in admitted,
     } for move in planned]
-    if {row["session_id"] for row in moves} != {
+    if not frontier and {row["session_id"] for row in moves} != {
             row["session_id"] for row in scenario["sessions"]}:
         raise RuntimeError("policy did not plan the complete evacuation")
+    if frontier and (requested_shed_w is None
+            or not set(admitted) <= {row["session_id"] for row in scenario["sessions"]}):
+        raise RuntimeError("invalid frontier shed decision")
     return moves
 
 
 def agentic_demand(records: dict[str, dict], sessions: list[dict],
-                   profile: ModelProfile
+                   profile: ModelProfile, total_load: float = .4,
                    ) -> dict[str, tuple[float, float]]:
     demand = {}
     for session in sessions:
@@ -1076,7 +1157,7 @@ def agentic_demand(records: dict[str, dict], sessions: list[dict],
             rate * statistics.mean(turn["output_tokens"] for turn in turns),
         )
     case = profile.case()
-    scale = .4 / sum(f / case.F + g / case.G for f, g in demand.values())
+    scale = total_load / sum(f / case.F + g / case.G for f, g in demand.values())
     return {session_id: (f * scale, g * scale)
             for session_id, (f, g) in demand.items()}
 
@@ -1148,7 +1229,14 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     if any(process.poll() is not None for process in stack.remote.values()):
         raise RuntimeError("remote sink exited")
     _clear_cluster(stack)
-    sessions = {row["id"]: row for row in manifest["sessions"]}
+    templates = {row["id"]: row for row in manifest["sessions"]}
+    sessions = {
+        row["session_id"]: ({**templates[row.get("template_id", row["session_id"])],
+                             "id": row["session_id"],
+                             "state_code": f"QH{index:03d}"}
+                            if "template_id" in row else templates[row["session_id"]])
+        for index, row in enumerate(scenario["sessions"])
+    }
     messages = {row["session_id"]: profiler.calibration_messages(
         sessions[row["session_id"]], row["initial_tokens"])
         for row in scenario["sessions"]}
@@ -1161,64 +1249,101 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 stack.cfg, stack.ports[node.id]["api"], prefill_tps, compute,
                 root / f"sink_load_{node.id}.jsonl")
             loads[node.id].start()
+    if scenario.get("source_load"):
+        loads["source"] = SinkLoad(
+            stack.cfg, stack.cfg.src_port, prefill_tps, scenario["source_load"],
+            root / "source_load.jsonl")
+        loads["source"].start()
     try:
-        if scenario["design"] == "joint":
+        if scenario["design"] in {"joint", "frontier"}:
             time.sleep(5)
             nodes = stack.cluster.destinations
+            def snapshot(node):
+                try:
+                    return destination_metrics(
+                        stack, node.id, scenario["background"][node.id][1])
+                except Exception as exc:
+                    if scenario["design"] != "frontier":
+                        raise
+                    return {"kv_fraction": 0, "warning": True,
+                            "error": f"{type(exc).__name__}: {exc}"}
             with ThreadPoolExecutor(max_workers=len(nodes)) as pool:
                 snapshots = dict(zip(
                     (node.id for node in nodes),
-                    pool.map(lambda node: destination_metrics(
-                        stack, node.id, scenario["background"][node.id][1]), nodes),
+                    pool.map(snapshot, nodes),
                 ))
             profile = ModelProfile.load(MODEL_PATH)
+            demand = agentic_demand(
+                sessions, scenario["sessions"], profile,
+                scenario.get("source_load", .4))
             moves = plan_joint_scenario(
-                scenario, snapshots, profile, scenario["planner_seed"],
-                agentic_demand(sessions, scenario["sessions"], profile))
+                scenario, snapshots, profile, scenario["planner_seed"], demand)
             write_checkpoint(root / "decision.json", {
                 "background": snapshots, "moves": moves,
             })
         else:
             moves = scenario["moves"]
         moves = sorted(moves, key=lambda row: row["order"])
+        preparation_errors = {}
         for move in moves:
             if move["method"] == "kv_transfer":
                 row = sessions[move["session_id"]]
-                _warm(stack, messages[move["session_id"]],
-                      row["state_code"], timeout)
+                try:
+                    _warm(stack, messages[move["session_id"]],
+                          row["state_code"], timeout)
+                except Exception as exc:
+                    if scenario["design"] != "frontier":
+                        raise
+                    preparation_errors[move["session_id"]] = \
+                        f"{type(exc).__name__}: {exc}"
     except BaseException:
         for load in loads.values():
             load.close()
         raise
     before = testbed.proxy_counts(stack.run_root / "proxy_bytes.csv")
     start_ns = time.monotonic_ns()
+    load_warnings = []
     try:
         def reconstruct(move):
+            if move["session_id"] in preparation_errors:
+                return {**move, "error": preparation_errors[move["session_id"]]}
             session = sessions[move["session_id"]]
             destination = move["destination_instance"]
-            return {
-                **move, "request": _chat(
+            try:
+                return {**move, "request": _chat(
                     stack.cfg, stack.ports[destination]["api"],
                     messages[move["session_id"]], session["state_code"],
-                    timeout,
-                ),
-            }
+                    timeout, move["method"] == "replay")}
+            except Exception as exc:
+                if scenario["design"] != "frontier":
+                    raise
+                return {**move, "error": f"{type(exc).__name__}: {exc}"}
 
-        with ThreadPoolExecutor(max_workers=len(moves)) as pool:
-            results = list(pool.map(reconstruct, moves))
+        if moves:
+            with ThreadPoolExecutor(max_workers=len(moves)) as pool:
+                results = list(pool.map(reconstruct, moves))
+        else:
+            results = []
     finally:
-        for load in loads.values():
-            load.close()
+        for name, load in loads.items():
+            try:
+                load.close()
+            except RuntimeError as exc:
+                if scenario["design"] != "frontier":
+                    raise
+                load_warnings.append(f"{name}: {exc}")
     end_ns = time.monotonic_ns()
-    if any(row["method"] == "kv_transfer"
+    if scenario["design"] != "frontier" and any(row["method"] == "kv_transfer"
            and row["request"]["cached_tokens"] <= 0 for row in results):
         raise RuntimeError("KV reconstruction reported no cached tokens")
-    testbed.set_source_sleep(stack.cfg, True)
-    sleep_start_ns = time.monotonic_ns()
-    time.sleep(5)
-    testbed.set_source_sleep(stack.cfg, False)
-    sleep_end_ns = time.monotonic_ns()
-    time.sleep(.5)
+    sleep_start_ns = sleep_end_ns = None
+    if scenario["design"] != "frontier":
+        testbed.set_source_sleep(stack.cfg, True)
+        sleep_start_ns = time.monotonic_ns()
+        time.sleep(5)
+        testbed.set_source_sleep(stack.cfg, False)
+        sleep_end_ns = time.monotonic_ns()
+        time.sleep(.5)
     stack.spot.check()
     proxy = stack.run_root / "proxy_bytes.csv"
     connections = _csv_window(
@@ -1238,6 +1363,32 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         "connections": connections, "resp_transfers": transfers,
         "source_sleep_ns": [sleep_start_ns, sleep_end_ns],
     }
+    if scenario["design"] == "frontier":
+        profile = ModelProfile.load(MODEL_PATH)
+        base, _ = policy_campaign._problem(
+            profile, scenario["sessions"], 1, scenario["deadline_s"])
+        base = replace(base, sessions=tuple(replace(
+            session, expected_f=demand[session.session_id][0],
+            expected_g=demand[session.session_id][1],
+        ) for session in base.sessions))
+        initial = source_power(base, profile)
+        minimum = source_power(
+            base, profile, (session.session_id for session in base.sessions))
+        requested = scenario["requested_shed_fraction"] * (initial - minimum)
+        credited = {row["session_id"] for row in results
+                    if "request" in row
+                    and (row["request"]["end_ns"] - row["request"]["start_ns"])
+                    / 1e9 <= scenario["deadline_s"]}
+        realized = initial - source_power(base, profile, credited)
+        result.update({
+            "requested_shed_w": requested, "realized_shed_w": realized,
+            "target_met": realized >= requested,
+            "request_failures": sum("error" in row for row in results),
+            "kv_evidence_warnings": sum(
+                row["method"] == "kv_transfer" and "request" in row
+                and row["request"]["cached_tokens"] <= 0 for row in results),
+            "load_warnings": load_warnings,
+        })
     write_checkpoint(root / "result.json", result)
     return result
 
@@ -1434,6 +1585,96 @@ def _latest_result(root: Path) -> tuple[int, dict] | None:
     return int(path.parent.name.rsplit("-", 1)[-1]), json.loads(path.read_text())
 
 
+def frontier_refinement(plan: dict, run_root: Path) -> dict:
+    """Create the next matched boundary-only phase from completed frontier data."""
+    validate_plan(plan)
+    if plan["design"] != "frontier":
+        raise ValueError("refinement requires a frontier plan")
+    records = {}
+    for scenario in plan["scenarios"]:
+        latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
+        if latest and latest[1].get("status") == "complete":
+            result = latest[1]
+            records[(scenario["condition_index"], scenario["policy"],
+                     scenario["repeat"])] = (
+                bool(result.get("target_met")),
+                tuple(sorted((row["destination_instance"], row["method"])
+                             for row in result.get("requests", [])
+                             if "request" in row)),
+                float(result.get("realized_shed_w", 0)),
+            )
+    conditions = {row["condition_index"]: row for row in plan["scenarios"]}
+    original_conditions = set(conditions)
+    selected = set()
+    if plan.get("phase", "pilot") == "pilot":
+        next_index = max(conditions) + 1
+        symmetric = {}
+        for index, row in conditions.items():
+            loads = tuple(value[0] for value in row["background"].values())
+            if loads[0] == loads[1]:
+                symmetric.setdefault(row["pack"], []).append((loads[0], index))
+        for cells in symmetric.values():
+            cells.sort()
+            for (left_load, left), (right_load, right) in zip(cells, cells[1:]):
+                if any((records.get((left, policy, 0)) or (None, None))[:2]
+                       != (records.get((right, policy, 0)) or (None, None))[:2]
+                       for policy in FRONTIER_POLICIES):
+                    selected.update((left, right))
+                    if (left_load, right_load) in ((.85, .9), (.9, .95)):
+                        midpoint = (left_load + right_load) / 2
+                        template = conditions[left]
+                        conditions[next_index] = {
+                            **template, "condition_index": next_index,
+                            "background": {node: (midpoint, 0)
+                                           for node in template["background"]},
+                        }
+                        selected.add(next_index)
+                        next_index += 1
+        # The asymmetric slice competes routes directly, so retain every observed shift.
+        canonical = [(index, tuple(value[0] for value in row["background"].values()))
+                     for index, row in conditions.items()
+                     if index in original_conditions and row["pack"] == "8x16k"]
+        for policy in FRONTIER_POLICIES:
+            for axis in range(2):
+                ordered = sorted((item for item in canonical if item[1][axis] == .5),
+                                 key=lambda item: item[1][1 - axis])
+                for (left, _), (right, _) in zip(ordered, ordered[1:]):
+                    if (records.get((left, policy, 0)) or (None, None))[:2] \
+                            != (records.get((right, policy, 0)) or (None, None))[:2]:
+                        selected.update((left, right))
+        repeats = range(1, 5)
+    else:
+        for index in conditions:
+            for policy in FRONTIER_POLICIES:
+                values = [records[key] for key in records
+                          if key[:2] == (index, policy)]
+                watts = [value[2] for value in values]
+                if len({value[1] for value in values}) > 1 or len(watts) > 1 \
+                        and 3.92 * statistics.stdev(watts) / len(watts) ** .5 > 10:
+                    selected.add(index)
+        repeats = range(5, 10)
+    scenarios = []
+    for index in sorted(selected):
+        template = conditions[index]
+        cell_repeats = range(5) if index not in original_conditions else repeats
+        for repeat in cell_repeats:
+            for policy in FRONTIER_POLICIES:
+                row = {**template, "repeat": repeat, "policy": policy,
+                       "planner_seed": profiler.stable_seed(
+                           plan["seed"], index, repeat, policy)}
+                row["scenario_id"] = _hash([
+                    "frontier-refinement", index, repeat, policy,
+                    row["sessions"], row["background"],
+                ])[:16]
+                scenarios.append(row)
+    if not scenarios:
+        raise RuntimeError("no frontier boundary needs refinement")
+    output = {**plan, "phase": "refinement", "scenarios": scenarios,
+              "repeats": len(repeats)}
+    validate_plan(output)
+    return output
+
+
 def _next_attempt(root: Path) -> int:
     attempts = [int(path.name.rsplit("-", 1)[-1])
                 for path in root.glob("attempt-*") if path.is_dir()]
@@ -1458,8 +1699,67 @@ def checkpoint_progress(plan: dict, run_root: Path) -> dict:
     return value
 
 
+def plot_frontier(plan: dict, evidence: list[tuple[dict, dict]], out: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    profile, colors = ModelProfile.load(MODEL_PATH), {
+        policy: color for policy, color in zip(FRONTIER_POLICIES, (
+            "#B1040E", "#008566", "#E98300", "#006CB8", "#6F42C1"))}
+    fig, axis = plt.subplots(figsize=(7, 4.5))
+    for scenario, result in evidence:
+        for move in result.get("requests", []):
+            node = move["destination_instance"]
+            load = scenario["background"][node][0]
+            axis.scatter(
+                scenario["bandwidth_mbps"][node] / 1000,
+                profile.case().F * (1 - load),
+                marker="^" if move["method"] == "kv_transfer" else "o",
+                facecolors=colors[scenario["policy"]] if result.get("target_met")
+                else "none", edgecolors=colors[scenario["policy"]], alpha=.75)
+    case, tokens = profile.case(), 16_384
+    eta = (tokens - case.kv_transfer.tail_tokens(tokens)) / (
+        case.kv_transfer.sealed_bytes(tokens) - 2 * tokens)
+    xs = sorted(path["natural_mbps"] / 1000
+                for path in plan["network_contract"]["paths"].values())
+    axis.plot(xs, [eta * x * 125_000_000 for x in xs], "k--",
+              label=r"analytical 16K boundary $e=\eta\rho$")
+    axis.set(xlabel="Measured natural network goodput (Gb/s)",
+             ylabel="Available destination prefill (tokens/s)")
+    axis.legend(frameon=False)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"prefill_network_mechanism.{suffix}", dpi=200)
+    plt.close(fig)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
+    for policy in FRONTIER_POLICIES:
+        rows = [(scenario, result) for scenario, result in evidence
+                if scenario["policy"] == policy]
+        sizes = sorted({sum(item["initial_tokens"] for item in scenario["sessions"])
+                        for scenario, _ in rows})
+        loads = sorted({statistics.mean(value[0] for value in scenario["background"].values())
+                        for scenario, _ in rows})
+        axes[0].plot([size / 1000 for size in sizes], [statistics.mean(
+            result.get("target_met", False) for scenario, result in rows
+            if sum(item["initial_tokens"] for item in scenario["sessions"]) == size)
+            for size in sizes], marker="o", color=colors[policy], label=policy)
+        axes[1].plot(loads, [statistics.mean(
+            result.get("target_met", False) for scenario, result in rows
+            if statistics.mean(value[0] for value in scenario["background"].values()) == load)
+            for load in loads], marker="o", color=colors[policy])
+    axes[0].set(xlabel="Movement size (thousand tokens)", ylabel="30 s target attainment")
+    axes[1].set(xlabel="Mean destination load", ylim=(-.05, 1.05))
+    axes[0].legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"frontier_target_attainment.{suffix}", dpi=200)
+    plt.close(fig)
+
+
 def reduce_run(plan: dict, run_root: Path) -> dict:
-    rows, completed, failed, missing = [], 0, 0, 0
+    rows, evidence, completed, failed, missing = [], [], 0, 0, 0
     for scenario in plan["scenarios"]:
         latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None:
@@ -1469,6 +1769,8 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             attempt, result = latest
             completed += result["status"] == "complete"
             failed += result["status"] == "failed"
+            if result["status"] == "complete":
+                evidence.append((scenario, result))
         connections = result.get("connections", [])
         rtts = [float(row["target_rtt_us"]) / 1000 for row in connections
                 if row.get("target_rtt_us")]
@@ -1483,10 +1785,18 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             "workload": scenario["workload"],
             "bandwidth": scenario["bandwidth"],
             "background": json.dumps(scenario.get("background", {}), sort_keys=True),
+            "pack": scenario.get("pack", ""),
+            "session_count": len(scenario.get("sessions", ())),
+            "movement_tokens": sum(item.get("initial_tokens", 0)
+                                   for item in scenario.get("sessions", ())),
             "deadline_s": scenario["deadline_s"], "attempt": attempt,
             "status": result["status"],
             "migration_s": result.get("migration_s", ""),
             "deadline_met": result.get("deadline_met", ""),
+            "requested_shed_w": result.get("requested_shed_w", ""),
+            "realized_shed_w": result.get("realized_shed_w", ""),
+            "target_met": result.get("target_met", ""),
+            "request_failures": result.get("request_failures", ""),
             "api_request_bytes": sum(value for key, value in wire.items()
                                      if key.endswith("/client_to_target")
                                      and key.startswith("api/")),
@@ -1499,12 +1809,16 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             "error": result.get("error", ""),
         })
     profiler.write_csv(run_root / "results.csv", rows)
+    frontier = plan.get("design") == "frontier"
+    if frontier and evidence:
+        plot_frontier(plan, evidence, run_root)
     summary = {
         "schema": "queue-haul-network-summary-v1",
         "expected": len(plan["scenarios"]), "completed": completed,
         "failed": failed, "missing": missing,
-        "valid": completed == len(plan["scenarios"])
-        and not failed and not missing,
+        "valid": not missing and (
+            completed == len(plan["scenarios"]) if not frontier else
+            failed / len(plan["scenarios"]) <= FRONTIER_FAILURE_GATE),
     }
     (run_root / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n")
@@ -1603,7 +1917,8 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                 stop_cluster(stack)
                 stack = None
                 checkpoint_progress(plan, run_root)
-                raise
+                if plan["design"] != "frontier":
+                    raise
             checkpoint_progress(plan, run_root)
     finally:
         if stack:
@@ -1633,6 +1948,13 @@ def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
     return plan
 
 
+def write_frontier_refinement(plan_path: Path, run_root: Path, out: Path) -> dict:
+    refined = frontier_refinement(json.loads(plan_path.read_text()), run_root)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(refined, indent=2, sort_keys=True) + "\n")
+    return refined
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1643,7 +1965,7 @@ def parse_args(argv=None):
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--seed", type=int, default=1)
     command.add_argument("--sessions", type=int, default=8)
-    command.add_argument("--design", choices=("joint", "isolated"),
+    command.add_argument("--design", choices=("joint", "isolated", "frontier"),
                          default="joint")
     command = sub.add_parser("check")
     command.add_argument("--cluster", type=Path, required=True)
@@ -1684,6 +2006,10 @@ def parse_args(argv=None):
     command = sub.add_parser("reduce")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
+    command = sub.add_parser("refine")
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("handoff")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -1736,6 +2062,11 @@ def main(argv=None) -> None:
         validate_plan(plan)
         print(json.dumps(reduce_run(plan, args.run_root),
                          indent=2, sort_keys=True))
+    elif args.command == "refine":
+        refined = write_frontier_refinement(
+            args.plan, args.run_root, args.out)
+        print(json.dumps({"scenarios": len(refined["scenarios"]),
+                          "out": str(args.out)}, sort_keys=True))
     elif args.command == "handoff":
         print(json.dumps(run_handoff(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),

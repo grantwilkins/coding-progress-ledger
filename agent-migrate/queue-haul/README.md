@@ -312,6 +312,41 @@ for policy in queue_haul kv_only replay_only; do
 done
 ```
 
+The East/Germany frontier campaign uses measured natural bandwidth only. Its
+185-episode pilot is six movement packs (4x16K, 8x16K, 16x16K, 8x8K, 8x24K,
+and 8x31K), destination loads 0, 0.5, 0.85, 0.9, and 0.95, plus the seven-cell
+8x16K asymmetric slice. Every matched cell runs Queue-Haul LP, greedy,
+replay-only, KV-only, and power-blind Queue-Haul against a 30-second deadline
+and an 80% modeled removable-power target. The source load is 80%; replay
+requests explicitly bypass LMCache and KV requests require positive cache
+evidence only as a warning.
+
+```bash
+uv run python queue-haul/network_campaign.py prepare --design frontier \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out /datadrive/queue-haul-network/control/frontier-pilot.json
+uv run python queue-haul/network_campaign.py run \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --current-calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+  --plan /datadrive/queue-haul-network/control/frontier-pilot.json \
+  --run-root /datadrive/queue-haul-network/frontier-pilot-001
+uv run python queue-haul/network_campaign.py refine \
+  --plan /datadrive/queue-haul-network/control/frontier-pilot.json \
+  --run-root /datadrive/queue-haul-network/frontier-pilot-001 \
+  --out /datadrive/queue-haul-network/control/frontier-refinement.json
+```
+
+Reduction writes raw episode CSV plus PNG/PDF prefill--network mechanism and
+target-attainment figures. Refinement adds 0.875 or 0.925 load midpoints where
+an action or attainment boundary appears, takes selected cells to five repeats,
+then takes them to ten only when action remains unstable or the 95% shed-width
+exceeds 10 W. Deadline misses, target misses, individual request failures, load
+drift, queueing, and missing secondary telemetry remain observations. Invalid
+identity or inputs, unusable primary outcomes, and failure of more than half of
+the planned episodes stop the campaign.
+
 Each policy uses the same eight pinned agentic sessions. An independent 80%-load
 stream serves on Sweden while both destinations sustain 50% background inference.
 The 30-second handoff clock includes live metrics, policy planning, and parallel
