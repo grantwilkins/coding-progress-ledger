@@ -7,17 +7,21 @@ per matched episode, late events retained, and unattained targets as missing mas
 Plausible wrong implementations:
 - Count completed sessions instead of evaluating their modeled power shed.
 - Measure each request from its own start instead of the shared policy epoch.
-- Condition the ECDF denominator on episodes that attain the target.
-- Clip late attainment at the 30-second deadline.
-- Include archived failed attempts instead of the selected campaign attempt.
+- Condition on attained episodes or clip late events at the deadline.
+- Bound the plot by attainment events instead of the full observed episode horizon.
+- Retain bespoke scheduler colors instead of the requested Tab10 mapping.
 """
 
 import numpy as np
+from matplotlib import pyplot as plt
 
 from plot_network_power_attainment_cdf import (
+    COLORS,
+    POLICIES,
     attainment_curve,
     attainment_time,
     completion_times,
+    plot_horizon,
 )
 
 
@@ -50,3 +54,14 @@ def test_attainment_curve_keeps_late_events_and_missing_mass():
     x, y = attainment_curve(rows, "queue_haul")
     np.testing.assert_array_equal(x, [0, 10, 35])
     np.testing.assert_allclose(y, [0, 1 / 3, 2 / 3])
+
+
+def test_plot_uses_full_episode_horizon_and_tab10_policy_order():
+    rows = [
+        {"episode_end_s": 10, "attainment_s": 8},
+        {"episode_end_s": 37.6, "attainment_s": None},
+    ]
+    assert plot_horizon(rows, 30) == 40
+    assert plot_horizon([{"episode_end_s": 20}], 30) == 30
+    assert [COLORS[policy] for policy in POLICIES] \
+        == list(plt.get_cmap("tab10").colors[:len(POLICIES)])

@@ -363,7 +363,8 @@ deadline-blind phases into matched 50-episode-per-policy ECDFs. Each event is th
 earliest common-epoch completion at which nonlinear modeled source-power shed
 reaches the 80% target; late events remain and unattained targets are missing
 mass. Run `uv run python queue-haul/plot_network_power_attainment_cdf.py`; it
-writes CSV, PNG, and PDF outputs to the frontier campaign root.
+writes CSV, PNG, and PDF outputs to the frontier campaign root using Tab10
+policy colors and the longest observed episode runtime as the plotting horizon.
 
 Each policy uses the same eight pinned agentic sessions. An independent 80%-load
 stream serves on Sweden while both destinations sustain 50% background inference.

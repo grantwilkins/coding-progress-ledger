@@ -36,16 +36,15 @@ LABELS = {
     "queue_haul_power_blind": "Queue-Haul Power Blind",
     "queue_haul_deadline_blind": "Queue-Haul Deadline Blind",
 }
-COLORS = dict(zip(POLICIES, (
-    "#B1040E", "#008566", "#006CB8", "#E98300", "#6F42C1", "#17BECF",
-)))
+COLORS = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
 LINESTYLES = dict(zip(POLICIES, (
     "-", "--", "-.", ":", (0, (5, 1)), (0, (3, 1, 1, 1)),
 )))
 FIELDS = (
     "phase", "scenario_id", "condition_index", "repeat", "policy", "pack",
     "movement_tokens", "mean_destination_load", "deadline_s",
-    "requested_shed_w", "attainment_s", "attained_by_deadline",
+    "requested_shed_w", "attainment_s", "episode_end_s",
+    "attained_by_deadline",
 )
 
 
@@ -97,6 +96,14 @@ def attainment_curve(rows: list[dict], policy: str):
                                       / len(selected)]
 
 
+def plot_horizon(rows: list[dict], deadline_s: float) -> float:
+    ends = [row["episode_end_s"] for row in rows
+            if row["episode_end_s"] is not None]
+    if deadline_s <= 0 or any(value <= 0 for value in ends):
+        raise ValueError("plot times must be positive")
+    return 5 * math.ceil(max([deadline_s, *ends]) / 5)
+
+
 def _episode(scenario, result, profile, templates):
     records = {row["session_id"]: {
         **templates[row.get("template_id", row["session_id"])],
@@ -146,7 +153,7 @@ def extract(run_root: Path = RUN_ROOT) -> list[dict]:
             raise ValueError("plan and selected frontier results do not match")
         for identifier, scenario in scenarios.items():
             row = selected[identifier]
-            event = target = None
+            event = target = episode_end = None
             if row["status"] == "complete":
                 result = json.loads((
                     root / "scenarios" / identifier
@@ -155,6 +162,7 @@ def extract(run_root: Path = RUN_ROOT) -> list[dict]:
                 if result["status"] != "complete":
                     raise ValueError("selected result is not complete")
                 event, target = _episode(scenario, result, profile, templates)
+                episode_end = float(result["migration_s"])
             output.append({
                 "phase": phase, "scenario_id": identifier,
                 "condition_index": scenario["condition_index"],
@@ -166,6 +174,7 @@ def extract(run_root: Path = RUN_ROOT) -> list[dict]:
                     [value[0] for value in scenario["background"].values()]),
                 "deadline_s": scenario["deadline_s"],
                 "requested_shed_w": target, "attainment_s": event,
+                "episode_end_s": episode_end,
                 "attained_by_deadline": event is not None
                 and event <= scenario["deadline_s"],
             })
@@ -189,9 +198,7 @@ def write(run_root: Path = RUN_ROOT) -> list[dict]:
     if len(deadlines) != 1:
         raise ValueError("power-attainment CDF mixes deadlines")
     deadline = deadlines.pop()
-    events = [row["attainment_s"] for row in rows
-              if row["attainment_s"] is not None]
-    right = max(deadline * 1.08, max(events) * 1.05)
+    right = plot_horizon(rows, deadline)
     figure, axis = plt.subplots(figsize=(6.4, 5))
     for policy in POLICIES:
         x, y = attainment_curve(rows, policy)
