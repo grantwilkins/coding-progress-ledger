@@ -97,6 +97,26 @@ def test_public_solver_surface_hard_fails_retired_greedies(tmp_path):
             )
 
 
+def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):
+    scenario = replace(problem(), sessions=(
+        replace(problem().sessions[0], expected_f=5),
+        replace(problem().sessions[1], expected_f=45),
+    ))
+    profile, seen = model(tmp_path, tp=1), []
+    original = pool_planner._lp
+
+    def capture(table, target):
+        seen.append([candidate.gain_w for candidate in table.candidates])
+        return original(table, target)
+
+    monkeypatch.setattr(pool_planner, "_lp", capture)
+    plan(scenario, profile, PATHS, "lp_power_blind", destination=architecture())
+
+    expected = ExpectedPower(scenario, profile).drain_gain(("a", "b")) / 2
+    assert seen and all(gains == pytest.approx([expected] * len(gains))
+                        for gains in seen)
+
+
 def _reference_marginal(power, session_id):
     source = power.route[session_id]
     owned = power.instance_slots[source]

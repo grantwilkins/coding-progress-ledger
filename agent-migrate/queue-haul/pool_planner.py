@@ -1970,6 +1970,11 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
         )
     else:
         table = candidate_table(scenario, profile, architecture, mode, power)
+        if solver == "lp_power_blind":
+            gain = power.drain_gain(session.session_id for session in table.sessions) \
+                / len(table.sessions)
+            table = replace(table, candidates=tuple(
+                replace(candidate, gain_w=gain) for candidate in table.candidates))
     if streamed:
         pass
     elif solver == "greedy_lagrangian":
@@ -2002,6 +2007,7 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     if solver not in {"greedy", "greedy_lagrangian",
                       "isolated_fastest", "random", "replay_only", "kv_only",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
+                      "lp_power_blind",
                       "lp_column_generation", "lp_column_generation_persistent",
                       "lp_column_generation_lazy", "lp_column_generation_native"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
