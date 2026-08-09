@@ -29,11 +29,11 @@ import policy_hardware_campaign as policy_campaign
 from destination_runner import MetricsSampler
 from destination import (DestinationArchitecture, DestinationPool,
                          DestinationReplica, dedicated_sink_architecture)
-from planner import plan as solve, source_power
+from planner import _expected_scenario, plan as solve, source_power
 from pool_planner import candidate_table, phase_one_capacity_duals
 from power_model import ExpectedPower
 from profiles import ModelProfile, WorkloadProfile
-from simulate import NetworkLink, PowerNode, ServingInstance
+from simulate import NetworkLink, PowerNode, ServingInstance, predict
 
 
 CLUSTER_SCHEMA = "queue-haul-azure-cluster-v1"
@@ -57,12 +57,47 @@ CONSTRAINT_POLICIES = (
     "queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest",
     "queue_haul_power_blind",
 )
+DEADLINE_BLIND_POLICY = "queue_haul_deadline_blind"
+SEPARATION_POLICIES = (*CONSTRAINT_POLICIES, DEADLINE_BLIND_POLICY)
 CONSTRAINT_CELLS = (
     ("window-19", 19, 22, 15, 1.0),
     ("window-30", 30, 28, 8, 1.0),
     ("window-60", 60, 64, None, 1.0),
     ("quota-30", 30, 28, 8, 1.0),
 )
+SEPARATION_CELLS = (
+    ("germany-service", "natural", .25, .95, .60),
+    ("east-service-slow-path", "natural", .90, .25, .77),
+    ("joint-shaped", "controlled_40", .50, .85, .54),
+)
+SEPARATION_REPEATS = 3
+SEPARATION_DEADLINE_S = 45
+SEPARATION_PLANNING_DEADLINE_S = 30
+SEPARATION_LOAD_WARMUP_S = 30
+SEPARATION_MARGIN = .10
+SEPARATION_BINDINGS = {
+    "germany-service": {
+        "service:pool/germany:0": .98,
+        "migration:pool/east:replay": .89,
+        "migration:pool/east:kv_transfer": .94,
+    },
+    "east-service-slow-path": {
+        "migration:pool/east:replay": .98,
+        "migration:pool/east:kv_transfer": .94,
+        "migration:pool/germany:replay": .92,
+        "migration:pool/germany:kv_transfer": .98,
+    },
+    "joint-shaped": {
+        "service:pool/east:0": .92,
+        "service:pool/germany:0": .89,
+        "migration:pool/east:replay": .89,
+        "migration:pool/east:kv_transfer": .97,
+        "migration:pool/germany:replay": .92,
+        "migration:pool/germany:kv_transfer": .96,
+    },
+}
+SINK_LOAD_PREFILL_TOKENS = 604
+SINK_LOAD_DECODE_TOKENS = 64
 CONSTRAINT_ACTIONS = (
     "germany_kv_transfer", "east_replay", "east_kv_transfer",
     "germany_replay",
@@ -79,13 +114,13 @@ FRONTIER_PACKS = (
 FRONTIER_LOADS = (0, .5, .85, .9, .95)
 FRONTIER_FAILURE_GATE = .5
 FRONTIER_REFINEMENT_EPISODES = 65
-DEADLINE_BLIND_POLICY = "queue_haul_deadline_blind"
 DEADLINE_BLIND_HORIZON_S = 600
 ROOT = Path(__file__).parent
 MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
 WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 )}
+LOAD_SUPPORT_PATH = ROOT / "outputs/capacity-load-publication-20260807/live_plan.json"
 EXPECTED_RUNTIME = {"vllm": "0.22.0", "lmcache": "0.5.1"}
 HANDOFF_DEADLINE_S = 30
 HANDOFF_POLICIES = ("queue_haul", "kv_only", "replay_only")
@@ -484,12 +519,12 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         raise ValueError("invalid session count")
     scenarios = []
     destinations = tuple(sorted(contract["paths"]))
-    if design not in {"joint", "isolated", "frontier", "constraint"} \
+    if design not in {"joint", "isolated", "frontier", "constraint", "separation"} \
             or len(destinations) != (
-        2 if design in {"joint", "frontier", "constraint"} else 1
+        2 if design in {"joint", "frontier", "constraint", "separation"} else 1
     ):
         raise ValueError(f"{design} design requires "
-                         f"{'two destinations' if design in {'joint', 'frontier', 'constraint'} else 'one destination'}")
+                         f"{'two destinations' if design in {'joint', 'frontier', 'constraint', 'separation'} else 'one destination'}")
     if design == "frontier":
         if not available:
             raise ValueError("frontier design needs a manifest template")
@@ -571,6 +606,48 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                         seed, condition_index, policy),
                     "sessions": session_rows,
                 })
+    elif design == "separation":
+        if destinations != ("east", "germany") or len(available) != 8:
+            raise ValueError("separation design requires East, Germany, and eight traces")
+        support = tuple(sorted({row.context_tokens for row in
+                               WorkloadProfile.load(
+                                   WORKLOAD_PATHS["agentic_tool_loop"]).records}))
+        rng = random.Random(8)
+        contexts = [rng.choice(support) for _ in range(28)]
+        session_rows = [{
+            "session_id": f"{available[index % len(available)]['id']}-separation-{index}",
+            "template_id": available[index % len(available)]["id"],
+            "job_class": available[index % len(available)]["job_class"],
+            "turn_index": 0, "initial_tokens": context, "order": index,
+        } for index, context in enumerate(contexts)]
+        for condition_index, (condition_id, bandwidth, east, germany,
+                              target) in enumerate(SEPARATION_CELLS):
+            for repeat in range(SEPARATION_REPEATS):
+                for policy in SEPARATION_POLICIES:
+                    scenarios.append({
+                        "scenario_id": _hash([
+                            design, condition_index, repeat, policy,
+                            session_rows, bandwidth, east, germany, target,
+                        ])[:16],
+                        "design": design, "condition_index": condition_index,
+                        "condition_id": condition_id, "repeat": repeat,
+                        "pack": "recorded-28-seed-8", "policy": policy,
+                        "workload": "agentic_tool_loop", "bandwidth": bandwidth,
+                        "bandwidth_mbps": _bandwidths(contract, bandwidth),
+                        "deadline_s": SEPARATION_DEADLINE_S,
+                        "planning_deadline_s": SEPARATION_PLANNING_DEADLINE_S,
+                        "load_warmup_s": SEPARATION_LOAD_WARMUP_S,
+                        "load_normalization": "destination_service",
+                        "background": {"east": (east, 0),
+                                       "germany": (germany, 0)},
+                        "source_load": .8,
+                        "requested_shed_fraction": target,
+                        "objective": "max_shed", "migration_headroom": {},
+                        "context_seed": 8,
+                        "planner_seed": profiler.stable_seed(
+                            seed, condition_index, repeat, policy),
+                        "sessions": session_rows,
+                    })
     elif design == "isolated":
         destination = destinations[0]
         for bandwidth in ("controlled_80", "controlled_40", "natural"):
@@ -628,9 +705,13 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                         "sessions": session_rows,
                     })
     rng = random.Random(seed)
-    if design == "constraint":
-        blocks = [[row for row in scenarios if row["condition_index"] == index]
-                  for index in range(len(CONSTRAINT_CELLS))]
+    if design in {"constraint", "separation"}:
+        cells = CONSTRAINT_CELLS if design == "constraint" else SEPARATION_CELLS
+        blocks = [[row for row in scenarios if row["condition_index"] == index
+                   and (design == "constraint" or row["repeat"] == repeat)]
+                  for index in range(len(cells))
+                  for repeat in range(1 if design == "constraint"
+                                      else SEPARATION_REPEATS)]
         for block in blocks:
             rng.shuffle(block)
         scenarios = [row for block in blocks for row in block]
@@ -648,16 +729,30 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                           "sha256": profiler.file_hash(MODEL_PATH)},
         "network_contract": contract,
         "policies": list(FRONTIER_POLICIES if design == "frontier" else
-                         CONSTRAINT_POLICIES if design == "constraint" else POLICIES),
+                         CONSTRAINT_POLICIES if design == "constraint" else
+                         SEPARATION_POLICIES if design == "separation" else POLICIES),
         "conditions": target_conditions(destinations) if design == "joint" else
             [{"condition_id": row[0], "deadline_s": row[1],
               "sessions": row[2], "context_seed": row[3],
               "requested_shed_fraction": row[4]}
-             for row in CONSTRAINT_CELLS] if design == "constraint" else [],
-        "repeats": 1 if design in {"frontier", "constraint"} else REPEATS,
-        "sessions_per_scenario": None if design == "constraint" else sessions,
+             for row in CONSTRAINT_CELLS] if design == "constraint" else
+            [{"condition_id": row[0], "bandwidth": row[1],
+              "background": {"east": row[2], "germany": row[3]},
+              "deadline_s": SEPARATION_DEADLINE_S,
+              "planning_deadline_s": SEPARATION_PLANNING_DEADLINE_S,
+              "requested_shed_fraction": row[4]}
+             for row in SEPARATION_CELLS] if design == "separation" else [],
+        "repeats": 1 if design in {"frontier", "constraint"} else
+            SEPARATION_REPEATS if design == "separation" else REPEATS,
+        "sessions_per_scenario": None if design in {"constraint", "separation"}
+            else sessions,
         "scenarios": scenarios,
     }
+    if design == "separation":
+        output["load_support"] = {
+            "path": str(LOAD_SUPPORT_PATH.relative_to(ROOT)),
+            "sha256": profiler.file_hash(LOAD_SUPPORT_PATH),
+        }
     validate_plan(output)
     return output
 
@@ -670,7 +765,9 @@ def validate_plan(plan: dict) -> None:
     expected = 126 if design == "joint" else 54 if design == "isolated" \
         else (185 if plan.get("phase", "pilot") == "pilot" else
               len(scenarios)) if design == "frontier" \
-        else 24 if design == "constraint" else 0
+        else 24 if design == "constraint" \
+        else len(SEPARATION_CELLS) * SEPARATION_REPEATS \
+        * len(SEPARATION_POLICIES) if design == "separation" else 0
     if len(scenarios) != expected \
             or len({row["scenario_id"] for row in scenarios}) != len(scenarios):
         raise ValueError(f"network plan must contain exactly {expected} unique scenarios")
@@ -768,6 +865,72 @@ def validate_plan(plan: dict) -> None:
                     tuple((item[1], item[2]) for item in signature)
                     for signature in signatures[3]}:
             raise ValueError("quota counterfactual must reuse the 30-second pack")
+        return
+    if design == "separation":
+        if set(plan["network_contract"]["paths"]) != {"east", "germany"}:
+            raise ValueError("separation plan requires East and Germany")
+        if plan.get("load_support", {}).get("sha256") \
+                != profiler.file_hash(LOAD_SUPPORT_PATH):
+            raise ValueError("separation load support changed")
+        manifest_path = Path(plan["manifest"]["path"])
+        if profiler.file_hash(manifest_path) != plan["manifest"]["sha256"]:
+            raise ValueError("separation manifest changed")
+        templates = tuple(row["id"] for row in sorted(
+            json.loads(manifest_path.read_text())["sessions"],
+            key=lambda row: row["id"],
+        ))
+        if len(templates) != 8:
+            raise ValueError("separation design requires eight traces")
+        rng = random.Random(8)
+        contexts = [rng.choice((14_042, 30_785, 31_547)) for _ in range(28)]
+        signature = None
+        for index, (condition_id, bandwidth, east, germany,
+                    target) in enumerate(SEPARATION_CELLS):
+            for repeat in range(SEPARATION_REPEATS):
+                rows = [row for row in scenarios if (
+                    row["condition_index"], row["repeat"]
+                ) == (index, repeat)]
+                signatures = {tuple(
+                    (item["session_id"], item["template_id"],
+                     item["initial_tokens"])
+                    for item in row["sessions"]
+                ) for row in rows}
+                signature = signature or next(iter(signatures), None)
+                if len(rows) != len(SEPARATION_POLICIES) \
+                        or {row["policy"] for row in rows} \
+                        != set(SEPARATION_POLICIES) \
+                        or signatures != {signature} \
+                        or any(
+                            row["scenario_id"] != _hash([
+                                design, index, repeat, row["policy"],
+                                row["sessions"], bandwidth, east, germany,
+                                target,
+                            ])[:16]
+                            or row["condition_id"] != condition_id
+                            or row["bandwidth"] != bandwidth
+                            or row["bandwidth_mbps"] != _bandwidths(
+                                plan["network_contract"], bandwidth)
+                            or tuple(row["background"]["east"]) != (east, 0)
+                            or tuple(row["background"]["germany"]) != (germany, 0)
+                            or row["deadline_s"] != SEPARATION_DEADLINE_S
+                            or row["planning_deadline_s"]
+                            != SEPARATION_PLANNING_DEADLINE_S
+                            or row["load_warmup_s"] != SEPARATION_LOAD_WARMUP_S
+                            or row["load_normalization"] != "destination_service"
+                            or row["requested_shed_fraction"] != target
+                            or row["objective"] != "max_shed"
+                            or row["migration_headroom"] != {}
+                            or row["context_seed"] != 8
+                            or row["source_load"] != .8
+                            or row["planner_seed"] != profiler.stable_seed(
+                                plan["seed"], index, repeat, row["policy"])
+                            or [item["initial_tokens"] for item in row["sessions"]]
+                            != contexts
+                            or [item["template_id"] for item in row["sessions"]]
+                            != [templates[i % len(templates)] for i in range(28)]
+                            for row in rows
+                        ):
+                    raise ValueError("separation policy block changed")
         return
     if design == "isolated":
         if len(plan["network_contract"]["paths"]) != 1 or any(
@@ -1221,11 +1384,27 @@ def destination_metrics(stack: ClusterStack, node_id: str,
     return summarize_metrics(samples, target_kv)
 
 
+def destination_background_work(dtype, rho: float) -> tuple[float, float]:
+    service_s = (
+        SINK_LOAD_PREFILL_TOKENS
+        / dtype.prefill.at(SINK_LOAD_PREFILL_TOKENS)
+        + SINK_LOAD_DECODE_TOKENS
+        / dtype.decode.at(SINK_LOAD_PREFILL_TOKENS)
+    )
+    rate = rho / service_s
+    return tuple(dtype.work(
+        rate * SINK_LOAD_PREFILL_TOKENS,
+        rate * SINK_LOAD_DECODE_TOKENS,
+        SINK_LOAD_PREFILL_TOKENS,
+    ))
+
+
 def joint_problem(scenario: dict, snapshots: dict[str, dict],
                   profile: ModelProfile,
                   demand: dict[str, tuple[float, float]] | None = None):
     base, _ = policy_campaign._problem(
-        profile, scenario["sessions"], 1, scenario["deadline_s"])
+        profile, scenario["sessions"], 1,
+        scenario.get("planning_deadline_s", scenario["deadline_s"]))
     if demand is not None:
         base = replace(base, sessions=tuple(replace(
             session, expected_f=demand[session.session_id][0],
@@ -1256,7 +1435,10 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
     pools = tuple(DestinationPool(
         f"pool/{node}", dtype.type_id,
         (DestinationReplica(
-            node, tuple(dtype.work(
+            node, destination_background_work(
+                dtype, float(scenario["background"][node][0]))
+            if scenario.get("load_normalization") == "destination_service"
+            else tuple(dtype.work(
                 profile.case().F * float(scenario["background"][node][0]),
                 0, 512)),
             round(snapshots[node]["kv_fraction"] * dtype.kv_capacity_tokens),
@@ -1288,7 +1470,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
                         ) -> list[dict]:
     problem, architecture, routes, requested_shed_w = joint_problem(
         scenario, snapshots, profile, demand)
-    partial = scenario.get("design") in {"frontier", "constraint"}
+    partial = scenario.get("design") in {"frontier", "constraint", "separation"}
     deadline_blind = scenario["policy"] == DEADLINE_BLIND_POLICY
     solver = joint_solver(scenario["policy"], scenario.get("objective"))
     planning_problem = replace(
@@ -1345,11 +1527,16 @@ def agentic_demand(records: dict[str, dict], sessions: list[dict],
 
 class SinkLoad:
     def __init__(self, cfg: testbed.Config, port: int, prefill_tps: float,
-                 rho: float, path: Path):
-        if prefill_tps <= 0 or not 0 < rho < 1:
+                 rho: float, path: Path, decode_tps: float | None = None):
+        if prefill_tps <= 0 or decode_tps is not None and decode_tps <= 0 \
+                or not 0 < rho < 1:
             raise ValueError("invalid sink load")
-        self.cfg, self.port, self.prefill_tps, self.rho, self.path = (
-            cfg, port, prefill_tps, rho, path)
+        self.cfg, self.port, self.rho, self.path, self.decode_tps = (
+            cfg, port, rho, path, decode_tps)
+        self.interval_s = (
+            SINK_LOAD_PREFILL_TOKENS / prefill_tps
+            + SINK_LOAD_DECODE_TOKENS / decode_tps
+        ) / rho if decode_tps is not None else 512 / (rho * prefill_tps)
         self.stop, self.error = threading.Event(), None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
@@ -1365,13 +1552,16 @@ class SinkLoad:
         result, _ = profiler.stream_chat(
             self.cfg, self.port, messages, 64,
             profiler.messages_hash(messages), 600, True, f"load-{index}")
-        if result.status_code != 200:
-            raise RuntimeError(f"sink load request failed: {result.status_code}")
-        return asdict(result)
+        row = asdict(result)
+        if result.status_code != 200 or self.decode_tps is not None and (
+            row["prompt_tokens"] != SINK_LOAD_PREFILL_TOKENS
+            or row["output_tokens"] != SINK_LOAD_DECODE_TOKENS
+        ):
+            raise RuntimeError("sink load request violated its service contract")
+        return row
 
     def _run(self) -> None:
         futures, index = [], 0
-        interval = 512 / (self.rho * self.prefill_tps)
         next_at = time.monotonic()
         try:
             with ThreadPoolExecutor(max_workers=8) as pool:
@@ -1381,7 +1571,7 @@ class SinkLoad:
                         break
                     futures.append(pool.submit(self._request, index))
                     index += 1
-                    next_at += interval
+                    next_at += self.interval_s
                 rows = [future.result() for future in futures]
             self.path.write_text("".join(
                 json.dumps(row, separators=(",", ":")) + "\n"
@@ -1414,7 +1604,7 @@ def scenario_records(manifest: dict, scenario: dict) -> dict[str, dict]:
 
 def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                          root: Path, prefill_tps: float) -> dict:
-    diagnostic = scenario["design"] in {"frontier", "constraint"}
+    diagnostic = scenario["design"] in {"frontier", "constraint", "separation"}
     root.mkdir(parents=True, exist_ok=False)
     (root / "scenario.json").write_text(
         json.dumps(scenario, indent=2, sort_keys=True) + "\n")
@@ -1426,14 +1616,22 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     messages = {row["session_id"]: profiler.calibration_messages(
         sessions[row["session_id"]], row["initial_tokens"])
         for row in scenario["sessions"]}
-    timeout = REQUEST_TIMEOUT_S
+    timeout, profile = REQUEST_TIMEOUT_S, ModelProfile.load(MODEL_PATH)
+    service_load = scenario.get("load_normalization") == "destination_service"
+    case = profile.case()
+    destination_rates = (
+        case.prefill.rate(SINK_LOAD_PREFILL_TOKENS, 1),
+        case.decode.rate(SINK_LOAD_PREFILL_TOKENS, 1),
+    )
     loads, snapshots = {}, {}
     for node in stack.cluster.destinations:
         compute, kv = scenario["background"].get(node.id, (0, 0))
         if compute:
             loads[node.id] = SinkLoad(
-                stack.cfg, stack.ports[node.id]["api"], prefill_tps, compute,
-                root / f"sink_load_{node.id}.jsonl")
+                stack.cfg, stack.ports[node.id]["api"],
+                destination_rates[0] if service_load else prefill_tps, compute,
+                root / f"sink_load_{node.id}.jsonl",
+                destination_rates[1] if service_load else None)
             loads[node.id].start()
     if scenario.get("source_load"):
         loads["source"] = SinkLoad(
@@ -1441,8 +1639,8 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             root / "source_load.jsonl")
         loads["source"].start()
     try:
-        if scenario["design"] in {"joint", "frontier", "constraint"}:
-            time.sleep(5)
+        if scenario["design"] in {"joint", "frontier", "constraint", "separation"}:
+            time.sleep(scenario.get("load_warmup_s", 5))
             nodes = stack.cluster.destinations
             def snapshot(node):
                 try:
@@ -1458,7 +1656,6 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                     (node.id for node in nodes),
                     pool.map(snapshot, nodes),
                 ))
-            profile = ModelProfile.load(MODEL_PATH)
             demand = agentic_demand(
                 sessions, scenario["sessions"], profile,
                 scenario.get("source_load", .4))
@@ -1510,6 +1707,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 results = list(pool.map(reconstruct, moves))
         else:
             results = []
+        end_ns = time.monotonic_ns()
     finally:
         for name, load in loads.items():
             try:
@@ -1518,7 +1716,6 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 if not diagnostic:
                     raise
                 load_warnings.append(f"{name}: {exc}")
-    end_ns = time.monotonic_ns()
     if not diagnostic and any(row["method"] == "kv_transfer"
            and row["request"]["cached_tokens"] <= 0 for row in results):
         raise RuntimeError("KV reconstruction reported no cached tokens")
@@ -2226,6 +2423,232 @@ def simulate_constraint(plan_path: Path, out: Path) -> dict:
             "out": str(out), "valid": True}
 
 
+def plot_separation(rows: list[dict], resources: list[dict], out: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    labels = {
+        "queue_haul": "Queue-Haul", "greedy": "Greedy",
+        "kv_only": "KV only", "replay_only": "Replay only",
+        "isolated_fastest": "Isolated fastest",
+        "queue_haul_power_blind": "Power blind",
+        DEADLINE_BLIND_POLICY: "Deadline blind",
+    }
+    colors = dict(zip(SEPARATION_POLICIES, TAB10_COLORS))
+    cells = [row[0] for row in SEPARATION_CELLS]
+    fig, axes = plt.subplots(2, len(cells), figsize=(15, 8))
+    for column, cell in enumerate(cells):
+        selected = {(row["repeat"], row["policy"]): row for row in rows
+                    if row["condition_id"] == cell}
+        values = [statistics.median(selected[repeat, policy]["attained_shed_w"]
+                                    for repeat in range(SEPARATION_REPEATS))
+                  for policy in SEPARATION_POLICIES]
+        target = next(iter(selected.values()))["requested_shed_w"]
+        axes[0, column].bar(
+            [labels[policy] for policy in SEPARATION_POLICIES], values,
+            color=[colors[policy] for policy in SEPARATION_POLICIES],
+        )
+        axes[0, column].axhline(target, color="black", linestyle="--")
+        axes[0, column].set_title(cell)
+        axes[0, column].tick_params(axis="x", rotation=35, labelsize=7)
+        if column == 0:
+            axes[0, column].set_ylabel("Shed by 45 s (W)")
+        bottom = [0.0, 0.0]
+        for action, color in zip(CONSTRAINT_ACTIONS, TAB10_COLORS):
+            values = [statistics.median(
+                selected[repeat, policy][action]
+                / selected[repeat, policy]["selected_sessions"]
+                for repeat in range(SEPARATION_REPEATS)
+            ) for policy in SEPARATION_POLICIES[:2]]
+            axes[1, column].bar(
+                [labels[policy] for policy in SEPARATION_POLICIES[:2]], values,
+                bottom=bottom, color=color,
+                label=action.replace("_kv_transfer", " KV")
+                .replace("_replay", " replay"),
+            )
+            bottom = [a + b for a, b in zip(bottom, values)]
+        axes[1, column].set_ylim(0, 1)
+        if column == 0:
+            axes[1, column].set_ylabel("Completed-action fraction")
+    handles, legend = axes[1, 0].get_legend_handles_labels()
+    fig.legend(handles, legend, frameon=False, ncol=4, loc="upper center")
+    fig.tight_layout(rect=(0, 0, 1, .95))
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"separation_campaign.{suffix}", dpi=200)
+    plt.close(fig)
+
+    if not resources:
+        return
+    names = sorted({row["resource"] for row in resources})
+    values = np.array([[next(
+        row["utilization"] for row in resources
+        if row["condition_id"] == cell and row["resource"] == name
+    ) for cell in cells] for name in names])
+    fig, axis = plt.subplots(figsize=(7, max(4, len(names) * .35)))
+    image = axis.imshow(values, vmin=0, vmax=1, cmap="viridis", aspect="auto")
+    axis.set_xticks(range(len(cells)), cells, rotation=15, ha="right")
+    axis.set_yticks(range(len(names)), names, fontsize=7)
+    for row, column in np.ndindex(values.shape):
+        if values[row, column] >= .8:
+            axis.text(column, row, f"{values[row, column]:.2f}",
+                      ha="center", va="center", color="white", fontsize=7)
+    fig.colorbar(image, ax=axis, label="Queue-Haul utilization")
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"separation_resources.{suffix}", dpi=200)
+    plt.close(fig)
+
+
+def _validate_separation_simulation(rows: list[dict], resources: list[dict],
+                                    duals: list[dict]) -> None:
+    for row in rows:
+        winner = row["policy"] in SEPARATION_POLICIES[:2]
+        ratio = row["attained_shed_w"] / row["requested_shed_w"]
+        if winner and (ratio < 1 + SEPARATION_MARGIN
+                       or not row["deadline_met"]):
+            raise RuntimeError("a joint planner lacks the required robust margin")
+        if not winner and ratio > 1 - SEPARATION_MARGIN:
+            raise RuntimeError("a baseline is too close to the separating target")
+        if winner and (row["east_replay"] + row["germany_replay"] < 2
+                       or row["east_kv_transfer"]
+                       + row["germany_kv_transfer"] < 2
+                       or row["east_replay"] + row["east_kv_transfer"] == 0
+                       or row["germany_replay"]
+                       + row["germany_kv_transfer"] == 0):
+            raise RuntimeError("a joint planner does not require both actions")
+        if row["policy"] == DEADLINE_BLIND_POLICY and (
+                not row["planner_feasible"] or row["deadline_met"]):
+            raise RuntimeError("deadline-blind planning is not a real deadline trap")
+    utilization = {(row["condition_id"], row["resource"]): row["utilization"]
+                   for row in resources}
+    prices = {(row["condition_id"], row["resource"]):
+              row["shadow_w_per_full_capacity"] for row in duals}
+    for cell, expected in SEPARATION_BINDINGS.items():
+        if any(utilization.get((cell, resource), 0) < minimum
+               for resource, minimum in expected.items()) or any(
+                   prices.get((cell, resource), 0) <= 0
+                   for resource in expected
+                   if resource != "service:pool/east:0"):
+            raise RuntimeError("a separating cell does not severely bind resources")
+
+
+def simulate_separation(plan_path: Path, out: Path) -> dict:
+    plan = json.loads(plan_path.read_text())
+    validate_plan(plan)
+    if plan["design"] != "separation":
+        raise ValueError("separation simulation requires a separation plan")
+    if profiler.file_hash(MODEL_PATH) != plan["model_profile"]["sha256"]:
+        raise RuntimeError("separation model profile changed")
+    manifest_path = Path(plan["manifest"]["path"])
+    if profiler.file_hash(manifest_path) != plan["manifest"]["sha256"]:
+        raise RuntimeError("separation manifest changed")
+    manifest, profile = (json.loads(manifest_path.read_text()),
+                         ModelProfile.load(MODEL_PATH))
+    rows, resources, duals, seen = [], [], [], set()
+    for scenario in plan["scenarios"]:
+        snapshots = {node: {"kv_fraction": values[1]}
+                     for node, values in scenario["background"].items()}
+        demand = agentic_demand(
+            scenario_records(manifest, scenario), scenario["sessions"], profile,
+            scenario["source_load"],
+        )
+        problem, architecture, routes, requested = joint_problem(
+            scenario, snapshots, profile, demand)
+        planning = replace(
+            problem, deadline_s=DEADLINE_BLIND_HORIZON_S,
+            end_s=DEADLINE_BLIND_HORIZON_S,
+        ) if scenario["policy"] == DEADLINE_BLIND_POLICY else problem
+        result = solve(
+            planning, profile, routes,
+            joint_solver(scenario["policy"], scenario.get("objective")),
+            seed=scenario["planner_seed"], destination=architecture,
+        )
+        actual = replace(
+            problem, deadline_s=scenario["deadline_s"],
+            end_s=scenario["deadline_s"],
+        )
+        execution = predict(
+            _expected_scenario(actual, result.moves), profile, result.moves,
+            destination=architecture,
+        )
+        completed = {row.session_id for row in execution.sessions
+                     if row.committed_s is not None
+                     and row.committed_s <= scenario["deadline_s"]}
+        moves = [move for move in result.moves if move.session_id in completed]
+        attained = result.initial_source_power_w \
+            - execution.modeled_source_power_at_deadline_w
+        rows.append({
+            "condition_index": scenario["condition_index"],
+            "condition_id": scenario["condition_id"],
+            "repeat": scenario["repeat"], "policy": scenario["policy"],
+            "solver": result.solver, "deadline_s": scenario["deadline_s"],
+            "planning_deadline_s": scenario["planning_deadline_s"],
+            "requested_shed_w": requested, "attained_shed_w": attained,
+            "attainment_fraction": attained / requested,
+            "target_met": attained >= requested - 1e-8,
+            "deadline_met": execution.deadline_met,
+            "planner_feasible": result.feasible,
+            "planned_sessions": len(result.moves),
+            "selected_sessions": len(moves),
+            "predicted_makespan_s": execution.migration_makespan_s,
+            **_constraint_action_counts(moves),
+        })
+        key = scenario["condition_id"]
+        if scenario["policy"] == "queue_haul" and key not in seen:
+            seen.add(key)
+            resources.extend({
+                "condition_id": key, "resource": row.name,
+                "unit": row.unit, "used": row.used,
+                "capacity": row.capacity, "utilization": row.utilization,
+            } for row in result.resource_uses)
+            table = candidate_table(
+                problem, profile, architecture, "normal",
+                ExpectedPower(replace(
+                    problem, final_state="awake", assumed_shutdown_s=None),
+                    profile),
+            )
+            ceiling, prices = phase_one_capacity_duals(table)
+            duals.extend({
+                "condition_id": key,
+                "phase_one_marginal_ceiling_w": ceiling,
+                "resource": name, "capacity": capacity, "unit": unit,
+                "shadow_w_per_full_capacity": float(price),
+                "shadow_w_per_unit": float(price / capacity),
+            } for name, capacity, unit, price in zip(
+                table.resource_names, table.resource_capacities,
+                table.resource_units, prices,
+            ))
+    order = {policy: index for index, policy in enumerate(SEPARATION_POLICIES)}
+    rows.sort(key=lambda row: (
+        row["condition_index"], row["repeat"], order[row["policy"]]))
+    _validate_separation_simulation(rows, resources, duals)
+    out.mkdir(parents=True, exist_ok=False)
+    profiler.write_csv(out / "separation_predictions.csv", rows)
+    profiler.write_csv(out / "separation_resources.csv", resources)
+    profiler.write_csv(out / "separation_duals.csv", duals)
+    plot_separation(rows, resources, out)
+    artifacts = {path.name: profiler.file_hash(path)
+                 for path in sorted(out.iterdir()) if path.is_file()}
+    write_checkpoint(out / "metadata.json", {
+        "schema": "queue-haul-separation-simulation-v1",
+        "plan": {"path": str(plan_path),
+                 "sha256": profiler.file_hash(plan_path)},
+        "load_support": {"path": str(LOAD_SUPPORT_PATH.relative_to(ROOT)),
+                         "sha256": profiler.file_hash(LOAD_SUPPORT_PATH)},
+        "margin_fraction": SEPARATION_MARGIN,
+        "minimum_binding_utilization": SEPARATION_BINDINGS,
+        "deadline_s": SEPARATION_DEADLINE_S,
+        "planning_deadline_s": SEPARATION_PLANNING_DEADLINE_S,
+        "objective": "exact maximum shed for Queue-Haul; target-aware greedy",
+        "policy_colors": dict(zip(SEPARATION_POLICIES, TAB10_COLORS)),
+        "artifacts": artifacts,
+    })
+    return {"scenarios": len(rows), "conditions": len(seen),
+            "out": str(out), "valid": True}
+
+
 def _valid_constraint_evidence(scenario: dict, result: dict) -> bool:
     background = result.get("background")
     return all(key in result for key in (
@@ -2240,9 +2663,34 @@ def _valid_constraint_evidence(scenario: dict, result: dict) -> bool:
         and not any(row.get("warning") for row in background.values())
 
 
+def _valid_separation_evidence(scenario: dict, result: dict) -> bool:
+    background = result.get("background")
+    if not all(key in result for key in (
+        "deadline_met", "target_met", "requested_shed_w", "realized_shed_w",
+        "request_failures", "kv_evidence_warnings", "load_warnings",
+        "background",
+    )) or result["request_failures"] or result["kv_evidence_warnings"] \
+            or result["load_warnings"] or set(background) != {"east", "germany"} \
+            or any(row.get("warning") for row in background.values()):
+        return False
+    ratio = result["realized_shed_w"] / result["requested_shed_w"]
+    winner = scenario["policy"] in SEPARATION_POLICIES[:2]
+    moves = result.get("requests", ())
+    methods = {row.get("method") for row in moves if "request" in row}
+    destinations = {row.get("destination_instance") for row in moves
+                    if "request" in row}
+    return (
+        ratio >= 1 + SEPARATION_MARGIN and result["deadline_met"] is True
+        and methods == {"replay", "kv_transfer"}
+        and destinations == {"east", "germany"}
+        if winner else ratio <= 1 - SEPARATION_MARGIN
+    )
+
+
 def reduce_run(plan: dict, run_root: Path) -> dict:
     rows, evidence, completed, failed, missing, invalid_evidence = [], [], 0, 0, 0, 0
     constraint = plan.get("design") == "constraint"
+    separation = plan.get("design") == "separation"
     for scenario in plan["scenarios"]:
         latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None:
@@ -2256,6 +2704,9 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
                 evidence.append((scenario, result))
         if constraint and result.get("status") == "complete" \
                 and not _valid_constraint_evidence(scenario, result):
+            invalid_evidence += 1
+        if separation and result.get("status") == "complete" \
+                and not _valid_separation_evidence(scenario, result):
             invalid_evidence += 1
         connections = result.get("connections", [])
         rtts = [float(row["target_rtt_us"]) / 1000 for row in connections
@@ -2303,28 +2754,43 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
     frontier = plan.get("design") == "frontier"
     if frontier and evidence:
         plot_frontier(plan, evidence, run_root)
-    if constraint and evidence:
+    if constraint and len(evidence) == len(plan["scenarios"]):
         plotted = []
         for scenario, result in evidence:
             moves = result.get("requests", [])
             plotted.append({
                 "condition_id": scenario["condition_id"],
                 "policy": scenario["policy"],
+                "deadline_s": scenario["deadline_s"],
                 "requested_shed_w": result["requested_shed_w"],
                 "attained_shed_w": result["realized_shed_w"],
                 "selected_sessions": len(moves),
                 **_constraint_action_counts(moves),
             })
         plot_constraint(plotted, [], run_root)
+    if separation and len(evidence) == len(plan["scenarios"]):
+        plotted = []
+        for scenario, result in evidence:
+            moves = [row for row in result.get("requests", ()) if "request" in row]
+            plotted.append({
+                "condition_id": scenario["condition_id"],
+                "repeat": scenario["repeat"], "policy": scenario["policy"],
+                "requested_shed_w": result["requested_shed_w"],
+                "attained_shed_w": result["realized_shed_w"],
+                "selected_sessions": len(moves),
+                **_constraint_action_counts(moves),
+            })
+        plot_separation(plotted, [], run_root)
     summary = {
         "schema": "queue-haul-network-summary-v1",
         "expected": len(plan["scenarios"]), "completed": completed,
         "failed": failed, "missing": missing,
-        "valid": not missing and not (constraint and invalid_evidence) and (
+        "valid": not missing and not (
+            (constraint or separation) and invalid_evidence) and (
             completed == len(plan["scenarios"]) if not frontier else
             failed / len(plan["scenarios"]) <= FRONTIER_FAILURE_GATE),
     }
-    if constraint:
+    if constraint or separation:
         summary["invalid_evidence"] = invalid_evidence
     (run_root / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n")
@@ -2423,7 +2889,7 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                 stop_cluster(stack)
                 stack = None
                 checkpoint_progress(plan, run_root)
-                if plan["design"] not in {"frontier", "constraint"}:
+                if plan["design"] not in {"frontier", "constraint", "separation"}:
                     raise
             checkpoint_progress(plan, run_root)
     finally:
@@ -2472,7 +2938,8 @@ def parse_args(argv=None):
     command.add_argument("--seed", type=int, default=1)
     command.add_argument("--sessions", type=int, default=8)
     command.add_argument("--design",
-                         choices=("joint", "isolated", "frontier", "constraint"),
+                         choices=("joint", "isolated", "frontier", "constraint",
+                                  "separation"),
                          default="joint")
     command = sub.add_parser("check")
     command.add_argument("--cluster", type=Path, required=True)
@@ -2514,6 +2981,9 @@ def parse_args(argv=None):
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
     command = sub.add_parser("simulate-constraint")
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
+    command = sub.add_parser("simulate-separation")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("refine")
@@ -2577,6 +3047,9 @@ def main(argv=None) -> None:
                          indent=2, sort_keys=True))
     elif args.command == "simulate-constraint":
         print(json.dumps(simulate_constraint(args.plan, args.out),
+                         indent=2, sort_keys=True))
+    elif args.command == "simulate-separation":
+        print(json.dumps(simulate_separation(args.plan, args.out),
                          indent=2, sort_keys=True))
     elif args.command == "refine":
         refined = write_frontier_refinement(

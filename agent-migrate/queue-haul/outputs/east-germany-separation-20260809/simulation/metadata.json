@@ -1,0 +1,54 @@
+{
+  "artifacts": {
+    "separation_campaign.pdf": "0842f68a023eadd6a41290fed986460b0296610581d2e2edbd4fc0bf174e3888",
+    "separation_campaign.png": "3e273879689cada6d8893b6fcc4b83feddf71b41e3630714c6f0ca50e01eba16",
+    "separation_duals.csv": "eb4ce71b29370f5171666e11ab7735cdc98a15448bd7f2d7348ab071fbdc4dc9",
+    "separation_predictions.csv": "33fd3421a307abd617e8930d09a01b63bf7d6a19701ad5d633178f7c93f22a3d",
+    "separation_resources.csv": "5896fd78fe200f3e527a96817860df80456f6154c30bc7662cb302a234f2037b",
+    "separation_resources.pdf": "f928698d60d70f31c226c00342c681e2fda99684b27e23a5215d7c36179f79d6",
+    "separation_resources.png": "9631497d18fc65464b91cd5663233de013e351a3aa7a9ff8b96b2df296957bb7"
+  },
+  "deadline_s": 45,
+  "load_support": {
+    "path": "outputs/capacity-load-publication-20260807/live_plan.json",
+    "sha256": "fee09c5b5cea411410614ed91957938ec8396d07c29b55ff5c473a3728900ee5"
+  },
+  "margin_fraction": 0.1,
+  "minimum_binding_utilization": {
+    "east-service-slow-path": {
+      "migration:pool/east:kv_transfer": 0.94,
+      "migration:pool/east:replay": 0.98,
+      "migration:pool/germany:kv_transfer": 0.98,
+      "migration:pool/germany:replay": 0.92
+    },
+    "germany-service": {
+      "migration:pool/east:kv_transfer": 0.94,
+      "migration:pool/east:replay": 0.89,
+      "service:pool/germany:0": 0.98
+    },
+    "joint-shaped": {
+      "migration:pool/east:kv_transfer": 0.97,
+      "migration:pool/east:replay": 0.89,
+      "migration:pool/germany:kv_transfer": 0.96,
+      "migration:pool/germany:replay": 0.92,
+      "service:pool/east:0": 0.92,
+      "service:pool/germany:0": 0.89
+    }
+  },
+  "objective": "exact maximum shed for Queue-Haul; target-aware greedy",
+  "plan": {
+    "path": "queue-haul/outputs/east-germany-separation-20260809/plan.json",
+    "sha256": "f75db7b987ce79bbaeebfdd21b665b8742ad9529698929ac54d4755d702591ca"
+  },
+  "planning_deadline_s": 30,
+  "policy_colors": {
+    "greedy": "#ff7f0e",
+    "isolated_fastest": "#9467bd",
+    "kv_only": "#2ca02c",
+    "queue_haul": "#1f77b4",
+    "queue_haul_deadline_blind": "#e377c2",
+    "queue_haul_power_blind": "#8c564b",
+    "replay_only": "#d62728"
+  },
+  "schema": "queue-haul-separation-simulation-v1"
+}

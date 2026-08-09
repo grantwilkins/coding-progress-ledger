@@ -5,6 +5,8 @@ source-NIC levels, rejects unsafe clock or allocation drift, and builds the
 agreed seven-cell matched policy design without a Cartesian explosion. The
 constraint design freezes four measured-path operating points, exact recorded
 context packs, six matched policies, and one method-specific replay quota.
+The separation design uses measured load/bandwidth support to require both
+actions and separates two joint planners from five baselines by at least 10%.
 
 Plausible wrong implementations:
 - Derive controlled rates from isolated-path rather than simultaneous goodput.
@@ -15,6 +17,11 @@ Plausible wrong implementations:
 - Round the recorded constraint contexts or fail to reuse the quota pack.
 - Apply the Germany replay quota to East, KV transfer, or the WAN route.
 - Accept completed constraint evidence with a missed target or load warning.
+- Normalize destination load with source power throughput instead of destination
+  prefill/decode service, or serialize migrations that should run in parallel.
+- Admit a separation cell whose winner or loser is within 10% of the target.
+- Let a restricted baseline use both actions or let deadline-blind planning use
+  the physical deadline.
 """
 
 import csv
@@ -492,6 +499,114 @@ def test_constraint_simulation_separates_joint_policies_and_exports_duals(tmp_pa
                  if row["resource"].startswith("migration:")]
     assert len(duals) == 16
     assert all(float(row["shadow_w_per_full_capacity"]) > 0 for row in duals)
+
+
+def test_separation_plan_freezes_three_robust_matched_regimes(tmp_path):
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 8), constraint_contract(), seed=7,
+        design="separation")
+
+    assert len(plan["scenarios"]) == 63
+    assert plan["policies"] == list(n.SEPARATION_POLICIES)
+    expected = {
+        "germany-service": ("natural", .25, .95, .60),
+        "east-service-slow-path": ("natural", .90, .25, .77),
+        "joint-shaped": ("controlled_40", .50, .85, .54),
+    }
+    signatures = set()
+    for condition, (bandwidth, east, germany, target) in expected.items():
+        for repeat in range(3):
+            rows = [row for row in plan["scenarios"]
+                    if (row["condition_id"], row["repeat"])
+                    == (condition, repeat)]
+            signatures |= {tuple(
+                (item["template_id"], item["initial_tokens"])
+                for item in row["sessions"]
+            ) for row in rows}
+            assert len(rows) == 7
+            assert {row["policy"] for row in rows} == set(n.SEPARATION_POLICIES)
+            assert all(
+                row["bandwidth"] == bandwidth
+                and tuple(row["background"]["east"]) == (east, 0)
+                and tuple(row["background"]["germany"]) == (germany, 0)
+                and row["deadline_s"] == 45
+                and row["planning_deadline_s"] == 30
+                and row["load_warmup_s"] == 30
+                and row["load_normalization"] == "destination_service"
+                and row["requested_shed_fraction"] == target
+                and row["planner_seed"] == n.profiler.stable_seed(
+                    plan["seed"], row["condition_index"], repeat,
+                    row["policy"])
+                and len(row["sessions"]) == 28
+                and sum(item["initial_tokens"] for item in row["sessions"])
+                == 648_131 for row in rows)
+    assert len(signatures) == 1
+    assert n.parse_args([
+        "prepare", "--cluster", "c", "--calibration", "k",
+        "--manifest", "m", "--out", "o", "--design", "separation",
+    ]).design == "separation"
+
+
+def test_destination_load_normalization_uses_both_service_rates(tmp_path):
+    profile = n.ModelProfile.load(n.MODEL_PATH)
+    dtype = n.dedicated_sink_architecture(
+        profile, "sink", ("link",)).types[0]
+
+    work = n.destination_background_work(dtype, .95)
+    load = n.SinkLoad(
+        SimpleNamespace(), 1, 100, .5, tmp_path / "load.jsonl", 50)
+
+    assert sum(work) == pytest.approx(.95)
+    assert work[0] > work[1] > 0
+    assert load.interval_s == pytest.approx(
+        (n.SINK_LOAD_PREFILL_TOKENS / 100
+         + n.SINK_LOAD_DECODE_TOKENS / 50) / .5)
+
+
+def test_separation_simulation_has_wide_joint_action_margins(tmp_path):
+    plan = n.make_plan(
+        n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
+        design="separation")
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    summary = n.simulate_separation(plan_path, tmp_path / "simulation")
+
+    assert summary == {"scenarios": 63, "conditions": 3,
+                       "out": str(tmp_path / "simulation"), "valid": True}
+    out = tmp_path / "simulation"
+    with (out / "separation_predictions.csv").open() as handle:
+        rows = list(csv.DictReader(handle))
+    for row in rows:
+        ratio = float(row["attainment_fraction"])
+        if row["policy"] in n.SEPARATION_POLICIES[:2]:
+            assert ratio >= 1.1
+            assert row["deadline_met"] == "True"
+            assert int(row["east_replay"]) + int(row["germany_replay"]) >= 2
+            assert int(row["east_kv_transfer"]) \
+                + int(row["germany_kv_transfer"]) >= 2
+            assert int(row["east_replay"]) + int(row["east_kv_transfer"]) > 0
+            assert int(row["germany_replay"]) \
+                + int(row["germany_kv_transfer"]) > 0
+        else:
+            assert ratio <= .9
+    deadline_blind = [row for row in rows
+                      if row["policy"] == n.DEADLINE_BLIND_POLICY]
+    assert all(row["planner_feasible"] == "True"
+               and row["deadline_met"] == "False" for row in deadline_blind)
+    with (out / "separation_resources.csv").open() as handle:
+        resources = list(csv.DictReader(handle))
+    expected_conditions = {row[0] for row in n.SEPARATION_CELLS}
+    utilization = {(row["condition_id"], row["resource"]):
+                   float(row["utilization"]) for row in resources}
+    assert all(utilization[condition, resource] >= minimum
+               for condition, bindings in n.SEPARATION_BINDINGS.items()
+               for resource, minimum in bindings.items())
+    assert expected_conditions == {
+        "germany-service", "east-service-slow-path", "joint-shaped"}
+    assert all((out / f"separation_{name}.{suffix}").is_file()
+               for name in ("campaign", "resources")
+               for suffix in ("png", "pdf"))
 
 
 def test_frontier_refinement_adds_boundary_midpoint_and_five_repeats(tmp_path):

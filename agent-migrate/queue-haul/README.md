@@ -368,7 +368,10 @@ policy colors and the longest observed episode runtime as the plotting horizon.
 
 The constrained East/Germany diagnostic is one frozen 24-episode run, not a
 sweep. It uses the measured simultaneous natural paths (2.280 Gb/s East and
-8.733 Gb/s Germany), 80% source load, 50% East load, and 95% Germany load. Its
+8.733 Gb/s Germany), 80% source load, and the original generator's 50% East
+and 95% Germany source-rate-normalized load labels. Those labels are not
+destination service utilization, so this campaign remains a migration-window
+capacity diagnostic rather than evidence that destination service binds. Its
 19-second cell has 22 exact recorded-support contexts selected with disclosed
 seed 15 (513,650 tokens); its 30-second cell has 28 contexts from seed 8
 (648,131 tokens); and its 60-second cell has eight copies of each trace at
@@ -415,6 +418,55 @@ request, KV-evidence, load-drift, or queueing warning.
 Reduction writes matched Tab10 attainment and action-composition figures; the
 simulator additionally writes the Phase-I dual table and figure. There is no
 adaptive refinement or CDF for this single-block diagnostic.
+
+The separation campaign is the service-binding follow-up. It pins the same
+28-session recorded-support pack (648,131 tokens, seed 8) in every matched
+cell, uses measured destination prefill and decode rates to generate exact
+604-prompt/64-output-token background requests, warms that traffic for 30
+seconds, and then launches all selected migrations concurrently. Each policy
+plans inside 30 seconds and is measured against a 45-second hardware deadline.
+
+| cell | paths | East/Germany service load | target | Queue-Haul | greedy | strongest losing baseline |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| Germany service | natural | 25% / 95% | 37.11 W | 47.72 W | 41.77 W | 32.51 W |
+| East slow path | natural | 90% / 25% | 47.63 W | 55.92 W | 53.72 W | 41.88 W |
+| joint shaped | 0.9 / 3.4 Gb/s | 50% / 85% | 33.40 W | 51.06 W | 37.22 W | 29.72 W |
+
+The 63 episodes are three cells by three repeats by seven policies: exact
+maximum-shed Queue-Haul, target-aware greedy, KV-only, replay-only,
+per-session-fastest, power-blind, and deadline-blind Queue-Haul. The simulator
+hard-fails unless Queue-Haul and greedy both use at least two KV and two replay
+actions, span both destinations, and attain at least 110% of target; each of
+the five ablations must remain at or below 90%. Deadline-blind must claim feasibility at
+600 seconds and then fail the 45-second evaluation. At least three Queue-Haul
+resources per cell must reach 89--98% utilization, including Germany service
+at 98%, all four action windows in the East cell at 92--98%, and both services
+plus all four action windows in the joint cell at 89--97%. Their Phase-I duals
+must also be positive, except for degenerate East-service pricing. Thus the
+certified separation is at least 20 percentage points, with 50% extra hardware
+time beyond the planning window; the hardware reducer applies the same attainment gates and also
+requires clean requests, cache evidence, destination load, and queue telemetry.
+
+```bash
+uv run python queue-haul/network_campaign.py prepare --design separation \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out /datadrive/queue-haul-network/control/separation.json
+uv run python queue-haul/network_campaign.py simulate-separation \
+  --plan /datadrive/queue-haul-network/control/separation.json \
+  --out /datadrive/queue-haul-network/separation-simulation
+uv run python queue-haul/network_campaign.py run \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --current-calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+  --plan /datadrive/queue-haul-network/control/separation.json \
+  --run-root /datadrive/queue-haul-network/separation-001
+```
+
+The frozen local certificate is in
+`outputs/east-germany-separation-20260809/`. Simulation proves the selected
+model points have the intended separation; the three-repeat hardware run is
+the test of that prediction.
 
 In the separate standard handoff experiment, each policy uses the same eight
 pinned agentic sessions. An independent 80%-load stream serves on Sweden while
