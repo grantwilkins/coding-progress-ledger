@@ -2056,7 +2056,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
     return table, selected, assignment, repairs, repair_s
 
 
-def plan_destination(scenario, profile, solver, case_id, seed, architecture):
+def plan_destination(scenario, profile, solver, case_id, seed, architecture,
+                     admission_mode=None):
     if solver not in {"greedy", "greedy_lagrangian", "max_shed",
                       "isolated_fastest", "random", "replay_only", "kv_only",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
@@ -2066,6 +2067,8 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")
+    if admission_mode not in {None, "normal", "emergency"}:
+        raise ValueError("invalid destination admission mode")
     selection_scenario = replace(
         scenario, final_state="awake", assumed_shutdown_s=None,
     )
@@ -2076,12 +2079,12 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
         _event_bounds(architecture.type_by_id[pool.type_id], pool, "normal"),
         _event_bounds(architecture.type_by_id[pool.type_id], pool, "emergency"),
     ) for pool in architecture.pools)
-    for mode in ("normal", "emergency"):
+    for mode in ((admission_mode,) if admission_mode else ("normal", "emergency")):
         result = _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed)
         moved = [result[0].sessions[result[0].candidates[i].session].session_id for i in result[1]]
         planned = source_power(selection_scenario, profile, moved, case_id)
         chosen = mode, result, planned
-        if planned <= scenario.power_limit_w + 1e-8:
+        if planned <= scenario.power_limit_w + 1e-8 or admission_mode:
             break
         if mode == "normal" and equal_modes:
             chosen = "emergency", result, planned

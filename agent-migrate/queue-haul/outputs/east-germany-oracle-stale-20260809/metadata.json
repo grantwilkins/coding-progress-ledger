@@ -1,0 +1,90 @@
+{
+  "artifacts": {
+    "attainment_curves.csv": "63418113cf7da327d1e4d4dee542f3338c8eafc5f7114101b8b940a4175e12ea",
+    "oracle_stale_resources.pdf": "d18b8606ebd6ae73a603ae44881385c8d47ac46e6d2eadf85584425d58602401",
+    "oracle_stale_resources.png": "4b5b41fd48144f0622a0a4513e7e23fcaeecb5f5f0876e776a290ab184f3b321",
+    "oracle_stale_summary.pdf": "7377d2c639810bd2967dba9eb2b522a6d2b73738bd2a81ceabe64c6a0ff05afe",
+    "oracle_stale_summary.png": "23c58c94852a6fd2ab4e0382b74b65757d740efc30f03d444cc51b525ff7ffcb",
+    "plans.json": "04f2d1b21baa95eee5408a98a296ac9d9abb6a89b6d7dafae818070c0c2638e9",
+    "restricted_oracles.csv": "bedcb85ec8ae91ab89cdd224640662a6723e277851985ff9df12ff6603f843bf",
+    "toggle_duals.csv": "d99b1137ce72a2f58342a320dce12f278073340506f29070fee76c2053914479",
+    "toggle_predictions.csv": "7f84f6f4b1d02e983f72dff7b3771183b7c9c209152d5f78bded7d9c33c7d085",
+    "toggle_resources.csv": "c8a22796dea70b9a9bf02ccbfdbf6ba4d3c5e4eae296b0bdfff61781a0edb837"
+  },
+  "constructed_constraint": "East KV occupancy is a controlled 90% reserve against the profiled A100 KV capacity; controlled route caps derive from measured natural paths, while service-load support, workload pack, and destination throughput are measured inputs",
+  "deadline_s": 45,
+  "full_horizon_s": 90,
+  "load_support": {
+    "path": "outputs/capacity-load-publication-20260807/live_plan.json",
+    "sha256": "fee09c5b5cea411410614ed91957938ec8396d07c29b55ff5c473a3728900ee5"
+  },
+  "manifest_sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435",
+  "model_profile_sha256": "b837fac06c63b002be84579e1e1be2159e8efdc65c45817ebf92737ae9cd5d58",
+  "oracle_semantics": "exact binary max-shed solve under forced normal admission with only the named methods or pools removed; sessions, source power, routes, and deadline are matched",
+  "plan": {
+    "path": "queue-haul/outputs/east-germany-separation-20260809/plan.json",
+    "sha256": "f75db7b987ce79bbaeebfdd21b665b8742ad9529698929ac54d4755d702591ca"
+  },
+  "planning_deadline_s": 30,
+  "policy_colors": {
+    "adaptive": "#1f77b4",
+    "best_restricted": "#ff7f0e",
+    "robust": "#2ca02c",
+    "stale_optimistic": "#d62728"
+  },
+  "requested_shed_fraction": 0.65,
+  "schema": "queue-haul-oracle-stale-simulation-v1",
+  "uncertainty_set": {
+    "robust_plan": "exact max-shed plan at the componentwise worst corner; service/KV capacity only increases and bandwidth only rises in every other rectangular corner",
+    "states": [
+      {
+        "bandwidth": "controlled_40",
+        "east_kv_fraction": 0.9,
+        "germany_service_load": 0.75,
+        "state": "all-bind"
+      },
+      {
+        "bandwidth": "controlled_40",
+        "east_kv_fraction": 0,
+        "germany_service_load": 0.75,
+        "state": "free-kv"
+      },
+      {
+        "bandwidth": "controlled_40",
+        "east_kv_fraction": 0.9,
+        "germany_service_load": 0.25,
+        "state": "free-service"
+      },
+      {
+        "bandwidth": "natural",
+        "east_kv_fraction": 0.9,
+        "germany_service_load": 0.75,
+        "state": "free-bandwidth"
+      },
+      {
+        "bandwidth": "natural",
+        "east_kv_fraction": 0,
+        "germany_service_load": 0.75,
+        "state": "free-kv-bandwidth"
+      },
+      {
+        "bandwidth": "natural",
+        "east_kv_fraction": 0.9,
+        "germany_service_load": 0.25,
+        "state": "free-service-bandwidth"
+      },
+      {
+        "bandwidth": "controlled_40",
+        "east_kv_fraction": 0,
+        "germany_service_load": 0.25,
+        "state": "free-kv-service"
+      },
+      {
+        "bandwidth": "natural",
+        "east_kv_fraction": 0,
+        "germany_service_load": 0.25,
+        "state": "all-release"
+      }
+    ]
+  }
+}

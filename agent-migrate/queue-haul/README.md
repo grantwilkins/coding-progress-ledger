@@ -429,6 +429,9 @@ seconds, and then launches all selected migrations concurrently. Each policy
 plans inside 30 seconds and is measured against a 45-second hardware deadline.
 Background prompts stay fixed while unique cache salts prevent reuse, and
 forced-length decoding makes every service-normalized request exactly 604/64.
+Attainment credits only reconstructions ending by the common migration
+start plus 45 seconds; reduction recomputes this value from raw request
+timestamps, including for results written by an earlier runner revision.
 
 | cell | paths | East/Germany service load | target | Queue-Haul | greedy | strongest losing baseline |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
@@ -471,6 +474,37 @@ The frozen local certificate is in
 `outputs/east-germany-separation-20260809/`. Simulation proves the selected
 model points have the intended separation; the three-repeat hardware run is
 the test of that prediction.
+
+`simulate-oracle-stale` is the no-new-campaign constraint and stale-information
+certificate. It reuses that exact 28-session recorded pack, measured East and
+Germany paths, measured destination service profile, and the measured 75%
+service-load support point. The constructed all-bind corner reserves 90% of
+East's profiled A100 KV capacity, applies 75% Germany service load, and uses
+40%-controlled caps derived from the measured paths (0.9/3.4 Gbit/s). The
+request is 40.21 W, or 65% of removable pack power. Exact restricted max-shed
+oracles all use forced normal admission and change only the allowed action or
+destination: Queue-Haul reaches 49.13 W, versus 27.31 W for KV only, 30.90 W
+for replay only, 22.73 W for East only, and 24.31 W for Germany only. East KV
+and Germany service reach 95% and 98% utilization and both have positive
+Phase-I duals.
+
+The eight corners independently release East KV, Germany service, and path
+bandwidth. A single exact worst-corner plan reaches 49.13 W by the deadline in
+all eight, while fresh replanning reaches 49.13--55.92 W. The all-release plan
+is capacity-invalid at the all-bind corner because it exceeds both East KV and
+Germany service. As a negative control, Germany-only reaches 41.88 W once all
+constraints are released. Deadline-aware Queue-Haul crosses 40.21 W at 23.33
+seconds; the 90-second deadline-blind ablation eventually reaches 54.20 W but
+has only 31.37 W at 45 seconds and first crosses the same target at 58.19
+seconds. Generated Tab10 figures, exact moves, nonlinear attainment curves,
+resource use, duals, and checksums are in
+`outputs/east-germany-oracle-stale-20260809/`.
+
+```bash
+uv run python queue-haul/network_campaign.py simulate-oracle-stale \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-oracle-stale-20260809
+```
 
 In the separate standard handoff experiment, each policy uses the same eight
 pinned agentic sessions. An independent 80%-load stream serves on Sweden while

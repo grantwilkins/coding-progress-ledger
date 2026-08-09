@@ -22,6 +22,13 @@ Plausible wrong implementations:
 - Admit a separation cell whose winner or loser is within 10% of the target.
 - Let a restricted baseline use both actions or let deadline-blind planning use
   the physical deadline.
+- Call a greedy restriction an oracle, evaluate a frozen plan against its
+  assumed state, or credit eventual nonlinear bundle shed at the deadline.
+- Treat a capacity-invalid stale plan as a slow plan, or call the worst-corner
+  plan robust without checking every monotone constraint release.
+- Credit a queued request by its own latency instead of the shared campaign
+  deadline, use the last request as an all-or-nothing deadline, or mix seconds
+  and nanoseconds at the exact boundary.
 """
 
 import csv
@@ -580,6 +587,57 @@ def test_destination_load_normalization_uses_both_service_rates(
         load.close()
 
 
+def test_deadline_credit_uses_the_shared_campaign_epoch():
+    second = 10**9
+    results = [
+        {"session_id": "before", "request": {
+            "start_ns": 9 * second, "end_ns": 10 * second}},
+        {"session_id": "boundary", "request": {
+            "start_ns": 10 * second, "end_ns": 11 * second}},
+        {"session_id": "queued-late", "request": {
+            "start_ns": 10 * second, "end_ns": 12 * second}},
+        {"session_id": "failed", "error": "request failed"},
+    ]
+
+    assert n.deadline_credited_sessions(results, second, 10) == {
+        "before", "boundary"}
+
+
+def test_separation_reducer_repairs_stale_per_request_deadline_credit(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(n, "plot_separation", lambda *_args: None)
+    plan = n.make_plan(
+        n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
+        design="separation")
+    scenario = next(row for row in plan["scenarios"]
+                    if row["policy"] == n.DEADLINE_BLIND_POLICY)
+    plan["scenarios"] = [scenario]
+    result_path = tmp_path / "scenarios" / scenario["scenario_id"] \
+        / "attempt-0001" / "result.json"
+    result_path.parent.mkdir(parents=True)
+    result_path.write_text(json.dumps({
+        "status": "complete", "started_ns": 10**9, "deadline_met": False,
+        "requested_shed_w": 1, "realized_shed_w": 1, "target_met": True,
+        "request_failures": 0, "kv_evidence_warnings": 0,
+        "load_warnings": [], "background": {
+            "east": {"warning": False}, "germany": {"warning": False}},
+        "requests": [{
+            "session_id": scenario["sessions"][0]["session_id"],
+            "destination_instance": "east", "method": "replay",
+            "request": {"start_ns": 44 * 10**9, "end_ns": 47 * 10**9},
+        }],
+    }))
+
+    summary = n.reduce_run(plan, tmp_path)
+
+    assert summary["valid"] and summary["invalid_evidence"] == 0
+    with (tmp_path / "results.csv").open() as handle:
+        row = next(csv.DictReader(handle))
+    assert float(row["requested_shed_w"]) > 0
+    assert float(row["realized_shed_w"]) == pytest.approx(0)
+    assert row["target_met"] == "False"
+
+
 def test_separation_simulation_has_wide_joint_action_margins(tmp_path):
     plan = n.make_plan(
         n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
@@ -623,6 +681,56 @@ def test_separation_simulation_has_wide_joint_action_margins(tmp_path):
         "germany-service", "east-service-slow-path", "joint-shaped"}
     assert all((out / f"separation_{name}.{suffix}").is_file()
                for name in ("campaign", "resources")
+               for suffix in ("png", "pdf"))
+
+
+def test_oracle_stale_simulation_certifies_capacity_and_deadline_traps(tmp_path):
+    plan = n.make_plan(
+        n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
+        design="separation")
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    summary = n.simulate_oracle_stale(plan_path, tmp_path / "simulation")
+
+    assert summary == {"oracle_conditions": 3, "toggle_states": 8,
+                       "out": str(tmp_path / "simulation"), "valid": True}
+    out = tmp_path / "simulation"
+    with (out / "restricted_oracles.csv").open() as handle:
+        oracles = list(csv.DictReader(handle))
+    assert {row["admission_mode"] for row in oracles} == {"normal"}
+    for condition in {row[0] for row in n.SEPARATION_CELLS}:
+        rows = [row for row in oracles if row["condition_id"] == condition]
+        joint = next(float(row["shed_w"]) for row in rows
+                     if row["restriction"] == "joint")
+        restricted = max(float(row["shed_w"]) for row in rows
+                         if row["restriction"] != "joint")
+        assert joint - restricted >= 12
+
+    with (out / "toggle_predictions.csv").open() as handle:
+        toggles = list(csv.DictReader(handle))
+    selected = {(row["state"], row["plan"]): row for row in toggles}
+    target = float(selected["all-bind", "adaptive"]["requested_shed_w"])
+    assert float(selected["all-bind", "adaptive"]["shed_by_deadline_w"]) \
+        >= 1.2 * target
+    assert all(selected[state, "robust"]["target_by_deadline"] == "True"
+               for state, *_ in n.ORACLE_STALE_STATES)
+    assert selected["all-bind", "stale-optimistic"]["status"] \
+        == "capacity_infeasible"
+    aware = selected["all-bind", "deadline-aware"]
+    blind = selected["all-bind", "deadline-blind"]
+    assert float(aware["time_to_target_s"]) < n.SEPARATION_DEADLINE_S
+    assert float(blind["shed_by_deadline_w"]) <= .85 * target
+    assert float(blind["eventual_shed_w"]) >= 1.2 * target
+    assert float(blind["time_to_target_s"]) >= 55
+
+    with (out / "toggle_resources.csv").open() as handle:
+        resources = {(row["state"], row["resource"]): float(row["utilization"])
+                     for row in csv.DictReader(handle)}
+    assert resources["all-bind", "kv:pool/east"] >= .94
+    assert resources["all-bind", "service:pool/germany:0"] >= .97
+    assert all((out / f"oracle_stale_{name}.{suffix}").is_file()
+               for name in ("summary", "resources")
                for suffix in ("png", "pdf"))
 
 

@@ -677,10 +677,16 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
 def plan(scenario: ExecutionScenario, profile: ModelProfile,
          paths: Routes, solver: str,
          case_id: str = "central", seed: int = 0, destination=None,
+         admission_mode: str | None = None,
          ) -> PlanResult:
     if destination is not None:
         from pool_planner import plan_destination
-        return plan_destination(scenario, profile, solver, case_id, seed, destination)
+        return plan_destination(
+            scenario, profile, solver, case_id, seed, destination,
+            admission_mode,
+        )
+    if admission_mode is not None:
+        raise ValueError("admission_mode requires a destination architecture")
     if solver not in ALL_SOLVERS:
         raise ValueError(f"unknown solver {solver!r}")
     if solver in POOL_SOLVERS:

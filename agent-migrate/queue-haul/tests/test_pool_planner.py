@@ -18,6 +18,7 @@ Plausible wrong implementations:
 - Ignore destination ingestion or add its time to the overlapping route transfer.
 - Admit an aggregate-feasible set that cannot be packed on replicas.
 - Label emergency rescue or maximum-shed best effort as normal success.
+- Let a matched oracle silently retry under a different admission mode.
 - Validate execution against the admission envelope instead of stable capacity.
 - Treat a service percentage as sessions or omit the migration-window units.
 - Divide debt by total capacity instead of post-migration spare capacity.
@@ -1701,6 +1702,24 @@ def test_normal_success_and_emergency_rescue_are_distinct(tmp_path, monkeypatch)
     )
     assert calls == ["normal", "emergency"]
     assert rescued.feasible and rescued.admission_mode == "emergency"
+
+
+def test_admission_mode_can_be_frozen_for_matched_oracles(tmp_path, monkeypatch):
+    profile, scenario = model(tmp_path, switch=0, tp=1), problem()
+    mode_plan, calls = pool_planner._mode_plan, []
+
+    def counted(*args, **kwargs):
+        calls.append(args[4])
+        return mode_plan(*args, **kwargs)
+
+    monkeypatch.setattr(pool_planner, "_mode_plan", counted)
+    result = plan(
+        scenario, profile, PATHS, "lp",
+        destination=architecture(normal=.2, emergency=.3),
+        admission_mode="normal",
+    )
+
+    assert calls == ["normal"] and result.admission_mode == "normal"
 
 
 def test_target_unmet_returns_valid_maximum_shed_plan(tmp_path, monkeypatch):
