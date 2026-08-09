@@ -75,6 +75,21 @@ SEPARATION_DEADLINE_S = 45
 SEPARATION_PLANNING_DEADLINE_S = 30
 SEPARATION_LOAD_WARMUP_S = 30
 SEPARATION_MARGIN = .10
+ORACLE_RESTRICTIONS = (
+    "joint", "kv_only", "replay_only", "east_only", "germany_only",
+)
+ORACLE_STALE_STATES = (
+    ("all-bind", .75, .90, "controlled_40"),
+    ("free-kv", .75, 0, "controlled_40"),
+    ("free-service", .25, .90, "controlled_40"),
+    ("free-bandwidth", .75, .90, "natural"),
+    ("free-kv-bandwidth", .75, 0, "natural"),
+    ("free-service-bandwidth", .25, .90, "natural"),
+    ("free-kv-service", .25, 0, "controlled_40"),
+    ("all-release", .25, 0, "natural"),
+)
+ORACLE_STALE_TARGET_FRACTION = .65
+ORACLE_STALE_HORIZON_S = 90
 SEPARATION_BINDINGS = {
     "germany-service": {
         "service:pool/germany:0": .98,
@@ -2660,6 +2675,474 @@ def simulate_separation(plan_path: Path, out: Path) -> dict:
             "out": str(out), "valid": True}
 
 
+def _restricted_architecture(architecture: DestinationArchitecture,
+                             restriction: str) -> DestinationArchitecture:
+    if restriction not in ORACLE_RESTRICTIONS:
+        raise ValueError(f"unknown oracle restriction: {restriction}")
+    pools = architecture.pools
+    methods = {"kv_only": ("kv_transfer",),
+               "replay_only": ("replay",)}.get(restriction)
+    if methods:
+        pools = tuple(replace(
+            pool, methods=methods,
+            migration_headroom=None if pool.migration_headroom is None else {
+                name: value for name, value in pool.migration_headroom.items()
+                if name in methods
+            },
+        ) for pool in pools)
+    if restriction in {"east_only", "germany_only"}:
+        destination = restriction.removesuffix("_only")
+        pools = tuple(pool for pool in pools
+                      if pool.pool_id == f"pool/{destination}")
+    return replace(architecture, pools=pools)
+
+
+def _oracle_row(family: str, condition: str, restriction: str, problem,
+                architecture, routes, profile, target: float, **fields):
+    result = solve(
+        problem, profile, routes, "max_shed",
+        destination=_restricted_architecture(architecture, restriction),
+        admission_mode="normal",
+    )
+    shed = result.initial_source_power_w - result.planned_source_power_w
+    return result, {
+        "family": family, "condition_id": condition,
+        "restriction": restriction, "requested_shed_w": target,
+        "shed_w": shed, "attainment_fraction": shed / target,
+        "target_met": shed >= target - 1e-8,
+        "admission_mode": result.admission_mode,
+        "selected_sessions": len(result.moves),
+        "predicted_makespan_s": result.predicted_migration_makespan_s,
+        **_constraint_action_counts(result.moves), **fields,
+    }
+
+
+def _stable_plan_violations(problem, profile, architecture, moves) -> tuple[str, ...]:
+    checking = replace(
+        problem, deadline_s=ORACLE_STALE_HORIZON_S,
+        end_s=ORACLE_STALE_HORIZON_S,
+    )
+    table = candidate_table(
+        checking, profile, architecture, "normal",
+        ExpectedPower(replace(
+            checking, final_state="awake", assumed_shutdown_s=None), profile),
+    )
+    candidates = {
+        (table.sessions[row.session].session_id, row.method,
+         architecture.pools[row.pool].pool_id): index
+        for index, row in enumerate(table.candidates)
+    }
+    signatures = [(move.session_id, move.method, move.destination_pool)
+                  for move in moves]
+    missing = [f"candidate:{'/'.join(map(str, signature))}"
+               for signature in signatures if signature not in candidates]
+    if missing:
+        return tuple(missing)
+    selected = [candidates[signature] for signature in signatures]
+    usage = table.resources[:, selected].sum(axis=1).A1
+    return tuple(name for name, value in zip(table.resource_names, usage)
+                 if name.startswith(("service:", "kv:"))
+                 and value > 1 + 1e-8)
+
+
+def _evaluate_fixed_plan(state: str, label: str, problem, architecture,
+                         profile, moves, target: float,
+                         curves: list[dict]) -> dict:
+    counts = _constraint_action_counts(moves)
+    initial = source_power(problem, profile)
+    planned = initial - source_power(
+        problem, profile, (move.session_id for move in moves))
+    row = {
+        "state": state, "plan": label, "requested_shed_w": target,
+        "planned_shed_w": planned, "selected_sessions": len(moves), **counts,
+    }
+    violations = _stable_plan_violations(
+        problem, profile, architecture, moves)
+    if violations:
+        return {**row, "status": "capacity_infeasible",
+                "capacity_violations": violations, "plan_valid": False,
+                "shed_by_deadline_w": None, "eventual_shed_w": None,
+                "target_by_deadline": False, "eventual_target_met": False,
+                "time_to_target_s": None, "migration_makespan_s": None,
+                "simulator_deadline_met": False}
+    actual = replace(
+        problem, deadline_s=SEPARATION_DEADLINE_S,
+        end_s=ORACLE_STALE_HORIZON_S,
+    )
+    execution = predict(
+        _expected_scenario(actual, moves), profile, moves,
+        destination=architecture,
+    )
+    moved, shed_by_deadline, target_time = [], 0.0, None
+    curves.append({"state": state, "plan": label, "time_s": 0.0,
+                   "shed_w": 0.0})
+    for committed_s, session_id in sorted(
+        (item.committed_s, item.session_id) for item in execution.sessions
+        if item.committed_s is not None
+    ):
+        moved.append(session_id)
+        shed = initial - source_power(problem, profile, moved)
+        curves.append({"state": state, "plan": label,
+                       "time_s": committed_s, "shed_w": shed})
+        if committed_s <= SEPARATION_DEADLINE_S:
+            shed_by_deadline = shed
+        if target_time is None and shed >= target - 1e-8:
+            target_time = committed_s
+    eventual = initial - source_power(problem, profile, moved)
+    curves.append({"state": state, "plan": label,
+                   "time_s": ORACLE_STALE_HORIZON_S, "shed_w": eventual})
+    by_deadline = shed_by_deadline >= target - 1e-8
+    eventual_met = eventual >= target - 1e-8
+    status = "target_met" if by_deadline else "late" if eventual_met else "insufficient"
+    return {
+        **row, "status": status, "capacity_violations": (),
+        "plan_valid": True, "shed_by_deadline_w": shed_by_deadline,
+        "eventual_shed_w": eventual, "target_by_deadline": by_deadline,
+        "eventual_target_met": eventual_met,
+        "time_to_target_s": target_time,
+        "migration_makespan_s": execution.migration_makespan_s,
+        "simulator_deadline_met": execution.deadline_met,
+    }
+
+
+def _validate_oracle_stale(oracles: list[dict], predictions: list[dict],
+                           resources: list[dict], duals: list[dict]) -> None:
+    if {row["admission_mode"] for row in oracles} != {"normal"}:
+        raise RuntimeError("restricted oracles do not share normal admission")
+    oracle = {(row["family"], row["condition_id"], row["restriction"]): row
+              for row in oracles}
+    for condition, *_ in SEPARATION_CELLS:
+        joint = oracle["original", condition, "joint"]["shed_w"]
+        restricted = max(oracle["original", condition, name]["shed_w"]
+                         for name in ORACLE_RESTRICTIONS[1:])
+        if joint - restricted < 12:
+            raise RuntimeError("an original exact restricted-oracle gap is too small")
+    target = oracle["toggle", "all-bind", "joint"]["requested_shed_w"]
+    joint = oracle["toggle", "all-bind", "joint"]
+    restricted = [oracle["toggle", "all-bind", name]
+                  for name in ORACLE_RESTRICTIONS[1:]]
+    if joint["shed_w"] < 1.2 * target \
+            or max(row["shed_w"] for row in restricted) > .8 * target \
+            or joint["shed_w"] - max(row["shed_w"] for row in restricted) < 18 \
+            or any(joint[action] == 0 for action in CONSTRAINT_ACTIONS):
+        raise RuntimeError("the all-bind exact-oracle separation is not severe")
+    releases = (
+        ("free-kv", "east_only", 4),
+        ("free-service", "germany_only", 12),
+        ("free-bandwidth", "kv_only", 4),
+    )
+    if any(oracle["toggle", state, restriction]["shed_w"]
+           - oracle["toggle", "all-bind", restriction]["shed_w"] < margin
+           for state, restriction, margin in releases) \
+            or not any(oracle["toggle", "all-release", name]["target_met"]
+                       for name in ORACLE_RESTRICTIONS[1:]):
+        raise RuntimeError("switching off a constraint did not release its oracle")
+    predicted = {(row["state"], row["plan"]): row for row in predictions}
+    if any(not predicted[state, "robust"]["target_by_deadline"]
+           or not predicted[state, "adaptive"]["target_by_deadline"]
+           or predicted[state, "adaptive"]["shed_by_deadline_w"] + 1e-8
+           < predicted[state, "robust"]["shed_by_deadline_w"]
+           for state, *_ in ORACLE_STALE_STATES) \
+            or predicted["all-bind", "stale-optimistic"]["status"] \
+            != "capacity_infeasible":
+        raise RuntimeError("the robust or stale-plan certificate failed")
+    aware, blind = (predicted["all-bind", name] for name in (
+        "deadline-aware", "deadline-blind"))
+    if aware["shed_by_deadline_w"] < 1.2 * target \
+            or aware["time_to_target_s"] >= SEPARATION_DEADLINE_S \
+            or blind["status"] != "late" \
+            or blind["shed_by_deadline_w"] > .85 * target \
+            or blind["eventual_shed_w"] < 1.2 * target \
+            or blind["time_to_target_s"] < 55:
+        raise RuntimeError("deadline blindness is not a severe late-power trap")
+    utilization = {(row["state"], row["resource"]): row["utilization"]
+                   for row in resources}
+    prices = {(row["state"], row["resource"]):
+              row["shadow_w_per_full_capacity"] for row in duals}
+    bindings = {"kv:pool/east": .94, "service:pool/germany:0": .97}
+    if any(utilization.get(("all-bind", name), 0) < minimum
+           or prices.get(("all-bind", name), 0) <= 0
+           for name, minimum in bindings.items()):
+        raise RuntimeError("the all-bind KV/service constraints are not severe")
+
+
+def plot_oracle_stale(oracles: list[dict], predictions: list[dict],
+                      curves: list[dict], resources: list[dict],
+                      duals: list[dict], out: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.colors import LinearSegmentedColormap
+
+    restrictions = dict(zip(ORACLE_RESTRICTIONS, TAB10_COLORS))
+    labels = {"joint": "Queue-Haul", "kv_only": "KV only",
+              "replay_only": "Replay only", "east_only": "East only",
+              "germany_only": "Germany only"}
+    cells = [row[0] for row in SEPARATION_CELLS]
+    fig, axes = plt.subplots(1, 3, figsize=(17, 4.8))
+    x, width = np.arange(len(cells)), .16
+    for index, restriction in enumerate(ORACLE_RESTRICTIONS):
+        selected = {(row["condition_id"], row["restriction"]): row
+                    for row in oracles if row["family"] == "original"}
+        axes[0].bar(x + (index - 2) * width,
+                    [selected[cell, restriction]["shed_w"] for cell in cells],
+                    width, color=restrictions[restriction],
+                    label=labels[restriction])
+    axes[0].plot(x, [selected[cell, "joint"]["requested_shed_w"]
+                     for cell in cells], "k--", marker="_", label="Target")
+    axes[0].set_xticks(x, cells, rotation=20, ha="right")
+    axes[0].set(ylabel="Maximum shed by 30 s (W)",
+                title="Exact restricted-oracle envelopes")
+    axes[0].legend(frameon=False, fontsize=7, ncol=2)
+
+    states = [row[0] for row in ORACLE_STALE_STATES]
+    predicted = {(row["state"], row["plan"]): row for row in predictions}
+    colors = {"adaptive": TAB10_COLORS[0], "robust": TAB10_COLORS[2],
+              "stale-optimistic": TAB10_COLORS[3]}
+    for label, color in colors.items():
+        values = [predicted[state, label]["shed_by_deadline_w"]
+                  if predicted[state, label]["plan_valid"] else np.nan
+                  for state in states]
+        axes[1].plot(states, values, marker="o", color=color,
+                     label=label.replace("-", " "))
+        invalid = [index for index, state in enumerate(states)
+                   if not predicted[state, label]["plan_valid"]]
+        axes[1].scatter(invalid, [0] * len(invalid), marker="x", s=45,
+                        color=color, label="capacity infeasible"
+                        if label == "stale-optimistic" else None)
+    toggles = {(row["condition_id"], row["restriction"]): row
+               for row in oracles if row["family"] == "toggle"}
+    axes[1].plot(states, [max(toggles[state, name]["shed_w"]
+                              for name in ORACLE_RESTRICTIONS[1:])
+                          for state in states], marker="s", linestyle="--",
+                 color=TAB10_COLORS[1], label="best restricted oracle")
+    target = predicted["all-bind", "adaptive"]["requested_shed_w"]
+    axes[1].axhline(target, color="black", linestyle="--", label="Target")
+    axes[1].tick_params(axis="x", rotation=35, labelsize=7)
+    axes[1].set(ylabel="Shed by 45 s (W)",
+                title="Fresh, robust, and stale plans")
+    axes[1].legend(frameon=False, fontsize=7)
+
+    for label, color in (("deadline-aware", TAB10_COLORS[0]),
+                         ("deadline-blind", TAB10_COLORS[3])):
+        rows = [row for row in curves
+                if row["state"] == "all-bind" and row["plan"] == label]
+        axes[2].step([row["time_s"] for row in rows],
+                     [row["shed_w"] for row in rows], where="post",
+                     color=color, label=label.replace("-", " "))
+    axes[2].axvline(SEPARATION_DEADLINE_S, color="black", linestyle=":",
+                    label="45 s deadline")
+    axes[2].axhline(target, color="black", linestyle="--", label="Target")
+    axes[2].set(xlim=(0, ORACLE_STALE_HORIZON_S), xlabel="Time (s)",
+                ylabel="Nonlinear source power shed (W)",
+                title="Enough power, but after the deadline")
+    axes[2].legend(frameon=False, fontsize=7)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"oracle_stale_summary.{suffix}", dpi=200)
+    plt.close(fig)
+
+    names = sorted({row["resource"] for row in resources})
+    values = np.array([[next(row["utilization"] for row in resources
+                             if row["state"] == state
+                             and row["resource"] == name)
+                        for state in states] for name in names])
+    fig, axes = plt.subplots(1, 2, figsize=(14, max(4, len(names) * .34)))
+    cmap = LinearSegmentedColormap.from_list(
+        "tab10-blue", ("white", TAB10_COLORS[0]))
+    image = axes[0].imshow(values, vmin=0, vmax=1, cmap=cmap, aspect="auto")
+    axes[0].set_xticks(range(len(states)), states, rotation=35, ha="right",
+                       fontsize=7)
+    axes[0].set_yticks(range(len(names)), names, fontsize=7)
+    for row, column in np.ndindex(values.shape):
+        if values[row, column] >= .8:
+            axes[0].text(column, row, f"{values[row, column]:.2f}",
+                         ha="center", va="center", color="white", fontsize=6)
+    fig.colorbar(image, ax=axes[0], label="Adaptive Queue-Haul utilization")
+    axes[0].set_title("Constraint toggles")
+    positive = [row for row in duals if row["state"] == "all-bind"
+                and row["shadow_w_per_full_capacity"] > 1e-8]
+    axes[1].barh(
+        [row["resource"] for row in positive],
+        [row["shadow_w_per_full_capacity"] for row in positive],
+        color=[TAB10_COLORS[index % len(TAB10_COLORS)]
+               for index in range(len(positive))],
+    )
+    axes[1].tick_params(axis="y", labelsize=7)
+    axes[1].set(xlabel="Phase-I shadow W per full capacity",
+                title="All-bind positive duals")
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"oracle_stale_resources.{suffix}", dpi=200)
+    plt.close(fig)
+
+
+def simulate_oracle_stale(plan_path: Path, out: Path) -> dict:
+    plan = json.loads(plan_path.read_text())
+    validate_plan(plan)
+    if plan["design"] != "separation":
+        raise ValueError("oracle/stale simulation requires a separation plan")
+    if profiler.file_hash(MODEL_PATH) != plan["model_profile"]["sha256"]:
+        raise RuntimeError("oracle/stale model profile changed")
+    manifest_path = Path(plan["manifest"]["path"])
+    if profiler.file_hash(manifest_path) != plan["manifest"]["sha256"]:
+        raise RuntimeError("oracle/stale manifest changed")
+    manifest = json.loads(manifest_path.read_text())
+    profile = ModelProfile.load(MODEL_PATH)
+    templates = [next(row for row in plan["scenarios"]
+                      if row["condition_id"] == condition
+                      and row["repeat"] == 0 and row["policy"] == "queue_haul")
+                 for condition, *_ in SEPARATION_CELLS]
+
+    def make_problem(scenario):
+        snapshots = {node: {"kv_fraction": values[1]}
+                     for node, values in scenario["background"].items()}
+        demand = agentic_demand(
+            scenario_records(manifest, scenario), scenario["sessions"], profile,
+            scenario["source_load"],
+        )
+        return joint_problem(scenario, snapshots, profile, demand)
+
+    oracles, resources, duals, predictions, curves = [], [], [], [], []
+    for scenario in templates:
+        problem, architecture, routes, target = make_problem(scenario)
+        for restriction in ORACLE_RESTRICTIONS:
+            _, row = _oracle_row(
+                "original", scenario["condition_id"], restriction,
+                problem, architecture, routes, profile, target,
+                bandwidth=scenario["bandwidth"],
+                germany_load=scenario["background"]["germany"][0],
+                east_kv_fraction=scenario["background"]["east"][1],
+            )
+            oracles.append(row)
+
+    problems, solutions = {}, {}
+    template = templates[-1]
+    for state, germany_load, east_kv, bandwidth in ORACLE_STALE_STATES:
+        scenario = {**template, "condition_id": state,
+                    "background": {"east": (.25, east_kv),
+                                   "germany": (germany_load, 0)},
+                    "bandwidth": bandwidth,
+                    "bandwidth_mbps": _bandwidths(
+                        plan["network_contract"], bandwidth),
+                    "requested_shed_fraction": ORACLE_STALE_TARGET_FRACTION}
+        problem, architecture, routes, target = make_problem(scenario)
+        problems[state] = problem, architecture, routes, target
+        solutions[state] = {}
+        for restriction in ORACLE_RESTRICTIONS:
+            result, row = _oracle_row(
+                "toggle", state, restriction, problem, architecture, routes,
+                profile, target, bandwidth=bandwidth,
+                germany_load=germany_load, east_kv_fraction=east_kv,
+            )
+            solutions[state][restriction] = result
+            oracles.append(row)
+        joint = solutions[state]["joint"]
+        resources.extend({"state": state, "resource": row.name,
+                          "unit": row.unit, "used": row.used,
+                          "capacity": row.capacity,
+                          "utilization": row.utilization}
+                         for row in joint.resource_uses)
+        table = candidate_table(
+            problem, profile, architecture, "normal",
+            ExpectedPower(replace(
+                problem, final_state="awake", assumed_shutdown_s=None), profile),
+        )
+        ceiling, prices = phase_one_capacity_duals(table)
+        duals.extend({
+            "state": state, "phase_one_marginal_ceiling_w": ceiling,
+            "resource": name, "capacity": capacity, "unit": unit,
+            "shadow_w_per_full_capacity": float(price),
+            "shadow_w_per_unit": float(price / capacity),
+        } for name, capacity, unit, price in zip(
+            table.resource_names, table.resource_capacities,
+            table.resource_units, prices,
+        ))
+
+    robust = solutions["all-bind"]["joint"].moves
+    stale = solutions["all-release"]["joint"].moves
+    for state, *_ in ORACLE_STALE_STATES:
+        problem, architecture, _routes, target = problems[state]
+        for label, moves in (("adaptive", solutions[state]["joint"].moves),
+                             ("robust", robust),
+                             ("stale-optimistic", stale)):
+            predictions.append(_evaluate_fixed_plan(
+                state, label, problem, architecture, profile, moves,
+                target, curves))
+    problem, architecture, routes, target = problems["all-bind"]
+    predictions.append(_evaluate_fixed_plan(
+        "all-bind", "deadline-aware", problem, architecture, profile,
+        robust, target, curves))
+    blind = solve(
+        replace(problem, deadline_s=ORACLE_STALE_HORIZON_S,
+                end_s=ORACLE_STALE_HORIZON_S),
+        profile, routes, "max_shed", destination=architecture,
+    )
+    predictions.append(_evaluate_fixed_plan(
+        "all-bind", "deadline-blind", problem, architecture, profile,
+        blind.moves, target, curves))
+    _validate_oracle_stale(oracles, predictions, resources, duals)
+
+    out.mkdir(parents=True, exist_ok=False)
+    profiler.write_csv(out / "restricted_oracles.csv", oracles)
+    profiler.write_csv(out / "toggle_predictions.csv", predictions)
+    profiler.write_csv(out / "toggle_resources.csv", resources)
+    profiler.write_csv(out / "toggle_duals.csv", duals)
+    profiler.write_csv(out / "attainment_curves.csv", curves)
+    write_checkpoint(out / "plans.json", {
+        "schema": "queue-haul-oracle-stale-plans-v1",
+        "robust_all_bind": [asdict(move) for move in robust],
+        "stale_all_release": [asdict(move) for move in stale],
+        "deadline_blind_90s": [asdict(move) for move in blind.moves],
+    })
+    plot_oracle_stale(oracles, predictions, curves, resources, duals, out)
+    artifacts = {path.name: profiler.file_hash(path)
+                 for path in sorted(out.iterdir()) if path.is_file()}
+    write_checkpoint(out / "metadata.json", {
+        "schema": "queue-haul-oracle-stale-simulation-v1",
+        "plan": {"path": str(plan_path),
+                 "sha256": profiler.file_hash(plan_path)},
+        "manifest_sha256": plan["manifest"]["sha256"],
+        "model_profile_sha256": plan["model_profile"]["sha256"],
+        "load_support": {"path": str(LOAD_SUPPORT_PATH.relative_to(ROOT)),
+                         "sha256": profiler.file_hash(LOAD_SUPPORT_PATH)},
+        "uncertainty_set": {
+            "states": [{"state": state, "germany_service_load": load,
+                        "east_kv_fraction": kv, "bandwidth": bandwidth}
+                       for state, load, kv, bandwidth in ORACLE_STALE_STATES],
+            "robust_plan": (
+                "exact max-shed plan at the componentwise worst corner; "
+                "service/KV capacity only increases and bandwidth only rises "
+                "in every other rectangular corner"
+            ),
+        },
+        "constructed_constraint": (
+            "East KV occupancy is a controlled 90% reserve against the profiled "
+            "A100 KV capacity; controlled route caps derive from measured natural "
+            "paths, while service-load support, workload pack, and destination "
+            "throughput are measured inputs"
+        ),
+        "requested_shed_fraction": ORACLE_STALE_TARGET_FRACTION,
+        "deadline_s": SEPARATION_DEADLINE_S,
+        "planning_deadline_s": SEPARATION_PLANNING_DEADLINE_S,
+        "full_horizon_s": ORACLE_STALE_HORIZON_S,
+        "oracle_semantics": (
+            "exact binary max-shed solve under forced normal admission with only "
+            "the named methods or pools removed; sessions, source power, routes, "
+            "and deadline are matched"
+        ),
+        "policy_colors": {
+            "adaptive": TAB10_COLORS[0], "best_restricted": TAB10_COLORS[1],
+            "robust": TAB10_COLORS[2], "stale_optimistic": TAB10_COLORS[3],
+        },
+        "artifacts": artifacts,
+    })
+    return {"oracle_conditions": len(SEPARATION_CELLS),
+            "toggle_states": len(ORACLE_STALE_STATES),
+            "out": str(out), "valid": True}
+
+
 def _valid_constraint_evidence(scenario: dict, result: dict) -> bool:
     background = result.get("background")
     return all(key in result for key in (
@@ -3010,6 +3493,9 @@ def parse_args(argv=None):
     command = sub.add_parser("simulate-separation")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
+    command = sub.add_parser("simulate-oracle-stale")
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("refine")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
@@ -3074,6 +3560,9 @@ def main(argv=None) -> None:
                          indent=2, sort_keys=True))
     elif args.command == "simulate-separation":
         print(json.dumps(simulate_separation(args.plan, args.out),
+                         indent=2, sort_keys=True))
+    elif args.command == "simulate-oracle-stale":
+        print(json.dumps(simulate_oracle_stale(args.plan, args.out),
                          indent=2, sort_keys=True))
     elif args.command == "refine":
         refined = write_frontier_refinement(
