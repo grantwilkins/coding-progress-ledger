@@ -447,6 +447,7 @@ def test_session_probe_appends_one_final_instruction():
     assert c.chat_payload(c.b.Config(), base, 1)["reasoning_effort"] == "low"
     assert c.chat_payload(c.b.Config(), base, 1, True)["vllm_xargs"] == {"qh_bypass_lmcache": 1}
     assert c.chat_payload(c.b.Config(), base, 1, cache_salt="salt")["cache_salt"] == "salt"
+    assert c.chat_payload(c.b.Config(), base, 1, ignore_eos=True)["ignore_eos"] is True
 
 
 def test_session_request_requires_http_success_not_exact_model_text(monkeypatch):

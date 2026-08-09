@@ -1547,11 +1547,12 @@ class SinkLoad:
         messages = [
             {"role": "system", "content": "You are a tool-using coding agent."},
             {"role": "user", "content":
-             f"Agentic trace turn {index}: analyze tool output. " + "x " * 512},
+             "Agentic trace turn 0: analyze tool output. " + "x " * 512},
         ]
         result, _ = profiler.stream_chat(
             self.cfg, self.port, messages, 64,
-            profiler.messages_hash(messages), 600, True, f"load-{index}")
+            profiler.messages_hash(messages), 600, True, f"load-{index}",
+            self.decode_tps is not None)
         row = asdict(result)
         if result.status_code != 200 or self.decode_tps is not None and (
             row["prompt_tokens"] != SINK_LOAD_PREFILL_TOKENS
@@ -1585,7 +1586,9 @@ class SinkLoad:
         if self.thread.is_alive():
             raise TimeoutError("sink load did not stop")
         if self.error:
-            raise RuntimeError("sink load failed") from self.error
+            raise RuntimeError(
+                f"sink load failed: {type(self.error).__name__}: {self.error}"
+            ) from self.error
 
     def stop_admissions(self) -> None:
         self.stop.set()

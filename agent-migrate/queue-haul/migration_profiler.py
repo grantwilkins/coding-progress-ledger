@@ -636,21 +636,25 @@ def messages_hash(messages: list[dict] | tuple[dict, ...]) -> str:
 
 def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int,
                  bypass_lmcache: bool = False,
-                 cache_salt: str | None = None) -> dict:
+                 cache_salt: str | None = None,
+                 ignore_eos: bool = False) -> dict:
     payload = {"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "reasoning_effort": "low", "stream": True, "stream_options": {"include_usage": True}}
     if bypass_lmcache:
         payload["vllm_xargs"] = {"qh_bypass_lmcache": 1}
     if cache_salt:
         payload["cache_salt"] = cache_salt
+    if ignore_eos:
+        payload["ignore_eos"] = True
     return payload
 
 
 def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
                 context_hash: str, timeout_s: float,
                 bypass_lmcache: bool = False,
-                cache_salt: str | None = None) -> tuple[RequestResult, str]:
+                cache_salt: str | None = None,
+                ignore_eos: bool = False) -> tuple[RequestResult, str]:
     body = json.dumps(chat_payload(
-        cfg, messages, max_tokens, bypass_lmcache, cache_salt,
+        cfg, messages, max_tokens, bypass_lmcache, cache_salt, ignore_eos,
     ))
     start = time.monotonic_ns()
     conn = http.client.HTTPConnection(cfg.host, port, timeout=timeout_s)

@@ -547,7 +547,8 @@ def test_separation_plan_freezes_three_robust_matched_regimes(tmp_path):
     ]).design == "separation"
 
 
-def test_destination_load_normalization_uses_both_service_rates(tmp_path):
+def test_destination_load_normalization_uses_both_service_rates(
+        monkeypatch, tmp_path):
     profile = n.ModelProfile.load(n.MODEL_PATH)
     dtype = n.dedicated_sink_architecture(
         profile, "sink", ("link",)).types[0]
@@ -555,12 +556,28 @@ def test_destination_load_normalization_uses_both_service_rates(tmp_path):
     work = n.destination_background_work(dtype, .95)
     load = n.SinkLoad(
         SimpleNamespace(), 1, 100, .5, tmp_path / "load.jsonl", 50)
+    calls = []
+    result = n.profiler.RequestResult(
+        "r", 200, "", 1, 2, prompt_tokens=n.SINK_LOAD_PREFILL_TOKENS,
+        output_tokens=n.SINK_LOAD_DECODE_TOKENS)
+    monkeypatch.setattr(n.profiler, "stream_chat", lambda *args:
+                        calls.append(args) or (result, ""))
+    load._request(7)
+    load._request(8)
 
     assert sum(work) == pytest.approx(.95)
     assert work[0] > work[1] > 0
     assert load.interval_s == pytest.approx(
         (n.SINK_LOAD_PREFILL_TOKENS / 100
          + n.SINK_LOAD_DECODE_TOKENS / 50) / .5)
+    assert calls[0][2] == calls[1][2]
+    assert [call[7:] for call in calls] == [("load-7", True),
+                                            ("load-8", True)]
+    load.thread = SimpleNamespace(join=lambda _timeout: None,
+                                  is_alive=lambda: False)
+    load.error = ValueError("short response")
+    with pytest.raises(RuntimeError, match="ValueError: short response"):
+        load.close()
 
 
 def test_separation_simulation_has_wide_joint_action_margins(tmp_path):
@@ -951,7 +968,7 @@ def test_handoff_uses_queue_haul_deadline_and_cache_isolated_load(monkeypatch, t
                         seen.update(args=args) or (result, ""))
     load = n.SinkLoad(SimpleNamespace(), 1, 1000, .5, tmp_path / "load.jsonl")
     load._request(7)
-    assert seen["args"][6:] == (True, "load-7")
+    assert seen["args"][6:] == (True, "load-7", False)
     assert seen["args"][2][0]["role"] == "system"
     load.stop_admissions()
     assert load.stop.is_set()
