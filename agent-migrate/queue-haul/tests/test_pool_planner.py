@@ -172,6 +172,25 @@ def _hand_lp_table():
     )
 
 
+def test_max_shed_selects_the_exact_source_load_optimum():
+    table = CandidateTable(
+        tuple(SimpleNamespace(session_id=name) for name in "abc"),
+        (
+            Candidate(0, "replay", 0, 100, 1, 1, (), 0, (0, 0), 0),
+            Candidate(1, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0),
+            Candidate(2, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0),
+        ),
+        csr_matrix(np.eye(3)), csr_matrix(np.array(((1, .5, .5),))),
+        ("capacity",), (1,), ("fraction",), 1,
+    )
+    power = SimpleNamespace(
+        ell={"a": 4, "b": 3, "c": 3},
+        route={name: "source" for name in "abc"},
+    )
+
+    assert pool_planner._max_shed(table, power) == {1, 2}
+
+
 @pytest.mark.parametrize("policy,method", (
     ("replay_only", "replay"), ("kv_only", "kv_transfer"),
 ))

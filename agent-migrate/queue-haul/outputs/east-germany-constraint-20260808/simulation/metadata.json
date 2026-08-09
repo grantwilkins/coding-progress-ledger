@@ -1,14 +1,15 @@
 {
   "artifacts": {
-    "constraint_actions.pdf": "07bb0e489d95aa60ad4a144766c12d18ae6fe522894985de748e93984d18428b",
-    "constraint_actions.png": "3d89c82bd37e5ca81bce3adb1d0ee973e057ff176da2d5ffdafa783a14f2e1af",
-    "constraint_attainment.pdf": "33b9ce6edee55b054c32892a8ebf6bf80741c5c10192ab8b43f97dc3b1d85914",
-    "constraint_attainment.png": "49a6b5b6ebfb2e3540008a056d308d54454ae3a5a3a905c8d3541846a1797787",
+    "constraint_actions.pdf": "a1bfe4d11b231a2b83db9b284061d3d6352465c1ff11e875d0f758496c16a8b7",
+    "constraint_actions.png": "1d0f93d6596fe96dba4ab7e9651867f76d0010afed9fa0b2627415ec551fb52e",
+    "constraint_attainment.pdf": "71912a7d755615b3c9f6262037718821d60dc39972e9c123e6ac73425fe11780",
+    "constraint_attainment.png": "bfc35f88ff58ea1ab2643dfc9936bc0872283d57967ba320c6d3b071c84e3f54",
     "constraint_duals.csv": "ef66cf8eefd38c97e1af476f6faf84888af400e5188e6ccdc6340154e3cf7451",
-    "constraint_duals.pdf": "3c793c560ef097e55009b3c17fd44a8a438ee61efcca4ac2a4b103b62e45645e",
+    "constraint_duals.pdf": "6d3140cd29810afbe215684596f81374fbb9d6550d709c0a0fa2e7664b65f8d2",
     "constraint_duals.png": "f15e6e905e0accfae03f385842e4035d4877e37cf9ee2545c5f7f41f8cbd8b4a",
-    "constraint_predictions.csv": "204a55d17a5e74640062c832bab9959576c5c4c8d520e6a060470d6f3c79a43d"
+    "constraint_predictions.csv": "11d954e0236aa1a42f2fbf25fe0898b4dd652c3cc76b43f6e97761b1e2acceb5"
   },
+  "big_shed_request": "100% of modeled removable pack power",
   "constructed_quota": {
     "capacity_replica_s": 6.25,
     "claim": "operator counterfactual, not a measured load coefficient",
@@ -34,9 +35,10 @@
   "dual_semantics": "Phase-I maximum additive initial marginal-power surrogate shadow price because every exact request exceeds its marginal ceiling; exact bundle shed is recomputed after integral packing",
   "manifest_sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435",
   "model_profile_sha256": "b837fac06c63b002be84579e1e1be2159e8efdc65c45817ebf92737ae9cd5d58",
+  "objective": "maximize total removable single-source load with an exact binary joint action/destination solve, then minimize migration work",
   "plan": {
     "path": "queue-haul/outputs/east-germany-constraint-20260808/plan.json",
-    "sha256": "a9da9706541ab971a3cf553487e6c8588268ca8a73213934833611ae416e2f52"
+    "sha256": "87f7293fca5c008f6a53c7e87e1be24dd46e097d4496df5a7fcd61536723132a"
   },
   "policy_colors": {
     "greedy": "#ff7f0e",
@@ -46,5 +48,5 @@
     "queue_haul_power_blind": "#8c564b",
     "replay_only": "#d62728"
   },
-  "schema": "queue-haul-constraint-simulation-v1"
+  "schema": "queue-haul-constraint-simulation-v2"
 }

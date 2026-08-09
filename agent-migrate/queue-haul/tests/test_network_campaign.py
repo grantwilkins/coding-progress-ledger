@@ -413,10 +413,10 @@ def test_constraint_plan_freezes_four_single_block_stress_cases(tmp_path):
     assert [row["condition_index"] for row in plan["scenarios"]] == [
         index for index in range(4) for _ in n.CONSTRAINT_POLICIES]
     expected = {
-        "window-19": (19, 22, 513_650, .70),
-        "window-30": (30, 28, 648_131, .80),
-        "window-60": (60, 64, 898_688, .90),
-        "quota-30": (30, 28, 648_131, .80),
+        "window-19": (19, 22, 513_650, 1.0),
+        "window-30": (30, 28, 648_131, 1.0),
+        "window-60": (60, 64, 898_688, 1.0),
+        "quota-30": (30, 28, 648_131, 1.0),
     }
     signatures = {}
     for condition, (deadline, count, tokens, target) in expected.items():
@@ -428,10 +428,16 @@ def test_constraint_plan_freezes_four_single_block_stress_cases(tmp_path):
         ) for row in rows}
         assert len(rows) == 6 and len(signatures[condition]) == 1
         assert {row["policy"] for row in rows} == set(n.CONSTRAINT_POLICIES)
+        assert all(row["scenario_id"] == n._hash([
+            "constraint", row["condition_index"], row["policy"],
+            row["sessions"], row["migration_headroom"], deadline, target,
+            "max_shed",
+        ])[:16] for row in rows)
         assert all(row["deadline_s"] == deadline
                    and len(row["sessions"]) == count
                    and sum(item["initial_tokens"] for item in row["sessions"])
                    == tokens
+                   and row["objective"] == "max_shed"
                    and row["requested_shed_fraction"] == target for row in rows)
     assert signatures["window-30"] == signatures["quota-30"]
     assert all(row["migration_headroom"] == {"germany": {"replay": .25}}
@@ -466,8 +472,16 @@ def test_constraint_simulation_separates_joint_policies_and_exports_duals(tmp_pa
                for suffix in ("png", "pdf"))
     with (out / "constraint_predictions.csv").open() as handle:
         predictions = list(csv.DictReader(handle))
-    assert {row["policy"] for row in predictions if row["target_met"] == "True"} \
-        == {"queue_haul", "greedy"}
+    assert not any(row["target_met"] == "True" for row in predictions)
+    by_cell = {(row["condition_id"], row["policy"]): row
+               for row in predictions}
+    assert [float(by_cell[cell, "queue_haul"]["attained_shed_w"])
+            for cell in ("window-19", "window-30", "window-60", "quota-30")] \
+        == pytest.approx((49.245505, 55.918628, 60.480647, 51.688888))
+    assert all(float(by_cell[cell, "queue_haul"]["attained_shed_w"])
+               >= max(float(by_cell[cell, policy]["attained_shed_w"])
+                      for policy in n.CONSTRAINT_POLICIES[1:]) - 1e-8
+               for cell, *_ in n.CONSTRAINT_CELLS)
     quota = next(row for row in predictions
                  if (row["condition_id"], row["policy"])
                  == ("quota-30", "queue_haul"))
@@ -634,6 +648,7 @@ def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
             for pool in seen["architecture"].pools} == {
                 "pool/east": None, "pool/west": {"replay": .25}}
     assert n.joint_solver("isolated_fastest") == "isolated_fastest"
+    assert n.joint_solver("queue_haul", "max_shed") == "max_shed"
 
 
 def test_frontier_planner_targets_power_and_does_not_force_evacuation(monkeypatch):
@@ -871,7 +886,7 @@ def test_constraint_reducer_hard_fails_semantically_invalid_evidence(
     result_path = root / "scenarios/s/attempt-0001/result.json"
     result_path.parent.mkdir(parents=True)
     result = {
-        "status": "complete", "deadline_met": True, "target_met": True,
+        "status": "complete", "deadline_met": True, "target_met": False,
         "requested_shed_w": 10, "realized_shed_w": 11,
         "request_failures": 0, "kv_evidence_warnings": 0,
         "load_warnings": [], "background": {

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import cvxpy as cp
 import highspy
 import numpy as np
-from scipy.optimize import linprog
+from scipy.optimize import Bounds, LinearConstraint, linprog, milp
 from scipy.sparse import csc_matrix, csr_matrix, hstack, vstack
 
 from destination import DestinationArchitecture
@@ -683,6 +683,40 @@ def phase_one_capacity_duals(table: CandidateTable):
         raise RuntimeError(f"HiGHS Phase-I LP failed: {result.message}")
     duals = -result.ineqlin.marginals[table.incidence.shape[0]:]
     return -float(result.fun), np.maximum(0, duals)
+
+
+def _max_shed(table: CandidateTable, power: ExpectedPower):
+    """Maximize exact awake-state shed for one source instance."""
+    if not table.candidates:
+        return set()
+    session_ids = tuple(session.session_id for session in table.sessions)
+    if len({power.route[session_ids[candidate.session]]
+            for candidate in table.candidates}) != 1:
+        raise ValueError("max_shed requires one source instance")
+    loads = np.asarray([
+        power.ell[session_ids[candidate.session]]
+        for candidate in table.candidates
+    ])
+    matrix = vstack((table.incidence, table.resources), format="csr")
+    base = LinearConstraint(matrix, -np.inf, 1)
+    bounds, integer = Bounds(0, 1), np.ones(len(loads))
+
+    def optimize(cost, constraints):
+        result = milp(
+            cost, integrality=integer, bounds=bounds, constraints=constraints,
+            options={"mip_rel_gap": 0},
+        )
+        if not result.success:
+            raise RuntimeError(f"maximum-shed MILP returned {result.message}")
+        return result.x
+
+    maximum = optimize(-loads, base)
+    selected = optimize(
+        np.asarray([candidate.migration_work_s for candidate in table.candidates]),
+        (base, LinearConstraint(csr_matrix(loads.reshape(1, -1)),
+                                loads @ maximum - 1e-9, np.inf)),
+    )
+    return set(np.flatnonzero(selected > .5))
 
 
 def _scarcity_prices(table, matrix, eligible=None):
@@ -1992,6 +2026,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
                 replace(candidate, gain_w=gain) for candidate in table.candidates))
     if streamed:
         pass
+    elif solver == "max_shed":
+        selected = _max_shed(table, power)
     elif solver == "greedy_lagrangian":
         selected, assignment = _greedy_lagrangian(
             table, target, power, architecture, scenario, mode, True,
@@ -2012,6 +2048,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
         assignment, cut = _pack(
             table, selected, architecture, scenario, mode, repair=True,
         )
+        if solver == "max_shed" and cut:
+            raise RuntimeError("maximum-shed set is not replica-packable")
         selected.difference_update(cut)
         repairs = len(cut)
         repair_s = perf_counter() - started if cut else 0.0
@@ -2019,7 +2057,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
 
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
-    if solver not in {"greedy", "greedy_lagrangian",
+    if solver not in {"greedy", "greedy_lagrangian", "max_shed",
                       "isolated_fastest", "random", "replay_only", "kv_only",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
                       "lp_power_blind",

@@ -40,28 +40,28 @@
       "condition_id": "window-19",
       "context_seed": 15,
       "deadline_s": 19,
-      "requested_shed_fraction": 0.7,
+      "requested_shed_fraction": 1.0,
       "sessions": 22
     },
     {
       "condition_id": "window-30",
       "context_seed": 8,
       "deadline_s": 30,
-      "requested_shed_fraction": 0.8,
+      "requested_shed_fraction": 1.0,
       "sessions": 28
     },
     {
       "condition_id": "window-60",
       "context_seed": null,
       "deadline_s": 60,
-      "requested_shed_fraction": 0.9,
+      "requested_shed_fraction": 1.0,
       "sessions": 64
     },
     {
       "condition_id": "quota-30",
       "context_seed": 8,
       "deadline_s": 30,
-      "requested_shed_fraction": 0.8,
+      "requested_shed_fraction": 1.0,
       "sessions": 28
     }
   ],
@@ -134,12 +134,13 @@
       "deadline_s": 19,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-19",
       "planner_seed": 14978923054434462913,
       "policy": "kv_only",
       "repeat": 0,
-      "requested_shed_fraction": 0.7,
-      "scenario_id": "28731e78187bd383",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "c7daf659e17aebd7",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -343,12 +344,13 @@
       "deadline_s": 19,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-19",
       "planner_seed": 5001700750528717012,
       "policy": "replay_only",
       "repeat": 0,
-      "requested_shed_fraction": 0.7,
-      "scenario_id": "533b71ad27fe28df",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "8ec1e350d670bc90",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -552,12 +554,13 @@
       "deadline_s": 19,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-19",
       "planner_seed": 1050759266802710903,
       "policy": "queue_haul_power_blind",
       "repeat": 0,
-      "requested_shed_fraction": 0.7,
-      "scenario_id": "bf8eda2fc3685509",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "5b4ed1a399ac96be",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -761,12 +764,13 @@
       "deadline_s": 19,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-19",
       "planner_seed": 5658789621706820929,
       "policy": "queue_haul",
       "repeat": 0,
-      "requested_shed_fraction": 0.7,
-      "scenario_id": "77dd8a30ddf43f03",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "7808ebf590b11f86",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -970,12 +974,13 @@
       "deadline_s": 19,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-19",
       "planner_seed": 6399409981718895033,
       "policy": "isolated_fastest",
       "repeat": 0,
-      "requested_shed_fraction": 0.7,
-      "scenario_id": "c93ea43b17f3a76b",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "c091100107614d2f",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -1179,12 +1184,13 @@
       "deadline_s": 19,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-19",
       "planner_seed": 11409280731791279755,
       "policy": "greedy",
       "repeat": 0,
-      "requested_shed_fraction": 0.7,
-      "scenario_id": "9cd0485ad985a266",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "d6baf42be9b07ecb",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -1388,12 +1394,13 @@
       "deadline_s": 30,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-30",
       "planner_seed": 17374776753361393088,
       "policy": "queue_haul",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "1881dd689a694e72",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "571529fcb8fd1484",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -1645,12 +1652,13 @@
       "deadline_s": 30,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-30",
       "planner_seed": 7848306202868905794,
       "policy": "greedy",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "e9b1af520e81a476",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "c0390a77a0b79511",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -1902,12 +1910,13 @@
       "deadline_s": 30,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-30",
       "planner_seed": 926273154000729134,
       "policy": "kv_only",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "b653beb01e2bdb8b",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "ac732716368c8fd1",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -2159,12 +2168,13 @@
       "deadline_s": 30,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-30",
       "planner_seed": 8250306342537953786,
       "policy": "isolated_fastest",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "8a2c2e0eac9a4988",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "4438fc75d7d6dceb",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -2416,12 +2426,13 @@
       "deadline_s": 30,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-30",
       "planner_seed": 8223846743424789316,
       "policy": "queue_haul_power_blind",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "538fe24d6ef042fb",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "9165d814b3d39201",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -2673,12 +2684,13 @@
       "deadline_s": 30,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-30",
       "planner_seed": 2245044475344132522,
       "policy": "replay_only",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "7d84b59b66c872df",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "c0a127fefd084194",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -2930,12 +2942,13 @@
       "deadline_s": 60,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-60",
       "planner_seed": 9797812186290874915,
       "policy": "kv_only",
       "repeat": 0,
-      "requested_shed_fraction": 0.9,
-      "scenario_id": "dbfc73df52caeca9",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "bf0d13531133e08a",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -3475,12 +3488,13 @@
       "deadline_s": 60,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-60",
       "planner_seed": 8256394653350740780,
       "policy": "queue_haul_power_blind",
       "repeat": 0,
-      "requested_shed_fraction": 0.9,
-      "scenario_id": "beb88afbef1b1849",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "937976e47e237a3d",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -4020,12 +4034,13 @@
       "deadline_s": 60,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-60",
       "planner_seed": 9132114130655848517,
       "policy": "isolated_fastest",
       "repeat": 0,
-      "requested_shed_fraction": 0.9,
-      "scenario_id": "e0d5160c1b19ac51",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "a4a44834242e2bf5",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -4565,12 +4580,13 @@
       "deadline_s": 60,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-60",
       "planner_seed": 15252076542067595021,
       "policy": "replay_only",
       "repeat": 0,
-      "requested_shed_fraction": 0.9,
-      "scenario_id": "41aa15de3e786ee9",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "84229624304775a2",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -5110,12 +5126,13 @@
       "deadline_s": 60,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-60",
       "planner_seed": 10887234925223726346,
       "policy": "queue_haul",
       "repeat": 0,
-      "requested_shed_fraction": 0.9,
-      "scenario_id": "973e8d312382cf98",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "de5c80d1c4fc474e",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -5655,12 +5672,13 @@
       "deadline_s": 60,
       "design": "constraint",
       "migration_headroom": {},
+      "objective": "max_shed",
       "pack": "window-60",
       "planner_seed": 4761212831455224666,
       "policy": "greedy",
       "repeat": 0,
-      "requested_shed_fraction": 0.9,
-      "scenario_id": "2a3e809905e1969c",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "cdf097c9bd707278",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -6204,12 +6222,13 @@
           "replay": 0.25
         }
       },
+      "objective": "max_shed",
       "pack": "quota-30",
       "planner_seed": 4729483727474915096,
       "policy": "queue_haul_power_blind",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "5807006d262a9640",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "34d06876c9170ec8",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -6465,12 +6484,13 @@
           "replay": 0.25
         }
       },
+      "objective": "max_shed",
       "pack": "quota-30",
       "planner_seed": 2140941894972557230,
       "policy": "greedy",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "3b641954e002d86d",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "4c2a73c74a17e550",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -6726,12 +6746,13 @@
           "replay": 0.25
         }
       },
+      "objective": "max_shed",
       "pack": "quota-30",
       "planner_seed": 9787743748639047392,
       "policy": "kv_only",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "515e27bdf3ff5691",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "211ed0b7af3382c6",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -6987,12 +7008,13 @@
           "replay": 0.25
         }
       },
+      "objective": "max_shed",
       "pack": "quota-30",
       "planner_seed": 4338850710296790185,
       "policy": "queue_haul",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "43e8973b092fb81f",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "cd0483d910d7960c",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -7248,12 +7270,13 @@
           "replay": 0.25
         }
       },
+      "objective": "max_shed",
       "pack": "quota-30",
       "planner_seed": 4017108949310594096,
       "policy": "isolated_fastest",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "b8b29f7231723509",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "1420839f340340bd",
       "sessions": [
         {
           "initial_tokens": 14042,
@@ -7509,12 +7532,13 @@
           "replay": 0.25
         }
       },
+      "objective": "max_shed",
       "pack": "quota-30",
       "planner_seed": 7191125677649781320,
       "policy": "replay_only",
       "repeat": 0,
-      "requested_shed_fraction": 0.8,
-      "scenario_id": "29381342c1fef15e",
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "9dbbce9e84cdd0a0",
       "sessions": [
         {
           "initial_tokens": 14042,

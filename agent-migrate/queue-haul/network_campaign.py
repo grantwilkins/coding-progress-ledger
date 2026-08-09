@@ -58,10 +58,10 @@ CONSTRAINT_POLICIES = (
     "queue_haul_power_blind",
 )
 CONSTRAINT_CELLS = (
-    ("window-19", 19, 22, 15, .70),
-    ("window-30", 30, 28, 8, .80),
-    ("window-60", 60, 64, None, .90),
-    ("quota-30", 30, 28, 8, .80),
+    ("window-19", 19, 22, 15, 1.0),
+    ("window-30", 30, 28, 8, 1.0),
+    ("window-60", 60, 64, None, 1.0),
+    ("quota-30", 30, 28, 8, 1.0),
 )
 CONSTRAINT_ACTIONS = (
     "germany_kv_transfer", "east_replay", "east_kv_transfer",
@@ -554,11 +554,13 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                 scenarios.append({
                     "scenario_id": _hash([
                         design, condition_index, policy, session_rows, headroom,
+                        deadline, target, "max_shed",
                     ])[:16],
                     "design": design, "condition_index": condition_index,
                     "condition_id": condition_id, "repeat": 0,
                     "pack": condition_id, "policy": policy,
                     "workload": "agentic_tool_loop", "bandwidth": "natural",
+                    "objective": "max_shed",
                     "bandwidth_mbps": _bandwidths(contract, "natural"),
                     "deadline_s": deadline,
                     "background": {"east": (.5, 0), "germany": (.95, 0)},
@@ -725,10 +727,10 @@ def validate_plan(plan: dict) -> None:
                                               "germany": (.95, 0)}:
                 raise ValueError("constraint route or load contract changed")
         expected_cells = {
-            0: ("window-19", 19, 22, 513_650, 15, .70, {}),
-            1: ("window-30", 30, 28, 648_131, 8, .80, {}),
-            2: ("window-60", 60, 64, 898_688, None, .90, {}),
-            3: ("quota-30", 30, 28, 648_131, 8, .80,
+            0: ("window-19", 19, 22, 513_650, 15, 1.0, {}),
+            1: ("window-30", 30, 28, 648_131, 8, 1.0, {}),
+            2: ("window-60", 60, 64, 898_688, None, 1.0, {}),
+            3: ("quota-30", 30, 28, 648_131, 8, 1.0,
                 {"germany": {"replay": .25}}),
         }
         signatures = {}
@@ -745,6 +747,7 @@ def validate_plan(plan: dict) -> None:
                     or any(row["condition_id"] != condition_id
                            or row["deadline_s"] != deadline
                            or row["workload"] != "agentic_tool_loop"
+                           or row["objective"] != "max_shed"
                            or row["source_load"] != .8
                            or row["context_seed"] != context_seed
                            or len(row["sessions"]) != count
@@ -1266,7 +1269,9 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
     return problem, architecture, routes, requested_shed_w
 
 
-def joint_solver(policy: str) -> str:
+def joint_solver(policy: str, objective: str | None = None) -> str:
+    if policy == "queue_haul" and objective == "max_shed":
+        return "max_shed"
     return {
         "queue_haul": "lp_work_first", "greedy": "greedy",
         "greedy_lagrangian": "greedy_lagrangian", "random": "random",
@@ -1285,7 +1290,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
         scenario, snapshots, profile, demand)
     partial = scenario.get("design") in {"frontier", "constraint"}
     deadline_blind = scenario["policy"] == DEADLINE_BLIND_POLICY
-    solver = joint_solver(scenario["policy"])
+    solver = joint_solver(scenario["policy"], scenario.get("objective"))
     planning_problem = replace(
         problem, deadline_s=DEADLINE_BLIND_HORIZON_S,
         end_s=max(problem.end_s, DEADLINE_BLIND_HORIZON_S),
@@ -1991,7 +1996,7 @@ def plot_constraint(rows: list[dict], duals: list[dict], out: Path) -> None:
 
     policy_colors = dict(zip(CONSTRAINT_POLICIES, TAB10_COLORS))
     policy_labels = {
-        "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul greedy",
+        "queue_haul": "Queue-Haul exact max", "greedy": "Queue-Haul greedy",
         "kv_only": "KV only", "replay_only": "Replay only",
         "isolated_fastest": "Per-session fastest",
         "queue_haul_power_blind": "Power blind",
@@ -2003,23 +2008,33 @@ def plot_constraint(rows: list[dict], duals: list[dict], out: Path) -> None:
         "germany_replay": "Replay → Germany",
     }
     cells = [cell[0] for cell in CONSTRAINT_CELLS]
-    fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharey=True)
-    for axis, condition in zip(axes.flat, cells):
-        selected = {row["policy"]: row for row in rows
-                    if row["condition_id"] == condition}
-        policies = [policy for policy in CONSTRAINT_POLICIES if policy in selected]
-        axis.bar(
-            [policy_labels[policy] for policy in policies],
-            [selected[policy]["attained_shed_w"] for policy in policies],
-            color=[policy_colors[policy] for policy in policies],
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
+    windows = cells[:3]
+    for policy in CONSTRAINT_POLICIES:
+        selected = {row["condition_id"]: row for row in rows
+                    if row["policy"] == policy}
+        axes[0].plot(
+            [selected[cell]["deadline_s"] for cell in windows],
+            [selected[cell]["attained_shed_w"] for cell in windows],
+            marker="o", color=policy_colors[policy], label=policy_labels[policy],
         )
-        if policies:
-            axis.axhline(selected[policies[0]]["requested_shed_w"],
-                        color="black", linestyle="--", linewidth=1)
-        axis.set_title(condition)
-        axis.tick_params(axis="x", rotation=35, labelsize=8)
-    axes[0, 0].set_ylabel("Exact source power shed (W)")
-    axes[1, 0].set_ylabel("Exact source power shed (W)")
+    request = next(row["requested_shed_w"] for row in rows
+                   if row["condition_id"] == windows[0])
+    axes[0].axhline(request, color="black", linestyle="--", linewidth=1,
+                    label="Full-pack request")
+    selected = {row["policy"]: row for row in rows
+                if row["condition_id"] == cells[3]}
+    axes[1].bar(
+        [policy_labels[policy] for policy in CONSTRAINT_POLICIES],
+        [selected[policy]["attained_shed_w"] for policy in CONSTRAINT_POLICIES],
+        color=[policy_colors[policy] for policy in CONSTRAINT_POLICIES],
+    )
+    axes[1].axhline(request, color="black", linestyle="--", linewidth=1)
+    axes[0].set(xlabel="Deadline (s)", ylabel="Source power shed (W)",
+                title="Full-pack request by deadline")
+    axes[1].set_title("30 s with Germany replay quota")
+    axes[1].tick_params(axis="x", rotation=35, labelsize=8)
+    axes[0].legend(frameon=False, fontsize=8)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"constraint_attainment.{suffix}", dpi=200)
@@ -2079,15 +2094,13 @@ def plot_constraint(rows: list[dict], duals: list[dict], out: Path) -> None:
 
 def _validate_constraint_simulation(rows: list[dict], duals: list[dict]) -> None:
     by_cell = {(row["condition_id"], row["policy"]): row for row in rows}
-    if any(not by_cell[cell, policy]["target_met"]
-           for cell, *_ in CONSTRAINT_CELLS
-           for policy in ("queue_haul", "greedy")):
-        raise RuntimeError("Queue-Haul failed a frozen constraint target")
-    restricted = ("kv_only", "replay_only", "isolated_fastest",
-                  "queue_haul_power_blind")
-    if any(by_cell[cell, policy]["target_met"]
-           for cell, *_ in CONSTRAINT_CELLS for policy in restricted):
-        raise RuntimeError("a restricted baseline passed a frozen constraint target")
+    if any(row["target_met"] for row in rows):
+        raise RuntimeError("the full-pack request must exceed constrained capacity")
+    if any(by_cell[cell, "queue_haul"]["attained_shed_w"] < max(
+            by_cell[cell, policy]["attained_shed_w"]
+            for policy in CONSTRAINT_POLICIES[1:]) - 1e-8
+           for cell, *_ in CONSTRAINT_CELLS):
+        raise RuntimeError("Queue-Haul is below a baseline capacity point")
     migration = [row for row in duals if row["resource"].startswith("migration:")]
     if any(len([row for row in migration if row["condition_id"] == cell
                 and row["shadow_w_per_full_capacity"] > 1e-8]) != 4
@@ -2124,7 +2137,8 @@ def simulate_constraint(plan_path: Path, out: Path) -> dict:
         problem, architecture, routes, requested = joint_problem(
             scenario, snapshots, profile, demand)
         result = solve(
-            problem, profile, routes, joint_solver(scenario["policy"]),
+            problem, profile, routes, joint_solver(
+                scenario["policy"], scenario.get("objective")),
             seed=scenario["planner_seed"], destination=architecture,
         )
         counts = _constraint_action_counts(result.moves)
@@ -2132,7 +2146,8 @@ def simulate_constraint(plan_path: Path, out: Path) -> dict:
         rows.append({
             "condition_index": scenario["condition_index"],
             "condition_id": scenario["condition_id"],
-            "policy": scenario["policy"], "deadline_s": scenario["deadline_s"],
+            "policy": scenario["policy"], "objective": scenario["objective"],
+            "solver": result.solver, "deadline_s": scenario["deadline_s"],
             "session_count": len(scenario["sessions"]),
             "movement_tokens": sum(row["initial_tokens"]
                                    for row in scenario["sessions"]),
@@ -2178,7 +2193,7 @@ def simulate_constraint(plan_path: Path, out: Path) -> dict:
     artifacts = {path.name: profiler.file_hash(path)
                  for path in sorted(out.iterdir()) if path.is_file()}
     metadata = {
-        "schema": "queue-haul-constraint-simulation-v1",
+        "schema": "queue-haul-constraint-simulation-v2",
         "plan": {"path": str(plan_path), "sha256": profiler.file_hash(plan_path)},
         "manifest_sha256": plan["manifest"]["sha256"],
         "model_profile_sha256": plan["model_profile"]["sha256"],
@@ -2198,6 +2213,11 @@ def simulate_constraint(plan_path: Path, out: Path) -> dict:
             "price because every exact request exceeds its marginal ceiling; "
             "exact bundle shed is recomputed after integral packing"
         ),
+        "objective": (
+            "maximize total removable single-source load with an exact binary "
+            "joint action/destination solve, then minimize migration work"
+        ),
+        "big_shed_request": "100% of modeled removable pack power",
         "policy_colors": dict(zip(CONSTRAINT_POLICIES, TAB10_COLORS)),
         "artifacts": artifacts,
     }
@@ -2207,13 +2227,12 @@ def simulate_constraint(plan_path: Path, out: Path) -> dict:
 
 
 def _valid_constraint_evidence(scenario: dict, result: dict) -> bool:
-    expected_target = scenario["policy"] in {"queue_haul", "greedy"}
     background = result.get("background")
     return all(key in result for key in (
         "deadline_met", "target_met", "request_failures",
         "kv_evidence_warnings", "load_warnings", "background",
     )) and result["deadline_met"] is True \
-        and result["target_met"] is expected_target \
+        and result["target_met"] is False \
         and result["request_failures"] == 0 \
         and result["kv_evidence_warnings"] == 0 \
         and result["load_warnings"] == [] \
