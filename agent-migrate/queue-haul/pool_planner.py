@@ -316,6 +316,7 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
                 tuple(sorted(pool.fluid_migration.destination_power_w.items())),
                 pool.fluid_migration.provenance,
             ),
+            tuple(sorted((pool.migration_headroom or {}).items())),
         )
         grouped.setdefault(key, []).append(p)
     pool_groups = tuple(map(tuple, grouped.values()))
@@ -474,7 +475,7 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
             capacity = len(pool.replicas) * migration_horizon * (
                 service.replay_speedup if service and method == "replay" else
                 service.kv_ingest_bytes_per_s if service else 1
-            )
+            ) * (pool.migration_headroom or {}).get(method, 1)
             add(("migration", p, method), capacity,
                 f"migration:{pool.pool_id}:{method}",
                 "serial-replay-s" if service and method == "replay" else
@@ -668,6 +669,20 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         candidate for j in range(len(oracle.sessions))
         for candidate in oracle.choices(j)
     ))
+
+
+def phase_one_capacity_duals(table: CandidateTable):
+    """Maximize additive marginal shed and return normalized capacity duals."""
+    if not table.candidates:
+        return 0.0, np.zeros(len(table.resource_names))
+    gains = np.array([candidate.gain_w for candidate in table.candidates])
+    matrix = vstack((table.incidence, table.resources), format="csr")
+    result = linprog(-gains, A_ub=matrix, b_ub=np.ones(matrix.shape[0]),
+                     bounds=(0, None), method="highs")
+    if result.status:
+        raise RuntimeError(f"HiGHS Phase-I LP failed: {result.message}")
+    duals = -result.ineqlin.marginals[table.incidence.shape[0]:]
+    return -float(result.fun), np.maximum(0, duals)
 
 
 def _scarcity_prices(table, matrix, eligible=None):

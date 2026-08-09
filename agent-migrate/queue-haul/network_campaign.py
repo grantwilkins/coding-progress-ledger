@@ -30,6 +30,8 @@ from destination_runner import MetricsSampler
 from destination import (DestinationArchitecture, DestinationPool,
                          DestinationReplica, dedicated_sink_architecture)
 from planner import plan as solve, source_power
+from pool_planner import candidate_table, phase_one_capacity_duals
+from power_model import ExpectedPower
 from profiles import ModelProfile, WorkloadProfile
 from simulate import NetworkLink, PowerNode, ServingInstance
 
@@ -50,6 +52,24 @@ POLICIES = (
 FRONTIER_POLICIES = (
     "queue_haul", "greedy", "replay_only", "kv_only",
     "queue_haul_power_blind",
+)
+CONSTRAINT_POLICIES = (
+    "queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest",
+    "queue_haul_power_blind",
+)
+CONSTRAINT_CELLS = (
+    ("window-19", 19, 22, 15, .70),
+    ("window-30", 30, 28, 8, .80),
+    ("window-60", 60, 64, None, .90),
+    ("quota-30", 30, 28, 8, .80),
+)
+CONSTRAINT_ACTIONS = (
+    "germany_kv_transfer", "east_replay", "east_kv_transfer",
+    "germany_replay",
+)
+TAB10_COLORS = (
+    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+    "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
 )
 FRONTIER_PACKS = (
     ("4x16k", 4, 16_384), ("8x16k", 8, 16_384),
@@ -464,11 +484,12 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         raise ValueError("invalid session count")
     scenarios = []
     destinations = tuple(sorted(contract["paths"]))
-    if design not in {"joint", "isolated", "frontier"} or len(destinations) != (
-        2 if design in {"joint", "frontier"} else 1
+    if design not in {"joint", "isolated", "frontier", "constraint"} \
+            or len(destinations) != (
+        2 if design in {"joint", "frontier", "constraint"} else 1
     ):
         raise ValueError(f"{design} design requires "
-                         f"{'two destinations' if design in {'joint', 'frontier'} else 'one destination'}")
+                         f"{'two destinations' if design in {'joint', 'frontier', 'constraint'} else 'one destination'}")
     if design == "frontier":
         if not available:
             raise ValueError("frontier design needs a manifest template")
@@ -503,6 +524,47 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                     "bandwidth_mbps": _bandwidths(contract, "natural"),
                     "deadline_s": HANDOFF_DEADLINE_S, "background": background,
                     "source_load": .8, "requested_shed_fraction": .8,
+                    "planner_seed": profiler.stable_seed(
+                        seed, condition_index, policy),
+                    "sessions": session_rows,
+                })
+    elif design == "constraint":
+        if destinations != ("east", "germany") or len(available) != 8:
+            raise ValueError("constraint design requires East, Germany, and eight traces")
+        workload = WorkloadProfile.load(WORKLOAD_PATHS["agentic_tool_loop"])
+        support = tuple(sorted({row.context_tokens for row in workload.records}))
+        packs = {}
+        for pack_id, _deadline, count, context_seed, _target in CONSTRAINT_CELLS[:3]:
+            rng = random.Random(context_seed)
+            contexts = ([support[0]] * count if context_seed is None else
+                        [rng.choice(support) for _ in range(count)])
+            packs[pack_id] = [{
+                "session_id": f"{available[index % len(available)]['id']}-{pack_id}-{index}",
+                "template_id": available[index % len(available)]["id"],
+                "job_class": available[index % len(available)]["job_class"],
+                "turn_index": 0, "initial_tokens": context, "order": index,
+            } for index, context in enumerate(contexts)]
+        packs["quota-30"] = packs["window-30"]
+        for condition_index, (condition_id, deadline, _count, context_seed,
+                              target) in enumerate(CONSTRAINT_CELLS):
+            headroom = ({"germany": {"replay": .25}}
+                        if condition_id == "quota-30" else {})
+            for policy in CONSTRAINT_POLICIES:
+                session_rows = packs[condition_id]
+                scenarios.append({
+                    "scenario_id": _hash([
+                        design, condition_index, policy, session_rows, headroom,
+                    ])[:16],
+                    "design": design, "condition_index": condition_index,
+                    "condition_id": condition_id, "repeat": 0,
+                    "pack": condition_id, "policy": policy,
+                    "workload": "agentic_tool_loop", "bandwidth": "natural",
+                    "bandwidth_mbps": _bandwidths(contract, "natural"),
+                    "deadline_s": deadline,
+                    "background": {"east": (.5, 0), "germany": (.95, 0)},
+                    "source_load": .8, "requested_shed_fraction": target,
+                    "migration_headroom": headroom,
+                    "context_seed": context_seed,
                     "planner_seed": profiler.stable_seed(
                         seed, condition_index, policy),
                     "sessions": session_rows,
@@ -564,11 +626,18 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                         "sessions": session_rows,
                     })
     rng = random.Random(seed)
-    for bandwidth in ("controlled_80", "controlled_40", "natural"):
-        rows = [row for row in scenarios if row["bandwidth"] == bandwidth]
-        rng.shuffle(rows)
-        scenarios = [row for row in scenarios if row["bandwidth"] != bandwidth]
-        scenarios.extend(rows)
+    if design == "constraint":
+        blocks = [[row for row in scenarios if row["condition_index"] == index]
+                  for index in range(len(CONSTRAINT_CELLS))]
+        for block in blocks:
+            rng.shuffle(block)
+        scenarios = [row for block in blocks for row in block]
+    else:
+        for bandwidth in ("controlled_80", "controlled_40", "natural"):
+            rows = [row for row in scenarios if row["bandwidth"] == bandwidth]
+            rng.shuffle(rows)
+            scenarios = [row for row in scenarios if row["bandwidth"] != bandwidth]
+            scenarios.extend(rows)
     output = {
         "schema": PLAN_SCHEMA, "design": design, "seed": seed,
         "manifest": {"path": str(manifest_path),
@@ -576,10 +645,16 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         "model_profile": {"path": str(MODEL_PATH),
                           "sha256": profiler.file_hash(MODEL_PATH)},
         "network_contract": contract,
-        "policies": list(FRONTIER_POLICIES if design == "frontier" else POLICIES),
-        "conditions": target_conditions(destinations) if design == "joint" else [],
-        "repeats": 1 if design == "frontier" else REPEATS,
-        "sessions_per_scenario": sessions, "scenarios": scenarios,
+        "policies": list(FRONTIER_POLICIES if design == "frontier" else
+                         CONSTRAINT_POLICIES if design == "constraint" else POLICIES),
+        "conditions": target_conditions(destinations) if design == "joint" else
+            [{"condition_id": row[0], "deadline_s": row[1],
+              "sessions": row[2], "context_seed": row[3],
+              "requested_shed_fraction": row[4]}
+             for row in CONSTRAINT_CELLS] if design == "constraint" else [],
+        "repeats": 1 if design in {"frontier", "constraint"} else REPEATS,
+        "sessions_per_scenario": None if design == "constraint" else sessions,
+        "scenarios": scenarios,
     }
     validate_plan(output)
     return output
@@ -592,7 +667,8 @@ def validate_plan(plan: dict) -> None:
     design = plan.get("design")
     expected = 126 if design == "joint" else 54 if design == "isolated" \
         else (185 if plan.get("phase", "pilot") == "pilot" else
-              len(scenarios)) if design == "frontier" else 0
+              len(scenarios)) if design == "frontier" \
+        else 24 if design == "constraint" else 0
     if len(scenarios) != expected \
             or len({row["scenario_id"] for row in scenarios}) != len(scenarios):
         raise ValueError(f"network plan must contain exactly {expected} unique scenarios")
@@ -615,6 +691,80 @@ def validate_plan(plan: dict) -> None:
                               for item in row["sessions"]) for row in rows}) != 1
                for rows in blocks.values()):
             raise ValueError("frontier policy block is incomplete or unmatched")
+        return
+    if design == "constraint":
+        if set(plan["network_contract"]["paths"]) != {"east", "germany"}:
+            raise ValueError("constraint plan requires East and Germany")
+        manifest_path = Path(plan["manifest"]["path"])
+        if profiler.file_hash(manifest_path) != plan["manifest"]["sha256"]:
+            raise ValueError("constraint manifest changed")
+        templates = tuple(row["id"] for row in sorted(
+            json.loads(manifest_path.read_text())["sessions"],
+            key=lambda row: row["id"],
+        ))
+        if len(templates) != 8:
+            raise ValueError("constraint design requires eight traces")
+        support = (14_042, 30_785, 31_547)
+        contexts = {}
+        for condition_id, _deadline, count, context_seed, _target \
+                in CONSTRAINT_CELLS[:3]:
+            rng = random.Random(context_seed)
+            contexts[condition_id] = ([support[0]] * count
+                                      if context_seed is None else
+                                      [rng.choice(support) for _ in range(count)])
+        contexts["quota-30"] = contexts["window-30"]
+        blocks = {}
+        for row in scenarios:
+            blocks.setdefault(row["condition_index"], []).append(row)
+            if row["bandwidth"] != "natural" \
+                    or row["bandwidth_mbps"] != _bandwidths(
+                        plan["network_contract"], "natural") \
+                    or row["background"] != {"east": [.5, 0],
+                                             "germany": [.95, 0]} \
+                    and row["background"] != {"east": (.5, 0),
+                                              "germany": (.95, 0)}:
+                raise ValueError("constraint route or load contract changed")
+        expected_cells = {
+            0: ("window-19", 19, 22, 513_650, 15, .70, {}),
+            1: ("window-30", 30, 28, 648_131, 8, .80, {}),
+            2: ("window-60", 60, 64, 898_688, None, .90, {}),
+            3: ("quota-30", 30, 28, 648_131, 8, .80,
+                {"germany": {"replay": .25}}),
+        }
+        signatures = {}
+        for index, (condition_id, deadline, count, tokens, context_seed, target,
+                    headroom) in expected_cells.items():
+            rows = blocks.get(index, [])
+            signatures[index] = {tuple(
+                (item["session_id"], item["template_id"], item["initial_tokens"])
+                for item in row["sessions"]
+            ) for row in rows}
+            if len(rows) != len(CONSTRAINT_POLICIES) \
+                    or {row["policy"] for row in rows} != set(CONSTRAINT_POLICIES) \
+                    or len(signatures[index]) != 1 \
+                    or any(row["condition_id"] != condition_id
+                           or row["deadline_s"] != deadline
+                           or row["workload"] != "agentic_tool_loop"
+                           or row["source_load"] != .8
+                           or row["context_seed"] != context_seed
+                           or len(row["sessions"]) != count
+                           or sum(item["initial_tokens"] for item in row["sessions"])
+                           != tokens
+                           or [item["initial_tokens"] for item in row["sessions"]]
+                           != contexts[condition_id]
+                           or [item["template_id"] for item in row["sessions"]]
+                           != [templates[i % len(templates)] for i in range(count)]
+                           or [item["order"] for item in row["sessions"]]
+                           != list(range(count))
+                           or row["requested_shed_fraction"] != target
+                           or row["migration_headroom"] != headroom
+                           for row in rows):
+                raise ValueError("constraint policy block changed")
+        if {tuple((item[1], item[2]) for item in signature)
+                for signature in signatures[1]} != {
+                    tuple((item[1], item[2]) for item in signature)
+                    for signature in signatures[3]}:
+            raise ValueError("quota counterfactual must reuse the 30-second pack")
         return
     if design == "isolated":
         if len(plan["network_contract"]["paths"]) != 1 or any(
@@ -1068,10 +1218,9 @@ def destination_metrics(stack: ClusterStack, node_id: str,
     return summarize_metrics(samples, target_kv)
 
 
-def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
-                        profile: ModelProfile, seed: int,
-                        demand: dict[str, tuple[float, float]] | None = None
-                        ) -> list[dict]:
+def joint_problem(scenario: dict, snapshots: dict[str, dict],
+                  profile: ModelProfile,
+                  demand: dict[str, tuple[float, float]] | None = None):
     base, _ = policy_campaign._problem(
         profile, scenario["sessions"], 1, scenario["deadline_s"])
     if demand is not None:
@@ -1079,7 +1228,6 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
             session, expected_f=demand[session.session_id][0],
             expected_g=demand[session.session_id][1],
         ) for session in base.sessions))
-    frontier = scenario.get("design") == "frontier"
     requested_shed_w = None
     if "requested_shed_fraction" in scenario:
         initial = source_power(base, profile)
@@ -1110,18 +1258,34 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
                 0, 512)),
             round(snapshots[node]["kv_fraction"] * dtype.kv_capacity_tokens),
         ),), f"route/{node}", (f"link/{node}",),
+        migration_headroom=scenario.get("migration_headroom", {}).get(node),
     ) for node in destinations)
     architecture = DestinationArchitecture(
         template.schema, template.source_compatibility, template.types, pools)
-    deadline_blind = scenario["policy"] == DEADLINE_BLIND_POLICY
-    solver = {
+    routes = {("source", node): (f"link/{node}",) for node in destinations}
+    return problem, architecture, routes, requested_shed_w
+
+
+def joint_solver(policy: str) -> str:
+    return {
         "queue_haul": "lp_work_first", "greedy": "greedy",
         "greedy_lagrangian": "greedy_lagrangian", "random": "random",
         "kv_only": "kv_only", "replay_only": "replay_only",
+        "isolated_fastest": "isolated_fastest",
         "queue_haul_power_blind": "lp_power_blind",
         DEADLINE_BLIND_POLICY: "lp_work_first",
-    }[scenario["policy"]]
-    routes = {("source", node): (f"link/{node}",) for node in destinations}
+    }[policy]
+
+
+def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
+                        profile: ModelProfile, seed: int,
+                        demand: dict[str, tuple[float, float]] | None = None
+                        ) -> list[dict]:
+    problem, architecture, routes, requested_shed_w = joint_problem(
+        scenario, snapshots, profile, demand)
+    partial = scenario.get("design") in {"frontier", "constraint"}
+    deadline_blind = scenario["policy"] == DEADLINE_BLIND_POLICY
+    solver = joint_solver(scenario["policy"])
     planning_problem = replace(
         problem, deadline_s=DEADLINE_BLIND_HORIZON_S,
         end_s=max(problem.end_s, DEADLINE_BLIND_HORIZON_S),
@@ -1131,7 +1295,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     planned = list(result.moves)
     admitted = {move.session_id for move in planned}
     missing = tuple(row for row in problem.sessions if row.session_id not in admitted)
-    if missing and not frontier:
+    if missing and not partial:
         late = replace(problem, sessions=missing, deadline_s=600, end_s=600)
         planned.extend(replace(move, order=move.order + len(planned)) for move in solve(
             late, profile, routes, solver, seed=seed, destination=architecture,
@@ -1146,12 +1310,12 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
         "planned_quiesce_s": move.quiesce_s,
         "deadline_admitted": move.session_id in admitted,
     } for move in planned]
-    if not frontier and {row["session_id"] for row in moves} != {
+    if not partial and {row["session_id"] for row in moves} != {
             row["session_id"] for row in scenario["sessions"]}:
         raise RuntimeError("policy did not plan the complete evacuation")
-    if frontier and (requested_shed_w is None
+    if partial and (requested_shed_w is None
             or not set(admitted) <= {row["session_id"] for row in scenario["sessions"]}):
-        raise RuntimeError("invalid frontier shed decision")
+        raise RuntimeError("invalid partial shed decision")
     return moves
 
 
@@ -1232,8 +1396,20 @@ class SinkLoad:
         self.stop.set()
 
 
+def scenario_records(manifest: dict, scenario: dict) -> dict[str, dict]:
+    templates = {row["id"]: row for row in manifest["sessions"]}
+    return {
+        row["session_id"]: ({
+            **templates[row.get("template_id", row["session_id"])],
+            "id": row["session_id"], "state_code": f"QH{index:03d}",
+        } if "template_id" in row else templates[row["session_id"]])
+        for index, row in enumerate(scenario["sessions"])
+    }
+
+
 def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                          root: Path, prefill_tps: float) -> dict:
+    diagnostic = scenario["design"] in {"frontier", "constraint"}
     root.mkdir(parents=True, exist_ok=False)
     (root / "scenario.json").write_text(
         json.dumps(scenario, indent=2, sort_keys=True) + "\n")
@@ -1241,14 +1417,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     if any(process.poll() is not None for process in stack.remote.values()):
         raise RuntimeError("remote sink exited")
     _clear_cluster(stack)
-    templates = {row["id"]: row for row in manifest["sessions"]}
-    sessions = {
-        row["session_id"]: ({**templates[row.get("template_id", row["session_id"])],
-                             "id": row["session_id"],
-                             "state_code": f"QH{index:03d}"}
-                            if "template_id" in row else templates[row["session_id"]])
-        for index, row in enumerate(scenario["sessions"])
-    }
+    sessions = scenario_records(manifest, scenario)
     messages = {row["session_id"]: profiler.calibration_messages(
         sessions[row["session_id"]], row["initial_tokens"])
         for row in scenario["sessions"]}
@@ -1267,7 +1436,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             root / "source_load.jsonl")
         loads["source"].start()
     try:
-        if scenario["design"] in {"joint", "frontier"}:
+        if scenario["design"] in {"joint", "frontier", "constraint"}:
             time.sleep(5)
             nodes = stack.cluster.destinations
             def snapshot(node):
@@ -1275,7 +1444,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                     return destination_metrics(
                         stack, node.id, scenario["background"][node.id][1])
                 except Exception as exc:
-                    if scenario["design"] != "frontier":
+                    if not diagnostic:
                         raise
                     return {"kv_fraction": 0, "warning": True,
                             "error": f"{type(exc).__name__}: {exc}"}
@@ -1304,7 +1473,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                     _warm(stack, messages[move["session_id"]],
                           row["state_code"], timeout)
                 except Exception as exc:
-                    if scenario["design"] != "frontier":
+                    if not diagnostic:
                         raise
                     preparation_errors[move["session_id"]] = \
                         f"{type(exc).__name__}: {exc}"
@@ -1327,7 +1496,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                     messages[move["session_id"]], session["state_code"],
                     timeout, move["method"] == "replay")}
             except Exception as exc:
-                if scenario["design"] != "frontier":
+                if not diagnostic:
                     raise
                 return {**move, "error": f"{type(exc).__name__}: {exc}"}
 
@@ -1341,15 +1510,15 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             try:
                 load.close()
             except RuntimeError as exc:
-                if scenario["design"] != "frontier":
+                if not diagnostic:
                     raise
                 load_warnings.append(f"{name}: {exc}")
     end_ns = time.monotonic_ns()
-    if scenario["design"] != "frontier" and any(row["method"] == "kv_transfer"
+    if not diagnostic and any(row["method"] == "kv_transfer"
            and row["request"]["cached_tokens"] <= 0 for row in results):
         raise RuntimeError("KV reconstruction reported no cached tokens")
     sleep_start_ns = sleep_end_ns = None
-    if scenario["design"] != "frontier":
+    if not diagnostic:
         testbed.set_source_sleep(stack.cfg, True)
         sleep_start_ns = time.monotonic_ns()
         time.sleep(5)
@@ -1375,7 +1544,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         "connections": connections, "resp_transfers": transfers,
         "source_sleep_ns": [sleep_start_ns, sleep_end_ns],
     }
-    if scenario["design"] == "frontier":
+    if diagnostic:
         profile = ModelProfile.load(MODEL_PATH)
         base, _ = policy_campaign._problem(
             profile, scenario["sessions"], 1, scenario["deadline_s"])
@@ -1805,8 +1974,256 @@ def plot_frontier(plan: dict, evidence: list[tuple[dict, dict]], out: Path) -> N
     plt.close(fig)
 
 
+def _constraint_action_counts(moves) -> dict[str, int]:
+    counts = dict.fromkeys(CONSTRAINT_ACTIONS, 0)
+    for move in moves:
+        destination = (move["destination_instance"] if isinstance(move, dict)
+                       else move.destination_instance)
+        method = move["method"] if isinstance(move, dict) else move.method
+        counts[f"{destination}_{method}"] += 1
+    return counts
+
+
+def plot_constraint(rows: list[dict], duals: list[dict], out: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    policy_colors = dict(zip(CONSTRAINT_POLICIES, TAB10_COLORS))
+    policy_labels = {
+        "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul greedy",
+        "kv_only": "KV only", "replay_only": "Replay only",
+        "isolated_fastest": "Per-session fastest",
+        "queue_haul_power_blind": "Power blind",
+    }
+    action_labels = {
+        "germany_kv_transfer": "KV → Germany",
+        "east_replay": "Replay → East",
+        "east_kv_transfer": "KV → East",
+        "germany_replay": "Replay → Germany",
+    }
+    cells = [cell[0] for cell in CONSTRAINT_CELLS]
+    fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharey=True)
+    for axis, condition in zip(axes.flat, cells):
+        selected = {row["policy"]: row for row in rows
+                    if row["condition_id"] == condition}
+        policies = [policy for policy in CONSTRAINT_POLICIES if policy in selected]
+        axis.bar(
+            [policy_labels[policy] for policy in policies],
+            [selected[policy]["attained_shed_w"] for policy in policies],
+            color=[policy_colors[policy] for policy in policies],
+        )
+        if policies:
+            axis.axhline(selected[policies[0]]["requested_shed_w"],
+                        color="black", linestyle="--", linewidth=1)
+        axis.set_title(condition)
+        axis.tick_params(axis="x", rotation=35, labelsize=8)
+    axes[0, 0].set_ylabel("Exact source power shed (W)")
+    axes[1, 0].set_ylabel("Exact source power shed (W)")
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"constraint_attainment.{suffix}", dpi=200)
+    plt.close(fig)
+
+    action_colors = dict(zip(CONSTRAINT_ACTIONS, TAB10_COLORS))
+    fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharey=True)
+    for axis, condition in zip(axes.flat, cells):
+        selected = {row["policy"]: row for row in rows
+                    if row["condition_id"] == condition}
+        policies = [policy for policy in CONSTRAINT_POLICIES if policy in selected]
+        bottom = [0.0] * len(policies)
+        for action in CONSTRAINT_ACTIONS:
+            values = [selected[policy][action] /
+                      max(1, selected[policy]["selected_sessions"])
+                      for policy in policies]
+            axis.bar([policy_labels[policy] for policy in policies], values,
+                     bottom=bottom, color=action_colors[action],
+                     label=action_labels[action])
+            bottom = [left + value for left, value in zip(bottom, values)]
+        axis.set_title(condition)
+        axis.tick_params(axis="x", rotation=35, labelsize=8)
+    axes[0, 0].set_ylabel("Fraction of selected actions")
+    axes[1, 0].set_ylabel("Fraction of selected actions")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, fontsize=8, ncol=4,
+               loc="upper center")
+    fig.tight_layout(rect=(0, 0, 1, .94))
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"constraint_actions.{suffix}", dpi=200)
+    plt.close(fig)
+
+    migration = [row for row in duals if row["resource"].startswith("migration:")]
+    if migration:
+        fig, axis = plt.subplots(figsize=(8, 4.5))
+        resources = [f"migration:pool/{action.split('_', 1)[0]}:"
+                     f"{action.split('_', 1)[1]}"
+                     for action in CONSTRAINT_ACTIONS]
+        offsets = (-.18, -.06, .06, .18)
+        for offset, color, resource in zip(offsets, TAB10_COLORS, resources):
+            values = {row["condition_id"]: row for row in migration
+                      if row["resource"] == resource}
+            axis.scatter([index + offset for index in range(len(cells))],
+                         [values[cell]["shadow_w_per_unit"] for cell in cells],
+                         color=color,
+                         label=resource.removeprefix("migration:pool/")
+                         .replace(":", " ").replace("kv_transfer", "KV"))
+        axis.set(xlabel="Frozen condition",
+                 ylabel="Phase-I shadow price (W / replica-second)")
+        axis.set_xticks(range(len(cells)), cells)
+        axis.legend(frameon=False, ncol=2, fontsize=8)
+        fig.tight_layout()
+        for suffix in ("png", "pdf"):
+            fig.savefig(out / f"constraint_duals.{suffix}", dpi=200)
+        plt.close(fig)
+
+
+def _validate_constraint_simulation(rows: list[dict], duals: list[dict]) -> None:
+    by_cell = {(row["condition_id"], row["policy"]): row for row in rows}
+    if any(not by_cell[cell, policy]["target_met"]
+           for cell, *_ in CONSTRAINT_CELLS
+           for policy in ("queue_haul", "greedy")):
+        raise RuntimeError("Queue-Haul failed a frozen constraint target")
+    restricted = ("kv_only", "replay_only", "isolated_fastest",
+                  "queue_haul_power_blind")
+    if any(by_cell[cell, policy]["target_met"]
+           for cell, *_ in CONSTRAINT_CELLS for policy in restricted):
+        raise RuntimeError("a restricted baseline passed a frozen constraint target")
+    migration = [row for row in duals if row["resource"].startswith("migration:")]
+    if any(len([row for row in migration if row["condition_id"] == cell
+                and row["shadow_w_per_full_capacity"] > 1e-8]) != 4
+           for cell, *_ in CONSTRAINT_CELLS):
+        raise RuntimeError("a frozen condition does not exhaust four migration windows")
+    base, quota = by_cell["window-30", "queue_haul"], \
+        by_cell["quota-30", "queue_haul"]
+    favored = quota["germany_kv_transfer"] + quota["east_replay"]
+    if quota["germany_replay"] >= base["germany_replay"] \
+            or quota["east_replay"] <= base["east_replay"] \
+            or favored / quota["selected_sessions"] < .70:
+        raise RuntimeError("replay quota did not cause the required destination shift")
+
+
+def simulate_constraint(plan_path: Path, out: Path) -> dict:
+    plan = json.loads(plan_path.read_text())
+    validate_plan(plan)
+    if plan["design"] != "constraint":
+        raise ValueError("constraint simulation requires a constraint plan")
+    if profiler.file_hash(MODEL_PATH) != plan["model_profile"]["sha256"]:
+        raise RuntimeError("constraint model profile changed")
+    manifest_path = Path(plan["manifest"]["path"])
+    if profiler.file_hash(manifest_path) != plan["manifest"]["sha256"]:
+        raise RuntimeError("constraint manifest changed")
+    manifest = json.loads(manifest_path.read_text())
+    profile, rows, duals, seen = ModelProfile.load(MODEL_PATH), [], [], set()
+    for scenario in plan["scenarios"]:
+        snapshots = {node: {"kv_fraction": values[1]}
+                     for node, values in scenario["background"].items()}
+        demand = agentic_demand(
+            scenario_records(manifest, scenario), scenario["sessions"], profile,
+            scenario["source_load"],
+        )
+        problem, architecture, routes, requested = joint_problem(
+            scenario, snapshots, profile, demand)
+        result = solve(
+            problem, profile, routes, joint_solver(scenario["policy"]),
+            seed=scenario["planner_seed"], destination=architecture,
+        )
+        counts = _constraint_action_counts(result.moves)
+        attained = result.initial_source_power_w - result.planned_source_power_w
+        rows.append({
+            "condition_index": scenario["condition_index"],
+            "condition_id": scenario["condition_id"],
+            "policy": scenario["policy"], "deadline_s": scenario["deadline_s"],
+            "session_count": len(scenario["sessions"]),
+            "movement_tokens": sum(row["initial_tokens"]
+                                   for row in scenario["sessions"]),
+            "requested_shed_w": requested, "attained_shed_w": attained,
+            "attainment_fraction": attained / requested,
+            "target_met": bool(result.feasible),
+            "selected_sessions": len(result.moves),
+            "predicted_makespan_s": result.predicted_migration_makespan_s,
+            "bottleneck": result.bottleneck or "",
+            "binding_resources": result.binding_resources,
+            **counts,
+        })
+        if scenario["condition_id"] not in seen:
+            seen.add(scenario["condition_id"])
+            selection = replace(
+                problem, final_state="awake", assumed_shutdown_s=None)
+            table = candidate_table(
+                problem, profile, architecture, "normal",
+                ExpectedPower(selection, profile))
+            ceiling, prices = phase_one_capacity_duals(table)
+            for name, capacity, unit, price in zip(
+                table.resource_names, table.resource_capacities,
+                table.resource_units, prices,
+            ):
+                duals.append({
+                    "condition_index": scenario["condition_index"],
+                    "condition_id": scenario["condition_id"],
+                    "phase_one_marginal_ceiling_w": ceiling,
+                    "resource": name, "capacity": capacity, "unit": unit,
+                    "shadow_w_per_full_capacity": float(price),
+                    "shadow_w_per_unit": float(price / capacity),
+                })
+    order = {policy: index for index, policy in enumerate(CONSTRAINT_POLICIES)}
+    rows.sort(key=lambda row: (row["condition_index"], order[row["policy"]]))
+    duals.sort(key=lambda row: (row["condition_index"], row["resource"]))
+    _validate_constraint_simulation(rows, duals)
+    out.mkdir(parents=True, exist_ok=False)
+    prediction_path, dual_path = (out / "constraint_predictions.csv",
+                                  out / "constraint_duals.csv")
+    profiler.write_csv(prediction_path, rows)
+    profiler.write_csv(dual_path, duals)
+    plot_constraint(rows, duals, out)
+    artifacts = {path.name: profiler.file_hash(path)
+                 for path in sorted(out.iterdir()) if path.is_file()}
+    metadata = {
+        "schema": "queue-haul-constraint-simulation-v1",
+        "plan": {"path": str(plan_path), "sha256": profiler.file_hash(plan_path)},
+        "manifest_sha256": plan["manifest"]["sha256"],
+        "model_profile_sha256": plan["model_profile"]["sha256"],
+        "context_selection": {
+            "window-19": {"support": "recorded exact", "seed": 15},
+            "window-30/quota-30": {"support": "recorded exact", "seed": 8},
+            "window-60": {"support": "eight copies of each trace at 14042"},
+            "disclosure": "19 s and 30 s seeds were selected offline to expose stress",
+        },
+        "constructed_quota": {
+            "condition": "quota-30", "pool": "germany", "method": "replay",
+            "headroom_fraction": .25, "capacity_replica_s": 6.25,
+            "claim": "operator counterfactual, not a measured load coefficient",
+        },
+        "dual_semantics": (
+            "Phase-I maximum additive initial marginal-power surrogate shadow "
+            "price because every exact request exceeds its marginal ceiling; "
+            "exact bundle shed is recomputed after integral packing"
+        ),
+        "policy_colors": dict(zip(CONSTRAINT_POLICIES, TAB10_COLORS)),
+        "artifacts": artifacts,
+    }
+    write_checkpoint(out / "metadata.json", metadata)
+    return {"scenarios": len(rows), "conditions": len(seen),
+            "out": str(out), "valid": True}
+
+
+def _valid_constraint_evidence(scenario: dict, result: dict) -> bool:
+    expected_target = scenario["policy"] in {"queue_haul", "greedy"}
+    background = result.get("background")
+    return all(key in result for key in (
+        "deadline_met", "target_met", "request_failures",
+        "kv_evidence_warnings", "load_warnings", "background",
+    )) and result["deadline_met"] is True \
+        and result["target_met"] is expected_target \
+        and result["request_failures"] == 0 \
+        and result["kv_evidence_warnings"] == 0 \
+        and result["load_warnings"] == [] \
+        and set(background) == {"east", "germany"} \
+        and not any(row.get("warning") for row in background.values())
+
+
 def reduce_run(plan: dict, run_root: Path) -> dict:
-    rows, evidence, completed, failed, missing = [], [], 0, 0, 0
+    rows, evidence, completed, failed, missing, invalid_evidence = [], [], 0, 0, 0, 0
+    constraint = plan.get("design") == "constraint"
     for scenario in plan["scenarios"]:
         latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None:
@@ -1818,6 +2235,9 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             failed += result["status"] == "failed"
             if result["status"] == "complete":
                 evidence.append((scenario, result))
+        if constraint and result.get("status") == "complete" \
+                and not _valid_constraint_evidence(scenario, result):
+            invalid_evidence += 1
         connections = result.get("connections", [])
         rtts = [float(row["target_rtt_us"]) / 1000 for row in connections
                 if row.get("target_rtt_us")]
@@ -1844,6 +2264,11 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             "realized_shed_w": result.get("realized_shed_w", ""),
             "target_met": result.get("target_met", ""),
             "request_failures": result.get("request_failures", ""),
+            "kv_evidence_warnings": result.get("kv_evidence_warnings", ""),
+            "load_warnings": len(result.get("load_warnings", ())),
+            "background_warnings": sum(
+                bool(value.get("warning"))
+                for value in result.get("background", {}).values()),
             "api_request_bytes": sum(value for key, value in wire.items()
                                      if key.endswith("/client_to_target")
                                      and key.startswith("api/")),
@@ -1859,14 +2284,29 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
     frontier = plan.get("design") == "frontier"
     if frontier and evidence:
         plot_frontier(plan, evidence, run_root)
+    if constraint and evidence:
+        plotted = []
+        for scenario, result in evidence:
+            moves = result.get("requests", [])
+            plotted.append({
+                "condition_id": scenario["condition_id"],
+                "policy": scenario["policy"],
+                "requested_shed_w": result["requested_shed_w"],
+                "attained_shed_w": result["realized_shed_w"],
+                "selected_sessions": len(moves),
+                **_constraint_action_counts(moves),
+            })
+        plot_constraint(plotted, [], run_root)
     summary = {
         "schema": "queue-haul-network-summary-v1",
         "expected": len(plan["scenarios"]), "completed": completed,
         "failed": failed, "missing": missing,
-        "valid": not missing and (
+        "valid": not missing and not (constraint and invalid_evidence) and (
             completed == len(plan["scenarios"]) if not frontier else
             failed / len(plan["scenarios"]) <= FRONTIER_FAILURE_GATE),
     }
+    if constraint:
+        summary["invalid_evidence"] = invalid_evidence
     (run_root / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n")
     artifacts = [path for path in sorted(run_root.rglob("*"))
@@ -1964,7 +2404,7 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                 stop_cluster(stack)
                 stack = None
                 checkpoint_progress(plan, run_root)
-                if plan["design"] != "frontier":
+                if plan["design"] not in {"frontier", "constraint"}:
                     raise
             checkpoint_progress(plan, run_root)
     finally:
@@ -2012,7 +2452,8 @@ def parse_args(argv=None):
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--seed", type=int, default=1)
     command.add_argument("--sessions", type=int, default=8)
-    command.add_argument("--design", choices=("joint", "isolated", "frontier"),
+    command.add_argument("--design",
+                         choices=("joint", "isolated", "frontier", "constraint"),
                          default="joint")
     command = sub.add_parser("check")
     command.add_argument("--cluster", type=Path, required=True)
@@ -2053,6 +2494,9 @@ def parse_args(argv=None):
     command = sub.add_parser("reduce")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
+    command = sub.add_parser("simulate-constraint")
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("refine")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
@@ -2111,6 +2555,9 @@ def main(argv=None) -> None:
         plan = json.loads(args.plan.read_text())
         validate_plan(plan)
         print(json.dumps(reduce_run(plan, args.run_root),
+                         indent=2, sort_keys=True))
+    elif args.command == "simulate-constraint":
+        print(json.dumps(simulate_constraint(args.plan, args.out),
                          indent=2, sort_keys=True))
     elif args.command == "refine":
         refined = write_frontier_refinement(

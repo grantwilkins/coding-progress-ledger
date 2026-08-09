@@ -366,6 +366,56 @@ mass. Run `uv run python queue-haul/plot_network_power_attainment_cdf.py`; it
 writes CSV, PNG, and PDF outputs to the frontier campaign root using Tab10
 policy colors and the longest observed episode runtime as the plotting horizon.
 
+The constrained East/Germany diagnostic is one frozen 24-episode run, not a
+sweep. It uses the measured simultaneous natural paths (2.280 Gb/s East and
+8.733 Gb/s Germany), 80% source load, 50% East load, and 95% Germany load. Its
+19-second cell has 22 exact recorded-support contexts selected with disclosed
+seed 15 (513,650 tokens, 70% target); its 30-second cell has 28 contexts from
+seed 8 (648,131 tokens, 80% target); and its 60-second cell has eight copies of
+each trace at 14,042 tokens (898,688 tokens, 90% target). The fourth cell reuses
+the exact 30-second pack while limiting Germany replay to 25% of its migration
+window, or 6.25 replica-seconds. This quota is an operator counterfactual, not a
+measured load-slowdown coefficient.
+
+Every cell runs Queue-Haul LP, Queue-Haul greedy, KV-only, replay-only,
+per-session-fastest, and power-blind Queue-Haul once. The pinned simulation in
+`outputs/east-germany-constraint-20260808/` has both Queue-Haul variants meeting
+all four targets and all four restricted baselines missing all four. LP sheds
+49.25, 54.88, 60.48, and 51.06 W against requests of 43.30, 49.49, 55.67, and
+49.49 W. Under the replay quota it chooses 5 KV→Germany, 7 replay→East,
+3 KV→East, and 1 replay→Germany. All four method--destination migration
+windows have positive Phase-I prices. Those prices are sensitivities of the
+maximum-surrogate fallback: its ceilings are 32.55, 34.17, 35.45, and 33.12 W,
+below the respective exact requests. Exact nonlinear bundle shed is recomputed
+after integral packing. Direct route and destination-service prices are zero,
+so this supports joint migration-window exhaustion rather than a raw link or
+measured service-headroom bottleneck.
+
+```bash
+uv run python queue-haul/network_campaign.py prepare --design constraint \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out /datadrive/queue-haul-network/control/constraint.json
+uv run python queue-haul/network_campaign.py simulate-constraint \
+  --plan /datadrive/queue-haul-network/control/constraint.json \
+  --out /datadrive/queue-haul-network/constraint-simulation
+uv run python queue-haul/network_campaign.py run \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --current-calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+  --plan /datadrive/queue-haul-network/control/constraint.json \
+  --run-root /datadrive/queue-haul-network/constraint-001
+```
+
+The runner keeps collecting after an episode failure but hard-fails after final
+reduction unless all 24 episodes complete and meet their deadline, both
+Queue-Haul variants meet their power target, all four restricted baselines miss
+it, and no episode contains a request, KV-evidence, load-drift, or queueing
+warning.
+Reduction writes matched Tab10 attainment and action-composition figures; the
+simulator additionally writes the Phase-I dual table and figure. There is no
+adaptive refinement or CDF for this single-block diagnostic.
+
 Each policy uses the same eight pinned agentic sessions. An independent 80%-load
 stream serves on Sweden while both destinations sustain 50% background inference.
 The 30-second handoff clock includes live metrics, policy planning, and parallel

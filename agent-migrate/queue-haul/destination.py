@@ -193,6 +193,7 @@ class DestinationPool:
     event_flex_fraction: float | None = None
     service_debt_fraction: float = 0.0
     fluid_migration: FluidMigrationService | None = None
+    migration_headroom: dict[str, float] | None = None
 
     def __post_init__(self):
         if not self.pool_id or not self.type_id or not self.replicas or not self.route_id \
@@ -201,7 +202,11 @@ class DestinationPool:
                 or self.event_flex_fraction is not None \
                 and not 0 <= self.event_flex_fraction <= 1 \
                 or not 0 <= self.service_debt_fraction <= 1 \
-                or self.event_flex_fraction is None and self.service_debt_fraction:
+                or self.event_flex_fraction is None and self.service_debt_fraction \
+                or self.migration_headroom is not None and (
+                    not set(self.migration_headroom) <= set(self.methods)
+                    or any(not 0 < value <= 1
+                           for value in self.migration_headroom.values())):
             raise ValueError("invalid destination pool")
 
 
@@ -270,6 +275,7 @@ class DestinationArchitecture:
             item.get("service_debt_fraction", 0),
             FluidMigrationService(**item["fluid_migration"])
             if "fluid_migration" in item else None,
+            item.get("migration_headroom"),
         ) for item in raw["pools"])
         return cls(raw["schema"], fingerprint(raw["source_compatibility"]),
                    tuple(types), pools, raw.get("residency_horizon_s"))

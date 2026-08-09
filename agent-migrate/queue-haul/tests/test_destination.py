@@ -13,6 +13,7 @@ Plausible wrong implementations:
   through the selected envelope boundary.
 - Accept a debt allowance while the event-capacity contract is disabled.
 - Reject a measured sub-unit replay capacity factor or accept a nonpositive factor.
+- Apply a replay headroom fraction to another method or accept an invalid fraction.
 """
 
 from dataclasses import replace
@@ -31,6 +32,18 @@ def test_fluid_replay_factor_accepts_slowdown_but_requires_positive_capacity():
     assert FluidMigrationService(.963, 1, *values, "hand").replay_speedup == .963
     with pytest.raises(ValueError, match="fluid migration"):
         FluidMigrationService(0, 1, *values, "hand")
+
+
+def test_migration_headroom_is_method_scoped_and_bounded():
+    pool = DestinationPool(
+        "p", "q", (DestinationReplica("r"),), "route", ("wan",),
+        migration_headroom={"replay": .25},
+    )
+
+    assert pool.migration_headroom == {"replay": .25}
+    for headroom in ({"replay": 0}, {"replay": 1.01}, {"other": .5}):
+        with pytest.raises(ValueError, match="destination pool"):
+            replace(pool, migration_headroom=headroom)
 
 
 def fingerprint(**changes):

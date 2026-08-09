@@ -2,7 +2,9 @@
 Claim:
 The Azure campaign freezes simultaneous source-egress capacity at the route and
 source-NIC levels, rejects unsafe clock or allocation drift, and builds the
-agreed seven-cell matched policy design without a Cartesian explosion.
+agreed seven-cell matched policy design without a Cartesian explosion. The
+constraint design freezes four measured-path operating points, exact recorded
+context packs, six matched policies, and one method-specific replay quota.
 
 Plausible wrong implementations:
 - Derive controlled rates from isolated-path rather than simultaneous goodput.
@@ -10,6 +12,9 @@ Plausible wrong implementations:
 - Accept a clock just outside the formal 2 ms bound.
 - Compare resumed calibration in only one direction or silently change caps.
 - Recreate the 648-run factorial instead of the seven targeted conditions.
+- Round the recorded constraint contexts or fail to reuse the quota pack.
+- Apply the Germany replay quota to East, KV transfer, or the WAN route.
+- Accept completed constraint evidence with a missed target or load warning.
 """
 
 import csv
@@ -94,6 +99,11 @@ def campaign_manifest(tmp_path, count=12):
         } for i in range(count)],
     }))
     return path
+
+
+def constraint_contract():
+    return json.loads((n.ROOT / "outputs/east-germany-frontier-20260808/control/"
+                       "frontier-pilot-002.json").read_text())["network_contract"]
 
 
 def test_cluster_pins_actual_roles_and_rejects_ambiguous_hosts(tmp_path):
@@ -393,6 +403,83 @@ def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(tmp_pa
     } | {(load, .5) for load in asymmetric}
 
 
+def test_constraint_plan_freezes_four_single_block_stress_cases(tmp_path):
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 8), constraint_contract(), seed=7,
+        design="constraint")
+
+    assert len(plan["scenarios"]) == 24
+    assert plan["policies"] == list(n.CONSTRAINT_POLICIES)
+    assert [row["condition_index"] for row in plan["scenarios"]] == [
+        index for index in range(4) for _ in n.CONSTRAINT_POLICIES]
+    expected = {
+        "window-19": (19, 22, 513_650, .70),
+        "window-30": (30, 28, 648_131, .80),
+        "window-60": (60, 64, 898_688, .90),
+        "quota-30": (30, 28, 648_131, .80),
+    }
+    signatures = {}
+    for condition, (deadline, count, tokens, target) in expected.items():
+        rows = [row for row in plan["scenarios"]
+                if row["condition_id"] == condition]
+        signatures[condition] = {tuple(
+            (item["template_id"], item["initial_tokens"])
+            for item in row["sessions"]
+        ) for row in rows}
+        assert len(rows) == 6 and len(signatures[condition]) == 1
+        assert {row["policy"] for row in rows} == set(n.CONSTRAINT_POLICIES)
+        assert all(row["deadline_s"] == deadline
+                   and len(row["sessions"]) == count
+                   and sum(item["initial_tokens"] for item in row["sessions"])
+                   == tokens
+                   and row["requested_shed_fraction"] == target for row in rows)
+    assert signatures["window-30"] == signatures["quota-30"]
+    assert all(row["migration_headroom"] == {"germany": {"replay": .25}}
+               for row in plan["scenarios"] if row["condition_id"] == "quota-30")
+    assert all(row["migration_headroom"] == {} for row in plan["scenarios"]
+               if row["condition_id"] != "quota-30")
+    assert n.parse_args([
+        "prepare", "--cluster", "c", "--calibration", "k",
+        "--manifest", "m", "--out", "o", "--design", "constraint",
+    ]).design == "constraint"
+    changed = json.loads(json.dumps(plan))
+    changed["scenarios"][0]["sessions"][0]["initial_tokens"] += 1
+    changed["scenarios"][0]["sessions"][1]["initial_tokens"] -= 1
+    with pytest.raises(ValueError, match="policy block"):
+        n.validate_plan(changed)
+
+
+def test_constraint_simulation_separates_joint_policies_and_exports_duals(tmp_path):
+    plan = n.make_plan(
+        n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
+        design="constraint")
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(plan))
+
+    summary = n.simulate_constraint(plan_path, tmp_path / "simulation")
+
+    assert summary == {"scenarios": 24, "conditions": 4,
+                       "out": str(tmp_path / "simulation"), "valid": True}
+    out = tmp_path / "simulation"
+    assert all((out / f"constraint_{name}.{suffix}").is_file()
+               for name in ("attainment", "actions", "duals")
+               for suffix in ("png", "pdf"))
+    with (out / "constraint_predictions.csv").open() as handle:
+        predictions = list(csv.DictReader(handle))
+    assert {row["policy"] for row in predictions if row["target_met"] == "True"} \
+        == {"queue_haul", "greedy"}
+    quota = next(row for row in predictions
+                 if (row["condition_id"], row["policy"])
+                 == ("quota-30", "queue_haul"))
+    assert (int(quota["germany_kv_transfer"]) + int(quota["east_replay"])) \
+        / int(quota["selected_sessions"]) >= .70
+    with (out / "constraint_duals.csv").open() as handle:
+        duals = [row for row in csv.DictReader(handle)
+                 if row["resource"].startswith("migration:")]
+    assert len(duals) == 16
+    assert all(float(row["shadow_w_per_full_capacity"]) > 0 for row in duals)
+
+
 def test_frontier_refinement_adds_boundary_midpoint_and_five_repeats(tmp_path):
     plan = n.make_plan(
         campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
@@ -522,6 +609,7 @@ def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
         "sessions": [{"session_id": "s0", "initial_tokens": 8192}],
         "bandwidth_mbps": {"east": 1000, "west": 2000},
         "background": {"east": (.2, .4), "west": (.4, .2)},
+        "migration_headroom": {"west": {"replay": .25}},
     }
     profile = n.ModelProfile.load(n.MODEL_PATH)
 
@@ -542,6 +630,10 @@ def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
             for pool in seen["architecture"].pools} == {
                 tuple(dtype.work(profile.case().F * rho, 0, 512))
                 for rho in (.2, .4)}
+    assert {pool.pool_id: pool.migration_headroom
+            for pool in seen["architecture"].pools} == {
+                "pool/east": None, "pool/west": {"replay": .25}}
+    assert n.joint_solver("isolated_fastest") == "isolated_fastest"
 
 
 def test_frontier_planner_targets_power_and_does_not_force_evacuation(monkeypatch):
@@ -763,6 +855,52 @@ def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
     with (root / "results.csv").open() as handle:
         row = next(csv.DictReader(handle))
     assert (row["scenario_id"], row["attempt"]) == ("s", "2")
+
+
+def test_constraint_reducer_hard_fails_semantically_invalid_evidence(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(n, "plot_constraint", lambda *_args: None)
+    scenario = {
+        "scenario_id": "s", "condition_index": 0,
+        "condition_id": "window-19", "repeat": 0,
+        "policy": "queue_haul", "workload": "agentic_tool_loop",
+        "bandwidth": "natural", "background": {"east": [.5, 0]},
+        "pack": "window-19", "deadline_s": 19, "sessions": [],
+    }
+    root = tmp_path / "run"
+    result_path = root / "scenarios/s/attempt-0001/result.json"
+    result_path.parent.mkdir(parents=True)
+    result = {
+        "status": "complete", "deadline_met": True, "target_met": True,
+        "requested_shed_w": 10, "realized_shed_w": 11,
+        "request_failures": 0, "kv_evidence_warnings": 0,
+        "load_warnings": [], "background": {
+            "east": {"warning": True}, "germany": {"warning": False}},
+        "requests": [],
+    }
+    result_path.write_text(json.dumps(result))
+
+    invalid = n.reduce_run({"design": "constraint", "scenarios": [scenario]}, root)
+    assert not invalid["valid"] and invalid["invalid_evidence"] == 1
+
+    result["background"]["east"]["warning"] = False
+    result_path.write_text(json.dumps(result))
+    valid = n.reduce_run({"design": "constraint", "scenarios": [scenario]}, root)
+    assert valid["valid"] and valid["invalid_evidence"] == 0
+
+    scenario["policy"] = "kv_only"
+    result["target_met"] = False
+    result_path.write_text(json.dumps(result))
+    expected_miss = n.reduce_run(
+        {"design": "constraint", "scenarios": [scenario]}, root)
+    assert expected_miss["valid"] and expected_miss["invalid_evidence"] == 0
+
+    result["target_met"] = True
+    result_path.write_text(json.dumps(result))
+    unexpected_pass = n.reduce_run(
+        {"design": "constraint", "scenarios": [scenario]}, root)
+    assert not unexpected_pass["valid"] \
+        and unexpected_pass["invalid_evidence"] == 1
 
 
 def test_resume_skips_complete_and_advances_past_interrupted_attempt(tmp_path):

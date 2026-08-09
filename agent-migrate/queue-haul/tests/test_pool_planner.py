@@ -41,6 +41,8 @@ Plausible wrong implementations:
 - Merge pool variables that share physics or misalign SoA resource templates.
 - Re-scan every candidate for every session in the feasible-random baseline.
 - Repack every retained action after dropping one fragmented packing candidate.
+- Scale the wrong method or physical resource when applying migration headroom.
+- Report a capacity shadow price with the wrong sign or normalization.
 """
 
 from dataclasses import replace
@@ -74,7 +76,8 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           _source_removed_gain,
                           _recover_lagrangian, _service_trace, candidate_table,
                           destination_service_execution, exact_replica_assignment,
-                          service_debt, validate_destination_execution)
+                          phase_one_capacity_duals, service_debt,
+                          validate_destination_execution)
 from power_model import ExpectedPower
 from simulate import (PlannedMove, PowerNode, ServingInstance, SessionExecution,
                       SimSession, execute)
@@ -632,6 +635,24 @@ def test_dual_route_limit_reserves_the_largest_post_route_tail():
     assert _dual_resource_limits(table) == pytest.approx((.9, 1))
 
 
+def test_phase_one_capacity_dual_matches_hand_worked_fractional_knapsack():
+    candidates = (
+        Candidate(0, "replay", 0, 2, 1, 1, (), 0, (0, 0), 0),
+        Candidate(1, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0),
+    )
+    table = CandidateTable(
+        (SimpleNamespace(session_id="a"), SimpleNamespace(session_id="b")),
+        candidates, csr_matrix(np.eye(2)),
+        csr_matrix(np.array(((.6, .6),))),
+        ("migration:p:replay",), (10,), ("replica-s",), 10,
+    )
+
+    maximum, duals = phase_one_capacity_duals(table)
+
+    assert maximum == pytest.approx(8 / 3)
+    assert duals == pytest.approx((5 / 3,))
+
+
 def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)),
                  kv=1000, methods=("replay", "kv_transfer"), compatibility=FP,
                  residency=None, routes=(("wan",), ("wan",)), block=1,
@@ -694,6 +715,31 @@ def test_fluid_pool_charges_serial_replay_work_to_replica_speedup(tmp_path):
         sum(table.candidates[i].migration_work_s for i in replay)
         / table.resource_capacities[row]
     )
+
+
+def test_migration_headroom_scales_only_its_pool_method_window(tmp_path):
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),),
+    )
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    power = ExpectedPower(scenario, profile)
+    full = candidate_table(scenario, profile, arch, "normal", power)
+    limited = candidate_table(
+        scenario, profile, replace(arch, pools=(replace(
+            arch.pools[0], migration_headroom={"replay": .25}),)),
+        "normal", power,
+    )
+    capacities = dict(zip(full.resource_names, full.resource_capacities))
+    limited_capacities = dict(zip(
+        limited.resource_names, limited.resource_capacities))
+
+    assert limited_capacities["migration:p0:replay"] == pytest.approx(
+        capacities["migration:p0:replay"] / 4)
+    assert limited_capacities["migration:p0:kv_transfer"] == pytest.approx(
+        capacities["migration:p0:kv_transfer"])
+    assert limited_capacities["route:wan"] == pytest.approx(
+        capacities["route:wan"])
 
 
 def test_fluid_execution_uses_whole_pool_and_fitted_action_power(tmp_path):
