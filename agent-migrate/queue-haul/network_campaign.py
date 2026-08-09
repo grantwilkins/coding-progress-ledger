@@ -1525,6 +1525,31 @@ def agentic_demand(records: dict[str, dict], sessions: list[dict],
             for session_id, (f, g) in demand.items()}
 
 
+def deadline_credited_sessions(results: list[dict], started_ns: int,
+                               deadline_s: float) -> set[str]:
+    deadline_ns = started_ns + int(deadline_s * 1e9)
+    return {row["session_id"] for row in results
+            if "request" in row and int(row["request"]["end_ns"]) <= deadline_ns}
+
+
+def diagnostic_attainment(scenario: dict, results: list[dict], demand: dict,
+                          profile: ModelProfile, started_ns: int
+                          ) -> tuple[float, float]:
+    base, _ = policy_campaign._problem(
+        profile, scenario["sessions"], 1, scenario["deadline_s"])
+    base = replace(base, sessions=tuple(replace(
+        session, expected_f=demand[session.session_id][0],
+        expected_g=demand[session.session_id][1],
+    ) for session in base.sessions))
+    initial = source_power(base, profile)
+    minimum = source_power(
+        base, profile, (session.session_id for session in base.sessions))
+    requested = scenario["requested_shed_fraction"] * (initial - minimum)
+    credited = deadline_credited_sessions(
+        results, started_ns, scenario["deadline_s"])
+    return requested, initial - source_power(base, profile, credited)
+
+
 class SinkLoad:
     def __init__(self, cfg: testbed.Config, port: int, prefill_tps: float,
                  rho: float, path: Path, decode_tps: float | None = None):
@@ -1747,22 +1772,8 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         "source_sleep_ns": [sleep_start_ns, sleep_end_ns],
     }
     if diagnostic:
-        profile = ModelProfile.load(MODEL_PATH)
-        base, _ = policy_campaign._problem(
-            profile, scenario["sessions"], 1, scenario["deadline_s"])
-        base = replace(base, sessions=tuple(replace(
-            session, expected_f=demand[session.session_id][0],
-            expected_g=demand[session.session_id][1],
-        ) for session in base.sessions))
-        initial = source_power(base, profile)
-        minimum = source_power(
-            base, profile, (session.session_id for session in base.sessions))
-        requested = scenario["requested_shed_fraction"] * (initial - minimum)
-        credited = {row["session_id"] for row in results
-                    if "request" in row
-                    and (row["request"]["end_ns"] - row["request"]["start_ns"])
-                    / 1e9 <= scenario["deadline_s"]}
-        realized = initial - source_power(base, profile, credited)
+        requested, realized = diagnostic_attainment(
+            scenario, results, demand, profile, start_ns)
         result.update({
             "requested_shed_w": requested, "realized_shed_w": realized,
             "target_met": realized >= requested,
@@ -2691,6 +2702,9 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
     rows, evidence, completed, failed, missing, invalid_evidence = [], [], 0, 0, 0, 0
     constraint = plan.get("design") == "constraint"
     separation = plan.get("design") == "separation"
+    manifest = json.loads(Path(plan["manifest"]["path"]).read_text()) \
+        if separation else None
+    profile = ModelProfile.load(MODEL_PATH) if separation else None
     for scenario in plan["scenarios"]:
         latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None:
@@ -2700,6 +2714,16 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             attempt, result = latest
             completed += result["status"] == "complete"
             failed += result["status"] == "failed"
+            if separation and result["status"] == "complete":
+                demand = agentic_demand(
+                    scenario_records(manifest, scenario), scenario["sessions"],
+                    profile, scenario["source_load"])
+                requested, realized = diagnostic_attainment(
+                    scenario, result["requests"], demand, profile,
+                    result["started_ns"])
+                result = {**result, "requested_shed_w": requested,
+                          "realized_shed_w": realized,
+                          "target_met": realized >= requested}
             if result["status"] == "complete":
                 evidence.append((scenario, result))
         if constraint and result.get("status") == "complete" \

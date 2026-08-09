@@ -425,6 +425,9 @@ cell, uses measured destination prefill and decode rates to generate exact
 604-prompt/64-output-token background requests, warms that traffic for 30
 seconds, and then launches all selected migrations concurrently. Each policy
 plans inside 30 seconds and is measured against a 45-second hardware deadline.
+Attainment credits only reconstructions ending by the common migration
+start plus 45 seconds; reduction recomputes this value from raw request
+timestamps, including for results written by an earlier runner revision.
 
 | cell | paths | East/Germany service load | target | Queue-Haul | greedy | strongest losing baseline |
 | --- | --- | --- | ---: | ---: | ---: | ---: |

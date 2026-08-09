@@ -22,6 +22,9 @@ Plausible wrong implementations:
 - Admit a separation cell whose winner or loser is within 10% of the target.
 - Let a restricted baseline use both actions or let deadline-blind planning use
   the physical deadline.
+- Credit a queued request by its own latency instead of the shared campaign
+  deadline, use the last request as an all-or-nothing deadline, or mix seconds
+  and nanoseconds at the exact boundary.
 """
 
 import csv
@@ -561,6 +564,57 @@ def test_destination_load_normalization_uses_both_service_rates(tmp_path):
     assert load.interval_s == pytest.approx(
         (n.SINK_LOAD_PREFILL_TOKENS / 100
          + n.SINK_LOAD_DECODE_TOKENS / 50) / .5)
+
+
+def test_deadline_credit_uses_the_shared_campaign_epoch():
+    second = 10**9
+    results = [
+        {"session_id": "before", "request": {
+            "start_ns": 9 * second, "end_ns": 10 * second}},
+        {"session_id": "boundary", "request": {
+            "start_ns": 10 * second, "end_ns": 11 * second}},
+        {"session_id": "queued-late", "request": {
+            "start_ns": 10 * second, "end_ns": 12 * second}},
+        {"session_id": "failed", "error": "request failed"},
+    ]
+
+    assert n.deadline_credited_sessions(results, second, 10) == {
+        "before", "boundary"}
+
+
+def test_separation_reducer_repairs_stale_per_request_deadline_credit(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(n, "plot_separation", lambda *_args: None)
+    plan = n.make_plan(
+        n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
+        design="separation")
+    scenario = next(row for row in plan["scenarios"]
+                    if row["policy"] == n.DEADLINE_BLIND_POLICY)
+    plan["scenarios"] = [scenario]
+    result_path = tmp_path / "scenarios" / scenario["scenario_id"] \
+        / "attempt-0001" / "result.json"
+    result_path.parent.mkdir(parents=True)
+    result_path.write_text(json.dumps({
+        "status": "complete", "started_ns": 10**9, "deadline_met": False,
+        "requested_shed_w": 1, "realized_shed_w": 1, "target_met": True,
+        "request_failures": 0, "kv_evidence_warnings": 0,
+        "load_warnings": [], "background": {
+            "east": {"warning": False}, "germany": {"warning": False}},
+        "requests": [{
+            "session_id": scenario["sessions"][0]["session_id"],
+            "destination_instance": "east", "method": "replay",
+            "request": {"start_ns": 44 * 10**9, "end_ns": 47 * 10**9},
+        }],
+    }))
+
+    summary = n.reduce_run(plan, tmp_path)
+
+    assert summary["valid"] and summary["invalid_evidence"] == 0
+    with (tmp_path / "results.csv").open() as handle:
+        row = next(csv.DictReader(handle))
+    assert float(row["requested_shed_w"]) > 0
+    assert float(row["realized_shed_w"]) == pytest.approx(0)
+    assert row["target_met"] == "False"
 
 
 def test_separation_simulation_has_wide_joint_action_margins(tmp_path):
