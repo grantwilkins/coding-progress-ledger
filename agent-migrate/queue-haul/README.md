@@ -412,6 +412,8 @@ The runner keeps collecting after an episode failure but hard-fails after final
 reduction unless all 24 episodes complete and meet their deadline, every
 intentionally oversized target remains unmet, and no episode contains a
 request, KV-evidence, load-drift, or queueing warning.
+Migration timing ends when parallel reconstruction finishes; draining background
+load happens afterward and is excluded from `migration_s` and `deadline_met`.
 Reduction writes matched Tab10 attainment and action-composition figures; the
 simulator additionally writes the Phase-I dual table and figure. There is no
 adaptive refinement or CDF for this single-block diagnostic.

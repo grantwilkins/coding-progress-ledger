@@ -842,6 +842,42 @@ def test_handoff_uses_queue_haul_deadline_and_cache_isolated_load(monkeypatch, t
     assert load.stop.is_set()
 
 
+def test_scenario_timing_excludes_background_load_drain(monkeypatch, tmp_path):
+    clock = [1_000_000_000]
+
+    class Load:
+        def __init__(self, *_args):
+            pass
+
+        def start(self):
+            pass
+
+        def close(self):
+            clock[0] += 10_000_000_000
+
+    monkeypatch.setattr(n, "SinkLoad", Load)
+    monkeypatch.setattr(n, "_clear_cluster", lambda _stack: None)
+    monkeypatch.setattr(n.time, "monotonic_ns", lambda: clock[0])
+    monkeypatch.setattr(n.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(n.testbed, "proxy_counts", lambda _path: {})
+    monkeypatch.setattr(n.testbed, "set_source_sleep", lambda *_args: None)
+    stack = SimpleNamespace(
+        spot=SimpleNamespace(check=lambda: None), remote={},
+        cluster=SimpleNamespace(destinations=[]),
+        cfg=SimpleNamespace(src_port=1), run_root=tmp_path,
+    )
+    scenario = {
+        "scenario_id": "s", "design": "isolated", "deadline_s": 1,
+        "sessions": [], "background": {}, "source_load": .5, "moves": [],
+    }
+
+    result = n.run_network_scenario(
+        stack, {"sessions": []}, scenario, tmp_path / "scenario", 1)
+
+    assert result["migration_s"] == 0
+    assert result["deadline_met"]
+
+
 def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
     scenario = {
         "scenario_id": "s", "condition_index": 0, "repeat": 0,
@@ -874,7 +910,8 @@ def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
 
 def test_constraint_reducer_hard_fails_semantically_invalid_evidence(
         monkeypatch, tmp_path):
-    monkeypatch.setattr(n, "plot_constraint", lambda *_args: None)
+    monkeypatch.setattr(n, "plot_constraint", lambda rows, *_args:
+                        rows[0]["deadline_s"])
     scenario = {
         "scenario_id": "s", "condition_index": 0,
         "condition_id": "window-19", "repeat": 0,

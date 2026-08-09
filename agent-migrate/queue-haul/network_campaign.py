@@ -1510,6 +1510,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 results = list(pool.map(reconstruct, moves))
         else:
             results = []
+        end_ns = time.monotonic_ns()
     finally:
         for name, load in loads.items():
             try:
@@ -1518,7 +1519,6 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 if not diagnostic:
                     raise
                 load_warnings.append(f"{name}: {exc}")
-    end_ns = time.monotonic_ns()
     if not diagnostic and any(row["method"] == "kv_transfer"
            and row["request"]["cached_tokens"] <= 0 for row in results):
         raise RuntimeError("KV reconstruction reported no cached tokens")
@@ -2309,6 +2309,7 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             moves = result.get("requests", [])
             plotted.append({
                 "condition_id": scenario["condition_id"],
+                "deadline_s": scenario["deadline_s"],
                 "policy": scenario["policy"],
                 "requested_shed_w": result["requested_shed_w"],
                 "attained_shed_w": result["realized_shed_w"],
