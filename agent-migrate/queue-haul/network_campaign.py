@@ -33,7 +33,8 @@ from planner import _expected_scenario, plan as solve, source_power
 from pool_planner import candidate_table, phase_one_capacity_duals
 from power_model import ExpectedPower
 from profiles import ModelProfile, WorkloadProfile
-from simulate import NetworkLink, PowerNode, ServingInstance, predict
+from simulate import (NetworkLink, PlannedMove, PowerNode, ServingInstance,
+                      predict)
 
 
 CLUSTER_SCHEMA = "queue-haul-azure-cluster-v1"
@@ -90,6 +91,32 @@ ORACLE_STALE_STATES = (
 )
 ORACLE_STALE_TARGET_FRACTION = .65
 ORACLE_STALE_HORIZON_S = 90
+HARDWARE_GAP_TARGET_FRACTION = .72
+HARDWARE_GAP_REPEATS = 3
+HARDWARE_GAP_MATRIX = (
+    ("all-bind", .75, .90, "controlled_40", (
+        "queue_haul_robust", "greedy", "oracle_kv_only",
+        "oracle_replay_only", "oracle_east_only", "oracle_germany_only",
+        "isolated_fastest", "queue_haul_power_blind",
+        DEADLINE_BLIND_POLICY, "queue_haul_stale",
+    )),
+    ("free-kv", .75, 0, "controlled_40", (
+        "queue_haul", "queue_haul_robust", "greedy", "oracle_east_only",
+    )),
+    ("free-service", .25, .90, "controlled_40", (
+        "queue_haul", "queue_haul_robust", "oracle_germany_only",
+    )),
+    ("free-bandwidth", .75, .90, "natural", (
+        "queue_haul", "queue_haul_robust", "oracle_kv_only",
+    )),
+    ("all-release", .25, 0, "natural", (
+        "queue_haul", "queue_haul_robust", "queue_haul_stale",
+        "oracle_germany_only",
+    )),
+)
+HARDWARE_GAP_POLICIES = tuple(dict.fromkeys(
+    policy for *_, policies in HARDWARE_GAP_MATRIX for policy in policies))
+KV_BLOCK_SIZE = 16
 SEPARATION_BINDINGS = {
     "germany-service": {
         "service:pool/germany:0": .98,
@@ -113,6 +140,8 @@ SEPARATION_BINDINGS = {
 }
 SINK_LOAD_PREFILL_TOKENS = 604
 SINK_LOAD_DECODE_TOKENS = 64
+HARDWARE_GAP_BACKGROUND_KV_TOKENS = (
+    SINK_LOAD_PREFILL_TOKENS + SINK_LOAD_DECODE_TOKENS)
 CONSTRAINT_ACTIONS = (
     "germany_kv_transfer", "east_replay", "east_kv_transfer",
     "germany_replay",
@@ -121,6 +150,17 @@ TAB10_COLORS = (
     "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
     "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
 )
+HARDWARE_GAP_COLORS = {
+    "queue_haul": TAB10_COLORS[0], "queue_haul_robust": TAB10_COLORS[0],
+    "greedy": TAB10_COLORS[1], "oracle_kv_only": TAB10_COLORS[2],
+    "oracle_replay_only": TAB10_COLORS[3],
+    "oracle_east_only": TAB10_COLORS[4],
+    "oracle_germany_only": TAB10_COLORS[5],
+    "isolated_fastest": TAB10_COLORS[6],
+    "queue_haul_power_blind": TAB10_COLORS[7],
+    DEADLINE_BLIND_POLICY: TAB10_COLORS[8],
+    "queue_haul_stale": TAB10_COLORS[9],
+}
 FRONTIER_PACKS = (
     ("4x16k", 4, 16_384), ("8x16k", 8, 16_384),
     ("16x16k", 16, 16_384), ("8x8k", 8, 8_192),
@@ -782,7 +822,10 @@ def validate_plan(plan: dict) -> None:
               len(scenarios)) if design == "frontier" \
         else 24 if design == "constraint" \
         else len(SEPARATION_CELLS) * SEPARATION_REPEATS \
-        * len(SEPARATION_POLICIES) if design == "separation" else 0
+        * len(SEPARATION_POLICIES) if design == "separation" \
+        else HARDWARE_GAP_REPEATS * sum(
+            len(row[-1]) for row in HARDWARE_GAP_MATRIX
+        ) if design == "hardware_gap" else 0
     if len(scenarios) != expected \
             or len({row["scenario_id"] for row in scenarios}) != len(scenarios):
         raise ValueError(f"network plan must contain exactly {expected} unique scenarios")
@@ -947,6 +990,86 @@ def validate_plan(plan: dict) -> None:
                         ):
                     raise ValueError("separation policy block changed")
         return
+    if design == "hardware_gap":
+        if set(plan["network_contract"]["paths"]) != {"east", "germany"} \
+                or plan.get("policies") != list(HARDWARE_GAP_POLICIES):
+            raise ValueError("hardware gap plan requires East and Germany")
+        for key in ("parent_plan", "oracle_plans"):
+            pin = plan.get(key, {})
+            if profiler.file_hash(Path(pin.get("path", ""))) \
+                    != pin.get("sha256"):
+                raise ValueError(f"hardware gap {key} changed")
+        signature = None
+        for index, (state, germany, kv, bandwidth, policies) \
+                in enumerate(HARDWARE_GAP_MATRIX):
+            capacity = {"east": round(1 - kv, 10), "germany": 1}
+            for repeat in range(HARDWARE_GAP_REPEATS):
+                rows = [row for row in scenarios if (
+                    row["condition_index"], row["repeat"]
+                ) == (index, repeat)]
+                signatures = {tuple(
+                    (item["session_id"], item["template_id"],
+                     item["initial_tokens"]) for item in row["sessions"]
+                ) for row in rows}
+                signature = signature or next(iter(signatures), None)
+                if len(rows) != len(policies) \
+                        or {row["policy"] for row in rows} != set(policies) \
+                        or signatures != {signature} \
+                        or any(
+                            row["scenario_id"] != _hash([
+                                design, state, repeat, row["policy"],
+                                row.get("moves", []), bandwidth, germany, kv,
+                                HARDWARE_GAP_TARGET_FRACTION,
+                            ])[:16]
+                            or row["condition_id"] != state
+                            or row["bandwidth"] != bandwidth
+                            or row["bandwidth_mbps"] != _bandwidths(
+                                plan["network_contract"], bandwidth)
+                            or tuple(row["background"]["east"]) != (.25, kv)
+                            or tuple(row["background"]["germany"]) \
+                            != (germany, 0)
+                            or row["kv_capacity_fraction"] != capacity
+                            or row["deadline_s"] != SEPARATION_DEADLINE_S
+                            or row["planning_deadline_s"] \
+                            != SEPARATION_PLANNING_DEADLINE_S
+                            or row["load_warmup_s"] != SEPARATION_LOAD_WARMUP_S
+                            or row["load_normalization"] \
+                            != "destination_service"
+                            or row["requested_shed_fraction"] \
+                            != HARDWARE_GAP_TARGET_FRACTION
+                            or row["objective"] != "max_shed"
+                            or row["source_load"] != .8
+                            or row["admission_mode"] != "normal"
+                            or row["full_horizon_s"] \
+                            != ORACLE_STALE_HORIZON_S
+                            or row["background_kv_headroom_tokens"] != {
+                                "east": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                                "germany": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                            }
+                            or row["planning_state"] != (
+                                "all-bind" if row["policy"]
+                                == "queue_haul_robust" else
+                                "all-release" if row["policy"]
+                                == "queue_haul_stale" else
+                                "all-bind-90s" if row["policy"]
+                                == DEADLINE_BLIND_POLICY else state)
+                            or len(row["sessions"]) != 28
+                            or sum(item["initial_tokens"]
+                                   for item in row["sessions"]) != 648_131
+                            or row["expected_admission"] != (not (
+                                state == "all-bind"
+                                and row["policy"] == "queue_haul_stale"))
+                            or bool(row.get("moves")) != (
+                                row["policy"].startswith("oracle_")
+                                or row["policy"] in {
+                                    "queue_haul_robust",
+                                    "queue_haul_stale",
+                                    DEADLINE_BLIND_POLICY,
+                                })
+                            for row in rows
+                        ):
+                    raise ValueError("hardware gap policy block changed")
+        return
     if design == "isolated":
         if len(plan["network_contract"]["paths"]) != 1 or any(
             row.get("destination") not in plan["network_contract"]["paths"]
@@ -1073,8 +1196,17 @@ def proxy_command(routes: list[testbed.Route], aggregate_mbps: float | None,
     return command
 
 
+def vllm_kv_capacity(path: Path) -> int:
+    match = re.search(r"GPU KV cache size:\s+([\d,]+) tokens",
+                      path.read_text(errors="ignore"))
+    if not match:
+        raise RuntimeError("vLLM did not report its GPU KV capacity")
+    return int(match.group(1).replace(",", ""))
+
+
 def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
-               run_root: Path, power_interval_s: float = .25) -> None:
+               run_root: Path, power_interval_s: float = .25,
+               kv_blocks: int | None = None) -> None:
     import migration_profiler
 
     cfg = testbed.Config(host="127.0.0.1")
@@ -1098,14 +1230,17 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
         testbed.wait_tcp_process(
             "127.0.0.1", cfg.sink_lmc_port, 300, cache, cache_log)
         sink_log = run_root / "sink.log"
+        extra = (["--num-gpu-blocks-override", str(kv_blocks)]
+                 if kv_blocks is not None else [])
         sink = testbed.start_logged(testbed.vllm_cmd(
-            cfg, "sink", gpu_index=0, bind_host=bind_host), sink_log)
+            cfg, "sink", extra, gpu_index=0, bind_host=bind_host), sink_log)
         testbed.wait_health_process(
             bind_host, cfg.sink_port, testbed.health_timeout(), sink, sink_log)
         sampler.start()
         print(json.dumps({
             "status": "ready", "node_id": node_id, "host": bind_host,
             "vllm_port": cfg.sink_port, "kv_port": kv_port,
+            "kv_capacity_tokens": vllm_kv_capacity(sink_log),
             "monotonic_ns": time.monotonic_ns(), "wall_ns": time.time_ns(),
         }, sort_keys=True), flush=True)
         stopped.wait()
@@ -1130,6 +1265,7 @@ class ClusterStack:
     run_root: Path
     key: Path
     spot: ScheduledEventMonitor
+    node_reports: dict[str, dict]
 
 
 def _remote_ready(process: subprocess.Popen, timeout_s: float) -> dict:
@@ -1150,12 +1286,12 @@ def _remote_ready(process: subprocess.Popen, timeout_s: float) -> dict:
 
 
 def _wait_remote_ready(remote: dict[str, subprocess.Popen],
-                       timeout_s: float) -> None:
+                       timeout_s: float) -> dict[str, dict]:
     with ThreadPoolExecutor(max_workers=len(remote)) as pool:
         futures = {node_id: pool.submit(_remote_ready, process, timeout_s)
                    for node_id, process in remote.items()}
-        for node_id in sorted(futures):
-            futures[node_id].result()
+        return {node_id: futures[node_id].result()
+                for node_id in sorted(futures)}
 
 
 def _stop_remote(node: Node, key: Path, root: Path,
@@ -1171,7 +1307,9 @@ def _stop_remote(node: Node, key: Path, root: Path,
 
 def start_cluster(cluster: Cluster, key: Path, contract: dict,
                   bandwidth: str, run_root: Path,
-                  power_interval_s: float = .25) -> ClusterStack:
+                  power_interval_s: float = .25,
+                  kv_capacity_fraction: dict[str, float] | None = None
+                  ) -> ClusterStack:
     import migration_profiler
 
     cfg = testbed.Config(host="127.0.0.1")
@@ -1184,6 +1322,11 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
     sampler = migration_profiler.PowerSampler(
         run_root / "power.csv", power_interval_s)
     spot = ScheduledEventMonitor(run_root / "scheduled_events.jsonl")
+    fractions = kv_capacity_fraction or {}
+    if any(node not in {item.id for item in cluster.destinations}
+           or not 0 < fraction <= 1 for node, fraction in fractions.items()):
+        raise ValueError("invalid destination KV capacity fraction")
+    profile_capacity = ModelProfile.load(MODEL_PATH).kv_capacity_tokens
     try:
         spot.start()
         lmc_log = run_root / "redis.log"
@@ -1223,20 +1366,26 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                 "--source-host", cluster.source.host, "--kv-port",
                 str(ports[node_id]["kv"]), "--run-root", str(remote_root),
                 "--power-interval-s", str(power_interval_s),
+                *(["--kv-blocks", str(round(
+                    profile_capacity * fractions[node_id] / KV_BLOCK_SIZE))]
+                  if fractions.get(node_id, 1) < 1 else []),
             ])
             process = subprocess.Popen(
                 command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, start_new_session=True,
             )
             remote[node_id] = process
-        _wait_remote_ready(remote, testbed.health_timeout())
+        reports = _wait_remote_ready(remote, testbed.health_timeout())
+        if any(abs(reports[node]["kv_capacity_tokens"] / profile_capacity
+                   - fraction) > .01 for node, fraction in fractions.items()):
+            raise RuntimeError("destination KV quota differs from hardware")
         local = testbed.Stack(
             lmc, proxy, source, None, run_root, services,
             aggregate or 0,
         )
         return ClusterStack(
             cluster, cfg, local, sampler, remote, remote_roots, ports,
-            run_root, key, spot,
+            run_root, key, spot, reports,
         )
     except BaseException:
         for node_id, process in remote.items():
@@ -1368,7 +1517,10 @@ def _csv_window(path: Path, start_ns: int, end_ns: int) -> list[dict]:
             and int(row["end_ns"]) <= end_ns]
 
 
-def summarize_metrics(samples: list[str], target_kv: float) -> dict:
+def summarize_metrics(samples: list[str], target_kv: float,
+                      capacity_fraction: float = 1) -> dict:
+    if not 0 < capacity_fraction <= 1.01:
+        raise ValueError("invalid measured KV capacity fraction")
     names = ("kv_cache_usage_perc", "num_requests_running", "num_requests_waiting")
     values = {name: [] for name in names}
     for sample in samples:
@@ -1378,8 +1530,12 @@ def summarize_metrics(samples: list[str], target_kv: float) -> dict:
             if not match:
                 raise ValueError(f"missing vLLM metric {name}")
             values[name].append(float(match.group(1)))
+    engine_fraction = statistics.median(values["kv_cache_usage_perc"])
     result = {
-        "kv_fraction": statistics.median(values["kv_cache_usage_perc"]),
+        "kv_fraction": max(0, min(
+            1, 1 - capacity_fraction * (1 - engine_fraction))),
+        "engine_kv_fraction": engine_fraction,
+        "kv_capacity_fraction": capacity_fraction,
         "running": statistics.median(values["num_requests_running"]),
         "waiting": max(values["num_requests_waiting"]),
     }
@@ -1389,14 +1545,20 @@ def summarize_metrics(samples: list[str], target_kv: float) -> dict:
 
 
 def destination_metrics(stack: ClusterStack, node_id: str,
-                        target_kv: float) -> dict:
+                        target_kv: float,
+                        expected_capacity_fraction: float = 1) -> dict:
     samples = []
     for index in range(5):
         samples.append(testbed.http_text(
             stack.cfg.host, stack.ports[node_id]["api"], "GET", "/metrics"))
         if index < 4:
             time.sleep(1)
-    return summarize_metrics(samples, target_kv)
+    capacity = stack.node_reports[node_id]["kv_capacity_tokens"]
+    fraction = capacity / ModelProfile.load(MODEL_PATH).kv_capacity_tokens
+    result = summarize_metrics(samples, target_kv, fraction)
+    result["kv_capacity_tokens"] = capacity
+    result["warning"] |= abs(fraction - expected_capacity_fraction) > .01
+    return result
 
 
 def destination_background_work(dtype, rho: float) -> tuple[float, float]:
@@ -1485,15 +1647,19 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
                         ) -> list[dict]:
     problem, architecture, routes, requested_shed_w = joint_problem(
         scenario, snapshots, profile, demand)
-    partial = scenario.get("design") in {"frontier", "constraint", "separation"}
+    partial = scenario.get("design") in {
+        "frontier", "constraint", "separation", "hardware_gap"}
     deadline_blind = scenario["policy"] == DEADLINE_BLIND_POLICY
     solver = joint_solver(scenario["policy"], scenario.get("objective"))
     planning_problem = replace(
         problem, deadline_s=DEADLINE_BLIND_HORIZON_S,
         end_s=max(problem.end_s, DEADLINE_BLIND_HORIZON_S),
     ) if deadline_blind else problem
-    result = solve(planning_problem, profile, routes, solver, seed=seed,
-                   destination=architecture)
+    result = solve(
+        planning_problem, profile, routes, solver, seed=seed,
+        destination=architecture,
+        admission_mode=scenario.get("admission_mode"),
+    )
     planned = list(result.moves)
     admitted = {move.session_id for move in planned}
     missing = tuple(row for row in problem.sessions if row.session_id not in admitted)
@@ -1501,6 +1667,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
         late = replace(problem, sessions=missing, deadline_s=600, end_s=600)
         planned.extend(replace(move, order=move.order + len(planned)) for move in solve(
             late, profile, routes, solver, seed=seed, destination=architecture,
+            admission_mode=scenario.get("admission_mode"),
         ).moves)
     moves = [{
         "session_id": move.session_id,
@@ -1519,6 +1686,65 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
             or not set(admitted) <= {row["session_id"] for row in scenario["sessions"]}):
         raise RuntimeError("invalid partial shed decision")
     return moves
+
+
+def _planned_move(row: dict) -> PlannedMove:
+    return PlannedMove(
+        row["session_id"], row["destination_instance"], row["method"],
+        row["order"], tuple(row["path"]), row.get("rate_limit_bytes_per_s"),
+        row.get("quiesce_s"), row.get("destination_pool"),
+    )
+
+
+def _execution_move(row: dict) -> dict:
+    return {
+        "session_id": row["session_id"],
+        "destination_instance": row["destination_instance"],
+        "destination_pool": row.get("destination_pool"),
+        "method": row["method"], "order": row["order"],
+        "path": list(row["path"]),
+        "planned_rate_limit_bytes_per_s": row.get(
+            "rate_limit_bytes_per_s"),
+        "planned_quiesce_s": row.get("quiesce_s"),
+        "deadline_admitted": True,
+    }
+
+
+def plan_hardware_gap_scenario(scenario: dict, snapshots: dict[str, dict],
+                               profile: ModelProfile, demand: dict
+                               ) -> tuple[list[dict], dict]:
+    snapshots = _hardware_gap_snapshots(scenario, snapshots, profile)
+    if not scenario.get("moves"):
+        return plan_joint_scenario(
+            scenario, snapshots, profile, scenario["planner_seed"], demand,
+        ), {"admission_rejected": False, "capacity_violations": [],
+            "admission_mode": scenario["admission_mode"]}
+    problem, architecture, _routes, _target = joint_problem(
+        scenario, snapshots, profile, demand)
+    planned = tuple(_planned_move(row) for row in scenario["moves"])
+    policy = scenario["policy"]
+    if policy == "queue_haul_stale":
+        violations = _stable_plan_violations(
+            problem, profile, architecture, planned)
+    else:
+        horizon = ORACLE_STALE_HORIZON_S \
+            if policy == DEADLINE_BLIND_POLICY else None
+        violations = _plan_violations(
+            problem, profile, architecture, planned, horizon)
+    admitted = not violations
+    if admitted != scenario["expected_admission"]:
+        raise RuntimeError("fixed-plan hardware admission changed")
+    fresh = plan_joint_scenario(
+        {**scenario, "policy": "queue_haul", "moves": []}, snapshots,
+        profile, scenario["planner_seed"], demand,
+    ) if policy in {"queue_haul_robust", "queue_haul_stale"} else []
+    return ([_execution_move(row) for row in scenario["moves"]]
+            if admitted else []), {
+        "admission_rejected": not admitted,
+        "capacity_violations": list(violations),
+        "fresh_moves": fresh, "planning_state": scenario["planning_state"],
+        "admission_mode": scenario["admission_mode"],
+    }
 
 
 def agentic_demand(records: dict[str, dict], sessions: list[dict],
@@ -1550,6 +1776,15 @@ def deadline_credited_sessions(results: list[dict], started_ns: int,
 def diagnostic_attainment(scenario: dict, results: list[dict], demand: dict,
                           profile: ModelProfile, started_ns: int
                           ) -> tuple[float, float]:
+    base, initial, requested = diagnostic_power_problem(
+        scenario, demand, profile)
+    credited = deadline_credited_sessions(
+        results, started_ns, scenario["deadline_s"])
+    return requested, initial - source_power(base, profile, credited)
+
+
+def diagnostic_power_problem(scenario: dict, demand: dict,
+                             profile: ModelProfile):
     base, _ = policy_campaign._problem(
         profile, scenario["sessions"], 1, scenario["deadline_s"])
     base = replace(base, sessions=tuple(replace(
@@ -1560,9 +1795,42 @@ def diagnostic_attainment(scenario: dict, results: list[dict], demand: dict,
     minimum = source_power(
         base, profile, (session.session_id for session in base.sessions))
     requested = scenario["requested_shed_fraction"] * (initial - minimum)
-    credited = deadline_credited_sessions(
-        results, started_ns, scenario["deadline_s"])
-    return requested, initial - source_power(base, profile, credited)
+    return base, initial, requested
+
+
+def diagnostic_outcomes(scenario: dict, results: list[dict], demand: dict,
+                        profile: ModelProfile, started_ns: int) -> dict:
+    base, initial, requested = diagnostic_power_problem(
+        scenario, demand, profile)
+    successful = sorted(
+        ((int(row["request"]["end_ns"]), row["session_id"])
+         for row in results if "request" in row),
+    )
+    moved, by_deadline, target_time, curve = [], 0.0, None, [
+        {"time_s": 0.0, "shed_w": 0.0}]
+    full_horizon = scenario.get("full_horizon_s")
+    for ended_ns, session_id in successful:
+        elapsed = (ended_ns - started_ns) / 1e9
+        if full_horizon is not None and elapsed > full_horizon:
+            break
+        moved.append(session_id)
+        shed = initial - source_power(base, profile, moved)
+        curve.append({"time_s": elapsed, "shed_w": shed})
+        if elapsed <= scenario["deadline_s"]:
+            by_deadline = shed
+        if target_time is None and shed >= requested - 1e-8:
+            target_time = elapsed
+    eventual = initial - source_power(base, profile, moved)
+    horizon = full_horizon or max(
+        ORACLE_STALE_HORIZON_S, curve[-1]["time_s"])
+    if curve[-1]["time_s"] < horizon:
+        curve.append({"time_s": horizon, "shed_w": eventual})
+    return {
+        "requested_shed_w": requested, "realized_shed_w": by_deadline,
+        "eventual_shed_w": eventual, "target_met": by_deadline >= requested,
+        "eventual_target_met": eventual >= requested,
+        "time_to_target_s": target_time, "attainment_curve": curve,
+    }
 
 
 class SinkLoad:
@@ -1647,7 +1915,8 @@ def scenario_records(manifest: dict, scenario: dict) -> dict[str, dict]:
 
 def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                          root: Path, prefill_tps: float) -> dict:
-    diagnostic = scenario["design"] in {"frontier", "constraint", "separation"}
+    diagnostic = scenario["design"] in {
+        "frontier", "constraint", "separation", "hardware_gap"}
     root.mkdir(parents=True, exist_ok=False)
     (root / "scenario.json").write_text(
         json.dumps(scenario, indent=2, sort_keys=True) + "\n")
@@ -1666,7 +1935,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         case.prefill.rate(SINK_LOAD_PREFILL_TOKENS, 1),
         case.decode.rate(SINK_LOAD_PREFILL_TOKENS, 1),
     )
-    loads, snapshots = {}, {}
+    loads, snapshots, decision = {}, {}, {}
     for node in stack.cluster.destinations:
         compute, kv = scenario["background"].get(node.id, (0, 0))
         if compute:
@@ -1682,15 +1951,19 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             root / "source_load.jsonl")
         loads["source"].start()
     try:
-        if scenario["design"] in {"joint", "frontier", "constraint", "separation"}:
+        if scenario["design"] in {
+                "joint", "frontier", "constraint", "separation",
+                "hardware_gap"}:
             time.sleep(scenario.get("load_warmup_s", 5))
             nodes = stack.cluster.destinations
             def snapshot(node):
                 try:
                     return destination_metrics(
-                        stack, node.id, scenario["background"][node.id][1])
+                        stack, node.id, scenario["background"][node.id][1],
+                        scenario.get("kv_capacity_fraction", {}).get(
+                            node.id, 1))
                 except Exception as exc:
-                    if not diagnostic:
+                    if not diagnostic or scenario["design"] == "hardware_gap":
                         raise
                     return {"kv_fraction": 0, "warning": True,
                             "error": f"{type(exc).__name__}: {exc}"}
@@ -1702,10 +1975,15 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             demand = agentic_demand(
                 sessions, scenario["sessions"], profile,
                 scenario.get("source_load", .4))
-            moves = plan_joint_scenario(
-                scenario, snapshots, profile, scenario["planner_seed"], demand)
+            if scenario["design"] == "hardware_gap":
+                moves, decision = plan_hardware_gap_scenario(
+                    scenario, snapshots, profile, demand)
+            else:
+                moves = plan_joint_scenario(
+                    scenario, snapshots, profile, scenario["planner_seed"],
+                    demand)
             write_checkpoint(root / "decision.json", {
-                "background": snapshots, "moves": moves,
+                "background": snapshots, "moves": moves, **decision,
             })
         else:
             moves = scenario["moves"]
@@ -1790,16 +2068,16 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         "source_sleep_ns": [sleep_start_ns, sleep_end_ns],
     }
     if diagnostic:
-        requested, realized = diagnostic_attainment(
+        outcomes = diagnostic_outcomes(
             scenario, results, demand, profile, start_ns)
         result.update({
-            "requested_shed_w": requested, "realized_shed_w": realized,
-            "target_met": realized >= requested,
+            **outcomes,
             "request_failures": sum("error" in row for row in results),
             "kv_evidence_warnings": sum(
                 row["method"] == "kv_transfer" and "request" in row
                 and row["request"]["cached_tokens"] <= 0 for row in results),
             "load_warnings": load_warnings,
+            **decision,
         })
     write_checkpoint(root / "result.json", result)
     return result
@@ -2720,11 +2998,12 @@ def _oracle_row(family: str, condition: str, restriction: str, problem,
     }
 
 
-def _stable_plan_violations(problem, profile, architecture, moves) -> tuple[str, ...]:
-    checking = replace(
-        problem, deadline_s=ORACLE_STALE_HORIZON_S,
-        end_s=ORACLE_STALE_HORIZON_S,
-    )
+def _plan_violations(problem, profile, architecture, moves,
+                     horizon_s: float | None = None,
+                     prefixes: tuple[str, ...] = ()) -> tuple[str, ...]:
+    checking = (replace(problem, deadline_s=horizon_s,
+                        end_s=max(problem.end_s, horizon_s))
+                if horizon_s is not None else problem)
     table = candidate_table(
         checking, profile, architecture, "normal",
         ExpectedPower(replace(
@@ -2744,8 +3023,15 @@ def _stable_plan_violations(problem, profile, architecture, moves) -> tuple[str,
     selected = [candidates[signature] for signature in signatures]
     usage = table.resources[:, selected].sum(axis=1).A1
     return tuple(name for name, value in zip(table.resource_names, usage)
-                 if name.startswith(("service:", "kv:"))
+                 if (not prefixes or name.startswith(prefixes))
                  and value > 1 + 1e-8)
+
+
+def _stable_plan_violations(problem, profile, architecture,
+                            moves) -> tuple[str, ...]:
+    return _plan_violations(
+        problem, profile, architecture, moves, ORACLE_STALE_HORIZON_S,
+        ("service:", "kv:"))
 
 
 def _evaluate_fixed_plan(state: str, label: str, problem, architecture,
@@ -2758,6 +3044,7 @@ def _evaluate_fixed_plan(state: str, label: str, problem, architecture,
     row = {
         "state": state, "plan": label, "requested_shed_w": target,
         "planned_shed_w": planned, "selected_sessions": len(moves), **counts,
+        "admission_mode": "normal",
     }
     violations = _stable_plan_violations(
         problem, profile, architecture, moves)
@@ -2783,6 +3070,8 @@ def _evaluate_fixed_plan(state: str, label: str, problem, architecture,
         (item.committed_s, item.session_id) for item in execution.sessions
         if item.committed_s is not None
     ):
+        if committed_s > ORACLE_STALE_HORIZON_S:
+            break
         moved.append(session_id)
         shed = initial - source_power(problem, profile, moved)
         curves.append({"state": state, "plan": label,
@@ -2810,7 +3099,8 @@ def _evaluate_fixed_plan(state: str, label: str, problem, architecture,
 
 def _validate_oracle_stale(oracles: list[dict], predictions: list[dict],
                            resources: list[dict], duals: list[dict]) -> None:
-    if {row["admission_mode"] for row in oracles} != {"normal"}:
+    if {row["admission_mode"] for row in (*oracles, *predictions)} \
+            != {"normal"}:
         raise RuntimeError("restricted oracles do not share normal admission")
     oracle = {(row["family"], row["condition_id"], row["restriction"]): row
               for row in oracles}
@@ -3081,6 +3371,7 @@ def simulate_oracle_stale(plan_path: Path, out: Path) -> dict:
         replace(problem, deadline_s=ORACLE_STALE_HORIZON_S,
                 end_s=ORACLE_STALE_HORIZON_S),
         profile, routes, "max_shed", destination=architecture,
+        admission_mode="normal",
     )
     predictions.append(_evaluate_fixed_plan(
         "all-bind", "deadline-blind", problem, architecture, profile,
@@ -3146,6 +3437,385 @@ def simulate_oracle_stale(plan_path: Path, out: Path) -> dict:
             "out": str(out), "valid": True}
 
 
+def _scenario_problem(scenario: dict, manifest: dict, profile: ModelProfile):
+    snapshots = {node: {"kv_fraction": values[1]}
+                 for node, values in scenario["background"].items()}
+    snapshots = _hardware_gap_snapshots(scenario, snapshots, profile)
+    demand = agentic_demand(
+        scenario_records(manifest, scenario), scenario["sessions"], profile,
+        scenario["source_load"],
+    )
+    return (*joint_problem(scenario, snapshots, profile, demand), demand)
+
+
+def _hardware_gap_snapshots(scenario: dict, snapshots: dict[str, dict],
+                            profile: ModelProfile) -> dict[str, dict]:
+    if scenario.get("design") != "hardware_gap":
+        return snapshots
+    return {node: {
+        **snapshot,
+        "kv_fraction": min(1, snapshot["kv_fraction"] + scenario[
+            "background_kv_headroom_tokens"][node]
+            / profile.kv_capacity_tokens),
+    } for node, snapshot in snapshots.items()}
+
+
+def _move_rows(moves) -> list[dict]:
+    return json.loads(json.dumps([asdict(move) for move in moves]))
+
+
+def hardware_gap_plan(parent_path: Path, oracle_path: Path) -> dict:
+    parent = json.loads(parent_path.read_text())
+    validate_plan(parent)
+    if parent["design"] != "separation":
+        raise ValueError("hardware gap requires a separation plan")
+    frozen = json.loads(oracle_path.read_text())
+    if frozen.get("schema") != "queue-haul-oracle-stale-plans-v1":
+        raise ValueError("invalid oracle/stale plans")
+    manifest = json.loads(Path(parent["manifest"]["path"]).read_text())
+    profile = ModelProfile.load(MODEL_PATH)
+    template = next(row for row in parent["scenarios"]
+                    if row["condition_id"] == "joint-shaped"
+                    and row["repeat"] == 0 and row["policy"] == "queue_haul")
+    states, exact = {}, {}
+    for state, germany, kv, bandwidth, _policies in HARDWARE_GAP_MATRIX:
+        scenario = {
+            **template, "design": "hardware_gap", "condition_id": state,
+            "background": {"east": (.25, kv), "germany": (germany, 0)},
+            "bandwidth": bandwidth,
+            "bandwidth_mbps": _bandwidths(
+                parent["network_contract"], bandwidth),
+            "requested_shed_fraction": HARDWARE_GAP_TARGET_FRACTION,
+            "admission_mode": "normal",
+            "full_horizon_s": ORACLE_STALE_HORIZON_S,
+            "background_kv_headroom_tokens": {
+                "east": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                "germany": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+            },
+        }
+        problem, architecture, routes, target, _demand = _scenario_problem(
+            scenario, manifest, profile)
+        states[state] = scenario, problem, architecture, routes, target
+        for restriction in ORACLE_RESTRICTIONS:
+            result, _ = _oracle_row(
+                "hardware_gap", state, restriction, problem, architecture,
+                routes, profile, target)
+            exact[state, restriction] = result
+    all_bind = states["all-bind"]
+    robust = exact["all-bind", "joint"].moves
+    stale = exact["all-release", "joint"].moves
+    blind = solve(
+        replace(all_bind[1], deadline_s=ORACLE_STALE_HORIZON_S,
+                end_s=ORACLE_STALE_HORIZON_S),
+        profile, all_bind[3], "max_shed", destination=all_bind[2],
+        admission_mode="normal",
+    ).moves
+    generated = {
+        "robust_all_bind": _move_rows(robust),
+        "stale_all_release": _move_rows(stale),
+        "deadline_blind_90s": _move_rows(blind),
+    }
+    if any(generated[key] != frozen[key] for key in generated):
+        raise RuntimeError("frozen oracle/stale decisions changed")
+    scenarios = []
+    for index, (state, germany, kv, bandwidth, policies) \
+            in enumerate(HARDWARE_GAP_MATRIX):
+        base = states[state][0]
+        for repeat in range(HARDWARE_GAP_REPEATS):
+            for policy in policies:
+                if policy.startswith("oracle_"):
+                    moves = _move_rows(exact[state, policy[7:]].moves)
+                elif policy == "queue_haul_robust":
+                    moves = generated["robust_all_bind"]
+                elif policy == "queue_haul_stale":
+                    moves = generated["stale_all_release"]
+                elif policy == DEADLINE_BLIND_POLICY:
+                    moves = generated["deadline_blind_90s"]
+                else:
+                    moves = []
+                row = {
+                    **base, "condition_index": index, "repeat": repeat,
+                    "policy": policy,
+                    "planning_state": (
+                        "all-bind" if policy == "queue_haul_robust" else
+                        "all-release" if policy == "queue_haul_stale" else
+                        "all-bind-90s" if policy == DEADLINE_BLIND_POLICY else
+                        state),
+                    "planner_seed": profiler.stable_seed(
+                        parent["seed"], "hardware-gap", index, repeat, policy),
+                    "kv_capacity_fraction": {
+                        "east": round(1 - kv, 10), "germany": 1},
+                    "expected_admission": not (
+                        state == "all-bind" and policy == "queue_haul_stale"),
+                }
+                if moves:
+                    row["moves"] = moves
+                row["scenario_id"] = _hash([
+                    "hardware_gap", state, repeat, policy, moves, bandwidth,
+                    germany, kv, HARDWARE_GAP_TARGET_FRACTION,
+                ])[:16]
+                scenarios.append(row)
+    blocks = [[row for row in scenarios
+               if row["condition_index"] == index and row["repeat"] == repeat]
+              for index in range(len(HARDWARE_GAP_MATRIX))
+              for repeat in range(HARDWARE_GAP_REPEATS)]
+    rng = random.Random(parent["seed"])
+    for block in blocks:
+        rng.shuffle(block)
+    scenarios = [row for block in blocks for row in block]
+    output = {
+        **{key: parent[key] for key in (
+            "schema", "seed", "manifest", "model_profile",
+            "network_contract", "cluster", "calibration", "load_support",
+        )},
+        "design": "hardware_gap", "policies": list(HARDWARE_GAP_POLICIES),
+        "conditions": [{
+            "condition_id": state, "germany_service_load": germany,
+            "east_kv_reserved_fraction": kv, "bandwidth": bandwidth,
+            "policies": list(policies),
+        } for state, germany, kv, bandwidth, policies in HARDWARE_GAP_MATRIX],
+        "repeats": HARDWARE_GAP_REPEATS, "sessions_per_scenario": 28,
+        "parent_plan": {"path": str(parent_path),
+                        "sha256": profiler.file_hash(parent_path)},
+        "oracle_plans": {"path": str(oracle_path),
+                         "sha256": profiler.file_hash(oracle_path)},
+        "scenarios": scenarios,
+    }
+    validate_plan(output)
+    return output
+
+
+def write_hardware_gap_plan(parent: Path, oracle: Path, out: Path) -> dict:
+    plan = hardware_gap_plan(parent, oracle)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n")
+    return plan
+
+
+def _validate_hardware_gap_simulation(rows: list[dict]) -> None:
+    if {row["admission_mode"] for row in rows} != {"normal"}:
+        raise RuntimeError("hardware gap admission modes are unmatched")
+    selected = {(row["state"], row["policy"]): row for row in rows}
+    target = selected["all-bind", "queue_haul_robust"]["requested_shed_w"]
+    winner = selected["all-bind", "queue_haul_robust"]
+    losers = [selected["all-bind", policy] for policy in (
+        "greedy", "oracle_kv_only", "oracle_replay_only",
+        "oracle_east_only", "oracle_germany_only", "isolated_fastest",
+        "queue_haul_power_blind",
+    )]
+    if not winner["target_by_deadline"] \
+            or winner["shed_by_deadline_w"] < 1.1 * target \
+            or max(row["shed_by_deadline_w"] for row in losers) > .9 * target:
+        raise RuntimeError("all-bind hardware separation is not severe")
+    stale = selected["all-bind", "queue_haul_stale"]
+    blind = selected["all-bind", DEADLINE_BLIND_POLICY]
+    if stale["status"] != "capacity_infeasible" \
+            or not {"kv:pool/east", "service:pool/germany:0"} <= set(
+                stale["capacity_violations"]) \
+            or blind["status"] != "late" \
+            or blind["shed_by_deadline_w"] > .85 * target \
+            or blind["eventual_shed_w"] < 1.2 * target \
+            or blind["time_to_target_s"] is None \
+            or not 55 <= blind["time_to_target_s"] \
+            <= ORACLE_STALE_HORIZON_S:
+        raise RuntimeError("stale or deadline hardware trap is not severe")
+    if any(selected[state, "queue_haul"]["shed_by_deadline_w"] < 1.1 * target
+           for state in ("free-kv", "free-service", "free-bandwidth",
+                         "all-release")) \
+            or any(selected[state, "queue_haul_robust"][
+                "shed_by_deadline_w"] < 1.1 * target for state in (
+                    "free-kv", "free-service", "free-bandwidth",
+                    "all-release")) \
+            or selected["free-kv", "greedy"]["shed_by_deadline_w"] \
+            < 1.1 * target \
+            or selected["all-release", "queue_haul_stale"][
+                "shed_by_deadline_w"] < 1.2 * target \
+            or selected["all-release", "oracle_germany_only"][
+                "shed_by_deadline_w"] > .95 * target:
+        raise RuntimeError("hardware release controls are not separated")
+    releases = (
+        ("free-kv", "oracle_east_only", 4),
+        ("free-service", "oracle_germany_only", 12),
+        ("free-bandwidth", "oracle_kv_only", 7),
+    )
+    if any(selected[state, policy]["planned_shed_w"]
+           - selected["all-bind", policy]["planned_shed_w"] < margin
+           for state, policy, margin in releases):
+        raise RuntimeError("a hardware constraint release is too small")
+
+
+def plot_hardware_gap(rows: list[dict], curves: list[dict], out: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    selected = {(row["state"], row["policy"]): row for row in rows}
+    target = selected["all-bind", "queue_haul_robust"]["requested_shed_w"]
+    policies = [policy for policy in HARDWARE_GAP_MATRIX[0][-1]
+                if policy != "queue_haul_stale"]
+    labels = [policy.replace("queue_haul_", "").replace("oracle_", "")
+              .replace("_", " ") for policy in policies]
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    axes[0].bar(
+        np.arange(len(policies)),
+        [selected["all-bind", policy]["shed_by_deadline_w"]
+         for policy in policies],
+        color=[HARDWARE_GAP_COLORS[policy] for policy in policies],
+    )
+    axes[0].axhline(target, color="black", linestyle="--", label="Target")
+    axes[0].set_xticks(np.arange(len(policies)), labels, rotation=35,
+                       ha="right", fontsize=7)
+    axes[0].set(ylabel="Shed by 45 s (W)", title="All constraints bind")
+    axes[0].legend(frameon=False)
+
+    releases = (
+        ("all-bind", "queue_haul_robust", "oracle_replay_only"),
+        ("free-kv", "queue_haul", "oracle_east_only"),
+        ("free-service", "queue_haul", "oracle_germany_only"),
+        ("free-bandwidth", "queue_haul", "oracle_kv_only"),
+        ("all-release", "queue_haul", "oracle_germany_only"),
+    )
+    x = np.arange(len(releases))
+    axes[1].bar(x - .18, [selected[state, joint]["shed_by_deadline_w"]
+                          for state, joint, _ in releases], .36,
+                color=HARDWARE_GAP_COLORS["queue_haul"], label="Queue-Haul")
+    seen = set()
+    for index, (state, _, policy) in enumerate(releases):
+        label = policy.removeprefix("oracle_").replace("_", " ")
+        axes[1].bar(
+            index + .18, selected[state, policy]["shed_by_deadline_w"], .36,
+            color=HARDWARE_GAP_COLORS[policy],
+            label=label if policy not in seen else None,
+        )
+        seen.add(policy)
+    axes[1].plot(
+        x, [selected[state, "queue_haul_robust"]["shed_by_deadline_w"]
+            for state, *_ in releases], marker="D", linestyle=":",
+        color=HARDWARE_GAP_COLORS["queue_haul_robust"],
+        label="Worst-corner robust plan",
+    )
+    axes[1].axhline(target, color="black", linestyle="--", label="Target")
+    axes[1].set_xticks(x, [state for state, *_ in releases], rotation=25,
+                       ha="right", fontsize=8)
+    axes[1].set(ylabel="Shed by 45 s (W)", title="One-at-a-time releases")
+    axes[1].legend(frameon=False, fontsize=7, ncol=2)
+
+    for policy in ("queue_haul_robust", DEADLINE_BLIND_POLICY):
+        values = [row for row in curves if row["state"] == "all-bind"
+                  and row["plan"] == policy]
+        for index, repeat in enumerate(sorted(
+                {row.get("repeat", 0) for row in values})):
+            trace = sorted((row for row in values
+                            if row.get("repeat", 0) == repeat),
+                           key=lambda row: row["time_s"])
+            axes[2].step(
+                [row["time_s"] for row in trace],
+                [row["shed_w"] for row in trace], where="post",
+                color=HARDWARE_GAP_COLORS[policy],
+                alpha=1 if len(values) == len(trace) else .45,
+                label=(policy.replace("queue_haul_", "").replace("_", " ")
+                       if index == 0 else None))
+    axes[2].axvline(SEPARATION_DEADLINE_S, color="black", linestyle=":",
+                    label="45 s deadline")
+    axes[2].axhline(target, color="black", linestyle="--", label="Target")
+    axes[2].set(xlim=(0, ORACLE_STALE_HORIZON_S), xlabel="Time (s)",
+                ylabel="Source power shed (W)",
+                title="Enough power, but too late")
+    axes[2].legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"hardware_gap.{suffix}", dpi=200)
+    plt.close(fig)
+
+
+def simulate_hardware_gap(plan_path: Path, out: Path) -> dict:
+    plan = json.loads(plan_path.read_text())
+    validate_plan(plan)
+    if plan["design"] != "hardware_gap":
+        raise ValueError("hardware gap simulation requires a gap plan")
+    manifest = json.loads(Path(plan["manifest"]["path"]).read_text())
+    profile = ModelProfile.load(MODEL_PATH)
+    rows, curves, resources, duals = [], [], [], []
+    for state, *_ in HARDWARE_GAP_MATRIX:
+        scenarios = [row for row in plan["scenarios"]
+                     if row["condition_id"] == state and row["repeat"] == 0]
+        for scenario in scenarios:
+            problem, architecture, routes, target, _demand = _scenario_problem(
+                scenario, manifest, profile)
+            policy = scenario["policy"]
+            if scenario.get("moves"):
+                moves = tuple(_planned_move(row) for row in scenario["moves"])
+                admission_mode = scenario["admission_mode"]
+            else:
+                result = solve(
+                    problem, profile, routes,
+                    joint_solver(policy, scenario["objective"]),
+                    seed=scenario["planner_seed"], destination=architecture,
+                    admission_mode=scenario["admission_mode"],
+                )
+                moves, admission_mode = result.moves, result.admission_mode
+            row = _evaluate_fixed_plan(
+                state, policy, problem, architecture, profile, moves, target,
+                curves)
+            rows.append({**row, "policy": policy,
+                         "admission_mode": admission_mode,
+                         "bandwidth": scenario["bandwidth"],
+                         "germany_service_load":
+                         scenario["background"]["germany"][0],
+                         "east_kv_reserved_fraction":
+                         scenario["background"]["east"][1],
+                         **_constraint_action_counts(moves)})
+        problem, architecture, routes, _target, _demand = _scenario_problem(
+            scenarios[0], manifest, profile)
+        result = solve(
+            problem, profile, routes, "max_shed", destination=architecture,
+            admission_mode="normal")
+        resources.extend({"state": state, "resource": row.name,
+                          "unit": row.unit, "used": row.used,
+                          "capacity": row.capacity,
+                          "utilization": row.utilization}
+                         for row in result.resource_uses)
+        table = candidate_table(
+            problem, profile, architecture, "normal",
+            ExpectedPower(replace(
+                problem, final_state="awake", assumed_shutdown_s=None),
+                profile))
+        ceiling, prices = phase_one_capacity_duals(table)
+        duals.extend({
+            "state": state, "phase_one_marginal_ceiling_w": ceiling,
+            "resource": name, "capacity": capacity, "unit": unit,
+            "shadow_w_per_full_capacity": float(price),
+            "shadow_w_per_unit": float(price / capacity),
+        } for name, capacity, unit, price in zip(
+            table.resource_names, table.resource_capacities,
+            table.resource_units, prices))
+    _validate_hardware_gap_simulation(rows)
+    out.mkdir(parents=True, exist_ok=False)
+    profiler.write_csv(out / "hardware_gap_predictions.csv", rows)
+    profiler.write_csv(out / "hardware_gap_curves.csv", curves)
+    profiler.write_csv(out / "hardware_gap_resources.csv", resources)
+    profiler.write_csv(out / "hardware_gap_duals.csv", duals)
+    plot_hardware_gap(rows, curves, out)
+    artifacts = {path.name: profiler.file_hash(path)
+                 for path in sorted(out.iterdir()) if path.is_file()}
+    write_checkpoint(out / "metadata.json", {
+        "schema": "queue-haul-hardware-gap-simulation-v1",
+        "plan": {"path": str(plan_path),
+                 "sha256": profiler.file_hash(plan_path)},
+        "target_fraction": HARDWARE_GAP_TARGET_FRACTION,
+        "east_all_bind_kv_capacity_fraction": .1,
+        "background_kv_headroom_tokens": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+        "deadline_s": SEPARATION_DEADLINE_S,
+        "full_horizon_s": ORACLE_STALE_HORIZON_S,
+        "policy_colors": HARDWARE_GAP_COLORS,
+        "artifacts": artifacts,
+    })
+    return {"scenarios": len(plan["scenarios"]),
+            "conditions": len(HARDWARE_GAP_MATRIX),
+            "out": str(out), "valid": True}
+
+
 def _valid_constraint_evidence(scenario: dict, result: dict) -> bool:
     background = result.get("background")
     return all(key in result for key in (
@@ -3184,13 +3854,93 @@ def _valid_separation_evidence(scenario: dict, result: dict) -> bool:
     )
 
 
+def _valid_hardware_gap_evidence(scenario: dict, result: dict) -> bool:
+    background = result.get("background", {})
+    required = {
+        "request_failures", "kv_evidence_warnings", "load_warnings",
+        "requested_shed_w", "realized_shed_w", "eventual_shed_w",
+        "time_to_target_s", "deadline_met", "target_met",
+    }
+    if not required <= result.keys() \
+            or result.get("request_failures") or result.get("kv_evidence_warnings") \
+            or result.get("load_warnings") or set(background) \
+            != {"east", "germany"} or any(
+                row.get("warning") for row in background.values()) \
+            or result.get("admission_mode") != scenario["admission_mode"]:
+        return False
+    expected = scenario["kv_capacity_fraction"]
+    if any(abs(background[node].get("kv_capacity_fraction", -1)
+               - expected[node]) > .01 for node in expected):
+        return False
+    if not scenario["expected_admission"]:
+        return result.get("admission_rejected") is True \
+            and not result.get("requests") \
+            and {"kv:pool/east", "service:pool/germany:0"} <= set(
+                result.get("capacity_violations", ()))
+    if result.get("admission_rejected") or result.get("request_failures"):
+        return False
+    ratio = result["realized_shed_w"] / result["requested_shed_w"]
+    state, policy = scenario["condition_id"], scenario["policy"]
+    if policy == DEADLINE_BLIND_POLICY:
+        target_time = result["time_to_target_s"]
+        return result["deadline_met"] is False and ratio <= .85 \
+            and result["eventual_shed_w"] \
+            >= 1.2 * result["requested_shed_w"] \
+            and target_time is not None \
+            and 55 <= target_time <= scenario["full_horizon_s"]
+    if state == "all-bind":
+        if policy == "queue_haul_robust":
+            moves = result.get("requests", ())
+            return ratio >= 1.1 and result["deadline_met"] is True \
+                and {row["method"] for row in moves} \
+                == {"replay", "kv_transfer"} \
+                and {row["destination_instance"] for row in moves} \
+                == {"east", "germany"}
+        return ratio <= .9 and result["deadline_met"] is True
+    if policy in {
+            "queue_haul", "queue_haul_robust", "greedy",
+            "queue_haul_stale"}:
+        return ratio >= 1.1 and result["deadline_met"] is True
+    return result["deadline_met"] is True and result["target_met"] is False
+
+
+def _valid_hardware_gap_block(evidence: list[tuple[dict, dict]]) -> bool:
+    groups = {}
+    for scenario, result in evidence:
+        groups.setdefault((scenario["condition_id"], scenario["policy"]),
+                          []).append(result)
+    if any(len(rows) != HARDWARE_GAP_REPEATS for rows in groups.values()):
+        return False
+    med = {key: {
+        field: statistics.median(row[field] for row in rows)
+        for field in ("requested_shed_w", "realized_shed_w",
+                      "eventual_shed_w")
+    } for key, rows in groups.items() if all(
+        field in row for row in rows for field in (
+            "requested_shed_w", "realized_shed_w", "eventual_shed_w"))}
+    target = med["all-bind", "queue_haul_robust"]["requested_shed_w"]
+    releases = (
+        ("free-kv", "oracle_east_only", 4),
+        ("free-service", "oracle_germany_only", 12),
+        ("free-bandwidth", "oracle_kv_only", 7),
+    )
+    return all(
+        med[state, policy]["realized_shed_w"]
+        - med["all-bind", policy]["realized_shed_w"] >= margin
+        for state, policy, margin in releases
+    ) and med["all-release", "oracle_germany_only"]["realized_shed_w"] \
+        <= .95 * target
+
+
 def reduce_run(plan: dict, run_root: Path) -> dict:
     rows, evidence, completed, failed, missing, invalid_evidence = [], [], 0, 0, 0, 0
     constraint = plan.get("design") == "constraint"
     separation = plan.get("design") == "separation"
+    hardware_gap = plan.get("design") == "hardware_gap"
     manifest = json.loads(Path(plan["manifest"]["path"]).read_text()) \
-        if separation else None
-    profile = ModelProfile.load(MODEL_PATH) if separation else None
+        if separation or hardware_gap else None
+    profile = ModelProfile.load(MODEL_PATH) \
+        if separation or hardware_gap else None
     for scenario in plan["scenarios"]:
         latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None:
@@ -3200,16 +3950,15 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             attempt, result = latest
             completed += result["status"] == "complete"
             failed += result["status"] == "failed"
-            if separation and result["status"] == "complete":
+            if (separation or hardware_gap) \
+                    and result["status"] == "complete":
                 demand = agentic_demand(
                     scenario_records(manifest, scenario), scenario["sessions"],
                     profile, scenario["source_load"])
-                requested, realized = diagnostic_attainment(
+                outcomes = diagnostic_outcomes(
                     scenario, result["requests"], demand, profile,
                     result["started_ns"])
-                result = {**result, "requested_shed_w": requested,
-                          "realized_shed_w": realized,
-                          "target_met": realized >= requested}
+                result = {**result, **outcomes}
             if result["status"] == "complete":
                 evidence.append((scenario, result))
         if constraint and result.get("status") == "complete" \
@@ -3217,6 +3966,9 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             invalid_evidence += 1
         if separation and result.get("status") == "complete" \
                 and not _valid_separation_evidence(scenario, result):
+            invalid_evidence += 1
+        if hardware_gap and result.get("status") == "complete" \
+                and not _valid_hardware_gap_evidence(scenario, result):
             invalid_evidence += 1
         connections = result.get("connections", [])
         rtts = [float(row["target_rtt_us"]) / 1000 for row in connections
@@ -3243,6 +3995,12 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             "requested_shed_w": result.get("requested_shed_w", ""),
             "realized_shed_w": result.get("realized_shed_w", ""),
             "target_met": result.get("target_met", ""),
+            "eventual_shed_w": result.get("eventual_shed_w", ""),
+            "eventual_target_met": result.get("eventual_target_met", ""),
+            "time_to_target_s": result.get("time_to_target_s", ""),
+            "admission_rejected": result.get("admission_rejected", ""),
+            "capacity_violations": json.dumps(
+                result.get("capacity_violations", ())),
             "request_failures": result.get("request_failures", ""),
             "kv_evidence_warnings": result.get("kv_evidence_warnings", ""),
             "load_warnings": len(result.get("load_warnings", ())),
@@ -3292,16 +4050,44 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
                 **_constraint_action_counts(moves),
             })
         plot_separation(plotted, [], run_root)
+    if hardware_gap and len(evidence) == len(plan["scenarios"]):
+        if not _valid_hardware_gap_block(evidence):
+            invalid_evidence += 1
+        plotted, curves = [], []
+        for scenario, result in evidence:
+            plotted.append({
+                "state": scenario["condition_id"],
+                "policy": scenario["policy"],
+                "requested_shed_w": result["requested_shed_w"],
+                "shed_by_deadline_w": result["realized_shed_w"],
+            })
+            curves.extend({
+                **row, "state": scenario["condition_id"],
+                "plan": scenario["policy"], "repeat": scenario["repeat"],
+            } for row in result["attainment_curve"])
+        medians = []
+        for key in {(row["state"], row["policy"]) for row in plotted}:
+            group = [row for row in plotted
+                     if (row["state"], row["policy"]) == key]
+            medians.append({
+                "state": key[0], "policy": key[1],
+                "requested_shed_w": statistics.median(
+                    row["requested_shed_w"] for row in group),
+                "shed_by_deadline_w": statistics.median(
+                    row["shed_by_deadline_w"] for row in group),
+            })
+        plot_hardware_gap(medians, curves, run_root)
     summary = {
         "schema": "queue-haul-network-summary-v1",
         "expected": len(plan["scenarios"]), "completed": completed,
         "failed": failed, "missing": missing,
         "valid": not missing and not (
-            (constraint or separation) and invalid_evidence) and (
+            (constraint or separation or hardware_gap)
+            and invalid_evidence) and (
             completed == len(plan["scenarios"]) if not frontier else
             failed / len(plan["scenarios"]) <= FRONTIER_FAILURE_GATE),
     }
-    if constraint or separation:
+    if constraint or separation or hardware_gap:
         summary["invalid_evidence"] = invalid_evidence
     (run_root / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n")
@@ -3368,22 +4154,27 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
     checkpoint_progress(plan, run_root)
     manifest = json.loads(Path(plan["manifest"]["path"]).read_text())
     prefill_tps = ModelProfile.load(MODEL_PATH).case().F
-    stack, bandwidth = None, None
+    stack, stack_key = None, None
     try:
         for scenario in plan["scenarios"]:
             scenario_root = run_root / "scenarios" / scenario["scenario_id"]
             latest = _latest_result(scenario_root)
             if latest and latest[1].get("status") == "complete":
                 continue
-            if stack and bandwidth != scenario["bandwidth"]:
+            wanted = (scenario["bandwidth"], tuple(sorted(
+                scenario.get("kv_capacity_fraction", {}).items())))
+            if stack and stack_key != wanted:
                 stop_cluster(stack)
                 stack = None
             if stack is None:
-                bandwidth = scenario["bandwidth"]
+                stack_key = wanted
                 stack = start_cluster(
-                    cluster, key, plan["network_contract"], bandwidth,
+                    cluster, key, plan["network_contract"],
+                    scenario["bandwidth"],
                     run_root / "stacks" /
-                    f"{bandwidth}-{time.time_ns()}",
+                    f"{scenario['bandwidth']}-{time.time_ns()}",
+                    kv_capacity_fraction=scenario.get(
+                        "kv_capacity_fraction"),
                 )
             attempt = _next_attempt(scenario_root)
             attempt_root = scenario_root / f"attempt-{attempt:04d}"
@@ -3400,7 +4191,9 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                 stop_cluster(stack)
                 stack = None
                 checkpoint_progress(plan, run_root)
-                if plan["design"] not in {"frontier", "constraint", "separation"}:
+                if plan["design"] not in {
+                        "frontier", "constraint", "separation",
+                        "hardware_gap"}:
                     raise
             checkpoint_progress(plan, run_root)
     finally:
@@ -3410,7 +4203,8 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
     if not summary["valid"]:
         raise RuntimeError(
             f"network campaign incomplete: {summary['failed']} failed, "
-            f"{summary['missing']} missing")
+            f"{summary['missing']} missing, "
+            f"{summary.get('invalid_evidence', 0)} invalid evidence")
     return summary
 
 
@@ -3472,6 +4266,7 @@ def parse_args(argv=None):
     command.add_argument("--kv-port", type=int, required=True)
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--power-interval-s", type=float, default=.25)
+    command.add_argument("--kv-blocks", type=int)
     command = sub.add_parser("smoke")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -3498,6 +4293,13 @@ def parse_args(argv=None):
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("simulate-oracle-stale")
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
+    command = sub.add_parser("hardware-gap")
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--oracle-plans", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
+    command = sub.add_parser("simulate-hardware-gap")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("refine")
@@ -3542,7 +4344,8 @@ def main(argv=None) -> None:
         ), indent=2, sort_keys=True))
     elif args.command == "node-serve":
         node_serve(args.node_id, args.bind_host, args.source_host,
-                   args.kv_port, args.run_root, args.power_interval_s)
+                   args.kv_port, args.run_root, args.power_interval_s,
+                   args.kv_blocks)
     elif args.command == "smoke":
         print(json.dumps(smoke(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
@@ -3567,6 +4370,14 @@ def main(argv=None) -> None:
                          indent=2, sort_keys=True))
     elif args.command == "simulate-oracle-stale":
         print(json.dumps(simulate_oracle_stale(args.plan, args.out),
+                         indent=2, sort_keys=True))
+    elif args.command == "hardware-gap":
+        plan = write_hardware_gap_plan(
+            args.plan, args.oracle_plans, args.out)
+        print(json.dumps({"scenarios": len(plan["scenarios"]),
+                          "out": str(args.out)}, sort_keys=True))
+    elif args.command == "simulate-hardware-gap":
+        print(json.dumps(simulate_hardware_gap(args.plan, args.out),
                          indent=2, sort_keys=True))
     elif args.command == "refine":
         refined = write_frontier_refinement(

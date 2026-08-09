@@ -29,6 +29,10 @@ Plausible wrong implementations:
 - Credit a queued request by its own latency instead of the shared campaign
   deadline, use the last request as an all-or-nothing deadline, or mix seconds
   and nanoseconds at the exact boundary.
+- Treat a hardware-reduced KV cache as idle capacity instead of a reservation
+  against the common profiled capacity.
+- Change the pack or operating state across policies, or execute the optimistic
+  stale decision after the all-bind admission check fails.
 """
 
 import csv
@@ -734,6 +738,194 @@ def test_oracle_stale_simulation_certifies_capacity_and_deadline_traps(tmp_path)
                for suffix in ("png", "pdf"))
 
 
+def test_hardware_gap_plan_is_matched_and_covers_each_missing_constraint(
+        monkeypatch):
+    monkeypatch.chdir(n.ROOT.parent)
+    plan = n.hardware_gap_plan(
+        n.ROOT / "outputs/east-germany-separation-20260809/plan.json",
+        n.ROOT / "outputs/east-germany-oracle-stale-20260809/plans.json",
+    )
+
+    assert len(plan["scenarios"]) == 72
+    assert plan["policies"] == list(n.HARDWARE_GAP_POLICIES)
+    assert {state: len([row for row in plan["scenarios"]
+                        if row["condition_id"] == state])
+            for state, *_ in n.HARDWARE_GAP_MATRIX} == {
+        "all-bind": 30, "free-kv": 12, "free-service": 9,
+        "free-bandwidth": 9, "all-release": 12,
+    }
+    assert len({tuple((item["session_id"], item["initial_tokens"])
+                      for item in row["sessions"])
+                for row in plan["scenarios"]}) == 1
+    assert all(row["requested_shed_fraction"] == .72
+               and row["admission_mode"] == "normal"
+               and row["full_horizon_s"] == 90
+               and set(row["background_kv_headroom_tokens"].values()) == {668}
+               and len(row["sessions"]) == 28
+               and sum(item["initial_tokens"] for item in row["sessions"])
+               == 648_131 for row in plan["scenarios"])
+    all_bind = [row for row in plan["scenarios"]
+                if row["condition_id"] == "all-bind"]
+    assert all(row["kv_capacity_fraction"] == {"east": .1, "germany": 1}
+               for row in all_bind)
+    stale = [row for row in all_bind
+             if row["policy"] == "queue_haul_stale"]
+    assert len(stale) == 3 and all(
+        not row["expected_admission"] and row["moves"] for row in stale)
+    assert all(bool(row.get("moves")) == (
+        row["policy"].startswith("oracle_") or row["policy"] in {
+            "queue_haul_robust", "queue_haul_stale",
+            n.DEADLINE_BLIND_POLICY,
+        }) for row in plan["scenarios"])
+
+
+def test_hardware_gap_rejects_stale_plan_without_silent_replanning(
+        monkeypatch):
+    monkeypatch.chdir(n.ROOT.parent)
+    plan = n.hardware_gap_plan(
+        n.ROOT / "outputs/east-germany-separation-20260809/plan.json",
+        n.ROOT / "outputs/east-germany-oracle-stale-20260809/plans.json",
+    )
+    manifest = json.loads(Path(plan["manifest"]["path"]).read_text())
+    profile = n.ModelProfile.load(n.MODEL_PATH)
+
+    def decide(state, policy):
+        scenario = next(row for row in plan["scenarios"]
+                        if row["condition_id"] == state
+                        and row["repeat"] == 0 and row["policy"] == policy)
+        snapshots = {node: {"kv_fraction": values[1]}
+                     for node, values in scenario["background"].items()}
+        demand = n.agentic_demand(
+            n.scenario_records(manifest, scenario), scenario["sessions"],
+            profile, scenario["source_load"])
+        return n.plan_hardware_gap_scenario(
+            scenario, snapshots, profile, demand)
+
+    robust, robust_evidence = decide("all-bind", "queue_haul_robust")
+    stale, stale_evidence = decide("all-bind", "queue_haul_stale")
+    released, released_evidence = decide("all-release", "queue_haul_stale")
+
+    assert robust and robust_evidence["fresh_moves"] \
+        and not robust_evidence["admission_rejected"]
+    assert stale == [] and stale_evidence["admission_rejected"]
+    assert {"kv:pool/east", "service:pool/germany:0"} <= set(
+        stale_evidence["capacity_violations"])
+    assert stale_evidence["fresh_moves"]
+    assert released and not released_evidence["admission_rejected"]
+
+
+def test_hardware_gap_simulation_has_severe_matched_gaps(monkeypatch, tmp_path):
+    monkeypatch.chdir(n.ROOT.parent)
+    plan_path = tmp_path / "plan.json"
+    n.write_hardware_gap_plan(
+        n.ROOT / "outputs/east-germany-separation-20260809/plan.json",
+        n.ROOT / "outputs/east-germany-oracle-stale-20260809/plans.json",
+        plan_path,
+    )
+
+    summary = n.simulate_hardware_gap(plan_path, tmp_path / "simulation")
+
+    assert summary == {"scenarios": 72, "conditions": 5,
+                       "out": str(tmp_path / "simulation"), "valid": True}
+    out = tmp_path / "simulation"
+    with (out / "hardware_gap_predictions.csv").open() as handle:
+        rows = {(row["state"], row["policy"]): row
+                for row in csv.DictReader(handle)}
+    target = float(rows["all-bind", "queue_haul_robust"][
+        "requested_shed_w"])
+    assert {row["admission_mode"] for row in rows.values()} == {"normal"}
+    assert float(rows["all-bind", "queue_haul_robust"][
+        "shed_by_deadline_w"]) >= 1.1 * target
+    assert all(float(rows[state, "queue_haul_robust"][
+        "shed_by_deadline_w"]) >= 1.1 * target for state in (
+            "free-kv", "free-service", "free-bandwidth", "all-release"))
+    assert max(float(rows["all-bind", policy]["shed_by_deadline_w"])
+               for policy in (
+                   "greedy", "oracle_kv_only", "oracle_replay_only",
+                   "oracle_east_only", "oracle_germany_only",
+                   "isolated_fastest", "queue_haul_power_blind")) <= .9 * target
+    assert rows["all-bind", "queue_haul_stale"]["status"] \
+        == "capacity_infeasible"
+    assert rows["all-bind", n.DEADLINE_BLIND_POLICY]["status"] == "late"
+    assert all((out / f"hardware_gap.{suffix}").is_file()
+               for suffix in ("png", "pdf"))
+
+
+def test_hardware_gap_evidence_requires_measured_quota_and_safe_rejection():
+    scenario = {
+        "condition_id": "all-bind", "policy": "queue_haul_stale",
+        "expected_admission": False,
+        "admission_mode": "normal",
+        "kv_capacity_fraction": {"east": .1, "germany": 1},
+    }
+    result = {
+        "request_failures": 0, "kv_evidence_warnings": 0,
+        "load_warnings": [], "requests": [], "admission_rejected": True,
+        "admission_mode": "normal",
+        "requested_shed_w": 1, "realized_shed_w": 0,
+        "eventual_shed_w": 0, "time_to_target_s": None,
+        "deadline_met": True, "target_met": False,
+        "capacity_violations": [
+            "kv:pool/east", "service:pool/germany:0"],
+        "background": {
+            "east": {"warning": False, "kv_capacity_fraction": .1},
+            "germany": {"warning": False, "kv_capacity_fraction": 1.002},
+        },
+    }
+
+    assert n._valid_hardware_gap_evidence(scenario, result)
+    result["background"]["east"]["kv_capacity_fraction"] = 1
+    assert not n._valid_hardware_gap_evidence(scenario, result)
+    result["background"]["east"]["kv_capacity_fraction"] = .1
+    result["requests"] = [{"session_id": "unsafe"}]
+    assert not n._valid_hardware_gap_evidence(scenario, result)
+
+
+def test_hardware_gap_late_evidence_requires_a_measured_target_time():
+    scenario = {
+        "condition_id": "all-bind", "policy": n.DEADLINE_BLIND_POLICY,
+        "expected_admission": True,
+        "admission_mode": "normal", "full_horizon_s": 90,
+        "kv_capacity_fraction": {"east": .1, "germany": 1},
+    }
+    result = {
+        "request_failures": 0, "kv_evidence_warnings": 0,
+        "load_warnings": [], "admission_rejected": False,
+        "admission_mode": "normal",
+        "requested_shed_w": 10, "realized_shed_w": 8,
+        "eventual_shed_w": 12, "time_to_target_s": None,
+        "deadline_met": False, "target_met": False,
+        "background": {
+            "east": {"warning": False, "kv_capacity_fraction": .1},
+            "germany": {"warning": False, "kv_capacity_fraction": 1},
+        },
+    }
+
+    assert not n._valid_hardware_gap_evidence(scenario, result)
+    result["time_to_target_s"] = 91
+    assert not n._valid_hardware_gap_evidence(scenario, result)
+
+
+def test_hardware_gap_eventual_power_stops_at_the_frozen_horizon(monkeypatch):
+    monkeypatch.setattr(
+        n, "diagnostic_power_problem", lambda *_args: (object(), 10, 5))
+    monkeypatch.setattr(
+        n, "source_power",
+        lambda _problem, _profile, moved: 10 - 3 * len(tuple(moved)))
+    scenario = {"deadline_s": 45, "full_horizon_s": 90}
+    results = [
+        {"session_id": "on-time", "request": {"end_ns": 60 * 10**9}},
+        {"session_id": "too-late", "request": {"end_ns": 95 * 10**9}},
+    ]
+
+    outcome = n.diagnostic_outcomes(
+        scenario, results, {}, SimpleNamespace(), 0)
+
+    assert outcome["eventual_shed_w"] == 3
+    assert outcome["time_to_target_s"] is None
+    assert outcome["attainment_curve"][-1] == {"time_s": 90, "shed_w": 3}
+
+
 def test_frontier_refinement_adds_boundary_midpoint_and_five_repeats(tmp_path):
     plan = n.make_plan(
         campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
@@ -846,6 +1038,21 @@ vllm:num_requests_waiting 1
     assert snapshot["kv_fraction"] == pytest.approx(.31)
     assert snapshot["warning"]
 
+    reserved = n.summarize_metrics([samples[0].replace(
+        "0.31", "0.05").replace(" 1\n", " 0\n")], .9, .1)
+    assert reserved["engine_kv_fraction"] == pytest.approx(.05)
+    assert reserved["kv_fraction"] == pytest.approx(.905)
+    assert not reserved["warning"]
+
+
+def test_vllm_kv_capacity_is_hard_evidence(tmp_path):
+    log = tmp_path / "sink.log"
+    log.write_text("GPU KV cache size: 96,320 tokens\n")
+    assert n.vllm_kv_capacity(log) == 96_320
+    log.write_text("engine ready\n")
+    with pytest.raises(RuntimeError, match="GPU KV capacity"):
+        n.vllm_kv_capacity(log)
+
 
 def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
     moves = [SimpleNamespace(
@@ -855,7 +1062,7 @@ def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
     )]
     seen = {}
     monkeypatch.setattr(n, "solve", lambda problem, profile, routes, solver,
-                        seed, destination: seen.update(
+                        seed, destination, admission_mode=None: seen.update(
                             routes=routes, architecture=destination) or
                         SimpleNamespace(moves=moves))
     scenario = {

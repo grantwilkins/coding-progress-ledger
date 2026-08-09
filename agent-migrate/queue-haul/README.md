@@ -472,8 +472,20 @@ uv run python queue-haul/network_campaign.py run \
 
 The frozen local certificate is in
 `outputs/east-germany-separation-20260809/`. Simulation proves the selected
-model points have the intended separation; the three-repeat hardware run is
-the test of that prediction.
+model points have the intended separation. The completed 63-episode A100
+hardware run had no request or load failures. Across Germany-service,
+East-slow-path, and joint-shaped cells, Queue-Haul's median attainment was
+128.6%, 117.4%, and 152.9%; greedy reached 112.5%, 112.8%, and 111.4%.
+KV-only, replay-only, isolated-fastest, and power-blind stayed below 90% in
+every cell. Deadline-blind finished the full move set after 45 seconds in all
+three cells, but the joint-shaped cell already crossed its power target, so it
+is not a clean deadline-blind negative control. One greedy repeat also lacked
+clean KV evidence. Consequently all 63 executions completed, but the strict
+certificate is invalid in nine episodes. The measured run further confirms
+that destination KV occupancy was near zero, leaving KV capacity untested.
+The compact reduction, plots, run identity, and verified 438-entry raw-artifact
+manifest are retained in `outputs/east-germany-separation-hardware-20260809/`;
+the large per-request and power traces remain in the hardware run root.
 
 `simulate-oracle-stale` is the no-new-campaign constraint and stale-information
 certificate. It reuses that exact 28-session recorded pack, measured East and
@@ -504,6 +516,46 @@ resource use, duals, and checksums are in
 uv run python queue-haul/network_campaign.py simulate-oracle-stale \
   --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
   --out queue-haul/outputs/east-germany-oracle-stale-20260809
+```
+
+The 72-episode hardware-gap follow-up turns those missing mechanisms into five
+matched operating points using the same 28-session recorded pack, profiled
+destination service, source-power model, and measured routes. Its all-bind
+point physically limits East to 10% of profiled vLLM KV blocks, loads Germany
+to 75% service utilization, and applies the measured 40% route caps. It tests
+Queue-Haul against greedy, four exact restricted oracles, isolated-fastest,
+power-blind, deadline-blind, and a frozen all-release plan. One-at-a-time
+release controls restore East KV, Germany service, or path bandwidth; the
+all-release control admits the previously stale plan. Every block has three
+matched repeats, forced normal admission, and concurrent migrations. The fixed
+worst-corner robust plan also runs in every released state, so its cross-state
+guarantee is hardware-tested rather than inferred only from simulation.
+
+The frozen simulation requests 44.54 W, or 72% of removable pack power.
+All-bind Queue-Haul reaches 49.13 W while every losing baseline reaches at most
+39.60 W; the stale plan is rejected because East KV and Germany service both
+overflow. Deadline-blind reaches enough eventual power only after 59.31
+seconds. Releasing KV, service, and bandwidth expands the corresponding exact
+restricted oracle by 4.58, 12.91, and 7.44 W. The runner parses each vLLM
+engine's reported KV-token capacity and hard-fails unless it matches the
+planned fraction within one percentage point, preventing a labeled-only quota.
+Planning additionally reserves 668 KV tokens per destination for one continuing
+background request. Eventual attainment stops at the frozen 90-second horizon;
+responses after it cannot satisfy the deadline-blind control.
+
+```bash
+uv run python queue-haul/network_campaign.py hardware-gap \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --oracle-plans queue-haul/outputs/east-germany-oracle-stale-20260809/plans.json \
+  --out queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json
+uv run python queue-haul/network_campaign.py simulate-hardware-gap \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-hardware-gap-20260809/simulation
+uv run python queue-haul/network_campaign.py run \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --current-calibration queue-haul/outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --run-root /datadrive/queue-haul-network/hardware-gap-001
 ```
 
 In the separate standard handoff experiment, each policy uses the same eight

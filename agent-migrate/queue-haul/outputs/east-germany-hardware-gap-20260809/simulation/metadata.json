@@ -1,0 +1,33 @@
+{
+  "artifacts": {
+    "hardware_gap.pdf": "3aadcd1974977837450fcf486bbae2af355f705754eb9a1cf5086cd768271621",
+    "hardware_gap.png": "6da5161a4407f3329e895a8d291ca02f9001c9224be4c12b6a1207c756ffb556",
+    "hardware_gap_curves.csv": "de202f048b1ac3156cdd34ba29f0f0bd23b57c2a4f26fffc87d5ba4e57f27333",
+    "hardware_gap_duals.csv": "12a858946ee3b4afbb6b6b64ee08bebd479a68c70d75578f28f35e4b1cb50f90",
+    "hardware_gap_predictions.csv": "6df5d9365bb78dc7bafa3066501c70306db7c5c2db51a0137aa30a1467e12e29",
+    "hardware_gap_resources.csv": "c168ffdef0e523acad1bcaa9abe6e80ad97086b953447f6b2c5e76bd1ce1e8a9"
+  },
+  "background_kv_headroom_tokens": 668,
+  "deadline_s": 45,
+  "east_all_bind_kv_capacity_fraction": 0.1,
+  "full_horizon_s": 90,
+  "plan": {
+    "path": "queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json",
+    "sha256": "017314484d6c24da7f565d30742bc41b08f3a00d79a070b04cb3fba86ec6a6c0"
+  },
+  "policy_colors": {
+    "greedy": "#ff7f0e",
+    "isolated_fastest": "#e377c2",
+    "oracle_east_only": "#9467bd",
+    "oracle_germany_only": "#8c564b",
+    "oracle_kv_only": "#2ca02c",
+    "oracle_replay_only": "#d62728",
+    "queue_haul": "#1f77b4",
+    "queue_haul_deadline_blind": "#bcbd22",
+    "queue_haul_power_blind": "#7f7f7f",
+    "queue_haul_robust": "#1f77b4",
+    "queue_haul_stale": "#17becf"
+  },
+  "schema": "queue-haul-hardware-gap-simulation-v1",
+  "target_fraction": 0.72
+}
