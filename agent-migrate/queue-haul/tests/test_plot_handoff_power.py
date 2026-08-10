@@ -92,6 +92,9 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path, monkeypatch):
         "Barrier": (.5001, .2499),
         "Sleep": (.75, .25),
     }
+    colors = {label: color for label, _, _, color, _ in p.SPANS}
+    assert colors["Migration"] == "#BCBD22"
+    assert colors["Sleep"] == "#9467BD"
 
 
 def test_bin_mean_uses_fixed_half_second_windows():

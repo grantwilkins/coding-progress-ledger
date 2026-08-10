@@ -20,9 +20,9 @@ COLORS = {"sweden": TAB10[0], "east": TAB10[1],
 REGIONS = {"sweden": "sweden-central", "east": "eastus-2",
            "west": "west-europe", "germany": "germany-west-central"}
 SPANS = (
-    ("Migration", "handoff_start", "handoff_end", "#9467BD", .12),
+    ("Migration", "handoff_start", "handoff_end", "#BCBD22", .12),
     ("Barrier", "traffic_switched", "source_drained", "#7F7F7F", .18),
-    ("Sleep", "sleep_start", "sleep_ready", "#BCBD22", .12),
+    ("Sleep", "sleep_start", "sleep_ready", "#9467BD", .12),
 )
 BIN_S = .5
 TDP_W = 300
