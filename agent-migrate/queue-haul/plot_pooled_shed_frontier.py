@@ -25,11 +25,8 @@ def pooled_summary(rows):
         for fraction in fractions:
             selected = [row for row in rows if row["policy"] == policy
                         and row["requested_fraction"] == fraction]
-            by_case = {
-                row["case_id"]: 1.0 if fraction == 0 else min(
-                    1.0, row["safely_attained_fraction"] / fraction)
-                for row in selected
-            }
+            by_case = {row["case_id"]: row["safely_attained_fraction"]
+                       for row in selected}
             if len(selected) != len(cases) or set(by_case) != cases:
                 raise RuntimeError("pooled frontier does not weight each case once")
             lower, median, upper = np.quantile(list(by_case.values()),
@@ -85,7 +82,6 @@ def write_plot(summary, out: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Patch
     from matplotlib.ticker import PercentFormatter
 
     fig, axis = plt.subplots(figsize=(5, 4))
@@ -102,21 +98,17 @@ def write_plot(summary, out: Path) -> None:
             color=POLICY_COLORS[policy], linewidth=2,
             label=POLICY_LABELS[policy],
         )
-    axis.axhline(1, color="black", linestyle=":", linewidth=1,
-                 label="Full request attained")
+    axis.plot((0, 1), (0, 1), color="black", linestyle=":", linewidth=1)
     axis.set(xlim=(0, 1), ylim=(0, 1),
              xlabel="Requested Fraction of Power",
-             ylabel="Fraction of Requested Power by Deadline")
+             ylabel="Attained Fraction of Power by Deadline")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
     axis.tick_params(labelsize=11)
     axis.xaxis.label.set_size(12)
     axis.yaxis.label.set_size(12)
     axis.grid(alpha=.2)
-    handles, labels = axis.get_legend_handles_labels()
-    handles.append(Patch(facecolor="gray", alpha=.2))
-    labels.append("Interquartile case range")
-    axis.legend(handles, labels, frameon=False, fontsize=7.5, ncol=2,
+    axis.legend(frameon=False, fontsize=7.5, ncol=2,
                 loc="lower left")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
