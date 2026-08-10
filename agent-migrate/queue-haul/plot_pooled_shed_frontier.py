@@ -19,13 +19,20 @@ from plot_hardware_shed_frontier import (
 def pooled_summary(rows):
     summary = []
     cases = {row["case_id"] for row in rows}
+    maximum = max(row["requested_fraction"] for row in rows)
+    ceilings = {row["case_id"]: row["safely_attained_fraction"] for row in rows
+                if row["policy"] == "queue_haul_lp"
+                and row["requested_fraction"] == maximum}
+    if set(ceilings) != cases or min(ceilings.values()) <= 0:
+        raise RuntimeError("pooled frontier lacks positive Queue-Haul ceilings")
     for policy in POLICIES:
         fractions = sorted({row["requested_fraction"] for row in rows
                             if row["policy"] == policy})
         for fraction in fractions:
             selected = [row for row in rows if row["policy"] == policy
                         and row["requested_fraction"] == fraction]
-            by_case = {row["case_id"]: row["safely_attained_fraction"]
+            by_case = {row["case_id"]:
+                       row["safely_attained_fraction"] / ceilings[row["case_id"]]
                        for row in selected}
             if len(selected) != len(cases) or set(by_case) != cases:
                 raise RuntimeError("pooled frontier does not weight each case once")
@@ -99,11 +106,11 @@ def write_plot(summary, out: Path) -> None:
             color=POLICY_COLORS[policy], linewidth=2,
             label=POLICY_LABELS[policy],
         )
-    axis.plot((0, 1), (0, 1), color="black", linestyle=":", linewidth=1,
-              label="Requested = attained")
+    axis.axhline(1, color="black", linestyle=":", linewidth=1,
+                 label="Queue-Haul LP 30 s ceiling")
     axis.set(xlim=(0, 1), ylim=(0, 1),
              xlabel="Requested fraction of removable power",
-             ylabel="Safely attained fraction by 30 s",
+             ylabel="Fraction of Queue-Haul 30 s ceiling attained",
              title=f"Pooled 30 s attainment frontier ({summary[0]['cases']} cases)")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))

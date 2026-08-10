@@ -620,11 +620,12 @@ uv run python queue-haul/plot_hardware_shed_frontier.py \
 
 The pooled publication view removes those diagnostic panels and standardizes
 twelve constraint, separation, and hardware-gap operating points to a common
-30-second cutoff. Requested and attained shed are normalized by each case's
-removable power before equal-weight pooling. Lines are medians and ribbons are
-the interquartile spread across designed cases, not repeated-run confidence
-intervals. Deadline-blind plans against 90 seconds but receives credit only for
-shed attained by the common 30-second cutoff.
+30-second cutoff. The x-axis requests a fraction of removable power; attained
+shed is normalized by each case's Queue-Haul LP 30-second ceiling before
+equal-weight pooling, so Queue-Haul LP ends at 100%. Lines are medians and
+ribbons are the interquartile spread across designed cases, not repeated-run
+confidence intervals. Deadline-blind plans against 90 seconds but receives
+credit only for shed attained by the common 30-second cutoff.
 
 ```bash
 uv run python queue-haul/plot_pooled_shed_frontier.py \

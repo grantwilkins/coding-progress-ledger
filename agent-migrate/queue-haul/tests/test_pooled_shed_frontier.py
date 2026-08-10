@@ -1,10 +1,11 @@
 """
 Claim:
-The pooled frontier normalizes within each case, weights every designed case
-once, and reports the median and interquartile range at each policy/request.
+The pooled frontier normalizes within each case by its Queue-Haul 30-second
+ceiling, weights every designed case once, and reports case quantiles.
 
 Plausible wrong implementations:
 - Pool raw watts so high-power cases dominate the summary.
+- Divide by removable power rather than the case's Queue-Haul ceiling.
 - Weight a case more because it has more sessions or policies.
 - Mix requested-shed coordinates while computing uncertainty bands.
 - Compute quartiles across policies rather than across cases.
@@ -20,7 +21,8 @@ def test_pooled_summary_normalizes_cases_and_keeps_policy_coordinates():
         {"case_id": case, "policy": policy, "requested_fraction": request,
          "safely_attained_fraction": value}
         for policy, request, values in (
-            ("queue_haul_lp", .5, (.2, .4, .6, .8)),
+            ("queue_haul_lp", .5, (.1, .2, .3, .4)),
+            ("queue_haul_lp", 1, (.2, .4, .6, .8)),
             ("queue_haul_greedy", .5, (.1, .2, .3, .4)),
         )
         for case, value in zip("abcd", values)
@@ -30,11 +32,14 @@ def test_pooled_summary_normalizes_cases_and_keeps_policy_coordinates():
                for row in pooled_summary(rows)}
     assert summary["queue_haul_lp", .5] == {
         "policy": "queue_haul_lp", "requested_fraction": .5,
-        "lower_quartile": pytest.approx(.35), "median": pytest.approx(.5),
-        "upper_quartile": pytest.approx(.65), "cases": 4,
+        "lower_quartile": pytest.approx(.5), "median": pytest.approx(.5),
+        "upper_quartile": pytest.approx(.5), "cases": 4,
     }
-    assert summary["queue_haul_greedy", .5]["median"] == pytest.approx(.25)
+    assert summary["queue_haul_lp", 1]["median"] == 1
+    assert summary["queue_haul_greedy", .5]["median"] == pytest.approx(.5)
 
-    duplicated = [*rows[:3], {**rows[3], "case_id": "a"}, *rows[4:]]
+    duplicated = [*rows, next(row for row in rows
+                              if row["policy"] == "queue_haul_lp"
+                              and row["requested_fraction"] == .5)]
     with pytest.raises(RuntimeError, match="weight each case once"):
         pooled_summary(duplicated)
