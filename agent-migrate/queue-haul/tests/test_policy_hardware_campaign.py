@@ -16,6 +16,7 @@ Plausible wrong implementations:
 - Drop failed full-target episodes or forget the trailing power window.
 - Clip full-target completions at the deadline instead of extending the CDF.
 - Mix 19-second plans into the 30-second attainment curve.
+- Retain bespoke colors or the default size in the full-attainment CDF.
 - Plot destination-only prefill instead of migration-to-first-token latency.
 - Average or pool migrations instead of taking each complete episode's maximum.
 - Divide by a shed percentage or linear load instead of modeled watts.
@@ -623,16 +624,19 @@ def test_full_power_attainment_includes_late_events_and_power_window():
 def test_full_power_attainment_marks_deadline_and_moves_legend(
         tmp_path, monkeypatch):
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
-    campaign.plot_full_power_attainment([{
-        "policy": "queue_haul", "required_deadline_s": 30,
-        "commit_100_s": 5,
-    }], 5, tmp_path)
+    campaign.plot_full_power_attainment([
+        {"policy": policy, "required_deadline_s": 30, "commit_100_s": 5}
+        for policy in campaign.POLICIES
+    ], 5, tmp_path)
 
     ax = campaign.plt.gcf().axes[0]
     legend = ax.get_legend()
     assert [text.get_text() for text in legend.texts] \
-        == [CDF_LABELS["queue_haul"]]
+        == [CDF_LABELS[policy] for policy in campaign.POLICIES]
     assert legend._loc == 4
+    assert tuple(ax.figure.get_size_inches()) == (8, 3)
+    assert [line.get_color() for line in ax.lines[:-1]] \
+        == list(campaign.plt.get_cmap("tab10").colors[:len(campaign.POLICIES)])
     assert list(ax.lines[-1].get_xdata()) == [30, 30]
     assert ax.lines[-1].get_linestyle() == "--"
     assert [text.get_text() for text in ax.texts] == ["30 s Deadline"]
