@@ -606,11 +606,11 @@ uv run python queue-haul/plot_hardware_constraint_timeline.py \
 ```
 
 The requested-shed frontier is a model sweep over that frozen all-bind hardware
-scenario, not additional hardware observations. It caps overshed at the request
-and carries the last safe attainment forward when a policy cannot satisfy a
-larger request. Its second panel reports Queue-Haul LP's modeled resource
-pressure and action/destination mix; those are diagnostic rather than the
-primary comparison.
+scenario, not additional hardware observations. It retains raw overshed above
+the requested-equals-attained diagonal and carries the last safe attainment
+forward when a larger request is unsafe. Its second panel reports Queue-Haul
+LP's modeled resource pressure and action/destination mix; those are diagnostic
+rather than the primary comparison.
 
 ```bash
 uv run python queue-haul/plot_hardware_shed_frontier.py \
@@ -621,10 +621,11 @@ uv run python queue-haul/plot_hardware_shed_frontier.py \
 The pooled publication view removes those diagnostic panels and standardizes
 twelve constraint, separation, and hardware-gap operating points to a common
 30-second cutoff. Requested and attained shed are normalized by each case's
-removable power before equal-weight pooling. Lines are medians and ribbons are
-the interquartile spread across designed cases, not repeated-run confidence
-intervals. Deadline-blind plans against 90 seconds but receives credit only for
-shed attained by the common 30-second cutoff.
+removable power before equal-weight pooling; raw overshed remains visible above
+the diagonal. Lines are medians and ribbons are the interquartile spread across
+designed cases, not repeated-run confidence intervals. Deadline-blind plans
+against 90 seconds but receives credit only for shed attained by the common
+30-second cutoff.
 
 ```bash
 uv run python queue-haul/plot_pooled_shed_frontier.py \

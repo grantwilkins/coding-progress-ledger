@@ -79,7 +79,7 @@ def evaluated_source_power(actual, planned, result, profile, architecture):
 
 
 def plateau_attainment(requested, safe_shed, admissible):
-    """Cap overshed at the request and retain the last safe result on failure."""
+    """Retain raw overshed and the last safe result on failure."""
     if not (len(requested) == len(safe_shed) == len(admissible)) \
             or any(b < a for a, b in zip(requested, requested[1:])):
         raise ValueError("frontier inputs must be aligned and request-sorted")
@@ -88,7 +88,7 @@ def plateau_attainment(requested, safe_shed, admissible):
         if target < 0 or shed < 0:
             raise ValueError("shed values must be nonnegative")
         if safe:
-            last = max(last, min(target, shed))
+            last = max(last, shed)
         frontier.append(last)
     return frontier
 
