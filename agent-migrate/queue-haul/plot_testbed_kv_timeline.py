@@ -18,6 +18,13 @@ DEFAULT_SCENARIOS = {
     "kv_transfer": "m-0d41d4a3ced809ad",
     "replay": "m-b35dec3b9a228389",
 }
+TAB10 = plt.get_cmap("tab10").colors
+COLORS = {
+    "prefill": TAB10[0], "decode": TAB10[1], "tool": TAB10[2],
+    "kv": TAB10[3], "context": TAB10[3], "drain": TAB10[4],
+    "switch": TAB10[5], "resume": TAB10[6],
+    "text": "#2E2D29", "grid": "#DAD7CB",
+}
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -233,16 +240,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "font.size": 13, "axes.labelsize": 15, "xtick.labelsize": 13,
         "ytick.labelsize": 13, "legend.fontsize": 11.5,
     })
-    colors = {
-        "kv": "#279989",
-        "context": "#4298B5",
-        "drain": "#DAD7CB",
-        "prefill": "#734675",
-        "decode": "#E98300",
-        "tool": "#7F7776",
-        "text": "#2E2D29",
-        "grid": "#DAD7CB",
-    }
+    colors = COLORS
     fig, gantt = plt.subplots(figsize=(7.2, 3))
     transfer_label, transfer_color = ("KV Transfer", "kv") \
         if method == "kv_transfer" else ("Context Transfer", "context")
@@ -308,8 +306,8 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
              if segment["location"] == "source"), default=0,
         )
         for time, marker, color, lane in (
-            (source_finish, "8", "#B31B1B", source_y),
-            (float(row["first_token_s"]), "*", "#D4A017", destination_y),
+            (source_finish, "8", colors["switch"], source_y),
+            (float(row["first_token_s"]), "*", colors["resume"], destination_y),
         ):
             gantt.scatter(
                 time, lane, marker=marker, s=150, color=color,
@@ -330,10 +328,10 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         Patch(facecolor=colors[transfer_color], label=transfer_label),
         Patch(facecolor=colors["drain"], alpha=.6, label="Drain"),
         Line2D([], [], marker="8", markersize=12, linestyle="none",
-               markerfacecolor="#B31B1B", markeredgecolor=colors["text"],
+               markerfacecolor=colors["switch"], markeredgecolor=colors["text"],
                label="Switch"),
         Line2D([], [], marker="*", markersize=14, linestyle="none",
-               markerfacecolor="#D4A017", markeredgecolor=colors["text"],
+               markerfacecolor=colors["resume"], markeredgecolor=colors["text"],
                label="Resume"),
     )
     gantt.legend(

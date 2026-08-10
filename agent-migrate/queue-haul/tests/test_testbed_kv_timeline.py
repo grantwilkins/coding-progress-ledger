@@ -16,15 +16,17 @@ Plausible wrong implementations:
 - Mark a later continuation as the first destination token.
 - Place Switch or Resume markers on the wrong lane or measured event time.
 - Put event-marker labels over the timeline instead of in its legend.
+- Retain bespoke Gantt colors or shift the requested Tab10 semantic order.
 """
 
 import csv
 import json
 
 import pytest
+from matplotlib import pyplot as plt
 
 import plot_testbed_kv_timeline as timeline_plot
-from plot_testbed_kv_timeline import extract, write
+from plot_testbed_kv_timeline import COLORS, extract, write
 
 
 def _csv(path, rows):
@@ -144,6 +146,14 @@ def test_timeline_marks_switch_and_resume_events(tmp_path, monkeypatch):
     assert markers[0] == pytest.approx([2.5, -.32])
     assert markers[1] == pytest.approx([4.15, .32])
     assert [marker.get_sizes()[0] for marker in ax.collections] == [150, 150]
+
+
+def test_gantt_semantics_use_tab10_palette():
+    tab10 = plt.get_cmap("tab10").colors
+    assert [COLORS[name] for name in (
+        "prefill", "decode", "tool", "kv", "drain", "switch", "resume",
+    )] == list(tab10[:7])
+    assert COLORS["context"] == COLORS["kv"]
 
 
 def test_replay_uses_the_same_measured_clock(tmp_path):
