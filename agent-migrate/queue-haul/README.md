@@ -647,6 +647,20 @@ uv run python queue-haul/plot_pooled_resource_pressure.py \
   --out queue-haul/outputs/east-germany-pooled-resource-pressure-20260810/resource_pressure
 ```
 
+The time-to-binding view uses the same two-thirds stress point. It estimates
+completion-ordered slack for VRAM, network-transfer, and prefill constraints;
+each class reports its tightest component without exposing destination names.
+Thin step curves are the twelve cases, thick curves are policy medians, and a
+cross marks the first time a case reaches at most 5% residual slack.
+
+```bash
+uv run python queue-haul/plot_pooled_resource_slack.py \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-pooled-resource-slack-20260810/resource_slack
+```
+
 In the separate standard handoff experiment, each policy uses the same eight
 pinned agentic sessions. An independent 80%-load stream serves on Sweden while
 both destinations sustain 50% background inference.

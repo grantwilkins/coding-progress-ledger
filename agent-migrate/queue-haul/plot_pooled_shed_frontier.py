@@ -39,11 +39,8 @@ def pooled_summary(rows):
     return summary
 
 
-def sweep(plan_paths: list[Path], points: int):
-    if points < 2:
-        raise ValueError("pooled frontier requires at least two points")
-    profile = campaign.ModelProfile.load(campaign.MODEL_PATH)
-    fractions, rows, case_ids = np.linspace(0, 1, points), [], set()
+def pooled_cases(plan_paths: list[Path]):
+    case_ids = set()
     for plan_path in plan_paths:
         plan = json.loads(plan_path.read_text())
         manifest = json.loads(_resolve(plan["manifest"]["path"], plan_path).read_text())
@@ -59,8 +56,17 @@ def sweep(plan_paths: list[Path], points: int):
                 raise RuntimeError(f"duplicate pooled case {case_id}")
             case_ids.add(case_id)
             scenario = {**template, "deadline_s": 30, "planning_deadline_s": 30}
-            rows.extend(sweep_scenario(
-                scenario, manifest, profile, fractions, case_id))
+            yield case_id, scenario, manifest
+
+
+def sweep(plan_paths: list[Path], points: int):
+    if points < 2:
+        raise ValueError("pooled frontier requires at least two points")
+    profile = campaign.ModelProfile.load(campaign.MODEL_PATH)
+    fractions, rows = np.linspace(0, 1, points), []
+    for case_id, scenario, manifest in pooled_cases(plan_paths):
+        rows.extend(sweep_scenario(
+            scenario, manifest, profile, fractions, case_id))
     return rows
 
 
