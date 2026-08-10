@@ -19,21 +19,17 @@ from plot_hardware_shed_frontier import (
 def pooled_summary(rows):
     summary = []
     cases = {row["case_id"] for row in rows}
-    maximum = max(row["requested_fraction"] for row in rows)
-    ceilings = {row["case_id"]: row["safely_attained_fraction"] for row in rows
-                if row["policy"] == "queue_haul_lp"
-                and row["requested_fraction"] == maximum}
-    if set(ceilings) != cases or min(ceilings.values()) <= 0:
-        raise RuntimeError("pooled frontier lacks positive Queue-Haul ceilings")
     for policy in POLICIES:
         fractions = sorted({row["requested_fraction"] for row in rows
                             if row["policy"] == policy})
         for fraction in fractions:
             selected = [row for row in rows if row["policy"] == policy
                         and row["requested_fraction"] == fraction]
-            by_case = {row["case_id"]:
-                       row["safely_attained_fraction"] / ceilings[row["case_id"]]
-                       for row in selected}
+            by_case = {
+                row["case_id"]: 1.0 if fraction == 0 else min(
+                    1.0, row["safely_attained_fraction"] / fraction)
+                for row in selected
+            }
             if len(selected) != len(cases) or set(by_case) != cases:
                 raise RuntimeError("pooled frontier does not weight each case once")
             lower, median, upper = np.quantile(list(by_case.values()),
@@ -92,7 +88,7 @@ def write_plot(summary, out: Path) -> None:
     from matplotlib.patches import Patch
     from matplotlib.ticker import PercentFormatter
 
-    fig, axis = plt.subplots(figsize=(8, 6))
+    fig, axis = plt.subplots(figsize=(5, 4))
     for policy in POLICIES:
         selected = [row for row in summary if row["policy"] == policy]
         x = [row["requested_fraction"] for row in selected]
@@ -107,19 +103,21 @@ def write_plot(summary, out: Path) -> None:
             label=POLICY_LABELS[policy],
         )
     axis.axhline(1, color="black", linestyle=":", linewidth=1,
-                 label="Queue-Haul LP 30 s ceiling")
+                 label="Full request attained")
     axis.set(xlim=(0, 1), ylim=(0, 1),
-             xlabel="Requested fraction of removable power",
-             ylabel="Fraction of Queue-Haul 30 s ceiling attained",
-             title=f"Pooled 30 s attainment frontier ({summary[0]['cases']} cases)")
+             xlabel="Requested Fraction of Power",
+             ylabel="Fraction of Requested Power by Deadline")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
+    axis.tick_params(labelsize=11)
+    axis.xaxis.label.set_size(12)
+    axis.yaxis.label.set_size(12)
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
     handles.append(Patch(facecolor="gray", alpha=.2))
     labels.append("Interquartile case range")
-    axis.legend(handles, labels, frameon=False, fontsize=8, ncol=2,
-                loc="upper left")
+    axis.legend(handles, labels, frameon=False, fontsize=7.5, ncol=2,
+                loc="lower left")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=200)
