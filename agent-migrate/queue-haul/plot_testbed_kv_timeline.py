@@ -20,11 +20,12 @@ DEFAULT_SCENARIOS = {
 }
 TAB10 = plt.get_cmap("tab10").colors
 COLORS = {
-    "prefill": TAB10[0], "decode": TAB10[1], "tool": TAB10[2],
-    "kv": TAB10[3], "context": TAB10[3], "drain": TAB10[4],
-    "switch": TAB10[5], "resume": TAB10[6],
+    "prefill": TAB10[0], "decode": TAB10[1], "context": TAB10[2],
+    "switch": TAB10[3], "kv": TAB10[4],
+    "tool": TAB10[7], "barrier": TAB10[7], "resume": "#D4A017",
     "text": "#2E2D29", "grid": "#DAD7CB",
 }
+BARRIER_ALPHA = .35
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -254,7 +255,8 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     gantt.axvspan(
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
-        color=colors["drain"], alpha=.48, label="Drain", zorder=0,
+        color=colors["barrier"], alpha=BARRIER_ALPHA,
+        label="Barrier", zorder=0,
     )
     positions = [1.4 * index for index in range(len(timeline))]
     inference_labels = set()
@@ -326,7 +328,8 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             hatch="//", linewidth=0, label="Tool Call",
         ),
         Patch(facecolor=colors[transfer_color], label=transfer_label),
-        Patch(facecolor=colors["drain"], alpha=.6, label="Drain"),
+        Patch(facecolor=colors["barrier"], alpha=BARRIER_ALPHA,
+              label="Barrier"),
         Line2D([], [], marker="8", markersize=12, linestyle="none",
                markerfacecolor=colors["switch"], markeredgecolor=colors["text"],
                label="Switch"),
