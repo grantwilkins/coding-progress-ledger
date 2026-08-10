@@ -592,6 +592,19 @@ manifest are retained in
 `outputs/east-germany-hardware-gap-hardware-20260810/`; large traces remain in
 the raw run root.
 
+`plot_hardware_constraint_timeline.py` reconstructs the all-bind repeat-0
+Queue-Haul, power-blind, and deadline-blind resource accounting. KV and service
+curves are residual headroom consumed after measured cutover; migration curves
+are modeled work charged to Queue-Haul's 30-second planning budget in measured
+completion order, not sampled instantaneous utilization.
+
+```bash
+uv run python queue-haul/plot_hardware_constraint_timeline.py \
+  --raw-root /datadrive/queue-haul-network/hardware-gap-001 \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-hardware-gap-hardware-20260810/constraint_timeline
+```
+
 In the separate standard handoff experiment, each policy uses the same eight
 pinned agentic sessions. An independent 80%-load stream serves on Sweden while
 both destinations sustain 50% background inference.
