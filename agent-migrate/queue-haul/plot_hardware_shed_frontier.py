@@ -89,7 +89,8 @@ def sweep_scenario(scenario, manifest, profile, requested_fractions, case_id):
         for target in requested:
             if target == 0:
                 result = None
-                safe_shed, resources, counts = 0.0, {}, dict.fromkeys(ACTIONS, 0)
+                safe_shed, resource_rows, resources, counts = (
+                    0.0, {}, {}, dict.fromkeys(ACTIONS, 0))
                 safe, failure, selected, bottleneck = True, None, 0, None
             else:
                 result = campaign.solve(
@@ -98,7 +99,11 @@ def sweep_scenario(scenario, manifest, profile, requested_fractions, case_id):
                     destination=architecture, admission_mode="normal",
                 )
                 safe_shed = max(0.0, initial - result.expected_source_power_at_deadline_w)
-                resources = {row.name: row.utilization for row in result.resource_uses}
+                resource_rows = {row.name: row for row in result.resource_uses}
+                if any(resource not in resource_rows for resource in RESOURCES):
+                    raise RuntimeError("plan omits a pooled resource budget")
+                resources = {name: row.utilization
+                             for name, row in resource_rows.items()}
                 max_use = max(resources.values(), default=0)
                 safe = max_use <= 1 + 1e-8 and result.failure_reason in {None, "target_unmet"}
                 failure, selected, bottleneck = (
@@ -121,6 +126,12 @@ def sweep_scenario(scenario, manifest, profile, requested_fractions, case_id):
                 "selected_sessions": selected,
                 "bottleneck": bottleneck,
                 **{resource: resources.get(resource, 0) for resource in RESOURCES},
+                **{f"used|{resource}": resource_rows[resource].used
+                   if resource_rows else 0 for resource in RESOURCES},
+                **{f"capacity|{resource}": resource_rows[resource].capacity
+                   if resource_rows else 0 for resource in RESOURCES},
+                **{f"unit|{resource}": resource_rows[resource].unit
+                   if resource_rows else "" for resource in RESOURCES},
                 **{action: counts[action] for action in ACTIONS},
             })
         attained = plateau_attainment(requested, raw, admissible)

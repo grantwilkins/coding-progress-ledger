@@ -635,10 +635,11 @@ uv run python queue-haul/plot_pooled_shed_frontier.py \
 
 The companion resource-pressure view compares the same cases at two-thirds of
 removable power, where Queue-Haul usually succeeds and the restricted policies
-usually fail. Each facet keeps one normalized planning budget separate. Points
-are designed cases, filled when the target is met by 30 seconds; diamonds and
-whiskers are the equal-case mean and 95% case-bootstrap interval. KV-transfer
-window pressure includes the measured path bandwidth and the common deadline.
+usually fail. Its four facets sum physical use and capacity across destinations
+for prefill service, KV headroom, replay time, and bandwidth-sensitive KV
+transfer time. Points are designed cases, filled when the target is met by 30
+seconds; diamonds and whiskers are the equal-case mean and 95% case-bootstrap
+interval.
 
 ```bash
 uv run python queue-haul/plot_pooled_resource_pressure.py \
