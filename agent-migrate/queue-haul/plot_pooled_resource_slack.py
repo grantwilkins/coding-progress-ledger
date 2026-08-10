@@ -11,7 +11,7 @@ import numpy as np
 import network_campaign as campaign
 from planner import _expected_scenario
 from plot_hardware_shed_frontier import (
-    POLICIES, POLICY_COLORS, POLICY_LABELS,
+    POLICIES, POLICY_COLORS, POLICY_LABELS, planning_problem,
 )
 from plot_pooled_shed_frontier import pooled_cases, write_csv
 from pool_planner import candidate_table
@@ -58,10 +58,11 @@ def completion_slack(completions, work, classes, deadline_s):
     return rows
 
 
-def _plan_timeline(problem, architecture, routes, profile, solver, seed,
-                   target):
+def _plan_timeline(problem, architecture, routes, profile, policy, solver,
+                   seed, target):
     initial = campaign.source_power(problem, profile)
-    planned = replace(problem, power_limit_w=initial - target)
+    actual = replace(problem, power_limit_w=initial - target)
+    planned = planning_problem(actual, policy)
     result = campaign.solve(
         planned, profile, routes, solver, seed=seed, destination=architecture,
         admission_mode="normal",
@@ -71,6 +72,15 @@ def _plan_timeline(problem, architecture, routes, profile, solver, seed,
         ExpectedPower(replace(
             planned, final_state="awake", assumed_shutdown_s=None), profile),
     )
+    actual_table = candidate_table(
+        actual, profile, architecture, "normal",
+        ExpectedPower(replace(
+            actual, final_state="awake", assumed_shutdown_s=None), profile),
+    )
+    actual_capacity = dict(zip(
+        actual_table.resource_names, actual_table.resource_capacities))
+    if set(table.resource_names) != set(actual_capacity):
+        raise RuntimeError("planning and evaluation resource budgets differ")
     candidates = {}
     for column, candidate in enumerate(table.candidates):
         key = (table.sessions[candidate.session].session_id, candidate.method,
@@ -85,18 +95,22 @@ def _plan_timeline(problem, architecture, routes, profile, solver, seed,
             raise RuntimeError(f"missing or duplicate planned candidate {key}")
         column = candidates[key]
         normalized = table.resources[:, column].toarray().ravel()
-        work[move.session_id] = dict(zip(table.resource_names, normalized))
+        physical = normalized * table.resource_capacities
+        work[move.session_id] = {
+            name: value / actual_capacity[name]
+            for name, value in zip(table.resource_names, physical)
+        }
     execution = predict(
-        _expected_scenario(planned, result.moves), profile, result.moves,
+        _expected_scenario(actual, result.moves), profile, result.moves,
         destination=architecture,
     )
     completions = {row.session_id: row.committed_s for row in execution.sessions
                    if row.committed_s is not None
-                   and row.committed_s <= planned.deadline_s}
+                   and row.committed_s <= actual.deadline_s}
     return completion_slack(
         completions, work, resource_classes(table.resource_names),
-        planned.deadline_s,
-    ), initial - result.expected_source_power_at_deadline_w >= target - 1e-8
+        actual.deadline_s,
+    ), initial - execution.modeled_source_power_at_deadline_w >= target - 1e-8
 
 
 def estimate(plan_paths, requested_fraction=2 / 3):
@@ -114,7 +128,7 @@ def estimate(plan_paths, requested_fraction=2 / 3):
         target = requested_fraction * (initial - minimum)
         for policy, solver in POLICIES.items():
             timeline, met = _plan_timeline(
-                problem, architecture, routes, profile, solver,
+                problem, architecture, routes, profile, policy, solver,
                 scenario["planner_seed"], target)
             rows.extend({
                 "case_id": case_id, "policy": policy, "budget": budget,

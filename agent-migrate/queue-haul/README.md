@@ -623,7 +623,8 @@ twelve constraint, separation, and hardware-gap operating points to a common
 30-second cutoff. Requested and attained shed are normalized by each case's
 removable power before equal-weight pooling. Lines are medians and ribbons are
 the interquartile spread across designed cases, not repeated-run confidence
-intervals.
+intervals. Deadline-blind plans against 90 seconds but receives credit only for
+shed attained by the common 30-second cutoff.
 
 ```bash
 uv run python queue-haul/plot_pooled_shed_frontier.py \
@@ -651,7 +652,8 @@ The time-to-binding view uses the same two-thirds stress point. It estimates
 completion-ordered slack for VRAM, network-transfer, and prefill constraints;
 each class reports its tightest component without exposing destination names.
 Thin step curves are the twelve cases, thick curves are policy medians, and a
-cross marks the first time a case reaches at most 5% residual slack.
+cross marks the first time a case reaches at most 5% residual slack. The
+deadline-blind trajectory likewise shows only its first 30 seconds.
 
 ```bash
 uv run python queue-haul/plot_pooled_resource_slack.py \

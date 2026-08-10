@@ -11,7 +11,9 @@ from pathlib import Path
 import numpy as np
 
 import network_campaign as campaign
+from planner import _expected_scenario
 from plot_hardware_constraint_timeline import _resolve
+from simulate import predict
 
 
 POLICIES = {
@@ -21,6 +23,7 @@ POLICIES = {
     "replay_only": "replay_only",
     "kv_only": "kv_only",
     "power_blind": "lp_power_blind",
+    "deadline_blind": "lp_work_first",
 }
 POLICY_LABELS = {
     "queue_haul_lp": "Queue-Haul LP",
@@ -29,11 +32,13 @@ POLICY_LABELS = {
     "replay_only": "Replay-only",
     "kv_only": "KV-only",
     "power_blind": "Power-blind",
+    "deadline_blind": "Deadline-blind",
 }
 POLICY_COLORS = dict(zip(POLICIES, (
     campaign.TAB10_COLORS[0], campaign.TAB10_COLORS[1],
     campaign.TAB10_COLORS[6], campaign.TAB10_COLORS[3],
     campaign.TAB10_COLORS[2], campaign.TAB10_COLORS[7],
+    campaign.TAB10_COLORS[4],
 )))
 RESOURCE_LABELS = {
     "service:pool/east:0": "East prefill service",
@@ -55,6 +60,22 @@ ACTIONS = (
     "east_replay", "east_kv_transfer",
     "germany_replay", "germany_kv_transfer",
 )
+
+
+def planning_problem(problem, policy):
+    return replace(
+        problem, deadline_s=campaign.ORACLE_STALE_HORIZON_S,
+        end_s=max(problem.end_s, campaign.ORACLE_STALE_HORIZON_S),
+    ) if policy == "deadline_blind" else problem
+
+
+def evaluated_source_power(actual, planned, result, profile, architecture):
+    if planned is actual:
+        return result.expected_source_power_at_deadline_w
+    return predict(
+        _expected_scenario(actual, result.moves), profile, result.moves,
+        destination=architecture,
+    ).modeled_source_power_at_deadline_w
 
 
 def plateau_attainment(requested, safe_shed, admissible):
@@ -87,6 +108,8 @@ def sweep_scenario(scenario, manifest, profile, requested_fractions, case_id):
     for policy, solver in POLICIES.items():
         raw, admissible, policy_rows = [], [], []
         for target in requested:
+            actual = replace(problem, power_limit_w=initial - target)
+            planned = planning_problem(actual, policy)
             if target == 0:
                 result = None
                 safe_shed, resource_rows, resources, counts = (
@@ -94,11 +117,12 @@ def sweep_scenario(scenario, manifest, profile, requested_fractions, case_id):
                 safe, failure, selected, bottleneck = True, None, 0, None
             else:
                 result = campaign.solve(
-                    replace(problem, power_limit_w=initial - target),
+                    planned,
                     profile, routes, solver, seed=scenario["planner_seed"],
                     destination=architecture, admission_mode="normal",
                 )
-                safe_shed = max(0.0, initial - result.expected_source_power_at_deadline_w)
+                safe_shed = max(0.0, initial - evaluated_source_power(
+                    actual, planned, result, profile, architecture))
                 resource_rows = {row.name: row for row in result.resource_uses}
                 if any(resource not in resource_rows for resource in RESOURCES):
                     raise RuntimeError("plan omits a pooled resource budget")
@@ -114,6 +138,7 @@ def sweep_scenario(scenario, manifest, profile, requested_fractions, case_id):
             policy_rows.append({
                 "case_id": case_id,
                 "deadline_s": problem.deadline_s,
+                "planning_deadline_s": planned.deadline_s,
                 "sessions": len(problem.sessions),
                 "maximum_removable_w": maximum,
                 "requested_fraction": target / maximum,
