@@ -35,13 +35,21 @@ POLICY_COLORS = dict(zip(POLICIES, (
     campaign.TAB10_COLORS[6], campaign.TAB10_COLORS[3],
     campaign.TAB10_COLORS[2], campaign.TAB10_COLORS[7],
 )))
-RESOURCES = (
-    "kv:pool/east",
-    "service:pool/germany:0",
-    "migration:pool/east:replay",
-    "migration:pool/east:kv_transfer",
-    "migration:pool/germany:replay",
-    "migration:pool/germany:kv_transfer",
+RESOURCE_LABELS = {
+    "service:pool/east:0": "East prefill service",
+    "service:pool/germany:0": "Germany prefill service",
+    "kv:pool/east": "East KV headroom",
+    "kv:pool/germany": "Germany KV headroom",
+    "migration:pool/east:replay": "East replay window",
+    "migration:pool/germany:replay": "Germany replay window",
+    "migration:pool/east:kv_transfer": "East KV-transfer window",
+    "migration:pool/germany:kv_transfer": "Germany KV-transfer window",
+}
+RESOURCES = tuple(RESOURCE_LABELS)
+DIAGNOSTIC_RESOURCES = (
+    "kv:pool/east", "service:pool/germany:0",
+    "migration:pool/east:replay", "migration:pool/east:kv_transfer",
+    "migration:pool/germany:replay", "migration:pool/germany:kv_transfer",
 )
 ACTIONS = (
     "east_replay", "east_kv_transfer",
@@ -195,17 +203,17 @@ def write_plot(rows, hardware_target: float, out: Path) -> None:
     selected = [row for row in rows if row["policy"] == "queue_haul_lp"]
     x = np.asarray([row["requested_shed_w"] for row in selected])
     pressure = np.asarray([[row[resource] for row in selected]
-                           for resource in RESOURCES])
+                           for resource in DIAGNOSTIC_RESOURCES])
     image = heat.imshow(
         pressure, vmin=0, vmax=1, aspect="auto", cmap="viridis",
-        extent=(x[0], x[-1], len(RESOURCES) - .5, -.5),
+        extent=(x[0], x[-1], len(DIAGNOSTIC_RESOURCES) - .5, -.5),
         interpolation="nearest",
     )
     for column, row in enumerate(np.argmax(pressure, axis=0)):
         if pressure[row, column] >= .95:
             heat.text(x[column], row, "×", ha="center", va="center",
                       color="white", fontsize=8)
-    heat.set_yticks(range(len(RESOURCES)), resource_labels, fontsize=8)
+    heat.set_yticks(range(len(DIAGNOSTIC_RESOURCES)), resource_labels, fontsize=8)
     heat.axvline(hardware_target, color="black", linestyle="--", linewidth=1)
     heat.set(title="Queue-Haul LP resource pressure (× ≥ 95%)")
     heat.tick_params(axis="x", labelbottom=False)

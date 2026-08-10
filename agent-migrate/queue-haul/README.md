@@ -633,6 +633,19 @@ uv run python queue-haul/plot_pooled_shed_frontier.py \
   --out queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_shed_frontier
 ```
 
+The companion resource-pressure view compares the same cases at two-thirds of
+removable power, where Queue-Haul usually succeeds and the restricted policies
+usually fail. Each facet keeps one normalized planning budget separate. Points
+are designed cases, filled when the target is met by 30 seconds; diamonds and
+whiskers are the equal-case mean and 95% case-bootstrap interval. KV-transfer
+window pressure includes the measured path bandwidth and the common deadline.
+
+```bash
+uv run python queue-haul/plot_pooled_resource_pressure.py \
+  --cases queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_shed_frontier_cases.csv \
+  --out queue-haul/outputs/east-germany-pooled-resource-pressure-20260810/resource_pressure
+```
+
 In the separate standard handoff experiment, each policy uses the same eight
 pinned agentic sessions. An independent 80%-load stream serves on Sweden while
 both destinations sustain 50% background inference.
