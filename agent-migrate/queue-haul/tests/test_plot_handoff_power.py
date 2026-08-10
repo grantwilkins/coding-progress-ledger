@@ -1,16 +1,16 @@
 """
 Claim:
-Handoff plots show the full trace as regional 500 ms power means aligned to
-event timestamps, with shutdown flush ending when source power reaches idle.
+Handoff plots show regional 500 ms power means from state preparation through
+GPU sleep, normalized by each region's pre-handoff median.
 
 Plausible wrong implementations:
 - use the wrong event as the shared time origin
 - place a boundary sample in the wrong 500 ms bin
 - assign a destination's samples to the wrong region
 - aggregate power across regions instead of within each region and time bin
-- hide the sub-second traffic switch by rendering it as a zero-width span
-- extend shutdown to a control event instead of measured idle power
-- crop out the pre-handoff or steady post-handoff measurements
+- hide the sub-second traffic cutover by rendering it as a zero-width span
+- normalize every region by the source baseline instead of its own baseline
+- crop at traffic cutover instead of including drain and GPU sleep
 """
 
 import csv
@@ -24,6 +24,7 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path, monkeypatch):
         "pre_start": 1_000_000_000, "pre_end": 2_000_000_000,
         "handoff_start": 2_000_000_000, "handoff_end": 2_500_000_000,
         "switch_start": 2_500_000_000, "traffic_switched": 2_500_100_000,
+        "source_drained": 2_750_000_000, "sleep_start": 2_750_000_000,
         "sleep_ready": 3_000_000_000,
         "post_start": 3_000_000_000, "post_end": 4_000_000_000,
     }.items()}
@@ -57,22 +58,34 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path, monkeypatch):
     monkeypatch.setattr(p.plt, "close", lambda _: None)
     rows = p.reduce(tmp_path)
 
-    assert len(rows) == 12
+    assert len(rows) == 15
     assert {(row["node"], row["phase"], row["mean_power_w"])
             for row in rows if row["node"] == "sweden"} == {
-                ("sweden", "pre", 220), ("sweden", "migration", 230),
-                ("sweden", "source_fall", 120), ("sweden", "post", 80)}
+                ("sweden", "pre", 220),
+                ("sweden", "migration", 230),
+                ("sweden", "barrier", 120),
+                ("sweden", "sleep", 120), ("sweden", "post", 80)}
     with (tmp_path / "queue_summary.csv").open() as handle:
         queue = list(csv.DictReader(handle))
-    assert len(queue) == 12
+    assert len(queue) == 15
     assert (tmp_path / "power_handoff.png").is_file()
     axis = p.plt.gcf().axes[0]
-    assert axis.get_xlim() == (0, 3)
-    switch = next(line for line in axis.lines if line.get_label() == "Switch")
-    assert list(switch.get_xdata()) == [1.5001, 1.5001]
-    shutdown = next(patch for patch in axis.patches
-                    if patch.get_label() == "Shutdown flush")
-    assert (shutdown.get_x(), round(shutdown.get_width(), 4)) == (1.5001, 1.2499)
+    assert axis.get_xlim() == (0, 1)
+    assert axis.get_ylabel() == "Normalized power"
+    source = next(line for line in axis.lines
+                  if line.get_label() == "sweden-central")
+    assert list(source.get_xdata()) == [.25, .75]
+    assert list(source.get_ydata()) == [230 / 220, 120 / 220]
+    cutover = next(line for line in axis.lines
+                   if line.get_label() == "Switch")
+    assert list(cutover.get_xdata()) == [.5001, .5001]
+    spans = {patch.get_label(): (patch.get_x(), patch.get_width())
+             for patch in axis.patches}
+    assert spans == {
+        "Migration": (0, .5),
+        "Barrier": (.5001, .2499),
+        "Sleep": (.75, .25),
+    }
 
 
 def test_bin_mean_uses_fixed_half_second_windows():
