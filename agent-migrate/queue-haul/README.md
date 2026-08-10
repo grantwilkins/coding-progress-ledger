@@ -558,6 +558,22 @@ uv run python queue-haul/network_campaign.py run \
   --run-root /datadrive/queue-haul-network/hardware-gap-001
 ```
 
+The completed 72-episode A100 hardware run had no failed or missing scenarios,
+and all 585 retained raw artifacts verify. At all-bind, robust Queue-Haul shed
+49.13 W (110.3% of target) in 24.56 seconds, while greedy shed 39.60 W
+(88.9%). KV-only, replay-only, East-only, Germany-only, isolated-fastest, and
+power-blind all stayed below target. Releasing KV, service, and bandwidth
+increased their corresponding restricted oracle by 4.58, 12.91, and 7.43 W;
+the robust plan continued to shed 49.13 W in every state. The stale plan was
+rejected at all-bind and reached 55.92 W at all-release. Deadline-blind was not
+a valid negative control: all three repeats crossed the target in 38.89--43.29
+seconds, before the 45-second cutoff, although their full migrations ended in
+54.37--56.67 seconds. The strict reducer therefore reports three invalid
+episodes. The compact reduction, plots, run identity, and verified raw-artifact
+manifest are retained in
+`outputs/east-germany-hardware-gap-hardware-20260810/`; large traces remain in
+the raw run root.
+
 In the separate standard handoff experiment, each policy uses the same eight
 pinned agentic sessions. An independent 80%-load stream serves on Sweden while
 both destinations sustain 50% background inference.
