@@ -109,7 +109,7 @@ def write_plot(summary, out: Path) -> None:
     axis.yaxis.label.set_size(12)
     axis.grid(alpha=.2)
     axis.legend(frameon=False, fontsize=7.5, ncol=2,
-                loc="lower left")
+                loc="upper left")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=200)
