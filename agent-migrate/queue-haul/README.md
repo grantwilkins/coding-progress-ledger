@@ -605,6 +605,18 @@ uv run python queue-haul/plot_hardware_constraint_timeline.py \
   --out queue-haul/outputs/east-germany-hardware-gap-hardware-20260810/constraint_timeline
 ```
 
+The requested-shed frontier is a model sweep over that frozen all-bind hardware
+scenario, not additional hardware observations. It caps overshed at the request
+and carries the last safe attainment forward when a policy cannot satisfy a
+larger request. Its second panel reports Queue-Haul LP's modeled resource
+pressure and action/destination mix.
+
+```bash
+uv run python queue-haul/plot_hardware_shed_frontier.py \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-hardware-gap-frontier-20260810/shed_frontier
+```
+
 In the separate standard handoff experiment, each policy uses the same eight
 pinned agentic sessions. An independent 80%-load stream serves on Sweden while
 both destinations sustain 50% background inference.
