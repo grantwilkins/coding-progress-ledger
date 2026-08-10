@@ -25,11 +25,8 @@ def pooled_summary(rows):
         for fraction in fractions:
             selected = [row for row in rows if row["policy"] == policy
                         and row["requested_fraction"] == fraction]
-            by_case = {
-                row["case_id"]: 1.0 if fraction == 0 else min(
-                    1.0, row["safely_attained_fraction"] / fraction)
-                for row in selected
-            }
+            by_case = {row["case_id"]: row["safely_attained_fraction"]
+                       for row in selected}
             if len(selected) != len(cases) or set(by_case) != cases:
                 raise RuntimeError("pooled frontier does not weight each case once")
             lower, median, upper = np.quantile(list(by_case.values()),
@@ -102,12 +99,12 @@ def write_plot(summary, out: Path) -> None:
             color=POLICY_COLORS[policy], linewidth=2,
             label=POLICY_LABELS[policy],
         )
-    axis.axhline(1, color="black", linestyle=":", linewidth=1,
-                 label="Full request attained")
-    axis.set(xlim=(0, 1), ylim=(0, 1.03),
+    axis.plot((0, 1), (0, 1), color="black", linestyle=":", linewidth=1,
+              label="Requested = attained")
+    axis.set(xlim=(0, 1), ylim=(0, 1),
              xlabel="Requested fraction of removable power",
-             ylabel="Fraction of request attained by 30 s",
-             title=f"Pooled 30 s request attainment ({summary[0]['cases']} cases)")
+             ylabel="Safely attained fraction by 30 s",
+             title=f"Pooled 30 s attainment frontier ({summary[0]['cases']} cases)")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
     axis.grid(alpha=.2)

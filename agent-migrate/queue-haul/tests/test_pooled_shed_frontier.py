@@ -1,12 +1,10 @@
 """
 Claim:
-The pooled frontier reports attained/requested within each equally weighted
-case, then reports the median and interquartile range at each policy/request.
+The pooled frontier normalizes within each case, weights every designed case
+once, and reports the median and interquartile range at each policy/request.
 
 Plausible wrong implementations:
 - Pool raw watts so high-power cases dominate the summary.
-- Divide attained shed by removable rather than requested power.
-- Treat the zero request as zero rather than fully attained.
 - Weight a case more because it has more sessions or policies.
 - Mix requested-shed coordinates while computing uncertainty bands.
 - Compute quartiles across policies rather than across cases.
@@ -22,9 +20,8 @@ def test_pooled_summary_normalizes_cases_and_keeps_policy_coordinates():
         {"case_id": case, "policy": policy, "requested_fraction": request,
          "safely_attained_fraction": value}
         for policy, request, values in (
-            ("queue_haul_lp", 0, (0, 0, 0, 0)),
-            ("queue_haul_lp", .5, (.1, .2, .3, .4)),
-            ("queue_haul_greedy", .5, (.05, .1, .15, .2)),
+            ("queue_haul_lp", .5, (.2, .4, .6, .8)),
+            ("queue_haul_greedy", .5, (.1, .2, .3, .4)),
         )
         for case, value in zip("abcd", values)
     ]
@@ -37,7 +34,6 @@ def test_pooled_summary_normalizes_cases_and_keeps_policy_coordinates():
         "upper_quartile": pytest.approx(.65), "cases": 4,
     }
     assert summary["queue_haul_greedy", .5]["median"] == pytest.approx(.25)
-    assert summary["queue_haul_lp", 0]["median"] == 1
 
     duplicated = [*rows[:3], {**rows[3], "case_id": "a"}, *rows[4:]]
     with pytest.raises(RuntimeError, match="weight each case once"):
