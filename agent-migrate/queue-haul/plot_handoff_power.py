@@ -14,8 +14,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-COLORS = {"sweden": "#8C1515", "east": "#006CB8",
-          "west": "#008566", "germany": "#008566"}
+TAB10 = plt.get_cmap("tab10").colors
+COLORS = {"sweden": TAB10[0], "east": TAB10[1],
+          "west": TAB10[2], "germany": TAB10[2]}
 REGIONS = {"sweden": "sweden-central", "east": "eastus-2",
            "west": "west-europe", "germany": "germany-west-central"}
 SPANS = (
@@ -121,7 +122,7 @@ def reduce(run_root: Path) -> list[dict]:
         selected = [(seconds - plot_start, 100 * watts / TDP_W)
                     for seconds, watts in zip(x, y)
                     if plot_start <= seconds <= plot_end]
-        axis.plot(*zip(*selected), lw=1.5,
+        axis.plot(*zip(*selected), lw=2,
                   color=COLORS[node], label=REGIONS[node])
     for label, span_start, span_end, color, alpha in SPANS:
         if span_start in marker and span_end in marker:
@@ -134,7 +135,7 @@ def reduce(run_root: Path) -> list[dict]:
                     label="Switch")
     style(axis, (0, plot_end - plot_start), "Normalized Power (%)")
     axis.set_xlabel("Time since migration began (s)", size=16)
-    axis.legend(frameon=False, fontsize=13, loc="upper center",
+    axis.legend(frameon=False, fontsize=14, loc="upper center",
                 bbox_to_anchor=(.5, -.2), ncol=3)
     figure.tight_layout()
     for suffix in ("png", "pdf"):

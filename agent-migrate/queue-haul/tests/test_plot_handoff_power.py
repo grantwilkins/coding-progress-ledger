@@ -11,6 +11,7 @@ Plausible wrong implementations:
 - hide the sub-second traffic cutover by rendering it as a zero-width span
 - normalize by a measured baseline or 400 W instead of the 300 W TDP
 - crop at traffic cutover instead of including drain and GPU sleep
+- retain bespoke region colors or use lines too thin for a paper figure
 """
 
 import csv
@@ -74,6 +75,11 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path, monkeypatch):
     assert axis.get_ylabel() == "Normalized Power (%)"
     source = next(line for line in axis.lines
                   if line.get_label() == "sweden-central")
+    region_lines = axis.lines[:3]
+    assert [line.get_color() for line in region_lines] \
+        == list(p.plt.get_cmap("tab10").colors[:3])
+    assert [line.get_linewidth() for line in region_lines] == [2, 2, 2]
+    assert axis.get_legend().get_texts()[0].get_fontsize() == 14
     assert list(source.get_xdata()) == [.25, .75]
     assert list(source.get_ydata()) == [100 * 230 / 300, 100 * 120 / 300]
     cutover = next(line for line in axis.lines
