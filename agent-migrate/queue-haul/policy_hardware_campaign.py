@@ -7,6 +7,7 @@ import csv
 import json
 import math
 import random
+from dataclasses import replace
 from pathlib import Path
 
 import matplotlib
@@ -41,10 +42,17 @@ CONTEXT_PACKS = {
 }
 POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "isolated_fastest",
-    "kv_only", "replay_only",
+    "kv_only", "replay_only", "queue_haul_power_blind",
+    "queue_haul_deadline_blind",
 )
-DEFAULT_POLICIES = tuple(policy for policy in POLICIES
-                         if policy != "isolated_fastest")
+DEFAULT_POLICIES = (
+    "queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only",
+)
+NETWORK_BASELINES = (
+    "isolated_fastest", "queue_haul_power_blind",
+    "queue_haul_deadline_blind",
+)
+DEADLINE_BLIND_HORIZON_S = 600
 PACKING_POLICIES = (
     "queue_haul", "greedy", "isolated_fastest", "kv_only", "replay_only",
 )
@@ -53,23 +61,31 @@ LABELS = {
     "greedy_lagrangian": "Lagrangian greedy choice/order",
     "isolated_fastest": "Per-session fastest", "random": "Random choice/order",
     "kv_only": "KV only", "replay_only": "Replay only",
+    "queue_haul_power_blind": "Power blind",
+    "queue_haul_deadline_blind": "Deadline blind",
 }
 CDF_COLORS = {
     "queue_haul": "#B1040E", "greedy": "#008566",
     "greedy_lagrangian": "#620059",
     "isolated_fastest": "#5E3C99",
     "kv_only": "#006CB8", "replay_only": "#E98300",
+    "queue_haul_power_blind": "#CC79A7",
+    "queue_haul_deadline_blind": "#56B4E9",
 }
 CDF_LABELS = {
     "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
     "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
     "isolated_fastest": "Per-session fastest",
     "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
+    "queue_haul_power_blind": "Queue-Haul Power Blind",
+    "queue_haul_deadline_blind": "Queue-Haul Deadline Blind",
 }
 CDF_LINESTYLES = {
     "queue_haul": "-", "greedy": "--", "greedy_lagrangian": (0, (3, 1, 1, 1)),
     "isolated_fastest": (0, (5, 1)),
     "kv_only": "-.", "replay_only": ":",
+    "queue_haul_power_blind": (0, (3, 1)),
+    "queue_haul_deadline_blind": (0, (1, 1)),
 }
 CDF_FIGSIZE = (5, 4)
 
@@ -121,24 +137,30 @@ def _ranked_moves(sessions, methods, scenario, profile, offset=0):
 
 def _moves(policy, scenario, routes, profile, seed):
     sessions = list(scenario.sessions)
-    if policy in {"queue_haul", "greedy", "greedy_lagrangian", "random"}:
-        solver = {"queue_haul": "lp_work_first", "greedy": "greedy",
-                  "greedy_lagrangian": "greedy_lagrangian",
-                  "random": "random"}[policy]
+    solvers = {
+        "queue_haul": "lp_work_first", "greedy": "greedy",
+        "greedy_lagrangian": "greedy_lagrangian", "random": "random",
+        "isolated_fastest": "isolated_fastest",
+        "queue_haul_power_blind": "lp_power_blind",
+        "queue_haul_deadline_blind": "lp_work_first",
+    }
+    if policy in solvers:
         destination = dedicated_sink_architecture(
             profile, "destination", ("link",),
         ) if policy == "greedy_lagrangian" else None
+        planning_scenario = replace(
+            scenario, deadline_s=DEADLINE_BLIND_HORIZON_S,
+            end_s=max(scenario.end_s, DEADLINE_BLIND_HORIZON_S),
+        ) if policy == "queue_haul_deadline_blind" else scenario
         result = plan(
-            scenario, profile, routes, solver, seed=seed, destination=destination,
+            planning_scenario, profile, routes, solvers[policy], seed=seed,
+            destination=destination,
         )
         moves = result.moves
     else:
-        fixed_method = None if policy == "isolated_fastest" else {
-            "kv_only": "kv_transfer", "replay_only": "replay",
-        }[policy]
+        fixed_method = {"kv_only": "kv_transfer", "replay_only": "replay"}[policy]
         moves = _ranked_moves(
-            sessions, (fixed_method,) if fixed_method
-            else ("replay", "kv_transfer"), scenario, profile,
+            sessions, (fixed_method,), scenario, profile,
         )
     admitted = {
         move.session_id if hasattr(move, "session_id") else move[0]
@@ -375,12 +397,81 @@ def validate_policy_plan(plan_: dict) -> None:
             raise ValueError("policies must consume the same complete episode")
 
 
-def prepare(manifest: Path, out: Path, **kwargs) -> dict:
-    plan_ = make_plan(manifest, **kwargs)
+def matched_baseline_plan(source_path: Path, policies=NETWORK_BASELINES,
+                          model_path: Path | None = None) -> dict:
+    source = json.loads(source_path.read_text())
+    manifest_path = Path(source["manifest"]["path"])
+    source_model_path = Path(source["model_profile"]["path"])
+    manifest_path = manifest_path if manifest_path.is_absolute() \
+        else ROOT.parent / manifest_path
+    source_model_path = source_model_path if source_model_path.is_absolute() \
+        else ROOT.parent / source_model_path
+    model_path = model_path or source_model_path
+    manifest = json.loads(manifest_path.read_text())
+    profiler.validate_plan(source, manifest)
+    validate_policy_plan(source)
+    if profiler.file_hash(manifest_path) != source["manifest"]["sha256"] \
+            or profiler.file_hash(model_path) != source["model_profile"]["sha256"]:
+        raise ValueError("source plan inputs changed")
+    policies = tuple(policies)
+    if not policies or len(set(policies)) != len(policies) \
+            or not set(policies) <= set(NETWORK_BASELINES):
+        raise ValueError("invalid matched baseline policies")
+    profile, rng, scenarios = ModelProfile.load(model_path), \
+        random.Random(source["seed"]), []
+    episode_order = list(dict.fromkeys(
+        row["episode"] for row in source["scenarios"]
+    ))
+    for episode in episode_order:
+        rows = [row for row in source["scenarios"] if row["episode"] == episode]
+        control = next(row for row in rows if row["policy"] == "control")
+        block = [control]
+        problem, routes = _problem(
+            profile, control["sessions"], control["bandwidth_mbps"],
+            control["required_deadline_s"],
+        )
+        for policy in policies:
+            moves = _moves(
+                policy, problem, routes, profile,
+                profiler.stable_seed(source["seed"], episode, policy),
+            )
+            move_rows = [{
+                **next(row for row in control["sessions"]
+                       if row["session_id"] == move["session_id"]),
+                **move,
+            } for move in moves]
+            scenario_id = profiler.object_hash([
+                control["match_id"], policy, move_rows,
+            ])[:16]
+            block.append({
+                **control, "scenario_id": f"p-{scenario_id}",
+                "kind": "migration", "method": move_rows[0]["method"]
+                if len({row["method"] for row in move_rows}) == 1 else "mixed",
+                "policy": policy, "moves": move_rows,
+            })
+        rng.shuffle(block)
+        scenarios.extend(block)
+    output = {
+        **source, "policies": list(policies), "scenarios": scenarios,
+        "model_profile": {
+            **source["model_profile"], "path": _portable_path(model_path),
+        },
+        "baseline_source_plan": {
+            "path": _portable_path(source_path),
+            "sha256": profiler.file_hash(source_path),
+        },
+    }
+    profiler.validate_plan(output, manifest)
+    validate_policy_plan(output)
+    return output
+
+
+def _prepare(plan_: dict, out: Path) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     plan_path = out / "plan.json"
     profiler.write_json(plan_path, plan_)
     job = out / "run.sh"
+    stack_scenarios = 30 - 30 % (len(plan_["policies"]) + 1)
     job.write_text("""#!/usr/bin/env bash
 set -euo pipefail
 : "${QH_POLICY_RUN_ROOT:?set QH_POLICY_RUN_ROOT}"
@@ -388,14 +479,16 @@ export QH_LMCACHE_MODE="${QH_LMCACHE_MODE:-mp}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir/../../.."
 status=0
-run=(uv run python queue-haul/migration_profiler.py run --plan "$script_dir/plan.json" --run-root "$QH_POLICY_RUN_ROOT" --stack-scenarios 30)
+run=(uv run python queue-haul/migration_profiler.py run --plan "$script_dir/plan.json" --run-root "$QH_POLICY_RUN_ROOT" --stack-scenarios %d)
 [[ -z "${QH_RESUME_FROM_GIT_SHA:-}" ]] || run+=(--resume-from-git-sha "$QH_RESUME_FROM_GIT_SHA")
 "${run[@]}" || status=$?
 [[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]] || exit "$status"
 uv run python queue-haul/policy_hardware_campaign.py reduce \
   --run-root "$QH_POLICY_RUN_ROOT"
+uv run python queue-haul/policy_hardware_campaign.py validate \
+  --run-root "$QH_POLICY_RUN_ROOT" --expected-episodes %d --policies %s
 exit "$status"
-""")
+""" % (stack_scenarios, plan_["episodes"], " ".join(plan_["policies"])))
     job.chmod(0o755)
     (out / "run.sbatch").write_text("""#!/bin/bash
 #SBATCH --job-name=qh-policy-parallel
@@ -421,6 +514,16 @@ export QH_PORT_OFFSET="${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}"
 bash "$script_dir/run.sh"
 """)
     return plan_
+
+
+def prepare(manifest: Path, out: Path, **kwargs) -> dict:
+    return _prepare(make_plan(manifest, **kwargs), out)
+
+
+def prepare_baselines(source_plan: Path, out: Path,
+                      policies=NETWORK_BASELINES,
+                      model_path: Path | None = None) -> dict:
+    return _prepare(matched_baseline_plan(source_plan, policies, model_path), out)
 
 
 def _time(start, end):
@@ -1053,16 +1156,35 @@ def _pooled_results(paths):
     return rows, summaries
 
 
+def validate_repeats(rows, policies, repetitions):
+    cells = {}
+    for row in rows:
+        cells.setdefault((row["policy"], row["condition"]), set()).add(
+            int(row["repeat"])
+        )
+    conditions = {condition for _, condition in cells}
+    if not conditions or any(
+        len(cells.get((policy, condition), ())) != repetitions
+        for condition in conditions for policy in policies
+    ) or any(
+        len({frozenset(cells[policy, condition]) for policy in policies}) != 1
+        for condition in conditions
+    ):
+        raise RuntimeError("baseline conditions do not have exact repetitions")
+    return len(conditions)
+
+
 
 def validate_run(run_root: Path, expected_episodes=120,
-                 policy="isolated_fastest"):
+                 policies=("isolated_fastest",)):
+    policies = (policies,) if isinstance(policies, str) else tuple(policies)
     plan_path = run_root / "plan.json"
     plan_ = json.loads(plan_path.read_text())
     validate_policy_plan(plan_)
     metadata = json.loads((run_root / "run_metadata.json").read_text())
     model_path = ROOT.parent / plan_["model_profile"]["path"]
     manifest_path = ROOT.parent / plan_["manifest"]["path"]
-    if plan_["policies"] != [policy] or plan_["episodes"] != expected_episodes \
+    if plan_["policies"] != list(policies) or plan_["episodes"] != expected_episodes \
             or metadata.get("dirty") \
             or metadata.get("plan_sha256") != profiler.file_hash(plan_path) \
             or metadata.get("plan_object_sha256") != profiler.object_hash(plan_) \
@@ -1081,28 +1203,26 @@ def validate_run(run_root: Path, expected_episodes=120,
         attainment = list(csv.DictReader(stream))
     scenario_ids = {
         row["scenario_id"] for row in plan_["scenarios"]
-        if row["policy"] == policy
+        if row["policy"] in policies
     }
-    if len(summaries) != expected_episodes \
+    expected_rows = expected_episodes * len(policies)
+    if len(summaries) != expected_rows \
             or {row["scenario_id"] for row in summaries} != scenario_ids \
-            or len(attainment) != expected_episodes \
+            or len(attainment) != expected_rows \
             or {row["scenario_id"] for row in attainment} != scenario_ids \
             or any(row["status"] != "complete"
                    or row["completed_migrations"] != row["planned_migrations"]
                    or row["matched_control_complete"] != "True"
                    for row in summaries):
         raise RuntimeError("baseline reduction is incomplete")
-    cells = {}
-    for row in summaries:
-        cells.setdefault(row["condition"], set()).add(int(row["repeat"]))
-    expected_repeats = set(range(plan_["episodes_per_cell"]))
-    if not cells or any(repeats != expected_repeats
-                        for repeats in cells.values()):
-        raise RuntimeError("baseline conditions do not have exact repetitions")
+    conditions = validate_repeats(
+        summaries, policies, plan_["episodes_per_cell"],
+    )
     report = {
         "schema": "queue-haul-policy-baseline-validation-v1",
-        "valid": True, "policy": policy, "episodes": len(summaries),
-        "attainment_rows": len(attainment), "conditions": len(cells),
+        "valid": True, "policies": list(policies),
+        "episodes": expected_episodes,
+        "attainment_rows": len(attainment), "conditions": conditions,
         "repetitions_per_condition": plan_["episodes_per_cell"],
         "executed_scenarios": len(plan_["scenarios"]),
         "git_sha": metadata["git_sha"],
@@ -1368,6 +1488,12 @@ def parse_args(argv=None):
                          choices=tuple(CONTEXT_PACKS))
     command.add_argument("--policies", nargs="+", choices=POLICIES,
                          default=DEFAULT_POLICIES)
+    command = sub.add_parser("prepare-baselines")
+    command.add_argument("--source-plan", type=Path, required=True)
+    command.add_argument("--model-profile", type=Path)
+    command.add_argument("--out", type=Path, required=True)
+    command.add_argument("--policies", nargs="+", choices=NETWORK_BASELINES,
+                         default=NETWORK_BASELINES)
     command = sub.add_parser("reduce")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path)
@@ -1378,8 +1504,8 @@ def parse_args(argv=None):
     command = sub.add_parser("validate")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--expected-episodes", type=int, default=120)
-    command.add_argument("--policy", choices=POLICIES,
-                         default="isolated_fastest")
+    command.add_argument("--policies", nargs="+", choices=POLICIES,
+                         default=("isolated_fastest",))
     command = sub.add_parser("plot-common-packing")
     command.add_argument("--packing-run", type=Path, required=True)
     command.add_argument("--baseline-run", type=Path, required=True)
@@ -1400,12 +1526,16 @@ def main(argv=None):
             required_deadlines_s=args.required_deadlines_s,
             context_packs=args.context_packs or (), policies=args.policies,
         )
+    elif args.command == "prepare-baselines":
+        prepare_baselines(
+            args.source_plan, args.out, args.policies, args.model_profile,
+        )
     elif args.command == "reduce":
         reduce_run(args.run_root, args.out)
     elif args.command == "plot-reduced":
         plot_reduced(args.out, args.model_profile, args.pooled_with)
     elif args.command == "validate":
-        validate_run(args.run_root, args.expected_episodes, args.policy)
+        validate_run(args.run_root, args.expected_episodes, args.policies)
     else:
         common_packing_comparison(args.packing_run, args.baseline_run, args.out)
 

@@ -34,6 +34,7 @@ import csv
 import json
 import math
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -54,10 +55,12 @@ from policy_hardware_campaign import (
     max_session_ttft_per_watt_points,
     max_session_ttft_points,
     migration_time_per_watt_points,
+    matched_baseline_plan,
     pareto_points,
     power_shed_quantiles,
     prepare,
     reduce_run,
+    validate_repeats,
     validate_policy_plan,
 )
 
@@ -212,19 +215,24 @@ def test_policy_appends_unadmitted_sessions_as_fastest_tail(monkeypatch):
 
 def test_isolated_fastest_chooses_per_session_then_orders_by_chosen_duration(
         monkeypatch):
-    durations = {
-        ("a", "replay"): 5, ("a", "kv_transfer"): 2,
-        ("b", "replay"): 1, ("b", "kv_transfer"): 4,
-        ("c", "replay"): 3, ("c", "kv_transfer"): 6,
-    }
-    monkeypatch.setattr(
-        campaign, "_duration",
-        lambda session, method, *_: durations[session.session_id, method],
-    )
+    seen = {}
+    monkeypatch.setattr(campaign, "plan", lambda scenario, _profile, _routes,
+                        solver, **_kwargs: (seen.update(
+                            solver=solver, deadline=scenario.deadline_s,
+                        ) or SimpleNamespace(moves=tuple(
+                            SimpleNamespace(
+                                session_id=name, method=method, order=order,
+                                rate_limit_bytes_per_s=None, quiesce_s=0,
+                            ) for order, (name, method) in enumerate(
+                                (("b", "replay"), ("a", "kv_transfer"),
+                                 ("c", "replay"))
+                            )
+                        ))))
     scenario = SimpleNamespace(
         sessions=tuple(SimpleNamespace(session_id=name)
                        for name in ("a", "b", "c")),
         links=(SimpleNamespace(link_id="link", bytes_per_s=1),),
+        deadline_s=30, end_s=180,
     )
     profile = SimpleNamespace(case=lambda: object())
 
@@ -239,6 +247,79 @@ def test_isolated_fastest_chooses_per_session_then_orders_by_chosen_duration(
         ("a", "kv_transfer", 1),
         ("c", "replay", 2),
     ]
+    assert seen == {"solver": "isolated_fastest", "deadline": 30}
+
+
+@pytest.mark.parametrize(("policy", "solver", "planning_deadline"), (
+    ("queue_haul_power_blind", "lp_power_blind", 30),
+    ("queue_haul_deadline_blind", "lp_work_first", 600),
+))
+def test_network_ablation_planning_semantics(
+        policy, solver, planning_deadline, monkeypatch):
+    @dataclass(frozen=True)
+    class Scenario:
+        sessions: tuple = ()
+        links: tuple = ()
+        deadline_s: float = 30
+        end_s: float = 180
+
+    seen = {}
+    monkeypatch.setattr(campaign, "plan", lambda scenario, _profile, _routes,
+                        solver_, **kwargs: (seen.update(
+                            solver=solver_, scenario=scenario, kwargs=kwargs,
+                        ) or SimpleNamespace(moves=())))
+    scenario = Scenario()
+
+    profile = SimpleNamespace(case=lambda: object())
+    assert campaign._moves(policy, scenario, {}, profile, 7) == []
+    assert seen["solver"] == solver
+    assert seen["scenario"].deadline_s == planning_deadline
+    assert seen["scenario"].end_s == (600 if planning_deadline == 600 else 180)
+
+
+def test_matched_baselines_preserve_source_cohort(tmp_path, monkeypatch):
+    source = make_plan(
+        manifest(tmp_path), episodes=1, sessions=4, policies=("queue_haul",),
+    )
+    source_path = tmp_path / "source.json"
+    source_path.write_text(json.dumps(source))
+    monkeypatch.setattr(campaign, "_moves", lambda policy, scenario, *_: [{
+        "session_id": row.session_id, "method": "replay", "order": order,
+        "planned_rate_limit_bytes_per_s": None, "planned_quiesce_s": None,
+        "deadline_admitted": policy != "queue_haul_deadline_blind",
+    } for order, row in enumerate(scenario.sessions)])
+
+    plan = matched_baseline_plan(source_path)
+
+    assert plan["policies"] == list(campaign.NETWORK_BASELINES)
+    assert plan["episodes"] == source["episodes"]
+    assert {row["match_id"] for row in plan["scenarios"]} \
+        == {row["match_id"] for row in source["scenarios"]}
+    assert len(plan["scenarios"]) == source["episodes"] * 4
+    assert plan["baseline_source_plan"]["sha256"] \
+        == campaign.profiler.file_hash(source_path)
+    blocks = [[row["policy"] for row in plan["scenarios"]
+               if row["episode"] == episode]
+              for episode in range(plan["episodes"])]
+    assert blocks[0] != ["control", *campaign.NETWORK_BASELINES]
+    out = tmp_path / "prepared"
+    campaign._prepare(plan, out)
+    assert "--stack-scenarios 28" in (out / "run.sh").read_text()
+
+
+def test_validation_accepts_global_matched_repeats_only():
+    policies = ("isolated_fastest", "queue_haul_power_blind")
+    rows = [
+        {"policy": policy, "condition": condition, "repeat": repeat}
+        for policy in policies for condition, repeats in (
+            ("a", (6, 7, 8)), ("b", (9, 10, 11)),
+        ) for repeat in repeats
+    ]
+
+    assert validate_repeats(rows, policies, 3) == 2
+    rows[-1]["repeat"] = 12
+    with pytest.raises(RuntimeError, match="exact repetitions"):
+        validate_repeats(rows, policies, 3)
 
 
 def test_isolated_fastest_is_optional_not_default(tmp_path):
@@ -275,6 +356,7 @@ def test_prepared_job_is_self_locating_and_keeps_failures_visible(tmp_path):
     assert "run=(" in job and '"${run[@]}"' in job
     assert "--fail-fast" not in job
     assert '[[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]]' in job
+    assert "policy_hardware_campaign.py validate" in job
     assert (out / "run.sbatch").exists()
     sbatch = (out / "run.sbatch").read_text()
     assert "module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4" in sbatch
@@ -559,18 +641,24 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
         "greedy_lagrangian": "#620059",
         "isolated_fastest": "#5E3C99",
         "kv_only": "#006CB8", "replay_only": "#E98300",
+        "queue_haul_power_blind": "#CC79A7",
+        "queue_haul_deadline_blind": "#56B4E9",
     }
     assert CDF_LABELS == {
         "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
         "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
         "isolated_fastest": "Per-session fastest",
         "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
+        "queue_haul_power_blind": "Queue-Haul Power Blind",
+        "queue_haul_deadline_blind": "Queue-Haul Deadline Blind",
     }
     assert CDF_LINESTYLES == {
         "queue_haul": "-", "greedy": "--",
         "greedy_lagrangian": (0, (3, 1, 1, 1)),
         "isolated_fastest": (0, (5, 1)),
         "kv_only": "-.", "replay_only": ":",
+        "queue_haul_power_blind": (0, (3, 1)),
+        "queue_haul_deadline_blind": (0, (1, 1)),
     }
 
 

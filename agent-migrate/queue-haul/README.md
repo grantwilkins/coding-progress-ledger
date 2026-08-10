@@ -841,6 +841,21 @@ evidence also includes an episode migration-makespan-per-modeled-watt CDF and
 supports timing and projected, not realized, power attainment.
 The pinned 2026-07-30 bundles predate `greedy_lagrangian`; they do not constitute
 hardware evidence for it. A new two-A100 run is required for that claim.
+Matched reruns of either reduced bundle use its frozen plan as the cohort source.
+The three network baselines use resource-aware per-session fastest, uniform-gain
+power-blind LP, and a 600-second deadline-blind planning horizon while retaining
+the source plan's 19/30-second scoring deadlines:
+
+```bash
+uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
+  --source-plan queue-haul/outputs/policy-hardware-width8-frontier-20260730/plan.json \
+  --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_20260730.json \
+  --out queue-haul/outputs/policy-hardware-width8-frontier-network-baselines-plan
+uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
+  --source-plan queue-haul/outputs/policy-hardware-width8-packing-20260730/plan.json \
+  --out queue-haul/outputs/policy-hardware-width8-packing-network-baselines-plan
+```
+
 capacity_sweep_campaign.py keeps the completed two-point load run as a
 pilot and builds the publication load curve at
 0,.25,.50,.65,.75,.80,.85,.875,.90,.925,.95,.975. Normalized offered load is
