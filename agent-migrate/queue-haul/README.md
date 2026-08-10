@@ -634,6 +634,20 @@ uv run python queue-haul/plot_pooled_shed_frontier.py \
   --out queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_shed_frontier
 ```
 
+The companion hardware target-attainment plot retains uncapped overshed for the
+six deadline-safe policies in the 63 separation episodes. It divides realized
+shed by requested shed within each episode before pooling the three repeats, so
+values above 100% explicitly show target overshoot rather than extra physical
+efficiency. Deadline-blind is omitted because its recorded shed is eventual,
+not shed attained by the deadline.
+
+```bash
+uv run python queue-haul/plot_hardware_target_attainment.py \
+  --results queue-haul/outputs/east-germany-separation-hardware-20260809/results.csv \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-hardware-target-attainment-20260810/target_attainment
+```
+
 The companion resource-pressure view compares the same cases at two-thirds of
 removable power, where Queue-Haul usually succeeds and the restricted policies
 usually fail. Its four facets sum physical use and capacity across destinations
