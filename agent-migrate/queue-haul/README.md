@@ -609,12 +609,28 @@ The requested-shed frontier is a model sweep over that frozen all-bind hardware
 scenario, not additional hardware observations. It caps overshed at the request
 and carries the last safe attainment forward when a policy cannot satisfy a
 larger request. Its second panel reports Queue-Haul LP's modeled resource
-pressure and action/destination mix.
+pressure and action/destination mix; those are diagnostic rather than the
+primary comparison.
 
 ```bash
 uv run python queue-haul/plot_hardware_shed_frontier.py \
   --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
   --out queue-haul/outputs/east-germany-hardware-gap-frontier-20260810/shed_frontier
+```
+
+The pooled publication view removes those diagnostic panels and standardizes
+twelve constraint, separation, and hardware-gap operating points to a common
+30-second cutoff. Requested and attained shed are normalized by each case's
+removable power before equal-weight pooling. Lines are medians and ribbons are
+the interquartile spread across designed cases, not repeated-run confidence
+intervals.
+
+```bash
+uv run python queue-haul/plot_pooled_shed_frontier.py \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_shed_frontier
 ```
 
 In the separate standard handoff experiment, each policy uses the same eight

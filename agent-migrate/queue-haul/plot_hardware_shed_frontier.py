@@ -22,6 +22,19 @@ POLICIES = {
     "kv_only": "kv_only",
     "power_blind": "lp_power_blind",
 }
+POLICY_LABELS = {
+    "queue_haul_lp": "Queue-Haul LP",
+    "queue_haul_greedy": "Queue-Haul Greedy",
+    "independent_fastest": "Independent-fastest",
+    "replay_only": "Replay-only",
+    "kv_only": "KV-only",
+    "power_blind": "Power-blind",
+}
+POLICY_COLORS = dict(zip(POLICIES, (
+    campaign.TAB10_COLORS[0], campaign.TAB10_COLORS[1],
+    campaign.TAB10_COLORS[6], campaign.TAB10_COLORS[3],
+    campaign.TAB10_COLORS[2], campaign.TAB10_COLORS[7],
+)))
 RESOURCES = (
     "kv:pool/east",
     "service:pool/germany:0",
@@ -51,23 +64,17 @@ def plateau_attainment(requested, safe_shed, admissible):
     return frontier
 
 
-def sweep(plan_path: Path, points: int = 41):
-    if points < 2:
-        raise ValueError("frontier requires at least two requested-shed points")
-    plan = json.loads(plan_path.read_text())
-    manifest = json.loads(_resolve(plan["manifest"]["path"], plan_path).read_text())
-    profile = campaign.ModelProfile.load(campaign.MODEL_PATH)
-    scenario = next(row for row in plan["scenarios"]
-                    if row["condition_id"] == "all-bind"
-                    and row["repeat"] == 0
-                    and row["policy"] == "queue_haul_robust")
-    problem, architecture, routes, hardware_target, _demand = \
-        campaign._scenario_problem(scenario, manifest, profile)
+def sweep_scenario(scenario, manifest, profile, requested_fractions, case_id):
+    problem, architecture, routes, _target, _demand = campaign._scenario_problem(
+        scenario, manifest, profile)
     initial = campaign.source_power(problem, profile)
     minimum = campaign.source_power(
         problem, profile, (session.session_id for session in problem.sessions))
-    requested = sorted(set(np.linspace(0, initial - minimum, points))
-                       | {hardware_target})
+    maximum = initial - minimum
+    fractions = sorted(set(float(value) for value in requested_fractions))
+    if not fractions or fractions[0] < 0 or fractions[-1] > 1:
+        raise ValueError("requested shed fractions must lie in [0, 1]")
+    requested = [fraction * maximum for fraction in fractions]
     rows = []
     for policy, solver in POLICIES.items():
         raw, admissible, policy_rows = [], [], []
@@ -92,6 +99,11 @@ def sweep(plan_path: Path, points: int = 41):
             raw.append(safe_shed)
             admissible.append(safe)
             policy_rows.append({
+                "case_id": case_id,
+                "deadline_s": problem.deadline_s,
+                "sessions": len(problem.sessions),
+                "maximum_removable_w": maximum,
+                "requested_fraction": target / maximum,
                 "requested_shed_w": target,
                 "policy": policy,
                 "raw_safe_shed_w": safe_shed,
@@ -104,9 +116,32 @@ def sweep(plan_path: Path, points: int = 41):
                 **{action: counts[action] for action in ACTIONS},
             })
         attained = plateau_attainment(requested, raw, admissible)
-        rows.extend({**row, "safely_attained_shed_w": value}
+        rows.extend({**row, "safely_attained_shed_w": value,
+                     "safely_attained_fraction": value / maximum}
                     for row, value in zip(policy_rows, attained))
-    return rows, hardware_target
+    return rows
+
+
+def sweep(plan_path: Path, points: int = 41):
+    if points < 2:
+        raise ValueError("frontier requires at least two requested-shed points")
+    plan = json.loads(plan_path.read_text())
+    manifest = json.loads(_resolve(plan["manifest"]["path"], plan_path).read_text())
+    profile = campaign.ModelProfile.load(campaign.MODEL_PATH)
+    scenario = next(row for row in plan["scenarios"]
+                    if row["condition_id"] == "all-bind"
+                    and row["repeat"] == 0
+                    and row["policy"] == "queue_haul_robust")
+    problem, _architecture, _routes, hardware_target, _demand = \
+        campaign._scenario_problem(scenario, manifest, profile)
+    initial = campaign.source_power(problem, profile)
+    minimum = campaign.source_power(
+        problem, profile, (session.session_id for session in problem.sessions))
+    fractions = set(np.linspace(0, 1, points)) | {
+        hardware_target / (initial - minimum)}
+    return sweep_scenario(
+        scenario, manifest, profile, fractions, "hardware_gap/all-bind",
+    ), hardware_target
 
 
 def write_csv(rows, out: Path) -> None:
@@ -122,19 +157,6 @@ def write_plot(rows, hardware_target: float, out: Path) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    labels = {
-        "queue_haul_lp": "Queue-Haul LP",
-        "queue_haul_greedy": "Queue-Haul Greedy",
-        "independent_fastest": "Independent-fastest",
-        "replay_only": "Replay-only",
-        "kv_only": "KV-only",
-        "power_blind": "Power-blind",
-    }
-    colors = dict(zip(POLICIES, (
-        campaign.TAB10_COLORS[0], campaign.TAB10_COLORS[1],
-        campaign.TAB10_COLORS[6], campaign.TAB10_COLORS[3],
-        campaign.TAB10_COLORS[2], campaign.TAB10_COLORS[7],
-    )))
     resource_labels = (
         "East KV", "Germany service", "East replay", "East KV transfer",
         "Germany replay", "Germany KV transfer",
@@ -153,7 +175,8 @@ def write_plot(rows, hardware_target: float, out: Path) -> None:
         frontier.plot(
             [row["requested_shed_w"] for row in selected],
             [row["safely_attained_shed_w"] for row in selected],
-            color=colors[policy], linewidth=2, label=labels[policy],
+            color=POLICY_COLORS[policy], linewidth=2,
+            label=POLICY_LABELS[policy],
         )
     maximum = max(row["requested_shed_w"] for row in rows)
     frontier.plot((0, maximum), (0, maximum), color="black", linestyle=":",
