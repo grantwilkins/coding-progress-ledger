@@ -24,6 +24,7 @@ SPANS = (
     ("Sleep", "sleep_start", "sleep_ready", "#BCBD22", .12),
 )
 BIN_S = .5
+TDP_W = 300
 
 
 def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
@@ -45,7 +46,7 @@ def bin_mean(points: list[tuple[float, float]]) -> tuple[list[float], list[float
 
 def style(axis, xlim: tuple[float, float], ylabel: str) -> None:
     axis.set_xlim(*xlim)
-    axis.set_ylabel(ylabel, size=16)
+    axis.set_ylabel(ylabel, size=14)
     axis.tick_params(labelsize=14)
     axis.grid(alpha=.25)
     for spine in axis.spines.values():
@@ -117,9 +118,7 @@ def reduce(run_root: Path) -> list[dict]:
     figure, axis = plt.subplots(figsize=(9, 4))
     for node, points in power.items():
         x, y = bin_mean(points)
-        baseline = next(row["median_power_w"] for row in rows
-                        if row["node"] == node and row["phase"] == "pre")
-        selected = [(seconds - plot_start, watts / baseline)
+        selected = [(seconds - plot_start, 100 * watts / TDP_W)
                     for seconds, watts in zip(x, y)
                     if plot_start <= seconds <= plot_end]
         axis.plot(*zip(*selected), lw=1.5,
@@ -133,7 +132,7 @@ def reduce(run_root: Path) -> list[dict]:
         axis.axvline(marker["traffic_switched"] - marker["handoff_start"],
                     color="#D62728", lw=1.5, ls="--",
                     label="Switch")
-    style(axis, (0, plot_end - plot_start), "Normalized power")
+    style(axis, (0, plot_end - plot_start), "Normalized Power (%)")
     axis.set_xlabel("Time since migration began (s)", size=16)
     axis.legend(frameon=False, fontsize=13, loc="upper center",
                 bbox_to_anchor=(.5, -.2), ncol=3)

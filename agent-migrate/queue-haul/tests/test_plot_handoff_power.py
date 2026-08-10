@@ -1,7 +1,7 @@
 """
 Claim:
-Handoff plots show regional 500 ms power means from state preparation through
-GPU sleep, normalized by each region's pre-handoff median.
+Handoff plots show regional per-GPU 500 ms power means from state preparation
+through GPU sleep, normalized by the 300 W per-GPU TDP.
 
 Plausible wrong implementations:
 - use the wrong event as the shared time origin
@@ -9,7 +9,7 @@ Plausible wrong implementations:
 - assign a destination's samples to the wrong region
 - aggregate power across regions instead of within each region and time bin
 - hide the sub-second traffic cutover by rendering it as a zero-width span
-- normalize every region by the source baseline instead of its own baseline
+- normalize by a measured baseline or 400 W instead of the 300 W TDP
 - crop at traffic cutover instead of including drain and GPU sleep
 """
 
@@ -71,11 +71,11 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path, monkeypatch):
     assert (tmp_path / "power_handoff.png").is_file()
     axis = p.plt.gcf().axes[0]
     assert axis.get_xlim() == (0, 1)
-    assert axis.get_ylabel() == "Normalized power"
+    assert axis.get_ylabel() == "Normalized Power (%)"
     source = next(line for line in axis.lines
                   if line.get_label() == "sweden-central")
     assert list(source.get_xdata()) == [.25, .75]
-    assert list(source.get_ydata()) == [230 / 220, 120 / 220]
+    assert list(source.get_ydata()) == [100 * 230 / 300, 100 * 120 / 300]
     cutover = next(line for line in axis.lines
                    if line.get_label() == "Switch")
     assert list(cutover.get_xdata()) == [.5001, .5001]
