@@ -10,11 +10,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-CONFIG = "gpt-oss-20b-a100_tp1"
+CONFIG = "gpt-oss-20b-h100_tp1"
 PTRACE = (
     Path(__file__).resolve().parents[3] / "powertrace-sim" / "results" / "two_price_fit"
 )
-OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_a100_tp1"
+OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_h100_tp1"
 POWER_KNEE_FRAC = 0.8
 POWER_NORMALIZATION_W = 400.0
 CONSTANT_FIELDS = (

@@ -100,10 +100,13 @@ def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):
     assert case.kv_transfer.tail_replay_tps == 20
 
 
-def test_default_profile_uses_current_mp_runtime_kv_capacity():
-    path = Path(__file__).parents[1] / "profiles/gpt_oss_20b_a100_tp1.json"
+def test_default_profile_uses_measured_h100_capacity_and_rates():
+    path = Path(__file__).parents[1] / "profiles/gpt_oss_20b_h100_tp1.json"
+    profile = ModelProfile.load(path)
 
-    assert ModelProfile.load(path).kv_capacity_tokens == 963152
+    assert profile.hardware == "NVIDIA H100 NVL 94GB"
+    assert profile.kv_capacity_tokens == 2472995
+    assert (profile.case().F, profile.case().G) == (11415.78, 451.32)
 
 
 def test_version_two_profiles_do_not_inherit_zero_cost_catch_up(tmp_path):

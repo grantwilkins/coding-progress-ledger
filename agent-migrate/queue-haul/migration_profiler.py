@@ -2572,7 +2572,7 @@ def reduce_run(run_root: Path) -> None:
         if row["kind"] == "migration" and control and row["continuation_ttft_s"] is not None:
             row["continuation_difference_s"] = row["continuation_ttft_s"] - control["continuation_ttft_s"]
     from profiles import ModelProfile
-    profile = ModelProfile.load(Path(__file__).with_name("profiles") / "gpt_oss_20b_a100_tp1.json")
+    profile = ModelProfile.load(Path(__file__).with_name("profiles") / "gpt_oss_20b_h100_tp1.json")
     for row in migrations:
         row["current_model_time_s"] = current_model_time(row, profile)
     write_csv(run_root / "migrations.csv", migrations)

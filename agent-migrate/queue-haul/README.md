@@ -15,7 +15,7 @@ contract, not an inferred GPU inventory.
 
 The repository contains:
 
-- measured GPT-OSS-20B/A100 power curves;
+- a measured GPT-OSS-20B/H100 NVL TP=1 occupancy and GPU-power curve;
 - working replay and compatible KV handoff on two A100s, with 24/24 serial and
   90/90 bounded-campaign migrations completing by their deadlines;
 - 105/105 passing bounded-campaign gates and 6/6 passing parallel-KV gates;
@@ -33,6 +33,13 @@ with ordered eager-parallel launch. The archived destination service campaign
 does not provide an accepted shared-load capacity boundary, so simulator
 service headroom remains a sensitivity. That boundary is not required for the
 dedicated two-A100 migration claim.
+
+The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
+H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
+2,472,995 KV-cache tokens, and a concave GPU-power envelope over
+`0 <= ell <= 0.96647`. Raw benchmark and power samples are under
+`outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
+remain clearly marked A100-derived estimates until rerun on H100.
 
 ## System boundary
 
@@ -139,8 +146,8 @@ source ~/.bashrc
 This installs Valkey, `chrony`, and `iperf3`, configures chrony against Azure's
 stable `/dev/ptp_hyperv` device, waits for synchronization, installs the pinned
 Python 3.12/vLLM 0.22.0/LMCache 0.5.1 CUDA 12.9 runtime, and stores the pinned
-GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without the
-A100, persistent data mount, PTP device, or pinned runtime.
+GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without
+`nvidia-smi`, the persistent data mount, PTP device, or pinned runtime.
 
 From the Sweden Central source, establish and verify SSH host keys once, then confirm
 that the same commit is checked out everywhere:

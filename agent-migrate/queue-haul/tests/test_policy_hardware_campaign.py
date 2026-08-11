@@ -417,7 +417,7 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
         "execution_contract": ORDERED_EAGER_PARALLEL_V1,
         "power_target_fraction": 1,
         "model_profile": {
-            "path": "queue-haul/profiles/gpt_oss_20b_a100_tp1.json",
+            "path": f"queue-haul/profiles/{campaign.DEFAULT_MODEL.name}",
             "sha256": campaign.profiler.file_hash(campaign.DEFAULT_MODEL),
         },
         "scenarios": [control, queue, failed],

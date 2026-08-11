@@ -27,7 +27,7 @@ from simulate import ExecutionScenario, NetworkLink, PowerNode, ServingInstance,
 ROOT = Path(__file__).parent
 EXECUTION_CONTRACT = ORDERED_EAGER_PARALLEL_V1
 DEFAULT_MANIFEST = Path("queue-haul/outputs/coding-manifest.json")
-DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
+DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_h100_tp1.json"
 DEFAULT_WORKLOADS = tuple(ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 ))
