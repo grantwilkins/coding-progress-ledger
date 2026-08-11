@@ -31,6 +31,24 @@ POLICY_LINESTYLES = dict(zip(POLICIES, (
     "-", "--", (0, (3, 1, 1, 1)), (0, (5, 1)), "-.", ":",
     (0, (3, 1)), (0, (1, 1)),
 )))
+ACTION_NAMES = {
+    "replay": "Replay", "kv_transfer": "KV transfer",
+    "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",
+    "germany_replay": "Replay → Germany",
+    "germany_kv_transfer": "KV transfer → Germany",
+    "not_moved": "Remains at source",
+}
+ACTION_COLORS = {
+    "replay": "#E98300", "kv_transfer": "#006CB8",
+    "east_replay": "#E98300", "germany_replay": "#E98300",
+    "east_kv_transfer": "#006CB8", "germany_kv_transfer": "#006CB8",
+    "not_moved": "#999999",
+}
+ACTION_HATCHES = {
+    "east_replay": "", "east_kv_transfer": "",
+    "germany_replay": "//", "germany_kv_transfer": "//",
+    "not_moved": "",
+}
 
 
 def apply():

@@ -663,6 +663,20 @@ uv run python queue-haul/plot_pooled_resource_pressure.py \
   --out queue-haul/outputs/east-germany-pooled-resource-pressure-20260810/resource_pressure
 ```
 
+The action-adaptation views use the same equal-case sweep. Separate figures show
+controlled resource releases, the matched Germany replay quota, pooled action
+composition over requested shed, all designed cases, the paired bandwidth
+change, and selected sessions within three matched modeled episodes.
+
+```bash
+uv run python queue-haul/plot_pooled_action_adaptation.py \
+  --cases queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_shed_frontier_cases.csv \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out-dir queue-haul/outputs/east-germany-action-adaptation-20260811
+```
+
 The time-to-binding view uses the same two-thirds stress point. It estimates
 completion-ordered slack for VRAM, network-transfer, and prefill constraints;
 each class reports its tightest component without exposing destination names.
