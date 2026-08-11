@@ -19,7 +19,10 @@ POLICY_NAMES = dict(zip(POLICIES, (
     "True Greedy", "KV Migrate Only", "Replay Context Only",
     "Queue-Haul Power Blind", "Queue-Haul Deadline Blind",
 )))
-POLICY_COLORS = dict(zip(POLICIES, matplotlib.colormaps["tab10"].colors))
+POLICY_COLORS = dict(zip(POLICIES, (
+    "#0072B2", "#E69F00", "#F0E442", "#D55E00",
+    "#56B4E9", "#CC79A7", "#009E73", "#000000",
+)))
 POLICY_LINESTYLES = dict(zip(POLICIES, (
     "-", "--", (0, (3, 1, 1, 1)), (0, (5, 1)), "-.", ":",
     (0, (3, 1)), (0, (1, 1)),

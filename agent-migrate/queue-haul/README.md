@@ -988,7 +988,7 @@ uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
 The completed reduced baselines are checksum-pinned under each 2026-07-30
 bundle in `network-baselines-20260811/`; the parent graphs pool both campaigns.
 The packing bundle's 30-second full-attainment CDF pools packing and frontier
-parent and baseline episodes. It uses an 8-by-5-inch plot, Tab10 colors,
+parent and baseline episodes. It uses an 8-by-5-inch plot, Okabe–Ito colors,
 distinct line styles, and a three-column legend below the axes.
 
 The canonical output style is `plot_style.py`: 8-by-5 inches, 15-point titles,
@@ -996,16 +996,16 @@ labels, and ticks, 11-point legends and annotations, 3-point lines, and 220 DPI.
 Plot-specific layouts may use the shared compact size. New and modified plot
 producers must inherit it. Policy identities are:
 
-| Internal name | Display name | Tab10 | Line |
+| Internal name | Display name | Okabe–Ito | Line |
 |---|---|---:|---|
-| `queue_haul` | Queue-Haul LP | 0 | solid |
-| `greedy` | Queue-Haul Greedy | 1 | dashed |
-| `greedy_lagrangian` | Queue-Haul Lagrangian Greedy | 2 | dash-dot-dot |
-| `isolated_fastest` | True Greedy | 3 | long dash |
-| `kv_only` | KV Migrate Only | 4 | dash-dot |
-| `replay_only` | Replay Context Only | 5 | dotted |
-| `queue_haul_power_blind` | Queue-Haul Power Blind | 6 | short dash |
-| `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | 7 | fine dotted |
+| `queue_haul` | Queue-Haul LP | `#0072B2` | solid |
+| `greedy` | Queue-Haul Greedy | `#E69F00` | dashed |
+| `greedy_lagrangian` | Queue-Haul Lagrangian Greedy | `#F0E442` | dash-dot-dot |
+| `isolated_fastest` | True Greedy | `#D55E00` | long dash |
+| `kv_only` | KV Migrate Only | `#56B4E9` | dash-dot |
+| `replay_only` | Replay Context Only | `#CC79A7` | dotted |
+| `queue_haul_power_blind` | Queue-Haul Power Blind | `#009E73` | short dash |
+| `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | `#000000` | fine dotted |
 
 Rebuild them with:
 
