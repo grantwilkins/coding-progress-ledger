@@ -886,7 +886,7 @@ def plot_full_power_attainment(summaries, power_window_s, out,
         xlabel="Time to Full Power-Shed Attainment (s)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.set_xlim(left=0)
+    ax.set_xlim(0, 3 * deadline_s)
     ax.tick_params(labelsize=plot_style.LARGE_FONT_SIZE)
     ax.xaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
     ax.yaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
@@ -1426,7 +1426,7 @@ def plot(rows, summaries, out, cohort=None, policy_order=CDF_POLICIES):
 
 
 def plot_attainment(rows, out, condition=None):
-    deadlines = sorted({row["required_deadline_s"] for row in rows})
+    deadlines = sorted({float(row["required_deadline_s"]) for row in rows})
     fig, axes = plt.subplots(
         1, len(deadlines), figsize=(4.4 * len(deadlines), 4), squeeze=False
     )
@@ -1434,9 +1434,9 @@ def plot_attainment(rows, out, condition=None):
     for ax, deadline in zip(axes, deadlines):
         for policy in POLICIES:
             values = sorted(
-                100 * row["power_attainment_fraction"] for row in rows
+                100 * float(row["power_attainment_fraction"]) for row in rows
                 if row["policy"] == policy
-                and row["required_deadline_s"] == deadline
+                and float(row["required_deadline_s"]) == deadline
             )
             if values:
                 ax.step(

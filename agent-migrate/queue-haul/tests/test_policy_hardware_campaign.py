@@ -616,7 +616,7 @@ def test_common_packing_chart_uses_120_matched_rows_and_five_point_band(
         "replay_only": (0, 120, 0),
     }
     labels = [row.get_text() for row in campaign.plt.gcf().axes[0].get_yticklabels()]
-    assert labels[2] == "Per-session fastest (n=120)"
+    assert labels[2] == "True Greedy (n=120)"
     assert (out / "policy_hardware_common_packing.pdf").exists()
 
 
