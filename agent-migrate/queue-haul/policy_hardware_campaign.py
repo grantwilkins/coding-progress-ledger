@@ -52,6 +52,7 @@ NETWORK_BASELINES = (
     "isolated_fastest", "queue_haul_power_blind",
     "queue_haul_deadline_blind",
 )
+RERUN_POLICIES = ("queue_haul", "greedy", *NETWORK_BASELINES)
 DEADLINE_BLIND_HORIZON_S = 600
 PACKING_POLICIES = (
     "queue_haul", "greedy", "isolated_fastest", "kv_only", "replay_only",
@@ -415,7 +416,7 @@ def matched_baseline_plan(source_path: Path, policies=NETWORK_BASELINES,
         raise ValueError("source plan inputs changed")
     policies = tuple(policies)
     if not policies or len(set(policies)) != len(policies) \
-            or not set(policies) <= set(NETWORK_BASELINES):
+            or not set(policies) <= set(RERUN_POLICIES):
         raise ValueError("invalid matched baseline policies")
     profile, rng, scenarios = ModelProfile.load(model_path), \
         random.Random(source["seed"]), []
@@ -1496,7 +1497,7 @@ def parse_args(argv=None):
     command.add_argument("--source-plan", type=Path, required=True)
     command.add_argument("--model-profile", type=Path)
     command.add_argument("--out", type=Path, required=True)
-    command.add_argument("--policies", nargs="+", choices=NETWORK_BASELINES,
+    command.add_argument("--policies", nargs="+", choices=RERUN_POLICIES,
                          default=NETWORK_BASELINES)
     command = sub.add_parser("reduce")
     command.add_argument("--run-root", type=Path, required=True)

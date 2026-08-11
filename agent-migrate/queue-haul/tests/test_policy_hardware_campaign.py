@@ -305,6 +305,10 @@ def test_matched_baselines_preserve_source_cohort(tmp_path, monkeypatch):
     out = tmp_path / "prepared"
     campaign._prepare(plan, out)
     assert "--stack-scenarios 28" in (out / "run.sh").read_text()
+    rerun = matched_baseline_plan(source_path, campaign.RERUN_POLICIES)
+    campaign._prepare(rerun, out)
+    assert len(rerun["scenarios"]) == source["episodes"] * 6
+    assert "--stack-scenarios 30" in (out / "run.sh").read_text()
 
 
 def test_validation_accepts_global_matched_repeats_only():

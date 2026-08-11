@@ -856,6 +856,10 @@ uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
 uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
   --source-plan queue-haul/outputs/policy-hardware-width8-packing-20260730/plan.json \
   --out queue-haul/outputs/policy-hardware-width8-packing-network-baselines-plan
+uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
+  --source-plan queue-haul/outputs/policy-hardware-width8-packing-20260730/plan.json \
+  --policies queue_haul greedy isolated_fastest queue_haul_power_blind queue_haul_deadline_blind \
+  --out queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-plan
 ```
 
 The completed reduced baselines are checksum-pinned under each 2026-07-30
