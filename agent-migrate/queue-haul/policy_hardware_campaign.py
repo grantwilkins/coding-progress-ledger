@@ -399,7 +399,8 @@ def validate_policy_plan(plan_: dict) -> None:
 
 
 def matched_baseline_plan(source_path: Path, policies=NETWORK_BASELINES,
-                          model_path: Path | None = None) -> dict:
+                          model_path: Path | None = None,
+                          condition_shard=None) -> dict:
     source = json.loads(source_path.read_text())
     manifest_path = Path(source["manifest"]["path"])
     source_model_path = Path(source["model_profile"]["path"])
@@ -423,9 +424,20 @@ def matched_baseline_plan(source_path: Path, policies=NETWORK_BASELINES,
     episode_order = list(dict.fromkeys(
         row["episode"] for row in source["scenarios"]
     ))
-    for episode in episode_order:
-        rows = [row for row in source["scenarios"] if row["episode"] == episode]
-        control = next(row for row in rows if row["policy"] == "control")
+    if condition_shard:
+        index, count = condition_shard
+        conditions = sorted({row["condition"] for row in source["scenarios"]})
+        if not 0 <= index < count or not conditions[index::count]:
+            raise ValueError("invalid matched condition shard")
+        selected = set(conditions[index::count])
+        episode_order = [source_episode for source_episode in episode_order
+                         if next(row["condition"] for row in source["scenarios"]
+                                 if row["episode"] == source_episode) in selected]
+    for episode, source_episode in enumerate(episode_order):
+        rows = [row for row in source["scenarios"]
+                if row["episode"] == source_episode]
+        control = {**next(row for row in rows if row["policy"] == "control"),
+                   "episode": episode}
         block = [control]
         problem, routes = _problem(
             profile, control["sessions"], control["bandwidth_mbps"],
@@ -434,7 +446,7 @@ def matched_baseline_plan(source_path: Path, policies=NETWORK_BASELINES,
         for policy in policies:
             moves = _moves(
                 policy, problem, routes, profile,
-                profiler.stable_seed(source["seed"], episode, policy),
+                profiler.stable_seed(source["seed"], source_episode, policy),
             )
             move_rows = [{
                 **next(row for row in control["sessions"]
@@ -453,7 +465,8 @@ def matched_baseline_plan(source_path: Path, policies=NETWORK_BASELINES,
         rng.shuffle(block)
         scenarios.extend(block)
     output = {
-        **source, "policies": list(policies), "scenarios": scenarios,
+        **source, "episodes": len(episode_order), "policies": list(policies),
+        "scenarios": scenarios,
         "model_profile": {
             **source["model_profile"], "path": _portable_path(model_path),
         },
@@ -461,6 +474,8 @@ def matched_baseline_plan(source_path: Path, policies=NETWORK_BASELINES,
             "path": _portable_path(source_path),
             "sha256": profiler.file_hash(source_path),
         },
+        **({"baseline_condition_shard": list(condition_shard)}
+           if condition_shard else {}),
     }
     profiler.validate_plan(output, manifest)
     validate_policy_plan(output)
@@ -499,7 +514,7 @@ exit "$status"
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:2
 #SBATCH --constraint=GPU_SKU:A100_SXM4&GPU_MEM:80GB
-#SBATCH --mem=256G
+#SBATCH --mem=128G
 #SBATCH --time=12:00:00
 #SBATCH --output=policy-hardware-%j.out
 #SBATCH --error=policy-hardware-%j.err
@@ -523,8 +538,10 @@ def prepare(manifest: Path, out: Path, **kwargs) -> dict:
 
 def prepare_baselines(source_plan: Path, out: Path,
                       policies=NETWORK_BASELINES,
-                      model_path: Path | None = None) -> dict:
-    return _prepare(matched_baseline_plan(source_plan, policies, model_path), out)
+                      model_path: Path | None = None,
+                      condition_shard=None) -> dict:
+    return _prepare(matched_baseline_plan(
+        source_plan, policies, model_path, condition_shard), out)
 
 
 def _time(start, end):
@@ -1499,6 +1516,7 @@ def parse_args(argv=None):
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--policies", nargs="+", choices=RERUN_POLICIES,
                          default=NETWORK_BASELINES)
+    command.add_argument("--condition-shard", type=int, nargs=2)
     command = sub.add_parser("reduce")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path)
@@ -1534,6 +1552,7 @@ def main(argv=None):
     elif args.command == "prepare-baselines":
         prepare_baselines(
             args.source_plan, args.out, args.policies, args.model_profile,
+            args.condition_shard,
         )
     elif args.command == "reduce":
         reduce_run(args.run_root, args.out)

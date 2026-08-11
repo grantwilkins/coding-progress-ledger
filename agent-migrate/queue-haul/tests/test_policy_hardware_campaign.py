@@ -309,6 +309,25 @@ def test_matched_baselines_preserve_source_cohort(tmp_path, monkeypatch):
     campaign._prepare(rerun, out)
     assert len(rerun["scenarios"]) == source["episodes"] * 6
     assert "--stack-scenarios 30" in (out / "run.sh").read_text()
+    shard = matched_baseline_plan(
+        source_path, campaign.RERUN_POLICIES, condition_shard=(0, 1),
+    )
+    assert shard["episodes"] == 1
+    assert shard["baseline_condition_shard"] == [0, 1]
+    assert {row["episode"] for row in shard["scenarios"]} == {0}
+    source = make_plan(
+        manifest(tmp_path), episodes=3, sessions=4,
+        bandwidths_mbps=(1000, 2000), policies=("queue_haul",),
+    )
+    source_path.write_text(json.dumps(source))
+    shards = [matched_baseline_plan(
+        source_path, campaign.RERUN_POLICIES, condition_shard=(index, 2),
+    ) for index in range(2)]
+    assert [row["episodes"] for row in shards] == [3, 3]
+    assert {row["match_id"] for plan in shards for row in plan["scenarios"]} \
+        == {row["match_id"] for row in source["scenarios"]}
+    assert all({row["repeat"] for row in plan["scenarios"]} == {0, 1, 2}
+               for plan in shards)
 
 
 def test_validation_accepts_global_matched_repeats_only():
