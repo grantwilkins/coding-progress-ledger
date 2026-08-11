@@ -92,7 +92,7 @@ def write_plot(summary, out: Path) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.ticker import PercentFormatter
 
-    fig, axis = plt.subplots(figsize=(6, 5))
+    fig, axis = plt.subplots(figsize=(4, 3))
     for policy in POLICIES:
         selected = [row for row in summary if row["policy"] == policy]
         x = [row["requested_fraction"] for row in selected]
@@ -112,10 +112,13 @@ def write_plot(summary, out: Path) -> None:
              ylabel="Shed Power by Deadline")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
+    axis.tick_params(labelsize=11)
+    axis.xaxis.label.set_size(12)
+    axis.yaxis.label.set_size(12)
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, ncol=1, loc="center left",
-               bbox_to_anchor=(.92, .5))
+    fig.legend(handles, labels, frameon=False, fontsize=10, ncol=1,
+               loc="center left", bbox_to_anchor=(.92, .5))
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
