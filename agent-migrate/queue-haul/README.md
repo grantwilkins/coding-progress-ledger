@@ -67,6 +67,11 @@ by its measured remainder, prefers unchanged assignments, and proposes a diff
 only when it restores the target. Otherwise it reports the attainable shed and
 leaves execution unchanged.
 
+`repair_shadow_campaign.py` is the narrow RAMR validation: three seeded repeats
+each of a sustained 10-to-1 Gbps cut, replay load from rho 0 to 0.8, and both.
+It requests two A100-SXM4-80GB GPUs, records but does not apply proposed diffs,
+and validates the trigger policy rather than live redirection or performance.
+
 ## Evidence flow
 
 ```text
