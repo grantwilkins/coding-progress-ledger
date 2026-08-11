@@ -10,10 +10,18 @@ from pathlib import Path
 import numpy as np
 
 import network_campaign as campaign
+import plot_style
 from plot_hardware_constraint_timeline import _resolve
 from plot_hardware_shed_frontier import (
-    POLICIES, POLICY_COLORS, POLICY_LABELS, sweep_scenario,
+    POLICIES, sweep_scenario,
 )
+
+
+POLICY_STYLE_IDS = dict(zip(POLICIES, (
+    "queue_haul", "greedy", "isolated_fastest", "replay_only", "kv_only",
+    "queue_haul_power_blind", "queue_haul_deadline_blind",
+)))
+plot_style.apply()
 
 
 def pooled_summary(rows):
@@ -84,19 +92,19 @@ def write_plot(summary, out: Path) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.ticker import PercentFormatter
 
-    fig, axis = plt.subplots(figsize=(5, 4))
+    fig, axis = plt.subplots(figsize=plot_style.FIGSIZE)
     for policy in POLICIES:
         selected = [row for row in summary if row["policy"] == policy]
         x = [row["requested_fraction"] for row in selected]
         axis.fill_between(
             x, [row["lower_quartile"] for row in selected],
             [row["upper_quartile"] for row in selected],
-            color=POLICY_COLORS[policy], alpha=.12, linewidth=0,
+            color=plot_style.POLICY_COLORS[POLICY_STYLE_IDS[policy]],
+            alpha=.12, linewidth=0,
         )
         axis.plot(
             x, [row["median"] for row in selected],
-            color=POLICY_COLORS[policy], linewidth=2,
-            label=POLICY_LABELS[policy],
+            **plot_style.policy_style(POLICY_STYLE_IDS[policy]),
         )
     axis.plot((0, 1), (0, 1), color="black", linestyle=":", linewidth=1)
     axis.set(xlim=(0, 1), ylim=(0, 1),
@@ -104,15 +112,12 @@ def write_plot(summary, out: Path) -> None:
              ylabel="Shed Power by Deadline")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
-    axis.tick_params(labelsize=11)
-    axis.xaxis.label.set_size(12)
-    axis.yaxis.label.set_size(12)
     axis.grid(alpha=.2)
-    axis.legend(frameon=False, fontsize=7.5, ncol=2,
-                loc="upper left")
-    fig.tight_layout()
+    handles, labels = axis.get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, ncol=3, loc="lower center")
+    fig.tight_layout(rect=(0, .2, 1, 1))
     for suffix in ("png", "pdf"):
-        fig.savefig(out.with_suffix(f".{suffix}"), dpi=200)
+        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
 

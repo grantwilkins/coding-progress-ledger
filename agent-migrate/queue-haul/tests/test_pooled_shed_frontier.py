@@ -1,7 +1,8 @@
 """
 Claim:
 The pooled frontier uses attained/removable power within each equally weighted
-case, then reports the median and interquartile range at each policy/request.
+case, reports the median and interquartile range at each policy/request, and
+maps independent-fastest to the canonical True Greedy identity.
 
 Plausible wrong implementations:
 - Pool raw watts so high-power cases dominate the summary.
@@ -9,11 +10,12 @@ Plausible wrong implementations:
 - Weight a case more because it has more sessions or policies.
 - Mix requested-shed coordinates while computing uncertainty bands.
 - Compute quartiles across policies rather than across cases.
+- Preserve the obsolete independent-fastest display identity.
 """
 
 import pytest
 
-from plot_pooled_shed_frontier import pooled_summary
+from plot_pooled_shed_frontier import POLICY_STYLE_IDS, pooled_summary
 
 
 def test_pooled_summary_normalizes_cases_and_keeps_policy_coordinates():
@@ -41,3 +43,7 @@ def test_pooled_summary_normalizes_cases_and_keeps_policy_coordinates():
                               and row["requested_fraction"] == .5)]
     with pytest.raises(RuntimeError, match="weight each case once"):
         pooled_summary(duplicated)
+
+
+def test_pooled_frontier_maps_true_greedy_identity():
+    assert POLICY_STYLE_IDS["independent_fastest"] == "isolated_fastest"
