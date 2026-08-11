@@ -1146,14 +1146,17 @@ def plot_hardware_pareto(attainment, summaries, out):
     plt.close(fig)
 
 
-def _pooled_results(paths):
-    rows, summaries = [], []
+def _pooled_csv(paths, name):
+    rows = []
     for path in paths:
-        with (path / "policy_migrations.csv").open() as stream:
+        with (path / name).open() as stream:
             rows.extend(csv.DictReader(stream))
-        with (path / "policy_episodes.csv").open() as stream:
-            summaries.extend(csv.DictReader(stream))
-    return rows, summaries
+    return rows
+
+
+def _pooled_results(paths):
+    return tuple(_pooled_csv(paths, name) for name in
+                 ("policy_migrations.csv", "policy_episodes.csv"))
 
 
 def validate_repeats(rows, policies, repetitions):
@@ -1313,31 +1316,32 @@ def common_packing_comparison(packing: Path, baseline: Path, out: Path):
 
 
 def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
-    plan_ = json.loads((out / "plan.json").read_text())
-    rows, summaries = _pooled_results((out,))
-    with (out / "policy_attainment.csv").open() as stream:
-        attainment = list(csv.DictReader(stream))
-    pooled_rows, pooled_summaries = _pooled_results(pooled_with)
-    plot_destination_ttft(rows + pooled_rows, summaries + pooled_summaries, out)
-    plot_max_session_ttft(
-        rows + pooled_rows, summaries + pooled_summaries, out
-    )
-    plot_destination_ttft_by_bandwidth(
-        rows, summaries, plan_["scenarios"], out
-    )
+    paths = (out, *pooled_with)
+    rows, summaries = _pooled_results(paths)
+    attainment = _pooled_csv(paths, "policy_attainment.csv")
+    scenarios = sum((json.loads((path / "plan.json").read_text())["scenarios"]
+                     for path in paths), [])
+    plot(rows, summaries, out, "pooled")
+    plot_attainment(attainment, out, "pooled")
+    for condition in sorted({row["condition"] for row in summaries}):
+        plot([row for row in rows if row["condition"] == condition],
+             [row for row in summaries if row["condition"] == condition],
+             out, condition)
+        plot_attainment(
+            [row for row in attainment if row["condition"] == condition],
+            out, condition,
+        )
+    plot_destination_ttft(rows, summaries, out)
+    plot_max_session_ttft(rows, summaries, out)
+    plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out)
     model = ModelProfile.load(model_path)
     power_curve = model.case().power_curve
     plot_power_shed(rows, summaries, power_curve, out)
     plot_hardware_pareto(attainment, summaries, out)
-    plot_disruption(rows + pooled_rows, summaries + pooled_summaries,
-                    power_curve, out)
-    plot_migration_time_per_watt(summaries + pooled_summaries, power_curve, out)
-    plot_max_session_ttft_per_watt(
-        rows + pooled_rows, summaries + pooled_summaries, power_curve, out
-    )
-    plot_full_power_attainment(
-        summaries + pooled_summaries, model.power_window_s, out
-    )
+    plot_disruption(rows, summaries, power_curve, out)
+    plot_migration_time_per_watt(summaries, power_curve, out)
+    plot_max_session_ttft_per_watt(rows, summaries, power_curve, out)
+    plot_full_power_attainment(summaries, model.power_window_s, out)
 
 
 def representative_timeline(rows, summaries):

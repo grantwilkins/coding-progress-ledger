@@ -839,6 +839,8 @@ elapsed time with an interquartile band, plus paired attainment–completion
 points and a CDF of measured session downtime per modeled watt shed. This idle
 evidence also includes an episode migration-makespan-per-modeled-watt CDF and
 supports timing and projected, not realized, power attainment.
+`plot-reduced --pooled-with` adds supplied reduced campaigns to every pooled,
+bandwidth, condition, attainment, power, and Pareto plot.
 The pinned 2026-07-30 bundles predate `greedy_lagrangian`; they do not constitute
 hardware evidence for it. A new two-A100 run is required for that claim.
 Matched reruns of either reduced bundle use its frozen plan as the cohort source.

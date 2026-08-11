@@ -766,6 +766,52 @@ def test_pooled_results_concatenates_campaigns_without_reweighting(tmp_path):
     assert [int(row["planned_migrations"]) for row in summaries] == [1, 2]
 
 
+def test_plot_reduced_adds_pooled_campaign_to_every_graph(tmp_path,
+                                                          monkeypatch):
+    paths = [tmp_path / name for name in ("original", "baseline")]
+    for path, policy in zip(paths, ("queue_haul", "isolated_fastest")):
+        path.mkdir()
+        for name in ("policy_migrations.csv", "policy_episodes.csv",
+                     "policy_attainment.csv"):
+            with (path / name).open("w", newline="") as stream:
+                writer = csv.DictWriter(
+                    stream, fieldnames=("scenario_id", "policy", "condition")
+                )
+                writer.writeheader()
+                writer.writerow({"scenario_id": policy, "policy": policy,
+                                 "condition": "same"})
+        (path / "plan.json").write_text(json.dumps({"scenarios": [{
+            "scenario_id": policy, "policy": policy, "bandwidth_mbps": 1000,
+        }]}))
+    calls = {}
+
+    def capture(name):
+        return lambda *args: calls.setdefault(name, []).append(args)
+
+    names = (
+        "plot", "plot_attainment", "plot_destination_ttft",
+        "plot_max_session_ttft", "plot_destination_ttft_by_bandwidth",
+        "plot_power_shed", "plot_hardware_pareto", "plot_disruption",
+        "plot_migration_time_per_watt", "plot_max_session_ttft_per_watt",
+        "plot_full_power_attainment",
+    )
+    for name in names:
+        monkeypatch.setattr(campaign, name, capture(name))
+    monkeypatch.setattr(campaign.ModelProfile, "load", lambda _: SimpleNamespace(
+        case=lambda: SimpleNamespace(power_curve=object()), power_window_s=5,
+    ))
+
+    campaign.plot_reduced(paths[0], pooled_with=(paths[1],))
+
+    expected = {"queue_haul", "isolated_fastest"}
+    assert {row["policy"] for row in calls["plot_power_shed"][0][0]} == expected
+    assert {row["policy"] for row in calls["plot_hardware_pareto"][0][0]} \
+        == expected
+    assert {row["policy"] for row in
+            calls["plot_destination_ttft_by_bandwidth"][0][2]} == expected
+    assert {args[3] for args in calls["plot"]} == {"pooled", "same"}
+
+
 def test_destination_ttft_cdf_separates_and_normalizes_bandwidths(
         tmp_path, monkeypatch):
     rows = [
