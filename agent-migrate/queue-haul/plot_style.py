@@ -49,6 +49,8 @@ ACTION_HATCHES = {
     "germany_replay": "//", "germany_kv_transfer": "//",
     "not_moved": "",
 }
+ACTION_CHANGE_COLORS = {"fewer": "#E98300", "none": "#FFFFFF",
+                        "more": "#0072B2"}
 
 
 def apply():
