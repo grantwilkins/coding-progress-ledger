@@ -14,5 +14,5 @@
   "kv_capacity_tokens": 2472995,
   "prefill": {"input_tokens": 8192, "output_tokens": 1, "prompts": 16, "F_tps": 11415.78},
   "decode": {"input_tokens": 1024, "output_tokens": 512, "prompts": 128, "G_tps": 451.32},
-  "power": {"idle_samples": 50, "idle_mean_w": 94.4744, "sample_interval_s": 0.1, "level_window_s": 10, "warmup_s": 3}
+  "power": {"idle_samples": 50, "idle_mean_w": 94.4744, "peak_mean_w": 168.387375, "measured_max_ell": 1.224999995097, "sample_interval_s": 0.1, "level_window_s": 10, "warmup_s": 3, "prompt_words": [1100, 8192], "output_tokens": [1, 64]}
 }

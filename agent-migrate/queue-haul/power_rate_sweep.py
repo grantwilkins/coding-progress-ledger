@@ -24,6 +24,10 @@ def validate_gpu(name: str, power_limit_w: float) -> None:
         raise RuntimeError(f"expected one {name} at {power_limit_w:.2f} W, got {rows}")
 
 
+def calibration_prompt(words: int) -> str:
+    return "power calibration " + "x " * words
+
+
 def power(path: Path, stop: threading.Event, interval: float) -> None:
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
@@ -123,6 +127,7 @@ def main() -> None:
     parser.add_argument("--window-s", type=float, default=15)
     parser.add_argument("--warmup-s", type=float, default=5)
     parser.add_argument("--output-tokens", type=int, default=64)
+    parser.add_argument("--prompt-words", type=int, default=8192)
     parser.add_argument("--workers", type=int, default=512)
     parser.add_argument("--expected-gpu", default="NVIDIA H100 NVL")
     parser.add_argument("--expected-power-limit-w", type=float, default=400)
@@ -144,12 +149,12 @@ def main() -> None:
                args.idle_power_w, args.curve_max_rate)
         return
     if args.window_s <= 0 or args.warmup_s < 0 or args.output_tokens < 1 \
-            or args.workers < 1 or args.expected_power_limit_w <= 0 \
+            or args.prompt_words < 1 or args.workers < 1 or args.expected_power_limit_w <= 0 \
             or not args.rates or min(args.rates) <= 0:
         raise ValueError("invalid sweep settings")
     validate_gpu(args.expected_gpu, args.expected_power_limit_w)
     args.out.mkdir(parents=True, exist_ok=False)
-    prompt = "power calibration " + "x " * 1100
+    prompt = calibration_prompt(args.prompt_words)
     rows = []
     for rate in args.rates:
         rows.append(level(args.host, args.port, rate, args.window_s,
