@@ -31,6 +31,14 @@ CASE_NAMES = {
     "constraint/window-30": "Unrestricted replay",
     "constraint/quota-30": "Germany replay quota",
 }
+CONTROLLED_TRANSITIONS = (
+    ("constraint/window-30", "constraint/quota-30", "Impose replay quota"),
+    ("hardware_gap/all-bind", "hardware_gap/free-kv", "Release KV"),
+    ("hardware_gap/all-bind", "hardware_gap/free-service", "Release service"),
+    ("hardware_gap/all-bind", "hardware_gap/free-bandwidth",
+     "Release bandwidth"),
+    ("hardware_gap/all-bind", "hardware_gap/all-release", "Release all"),
+)
 plot_style.apply()
 
 
@@ -61,11 +69,114 @@ def pooled_composition(rows):
     return output
 
 
+def opportunity_action_rows(rows, fraction=2 / 3):
+    selected = at_fraction(rows, fraction)
+    output = []
+    for row in selected:
+        case = row["case_id"]
+        opportunity = {
+            policy: max(float(candidate["safely_attained_fraction"])
+                        for candidate in rows if candidate["case_id"] == case
+                        and candidate["policy"] == policy)
+            for policy in ("kv_only", "replay_only")
+        }
+        sessions = int(row["sessions"])
+        fractions = {action: int(row[action]) / sessions for action in ACTIONS}
+        fractions["not_moved"] = 1 - int(row["selected_sessions"]) / sessions
+        if not np.isclose(sum(fractions.values()), 1):
+            raise RuntimeError("action glyph does not conserve source sessions")
+        output.append({
+            "case_id": case,
+            "kv_only_capacity": opportunity["kv_only"],
+            "replay_only_capacity": opportunity["replay_only"],
+            "target_met": row["target_met_by_30s"] == "True",
+            **fractions,
+        })
+    return output
+
+
 def _save(fig, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
                     bbox_inches="tight")
+
+
+def _regime_map(rows, out, target=2 / 3):
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import FancyArrowPatch, Patch, Wedge
+    from matplotlib.ticker import PercentFormatter
+
+    by_case = {row["case_id"]: row for row in rows}
+    actions = (*ACTIONS, "not_moved")
+    fig, axis = plt.subplots(figsize=(10.5, 7))
+    axis.axvline(target, color="#666666", linestyle="--", linewidth=1.5)
+    axis.axhline(target, color="#666666", linestyle="--", linewidth=1.5)
+    for source, destination, label in CONTROLLED_TRANSITIONS:
+        start, end = by_case[source], by_case[destination]
+        x0, y0 = start["kv_only_capacity"], start["replay_only_capacity"]
+        x1, y1 = end["kv_only_capacity"], end["replay_only_capacity"]
+        axis.add_patch(FancyArrowPatch(
+            (x0, y0), (x1, y1), arrowstyle="-|>", mutation_scale=12,
+            color="#777777", linewidth=1, shrinkA=7, shrinkB=7, zorder=1,
+            connectionstyle="arc3,rad=.08" if label == "Release all" else "arc3",
+        ))
+        offset = {
+            "Impose replay quota": (-.055, -.005),
+            "Release KV": (-.035, -.018),
+            "Release service": (.015, .025),
+            "Release bandwidth": (.015, -.025),
+            "Release all": (.02, .025),
+        }[label]
+        axis.text((x0 + x1) / 2 + offset[0], (y0 + y1) / 2 + offset[1],
+                  label, fontsize=plot_style.ANNOTATION_FONT_SIZE,
+                  color="#555555", ha="center", va="center", zorder=4)
+
+    radius = .0105
+    for row in rows:
+        center = row["kv_only_capacity"], row["replay_only_capacity"]
+        angle = 90
+        for action in actions:
+            next_angle = angle + 360 * row[action]
+            axis.add_patch(Wedge(
+                center, radius, angle, next_angle,
+                facecolor=plot_style.ACTION_COLORS[action],
+                edgecolor="white", linewidth=.7, zorder=3,
+            ))
+            angle = next_angle
+        axis.add_patch(Wedge(center, radius, 0, 360, facecolor="none",
+                            edgecolor="#333333", linewidth=.8, zorder=3))
+        if not row["target_met"]:
+            x, y = center
+            axis.plot((x - radius * .7, x + radius * .7),
+                      (y - radius * .7, y + radius * .7), color="black",
+                      linewidth=2, zorder=5)
+            axis.plot((x - radius * .7, x + radius * .7),
+                      (y + radius * .7, y - radius * .7), color="black",
+                      linewidth=2, zorder=5)
+
+    duplicate = by_case["constraint/window-30"]
+    axis.text(duplicate["kv_only_capacity"] + radius * .9,
+              duplicate["replay_only_capacity"] + radius * .9, "2 cases",
+              fontsize=plot_style.ANNOTATION_FONT_SIZE, color="#555555")
+    axis.set(xlim=(.29, .73), ylim=(.35, .72), aspect="equal",
+             xlabel="Maximum safely attainable shed with KV only",
+             ylabel="Maximum safely attainable shed with replay only",
+             title="Queue-Haul adapts its action mix to the available "
+                   "migration regime")
+    axis.xaxis.set_major_formatter(PercentFormatter(1))
+    axis.yaxis.set_major_formatter(PercentFormatter(1))
+    axis.grid(alpha=.15, zorder=0)
+    axis.legend(handles=[
+        *(Patch(facecolor=plot_style.ACTION_COLORS[action],
+                label=plot_style.ACTION_NAMES[action]) for action in actions),
+        Line2D([], [], marker="x", color="black", linestyle="none",
+               markersize=9, markeredgewidth=2, label="Queue-Haul target miss"),
+    ], frameon=False, loc="center left", bbox_to_anchor=(1.01, .5))
+    fig.tight_layout()
+    _save(fig, out / "opportunity_action_regime_map")
+    plt.close(fig)
 
 
 def _stacked_bars(rows, out):
@@ -304,9 +415,12 @@ def main():
         rows = list(csv.DictReader(handle))
     selected = at_fraction(rows)
     composition = pooled_composition(rows)
+    regime = opportunity_action_rows(rows)
     episodes = episode_actions(args.plan)
     write_csv(composition, args.out_dir / "pooled_demand_composition.csv")
     write_csv(episodes, args.out_dir / "matched_episode_actions.csv")
+    write_csv(regime, args.out_dir / "opportunity_action_regime_map.csv")
+    _regime_map(regime, args.out_dir)
     _stacked_bars(selected, args.out_dir)
     _quota_dumbbell(selected, args.out_dir)
     _demand_area(composition, args.out_dir)

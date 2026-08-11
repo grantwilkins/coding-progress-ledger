@@ -40,8 +40,8 @@ ACTION_NAMES = {
 }
 ACTION_COLORS = {
     "replay": "#E98300", "kv_transfer": "#006CB8",
-    "east_replay": "#E98300", "germany_replay": "#E98300",
-    "east_kv_transfer": "#006CB8", "germany_kv_transfer": "#006CB8",
+    "east_replay": "#F6B65B", "germany_replay": "#D55E00",
+    "east_kv_transfer": "#56B4E9", "germany_kv_transfer": "#0072B2",
     "not_moved": "#999999",
 }
 ACTION_HATCHES = {

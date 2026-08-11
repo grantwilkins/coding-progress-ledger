@@ -12,7 +12,9 @@ Plausible wrong implementations:
 
 import pytest
 
-from plot_pooled_action_adaptation import at_fraction, pooled_composition
+from plot_pooled_action_adaptation import (
+    at_fraction, opportunity_action_rows, pooled_composition,
+)
 
 
 def row(case, sessions, counts, policy="queue_haul_lp", fraction=.5):
@@ -45,3 +47,25 @@ def test_fraction_selection_rejects_duplicate_case_and_other_policy():
         == [chosen]
     with pytest.raises(RuntimeError, match="one Queue-Haul row per case"):
         at_fraction([chosen, chosen], .5)
+
+
+def test_regime_uses_method_ceiling_and_total_source_session_mix():
+    queue_haul = row("a", 8, (1, 1, 2, 0), fraction=2 / 3)
+    restricted = [
+        {**row("a", 8, (0, 0, 0, 0), policy, fraction),
+         "safely_attained_fraction": attained}
+        for policy, fraction, attained in (
+            ("kv_only", .5, .4), ("kv_only", 1, .6),
+            ("replay_only", .5, .7), ("replay_only", 1, .5),
+        )
+    ]
+    queue_haul["target_met_by_30s"] = "False"
+
+    result = opportunity_action_rows([queue_haul, *restricted])[0]
+    assert result == {
+        "case_id": "a", "kv_only_capacity": .6,
+        "replay_only_capacity": .7, "target_met": False,
+        "east_replay": .125, "east_kv_transfer": .125,
+        "germany_replay": .25, "germany_kv_transfer": 0,
+        "not_moved": .5,
+    }
