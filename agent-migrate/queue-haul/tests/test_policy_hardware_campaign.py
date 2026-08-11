@@ -766,6 +766,19 @@ def test_pooled_results_concatenates_campaigns_without_reweighting(tmp_path):
     assert [int(row["planned_migrations"]) for row in summaries] == [1, 2]
 
 
+def test_plot_attainment_accepts_reduced_csv_strings(tmp_path, monkeypatch):
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+
+    campaign.plot_attainment([{
+        "policy": "queue_haul", "required_deadline_s": "30",
+        "power_attainment_fraction": ".8",
+    }], tmp_path)
+
+    ax = campaign.plt.gcf().axes[0]
+    assert ax.get_title() == "30 s requirement"
+    assert ax.lines[0].get_xdata().tolist() == [80]
+
+
 def test_plot_reduced_adds_pooled_campaign_to_every_graph(tmp_path,
                                                           monkeypatch):
     paths = [tmp_path / name for name in ("original", "baseline")]

@@ -1436,7 +1436,7 @@ def plot(rows, summaries, out, cohort=None):
 
 def plot_attainment(rows, out, condition=None):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    deadlines = sorted({row["required_deadline_s"] for row in rows})
+    deadlines = sorted({float(row["required_deadline_s"]) for row in rows})
     fig, axes = plt.subplots(
         1, len(deadlines), figsize=(4.4 * len(deadlines), 4), squeeze=False
     )
@@ -1444,9 +1444,9 @@ def plot_attainment(rows, out, condition=None):
     for ax, deadline in zip(axes, deadlines):
         for policy in POLICIES:
             values = sorted(
-                100 * row["power_attainment_fraction"] for row in rows
+                100 * float(row["power_attainment_fraction"]) for row in rows
                 if row["policy"] == policy
-                and row["required_deadline_s"] == deadline
+                and float(row["required_deadline_s"]) == deadline
             )
             if values:
                 ax.step(
