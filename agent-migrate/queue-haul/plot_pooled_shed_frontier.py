@@ -92,7 +92,7 @@ def write_plot(summary, out: Path) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.ticker import PercentFormatter
 
-    fig, axis = plt.subplots(figsize=plot_style.FIGSIZE)
+    fig, axis = plt.subplots(figsize=(6, 5))
     for policy in POLICIES:
         selected = [row for row in summary if row["policy"] == policy]
         x = [row["requested_fraction"] for row in selected]
@@ -114,8 +114,11 @@ def write_plot(summary, out: Path) -> None:
     axis.yaxis.set_major_formatter(PercentFormatter(1))
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, ncol=3, loc="lower center")
-    fig.tight_layout(rect=(0, .2, 1, 1))
+    fig.legend(handles, labels, frameon=False, fontsize=10, ncol=3,
+               loc="lower center",
+               bbox_to_anchor=(.5, .015), columnspacing=.3,
+               handlelength=1.5, handletextpad=.3)
+    fig.tight_layout(rect=(0, .17, 1, 1))
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
