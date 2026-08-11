@@ -509,13 +509,14 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     )["matched_control_complete"]
 
 
-def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
+def test_plot_selects_only_requested_pooled_policies(
         tmp_path, monkeypatch):
     rows = [
         {"policy": policy, "reaction_readiness_s": ready,
          "migration_ttft_s": ttft, "reaction_commit_s": commit}
         for policy, ready, ttft, commit in (
             ("queue_haul", 10, 1, 11), ("greedy", 9, 2, 12),
+            ("isolated_fastest", 8, 1.5, 10),
             ("kv_only", 11, 3, 14), ("replay_only", 12, 4, 16),
             ("queue_haul_power_blind", 13, 5, 18),
             ("queue_haul_deadline_blind", 14, 6, 20),
@@ -527,6 +528,7 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
          "realized_source_power_drop_w": power}
         for policy, power in (
             ("queue_haul", 300), ("greedy", 200),
+            ("isolated_fastest", 275),
             ("kv_only", 250), ("replay_only", 150), ("random", 400),
             ("queue_haul_power_blind", 225),
             ("queue_haul_deadline_blind", 175),
@@ -534,23 +536,22 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
     ]
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
 
-    campaign.plot(rows, summaries, tmp_path)
+    selected = (
+        "queue_haul", "isolated_fastest", "queue_haul_power_blind",
+        "queue_haul_deadline_blind",
+    )
+    campaign.plot(rows, summaries, tmp_path, policy_order=selected)
 
     figure = campaign.plt.gcf()
     assert [text.get_text() for text in figure.legends[0].texts] == [
-        campaign.LABELS["queue_haul"], campaign.LABELS["greedy"],
-        campaign.LABELS["kv_only"], campaign.LABELS["replay_only"],
+        campaign.LABELS["queue_haul"], campaign.LABELS["isolated_fastest"],
         campaign.LABELS["queue_haul_power_blind"],
         campaign.LABELS["queue_haul_deadline_blind"],
     ]
-    assert len(figure.axes[1].lines) == 6
+    assert len(figure.axes[1].lines) == 4
     assert figure.axes[1].get_xlim()[1] < 7
-    plotted = (
-            "queue_haul", "greedy", "kv_only", "replay_only",
-            "queue_haul_power_blind", "queue_haul_deadline_blind",
-    )
     assert [line.get_color() for line in figure.axes[1].lines] == [
-        campaign.CDF_COLORS[policy] for policy in plotted
+        campaign.CDF_COLORS[policy] for policy in selected
     ]
 
 

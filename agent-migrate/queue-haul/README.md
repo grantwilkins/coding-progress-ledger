@@ -984,7 +984,8 @@ and per-condition graphs with:
 uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
   --out queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811 \
   --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json \
-  --pooled-with queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811/shard1
+  --pooled-with queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811/shard1 \
+  --cdf-policies queue_haul isolated_fastest queue_haul_power_blind queue_haul_deadline_blind
 ```
 
 The completed reduced baselines are checksum-pinned under each 2026-07-30
