@@ -988,8 +988,9 @@ uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
 The completed reduced baselines are checksum-pinned under each 2026-07-30
 bundle in `network-baselines-20260811/`; the parent graphs pool both campaigns.
 The packing bundle's 30-second full-attainment CDF pools packing and frontier
-parent and baseline episodes. It uses an 8-by-5-inch plot, Okabe–Ito colors,
-distinct line styles, and a three-column legend below the axes.
+parent and baseline episodes. It uses an 8-by-4-inch plot, 17-point axis text,
+Okabe–Ito colors, distinct line styles, and a collision-free legend inside the
+lower-right axes. The deadline is labeled vertically in italics on its line.
 
 The canonical output style is `plot_style.py`: 8-by-5 inches, 15-point titles,
 labels, and ticks, 11-point legends and annotations, 3-point lines, and 220 DPI.

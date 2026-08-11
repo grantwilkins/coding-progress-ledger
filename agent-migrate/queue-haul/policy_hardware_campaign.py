@@ -856,7 +856,7 @@ def plot_max_session_ttft_per_watt(rows, summaries, power_curve, out):
 
 def plot_full_power_attainment(summaries, power_window_s, out,
                                deadline_s=30):
-    fig, ax = plt.subplots(figsize=plot_style.FIGSIZE)
+    fig, ax = plt.subplots(figsize=plot_style.WIDE_FIGSIZE)
     for policy in CDF_POLICIES:
         x, y = full_power_attainment_curve(
             summaries, policy, deadline_s, power_window_s
@@ -865,20 +865,27 @@ def plot_full_power_attainment(summaries, power_window_s, out,
             ax.step(x, y, where="post", **plot_style.policy_style(policy))
     ax.axvline(deadline_s, color="black", linestyle="--", linewidth=1.5)
     ax.text(
-        deadline_s, 1.01, f"{deadline_s:g} s Deadline",
-        transform=ax.get_xaxis_transform(), ha="center", va="bottom",
-        fontsize=plot_style.ANNOTATION_FONT_SIZE,
+        deadline_s, .4, f"{deadline_s:g} s deadline",
+        transform=ax.get_xaxis_transform(), ha="center", va="center",
+        rotation=90, fontstyle="italic",
+        fontsize=plot_style.LARGE_ANNOTATION_FONT_SIZE,
+        bbox={"facecolor": "white", "edgecolor": "none", "pad": 1},
     )
     ax.set(
         xlabel="Time to Full Power-Shed Attainment (s)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
     ax.set_xlim(left=0)
+    ax.tick_params(labelsize=plot_style.LARGE_FONT_SIZE)
+    ax.xaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
+    ax.yaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
     ax.grid(alpha=.25)
     handles, labels = ax.get_legend_handles_labels()
     if handles:
-        fig.legend(handles, labels, frameon=False, ncol=3, loc="lower center")
-    fig.tight_layout(rect=(0, .2, 1, 1))
+        ax.legend(handles, labels, loc="lower right", framealpha=1,
+                  facecolor="white", edgecolor="none",
+                  fontsize=plot_style.LARGE_LEGEND_FONT_SIZE)
+    fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
             out / f"policy_hardware_{deadline_s:g}s_full_power_attainment_cdf.{suffix}",

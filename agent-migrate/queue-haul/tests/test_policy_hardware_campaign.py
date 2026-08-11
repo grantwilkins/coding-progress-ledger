@@ -17,6 +17,7 @@ Plausible wrong implementations:
 - Clip full-target completions at the deadline instead of extending the CDF.
 - Mix 19-second plans into the 30-second attainment curve.
 - Retain bespoke colors or the default size in the full-attainment CDF.
+- Put the full-attainment legend outside the axes or across a plotted line.
 - Plot destination-only prefill instead of migration-to-first-token latency.
 - Average or pool migrations instead of taking each complete episode's maximum.
 - Divide by a shed percentage or linear load instead of modeled watts.
@@ -632,19 +633,31 @@ def test_full_power_attainment_uses_all_cases_and_requested_layout(
 
     figure = campaign.plt.gcf()
     ax = figure.axes[0]
-    legend = figure.legends[0]
+    legend = ax.get_legend()
     assert [text.get_text() for text in legend.texts] \
         == [CDF_LABELS[policy] for policy in campaign.CDF_POLICIES]
-    assert legend._ncols == 3
-    assert tuple(figure.get_size_inches()) == (8, 5)
+    assert not figure.legends
+    assert legend._ncols == 1
+    assert legend._loc == 4
+    assert legend.get_frame().get_alpha() == 1
+    assert tuple(figure.get_size_inches()) == (8, 4)
+    assert ax.xaxis.label.get_fontsize() == 17
+    assert legend.get_texts()[0].get_fontsize() == 12
     assert [line.get_color() for line in ax.lines[:-1]] \
-        == list(campaign.plt.get_cmap("tab10").colors[:len(campaign.CDF_POLICIES)])
+        == [CDF_COLORS[policy] for policy in campaign.CDF_POLICIES]
     assert len({str(CDF_LINESTYLES[policy])
                 for policy in campaign.CDF_POLICIES}) == len(campaign.CDF_POLICIES)
+    figure.canvas.draw()
+    box = legend.get_window_extent(figure.canvas.get_renderer()).expanded(1.02, 1.08)
+    assert not any(line.get_path().transformed(line.get_transform())
+                   .intersects_bbox(box, filled=False) for line in ax.lines)
     assert list(ax.lines[-1].get_xdata()) == [30, 30]
     assert ax.lines[-1].get_linestyle() == "--"
-    assert [text.get_text() for text in ax.texts] == ["30 s Deadline"]
-    assert ax.texts[0].get_position() == (30, 1.01)
+    assert [text.get_text() for text in ax.texts] == ["30 s deadline"]
+    assert ax.texts[0].get_position() == (30, .4)
+    assert ax.texts[0].get_rotation() == 90
+    assert ax.texts[0].get_fontstyle() == "italic"
+    assert ax.texts[0].get_fontsize() == 13
 
 
 def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
