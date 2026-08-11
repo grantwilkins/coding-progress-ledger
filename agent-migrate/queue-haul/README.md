@@ -985,6 +985,20 @@ uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
   --pooled-with queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811/shard1
 ```
 
+The 720-scenario contemporaneous packing rerun completed as RAMR jobs 38607705
+and 38607709. Both 360-scenario condition shards validate independently; their
+checksum-pinned reduced evidence is under
+`outputs/policy-hardware-width8-packing-contemporaneous-20260811/`, with pooled
+graphs at the top level and shard-1 provenance nested under `shard1/`. Rebuild
+the pooled graphs with:
+
+```bash
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
+  --out queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811 \
+  --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json \
+  --pooled-with queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811/shard1
+```
+
 The completed reduced baselines are checksum-pinned under each 2026-07-30
 bundle in `network-baselines-20260811/`; the parent graphs pool both campaigns.
 The packing bundle's 30-second full-attainment CDF pools packing and frontier
