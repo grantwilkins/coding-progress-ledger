@@ -37,7 +37,7 @@ dedicated two-A100 migration claim.
 The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
 H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
 2,472,995 KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
-and measured through offered load `ell=1.225`. Admission remains bounded at
+and measured through offered load `ell=12.566`. Admission remains bounded at
 `ell=0.96647`. Raw benchmark and power samples are under
 `outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
 remain clearly marked A100-derived estimates until rerun on H100.
