@@ -59,6 +59,14 @@ evidence status. The scenario supplies link rates. The pool planner enforces
 ongoing event capacity and conservative replica-second debt and reports required
 recovery.
 
+`repair_controller.py` is an optional in-memory feasibility latch; fixed planning
+remains the default. Progress updates only refresh ETAs. Two consecutive deadline
+miss forecasts request one residual repair, while hard failures request one
+immediately. `repair_destination` keeps committed work fixed, prices active work
+by its measured remainder, prefers unchanged assignments, and proposes a diff
+only when it restores the target. Otherwise it reports the attainable shed and
+leaves execution unchanged.
+
 ## Evidence flow
 
 ```text

@@ -18,6 +18,7 @@ from planner import (_changes, _duration, _expected_scenario, _kv_catch_up_s,
                      _kv_schedule, _local_sessions, _log_bytes, _resident_tokens,
                      PlanResult, ResourceUse, ServiceDebtUse, source_power)
 from power_model import ExpectedPower
+from repair_controller import (Assignment, RepairMove, RepairRequest, RepairResult)
 from simulate import (ExecutionScenario, PlannedMove, PoolServiceExecution,
                       SimSession, predict)
 
@@ -273,7 +274,8 @@ def destination_service_execution(
     return tuple(rows)
 
 
-def _candidate_oracle(scenario, profile, architecture, mode, power):
+def _candidate_oracle(scenario, profile, architecture, mode, power,
+                      include_infeasible=False):
     if mode not in {"normal", "emergency"}:
         raise ValueError("admission mode must be normal or emergency")
     _validate_topology(scenario, architecture)
@@ -424,7 +426,7 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
                 if timed is None:
                     continue
                 duration, migration_work = timed
-                if duration > migration_horizon:
+                if duration > migration_horizon and not include_infeasible:
                     continue
                 transition = (
                     (max(0, duration - route_bytes[method] / bandwidth), 0)
@@ -1832,7 +1834,7 @@ def _lp_column_generation_native(oracle, target, stats=None):
     return _lp_column_generation_lazy(oracle, target, stats, True)
 
 
-def _pack(table, selected, architecture, scenario, mode, repair=False):
+def _pack(table, selected, architecture, scenario, mode, repair=False, preferred=None):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
     work, kv = _baseline(scenario, architecture, horizon)
@@ -1879,7 +1881,13 @@ def _pack(table, selected, architecture, scenario, mode, repair=False):
                     rejected.append(i)
                     continue
                 return None, tuple(sorted(members))
-            r = feasible[np.argmin(pressure[feasible])]
+            wanted = None if preferred is None else preferred.get(
+                table.sessions[c.session].session_id)
+            matching = [r for r in feasible if wanted
+                        and wanted.method == c.method
+                        and wanted.pool == pool.pool_id
+                        and replicas[r].replica_id == wanted.destination]
+            r = matching[0] if matching else feasible[np.argmin(pressure[feasible])]
             replica_work[r] = next_work[r]
             replica_kv[r] += c.kv_tokens
             if not pool.fluid_migration:
@@ -2006,6 +2014,172 @@ def _selected_service_debt(table, selected, architecture, scenario):
             for facet in range(len(debt))
         )
     return tuple(records)
+
+
+def _repair_selection(table, architecture, target, attempts, soft):
+    if not table.candidates:
+        return set(), False
+    n, x = len(table.candidates), cp.Variable(len(table.candidates), nonneg=True)
+    gains = np.array([c.gain_w for c in table.candidates])
+    durations = np.array([c.duration_s for c in table.candidates])
+    session_ids = [table.sessions[c.session].session_id for c in table.candidates]
+    current = {a.session_id: a for a in attempts if a.status in {"pending", "running"}}
+    same = np.array([
+        sid in current and current[sid].assignment.method == c.method
+        and current[sid].assignment.pool == architecture.pools[c.pool].pool_id
+        for sid, c in zip(session_ids, table.candidates)
+    ])
+    change = np.array([
+        -1.0 if same[i] else 0.0 if session_ids[i] in current else 1.0
+        for i in range(n)
+    ])
+    discarded = np.array([
+        -current[session_ids[i]].completed_work
+        / current[session_ids[i]].total_work * durations[i]
+        if same[i] else 0.0 for i in range(n)
+    ])
+    forced = [i for i in range(n) if same[i] and soft
+              and current[session_ids[i]].soft_changed]
+    base = [table.incidence @ x <= 1, table.resources @ x <= 1, x <= 1]
+    base += [x[i] == 1 for i in forced]
+
+    def solve(objective, constraints, maximize=False):
+        problem = cp.Problem(
+            cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints,
+        )
+        problem.solve(solver=cp.CLARABEL)
+        return problem
+
+    constraints = base + [gains @ x >= target]
+    problem = solve(change @ x, constraints)
+    reaches = problem.status not in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE)
+    if reaches:
+        constraints += [change @ x <= float(change @ x.value) + 1e-7]
+        problem = solve(discarded @ x, constraints)
+        constraints += [discarded @ x <= float(discarded @ x.value) + 1e-7]
+        problem = solve(durations @ x, constraints)
+    else:
+        problem = solve(gains @ x, base, True)
+    if x.value is None or not np.isfinite(x.value).all():
+        return set(), False
+
+    matrix, usage = csc_matrix(table.resources), np.zeros(table.resources.shape[0])
+    selected, sessions = set(), set()
+    for i in (*forced, *np.lexsort((durations, -np.asarray(x.value)))):
+        i, candidate = int(i), table.candidates[int(i)]
+        if i in selected or candidate.session in sessions:
+            continue
+        sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
+        rows, added = matrix.indices[sl], matrix.data[sl]
+        if np.any(usage[rows] + added > 1 + 1e-8):
+            continue
+        selected.add(i)
+        sessions.add(candidate.session)
+        usage[rows] += added
+        if reaches and sum(table.candidates[j].gain_w for j in selected) >= target - 1e-8:
+            break
+    return selected, reaches
+
+
+def repair_destination(scenario, profile, architecture, request: RepairRequest,
+                       admission_mode="normal") -> RepairResult:
+    """Solve one residual, target-restoring pool-aware repair."""
+    state = request.snapshot
+    if state.credit_deadline_s <= state.now_s:
+        return RepairResult(request.request_id, state.budget_version, (), 0, False)
+    attempts = {attempt.session_id: attempt for attempt in state.attempts}
+    sessions = tuple(replace(
+        session,
+        source_instance=(attempts[session.session_id].assignment.destination
+                         if session.session_id in state.committed else session.source_instance),
+        movable=session.session_id in state.source_sessions,
+    ) for session in scenario.sessions)
+    rates = dict(state.route_rates)
+    links = tuple(replace(link, bytes_per_s=rates.get(link.link_id, link.bytes_per_s))
+                  for link in scenario.links)
+    deadline = state.credit_deadline_s + profile.power_window_s
+    residual = replace(
+        scenario, sessions=sessions, links=links, controller_delay_s=state.now_s,
+        deadline_s=deadline, end_s=max(scenario.end_s, deadline),
+        final_state="awake", assumed_shutdown_s=None,
+    )
+    power = ExpectedPower(residual, profile)
+    oracle = _candidate_oracle(
+        residual, profile, architecture, admission_mode, power, True,
+    )
+    active = {sid: attempt for sid, attempt in attempts.items()
+              if attempt.status in {"pending", "running"}}
+    replay_rates = dict(state.replay_rates)
+    full, candidates = {}, []
+    case = profile.case("central")
+    for j in range(len(oracle.sessions)):
+        for candidate in oracle.choices(j):
+            session = oracle.sessions[j]
+            pool = architecture.pools[candidate.pool]
+            attempt = active.get(session.session_id)
+            same = attempt and attempt.assignment.method == candidate.method \
+                and attempt.assignment.pool == pool.pool_id
+            full[session.session_id, candidate.method, candidate.pool] = candidate
+            if same:
+                fraction = (attempt.total_work - attempt.completed_work) / attempt.total_work
+                duration = ((attempt.total_work - attempt.completed_work) / attempt.rate
+                            + attempt.commit_overhead_s) if attempt.rate else \
+                    max(0.0, attempt.planned_commit_s - state.now_s)
+                candidate = replace(
+                    candidate, duration_s=duration,
+                    route_bytes=candidate.route_bytes * fraction,
+                    migration_work_s=candidate.migration_work_s * fraction,
+                    transition_work=tuple(value * fraction
+                                          for value in candidate.transition_work),
+                )
+            elif candidate.method == "replay" and pool.pool_id in replay_rates:
+                candidate = replace(
+                    candidate,
+                    duration_s=session.context_tokens / replay_rates[pool.pool_id]
+                    + case.replay_completion_s + case.switch_s,
+                )
+            if candidate.duration_s + state.eta_guard_s <= oracle.migration_horizon_s:
+                candidates.append(candidate)
+    table = _materialize_candidates(oracle, candidates)
+    original_power = ExpectedPower(replace(scenario, final_state="awake",
+                                           assumed_shutdown_s=None), profile)
+    committed = original_power.drain_gain(state.committed)
+    selected, lp_reaches = _repair_selection(
+        table, architecture, max(0.0, state.target_watts - committed),
+        tuple(active.values()), request.trigger.startswith("soft:"),
+    )
+    preferred = {sid: attempt.assignment for sid, attempt in active.items()}
+    assignment, rejected = _pack(
+        table, selected, architecture, residual, admission_mode, True, preferred,
+    )
+    selected -= set(rejected)
+    moved = {table.sessions[table.candidates[i].session].session_id for i in selected}
+    attainable = original_power.drain_gain(state.committed | moved)
+    reaches = lp_reaches and not rejected and attainable >= state.target_watts - 1e-8
+    moves = []
+    for i in sorted(selected, key=lambda i: table.sessions[table.candidates[i].session].session_id):
+        candidate = table.candidates[i]
+        session = table.sessions[candidate.session]
+        pool = architecture.pools[candidate.pool]
+        attempt = active.get(session.session_id)
+        same = attempt and attempt.assignment.method == candidate.method \
+            and attempt.assignment.pool == pool.pool_id
+        total = attempt.total_work if same else (
+            session.context_tokens if candidate.method == "replay" else
+            full[session.session_id, candidate.method, candidate.pool].route_bytes
+        )
+        overhead = (case.replay_completion_s + case.switch_s
+                    if candidate.method == "replay" else
+                    case.kv_transfer.initial_completion_s)
+        moves.append(RepairMove(
+            session.session_id,
+            Assignment(candidate.method, assignment[i], pool.pool_id),
+            candidate.duration_s, total,
+            attempt.commit_overhead_s if same else overhead,
+        ))
+    return RepairResult(
+        request.request_id, state.budget_version, tuple(moves), attainable, reaches,
+    )
 
 
 def _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed=0):
