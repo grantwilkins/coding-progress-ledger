@@ -115,7 +115,7 @@ def write_plot(summary, out: Path) -> None:
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, ncol=1, loc="center left",
-               bbox_to_anchor=(1, .5))
+               bbox_to_anchor=(.92, .5), labelspacing=2.5)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
