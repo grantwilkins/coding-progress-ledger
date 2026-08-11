@@ -517,6 +517,8 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
         for policy, ready, ttft, commit in (
             ("queue_haul", 10, 1, 11), ("greedy", 9, 2, 12),
             ("kv_only", 11, 3, 14), ("replay_only", 12, 4, 16),
+            ("queue_haul_power_blind", 13, 5, 18),
+            ("queue_haul_deadline_blind", 14, 6, 20),
             ("random", 100, 100, 100),
         )
     ]
@@ -526,6 +528,8 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
         for policy, power in (
             ("queue_haul", 300), ("greedy", 200),
             ("kv_only", 250), ("replay_only", 150), ("random", 400),
+            ("queue_haul_power_blind", 225),
+            ("queue_haul_deadline_blind", 175),
         )
     ]
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
@@ -536,9 +540,18 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
     assert [text.get_text() for text in figure.legends[0].texts] == [
         campaign.LABELS["queue_haul"], campaign.LABELS["greedy"],
         campaign.LABELS["kv_only"], campaign.LABELS["replay_only"],
+        campaign.LABELS["queue_haul_power_blind"],
+        campaign.LABELS["queue_haul_deadline_blind"],
     ]
-    assert len(figure.axes[1].lines) == 4
-    assert figure.axes[1].get_xlim()[1] < 5
+    assert len(figure.axes[1].lines) == 6
+    assert figure.axes[1].get_xlim()[1] < 7
+    plotted = (
+            "queue_haul", "greedy", "kv_only", "replay_only",
+            "queue_haul_power_blind", "queue_haul_deadline_blind",
+    )
+    assert [line.get_color() for line in figure.axes[1].lines] == [
+        campaign.CDF_COLORS[policy] for policy in plotted
+    ]
 
 
 def test_deadline_attainment_uses_episode_target_and_inclusive_deadline():

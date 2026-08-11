@@ -1281,6 +1281,12 @@ def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
     with (out / "policy_attainment.csv").open() as stream:
         attainment = list(csv.DictReader(stream))
     pooled_rows, pooled_summaries = _pooled_results(pooled_with)
+    all_rows, all_summaries = rows + pooled_rows, summaries + pooled_summaries
+    plot(all_rows, all_summaries, out, "pooled")
+    for condition in sorted({row["condition"] for row in all_summaries}):
+        plot([row for row in all_rows if row["condition"] == condition],
+             [row for row in all_summaries if row["condition"] == condition],
+             out, condition)
     plot_destination_ttft(rows + pooled_rows, summaries + pooled_summaries, out)
     plot_max_session_ttft(
         rows + pooled_rows, summaries + pooled_summaries, out
@@ -1359,7 +1365,7 @@ def plot_timeline(rows, out):
 
 def plot(rows, summaries, out, cohort=None):
     fig, axes = plt.subplots(1, 3, figsize=(13, 4))
-    policies = [policy for policy in POLICIES
+    policies = [policy for policy in CDF_POLICIES
                 if any(row["policy"] == policy for row in summaries)]
     for policy in policies:
         for ax, field in zip(
@@ -1369,7 +1375,7 @@ def plot(rows, summaries, out, cohort=None):
             x, y = completion_curve(rows, summaries, policy, field)
             ax.step(
                 np.r_[0, x], np.r_[0, y],
-                where="post", color=TAB10_COLORS[policy], label=LABELS[policy],
+                where="post", **plot_style.policy_style(policy),
             )
     axes[0].set_title("Controller queue → first token")
     axes[1].set_title("Destination TTFT")
