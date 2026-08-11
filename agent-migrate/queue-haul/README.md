@@ -858,6 +858,15 @@ uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
   --out queue-haul/outputs/policy-hardware-width8-packing-network-baselines-plan
 ```
 
+The completed reduced baselines are checksum-pinned under each 2026-07-30
+bundle in `network-baselines-20260811/`; the parent graphs pool both campaigns.
+Rebuild them with:
+
+```bash
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced --out queue-haul/outputs/policy-hardware-width8-frontier-20260730 --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_20260730.json --pooled-with queue-haul/outputs/policy-hardware-width8-frontier-20260730/network-baselines-20260811
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced --out queue-haul/outputs/policy-hardware-width8-packing-20260730 --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json --pooled-with queue-haul/outputs/policy-hardware-width8-packing-20260730/network-baselines-20260811
+```
+
 capacity_sweep_campaign.py keeps the completed two-point load run as a
 pilot and builds the publication load curve at
 0,.25,.50,.65,.75,.80,.85,.875,.90,.925,.95,.975. Normalized offered load is
