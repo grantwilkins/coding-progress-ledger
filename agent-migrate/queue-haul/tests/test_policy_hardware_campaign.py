@@ -621,22 +621,25 @@ def test_full_power_attainment_includes_late_events_and_power_window():
     assert y.tolist() == [0, .25, .5, .75]
 
 
-def test_full_power_attainment_marks_deadline_and_moves_legend(
+def test_full_power_attainment_uses_all_cases_and_requested_layout(
         tmp_path, monkeypatch):
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
     campaign.plot_full_power_attainment([
         {"policy": policy, "required_deadline_s": 30, "commit_100_s": 5}
-        for policy in campaign.POLICIES
+        for policy in campaign.CDF_POLICIES
     ], 5, tmp_path)
 
-    ax = campaign.plt.gcf().axes[0]
-    legend = ax.get_legend()
+    figure = campaign.plt.gcf()
+    ax = figure.axes[0]
+    legend = figure.legends[0]
     assert [text.get_text() for text in legend.texts] \
-        == [CDF_LABELS[policy] for policy in campaign.POLICIES]
-    assert legend._loc == 4
-    assert tuple(ax.figure.get_size_inches()) == (8, 3)
+        == [CDF_LABELS[policy] for policy in campaign.CDF_POLICIES]
+    assert legend._ncols == 3
+    assert tuple(figure.get_size_inches()) == (8, 5)
     assert [line.get_color() for line in ax.lines[:-1]] \
-        == list(campaign.plt.get_cmap("tab10").colors[:len(campaign.POLICIES)])
+        == list(campaign.plt.get_cmap("tab10").colors[:len(campaign.CDF_POLICIES)])
+    assert len({str(CDF_LINESTYLES[policy])
+                for policy in campaign.CDF_POLICIES}) == len(campaign.CDF_POLICIES)
     assert list(ax.lines[-1].get_xdata()) == [30, 30]
     assert ax.lines[-1].get_linestyle() == "--"
     assert [text.get_text() for text in ax.texts] == ["30 s Deadline"]

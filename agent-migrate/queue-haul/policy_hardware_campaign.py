@@ -52,7 +52,10 @@ NETWORK_BASELINES = (
 )
 RERUN_POLICIES = ("queue_haul", "greedy", *NETWORK_BASELINES)
 DEADLINE_BLIND_HORIZON_S = 600
-TAB10_COLORS = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+CDF_POLICIES = POLICIES + (
+    "queue_haul_power_blind", "queue_haul_deadline_blind",
+)
+TAB10_COLORS = dict(zip(CDF_POLICIES, plt.get_cmap("tab10").colors))
 PACKING_POLICIES = (
     "queue_haul", "greedy", "isolated_fastest", "kv_only", "replay_only",
 )
@@ -67,17 +70,23 @@ CDF_COLORS = {
     "greedy_lagrangian": "#620059",
     "isolated_fastest": "#5E3C99",
     "kv_only": "#006CB8", "replay_only": "#E98300",
+    "queue_haul_power_blind": "#CC79A7",
+    "queue_haul_deadline_blind": "#56B4E9",
 }
 CDF_LABELS = {
     "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
     "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
     "isolated_fastest": "Per-session fastest",
     "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
+    "queue_haul_power_blind": "Queue-Haul Power Blind",
+    "queue_haul_deadline_blind": "Queue-Haul Deadline Blind",
 }
 CDF_LINESTYLES = {
     "queue_haul": "-", "greedy": "--", "greedy_lagrangian": (0, (3, 1, 1, 1)),
     "isolated_fastest": (0, (5, 1)),
     "kv_only": "-.", "replay_only": ":",
+    "queue_haul_power_blind": (0, (3, 1)),
+    "queue_haul_deadline_blind": (0, (1, 1)),
 }
 CDF_FIGSIZE = (5, 4)
 
@@ -874,8 +883,8 @@ def plot_max_session_ttft_per_watt(rows, summaries, power_curve, out):
 
 def plot_full_power_attainment(summaries, power_window_s, out,
                                deadline_s=30):
-    fig, ax = plt.subplots(figsize=(8, 3))
-    for policy in POLICIES:
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for policy in CDF_POLICIES:
         x, y = full_power_attainment_curve(
             summaries, policy, deadline_s, power_window_s
         )
@@ -900,9 +909,11 @@ def plot_full_power_attainment(summaries, power_window_s, out,
     ax.xaxis.label.set_size(15)
     ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    if ax.get_legend_handles_labels()[0]:
-        ax.legend(frameon=False, fontsize=11, loc="lower right")
-    fig.tight_layout()
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        fig.legend(handles, labels, frameon=False, fontsize=11, ncol=3,
+                   loc="lower center")
+    fig.tight_layout(rect=(0, .2, 1, 1))
     for suffix in ("png", "pdf"):
         fig.savefig(
             out / f"policy_hardware_{deadline_s:g}s_full_power_attainment_cdf.{suffix}",

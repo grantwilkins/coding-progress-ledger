@@ -987,6 +987,8 @@ uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
 
 The completed reduced baselines are checksum-pinned under each 2026-07-30
 bundle in `network-baselines-20260811/`; the parent graphs pool both campaigns.
+The 30-second full-attainment CDF uses an 8-by-5-inch plot, Tab10 colors,
+distinct line styles, and a three-column legend below the axes.
 Rebuild them with:
 
 ```bash
