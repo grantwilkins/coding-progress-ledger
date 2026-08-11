@@ -43,6 +43,7 @@ import numpy as np
 import pytest
 
 import policy_hardware_campaign as campaign
+import plot_style
 from migration import ORDERED_EAGER_PARALLEL_V1
 from policy_hardware_campaign import (
     CDF_COLORS,
@@ -666,30 +667,10 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     assert ax.get_title() == ""
     assert ax.get_xlabel() == "Migration + Destination TTFT (s)"
     assert ax.get_ylabel() == "Cumulative Distribution"
-    assert CDF_COLORS == {
-        "queue_haul": "#B1040E", "greedy": "#008566",
-        "greedy_lagrangian": "#620059",
-        "isolated_fastest": "#5E3C99",
-        "kv_only": "#006CB8", "replay_only": "#E98300",
-        "queue_haul_power_blind": "#CC79A7",
-        "queue_haul_deadline_blind": "#56B4E9",
-    }
-    assert CDF_LABELS == {
-        "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
-        "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
-        "isolated_fastest": "Per-session fastest",
-        "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
-        "queue_haul_power_blind": "Queue-Haul Power Blind",
-        "queue_haul_deadline_blind": "Queue-Haul Deadline Blind",
-    }
-    assert CDF_LINESTYLES == {
-        "queue_haul": "-", "greedy": "--",
-        "greedy_lagrangian": (0, (3, 1, 1, 1)),
-        "isolated_fastest": (0, (5, 1)),
-        "kv_only": "-.", "replay_only": ":",
-        "queue_haul_power_blind": (0, (3, 1)),
-        "queue_haul_deadline_blind": (0, (1, 1)),
-    }
+    assert CDF_COLORS is plot_style.POLICY_COLORS
+    assert CDF_LABELS is plot_style.POLICY_NAMES
+    assert CDF_LINESTYLES is plot_style.POLICY_LINESTYLES
+    assert CDF_LABELS["isolated_fastest"] == "True Greedy"
 
 
 def test_max_session_ttft_uses_slowest_session_in_each_complete_episode(

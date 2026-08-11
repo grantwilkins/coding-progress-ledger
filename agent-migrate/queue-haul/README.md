@@ -987,13 +987,31 @@ uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
 
 The completed reduced baselines are checksum-pinned under each 2026-07-30
 bundle in `network-baselines-20260811/`; the parent graphs pool both campaigns.
-The 30-second full-attainment CDF uses an 8-by-5-inch plot, Tab10 colors,
+The packing bundle's 30-second full-attainment CDF pools packing and frontier
+parent and baseline episodes. It uses an 8-by-5-inch plot, Tab10 colors,
 distinct line styles, and a three-column legend below the axes.
+
+The canonical output style is `plot_style.py`: 8-by-5 inches, 15-point titles,
+labels, and ticks, 11-point legends and annotations, 3-point lines, and 220 DPI.
+Plot-specific layouts may use the shared compact size. New and modified plot
+producers must inherit it. Policy identities are:
+
+| Internal name | Display name | Tab10 | Line |
+|---|---|---:|---|
+| `queue_haul` | Queue-Haul LP | 0 | solid |
+| `greedy` | Queue-Haul Greedy | 1 | dashed |
+| `greedy_lagrangian` | Queue-Haul Lagrangian Greedy | 2 | dash-dot-dot |
+| `isolated_fastest` | True Greedy | 3 | long dash |
+| `kv_only` | KV Migrate Only | 4 | dash-dot |
+| `replay_only` | Replay Context Only | 5 | dotted |
+| `queue_haul_power_blind` | Queue-Haul Power Blind | 6 | short dash |
+| `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | 7 | fine dotted |
+
 Rebuild them with:
 
 ```bash
 uv run python queue-haul/policy_hardware_campaign.py plot-reduced --out queue-haul/outputs/policy-hardware-width8-frontier-20260730 --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_20260730.json --pooled-with queue-haul/outputs/policy-hardware-width8-frontier-20260730/network-baselines-20260811
-uv run python queue-haul/policy_hardware_campaign.py plot-reduced --out queue-haul/outputs/policy-hardware-width8-packing-20260730 --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json --pooled-with queue-haul/outputs/policy-hardware-width8-packing-20260730/network-baselines-20260811
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced --out queue-haul/outputs/policy-hardware-width8-packing-20260730 --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json --pooled-with queue-haul/outputs/policy-hardware-width8-packing-20260730/network-baselines-20260811 queue-haul/outputs/policy-hardware-width8-frontier-20260730 queue-haul/outputs/policy-hardware-width8-frontier-20260730/network-baselines-20260811
 ```
 
 capacity_sweep_campaign.py keeps the completed two-point load run as a
