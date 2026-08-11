@@ -101,7 +101,7 @@ def write_plot(summary, out: Path) -> None:
     axis.plot((0, 1), (0, 1), color="black", linestyle=":", linewidth=1)
     axis.set(xlim=(0, 1), ylim=(0, 1),
              xlabel="Requested Fraction of Power",
-             ylabel="Attained Fraction of Power by Deadline")
+             ylabel="Shed Power by Deadline")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
     axis.tick_params(labelsize=11)
