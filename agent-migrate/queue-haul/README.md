@@ -747,9 +747,9 @@ destination-method selections. Run
 `uv run python queue-haul/plot_network_action_breakdown.py`.
 
 `plot_hardware_power_parity.py` plots predicted against directly measured source-
-power shed for the 90 live power-drain runs. Both axes use the campaign-wide
-maximum requested shed as their shared denominator; the diagonal marks exact
-agreement and overshed remains visible. Run
+power shed for the 36 Queue-Haul LP and Greedy live power-drain runs. Both axes
+use the maximum request across all 90 campaign runs as their shared denominator;
+the diagonal marks exact agreement and overshed remains visible. Run
 `uv run python queue-haul/plot_hardware_power_parity.py`.
 
 Reduction runs automatically and can also be repeated without hardware:
@@ -1126,10 +1126,10 @@ the merge accepts exactly five complete blocks, checks profile, calibration,
 manifest, context, and trace provenance, and emits the 800-row final result.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
-reductions. `plot_hardware_power_parity.py` pools its 90 runs across five methods
-and plots predicted against measured shed, normalizing both axes by the maximum
-requested shed across the campaign; values above 100% and below zero remain
-visible around the shared-axis parity line.
+reductions. `plot_hardware_power_parity.py` plots the 36 Queue-Haul LP and Greedy
+runs, normalizing both axes by the maximum requested shed across all 90 campaign
+runs; values above 100% and below zero remain visible around the shared-axis
+parity line.
 `outputs/live-power-shed/` retains the 2026-08-06 two-A100 seamless full-shed
 run. The Queue-Haul LP arm moved all eight sessions under continuous 4 rps
 source and 1 rps destination agentic load with `kv_both` and 33 GB L1 pools;

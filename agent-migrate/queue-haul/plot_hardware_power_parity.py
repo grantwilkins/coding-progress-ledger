@@ -17,7 +17,7 @@ import plot_style
 ROOT = Path(__file__).parent
 SOURCE = ROOT / "outputs/power_drain_live_20260714/scenario_summary.csv"
 OUTPUT = ROOT / "outputs/hardware_power_shed_parity"
-METHODS = plot_style.POWER_VALIDATION_METHODS
+METHODS = ("lp", "greedy")
 plot_style.apply()
 
 
@@ -25,8 +25,9 @@ def load_points(path: Path) -> tuple[list[dict], float]:
     with path.open() as handle:
         source = list(csv.DictReader(handle))
     scale = max(float(row["target_w"]) for row in source)
-    if not source or scale <= 0 or {row["policy"] for row in source} != set(METHODS):
-        raise ValueError("power validation requires all methods and a positive request")
+    if not source or scale <= 0 or not set(METHODS) <= {
+            row["policy"] for row in source}:
+        raise ValueError("power validation requires both methods and a positive request")
     rows = [{
         "workload": row["workload"], "method": row["policy"],
         "seed": int(row["seed"]), "requested_shed_w": float(row["target_w"]),
@@ -34,7 +35,7 @@ def load_points(path: Path) -> tuple[list[dict], float]:
         "measured_shed_w": float(row["measured_source_drop_w"]),
         "predicted_percent": 100 * float(row["planned_source_drop_w"]) / scale,
         "measured_percent": 100 * float(row["measured_source_drop_w"]) / scale,
-    } for row in source]
+    } for row in source if row["policy"] in METHODS]
     return rows, scale
 
 
