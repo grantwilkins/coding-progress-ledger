@@ -6,6 +6,7 @@ Plausible wrong implementations:
 - Retain a Tab10 color or shift an Okabe-Ito color to another policy.
 - Reuse a line style or retain the old per-session-fastest name.
 - Silently style an unknown policy or fail to apply the documented font sizes.
+- Reuse an action hatch so grayscale action segments become ambiguous.
 """
 
 import matplotlib
@@ -33,3 +34,9 @@ def test_apply_sets_documented_defaults():
     assert matplotlib.rcParams["font.size"] == plot_style.FONT_SIZE
     assert matplotlib.rcParams["legend.fontsize"] == plot_style.LEGEND_FONT_SIZE
     assert matplotlib.rcParams["lines.linewidth"] == plot_style.LINE_WIDTH
+
+
+def test_selected_actions_have_unique_hatches():
+    actions = ("east_replay", "east_kv_transfer", "germany_replay",
+               "germany_kv_transfer")
+    assert len({plot_style.ACTION_HATCHES[action] for action in actions}) == 4

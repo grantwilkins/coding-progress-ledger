@@ -34,9 +34,9 @@ CASE_NAMES = {
 ACTION_MIX_CASES = (
     ("constraint/quota-30", "Replay quota"),
     ("hardware_gap/all-bind", "All bound"),
-    ("hardware_gap/free-bandwidth", "KV + prefill"),
+    ("hardware_gap/free-bandwidth", "HBM + prefill"),
     ("hardware_gap/free-kv", "Bandwidth + prefill"),
-    ("hardware_gap/free-service", "Bandwidth + KV"),
+    ("hardware_gap/free-service", "Bandwidth + HBM"),
     ("hardware_gap/all-release", "None bound"),
 )
 plot_style.apply()

@@ -15,7 +15,7 @@ Plausible wrong implementations:
 import pytest
 
 from plot_pooled_action_adaptation import (
-    at_fraction, controlled_action_mixes, pooled_composition,
+    ACTION_MIX_CASES, at_fraction, controlled_action_mixes, pooled_composition,
 )
 
 
@@ -65,3 +65,9 @@ def test_controlled_mix_normalizes_selected_actions_without_n(monkeypatch):
     rows[0]["selected_sessions"] = 16
     with pytest.raises(RuntimeError, match="accounted 28-session pack"):
         controlled_action_mixes(rows)
+
+
+def test_memory_constraint_is_labeled_hbm():
+    labels = {case: label for case, label in ACTION_MIX_CASES}
+    assert labels["hardware_gap/free-bandwidth"] == "HBM + prefill"
+    assert labels["hardware_gap/free-service"] == "Bandwidth + HBM"

@@ -45,8 +45,8 @@ ACTION_COLORS = {
     "not_moved": "#999999",
 }
 ACTION_HATCHES = {
-    "east_replay": "", "east_kv_transfer": "",
-    "germany_replay": "//", "germany_kv_transfer": "//",
+    "east_replay": "..", "east_kv_transfer": "xx",
+    "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "",
 }
 
