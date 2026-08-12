@@ -79,7 +79,7 @@ def _plot(rows, path):
         "germany_replay": "Replay → germany-west-central",
         "germany_kv_transfer": "KV → germany-west-central",
     }
-    fig, axis = plt.subplots(figsize=(7, 3))
+    fig, axis = plt.subplots(figsize=(5.5, 3))
     left = np.zeros(len(rows))
     for action in MIX:
         values = np.array([row[action] / row["planned_sessions"]
@@ -98,8 +98,8 @@ def _plot(rows, path):
     axis.xaxis.label.set_size(12)
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, ncol=2, loc="lower center",
-               bbox_to_anchor=(.6, .03), fontsize=10, handlelength=1.8)
-    fig.subplots_adjust(left=.25, right=.97, bottom=.37, top=.96)
+               bbox_to_anchor=(.58, .03), fontsize=10, handlelength=1.8)
+    fig.subplots_adjust(left=.32, right=.97, bottom=.37, top=.96)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)

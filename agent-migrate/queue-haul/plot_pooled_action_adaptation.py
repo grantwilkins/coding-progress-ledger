@@ -17,7 +17,7 @@ from plot_pooled_shed_frontier import pooled_cases, write_csv
 
 
 POLICY = "queue_haul_lp"
-ACTION_MIX_FIGSIZE = (7, 3)
+ACTION_MIX_FIGSIZE = (5.5, 3)
 ACTION_MIX_TICK_SIZE = 11
 ACTION_MIX_LABEL_SIZE = 12
 ACTION_MIX_LEGEND_SIZE = 10
@@ -122,9 +122,9 @@ def _controlled_action_mix(rows, out):
     axis.xaxis.label.set_size(ACTION_MIX_LABEL_SIZE)
     handles, legend_labels = axis.get_legend_handles_labels()
     fig.legend(handles, legend_labels, frameon=False, ncol=2,
-               loc="lower center", bbox_to_anchor=(.6, .03),
+               loc="lower center", bbox_to_anchor=(.58, .03),
                fontsize=ACTION_MIX_LEGEND_SIZE, handlelength=1.8)
-    fig.subplots_adjust(left=.23, right=.97, bottom=.37, top=.96)
+    fig.subplots_adjust(left=.29, right=.97, bottom=.37, top=.96)
     _save(fig, out / "controlled_action_mix", tight=False)
     plt.close(fig)
 
