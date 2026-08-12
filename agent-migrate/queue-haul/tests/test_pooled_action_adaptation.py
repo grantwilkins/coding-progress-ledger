@@ -71,3 +71,12 @@ def test_memory_constraint_is_labeled_hbm():
     labels = {case: label for case, label in ACTION_MIX_CASES}
     assert labels["hardware_gap/free-bandwidth"] == "HBM + prefill"
     assert labels["hardware_gap/free-service"] == "Bandwidth + HBM"
+
+
+def test_action_mix_uses_five_resource_states_with_bound_extremes_adjacent():
+    assert len(ACTION_MIX_CASES) == 5
+    assert ACTION_MIX_CASES[-2:] == (
+        ("hardware_gap/all-bind", "All bound"),
+        ("hardware_gap/all-release", "None bound"),
+    )
+    assert all(case != "constraint/quota-30" for case, _ in ACTION_MIX_CASES)
