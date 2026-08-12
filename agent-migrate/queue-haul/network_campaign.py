@@ -83,7 +83,7 @@ SEPARATION_MARGIN = .10
 ORACLE_RESTRICTIONS = (
     "joint", "kv_only", "replay_only", "east_only", "germany_only",
 )
-KV_RESERVED_FRACTION = .98 if H100_CAMPAIGN else .90
+KV_RESERVED_FRACTION = .96 if H100_CAMPAIGN else .90
 ORACLE_STALE_STATES = (
     ("all-bind", .75, KV_RESERVED_FRACTION, "controlled_40"),
     ("free-kv", .75, 0, "controlled_40"),

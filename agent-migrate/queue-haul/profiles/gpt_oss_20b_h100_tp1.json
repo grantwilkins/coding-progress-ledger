@@ -10,7 +10,7 @@
   "power_scope": "gpu",
   "power_window_s": 5.0,
   "max_ell": 0.966470634449,
-  "kv_capacity_tokens": 2472995,
+  "kv_capacity_tokens": 1205376,
   "max_destination_replays": 1,
   "max_destination_kv_streams": 1,
   "sources": {
@@ -34,10 +34,10 @@
     },
     "capacity": {
       "kind": "measured",
-      "reference": "vLLM 0.22.0 startup observation at gpu_memory_utilization=0.9 during outputs/h100-profile-20260811",
+      "reference": "vLLM 0.22.0 destination startup at gpu_memory_utilization=0.75 during /datadrive/queue-haul-network/hardware-gap-h100-001 pilot",
       "valid_range": [
         0,
-        2472995
+        1205376
       ],
       "relative_error": 0.0
     },

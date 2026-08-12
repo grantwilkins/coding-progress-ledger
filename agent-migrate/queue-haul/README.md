@@ -36,14 +36,14 @@ dedicated two-A100 migration claim.
 
 The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
 H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
-2,472,995 KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
+1,205,376 production KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
 and measured through offered load `ell=12.566`. Admission remains bounded at
 `ell=0.96647`. Raw benchmark and power samples are under
 `outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
 remain clearly marked A100-derived estimates until rerun on H100.
 
-The H100 hardware-gap campaign scales the constrained East KV reserve to 98%
-of the measured 2,472,995-token capacity, reserves 65% of each destination's
+The H100 hardware-gap campaign scales the constrained East KV reserve to 96%
+of the measured 1,205,376-token capacity, reserves 65% of each destination's
 migration window for KV, and requests 41.4% of removable source power. This
 preserves a mixed replay/KV challenge on the flatter 94--168 W H100 curve. The 90-second
 deadline-blind row is retained as an observed control, not required to be late.

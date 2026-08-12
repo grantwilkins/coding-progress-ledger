@@ -105,7 +105,7 @@ def test_default_profile_uses_measured_h100_capacity_and_rates():
     profile = ModelProfile.load(path)
 
     assert profile.hardware == "NVIDIA H100 NVL 94GB"
-    assert profile.kv_capacity_tokens == 2472995
+    assert profile.kv_capacity_tokens == 1205376
     assert (profile.case().F, profile.case().G) == (11415.78, 451.32)
 
 
