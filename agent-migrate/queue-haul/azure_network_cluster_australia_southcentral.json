@@ -1,0 +1,21 @@
+{
+  "schema": "queue-haul-azure-cluster-v1",
+  "source": {
+    "id": "southcentral",
+    "region": "southcentralus",
+    "host": "10.13.0.4",
+    "ssh_user": "azureuser",
+    "repo_root": "/datadrive/queue-haul-h100/agent-migrate",
+    "run_root": "/datadrive/queue-haul-network"
+  },
+  "destinations": [
+    {
+      "id": "australia",
+      "region": "australiaeast",
+      "host": "10.12.0.4",
+      "ssh_user": "azureuser",
+      "repo_root": "/datadrive/queue-haul-h100/agent-migrate",
+      "run_root": "/datadrive/queue-haul-network"
+    }
+  ]
+}

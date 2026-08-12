@@ -81,6 +81,23 @@ def cluster(tmp_path):
     return n.Cluster.load(path)
 
 
+def test_h100_two_region_cluster_and_profile_override(tmp_path, monkeypatch):
+    value = json.loads((n.ROOT / "azure_network_cluster_australia_southcentral.json").read_text())
+    assert n.Cluster.parse(value).destinations[0].id == "australia"
+    monkeypatch.setattr(n, "MODEL_PATH", n.ROOT / "profiles/gpt_oss_20b_h100_tp1.json")
+    reports = {
+        node: {"region": region, "private_ip": ip, "dirty": False,
+               "vm_size": "Standard_NC40ads_H100_v5", "gpu": "NVIDIA H100 NVL",
+               "gpu_memory_mib": 95830, "ptp": True, "datadrive": True,
+               "clock_uncertainty_ms": 1, "git_sha": "same",
+               "vllm": "0.22.0", "lmcache": "0.5.1"}
+        for node, region, ip in (
+            ("southcentral", "southcentralus", "10.13.0.4"),
+            ("australia", "australiaeast", "10.12.0.4"))
+    }
+    n.validate_hosts(n.Cluster.parse(value), reports)
+
+
 def calibration():
     return {
         "schema": n.CALIBRATION_SCHEMA,

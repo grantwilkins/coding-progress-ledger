@@ -171,7 +171,8 @@ FRONTIER_FAILURE_GATE = .5
 FRONTIER_REFINEMENT_EPISODES = 65
 DEADLINE_BLIND_HORIZON_S = 600
 ROOT = Path(__file__).parent
-MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
+MODEL_PATH = ROOT / "profiles" / os.environ.get(
+    "QH_MODEL_PROFILE", "gpt_oss_20b_a100_tp1_azure_300w.json")
 WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 )}
@@ -184,6 +185,7 @@ HANDOFF_ENV = {
     "QH_LMCACHE_L1_GB": "33", "QH_PREFIX_CACHING": "off",
     "QH_REDIS_MAXMEMORY_GB": "32",
 }
+RUNTIME_ENV = (*HANDOFF_ENV, "QH_MODEL_PROFILE")
 
 
 def write_checkpoint(path: Path, value: dict) -> None:
@@ -241,9 +243,13 @@ class Cluster:
                 or len({n.id for n in nodes}) != len(nodes) \
                 or len({n.host for n in nodes}) != len(nodes):
             raise ValueError("cluster node ids and hosts must be unique")
-        if value.source.region != "swedencentral" \
-                or not {node.region for node in value.destinations} \
-                <= {"eastus2", "westeurope", "germanywestcentral"}:
+        regions = (value.source.region,
+                   tuple(node.region for node in value.destinations))
+        if regions not in {
+                ("swedencentral", regions[1]),
+                ("southcentralus", ("australiaeast",)),
+        } or regions[0] == "swedencentral" and not set(regions[1]) <= {
+                "eastus2", "westeurope", "germanywestcentral"}:
             raise ValueError("cluster regions do not match the frozen topology")
         return value
 
@@ -413,9 +419,11 @@ def validate_hosts(cluster: Cluster | None, reports: dict[str, dict]) -> None:
         if node and (report["region"].lower() != node.region.lower()
                      or report["private_ip"] != node.host):
             raise ValueError(f"{node_id} region or private IP changed")
-        if report.get("dirty") or report.get("vm_size") \
-                != "Standard_NC24ads_A100_v4" \
-                or "A100" not in report.get("gpu", "") \
+        h100 = "H100" in ModelProfile.load(MODEL_PATH).hardware
+        if report.get("dirty") or report.get("vm_size") not in (
+                {"Standard_NC40ads_H100_v5"} if h100 else
+                {"Standard_NC24ads_A100_v4"}) \
+                or ("H100" if h100 else "A100") not in report.get("gpu", "") \
                 or report.get("gpu_memory_mib", 0) < 80_000 \
                 or not report.get("ptp") or not report.get("datadrive") \
                 or float(report.get("clock_uncertainty_ms", 1e9)) \
@@ -1359,7 +1367,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
             remote_root = Path(node.run_root) / run_root.name / node_id
             remote_roots[node_id] = remote_root
             command = ssh_command(node, key, [
-                "env", *(f"{name}={os.environ[name]}" for name in HANDOFF_ENV
+                "env", *(f"{name}={os.environ[name]}" for name in RUNTIME_ENV
                          if name in os.environ),
                 "uv", "run", "python", "queue-haul/network_campaign.py",
                 "node-serve", "--node-id", node_id, "--bind-host", node.host,
