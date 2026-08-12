@@ -121,10 +121,10 @@ def _controlled_action_mix(rows, out):
     axis.tick_params(labelsize=ACTION_MIX_TICK_SIZE)
     axis.xaxis.label.set_size(ACTION_MIX_LABEL_SIZE)
     handles, legend_labels = axis.get_legend_handles_labels()
-    fig.legend(handles, legend_labels, frameon=False, ncol=1,
-               loc="center left", bbox_to_anchor=(.59, .58),
+    fig.legend(handles, legend_labels, frameon=False, ncol=2,
+               loc="lower center", bbox_to_anchor=(.6, .03),
                fontsize=ACTION_MIX_LEGEND_SIZE, handlelength=1.8)
-    fig.subplots_adjust(left=.23, right=.57, bottom=.18, top=.96)
+    fig.subplots_adjust(left=.23, right=.97, bottom=.37, top=.96)
     _save(fig, out / "controlled_action_mix", tight=False)
     plt.close(fig)
 
