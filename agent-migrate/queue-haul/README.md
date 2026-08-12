@@ -73,6 +73,24 @@ evidence status. The scenario supplies link rates. The pool planner enforces
 ongoing event capacity and conservative replica-second debt and reports required
 recovery.
 
+`repair_controller.py` is an optional in-memory feasibility latch; fixed planning
+remains the default. Progress updates only refresh ETAs. Two consecutive deadline
+miss forecasts request one residual repair, while hard failures request one
+immediately. `repair_destination` keeps committed work fixed, prices active work
+by its measured remainder, prefers unchanged assignments, and proposes a diff
+only when it restores the target. Otherwise it reports the attainable shed and
+leaves execution unchanged.
+
+`repair_shadow_campaign.py` is the narrow RAMR validation: three seeded repeats
+each of a sustained 10-to-1 Gbps cut, replay load from rho 0 to 0.8, and both.
+It requests two A100-SXM4-80GB GPUs, records but does not apply proposed diffs,
+and validates the trigger policy rather than live redirection or performance.
+
+`repair_plan_shift_campaign.py` independently replans and simulates the original,
+controlled-40 bandwidth, and rho-0.9 Germany prefill snapshots at a 50% shed
+target. It writes the complete plan manifest, plan diffs, action counts, and a
+stacked action-mix plot. These are snapshot replans, not applied residual diffs.
+
 ## Evidence flow
 
 ```text
@@ -894,6 +912,20 @@ for shard in 0 1; do uv run python queue-haul/policy_hardware_campaign.py prepar
   --policies queue_haul greedy isolated_fastest queue_haul_power_blind queue_haul_deadline_blind \
   --condition-shard "$shard" 2 \
   --out queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-shard${shard}-plan; done
+```
+
+The 720-scenario contemporaneous packing rerun completed as RAMR jobs 38607705
+and 38607709. Both 360-scenario condition shards validate independently; their
+checksum-pinned reduced evidence is under
+`outputs/policy-hardware-width8-packing-contemporaneous-20260811/`, with pooled
+graphs at the top level and shard-1 provenance nested under `shard1/`. Rebuild
+the pooled graphs with:
+
+```bash
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
+  --out queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811 \
+  --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json \
+  --pooled-with queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811/shard1
 ```
 
 The completed reduced baselines are checksum-pinned under each 2026-07-30

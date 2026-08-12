@@ -1,0 +1,19 @@
+{
+  "attainment_rows": 300,
+  "conditions": 20,
+  "episodes": 60,
+  "executed_scenarios": 360,
+  "git_sha": "395f65e9cd8d605e06702017880d8b41770a8595",
+  "model_profile_sha256": "99ec3d2e3099f01103e7a0609a9d99beabfe7ec86eeb372d65f5829090658ab8",
+  "plan_sha256": "4030b3072db043d73bb16e4f39182b196fed98318d9ba11756dd6444418e15ec",
+  "policies": [
+    "queue_haul",
+    "greedy",
+    "isolated_fastest",
+    "queue_haul_power_blind",
+    "queue_haul_deadline_blind"
+  ],
+  "repetitions_per_condition": 3,
+  "schema": "queue-haul-policy-baseline-validation-v1",
+  "valid": true
+}
