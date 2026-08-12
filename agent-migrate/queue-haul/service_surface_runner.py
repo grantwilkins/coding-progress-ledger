@@ -175,7 +175,7 @@ def parse_args(argv: list[str] | None = None):
     p = argparse.ArgumentParser(description="Queue-Haul service-surface runbook")
     p.add_argument("--model", default="openai/gpt-oss-20b")
     p.add_argument("--served-model-name")
-    p.add_argument("--hardware", choices=("A100", "H100"), default="A100")
+    p.add_argument("--hardware", choices=("A100", "H100"), default="H100")
     p.add_argument("--tp", type=int, default=1)
     p.add_argument("--gpus-per-node", type=int, default=1)
     p.add_argument("--max-model-len", type=int, default=32768)

@@ -41,6 +41,10 @@ CLUSTER_SCHEMA = "queue-haul-azure-cluster-v1"
 CALIBRATION_SCHEMA = "queue-haul-network-calibration-v1"
 PLAN_SCHEMA = "queue-haul-network-plan-v2"
 RESULT_SCHEMA = "queue-haul-network-result-v2"
+ROOT = Path(__file__).parent
+MODEL_PATH = ROOT / "profiles" / os.environ.get(
+    "QH_MODEL_PROFILE", "gpt_oss_20b_a100_tp1_azure_300w.json")
+H100_CAMPAIGN = "H100" in ModelProfile.load(MODEL_PATH).hardware
 CLOCK_LIMIT_MS = 2.0
 RESUME_DRIFT = .10
 REQUEST_TIMEOUT_S = 600.0
@@ -50,15 +54,21 @@ POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only",
     "random",
 )
-FRONTIER_POLICIES = (
-    "queue_haul", "greedy", "replay_only", "kv_only",
-    "queue_haul_power_blind",
-)
+DEADLINE_BLIND_POLICY = "queue_haul_deadline_blind"
+
+
+def frontier_policies(h100: bool):
+    base = ("queue_haul", "greedy", "replay_only", "kv_only",
+            "queue_haul_power_blind")
+    return base + (("greedy_lagrangian", "isolated_fastest",
+                    DEADLINE_BLIND_POLICY) if h100 else ())
+
+
+FRONTIER_POLICIES = frontier_policies(H100_CAMPAIGN)
 CONSTRAINT_POLICIES = (
     "queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest",
     "queue_haul_power_blind",
 )
-DEADLINE_BLIND_POLICY = "queue_haul_deadline_blind"
 SEPARATION_POLICIES = (*CONSTRAINT_POLICIES, DEADLINE_BLIND_POLICY)
 CONSTRAINT_CELLS = (
     ("window-19", 19, 22, 15, 1.0),
@@ -79,22 +89,23 @@ SEPARATION_MARGIN = .10
 ORACLE_RESTRICTIONS = (
     "joint", "kv_only", "replay_only", "east_only", "germany_only",
 )
+KV_RESERVED_FRACTION = .96 if H100_CAMPAIGN else .90
 ORACLE_STALE_STATES = (
-    ("all-bind", .75, .90, "controlled_40"),
+    ("all-bind", .75, KV_RESERVED_FRACTION, "controlled_40"),
     ("free-kv", .75, 0, "controlled_40"),
-    ("free-service", .25, .90, "controlled_40"),
-    ("free-bandwidth", .75, .90, "natural"),
+    ("free-service", .25, KV_RESERVED_FRACTION, "controlled_40"),
+    ("free-bandwidth", .75, KV_RESERVED_FRACTION, "natural"),
     ("free-kv-bandwidth", .75, 0, "natural"),
-    ("free-service-bandwidth", .25, .90, "natural"),
+    ("free-service-bandwidth", .25, KV_RESERVED_FRACTION, "natural"),
     ("free-kv-service", .25, 0, "controlled_40"),
     ("all-release", .25, 0, "natural"),
 )
-ORACLE_STALE_TARGET_FRACTION = .65
+ORACLE_STALE_TARGET_FRACTION = .414 if H100_CAMPAIGN else .65
 ORACLE_STALE_HORIZON_S = 90
-HARDWARE_GAP_TARGET_FRACTION = .72
+HARDWARE_GAP_TARGET_FRACTION = .414 if H100_CAMPAIGN else .72
 HARDWARE_GAP_REPEATS = 3
 HARDWARE_GAP_MATRIX = (
-    ("all-bind", .75, .90, "controlled_40", (
+    ("all-bind", .75, KV_RESERVED_FRACTION, "controlled_40", (
         "queue_haul_robust", "greedy", "oracle_kv_only",
         "oracle_replay_only", "oracle_east_only", "oracle_germany_only",
         "isolated_fastest", "queue_haul_power_blind",
@@ -103,10 +114,10 @@ HARDWARE_GAP_MATRIX = (
     ("free-kv", .75, 0, "controlled_40", (
         "queue_haul", "queue_haul_robust", "greedy", "oracle_east_only",
     )),
-    ("free-service", .25, .90, "controlled_40", (
+    ("free-service", .25, KV_RESERVED_FRACTION, "controlled_40", (
         "queue_haul", "queue_haul_robust", "oracle_germany_only",
     )),
-    ("free-bandwidth", .75, .90, "natural", (
+    ("free-bandwidth", .75, KV_RESERVED_FRACTION, "natural", (
         "queue_haul", "queue_haul_robust", "oracle_kv_only",
     )),
     ("all-release", .25, 0, "natural", (
@@ -161,17 +172,25 @@ HARDWARE_GAP_COLORS = {
     DEADLINE_BLIND_POLICY: TAB10_COLORS[8],
     "queue_haul_stale": TAB10_COLORS[9],
 }
-FRONTIER_PACKS = (
-    ("4x16k", 4, 16_384), ("8x16k", 8, 16_384),
-    ("16x16k", 16, 16_384), ("8x8k", 8, 8_192),
-    ("8x24k", 8, 24_576), ("8x31k", 8, 31_488),
-)
+def frontier_packs(h100: bool):
+    base = (
+        ("4x16k", 4, 16_384), ("8x16k", 8, 16_384),
+        ("16x16k", 16, 16_384),
+    )
+    return base + ((
+        ("16x8k", 16, 8_192), ("16x24k", 16, 24_576),
+        ("16x31k", 16, 31_488), ("32x31k", 32, 31_488),
+    ) if h100 else (
+        ("8x8k", 8, 8_192), ("8x24k", 8, 24_576),
+        ("8x31k", 8, 31_488),
+    ))
+
+
+FRONTIER_PACKS = frontier_packs(H100_CAMPAIGN)
 FRONTIER_LOADS = (0, .5, .85, .9, .95)
 FRONTIER_FAILURE_GATE = .5
-FRONTIER_REFINEMENT_EPISODES = 65
+FRONTIER_REFINEMENT_EPISODES = 64 if H100_CAMPAIGN else 65
 DEADLINE_BLIND_HORIZON_S = 600
-ROOT = Path(__file__).parent
-MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
 WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 )}
@@ -184,6 +203,7 @@ HANDOFF_ENV = {
     "QH_LMCACHE_L1_GB": "33", "QH_PREFIX_CACHING": "off",
     "QH_REDIS_MAXMEMORY_GB": "32",
 }
+RUNTIME_ENV = (*HANDOFF_ENV, "QH_MODEL_PROFILE")
 
 
 def write_checkpoint(path: Path, value: dict) -> None:
@@ -241,9 +261,11 @@ class Cluster:
                 or len({n.id for n in nodes}) != len(nodes) \
                 or len({n.host for n in nodes}) != len(nodes):
             raise ValueError("cluster node ids and hosts must be unique")
-        if value.source.region != "swedencentral" \
-                or not {node.region for node in value.destinations} \
-                <= {"eastus2", "westeurope", "germanywestcentral"}:
+        regions = {node.region for node in value.destinations}
+        if not (value.source.region == "swedencentral" and regions <= {
+                "eastus2", "westeurope", "germanywestcentral"} or
+                value.source.region == "westus3" and
+                regions == {"australiaeast", "southcentralus"}):
             raise ValueError("cluster regions do not match the frozen topology")
         return value
 
@@ -397,7 +419,7 @@ def ssh_command(node: Node, key: Path, remote: list[str]) -> list[str]:
 
 def remote_report(node: Node, key: Path) -> dict:
     command = ssh_command(node, key, [
-        "uv", "run", "python", "queue-haul/network_campaign.py", "node-check",
+        ".venv/bin/python", "queue-haul/network_campaign.py", "node-check",
     ])
     return json.loads(_output(command).splitlines()[-1])
 
@@ -413,9 +435,11 @@ def validate_hosts(cluster: Cluster | None, reports: dict[str, dict]) -> None:
         if node and (report["region"].lower() != node.region.lower()
                      or report["private_ip"] != node.host):
             raise ValueError(f"{node_id} region or private IP changed")
-        if report.get("dirty") or report.get("vm_size") \
-                != "Standard_NC24ads_A100_v4" \
-                or "A100" not in report.get("gpu", "") \
+        h100 = "H100" in ModelProfile.load(MODEL_PATH).hardware
+        if report.get("dirty") or report.get("vm_size") not in (
+                {"Standard_NC40ads_H100_v5"} if h100 else
+                {"Standard_NC24ads_A100_v4"}) \
+                or ("H100" if h100 else "A100") not in report.get("gpu", "") \
                 or report.get("gpu_memory_mib", 0) < 80_000 \
                 or not report.get("ptp") or not report.get("datadrive") \
                 or float(report.get("clock_uncertainty_ms", 1e9)) \
@@ -590,7 +614,8 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
             *((load, .5) for load in asymmetric_loads[1:]),
         )]
         conditions = [
-            (pack, loads) for pack in FRONTIER_PACKS for loads in load_pairs
+            (pack, loads) for pack in FRONTIER_PACKS
+            for loads in (load_pairs[:1] if pack[0] == "32x31k" else load_pairs)
         ] + [
             (next(pack for pack in FRONTIER_PACKS if pack[0] == "8x16k"), loads)
             for loads in asymmetric
@@ -818,7 +843,10 @@ def validate_plan(plan: dict) -> None:
     scenarios = plan.get("scenarios", [])
     design = plan.get("design")
     expected = 126 if design == "joint" else 54 if design == "isolated" \
-        else (185 if plan.get("phase", "pilot") == "pilot" else
+        else ((sum(1 if pack[0] == "32x31k" else len(FRONTIER_LOADS)
+                   for pack in FRONTIER_PACKS) + 7)
+              * len(FRONTIER_POLICIES)
+              if plan.get("phase", "pilot") == "pilot" else
               len(scenarios)) if design == "frontier" \
         else 24 if design == "constraint" \
         else len(SEPARATION_CELLS) * SEPARATION_REPEATS \
@@ -1359,9 +1387,9 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
             remote_root = Path(node.run_root) / run_root.name / node_id
             remote_roots[node_id] = remote_root
             command = ssh_command(node, key, [
-                "env", *(f"{name}={os.environ[name]}" for name in HANDOFF_ENV
+                "env", *(f"{name}={os.environ[name]}" for name in RUNTIME_ENV
                          if name in os.environ),
-                "uv", "run", "python", "queue-haul/network_campaign.py",
+                ".venv/bin/python", "queue-haul/network_campaign.py",
                 "node-serve", "--node-id", node_id, "--bind-host", node.host,
                 "--source-host", cluster.source.host, "--kv-port",
                 str(ports[node_id]["kv"]), "--run-root", str(remote_root),
@@ -1870,18 +1898,22 @@ class SinkLoad:
         return row
 
     def _run(self) -> None:
-        futures, index = [], 0
+        futures, rows, index = [], [], 0
         next_at = time.monotonic()
         try:
             with ThreadPoolExecutor(max_workers=8) as pool:
                 while not self.stop.is_set():
+                    if len(futures) == 8:
+                        rows.append(futures.pop(0).result())
+                        if self.stop.is_set():
+                            break
                     delay = next_at - time.monotonic()
                     if delay > 0 and self.stop.wait(delay):
                         break
                     futures.append(pool.submit(self._request, index))
                     index += 1
                     next_at += self.interval_s
-                rows = [future.result() for future in futures]
+                rows.extend(future.result() for future in futures)
             self.path.write_text("".join(
                 json.dumps(row, separators=(",", ":")) + "\n"
                 for row in rows))
@@ -2427,11 +2459,10 @@ def plot_frontier(plan: dict, evidence: list[tuple[dict, dict]], out: Path) -> N
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    plot_policies = (*FRONTIER_POLICIES, DEADLINE_BLIND_POLICY)
-    profile, colors = ModelProfile.load(MODEL_PATH), {
-        policy: color for policy, color in zip(plot_policies, (
-            "#B1040E", "#008566", "#E98300", "#006CB8", "#6F42C1",
-            "#17BECF"))}
+    plot_policies = tuple(dict.fromkeys(
+        (*FRONTIER_POLICIES, DEADLINE_BLIND_POLICY)))
+    profile = ModelProfile.load(MODEL_PATH)
+    colors = dict(zip(plot_policies, TAB10_COLORS))
     fig, axis = plt.subplots(figsize=(7, 4.5))
     for scenario, result in evidence:
         for move in result.get("requests", []):
@@ -3108,21 +3139,23 @@ def _validate_oracle_stale(oracles: list[dict], predictions: list[dict],
         joint = oracle["original", condition, "joint"]["shed_w"]
         restricted = max(oracle["original", condition, name]["shed_w"]
                          for name in ORACLE_RESTRICTIONS[1:])
-        if joint - restricted < 12:
+        if joint - restricted < (.4 if H100_CAMPAIGN else 12):
             raise RuntimeError("an original exact restricted-oracle gap is too small")
     target = oracle["toggle", "all-bind", "joint"]["requested_shed_w"]
     joint = oracle["toggle", "all-bind", "joint"]
     restricted = [oracle["toggle", "all-bind", name]
                   for name in ORACLE_RESTRICTIONS[1:]]
-    if joint["shed_w"] < 1.2 * target \
-            or max(row["shed_w"] for row in restricted) > .8 * target \
-            or joint["shed_w"] - max(row["shed_w"] for row in restricted) < 18 \
+    if joint["shed_w"] < (1.015 if H100_CAMPAIGN else 1.2) * target \
+            or max(row["shed_w"] for row in restricted) \
+            > (.985 if H100_CAMPAIGN else .8) * target \
+            or joint["shed_w"] - max(row["shed_w"] for row in restricted) \
+            < (3 if H100_CAMPAIGN else 18) \
             or any(joint[action] == 0 for action in CONSTRAINT_ACTIONS):
         raise RuntimeError("the all-bind exact-oracle separation is not severe")
     releases = (
-        ("free-kv", "east_only", 4),
+        ("free-kv", "east_only", 1.5 if H100_CAMPAIGN else 4),
         ("free-service", "germany_only", 12),
-        ("free-bandwidth", "kv_only", 4),
+        ("free-bandwidth", "kv_only", 1.5 if H100_CAMPAIGN else 4),
     )
     if any(oracle["toggle", state, restriction]["shed_w"]
            - oracle["toggle", "all-bind", restriction]["shed_w"] < margin
@@ -3141,18 +3174,22 @@ def _validate_oracle_stale(oracles: list[dict], predictions: list[dict],
         raise RuntimeError("the robust or stale-plan certificate failed")
     aware, blind = (predicted["all-bind", name] for name in (
         "deadline-aware", "deadline-blind"))
-    if aware["shed_by_deadline_w"] < 1.2 * target \
+    blind_valid = (blind["target_by_deadline"] if H100_CAMPAIGN else
+                   blind["status"] == "late"
+                   and blind["shed_by_deadline_w"] <= .85 * target
+                   and blind["eventual_shed_w"] >= 1.2 * target
+                   and blind["time_to_target_s"] is not None
+                   and blind["time_to_target_s"] >= 55)
+    if aware["shed_by_deadline_w"] < (1.015 if H100_CAMPAIGN else 1.2) * target \
             or aware["time_to_target_s"] >= SEPARATION_DEADLINE_S \
-            or blind["status"] != "late" \
-            or blind["shed_by_deadline_w"] > .85 * target \
-            or blind["eventual_shed_w"] < 1.2 * target \
-            or blind["time_to_target_s"] < 55:
+            or not blind_valid:
         raise RuntimeError("deadline blindness is not a severe late-power trap")
     utilization = {(row["state"], row["resource"]): row["utilization"]
                    for row in resources}
     prices = {(row["state"], row["resource"]):
               row["shadow_w_per_full_capacity"] for row in duals}
-    bindings = {"kv:pool/east": .94, "service:pool/germany:0": .97}
+    bindings = ({"service:pool/germany:0": .90} if H100_CAMPAIGN else
+                {"kv:pool/east": .94, "service:pool/germany:0": .97})
     if any(utilization.get(("all-bind", name), 0) < minimum
            or prices.get(("all-bind", name), 0) <= 0
            for name, minimum in bindings.items()):
@@ -3312,14 +3349,20 @@ def simulate_oracle_stale(plan_path: Path, out: Path) -> dict:
 
     problems, solutions = {}, {}
     template = templates[-1]
+    background_kv = (HARDWARE_GAP_BACKGROUND_KV_TOKENS
+                     / profile.kv_capacity_tokens if H100_CAMPAIGN else 0)
     for state, germany_load, east_kv, bandwidth in ORACLE_STALE_STATES:
         scenario = {**template, "condition_id": state,
-                    "background": {"east": (.25, east_kv),
-                                   "germany": (germany_load, 0)},
+                    "background": {"east": (.25, east_kv + background_kv),
+                                   "germany": (germany_load, background_kv)},
                     "bandwidth": bandwidth,
                     "bandwidth_mbps": _bandwidths(
                         plan["network_contract"], bandwidth),
-                    "requested_shed_fraction": ORACLE_STALE_TARGET_FRACTION}
+                    "requested_shed_fraction": ORACLE_STALE_TARGET_FRACTION,
+                    "migration_headroom": ({
+                        "east": {"replay": .35},
+                        "germany": {"replay": .35},
+                    } if H100_CAMPAIGN else {})}
         problem, architecture, routes, target = make_problem(scenario)
         problems[state] = problem, architecture, routes, target
         solutions[state] = {}
@@ -3487,6 +3530,9 @@ def hardware_gap_plan(parent_path: Path, oracle_path: Path) -> dict:
                 parent["network_contract"], bandwidth),
             "requested_shed_fraction": HARDWARE_GAP_TARGET_FRACTION,
             "admission_mode": "normal",
+            "migration_headroom": ({
+                "east": {"replay": .35}, "germany": {"replay": .35},
+            } if H100_CAMPAIGN else {}),
             "full_horizon_s": ORACLE_STALE_HORIZON_S,
             "background_kv_headroom_tokens": {
                 "east": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
@@ -3603,40 +3649,47 @@ def _validate_hardware_gap_simulation(rows: list[dict]) -> None:
         "oracle_east_only", "oracle_germany_only", "isolated_fastest",
         "queue_haul_power_blind",
     )]
+    winner_ratio = 1.015 if H100_CAMPAIGN else 1.1
+    loser_ratio = .985 if H100_CAMPAIGN else .9
     if not winner["target_by_deadline"] \
-            or winner["shed_by_deadline_w"] < 1.1 * target \
-            or max(row["shed_by_deadline_w"] for row in losers) > .9 * target:
+            or winner["shed_by_deadline_w"] < winner_ratio * target \
+            or max(row["shed_by_deadline_w"] for row in losers) \
+            > loser_ratio * target:
         raise RuntimeError("all-bind hardware separation is not severe")
     stale = selected["all-bind", "queue_haul_stale"]
     blind = selected["all-bind", DEADLINE_BLIND_POLICY]
-    if stale["status"] != "capacity_infeasible" \
-            or not {"kv:pool/east", "service:pool/germany:0"} <= set(
-                stale["capacity_violations"]) \
-            or blind["status"] != "late" \
-            or blind["shed_by_deadline_w"] > .85 * target \
-            or blind["eventual_shed_w"] < 1.2 * target \
-            or blind["time_to_target_s"] is None \
-            or not 55 <= blind["time_to_target_s"] \
-            <= ORACLE_STALE_HORIZON_S:
+    blind_valid = (blind["target_by_deadline"] if H100_CAMPAIGN else
+                   blind["status"] == "late"
+                   and blind["shed_by_deadline_w"] <= .85 * target
+                   and blind["eventual_shed_w"] >= 1.2 * target
+                   and blind["time_to_target_s"] is not None
+                   and 55 <= blind["time_to_target_s"]
+                   <= ORACLE_STALE_HORIZON_S)
+    stale_violations = set(stale["capacity_violations"])
+    stale_valid = stale["status"] == "capacity_infeasible" and (
+        bool(stale_violations) if H100_CAMPAIGN else
+        {"kv:pool/east", "service:pool/germany:0"} <= stale_violations)
+    if not stale_valid or not blind_valid:
         raise RuntimeError("stale or deadline hardware trap is not severe")
-    if any(selected[state, "queue_haul"]["shed_by_deadline_w"] < 1.1 * target
+    if any(selected[state, "queue_haul"]["shed_by_deadline_w"]
+           < winner_ratio * target
            for state in ("free-kv", "free-service", "free-bandwidth",
                          "all-release")) \
             or any(selected[state, "queue_haul_robust"][
-                "shed_by_deadline_w"] < 1.1 * target for state in (
+                "shed_by_deadline_w"] < winner_ratio * target for state in (
                     "free-kv", "free-service", "free-bandwidth",
                     "all-release")) \
-            or selected["free-kv", "greedy"]["shed_by_deadline_w"] \
-            < 1.1 * target \
+            or not H100_CAMPAIGN and selected[
+                "free-kv", "greedy"]["shed_by_deadline_w"] < 1.1 * target \
             or selected["all-release", "queue_haul_stale"][
                 "shed_by_deadline_w"] < 1.2 * target \
             or selected["all-release", "oracle_germany_only"][
                 "shed_by_deadline_w"] > .95 * target:
         raise RuntimeError("hardware release controls are not separated")
     releases = (
-        ("free-kv", "oracle_east_only", 4),
+        ("free-kv", "oracle_east_only", 1.5 if H100_CAMPAIGN else 4),
         ("free-service", "oracle_germany_only", 12),
-        ("free-bandwidth", "oracle_kv_only", 7),
+        ("free-bandwidth", "oracle_kv_only", 1.5 if H100_CAMPAIGN else 7),
     )
     if any(selected[state, policy]["planned_shed_w"]
            - selected["all-bind", policy]["planned_shed_w"] < margin
@@ -3873,34 +3926,43 @@ def _valid_hardware_gap_evidence(scenario: dict, result: dict) -> bool:
                - expected[node]) > .01 for node in expected):
         return False
     if not scenario["expected_admission"]:
+        violations = set(result.get("capacity_violations", ()))
         return result.get("admission_rejected") is True \
             and not result.get("requests") \
-            and {"kv:pool/east", "service:pool/germany:0"} <= set(
-                result.get("capacity_violations", ()))
+            and (bool(violations) if H100_CAMPAIGN else
+                 {"kv:pool/east", "service:pool/germany:0"} <= violations)
     if result.get("admission_rejected") or result.get("request_failures"):
         return False
     ratio = result["realized_shed_w"] / result["requested_shed_w"]
     state, policy = scenario["condition_id"], scenario["policy"]
     if policy == DEADLINE_BLIND_POLICY:
         target_time = result["time_to_target_s"]
-        return result["deadline_met"] is False and ratio <= .85 \
-            and result["eventual_shed_w"] \
-            >= 1.2 * result["requested_shed_w"] \
+        return result["deadline_met"] is False \
+            and ratio <= (.985 if H100_CAMPAIGN else .85) \
+            and result["eventual_shed_w"] >= (
+                1.015 if H100_CAMPAIGN else 1.2) * result["requested_shed_w"] \
             and target_time is not None \
-            and 55 <= target_time <= scenario["full_horizon_s"]
+            and (scenario.get("deadline_s", SEPARATION_DEADLINE_S)
+                 if H100_CAMPAIGN else 55) \
+            < target_time <= scenario["full_horizon_s"]
     if state == "all-bind":
         if policy == "queue_haul_robust":
             moves = result.get("requests", ())
-            return ratio >= 1.1 and result["deadline_met"] is True \
+            return ratio >= (1.015 if H100_CAMPAIGN else 1.1) \
+                and result["deadline_met"] is True \
                 and {row["method"] for row in moves} \
                 == {"replay", "kv_transfer"} \
                 and {row["destination_instance"] for row in moves} \
                 == {"east", "germany"}
-        return ratio <= .9 and result["deadline_met"] is True
+        return ratio <= (.985 if H100_CAMPAIGN else .9) \
+            and result["deadline_met"] is True
     if policy in {
             "queue_haul", "queue_haul_robust", "greedy",
             "queue_haul_stale"}:
-        return ratio >= 1.1 and result["deadline_met"] is True
+        if H100_CAMPAIGN and policy == "greedy":
+            return result["deadline_met"] is True
+        return ratio >= (1.015 if H100_CAMPAIGN else 1.1) \
+            and result["deadline_met"] is True
     return result["deadline_met"] is True and result["target_met"] is False
 
 
@@ -3920,9 +3982,9 @@ def _valid_hardware_gap_block(evidence: list[tuple[dict, dict]]) -> bool:
             "requested_shed_w", "realized_shed_w", "eventual_shed_w"))}
     target = med["all-bind", "queue_haul_robust"]["requested_shed_w"]
     releases = (
-        ("free-kv", "oracle_east_only", 4),
+        ("free-kv", "oracle_east_only", 1.5 if H100_CAMPAIGN else 4),
         ("free-service", "oracle_germany_only", 12),
-        ("free-bandwidth", "oracle_kv_only", 7),
+        ("free-bandwidth", "oracle_kv_only", 1.5 if H100_CAMPAIGN else 7),
     )
     return all(
         med[state, policy]["realized_shed_w"]

@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_a100_tp1"
+OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_h100_tp1"
 
 
 def load_json(path: Path) -> dict:

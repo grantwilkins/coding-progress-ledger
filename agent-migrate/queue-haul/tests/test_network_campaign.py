@@ -81,6 +81,33 @@ def cluster(tmp_path):
     return n.Cluster.load(path)
 
 
+def test_h100_two_region_cluster_and_profile_override(tmp_path, monkeypatch):
+    value = json.loads((n.ROOT / "azure_network_cluster_australia_southcentral.json").read_text())
+    assert [node.id for node in n.Cluster.parse(value).destinations] == [
+        "east", "germany"]
+    monkeypatch.setattr(n, "MODEL_PATH", n.ROOT / "profiles/gpt_oss_20b_h100_tp1.json")
+    reports = {
+        node: {"region": region, "private_ip": ip, "dirty": False,
+               "vm_size": "Standard_NC40ads_H100_v5", "gpu": "NVIDIA H100 NVL",
+               "gpu_memory_mib": 95830, "ptp": True, "datadrive": True,
+               "clock_uncertainty_ms": 1, "git_sha": "same",
+               "vllm": "0.22.0", "lmcache": "0.5.1"}
+        for node, region, ip in (
+            ("westus3", "westus3", "10.11.0.4"),
+            ("east", "australiaeast", "10.12.0.4"),
+            ("germany", "southcentralus", "10.13.0.4"))
+    }
+    n.validate_hosts(n.Cluster.parse(value), reports)
+
+
+def test_remote_commands_use_pinned_runtime(tmp_path):
+    node = n.Cluster.load(
+        n.ROOT / "azure_network_cluster_australia_southcentral.json"
+    ).destinations[0]
+    assert ".venv/bin/python" in " ".join(n.ssh_command(
+        node, tmp_path / "key", [".venv/bin/python", "script.py"]))
+
+
 def calibration():
     return {
         "schema": n.CALIBRATION_SCHEMA,
@@ -395,7 +422,9 @@ def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path)
         n.make_plan(path, contract, seed=7)
 
 
-def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(tmp_path):
+def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(n, "FRONTIER_PACKS", n.frontier_packs(False))
     plan = n.make_plan(
         campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
         seed=7, design="frontier")
@@ -419,6 +448,34 @@ def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(tmp_pa
     assert pairs == {(load, load) for load in n.FRONTIER_LOADS} | {
         (.5, load) for load in asymmetric
     } | {(load, .5) for load in asymmetric}
+
+
+def test_h100_frontier_adds_width_16_packs_and_one_width_32_tail(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(n, "FRONTIER_PACKS", n.frontier_packs(True))
+    monkeypatch.setattr(n, "FRONTIER_POLICIES", n.frontier_policies(True))
+
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
+        seed=7, design="frontier")
+
+    assert len(plan["scenarios"]) == 304
+    assert set(plan["policies"]) == {
+        "queue_haul", "greedy", "greedy_lagrangian", "isolated_fastest",
+        "kv_only", "replay_only", "queue_haul_power_blind",
+        n.DEADLINE_BLIND_POLICY,
+    }
+    assert {row["pack"] for row in plan["scenarios"]} == {
+        "4x16k", "8x16k", "16x8k", "16x16k", "16x24k", "16x31k",
+        "32x31k",
+    }
+    tail = [row for row in plan["scenarios"] if row["pack"] == "32x31k"]
+    assert len(tail) == 8
+    assert {tuple(value[0] for value in row["background"].values())
+            for row in tail} == {(0, 0)}
+    assert all(len(row["sessions"]) == 32 and sum(
+        session["initial_tokens"] for session in row["sessions"]
+    ) == 1_007_616 for row in tail)
 
 
 def test_constraint_plan_freezes_four_single_block_stress_cases(tmp_path):
@@ -589,6 +646,34 @@ def test_destination_load_normalization_uses_both_service_rates(
     load.error = ValueError("short response")
     with pytest.raises(RuntimeError, match="ValueError: short response"):
         load.close()
+
+
+def test_sink_load_caps_pending_requests(monkeypatch, tmp_path):
+    submitted, full = [], threading.Event()
+    overflow, release = threading.Event(), threading.Event()
+
+    class Pool(n.ThreadPoolExecutor):
+        def submit(self, *args, **kwargs):
+            future = super().submit(*args, **kwargs)
+            submitted.append(future)
+            if len(submitted) == 8:
+                full.set()
+            elif len(submitted) == 9:
+                overflow.set()
+            return future
+
+    load = n.SinkLoad(SimpleNamespace(), 1, 1000, .5, tmp_path / "load.jsonl")
+    load.interval_s = 0
+    monkeypatch.setattr(n, "ThreadPoolExecutor", Pool)
+    monkeypatch.setattr(load, "_request", lambda index:
+                        release.wait() and {"index": index})
+    load.start()
+    assert full.wait(1)
+    assert not overflow.wait(.05)
+    load.stop_admissions()
+    release.set()
+    load.close()
+    assert len(load.path.read_text().splitlines()) == 8
 
 
 def test_deadline_credit_uses_the_shared_campaign_epoch():
@@ -903,6 +988,32 @@ def test_hardware_gap_late_evidence_requires_a_measured_target_time():
 
     assert not n._valid_hardware_gap_evidence(scenario, result)
     result["time_to_target_s"] = 91
+    assert not n._valid_hardware_gap_evidence(scenario, result)
+
+
+def test_h100_hardware_gap_accepts_a_measured_late_deadline_blind_control(
+        monkeypatch):
+    monkeypatch.setattr(n, "H100_CAMPAIGN", True)
+    scenario = {
+        "condition_id": "all-bind", "policy": n.DEADLINE_BLIND_POLICY,
+        "expected_admission": True, "admission_mode": "normal",
+        "deadline_s": 45, "full_horizon_s": 90,
+        "kv_capacity_fraction": {"east": .04, "germany": 1},
+    }
+    result = {
+        "request_failures": 0, "kv_evidence_warnings": 0,
+        "load_warnings": [], "admission_rejected": False,
+        "admission_mode": "normal", "requested_shed_w": 30,
+        "realized_shed_w": 21.5, "eventual_shed_w": 32.5,
+        "time_to_target_s": 56, "deadline_met": False,
+        "target_met": False, "background": {
+            "east": {"warning": False, "kv_capacity_fraction": .04},
+            "germany": {"warning": False, "kv_capacity_fraction": 1},
+        },
+    }
+
+    assert n._valid_hardware_gap_evidence(scenario, result)
+    result["deadline_met"] = True
     assert not n._valid_hardware_gap_evidence(scenario, result)
 
 

@@ -15,7 +15,7 @@ contract, not an inferred GPU inventory.
 
 The repository contains:
 
-- measured GPT-OSS-20B/A100 power curves;
+- a measured GPT-OSS-20B/H100 NVL TP=1 occupancy and GPU-power curve;
 - working replay and compatible KV handoff on two A100s, with 24/24 serial and
   90/90 bounded-campaign migrations completing by their deadlines;
 - 105/105 passing bounded-campaign gates and 6/6 passing parallel-KV gates;
@@ -33,6 +33,20 @@ with ordered eager-parallel launch. The archived destination service campaign
 does not provide an accepted shared-load capacity boundary, so simulator
 service headroom remains a sensitivity. That boundary is not required for the
 dedicated two-A100 migration claim.
+
+The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
+H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
+1,205,376 production KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
+and measured through offered load `ell=12.566`. Admission remains bounded at
+`ell=0.96647`. Raw benchmark and power samples are under
+`outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
+remain clearly marked A100-derived estimates until rerun on H100.
+
+The completed 72-scenario H100 hardware-gap campaign has no failed or missing
+runs. It scales the constrained East KV reserve to 96% of the measured
+1,205,376-token capacity, reserves 65% of each destination's migration window
+for KV, and requests 41.4% of removable source power. All three deadline-blind
+controls missed 45 seconds and reached the target in 55.5--59.5 seconds.
 
 ## System boundary
 
@@ -102,6 +116,12 @@ contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/netw
 [Linux PTP/chrony](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/time-sync),
 and [Spot Scheduled Events](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/scheduled-events).
 
+The H100 path uses West US 3 (`10.11.0.4`) as source and Australia East
+(`10.12.0.4`) plus South Central US (`10.13.0.4`) as destinations via
+`azure_network_cluster_australia_southcentral.json`. Set
+`QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json`; the A100 profile remains the
+network campaign default so archived plans retain their original meaning.
+
 The node map across the provided cluster files is:
 
 | role | region | private IP |
@@ -157,8 +177,8 @@ source ~/.bashrc
 This installs Valkey, `chrony`, and `iperf3`, configures chrony against Azure's
 stable `/dev/ptp_hyperv` device, waits for synchronization, installs the pinned
 Python 3.12/vLLM 0.22.0/LMCache 0.5.1 CUDA 12.9 runtime, and stores the pinned
-GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without the
-A100, persistent data mount, PTP device, or pinned runtime.
+GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without
+`nvidia-smi`, the persistent data mount, PTP device, or pinned runtime.
 
 From the Sweden Central source, establish and verify SSH host keys once, then confirm
 that the same commit is checked out everywhere:
@@ -339,6 +359,13 @@ and an 80% modeled removable-power target. The source load is 80%; replay
 requests explicitly bypass LMCache and KV requests require positive cache
 evidence only as a warning.
 
+The H100 frontier keeps the 4x16K, 8x16K, and 16x16K width bridge, expands the
+8K, 24K, and 31K packs to width 16, and adds one 32x31K red-zone tail. Its 304
+matched scenarios cover Queue-Haul, greedy, Lagrangian greedy,
+isolated-fastest, KV-only, replay-only, power-blind, and deadline-blind using
+only the two measured natural WAN paths; no bandwidth cap or fixed destination
+split is applied.
+
 ```bash
 uv run python queue-haul/network_campaign.py prepare --design frontier \
   --cluster queue-haul/azure_network_cluster_east_germany.json \
@@ -435,6 +462,8 @@ intentionally oversized target remains unmet, and no episode contains a
 request, KV-evidence, load-drift, or queueing warning.
 Migration timing ends when parallel reconstruction finishes; draining background
 load happens afterward and is excluded from `migration_s` and `deadline_met`.
+Each background generator caps pending work at its eight request workers, so
+overload cannot create a stale client-side queue that lengthens episode cleanup.
 Reduction writes matched Tab10 attainment and action-composition figures; the
 simulator additionally writes the Phase-I dual table and figure. There is no
 adaptive refinement or CDF for this single-block diagnostic.

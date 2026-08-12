@@ -35,7 +35,7 @@ from simulate import ExecutionScenario, NetworkLink, PowerNode, ServingInstance,
 
 
 ROOT = Path(__file__).parent
-DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
+DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_h100_tp1.json"
 DEFAULT_MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
 WORKLOADS = {
     "interactive_coding": ROOT / "profiles/interactive_coding.json",

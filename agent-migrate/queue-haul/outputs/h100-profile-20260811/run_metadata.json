@@ -1,0 +1,18 @@
+{
+  "date": "2026-08-11",
+  "model": "openai/gpt-oss-20b@6cee5e81ee83917806bbde320786a8fb61efebee",
+  "runtime": "vLLM 0.22.0",
+  "hardware": "NVIDIA H100 NVL",
+  "memory_mib": 95830,
+  "power_limit_w": 400.0,
+  "tensor_parallel": 1,
+  "max_model_len": 32768,
+  "max_num_seqs": 256,
+  "max_num_batched_tokens": 8192,
+  "enforce_eager": true,
+  "gpu_memory_utilization": 0.9,
+  "kv_capacity_tokens": 2472995,
+  "prefill": {"input_tokens": 8192, "output_tokens": 1, "prompts": 16, "F_tps": 11415.78},
+  "decode": {"input_tokens": 1024, "output_tokens": 512, "prompts": 128, "G_tps": 451.32},
+  "power": {"idle_samples": 50, "idle_mean_w": 94.4744, "peak_mean_w": 168.387375, "measured_max_ell": 12.565992845975, "sample_interval_s": 0.1, "level_window_s": 10, "warmup_s": 3, "prompt_words": [1100, 8192], "output_tokens": [1, 64]}
+}
