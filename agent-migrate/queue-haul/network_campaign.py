@@ -401,7 +401,7 @@ def ssh_command(node: Node, key: Path, remote: list[str]) -> list[str]:
 
 def remote_report(node: Node, key: Path) -> dict:
     command = ssh_command(node, key, [
-        "uv", "run", "python", "queue-haul/network_campaign.py", "node-check",
+        ".venv/bin/python", "queue-haul/network_campaign.py", "node-check",
     ])
     return json.loads(_output(command).splitlines()[-1])
 
@@ -1367,7 +1367,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
             command = ssh_command(node, key, [
                 "env", *(f"{name}={os.environ[name]}" for name in RUNTIME_ENV
                          if name in os.environ),
-                "uv", "run", "python", "queue-haul/network_campaign.py",
+                ".venv/bin/python", "queue-haul/network_campaign.py",
                 "node-serve", "--node-id", node_id, "--bind-host", node.host,
                 "--source-host", cluster.source.host, "--kv-port",
                 str(ports[node_id]["kv"]), "--run-root", str(remote_root),

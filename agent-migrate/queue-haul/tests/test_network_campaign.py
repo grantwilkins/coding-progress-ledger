@@ -100,6 +100,14 @@ def test_h100_two_region_cluster_and_profile_override(tmp_path, monkeypatch):
     n.validate_hosts(n.Cluster.parse(value), reports)
 
 
+def test_remote_commands_use_pinned_runtime(tmp_path):
+    node = n.Cluster.load(
+        n.ROOT / "azure_network_cluster_australia_southcentral.json"
+    ).destinations[0]
+    assert ".venv/bin/python" in " ".join(n.ssh_command(
+        node, tmp_path / "key", [".venv/bin/python", "script.py"]))
+
+
 def calibration():
     return {
         "schema": n.CALIBRATION_SCHEMA,
