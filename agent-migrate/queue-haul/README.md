@@ -437,6 +437,8 @@ intentionally oversized target remains unmet, and no episode contains a
 request, KV-evidence, load-drift, or queueing warning.
 Migration timing ends when parallel reconstruction finishes; draining background
 load happens afterward and is excluded from `migration_s` and `deadline_met`.
+Each background generator caps pending work at its eight request workers, so
+overload cannot create a stale client-side queue that lengthens episode cleanup.
 Reduction writes matched Tab10 attainment and action-composition figures; the
 simulator additionally writes the Phase-I dual table and figure. There is no
 adaptive refinement or CDF for this single-block diagnostic.

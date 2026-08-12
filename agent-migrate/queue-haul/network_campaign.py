@@ -1878,18 +1878,22 @@ class SinkLoad:
         return row
 
     def _run(self) -> None:
-        futures, index = [], 0
+        futures, rows, index = [], [], 0
         next_at = time.monotonic()
         try:
             with ThreadPoolExecutor(max_workers=8) as pool:
                 while not self.stop.is_set():
+                    if len(futures) == 8:
+                        rows.append(futures.pop(0).result())
+                        if self.stop.is_set():
+                            break
                     delay = next_at - time.monotonic()
                     if delay > 0 and self.stop.wait(delay):
                         break
                     futures.append(pool.submit(self._request, index))
                     index += 1
                     next_at += self.interval_s
-                rows = [future.result() for future in futures]
+                rows.extend(future.result() for future in futures)
             self.path.write_text("".join(
                 json.dumps(row, separators=(",", ":")) + "\n"
                 for row in rows))

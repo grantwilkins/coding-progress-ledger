@@ -618,6 +618,34 @@ def test_destination_load_normalization_uses_both_service_rates(
         load.close()
 
 
+def test_sink_load_caps_pending_requests(monkeypatch, tmp_path):
+    submitted, full = [], threading.Event()
+    overflow, release = threading.Event(), threading.Event()
+
+    class Pool(n.ThreadPoolExecutor):
+        def submit(self, *args, **kwargs):
+            future = super().submit(*args, **kwargs)
+            submitted.append(future)
+            if len(submitted) == 8:
+                full.set()
+            elif len(submitted) == 9:
+                overflow.set()
+            return future
+
+    load = n.SinkLoad(SimpleNamespace(), 1, 1000, .5, tmp_path / "load.jsonl")
+    load.interval_s = 0
+    monkeypatch.setattr(n, "ThreadPoolExecutor", Pool)
+    monkeypatch.setattr(load, "_request", lambda index:
+                        release.wait() and {"index": index})
+    load.start()
+    assert full.wait(1)
+    assert not overflow.wait(.05)
+    load.stop_admissions()
+    release.set()
+    load.close()
+    assert len(load.path.read_text().splitlines()) == 8
+
+
 def test_deadline_credit_uses_the_shared_campaign_epoch():
     second = 10**9
     results = [
