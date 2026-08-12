@@ -31,17 +31,13 @@ CASE_NAMES = {
     "constraint/window-30": "Unrestricted replay",
     "constraint/quota-30": "Germany replay quota",
 }
-CONTROLLED_COMPARISONS = (
-    ("Replay intervention", "constraint/window-30", "constraint/quota-30",
-     "Impose Germany replay quota"),
-    ("Resource releases", "hardware_gap/all-bind",
-     "hardware_gap/free-bandwidth", "Release bandwidth"),
-    ("Resource releases", "hardware_gap/all-bind", "hardware_gap/free-kv",
-     "Release East KV capacity"),
-    ("Resource releases", "hardware_gap/all-bind",
-     "hardware_gap/free-service", "Release Germany service"),
-    ("Resource releases", "hardware_gap/all-bind",
-     "hardware_gap/all-release", "Release all constraints"),
+ACTION_MIX_CASES = (
+    ("constraint/quota-30", "Replay quota"),
+    ("hardware_gap/all-bind", "All bound"),
+    ("hardware_gap/free-bandwidth", "KV + prefill"),
+    ("hardware_gap/free-kv", "Bandwidth + prefill"),
+    ("hardware_gap/free-service", "Bandwidth + KV"),
+    ("hardware_gap/all-release", "None bound"),
 )
 plot_style.apply()
 
@@ -73,22 +69,19 @@ def pooled_composition(rows):
     return output
 
 
-def controlled_action_changes(rows, fraction=2 / 3):
+def controlled_action_mixes(rows, fraction=2 / 3):
     by_case = {row["case_id"]: row for row in at_fraction(rows, fraction)}
     output = []
-    for group, baseline, intervention, label in CONTROLLED_COMPARISONS:
-        before, after = by_case[baseline], by_case[intervention]
-        if int(before["sessions"]) != 28 or before["sessions"] != after["sessions"]:
-            raise RuntimeError("controlled comparison requires a matched 28-session pack")
-        changes = {action: int(after[action]) - int(before[action])
-                   for action in ACTIONS}
-        changes["not_moved"] = (
-            int(after["sessions"]) - int(after["selected_sessions"])
-            - int(before["sessions"]) + int(before["selected_sessions"])
-        )
-        if sum(changes.values()):
-            raise RuntimeError("controlled action changes do not conserve sessions")
-        output.append({"group": group, "controlled_change": label, **changes})
+    for case, label in ACTION_MIX_CASES:
+        row = by_case[case]
+        selected = int(row["selected_sessions"])
+        if int(row["sessions"]) != 28 or selected <= 0 \
+                or sum(int(row[action]) for action in ACTIONS) != selected:
+            raise RuntimeError("action mix requires an accounted 28-session pack")
+        mix = {action: int(row[action]) / selected for action in ACTIONS}
+        if not np.isclose(sum(mix.values()), 1):
+            raise RuntimeError("selected-action mix does not sum to one")
+        output.append({"bound_constraint": label, **mix})
     return output
 
 
@@ -99,49 +92,27 @@ def _save(fig, path):
                     bbox_inches="tight")
 
 
-def _change_heatmap(rows, out):
+def _controlled_action_mix(rows, out):
     import matplotlib.pyplot as plt
-    from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
-    actions = (*ACTIONS, "not_moved")
-    matrix = np.asarray([[row[action] for action in actions] for row in rows])
-    limit = np.abs(matrix).max()
-    cmap = LinearSegmentedColormap.from_list("action_change", [
-        plot_style.ACTION_CHANGE_COLORS["fewer"],
-        plot_style.ACTION_CHANGE_COLORS["none"],
-        plot_style.ACTION_CHANGE_COLORS["more"],
-    ])
-    fig = plt.figure(figsize=(10, 5.6))
-    grid = fig.add_gridspec(2, 1, height_ratios=(1, 4), hspace=.08)
-    axes = (fig.add_subplot(grid[0]), fig.add_subplot(grid[1]))
-    for group, axis, panel, panel_rows in zip(
-            ("Replay intervention", "Resource releases"), axes,
-            (matrix[:1], matrix[1:]), (rows[:1], rows[1:])):
-        image = axis.imshow(panel, cmap=cmap,
-                            norm=TwoSlopeNorm(vmin=-limit, vcenter=0, vmax=limit),
-                            aspect="auto")
-        for y, row in enumerate(panel):
-            for x, value in enumerate(row):
-                label = "0" if value == 0 else f"{value:+d}".replace("-", "−")
-                axis.text(x, y, label, ha="center", va="center",
-                          color="white" if abs(value) > limit / 2 else "black",
-                          fontsize=plot_style.LARGE_ANNOTATION_FONT_SIZE)
-        labels = [row["controlled_change"] for row in panel_rows]
-        labels[0] = f"{group}\n{labels[0]}"
-        axis.set_yticks(range(len(panel_rows)), labels)
-        axis.set_xticks(range(len(actions)))
-        axis.tick_params(length=0)
-        axis.axvline(1.5, color="white", linewidth=4)
-        axis.axvline(3.5, color="white", linewidth=4)
-    axes[0].set_xticklabels(("East", "", "Germany", "", "Source"))
-    axes[0].xaxis.tick_top()
-    axes[1].set_xticklabels(("Replay", "KV", "Replay", "KV", "Not moved"))
-    fig.suptitle("Queue-Haul reallocates sessions as resource constraints change")
-    colorbar = fig.colorbar(image, ax=axes, pad=.02, shrink=.9)
-    colorbar.set_label("Change in selected sessions")
-    colorbar.set_ticks((-limit, 0, limit))
-    colorbar.set_ticklabels((f"−{limit}", "0", f"+{limit}"))
-    _save(fig, out / "controlled_action_change_heatmap")
+    fig, axis = plt.subplots(figsize=(9, 5.8))
+    left = np.zeros(len(rows))
+    for action in ACTIONS:
+        values = np.asarray([row[action] for row in rows]) * 100
+        axis.barh(range(len(rows)), values, left=left,
+                  color=plot_style.ACTION_COLORS[action],
+                  hatch=plot_style.ACTION_HATCHES[action], edgecolor="white",
+                  linewidth=1.2, label=plot_style.ACTION_NAMES[action])
+        left += values
+    axis.set(yticks=range(len(rows)),
+             yticklabels=[row["bound_constraint"] for row in rows],
+             xlim=(0, 100), xlabel="Share of selected actions (%)")
+    axis.invert_yaxis()
+    axis.grid(axis="x", alpha=.2)
+    axis.legend(frameon=False, ncol=2, loc="lower center",
+                bbox_to_anchor=(.5, 1.01))
+    fig.tight_layout()
+    _save(fig, out / "controlled_action_mix")
     plt.close(fig)
 
 
@@ -381,12 +352,12 @@ def main():
         rows = list(csv.DictReader(handle))
     selected = at_fraction(rows)
     composition = pooled_composition(rows)
-    changes = controlled_action_changes(rows)
+    mixes = controlled_action_mixes(rows)
     episodes = episode_actions(args.plan)
     write_csv(composition, args.out_dir / "pooled_demand_composition.csv")
     write_csv(episodes, args.out_dir / "matched_episode_actions.csv")
-    write_csv(changes, args.out_dir / "controlled_action_change_heatmap.csv")
-    _change_heatmap(changes, args.out_dir)
+    write_csv(mixes, args.out_dir / "controlled_action_mix.csv")
+    _controlled_action_mix(mixes, args.out_dir)
     _stacked_bars(selected, args.out_dir)
     _quota_dumbbell(selected, args.out_dir)
     _demand_area(composition, args.out_dir)

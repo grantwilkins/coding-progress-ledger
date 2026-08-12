@@ -1,21 +1,21 @@
 """
 Claim:
-Action views select one Queue-Haul plan per case and pool case-normalized session
-fractions. Controlled changes use matched 28-session packs and conserve sessions.
+Action views select one Queue-Haul plan per case. Controlled bars report the
+composition of selected actions from matched 28-session packs.
 
 Plausible wrong implementations:
 - Pool raw action counts, overweighting cases with more sessions.
 - Normalize by selected sessions and hide changes in how many sessions move.
 - Swap an action column or omit sessions that remain at the source.
 - Mix policies or duplicate a designed case at a requested-shed coordinate.
-- Reverse intervention-minus-baseline changes or use the wrong release baseline.
-- Compute the not-moved change at a different aggregation level.
+- Normalize controlled bars by all source sessions instead of selected actions.
+- Include unaccounted selected sessions or a mismatched pack.
 """
 
 import pytest
 
 from plot_pooled_action_adaptation import (
-    at_fraction, controlled_action_changes, pooled_composition,
+    at_fraction, controlled_action_mixes, pooled_composition,
 )
 
 
@@ -51,20 +51,17 @@ def test_fraction_selection_rejects_duplicate_case_and_other_policy():
         at_fraction([chosen, chosen], .5)
 
 
-def test_controlled_changes_are_intervention_minus_matched_baseline(monkeypatch):
-    comparisons = (("group", "base", "changed", "release"),)
-    monkeypatch.setattr("plot_pooled_action_adaptation.CONTROLLED_COMPARISONS",
-                        comparisons)
-    rows = [row("base", 28, (3, 1, 7, 4), fraction=2 / 3),
-            row("changed", 28, (2, 2, 7, 5), fraction=2 / 3)]
+def test_controlled_mix_normalizes_selected_actions_without_n(monkeypatch):
+    monkeypatch.setattr("plot_pooled_action_adaptation.ACTION_MIX_CASES",
+                        (("case", "Bandwidth bound"),))
+    rows = [row("case", 28, (3, 1, 7, 4), fraction=2 / 3)]
 
-    assert controlled_action_changes(rows) == [{
-        "group": "group", "controlled_change": "release",
-        "east_replay": -1, "east_kv_transfer": 1,
-        "germany_replay": 0, "germany_kv_transfer": 1,
-        "not_moved": -1,
+    assert controlled_action_mixes(rows) == [{
+        "bound_constraint": "Bandwidth bound",
+        "east_replay": .2, "east_kv_transfer": 1 / 15,
+        "germany_replay": 7 / 15, "germany_kv_transfer": 4 / 15,
     }]
 
-    rows[1]["sessions"] = 27
-    with pytest.raises(RuntimeError, match="matched 28-session pack"):
-        controlled_action_changes(rows)
+    rows[0]["selected_sessions"] = 16
+    with pytest.raises(RuntimeError, match="accounted 28-session pack"):
+        controlled_action_mixes(rows)

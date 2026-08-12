@@ -663,10 +663,10 @@ uv run python queue-haul/plot_pooled_resource_pressure.py \
   --out queue-haul/outputs/east-germany-pooled-resource-pressure-20260810/resource_pressure
 ```
 
-The action-adaptation views use the same equal-case sweep. The primary diverging
-heatmap reports signed action-count changes for the replay quota and four
-matched resource releases at a common 67% target; every comparison uses the
-same 28-session pack. Companion figures retain broader descriptive views.
+The action-adaptation views use the same equal-case sweep. The primary chart
+shows Queue-Haul's selected-action composition across six succinct bound-
+constraint states at a common 67% target. Every 100%-stacked bar uses the same
+28-session pack; absolute selected-session counts are intentionally omitted.
 
 ```bash
 uv run python queue-haul/plot_pooled_action_adaptation.py \
