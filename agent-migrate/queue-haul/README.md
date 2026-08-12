@@ -42,6 +42,12 @@ and measured through offered load `ell=12.566`. Admission remains bounded at
 `outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
 remain clearly marked A100-derived estimates until rerun on H100.
 
+The H100 hardware-gap campaign scales the constrained East KV reserve to 98%
+of the measured 2,472,995-token capacity, reserves 65% of each destination's
+migration window for KV, and requests 41.4% of removable source power. This
+preserves a mixed replay/KV challenge on the flatter 94--168 W H100 curve. The 90-second
+deadline-blind row is retained as an observed control, not required to be late.
+
 ## System boundary
 
 A handoff prepares state in the background, quiesces at a request boundary,
