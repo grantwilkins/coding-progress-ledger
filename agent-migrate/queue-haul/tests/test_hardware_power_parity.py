@@ -1,95 +1,56 @@
 """
 Claim:
-Each hardware point compares deadline-admitted and achieved source-power shed
-on the same 0--100% episode scale and enters one outcome bucket for its displayed
-method; displayed methods are ordered by their met-or-exceeded rate.
+Each point compares predicted and measured source-power shed using the maximum
+requested shed across the complete hardware cohort as one shared denominator.
 
 Plausible wrong implementations:
-- Use the campaign-wide 100% goal instead of the policy's admitted request.
-- Normalize by migrations pooled across scenarios instead of within each episode.
-- Use elapsed campaign time instead of per-scenario completion timestamps.
-- Include unmeasured missing scenarios as zero-achievement observations.
-- Pool methods, flip the error sign, or mark equality as an undershoot.
-- Retain excluded methods or sort displayed methods by the wrong statistic.
-- Apply a relative 5% tolerance or exclude either exact five-point boundary.
+- Normalize each method or row independently.
+- Use requested rather than predicted shed on the x-axis.
+- Plot sink-power rise rather than measured source-power shed.
+- Clip negative measurements or omit a method.
 """
 
 import csv
-import json
-from types import SimpleNamespace
 
-from plot_hardware_power_parity import load_network, load_policy, method_outcomes
+import matplotlib.pyplot as plt
+import pytest
 
-
-def _scenario(scenario_id="s", policy="queue_haul", admitted=4):
-    sessions = [{"session_id": str(i)} for i in range(8)]
-    return {
-        "scenario_id": scenario_id, "policy": policy, "sessions": sessions,
-        "deadline_s": 10,
-        "moves": [{"session_id": str(i), "deadline_admitted": i < admitted}
-                  for i in range(8)],
-    }
+from plot_hardware_power_parity import METHODS, load_points, write_plot
 
 
-def test_policy_uses_per_episode_admitted_and_achieved_shed(tmp_path):
-    scenario = _scenario()
-    (tmp_path / "plan.json").write_text(json.dumps({"scenarios": [scenario]}))
-    with (tmp_path / "policy_attainment.csv").open("w", newline="") as handle:
+def test_power_validation_uses_one_maximum_request_denominator(tmp_path,
+                                                                monkeypatch):
+    source = tmp_path / "summary.csv"
+    with source.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=(
-            "scenario_id", "policy", "power_attainment_fraction"))
+            "workload", "policy", "seed", "target_w",
+            "planned_source_drop_w", "measured_source_drop_w",
+        ))
         writer.writeheader()
-        writer.writerow({"scenario_id": "s", "policy": "queue_haul",
-                         "power_attainment_fraction": .375})
+        for index, method in enumerate(METHODS):
+            writer.writerow({
+                "workload": "w", "policy": method, "seed": index,
+                "target_w": 20 if index else 40,
+                "planned_source_drop_w": 10, "measured_source_drop_w": -2,
+            })
 
-    assert load_policy(tmp_path)[0] == {
-        "campaign": tmp_path.name, "scenario_id": "s",
-        "method": "queue_haul", "requested_percent": 50,
-        "achieved_percent": 37.5, "marker": "x",
-    }
+    rows, scale = load_points(source)
 
-
-def test_network_uses_completion_times_and_omits_missing_cases(tmp_path):
-    complete, missing = _scenario(), _scenario("missing")
-    (tmp_path / "plan.json").write_text(
-        json.dumps({"scenarios": [complete, missing]}))
-    attempt = tmp_path / "scenarios/s/attempt-0001"
-    attempt.mkdir(parents=True)
-    (attempt / "decision.json").write_text(
-        json.dumps({"moves": complete["moves"]}))
-    ends = [4_000_000_000] * 4 + [11_000_000_000] * 4
-    (attempt / "result.json").write_text(json.dumps({
-        "status": "complete", "started_ns": 0,
-        "requests": [{"request": {"end_ns": end}} for end in ends],
-    }))
-    curve = SimpleNamespace(power=lambda load: 100 + 100 * load)
-
-    rows = load_network(tmp_path, curve, 5)
-
-    assert len(rows) == 1
-    assert rows[0]["requested_percent"] == 50
-    assert rows[0]["achieved_percent"] == 50
-    assert rows[0]["marker"] == "o"
+    assert scale == 40
+    assert {(row["predicted_percent"], row["measured_percent"])
+            for row in rows} == {(25, -5)}
+    monkeypatch.setattr(plt, "close", lambda _: None)
+    write_plot(rows, scale, tmp_path / "parity")
+    axis = plt.gcf().axes[0]
+    assert axis.lines[0].get_xdata().tolist() == axis.lines[0].get_ydata().tolist()
+    assert axis.get_xlim() == axis.get_ylim()
+    assert len(axis.collections) == len(METHODS)
 
 
-def test_outcomes_classify_the_error_sign_and_equality_boundary():
-    rows = [
-        {"method": method, "requested_percent": 50,
-         "achieved_percent": achieved}
-        for method, achieved in (("queue_haul", 44), ("queue_haul", 45),
-                                 ("queue_haul", 50), ("queue_haul", 55),
-                                 ("queue_haul", 56), ("greedy", 50),
-                                 ("random", 50))
-    ]
-
-    assert method_outcomes(rows) == [
-        ("greedy", [
-            ("Below target", 0, 0),
-            ("On target", 1, 100),
-            ("Above target", 0, 0),
-        ]),
-        ("queue_haul", [
-            ("Below target", 1, 20),
-            ("On target", 3, 60),
-            ("Above target", 1, 20),
-        ]),
-    ]
+def test_power_validation_requires_every_method(tmp_path):
+    source = tmp_path / "summary.csv"
+    source.write_text(
+        "workload,policy,seed,target_w,planned_source_drop_w,measured_source_drop_w\n"
+        "w,lp,0,10,10,10\n")
+    with pytest.raises(ValueError, match="all methods"):
+        load_points(source)

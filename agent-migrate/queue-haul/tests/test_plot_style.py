@@ -40,3 +40,7 @@ def test_selected_actions_have_unique_hatches():
     actions = ("east_replay", "east_kv_transfer", "germany_replay",
                "germany_kv_transfer")
     assert len({plot_style.ACTION_HATCHES[action] for action in actions}) == 4
+
+
+def test_power_validation_methods_have_unique_markers():
+    assert len(set(plot_style.POWER_VALIDATION_MARKERS.values())) == 5

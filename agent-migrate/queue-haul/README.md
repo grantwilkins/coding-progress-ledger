@@ -746,13 +746,10 @@ planner's Queue-Haul LP, Queue-Haul Greedy, KV-only, and replay-only recorded
 destination-method selections. Run
 `uv run python queue-haul/plot_network_action_breakdown.py`.
 
-`plot_hardware_power_parity.py` groups the completed width-8 policy and joint
-network scenarios into stacked power-target outcome bars for Queue-Haul LP,
-Queue-Haul Greedy, KV-only, and replay-only, sorted by target attainment.
-Each bar reports below, on, or above the normalized deadline-admitted shed.
-On target includes deviations within ±5 percentage points. Achieved shed uses
-the trailing power window from hardware completion times; the two three-node
-handoffs use measured Sweden pre/post power. Run
+`plot_hardware_power_parity.py` plots predicted against directly measured source-
+power shed for the 90 live power-drain runs. Both axes use the campaign-wide
+maximum requested shed as their shared denominator; the diagonal marks exact
+agreement and overshed remains visible. Run
 `uv run python queue-haul/plot_hardware_power_parity.py`.
 
 Reduction runs automatically and can also be repeated without hardware:
@@ -1129,8 +1126,10 @@ the merge accepts exactly five complete blocks, checks profile, calibration,
 manifest, context, and trace provenance, and emits the 800-row final result.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
-reductions; `plot_migration_results.py` writes their shared-axis parity plot.
-The parity plot compares Queue-Haul LP with greedy only.
+reductions. `plot_hardware_power_parity.py` pools its 90 runs across five methods
+and plots predicted against measured shed, normalizing both axes by the maximum
+requested shed across the campaign; values above 100% and below zero remain
+visible around the shared-axis parity line.
 `outputs/live-power-shed/` retains the 2026-08-06 two-A100 seamless full-shed
 run. The Queue-Haul LP arm moved all eight sessions under continuous 4 rps
 source and 1 rps destination agentic load with `kv_both` and 33 GB L1 pools;

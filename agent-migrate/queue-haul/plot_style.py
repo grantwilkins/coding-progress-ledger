@@ -49,6 +49,16 @@ ACTION_HATCHES = {
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "",
 }
+POWER_VALIDATION_METHODS = ("lp", "greedy", "milp", "power-unaware", "random")
+POWER_VALIDATION_NAMES = dict(zip(POWER_VALIDATION_METHODS, (
+    "Queue-Haul LP", "Queue-Haul Greedy", "MILP", "Power unaware", "Random",
+)))
+POWER_VALIDATION_COLORS = dict(zip(POWER_VALIDATION_METHODS, (
+    POLICY_COLORS["queue_haul"], POLICY_COLORS["greedy"],
+    "#009E73", "#CC79A7", "#000000",
+)))
+POWER_VALIDATION_MARKERS = dict(zip(
+    POWER_VALIDATION_METHODS, ("o", "s", "^", "D", "x")))
 
 
 def apply():
