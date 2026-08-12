@@ -17,6 +17,10 @@ from plot_pooled_shed_frontier import pooled_cases, write_csv
 
 
 POLICY = "queue_haul_lp"
+ACTION_MIX_FIGSIZE = (4, 3)
+ACTION_MIX_TICK_SIZE = 11
+ACTION_MIX_LABEL_SIZE = 12
+ACTION_MIX_LEGEND_SIZE = 10
 HARDWARE_CASES = (
     "hardware_gap/all-bind", "hardware_gap/free-bandwidth",
     "hardware_gap/free-kv", "hardware_gap/free-service",
@@ -84,34 +88,44 @@ def controlled_action_mixes(rows, fraction=2 / 3):
     return output
 
 
-def _save(fig, path):
+def _save(fig, path, tight=True):
     path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
-                    bbox_inches="tight")
+                    bbox_inches="tight" if tight else None)
 
 
 def _controlled_action_mix(rows, out):
     import matplotlib.pyplot as plt
 
-    fig, axis = plt.subplots(figsize=(9, 5.8))
+    labels = {
+        "east_replay": "Replay → East", "east_kv_transfer": "KV → East",
+        "germany_replay": "Replay → Germany",
+        "germany_kv_transfer": "KV → Germany",
+    }
+    fig, axis = plt.subplots(figsize=ACTION_MIX_FIGSIZE)
     left = np.zeros(len(rows))
     for action in ACTIONS:
         values = np.asarray([row[action] for row in rows]) * 100
         axis.barh(range(len(rows)), values, left=left,
                   color=plot_style.ACTION_COLORS[action],
                   hatch=plot_style.ACTION_HATCHES[action], edgecolor="white",
-                  linewidth=1.2, label=plot_style.ACTION_NAMES[action])
+                  linewidth=1.2, label=labels[action])
         left += values
     axis.set(yticks=range(len(rows)),
              yticklabels=[row["bound_constraint"] for row in rows],
-             xlim=(0, 100), xlabel="Share of selected actions (%)")
+             xlim=(0, 100), xlabel="Selected-action share (%)")
     axis.invert_yaxis()
     axis.grid(axis="x", alpha=.2)
-    axis.legend(frameon=False, ncol=2, loc="lower center",
-                bbox_to_anchor=(.5, 1.01))
-    fig.tight_layout()
-    _save(fig, out / "controlled_action_mix")
+    axis.tick_params(labelsize=ACTION_MIX_TICK_SIZE)
+    axis.xaxis.label.set_size(ACTION_MIX_LABEL_SIZE)
+    handles, legend_labels = axis.get_legend_handles_labels()
+    fig.legend(handles, legend_labels, frameon=False, ncol=2,
+               loc="upper right", bbox_to_anchor=(.98, .98),
+               fontsize=ACTION_MIX_LEGEND_SIZE, handlelength=1.8,
+               columnspacing=.7)
+    fig.subplots_adjust(left=.39, right=.95, bottom=.18, top=.68)
+    _save(fig, out / "controlled_action_mix", tight=False)
     plt.close(fig)
 
 

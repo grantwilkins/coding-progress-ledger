@@ -15,7 +15,9 @@ Plausible wrong implementations:
 import pytest
 
 from plot_pooled_action_adaptation import (
-    ACTION_MIX_CASES, at_fraction, controlled_action_mixes, pooled_composition,
+    ACTION_MIX_CASES, ACTION_MIX_FIGSIZE, ACTION_MIX_LABEL_SIZE,
+    ACTION_MIX_LEGEND_SIZE, ACTION_MIX_TICK_SIZE, at_fraction,
+    controlled_action_mixes, pooled_composition,
 )
 
 
@@ -80,3 +82,6 @@ def test_action_mix_uses_five_resource_states_with_bound_extremes_adjacent():
         ("hardware_gap/all-release", "None bound"),
     )
     assert all(case != "constraint/quota-30" for case, _ in ACTION_MIX_CASES)
+    assert ACTION_MIX_FIGSIZE == (4, 3)
+    assert (ACTION_MIX_TICK_SIZE, ACTION_MIX_LABEL_SIZE,
+            ACTION_MIX_LEGEND_SIZE) == (11, 12, 10)
