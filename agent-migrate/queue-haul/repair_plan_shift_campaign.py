@@ -98,8 +98,8 @@ def _plot(rows, path):
     axis.xaxis.label.set_size(12)
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, ncol=2, loc="lower center",
-               bbox_to_anchor=(.6, -.01), fontsize=10, handlelength=1.8)
-    fig.subplots_adjust(left=.23, right=.97, bottom=.42, top=.96)
+               bbox_to_anchor=(.6, .03), fontsize=10, handlelength=1.8)
+    fig.subplots_adjust(left=.23, right=.97, bottom=.37, top=.96)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
