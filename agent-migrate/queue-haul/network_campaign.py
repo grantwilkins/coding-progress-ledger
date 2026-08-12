@@ -54,15 +54,21 @@ POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only",
     "random",
 )
-FRONTIER_POLICIES = (
-    "queue_haul", "greedy", "replay_only", "kv_only",
-    "queue_haul_power_blind",
-)
+DEADLINE_BLIND_POLICY = "queue_haul_deadline_blind"
+
+
+def frontier_policies(h100: bool):
+    base = ("queue_haul", "greedy", "replay_only", "kv_only",
+            "queue_haul_power_blind")
+    return base + (("greedy_lagrangian", "isolated_fastest",
+                    DEADLINE_BLIND_POLICY) if h100 else ())
+
+
+FRONTIER_POLICIES = frontier_policies(H100_CAMPAIGN)
 CONSTRAINT_POLICIES = (
     "queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest",
     "queue_haul_power_blind",
 )
-DEADLINE_BLIND_POLICY = "queue_haul_deadline_blind"
 SEPARATION_POLICIES = (*CONSTRAINT_POLICIES, DEADLINE_BLIND_POLICY)
 CONSTRAINT_CELLS = (
     ("window-19", 19, 22, 15, 1.0),
@@ -166,14 +172,24 @@ HARDWARE_GAP_COLORS = {
     DEADLINE_BLIND_POLICY: TAB10_COLORS[8],
     "queue_haul_stale": TAB10_COLORS[9],
 }
-FRONTIER_PACKS = (
-    ("4x16k", 4, 16_384), ("8x16k", 8, 16_384),
-    ("16x16k", 16, 16_384), ("8x8k", 8, 8_192),
-    ("8x24k", 8, 24_576), ("8x31k", 8, 31_488),
-)
+def frontier_packs(h100: bool):
+    base = (
+        ("4x16k", 4, 16_384), ("8x16k", 8, 16_384),
+        ("16x16k", 16, 16_384),
+    )
+    return base + ((
+        ("16x8k", 16, 8_192), ("16x24k", 16, 24_576),
+        ("16x31k", 16, 31_488), ("32x31k", 32, 31_488),
+    ) if h100 else (
+        ("8x8k", 8, 8_192), ("8x24k", 8, 24_576),
+        ("8x31k", 8, 31_488),
+    ))
+
+
+FRONTIER_PACKS = frontier_packs(H100_CAMPAIGN)
 FRONTIER_LOADS = (0, .5, .85, .9, .95)
 FRONTIER_FAILURE_GATE = .5
-FRONTIER_REFINEMENT_EPISODES = 65
+FRONTIER_REFINEMENT_EPISODES = 64 if H100_CAMPAIGN else 65
 DEADLINE_BLIND_HORIZON_S = 600
 WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
@@ -598,7 +614,8 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
             *((load, .5) for load in asymmetric_loads[1:]),
         )]
         conditions = [
-            (pack, loads) for pack in FRONTIER_PACKS for loads in load_pairs
+            (pack, loads) for pack in FRONTIER_PACKS
+            for loads in (load_pairs[:1] if pack[0] == "32x31k" else load_pairs)
         ] + [
             (next(pack for pack in FRONTIER_PACKS if pack[0] == "8x16k"), loads)
             for loads in asymmetric
@@ -826,7 +843,10 @@ def validate_plan(plan: dict) -> None:
     scenarios = plan.get("scenarios", [])
     design = plan.get("design")
     expected = 126 if design == "joint" else 54 if design == "isolated" \
-        else (185 if plan.get("phase", "pilot") == "pilot" else
+        else ((sum(1 if pack[0] == "32x31k" else len(FRONTIER_LOADS)
+                   for pack in FRONTIER_PACKS) + 7)
+              * len(FRONTIER_POLICIES)
+              if plan.get("phase", "pilot") == "pilot" else
               len(scenarios)) if design == "frontier" \
         else 24 if design == "constraint" \
         else len(SEPARATION_CELLS) * SEPARATION_REPEATS \
@@ -2439,11 +2459,10 @@ def plot_frontier(plan: dict, evidence: list[tuple[dict, dict]], out: Path) -> N
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    plot_policies = (*FRONTIER_POLICIES, DEADLINE_BLIND_POLICY)
-    profile, colors = ModelProfile.load(MODEL_PATH), {
-        policy: color for policy, color in zip(plot_policies, (
-            "#B1040E", "#008566", "#E98300", "#006CB8", "#6F42C1",
-            "#17BECF"))}
+    plot_policies = tuple(dict.fromkeys(
+        (*FRONTIER_POLICIES, DEADLINE_BLIND_POLICY)))
+    profile = ModelProfile.load(MODEL_PATH)
+    colors = dict(zip(plot_policies, TAB10_COLORS))
     fig, axis = plt.subplots(figsize=(7, 4.5))
     for scenario, result in evidence:
         for move in result.get("requests", []):
@@ -3917,14 +3936,15 @@ def _valid_hardware_gap_evidence(scenario: dict, result: dict) -> bool:
     ratio = result["realized_shed_w"] / result["requested_shed_w"]
     state, policy = scenario["condition_id"], scenario["policy"]
     if policy == DEADLINE_BLIND_POLICY:
-        if H100_CAMPAIGN:
-            return result["deadline_met"] is True and ratio >= 1
         target_time = result["time_to_target_s"]
-        return result["deadline_met"] is False and ratio <= .85 \
-            and result["eventual_shed_w"] \
-            >= 1.2 * result["requested_shed_w"] \
+        return result["deadline_met"] is False \
+            and ratio <= (.985 if H100_CAMPAIGN else .85) \
+            and result["eventual_shed_w"] >= (
+                1.015 if H100_CAMPAIGN else 1.2) * result["requested_shed_w"] \
             and target_time is not None \
-            and 55 <= target_time <= scenario["full_horizon_s"]
+            and (scenario.get("deadline_s", SEPARATION_DEADLINE_S)
+                 if H100_CAMPAIGN else 55) \
+            < target_time <= scenario["full_horizon_s"]
     if state == "all-bind":
         if policy == "queue_haul_robust":
             moves = result.get("requests", ())

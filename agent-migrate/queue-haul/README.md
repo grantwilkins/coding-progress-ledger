@@ -42,11 +42,11 @@ and measured through offered load `ell=12.566`. Admission remains bounded at
 `outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
 remain clearly marked A100-derived estimates until rerun on H100.
 
-The H100 hardware-gap campaign scales the constrained East KV reserve to 96%
-of the measured 1,205,376-token capacity, reserves 65% of each destination's
-migration window for KV, and requests 41.4% of removable source power. This
-preserves a mixed replay/KV challenge on the flatter 94--168 W H100 curve. The 90-second
-deadline-blind row is retained as an observed control, not required to be late.
+The completed 72-scenario H100 hardware-gap campaign has no failed or missing
+runs. It scales the constrained East KV reserve to 96% of the measured
+1,205,376-token capacity, reserves 65% of each destination's migration window
+for KV, and requests 41.4% of removable source power. All three deadline-blind
+controls missed 45 seconds and reached the target in 55.5--59.5 seconds.
 
 ## System boundary
 
@@ -340,6 +340,13 @@ replay-only, KV-only, and power-blind Queue-Haul against a 30-second deadline
 and an 80% modeled removable-power target. The source load is 80%; replay
 requests explicitly bypass LMCache and KV requests require positive cache
 evidence only as a warning.
+
+The H100 frontier keeps the 4x16K, 8x16K, and 16x16K width bridge, expands the
+8K, 24K, and 31K packs to width 16, and adds one 32x31K red-zone tail. Its 304
+matched scenarios cover Queue-Haul, greedy, Lagrangian greedy,
+isolated-fastest, KV-only, replay-only, power-blind, and deadline-blind using
+only the two measured natural WAN paths; no bandwidth cap or fixed destination
+split is applied.
 
 ```bash
 uv run python queue-haul/network_campaign.py prepare --design frontier \
