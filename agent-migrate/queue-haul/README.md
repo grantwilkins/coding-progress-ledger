@@ -364,7 +364,8 @@ The H100 frontier keeps the 4x16K, 8x16K, and 16x16K width bridge, expands the
 matched scenarios cover Queue-Haul, greedy, Lagrangian greedy,
 isolated-fastest, KV-only, replay-only, power-blind, and deadline-blind using
 only the two measured natural WAN paths; no bandwidth cap or fixed destination
-split is applied.
+split is applied. H100 destination load is normalized to the measured
+604-prefill/64-decode service rates used by the live background generator.
 
 ```bash
 uv run python queue-haul/network_campaign.py prepare --design frontier \

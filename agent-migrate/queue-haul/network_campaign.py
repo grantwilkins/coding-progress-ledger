@@ -639,6 +639,8 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                     "bandwidth_mbps": _bandwidths(contract, "natural"),
                     "deadline_s": HANDOFF_DEADLINE_S, "background": background,
                     "source_load": .8, "requested_shed_fraction": .8,
+                    **({"load_normalization": "destination_service"}
+                       if H100_CAMPAIGN else {}),
                     "planner_seed": profiler.stable_seed(
                         seed, condition_index, policy),
                     "sessions": session_rows,
