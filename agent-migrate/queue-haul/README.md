@@ -92,8 +92,8 @@ contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/netw
 [Linux PTP/chrony](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/time-sync),
 and [Spot Scheduled Events](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/scheduled-events).
 
-The two-node H100 path uses South Central US (`10.13.0.4`) as source and
-Australia East (`10.12.0.4`) as destination via
+The H100 path uses West US 3 (`10.11.0.4`) as source and Australia East
+(`10.12.0.4`) plus South Central US (`10.13.0.4`) as destinations via
 `azure_network_cluster_australia_southcentral.json`. Set
 `QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json`; the A100 profile remains the
 network campaign default so archived plans retain their original meaning.

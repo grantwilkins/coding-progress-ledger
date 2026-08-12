@@ -1,18 +1,26 @@
 {
   "schema": "queue-haul-azure-cluster-v1",
   "source": {
-    "id": "southcentral",
-    "region": "southcentralus",
-    "host": "10.13.0.4",
+    "id": "westus3",
+    "region": "westus3",
+    "host": "10.11.0.4",
     "ssh_user": "azureuser",
     "repo_root": "/home/azureuser/queue-haul-h100/agent-migrate",
     "run_root": "/datadrive/queue-haul-network"
   },
   "destinations": [
     {
-      "id": "australia",
+      "id": "east",
       "region": "australiaeast",
       "host": "10.12.0.4",
+      "ssh_user": "azureuser",
+      "repo_root": "/home/azureuser/queue-haul-h100/agent-migrate",
+      "run_root": "/datadrive/queue-haul-network"
+    },
+    {
+      "id": "germany",
+      "region": "southcentralus",
+      "host": "10.13.0.4",
       "ssh_user": "azureuser",
       "repo_root": "/home/azureuser/queue-haul-h100/agent-migrate",
       "run_root": "/datadrive/queue-haul-network"

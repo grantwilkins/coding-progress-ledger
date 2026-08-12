@@ -83,7 +83,8 @@ def cluster(tmp_path):
 
 def test_h100_two_region_cluster_and_profile_override(tmp_path, monkeypatch):
     value = json.loads((n.ROOT / "azure_network_cluster_australia_southcentral.json").read_text())
-    assert n.Cluster.parse(value).destinations[0].id == "australia"
+    assert [node.id for node in n.Cluster.parse(value).destinations] == [
+        "east", "germany"]
     monkeypatch.setattr(n, "MODEL_PATH", n.ROOT / "profiles/gpt_oss_20b_h100_tp1.json")
     reports = {
         node: {"region": region, "private_ip": ip, "dirty": False,
@@ -92,8 +93,9 @@ def test_h100_two_region_cluster_and_profile_override(tmp_path, monkeypatch):
                "clock_uncertainty_ms": 1, "git_sha": "same",
                "vllm": "0.22.0", "lmcache": "0.5.1"}
         for node, region, ip in (
-            ("southcentral", "southcentralus", "10.13.0.4"),
-            ("australia", "australiaeast", "10.12.0.4"))
+            ("westus3", "westus3", "10.11.0.4"),
+            ("east", "australiaeast", "10.12.0.4"),
+            ("germany", "southcentralus", "10.13.0.4"))
     }
     n.validate_hosts(n.Cluster.parse(value), reports)
 

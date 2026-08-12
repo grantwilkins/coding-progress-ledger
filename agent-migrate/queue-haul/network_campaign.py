@@ -243,13 +243,11 @@ class Cluster:
                 or len({n.id for n in nodes}) != len(nodes) \
                 or len({n.host for n in nodes}) != len(nodes):
             raise ValueError("cluster node ids and hosts must be unique")
-        regions = (value.source.region,
-                   tuple(node.region for node in value.destinations))
-        if regions not in {
-                ("swedencentral", regions[1]),
-                ("southcentralus", ("australiaeast",)),
-        } or regions[0] == "swedencentral" and not set(regions[1]) <= {
-                "eastus2", "westeurope", "germanywestcentral"}:
+        regions = {node.region for node in value.destinations}
+        if not (value.source.region == "swedencentral" and regions <= {
+                "eastus2", "westeurope", "germanywestcentral"} or
+                value.source.region == "westus3" and
+                regions == {"australiaeast", "southcentralus"}):
             raise ValueError("cluster regions do not match the frozen topology")
         return value
 
