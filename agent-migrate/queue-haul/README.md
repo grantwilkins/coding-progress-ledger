@@ -73,9 +73,9 @@ It requests two A100-SXM4-80GB GPUs, records but does not apply proposed diffs,
 and validates the trigger policy rather than live redirection or performance.
 
 `repair_plan_shift_campaign.py` independently replans and simulates the original,
-controlled-40 bandwidth, and rho-0.9 Germany prefill snapshots at a 50% shed
-target. It writes the complete plan manifest, plan diffs, action counts, and a
-stacked action-mix plot. These are snapshot replans, not applied residual diffs.
+Germany-only 2.2-Gbps bandwidth, and East-only rho-0.976 prefill snapshots at a
+50% shed target. It writes complete plans, diffs, action counts, and a normalized
+action-mix plot. These are snapshot replans, not applied residual diffs.
 
 ## Evidence flow
 

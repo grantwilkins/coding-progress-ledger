@@ -1,5 +1,5 @@
 {
-  "parent_plan": "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-separation-20260809/plan.json",
+  "parent_plan": "/Users/grantwilkins/houdini/agent-migrate/queue-haul/outputs/east-germany-separation-20260809/plan.json",
   "parent_plan_sha256": "f75db7b987ce79bbaeebfdd21b665b8742ad9529698929ac54d4755d702591ca",
   "plans": [
     {
@@ -15,6 +15,7 @@
         "germany": 8733.31359588583
       },
       "condition": "original",
+      "east_prefill_rho": 0.25,
       "germany_prefill_rho": 0.25,
       "label": "Original",
       "moves": [
@@ -197,39 +198,40 @@
     },
     {
       "action_mix": {
-        "east_kv_transfer": 0,
-        "east_replay": 3,
-        "germany_kv_transfer": 4,
-        "germany_replay": 7
+        "east_kv_transfer": 3,
+        "east_replay": 7,
+        "germany_kv_transfer": 3,
+        "germany_replay": 1
       },
-      "bandwidth": "controlled_40",
+      "bandwidth": "germany_drop",
       "bandwidth_mbps": {
-        "east": 900,
-        "germany": 3400
+        "east": 2280.176174037911,
+        "germany": 2200
       },
-      "condition": "bandwidth_drop",
+      "condition": "germany_bandwidth_drop",
+      "east_prefill_rho": 0.25,
       "germany_prefill_rho": 0.25,
-      "label": "Bandwidth drop",
+      "label": "Germany bandwidth",
       "moves": [
         {
-          "destination_instance": "germany",
-          "destination_pool": "pool/germany",
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
           "method": "replay",
           "order": 0,
           "path": [
-            "link/germany"
+            "link/east"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
         },
         {
-          "destination_instance": "germany",
-          "destination_pool": "pool/germany",
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
           "method": "replay",
           "order": 1,
           "path": [
-            "link/germany"
+            "link/east"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
@@ -238,14 +240,14 @@
         {
           "destination_instance": "germany",
           "destination_pool": "pool/germany",
-          "method": "replay",
+          "method": "kv_transfer",
           "order": 2,
           "path": [
             "link/germany"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
         },
         {
           "destination_instance": "east",
@@ -257,55 +259,55 @@
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
         },
         {
-          "destination_instance": "germany",
-          "destination_pool": "pool/germany",
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
           "method": "replay",
           "order": 4,
           "path": [
-            "link/germany"
+            "link/east"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
         },
         {
-          "destination_instance": "germany",
-          "destination_pool": "pool/germany",
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
           "method": "kv_transfer",
           "order": 5,
           "path": [
-            "link/germany"
+            "link/east"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
         },
         {
-          "destination_instance": "germany",
-          "destination_pool": "pool/germany",
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
           "method": "kv_transfer",
           "order": 6,
           "path": [
-            "link/germany"
+            "link/east"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
         },
         {
-          "destination_instance": "germany",
-          "destination_pool": "pool/germany",
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
           "method": "kv_transfer",
           "order": 7,
           "path": [
-            "link/germany"
+            "link/east"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
         },
         {
           "destination_instance": "germany",
@@ -317,19 +319,19 @@
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
         },
         {
           "destination_instance": "germany",
           "destination_pool": "pool/germany",
-          "method": "replay",
+          "method": "kv_transfer",
           "order": 9,
           "path": [
             "link/germany"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-4"
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
         },
         {
           "destination_instance": "east",
@@ -341,39 +343,39 @@
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-4"
         },
         {
-          "destination_instance": "germany",
-          "destination_pool": "pool/germany",
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
           "method": "replay",
           "order": 11,
           "path": [
-            "link/germany"
+            "link/east"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-separation-0"
         },
         {
-          "destination_instance": "germany",
-          "destination_pool": "pool/germany",
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
           "method": "replay",
           "order": 12,
           "path": [
-            "link/germany"
+            "link/east"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-separation-8"
         },
         {
-          "destination_instance": "east",
-          "destination_pool": "pool/east",
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
           "method": "replay",
           "order": 13,
           "path": [
-            "link/east"
+            "link/germany"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
@@ -381,75 +383,75 @@
         }
       ],
       "original_plan_violations": [
-        "route:link/east",
-        "migration:pool/east:kv_transfer"
+        "migration:pool/germany:kv_transfer"
       ],
       "planned_shed_w": 47.83328040814327,
       "planner_feasible": true,
       "requested_shed_w": 30.928316227187338,
       "simulated_deadline_met": true,
-      "simulated_makespan_s": 24.610246350453163,
+      "simulated_makespan_s": 24.086029224139825,
       "simulated_shed_w": 47.83328040814328
     },
     {
       "action_mix": {
-        "east_kv_transfer": 3,
-        "east_replay": 3,
-        "germany_kv_transfer": 3,
-        "germany_replay": 5
+        "east_kv_transfer": 1,
+        "east_replay": 1,
+        "germany_kv_transfer": 5,
+        "germany_replay": 7
       },
       "bandwidth": "natural",
       "bandwidth_mbps": {
         "east": 2280.176174037911,
         "germany": 8733.31359588583
       },
-      "condition": "prefill_drop",
-      "germany_prefill_rho": 0.9,
-      "label": "Prefill drop",
+      "condition": "east_prefill_drop",
+      "east_prefill_rho": 0.976,
+      "germany_prefill_rho": 0.25,
+      "label": "East prefill",
       "moves": [
         {
-          "destination_instance": "east",
-          "destination_pool": "pool/east",
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
           "method": "replay",
           "order": 0,
           "path": [
-            "link/east"
+            "link/germany"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
         },
         {
-          "destination_instance": "east",
-          "destination_pool": "pool/east",
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
           "method": "replay",
           "order": 1,
           "path": [
-            "link/east"
+            "link/germany"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
         },
         {
-          "destination_instance": "east",
-          "destination_pool": "pool/east",
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
           "method": "kv_transfer",
           "order": 2,
           "path": [
-            "link/east"
+            "link/germany"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
           "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
         },
         {
-          "destination_instance": "east",
-          "destination_pool": "pool/east",
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
           "method": "replay",
           "order": 3,
           "path": [
-            "link/east"
+            "link/germany"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
@@ -477,7 +479,7 @@
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
         },
         {
           "destination_instance": "germany",
@@ -489,7 +491,7 @@
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
         },
         {
           "destination_instance": "germany",
@@ -513,25 +515,13 @@
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
-        },
-        {
-          "destination_instance": "east",
-          "destination_pool": "pool/east",
-          "method": "kv_transfer",
-          "order": 9,
-          "path": [
-            "link/east"
-          ],
-          "quiesce_s": null,
-          "rate_limit_bytes_per_s": null,
-          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
         },
         {
           "destination_instance": "germany",
           "destination_pool": "pool/germany",
           "method": "replay",
-          "order": 10,
+          "order": 9,
           "path": [
             "link/germany"
           ],
@@ -543,7 +533,7 @@
           "destination_instance": "germany",
           "destination_pool": "pool/germany",
           "method": "replay",
-          "order": 11,
+          "order": 10,
           "path": [
             "link/germany"
           ],
@@ -555,7 +545,7 @@
           "destination_instance": "germany",
           "destination_pool": "pool/germany",
           "method": "replay",
-          "order": 12,
+          "order": 11,
           "path": [
             "link/germany"
           ],
@@ -564,29 +554,39 @@
           "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-separation-8"
         },
         {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 12,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-7"
+        },
+        {
           "destination_instance": "germany",
           "destination_pool": "pool/germany",
-          "method": "replay",
+          "method": "kv_transfer",
           "order": 13,
           "path": [
             "link/germany"
           ],
           "quiesce_s": null,
           "rate_limit_bytes_per_s": null,
-          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-7"
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-separation-3"
         }
       ],
       "original_plan_violations": [
-        "candidate:codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22/kv_transfer/pool/germany",
-        "candidate:codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5/kv_transfer/pool/germany",
-        "candidate:codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13/kv_transfer/pool/germany"
+        "service:pool/east:0"
       ],
-      "planned_shed_w": 47.83328040814327,
+      "planned_shed_w": 43.905619027857654,
       "planner_feasible": true,
       "requested_shed_w": 30.928316227187338,
       "simulated_deadline_met": true,
-      "simulated_makespan_s": 23.75885490496827,
-      "simulated_shed_w": 47.83328040814328
+      "simulated_makespan_s": 23.84285913306841,
+      "simulated_shed_w": 43.90561902785768
     }
   ],
   "schema": "queue-haul-repair-plan-shift-simulation-v1",

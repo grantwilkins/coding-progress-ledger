@@ -11,9 +11,11 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 
 import migration_profiler as profiler
 import network_campaign as network
+import plot_style
 from planner import _expected_scenario
 from profiles import ModelProfile
 from simulate import predict
@@ -21,28 +23,27 @@ from simulate import predict
 
 ROOT = Path(__file__).parent
 DEFAULT_PARENT = ROOT / "outputs/east-germany-separation-20260809/plan.json"
+GERMANY_BANDWIDTH_MBPS = 2200
 STATES = (
-    ("original", "Original", .25, "natural"),
-    ("bandwidth_drop", "Bandwidth drop", .25, "controlled_40"),
-    ("prefill_drop", "Prefill drop", .90, "natural"),
+    ("original", "Original", .25, .25, "natural"),
+    ("germany_bandwidth_drop", "Germany bandwidth", .25, .25, "germany_drop"),
+    ("east_prefill_drop", "East prefill", .976, .25, "natural"),
 )
-MIX = (
-    ("east_replay", "East replay", "#006CB8"),
-    ("east_kv_transfer", "East KV", "#6FC3DF"),
-    ("germany_replay", "Germany replay", "#B1040E"),
-    ("germany_kv_transfer", "Germany KV", "#E98300"),
-)
+MIX = tuple(plot_style.ACTION_NAMES)[2:6]
+plot_style.apply()
 
 
-def _scenario(template, parent, condition, germany_rho, bandwidth):
+def _scenario(template, parent, condition, east_rho, germany_rho, bandwidth):
+    rates = network._bandwidths(parent["network_contract"], "natural")
+    if bandwidth == "germany_drop":
+        rates["germany"] = GERMANY_BANDWIDTH_MBPS
     return {
         **template,
         "design": "repair_plan_shift_simulation",
         "condition_id": condition,
-        "background": {"east": (.25, 0), "germany": (germany_rho, 0)},
+        "background": {"east": (east_rho, 0), "germany": (germany_rho, 0)},
         "bandwidth": bandwidth,
-        "bandwidth_mbps": network._bandwidths(
-            parent["network_contract"], bandwidth),
+        "bandwidth_mbps": rates,
         "requested_shed_fraction": .5,
         "admission_mode": "normal",
         "full_horizon_s": network.ORACLE_STALE_HORIZON_S,
@@ -72,18 +73,35 @@ def _diff(original, moves):
 
 
 def _plot(rows, path):
-    bottom = [0] * len(rows)
-    fig, axis = plt.subplots(figsize=(6, 3.5))
-    for key, label, color in MIX:
-        values = [row[key] for row in rows]
-        axis.bar([row["label"] for row in rows], values, bottom=bottom,
-                 label=label, color=color)
-        bottom = [a + b for a, b in zip(bottom, values)]
-    axis.set_ylabel("Planned migrations")
-    axis.legend(frameon=False, ncol=2)
-    axis.spines[["top", "right"]].set_visible(False)
-    fig.tight_layout()
-    fig.savefig(path, dpi=200)
+    labels = {
+        "east_replay": "Replay → eastus-2",
+        "east_kv_transfer": "KV → eastus-2",
+        "germany_replay": "Replay → germany-west-central",
+        "germany_kv_transfer": "KV → germany-west-central",
+    }
+    fig, axis = plt.subplots(figsize=(7, 3))
+    left = np.zeros(len(rows))
+    for action in MIX:
+        values = np.array([row[action] / row["planned_sessions"]
+                           for row in rows]) * 100
+        axis.barh(range(len(rows)), values, left=left,
+                  color=plot_style.ACTION_COLORS[action],
+                  hatch=plot_style.ACTION_HATCHES[action], edgecolor="white",
+                  linewidth=1.2, label=labels[action])
+        left += values
+    axis.set(yticks=range(len(rows)),
+             yticklabels=[row["label"] for row in rows], xlim=(0, 100),
+             xlabel="Selected-action share (%)")
+    axis.invert_yaxis()
+    axis.grid(axis="x", alpha=.2)
+    axis.tick_params(labelsize=11)
+    axis.xaxis.label.set_size(12)
+    handles, labels = axis.get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, ncol=1, loc="center left",
+               bbox_to_anchor=(.59, .58), fontsize=10, handlelength=1.8)
+    fig.subplots_adjust(left=.23, right=.57, bottom=.18, top=.96)
+    for suffix in ("png", "pdf"):
+        fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
 
@@ -99,9 +117,9 @@ def run(out: Path, parent_path: Path = DEFAULT_PARENT):
                     if row["condition_id"] == "joint-shaped"
                     and row["repeat"] == 0 and row["policy"] == "queue_haul")
     plans, mixes, diffs, original = [], [], [], None
-    for condition, label, germany_rho, bandwidth in STATES:
+    for condition, label, east_rho, germany_rho, bandwidth in STATES:
         scenario = _scenario(
-            template, parent, condition, germany_rho, bandwidth)
+            template, parent, condition, east_rho, germany_rho, bandwidth)
         problem, architecture, routes, target, _ = network._scenario_problem(
             scenario, manifest, profile)
         result = network.solve(
@@ -124,6 +142,7 @@ def run(out: Path, parent_path: Path = DEFAULT_PARENT):
             "label": label,
             "bandwidth": bandwidth,
             "bandwidth_mbps": scenario["bandwidth_mbps"],
+            "east_prefill_rho": east_rho,
             "germany_prefill_rho": germany_rho,
             "requested_shed_w": float(target),
             "planned_shed_w": float(result.initial_source_power_w
@@ -143,7 +162,7 @@ def run(out: Path, parent_path: Path = DEFAULT_PARENT):
                  for plan in plans) \
         and all(plan["original_plan_violations"] for plan in plans[1:]) \
         and all(row["changed_sessions"] for row in diffs[1:]) \
-        and len({tuple(row[key] for key, _, _ in MIX) for row in mixes}) == 3
+        and len({tuple(row[key] for key in MIX) for row in mixes}) == 3
     manifest_out = {
         "schema": "queue-haul-repair-plan-shift-simulation-v1",
         "semantics": "independent full snapshot replans",
