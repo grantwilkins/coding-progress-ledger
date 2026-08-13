@@ -706,6 +706,20 @@ designed cases, not repeated-run confidence intervals. Deadline-blind plans
 against 90 seconds but receives credit only for shed attained by the common
 30-second cutoff.
 
+The companion attainment-time ECDF uses the same twelve cases at the common
+67% stress point. Each event is the first modeled target crossing plus the
+profile's power-window delay; misses retain missing CDF mass. The 30-second
+line is the common evaluation deadline, while the 90-second horizon exposes
+late deadline-blind attainment:
+
+```bash
+uv run python queue-haul/plot_pooled_attainment_cdf.py \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_attainment_cdf
+```
+
 The H100 counterpart pools the five completed hardware-gap states using the
 measured H100 profile. Its star is the median of 15 matched Queue-Haul robust
 hardware runs at the common 41.4% request; the curves remain modeled 30-second
