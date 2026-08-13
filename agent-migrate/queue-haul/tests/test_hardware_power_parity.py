@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import pytest
 
 from plot_hardware_power_parity import (
-    METHODS, normalize, predicted_shed, settled_pre_available,
+    METHODS, PLOT_METHODS, normalize, predicted_shed, settled_pre_available,
     source_power_shed, write_plot,
 )
 
@@ -98,6 +98,8 @@ def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
     assert axis.get_xlim() == axis.get_ylim()
     assert axis.get_xlabel() == \
         "Phase-aware predicted shed (% of max prediction)"
-    assert len(axis.collections) == len(METHODS)
+    assert len(axis.collections) == len(PLOT_METHODS)
     assert all(len(collection.get_offsets()) == 2 for collection in axis.collections)
+    assert {collection.get_label() for collection in axis.collections} == \
+        {"Queue-Haul LP", "Queue-Haul Greedy"}
     assert {text.get_text() for text in axis.texts} >= {"Overshed", "Undershed"}

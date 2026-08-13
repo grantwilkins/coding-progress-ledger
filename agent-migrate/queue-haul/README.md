@@ -902,6 +902,8 @@ bias, and 8.66 W RMSE; grouped five-fold episode cross-validation retains a
 0.999 slope, 0.11 W bias, and 8.78 W RMSE. The CSV preserves all policy repeats.
 The parity x-axis reports shed from the fitted
 `P0 + delta_p * z / (1 + z)` model with `z = a*f + b*g`.
+The publication plot shows Queue-Haul LP and Queue-Haul Greedy; its CSV retains
+all seven measured policy arms.
 
 Reduction runs automatically and can also be repeated without hardware:
 

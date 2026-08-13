@@ -30,6 +30,7 @@ METHODS = (
     "queue_haul", "greedy", "isolated_fastest", "kv_only", "replay_only",
     "queue_haul_power_blind", "queue_haul_deadline_blind",
 )
+PLOT_METHODS = ("queue_haul", "greedy")
 CONTEMPORANEOUS_METHODS = set(METHODS) - {"kv_only", "replay_only"}
 MARKERS = dict(zip(METHODS, "os^vPDX"))
 NS = 10**9
@@ -187,7 +188,8 @@ def write_csv(rows: list[dict], out: Path) -> None:
 
 
 def write_plot(rows: list[dict], scale: float, out: Path) -> None:
-    values = [row[key] for row in rows
+    plotted = [row for row in rows if row["method"] in PLOT_METHODS]
+    values = [row[key] for row in plotted
               for key in ("predicted_percent", "measured_percent")]
     lower, upper = min(-5, min(values)), max(105, max(values))
     padding = .03 * (upper - lower)
@@ -195,8 +197,8 @@ def write_plot(rows: list[dict], scale: float, out: Path) -> None:
     fig, axis = plt.subplots(figsize=plot_style.FIGSIZE)
     axis.plot(limits, limits, color="black", linestyle="--", linewidth=1.5,
               label="Prediction = measurement", zorder=1)
-    for method in METHODS:
-        selected = [row for row in rows if row["method"] == method]
+    for method in PLOT_METHODS:
+        selected = [row for row in plotted if row["method"] == method]
         axis.scatter(
             [row["predicted_percent"] for row in selected],
             [row["measured_percent"] for row in selected],
@@ -214,7 +216,8 @@ def write_plot(rows: list[dict], scale: float, out: Path) -> None:
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, fontsize=9,
                loc="center left", bbox_to_anchor=(.66, .54))
-    fig.text(.98, .02, f"Maximum prediction = {scale:.1f} W; {len(rows)} episodes",
+    fig.text(.98, .02,
+             f"Maximum prediction = {scale:.1f} W; {len(plotted)} episodes",
              ha="right", fontsize=9)
     fig.subplots_adjust(left=.13, right=.65, bottom=.15, top=.97)
     out.parent.mkdir(parents=True, exist_ok=True)
