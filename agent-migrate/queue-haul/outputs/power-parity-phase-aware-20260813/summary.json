@@ -23,5 +23,17 @@
   "correlation": 0.8405858835443325,
   "within_5w_fraction": 0.4257142857142857,
   "within_10w_fraction": 0.7485714285714286,
-  "overprediction_fraction": 0.56
+  "overprediction_fraction": 0.56,
+  "grouped_five_fold_cross_validation": {
+    "group": "repeat",
+    "slope_through_origin": 0.9990435644545198,
+    "ols_slope": 0.9765547143224029,
+    "ols_intercept_w": 0.8092535495878036,
+    "measured_minus_predicted_bias_w": 0.11343816826523222,
+    "mae_w": 7.078625741575667,
+    "rmse_w": 8.782483843245869,
+    "correlation": 0.8358069413808977,
+    "within_10w_fraction": 0.7514285714285714,
+    "overprediction_fraction": 0.5514285714285714
+  }
 }

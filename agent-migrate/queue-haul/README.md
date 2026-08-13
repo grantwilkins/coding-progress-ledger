@@ -805,7 +805,8 @@ The completed 350-scenario run is retained in scratch. The descriptive
 phase-aware refit under `outputs/power-parity-phase-aware-20260813/` uses the
 same observations for fitting and parity, so it is not held-out evidence. Its
 shed regression has a 0.997 through-origin slope, effectively zero aggregate
-bias, and 8.66 W RMSE; the CSV preserves all policy repeats.
+bias, and 8.66 W RMSE; grouped five-fold episode cross-validation retains a
+0.999 slope, 0.11 W bias, and 8.78 W RMSE. The CSV preserves all policy repeats.
 
 Reduction runs automatically and can also be repeated without hardware:
 
