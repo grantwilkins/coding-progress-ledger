@@ -788,6 +788,19 @@ second before migration to the one-second post-switch window after a one-second
 guard. A new hardware run with an explicit pre-migration hold is required for a
 settled-state parity claim.
 
+`power_parity_experiment.py` supplies that focused run without campaign controls:
+50 matched random migration sizes per policy (350 runs total), a five-second
+settled source window at load 0.4, and a five-second settled window at the
+remaining source load. It reduces the direct GPU-0 means against the pinned
+RAMR A100 power curve and writes the CSV plus y=x PNG/PDF.
+
+```bash
+uv run python queue-haul/power_parity_experiment.py prepare \
+  --source-plan queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json \
+  --out queue-haul/outputs/power-parity-random-plan
+sbatch queue-haul/outputs/power-parity-random-plan/run.sbatch
+```
+
 Reduction runs automatically and can also be repeated without hardware:
 
 ```bash
