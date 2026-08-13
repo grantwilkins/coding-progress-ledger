@@ -79,5 +79,6 @@ def test_network_plan_materializes_fixed_screening_moves(tmp_path):
     plan = campaign.network_plan(parent, campaign_path)
     scenario = plan["scenarios"][0]
     assert [row["method"] for row in scenario["moves"]] == ["replay", "kv_transfer"]
+    assert scenario["workload"] == "migration_calibration"
     assert scenario["background"] == {"east": [.6, 0], "germany": [0, 0]}
     assert scenario["bandwidth_mbps"] == {"east": 40, "germany": 40}

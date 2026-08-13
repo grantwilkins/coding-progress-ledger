@@ -110,6 +110,7 @@ def network_plan(parent_path: Path, campaign_path: Path) -> dict:
         scenarios.append({
             "scenario_id": hashlib.sha256(identity.encode()).hexdigest()[:16],
             "design": "calibration", "condition_id": "migration-screening",
+            "workload": "migration_calibration",
             "condition_index": index, "policy": cell["action_mix"],
             "repeat": cell["repeat"], "pack": campaign["pack"],
             "background": {node: [cell["destination_prefill_load"]
