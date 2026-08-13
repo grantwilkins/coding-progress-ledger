@@ -33,6 +33,34 @@ def fit_curve(points: list[dict], idle_w: float, far_load: float,
                    "within_5w_fraction": statistics.fmean(abs(x) <= 5 for x in errors)}
 
 
+def bootstrap_curves(points: list[dict], idle_w: float, far_load: float,
+                     far_power_w: float, samples: int = 200, seed: int = 1) -> list[list[list[float]]]:
+    grouped = {repeat: [row for row in points if row["repeat"] == repeat]
+               for repeat in sorted({row["repeat"] for row in points})}
+    rng, curves = np.random.default_rng(seed), []
+    for _ in range(samples):
+        selected = [row for repeat in rng.choice(list(grouped), len(grouped))
+                    for row in grouped[repeat]]
+        curves.append(fit_curve(selected, idle_w, far_load, far_power_w)[0])
+    return curves
+
+
+def grouped_repeat_cv(points: list[dict], idle_w: float, far_load: float,
+                      far_power_w: float) -> dict:
+    errors = []
+    for repeat in sorted({row["repeat"] for row in points}):
+        curve, _ = fit_curve([row for row in points if row["repeat"] != repeat],
+                             idle_w, far_load, far_power_w)
+        x, y = np.asarray(curve).T
+        errors.extend(float(np.interp(row["load"], x, y) - row["power_w"])
+                      for row in points if row["repeat"] == repeat)
+    return {"grouped_repeat_cv_mae_w": statistics.fmean(map(abs, errors)),
+            "grouped_repeat_cv_rmse_w": float(np.sqrt(np.mean(np.square(errors)))),
+            "grouped_repeat_cv_bias_w": statistics.fmean(errors),
+            "grouped_repeat_cv_within_5w_fraction": statistics.fmean(
+                abs(error) <= 5 for error in errors)}
+
+
 def collect(root: Path, profile: ModelProfile) -> list[dict]:
     plan = json.loads((root / "plan.json").read_text())
     manifest_path = Path(plan["manifest"]["path"])
@@ -79,8 +107,12 @@ def fit(profile_path: Path, root: Path, out_profile: Path, summary_path: Path,
         raise ValueError("pack fit requires phase power")
     points = collect(root, profile)
     curve, metrics = fit_curve(points, phase.p0_w, profile.max_power_load, far_power_w)
+    metrics.update(grouped_repeat_cv(points, phase.p0_w, profile.max_power_load,
+                                     far_power_w))
+    bootstraps = bootstrap_curves(points, phase.p0_w, profile.max_power_load, far_power_w)
     phase_raw = raw["cases"]["central"]["phase_power"]
     phase_raw["measured_power_curve"] = curve
+    phase_raw["measured_power_bootstrap"] = bootstraps
     phase_raw["delta_w"] = far_power_w - phase.p0_w
     phase_raw["bootstrap"] = []
     digest = hashlib.sha256((root / "trailing_power.csv").read_bytes()).hexdigest()
@@ -94,7 +126,8 @@ def fit(profile_path: Path, root: Path, out_profile: Path, summary_path: Path,
     with points_path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=points[0]); writer.writeheader(); writer.writerows(points)
     summary = {"schema": "queue-haul-pack-power-fit-v1", **metrics,
-               "gate_passed": metrics["mae_w"] <= 5 and metrics["within_5w_fraction"] >= .8,
+               "gate_passed": metrics["grouped_repeat_cv_mae_w"] <= 5
+               and metrics["grouped_repeat_cv_within_5w_fraction"] >= .8,
                "points": len(points), "curve": curve, "scope": "recorded-28-seed-8"}
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     return summary

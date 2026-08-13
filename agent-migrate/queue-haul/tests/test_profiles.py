@@ -101,6 +101,8 @@ def test_phase_power_separates_service_and_power_load(tmp_path):
 
     raw["cases"]["central"]["phase_power"]["measured_power_curve"] = [
         [0, 10], [.5, 70], [1, 95]]
+    raw["cases"]["central"]["phase_power"]["measured_power_bootstrap"] = [[
+        [0, 10], [.5, 65], [1, 90]]]
     case = ModelProfile.load(write(tmp_path, raw, "measured-phase.json")).case()
     assert case.power(.75) == pytest.approx(82.5)
 

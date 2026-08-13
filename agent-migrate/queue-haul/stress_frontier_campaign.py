@@ -72,7 +72,8 @@ def stress_states(profile: ModelProfile, seed: int = 1) -> list[dict]:
                 "kv_multiplier": 1 + errors["kv_transfer"].relative_error
                 * (2 * axes[3][index] - 1),
                 "power_bootstrap_index": int(rng.integers(
-                    0, max(1, len(phase.bootstrap)))),
+                    0, max(1, len(getattr(phase, "measured_power_bootstrap", ())),
+                           len(phase.bootstrap)))),
                 "weight": 1 / 40,
             })
     return states
@@ -110,7 +111,11 @@ def state_profile(profile: ModelProfile, state: dict) -> ModelProfile:
     case, phase = profile.case(), profile.case().phase_power
     if phase is None:
         raise ValueError("state profile requires phase power")
-    if phase.bootstrap:
+    if phase.measured_power_bootstrap:
+        curve = phase.measured_power_bootstrap[
+            state["power_bootstrap_index"] % len(phase.measured_power_bootstrap)]
+        phase = replace(phase, measured_power_curve=curve)
+    elif phase.bootstrap:
         p0, delta, a, b = phase.bootstrap[state["power_bootstrap_index"]]
         phase = replace(phase, p0_w=p0, delta_w=delta,
                         a_s_per_prefill_token=a, b_s_per_decode_token=b)

@@ -1,6 +1,6 @@
 import pytest
 
-from pack_power_calibration import fit_curve
+from pack_power_calibration import bootstrap_curves, fit_curve, grouped_repeat_cv
 
 
 def test_fit_curve_is_monotone_and_anchors_far_power():
@@ -12,3 +12,14 @@ def test_fit_curve_is_monotone_and_anchors_far_power():
     assert curve[-1] == [2, 300]
     assert all(a[1] <= b[1] for a, b in zip(curve, curve[1:]))
     assert metrics["mae_w"] == pytest.approx(5.625)
+
+
+def test_bootstrap_curves_resample_whole_repeats():
+    points = [{"repeat": repeat, "load": load, "power_w": power + repeat}
+              for repeat in range(3) for load, power in ((.2, 150), (.5, 200))]
+    curves = bootstrap_curves(points, 100, 1, 300, samples=5)
+    assert len(curves) == 5
+    assert all(curve[0] == [0, 100] and curve[-1] == [1, 300] for curve in curves)
+    cv = grouped_repeat_cv(points, 100, 1, 300)
+    assert cv["grouped_repeat_cv_mae_w"] == pytest.approx(1)
+    assert cv["grouped_repeat_cv_within_5w_fraction"] == 1

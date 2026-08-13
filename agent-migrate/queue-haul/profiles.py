@@ -105,6 +105,7 @@ class PhasePower:
     bootstrap: tuple[tuple[float, float, float, float], ...]
     provenance_sha256: str
     measured_power_curve: tuple[tuple[float, float], ...] = ()
+    measured_power_bootstrap: tuple[tuple[tuple[float, float], ...], ...] = ()
 
     @classmethod
     def parse(cls, raw: dict) -> "PhasePower":
@@ -113,8 +114,9 @@ class PhasePower:
             "b_s_per_decode_token", "valid_hull", "grouped_cv_rmse_w",
             "within_5w_fraction", "bootstrap", "provenance_sha256",
         }
-        if set(raw) not in (required, required | {"measured_power_curve"}):
-            raise ValueError(f"phase_power fields must be {sorted(required)} plus optional measured_power_curve")
+        optional = {"measured_power_curve", "measured_power_bootstrap"}
+        if not required <= set(raw) or set(raw) - required - optional:
+            raise ValueError(f"phase_power fields must be {sorted(required)} plus {sorted(optional)}")
         hull = tuple(tuple(map(float, point)) for point in raw["valid_hull"])
         bootstrap = tuple(tuple(map(float, row)) for row in raw["bootstrap"])
         value = cls(
@@ -125,8 +127,11 @@ class PhasePower:
             float(raw["within_5w_fraction"]), bootstrap,
             str(raw["provenance_sha256"]),
             tuple(tuple(map(float, point)) for point in raw.get("measured_power_curve", ())),
+            tuple(tuple(tuple(map(float, point)) for point in curve)
+                  for curve in raw.get("measured_power_bootstrap", ())),
         )
         curve = np.asarray(value.measured_power_curve, float)
+        curves = [np.asarray(item, float) for item in value.measured_power_bootstrap]
         if value.p0_w < 0 or value.delta_w <= 0 \
                 or min(value.a_s_per_prefill_token,
                        value.b_s_per_decode_token) <= 0 \
@@ -138,7 +143,10 @@ class PhasePower:
                 or len(value.provenance_sha256) != 64 \
                 or value.measured_power_curve and (curve.ndim != 2 or curve.shape[1] != 2
                     or curve[0, 0] != 0 or np.any(np.diff(curve[:, 0]) <= 0)
-                    or np.any(np.diff(curve[:, 1]) < 0)):
+                    or np.any(np.diff(curve[:, 1]) < 0)) \
+                or any(item.ndim != 2 or item.shape[1] != 2 or item[0, 0] != 0
+                       or np.any(np.diff(item[:, 0]) <= 0)
+                       or np.any(np.diff(item[:, 1]) < 0) for item in curves):
             raise ValueError("invalid phase-aware power calibration")
         return value
 
