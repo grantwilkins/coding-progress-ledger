@@ -108,19 +108,31 @@ def run_cell(host: str, port: int, root: Path, cell: dict,
 
 
 def run_plan(plan_path: Path, profile_path: Path, out: Path,
-             host: str = "127.0.0.1", port: int = 8100) -> list[dict]:
+             host: str = "127.0.0.1", port: int = 8100,
+             resume: bool = False) -> list[dict]:
     plan, profile = json.loads(plan_path.read_text()), ModelProfile.load(profile_path)
     if plan.get("schema") not in {"queue-haul-phase-power-plan-v1",
                                   "queue-haul-phase-power-adaptive-plan-v1"}:
         raise ValueError("invalid phase power plan")
     power_rate_sweep.validate_gpu("NVIDIA A100 80GB PCIe", 300)
-    out.mkdir(parents=True, exist_ok=False)
-    rows, case = [], profile.case()
+    out.mkdir(parents=True, exist_ok=resume)
+    measurement_path = out / "measurements.csv"
+    rows = []
+    if resume and measurement_path.exists():
+        with measurement_path.open(newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    completed = {(row["mixture"], float(row["target_service_load"]), int(row["repeat"]))
+                 for row in rows}
+    case = profile.case()
     for cell in plan["cells"]:
+        key = cell["mixture"], float(cell["target_service_load"]), int(cell["repeat"])
+        if key in completed:
+            continue
         rows.append(run_cell(host, port, out, cell, case.F, case.G))
-        with (out / "measurements.csv").open("w", newline="") as handle:
+        with measurement_path.open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=rows[0])
             writer.writeheader(); writer.writerows(rows)
+        print(json.dumps(rows[-1]), flush=True)
     return rows
 
 
@@ -274,6 +286,7 @@ def main() -> None:
     run_command.add_argument("--out", type=Path, required=True)
     run_command.add_argument("--host", default="127.0.0.1")
     run_command.add_argument("--port", type=int, default=8100)
+    run_command.add_argument("--resume", action="store_true")
     augment = sub.add_parser("augment")
     augment.add_argument("--plan", type=Path, required=True)
     augment.add_argument("--summary", type=Path, required=True)
@@ -290,7 +303,7 @@ def main() -> None:
         (args.out / "plan.json").write_text(
             json.dumps(campaign_plan(args.repeats, args.seed), indent=2, sort_keys=True) + "\n")
     elif args.command == "run":
-        run_plan(args.plan, args.profile, args.out, args.host, args.port)
+        run_plan(args.plan, args.profile, args.out, args.host, args.port, args.resume)
     elif args.command == "augment":
         args.out.write_text(json.dumps(adaptive_plan(
             json.loads(args.plan.read_text()), json.loads(args.summary.read_text())),
