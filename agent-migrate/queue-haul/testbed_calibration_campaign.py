@@ -204,6 +204,31 @@ def fit_timing(profile_path: Path, parent_path: Path, telemetry_path: Path,
     }
 
 
+def bundle_summary(paths: list[Path]) -> dict:
+    values = {path.name: json.loads(path.read_text()) for path in paths}
+    power = next(value for value in values.values()
+                 if value.get("schema") == "queue-haul-phase-power-fit-v1")
+    timing = next(value for value in values.values()
+                  if value.get("schema") == "queue-haul-compact-timing-fit-v1")
+    frontier = next(value for value in values.values()
+                    if value.get("schema") == "queue-haul-stress-frontier-v1")
+    stress = next(value for value in values.values()
+                  if value.get("schema") == "queue-haul-stress-frontier-plan-v1")
+    return {
+        "schema": "queue-haul-compact-calibration-bundle-v1",
+        "claim": "modeled stress-suite sensitivity",
+        "promotion_ready": power["gate_passed"] and timing["migration_gate_passed"],
+        "calibration": {"phase_power_gate_passed": power["gate_passed"],
+                        "timing_gate_passed": timing["timing_gate_passed"],
+                        "held_out_migration_gate_passed": timing["migration_gate_passed"]},
+        "pareto": {"states": len(stress["states"]), "deadlines_s": stress["deadlines_s"],
+                   "points": len(frontier["frontier"]),
+                   "reference_label": frontier["reference_label"]},
+        "artifacts": {str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+                      for path in paths},
+    }
+
+
 def network_plan(parent_path: Path, campaign_path: Path,
                  completed_roots: list[Path] | None = None) -> dict:
     parent, campaign = json.loads(parent_path.read_text()), json.loads(campaign_path.read_text())
@@ -468,6 +493,9 @@ def main() -> None:
     t.add_argument("--out-profile", type=Path, required=True)
     t.add_argument("--out-parent", type=Path, required=True)
     t.add_argument("--summary", type=Path, required=True)
+    b = sub.add_parser("bundle-summary")
+    b.add_argument("--artifact", type=Path, action="append", required=True)
+    b.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "compact":
         args.out.write_text(json.dumps(compact_campaign(), indent=2,
@@ -478,6 +506,9 @@ def main() -> None:
         value = fit_timing(args.profile, args.parent, args.telemetry,
                            args.out_profile, args.out_parent)
         args.summary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+    elif args.command == "bundle-summary":
+        args.out.write_text(json.dumps(bundle_summary(args.artifact), indent=2,
+                                       sort_keys=True) + "\n")
     elif args.command == "network-plan":
         args.out.write_text(json.dumps(network_plan(args.parent, args.campaign,
                                                     args.missing_from),

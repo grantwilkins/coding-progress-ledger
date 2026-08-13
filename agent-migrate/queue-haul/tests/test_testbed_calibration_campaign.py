@@ -124,6 +124,25 @@ def test_fit_timing_calibrates_route_endpoint_and_residual(tmp_path):
     assert not result["migration_gate_passed"]
 
 
+def test_bundle_summary_preserves_modeled_label_and_gates(tmp_path):
+    values = [
+        {"schema": "queue-haul-phase-power-fit-v1", "gate_passed": False},
+        {"schema": "queue-haul-compact-timing-fit-v1", "timing_gate_passed": True,
+         "migration_gate_passed": False},
+        {"schema": "queue-haul-stress-frontier-plan-v1", "states": [{}] * 40,
+         "deadlines_s": [10, 15]},
+        {"schema": "queue-haul-stress-frontier-v1", "reference_label":
+         "exact modeled MILP optimum", "frontier": [{}] * 16},
+    ]
+    paths = []
+    for index, value in enumerate(values):
+        path = tmp_path / f"{index}.json"; path.write_text(json.dumps(value)); paths.append(path)
+    result = campaign.bundle_summary(paths)
+    assert result["claim"] == "modeled stress-suite sensitivity"
+    assert not result["promotion_ready"]
+    assert result["pareto"]["states"] == 40
+
+
 def test_plan_spans_requested_migration_design(tmp_path):
     parent = tmp_path / "parent.json"
     parent.write_text(json.dumps({"scenarios": [{"condition_id": "joint-shaped",
