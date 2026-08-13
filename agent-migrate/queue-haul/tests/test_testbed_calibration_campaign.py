@@ -46,12 +46,36 @@ def test_inventory_recovers_timing_concurrency_and_route_rate(tmp_path):
     (attempt / "scenario.json").write_text(json.dumps(scenario))
     (attempt / "result.json").write_text(json.dumps(result))
     write(stack / "proxy_connections.csv", [{"connection_id": "c", "route": "kv/east"}])
+    write(stack / "power.csv", [
+        {"monotonic_ns": value, "power_w": watts, "valid": 1, "gpu": 0}
+        for value, watts in ((0, 100), (2_000_000_000, 200),
+                             (4_000_000_000, 300), (6_000_000_000, 100))])
     rows, summary = campaign.inventory([tmp_path])
     assert rows[0]["kv_bytes"] == 900
     assert rows[0]["route_goodput_bytes_per_s"] == 1000
     assert rows[0]["destination_ready_ns"] == 3_000_000_000
     assert rows[0]["concurrent_kv"] == 1
+    assert rows[0]["source_power_mean_w"] == 250
+    assert rows[0]["source_power_p95_w"] == 300
+    assert rows[0]["source_power_samples"] == 2
     assert summary["requires_new_per_migration_transfer_ids"] is False
+    assert summary["source_power_covered_migrations"] == 1
+
+
+def test_compact_campaign_is_balanced_and_fit_ready():
+    plan = campaign.compact_campaign()
+    cells = plan["migration_screening_cells"]
+    assert len(cells) == 12
+    assert {value: sum(row["destination"] == value for row in cells)
+            for value in ("east", "germany")} == {"east": 6, "germany": 6}
+    assert {value: sum(row["action_mix"] == value for row in cells)
+            for value in campaign.ACTION_MIXES} == {
+                "replay_only": 4, "kv_only": 4, "mixed": 4}
+    assert {value: sum(row["bandwidth"] == value for row in cells)
+            for value in campaign.BANDWIDTHS} == {"natural": 6, "controlled_40": 6}
+    mixtures = [row["mixture"] for row in plan["power_anchors"] if "mixture" in row]
+    assert {value: mixtures.count(value) for value in set(mixtures)} == {
+        "prefill75": 3, "mixed": 2, "decode": 4}
 
 
 def test_plan_spans_requested_migration_design(tmp_path):

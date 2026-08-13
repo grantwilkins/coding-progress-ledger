@@ -19,6 +19,20 @@ LOADS = (.25, .6, .9)
 CONCURRENCIES = (1, 2, 4, 8)
 ACTION_MIXES = ("replay_only", "kv_only", "mixed")
 BANDWIDTHS = ("natural", "controlled_40")
+COMPACT_CELLS = (
+    ("east", .9, 1, "replay_only", 31547, "natural"),
+    ("east", .25, 8, "replay_only", 14042, "controlled_40"),
+    ("east", .9, 8, "kv_only", 31547, "controlled_40"),
+    ("east", .9, 2, "mixed", 14042, "controlled_40"),
+    ("east", .25, 1, "kv_only", 14042, "natural"),
+    ("east", .6, 2, "mixed", 30785, "natural"),
+    ("germany", .9, 4, "replay_only", 31547, "controlled_40"),
+    ("germany", .6, 4, "kv_only", 30785, "controlled_40"),
+    ("germany", .6, 1, "mixed", 31547, "controlled_40"),
+    ("germany", .6, 2, "kv_only", 14042, "natural"),
+    ("germany", .25, 1, "replay_only", 30785, "natural"),
+    ("germany", .6, 2, "mixed", 30785, "natural"),
+)
 
 
 def make_plan(parent_path: Path, seed: int = 1) -> dict:
@@ -76,6 +90,27 @@ def make_plan(parent_path: Path, seed: int = 1) -> dict:
                   "p90_timing_relative_error": .15,
                   "p90_timing_absolute_error_s": 1,
                   "false_feasible": 0, "correctness_failures": 0},
+    }
+
+
+def compact_campaign() -> dict:
+    cells = [{"destination": destination, "destination_prefill_load": load,
+              "concurrency": concurrency, "action_mix": action_mix,
+              "context_tokens": context, "bandwidth": bandwidth, "repeat": 0}
+             for destination, load, concurrency, action_mix, context, bandwidth
+             in COMPACT_CELLS]
+    return {
+        "schema": "queue-haul-compact-calibration-plan-v1",
+        "pack": "recorded-28-seed-8", "migration_screening_cells": cells,
+        "power_anchors": [
+            {"kind": "idle", "path": "phase-power-v1/idle/power.csv"},
+            *[{"mixture": mixture, "load": load}
+              for mixture, loads in (("prefill75", (.1, .65, .8)),
+                                      ("mixed", (.1, .45)),
+                                      ("decode", (.1, .45, .65, .8)))
+              for load in loads],
+        ],
+        "timing_model": "component rates plus conservative held-out residual quantile",
     }
 
 
@@ -144,7 +179,7 @@ def _overlap(rows: list[dict], item: dict, method: str) -> int:
                 for instant in instants), default=0)
 
 
-def inventory(roots: list[Path]) -> tuple[list[dict], dict]:
+def inventory(roots: list[Path], scenario_ids: set[str] | None = None) -> tuple[list[dict], dict]:
     rows = []
     for root in roots:
         route_by_connection = {}
@@ -152,11 +187,25 @@ def inventory(roots: list[Path]) -> tuple[list[dict], dict]:
             with connection_path.open(newline="") as handle:
                 route_by_connection.update({row["connection_id"]: row["route"]
                                             for row in csv.DictReader(handle)})
+        power = []
+        for power_path in root.glob("stacks/*/power.csv"):
+            with power_path.open(newline="") as handle:
+                samples = [(int(row["monotonic_ns"]), float(row["power_w"]))
+                           for row in csv.DictReader(handle)
+                           if row.get("valid", "1") == "1" and row.get("gpu", "0") == "0"]
+            if samples:
+                power.append((samples[0][0], samples[-1][0], samples, power_path))
         for path in sorted(root.glob("scenarios/*/attempt-*/result.json")):
             scenario_path = path.with_name("scenario.json")
             if not scenario_path.exists():
                 continue
             scenario, result = json.loads(scenario_path.read_text()), json.loads(path.read_text())
+            if scenario_ids is not None and scenario.get("scenario_id") not in scenario_ids:
+                continue
+            start, end = int(result.get("started_ns", 0)), int(result.get("ended_ns", 0))
+            power_matches = [item for item in power if item[0] <= start <= end <= item[1]]
+            episode_power = [(time_ns, watts) for time_ns, watts in power_matches[0][2]
+                             if start <= time_ns <= end] if len(power_matches) == 1 else []
             sessions = {row["session_id"]: row for row in scenario.get("sessions", [])}
             requests = []
             for move in result.get("requests", []):
@@ -213,6 +262,14 @@ def inventory(roots: list[Path]) -> tuple[list[dict], dict]:
                     "bandwidth": scenario.get("bandwidth"), "deadline_s": scenario.get("deadline_s"),
                     "deadline_admitted": move.get("deadline_admitted"),
                     "episode_deadline_met": result.get("deadline_met"), "source": str(path),
+                    "source_power_mean_w": statistics.fmean(
+                        watts for _, watts in episode_power) if episode_power else None,
+                    "source_power_p95_w": sorted(watts for _, watts in episode_power)[
+                        max(0, (95 * len(episode_power) + 99) // 100 - 1)]
+                    if episode_power else None,
+                    "source_power_samples": len(episode_power),
+                    "source_power_path": str(power_matches[0][3])
+                    if len(power_matches) == 1 else None,
                 })
     kv = [row for row in rows if row["method"] == "kv_transfer"]
     summary = {
@@ -224,6 +281,7 @@ def inventory(roots: list[Path]) -> tuple[list[dict], dict]:
         "direct_per_migration_kv_bytes": sum(row["kv_bytes"] is not None for row in kv),
         "kv_migrations": len(kv),
         "requires_new_per_migration_transfer_ids": any(row["kv_bytes"] is None for row in kv),
+        "source_power_covered_migrations": sum(row["source_power_samples"] > 0 for row in rows),
         "timestamp_semantics": {"migration_start_ns": "destination request start",
                                 "destination_ready_ns": "first response stream chunk",
                                 "commit_ns": "verified reconstruction response end"},
@@ -297,16 +355,24 @@ def main() -> None:
     i.add_argument("--root", type=Path, action="append", required=True)
     i.add_argument("--out", type=Path, required=True)
     i.add_argument("--summary", type=Path, required=True)
+    i.add_argument("--plan", type=Path)
     n = sub.add_parser("network-plan")
     n.add_argument("--parent", type=Path, required=True)
     n.add_argument("--campaign", type=Path, required=True)
     n.add_argument("--out", type=Path, required=True)
+    c = sub.add_parser("compact")
+    c.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "network-plan":
+    if args.command == "compact":
+        args.out.write_text(json.dumps(compact_campaign(), indent=2,
+                                       sort_keys=True) + "\n")
+    elif args.command == "network-plan":
         args.out.write_text(json.dumps(network_plan(args.parent, args.campaign),
                                        indent=2, sort_keys=True) + "\n")
     elif args.command == "inventory":
-        rows, value = inventory(args.root); _write(args.out, rows)
+        scenario_ids = ({row["scenario_id"] for row in json.loads(args.plan.read_text())["scenarios"]}
+                        if args.plan else None)
+        rows, value = inventory(args.root, scenario_ids); _write(args.out, rows)
         args.summary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
     else:
         value = make_plan(args.parent, args.seed) if args.command == "prepare" else reduce(
