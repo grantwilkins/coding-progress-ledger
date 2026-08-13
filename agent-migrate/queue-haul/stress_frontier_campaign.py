@@ -310,15 +310,22 @@ def main() -> None:
     r.add_argument("--shard", type=int, default=0); r.add_argument("--shards", type=int, default=1)
     d = sub.add_parser("reduce")
     d.add_argument("--results", type=Path, nargs="+", required=True); d.add_argument("--out", type=Path, required=True)
-    d.add_argument("--profile", type=Path, required=True)
-    d.add_argument("--power-summary", type=Path, required=True)
-    d.add_argument("--destination-summary", type=Path, required=True)
-    d.add_argument("--trailing-power", type=Path, required=True)
-    d.add_argument("--catalog", type=Path, required=True)
+    d.add_argument("--profile", type=Path); d.add_argument("--power-summary", type=Path)
+    d.add_argument("--destination-summary", type=Path); d.add_argument("--trailing-power", type=Path)
+    d.add_argument("--catalog", type=Path); d.add_argument("--modeled-only", action="store_true")
     args = parser.parse_args()
     if args.command == "prepare": prepare(args.parent, args.profile, args.out, args.seed)
     elif args.command == "run": run(args.plan, args.out, args.shard, args.shards)
     else:
+        evidence_paths = (args.profile, args.power_summary, args.destination_summary,
+                          args.trailing_power, args.catalog)
+        if args.modeled_only:
+            if any(evidence_paths):
+                raise ValueError("modeled-only reduction does not accept promotion evidence")
+            reduce(args.results, args.out)
+            return
+        if not all(evidence_paths):
+            raise ValueError("empirical reduction requires all promotion evidence")
         with args.trailing_power.open(newline="") as handle:
             trailing = list(csv.DictReader(handle))
         provenance = json.loads(args.catalog.read_text())
