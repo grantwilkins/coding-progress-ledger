@@ -208,8 +208,8 @@ def write_plot(rows: list[dict], _scale: float, out: Path) -> None:
         )
     axis.text(.03, .95, "Overshed", transform=axis.transAxes, va="top")
     axis.text(.97, .05, "Undershed", transform=axis.transAxes, ha="right")
-    axis.set(xlabel="Phase-aware predicted shed (% of max prediction)",
-             ylabel="Measured shed (% of max prediction)",
+    axis.set(xlabel="Predicted Shed (% of max)",
+             ylabel="Measured Shed (% of max)",
              xlim=limits, ylim=limits)
     axis.set_aspect("equal", adjustable="box")
     axis.grid(alpha=.2)
