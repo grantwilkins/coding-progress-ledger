@@ -122,6 +122,7 @@ def network_plan(parent_path: Path, campaign_path: Path) -> dict:
             "deadline_s": 300, "sessions": sessions, "moves": moves,
             "calibration_cell": cell,
         })
+    scenarios.sort(key=lambda row: row["bandwidth"])
     return {**parent, "design": "calibration", "policies": list(ACTION_MIXES),
             "conditions": [], "repeats": 1, "sessions_per_scenario": None,
             "scenarios": scenarios}

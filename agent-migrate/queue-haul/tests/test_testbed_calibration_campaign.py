@@ -82,3 +82,20 @@ def test_network_plan_materializes_fixed_screening_moves(tmp_path):
     assert scenario["workload"] == "migration_calibration"
     assert scenario["background"] == {"east": [.6, 0], "germany": [0, 0]}
     assert scenario["bandwidth_mbps"] == {"east": 40, "germany": 40}
+
+
+def test_network_plan_groups_bandwidth_to_avoid_stack_reloads(tmp_path):
+    parent = tmp_path / "parent.json"; campaign_path = tmp_path / "campaign.json"
+    session = {"session_id": "a", "template_id": "a", "initial_tokens": 10}
+    parent.write_text(json.dumps({"scenarios": [{"condition_id": "joint-shaped",
+        "repeat": 0, "sessions": [session]}], "network_contract": {"paths": {
+            node: {"natural_mbps": 100, "controlled_mbps": {"40": 40}}
+            for node in ("east", "germany")}}}))
+    base = {"destination": "east", "destination_prefill_load": .25,
+            "concurrency": 1, "action_mix": "replay_only", "context_tokens": 10,
+            "repeat": 0}
+    campaign_path.write_text(json.dumps({"pack": "p", "migration_screening_cells": [
+        {**base, "bandwidth": value} for value in ("natural", "controlled_40", "natural")]}))
+    plan = campaign.network_plan(parent, campaign_path)
+    assert [row["bandwidth"] for row in plan["scenarios"]] == [
+        "controlled_40", "natural", "natural"]
