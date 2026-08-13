@@ -1115,7 +1115,9 @@ appends an explicitly marked independently-fastest tail so runtime width remains
 the episode size. Failed episodes remain in denominators. Reduction writes
 timing CDFs, including a 30-second full-target attainment CDF whose event time
 includes the trailing five-second power window; missing mass is deadline
-failure. Power attainment is trailing-five-second average modeled source-power
+failure. The same 30-second cohort also produces standalone bandwidth plots for
+episode attainment and Queue-Haul's deadline-admitted replay/KV action mix.
+Power attainment is trailing-five-second average modeled source-power
 shed divided by the 100% source-power target. MP
 runs require bounded RESP quiescence between scenarios so late cache writes
 cannot cross scenario boundaries. Run from a clean committed checkout with two

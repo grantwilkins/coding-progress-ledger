@@ -63,6 +63,7 @@ PACKING_POLICIES = (
 LABELS = CDF_LABELS = plot_style.POLICY_NAMES
 CDF_LINESTYLES = plot_style.POLICY_LINESTYLES
 CDF_FIGSIZE = plot_style.COMPACT_FIGSIZE
+BANDWIDTH_POLICIES = ("queue_haul", "replay_only", "kv_only")
 plot_style.apply()
 
 
@@ -750,6 +751,69 @@ def full_power_attainment_curve(summaries, policy, deadline_s,
     return x, y
 
 
+def bandwidth_summary(summaries, scenarios, power_window_s, deadline_s=30):
+    by_id = {}
+    for scenario in scenarios:
+        if scenario["policy"] == "control":
+            continue
+        if scenario["scenario_id"] in by_id:
+            raise RuntimeError("duplicate non-control scenario ID")
+        by_id[scenario["scenario_id"]] = scenario
+    cells, action_cells = {}, {}
+    for row in summaries:
+        policy = row["policy"]
+        if policy not in BANDWIDTH_POLICIES \
+                or float(row["required_deadline_s"]) != deadline_s:
+            continue
+        scenario = by_id[row["scenario_id"]]
+        if scenario["policy"] != policy:
+            raise RuntimeError("summary policy does not match plan")
+        bandwidth = float(scenario["bandwidth_mbps"]) / 1000
+        cell = cells.setdefault((policy, bandwidth), [0, 0])
+        cell[0] += 1
+        commit = row["commit_100_s"]
+        cell[1] += commit not in (None, "") \
+            and float(commit) + power_window_s <= deadline_s
+        if policy == "queue_haul":
+            actions = action_cells.setdefault(
+                bandwidth, {"replay": 0, "kv_transfer": 0}
+            )
+            for move in scenario["moves"]:
+                if move["deadline_admitted"]:
+                    actions[move["method"]] += 1
+    if not cells:
+        return [], []
+    bandwidths = sorted({bandwidth for _, bandwidth in cells})
+    if set(cells) != {
+        (policy, bandwidth) for policy in BANDWIDTH_POLICIES
+        for bandwidth in bandwidths
+    } or any(len({cells[policy, bandwidth][0]
+                  for policy in BANDWIDTH_POLICIES}) != 1
+             for bandwidth in bandwidths):
+        raise RuntimeError("bandwidth cohorts are not paired across policies")
+    attainment = [{
+        "deadline_s": deadline_s, "bandwidth_gbps": bandwidth,
+        "policy": policy, "episodes": cells[policy, bandwidth][0],
+        "episodes_meeting_deadline": cells[policy, bandwidth][1],
+        "attainment_fraction":
+            cells[policy, bandwidth][1] / cells[policy, bandwidth][0],
+    } for bandwidth in bandwidths for policy in BANDWIDTH_POLICIES]
+    actions = []
+    for bandwidth in bandwidths:
+        counts = action_cells[bandwidth]
+        total = sum(counts.values())
+        if not total:
+            raise RuntimeError("Queue-Haul selected no deadline-admitted actions")
+        actions.append({
+            "deadline_s": deadline_s, "bandwidth_gbps": bandwidth,
+            "selected_actions": total, "replay_actions": counts["replay"],
+            "kv_transfer_actions": counts["kv_transfer"],
+            "replay_share": counts["replay"] / total,
+            "kv_transfer_share": counts["kv_transfer"] / total,
+        })
+    return attainment, actions
+
+
 def power_shed_quantiles(rows, summaries, policy, power_curve, times):
     commits = {}
     for row in rows:
@@ -902,6 +966,62 @@ def plot_full_power_attainment(summaries, power_window_s, out,
             out / f"policy_hardware_{deadline_s:g}s_full_power_attainment_cdf.{suffix}",
             dpi=plot_style.SAVE_DPI,
         )
+    plt.close(fig)
+
+
+def plot_bandwidth_summary(summaries, scenarios, power_window_s, out,
+                           deadline_s=30):
+    attainment, actions = bandwidth_summary(
+        summaries, scenarios, power_window_s, deadline_s
+    )
+    if not attainment:
+        return
+    prefix = out / f"policy_hardware_{deadline_s:g}s"
+    attainment_out = Path(f"{prefix}_attainment_by_bandwidth")
+    profiler.write_csv(attainment_out.with_suffix(".csv"), attainment)
+    fig, ax = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    for policy in BANDWIDTH_POLICIES:
+        rows = [row for row in attainment if row["policy"] == policy]
+        ax.plot(
+            [row["bandwidth_gbps"] for row in rows],
+            [row["attainment_fraction"] for row in rows],
+            marker="o", markersize=7, **plot_style.policy_style(policy),
+        )
+    bandwidths = [row["bandwidth_gbps"] for row in actions]
+    ax.set(
+        xlabel="Bandwidth (Gbit/s)",
+        ylabel=f"Episodes meeting {deadline_s:g} s (fraction)",
+        xticks=bandwidths, ylim=(-.02, 1.02),
+    )
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False, loc="lower left")
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(attainment_out.with_suffix(f".{suffix}"),
+                    dpi=plot_style.SAVE_DPI)
+    plt.close(fig)
+
+    actions_out = Path(f"{prefix}_action_mix_by_bandwidth")
+    profiler.write_csv(actions_out.with_suffix(".csv"), actions)
+    fig, ax = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    for method in ("replay", "kv_transfer"):
+        ax.plot(
+            bandwidths, [row[f"{method}_share"] for row in actions],
+            marker="o", markersize=7, color=plot_style.ACTION_COLORS[method],
+            label=plot_style.ACTION_NAMES[method],
+        )
+    ax.set(
+        xlabel="Bandwidth (Gbit/s)",
+        ylabel="Queue-Haul action share",
+        xticks=bandwidths, ylim=(-.02, 1.02),
+    )
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False, loc="lower center", bbox_to_anchor=(.5, 1),
+              ncol=2)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(actions_out.with_suffix(f".{suffix}"),
+                    dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
 
@@ -1334,6 +1454,9 @@ def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=(),
     plot_migration_time_per_watt(summaries, power_curve, out)
     plot_max_session_ttft_per_watt(rows, summaries, power_curve, out)
     plot_full_power_attainment(summaries, model.power_window_s, out)
+    plot_bandwidth_summary(
+        summaries, scenarios, model.power_window_s, out
+    )
 
 
 def representative_timeline(rows, summaries):
