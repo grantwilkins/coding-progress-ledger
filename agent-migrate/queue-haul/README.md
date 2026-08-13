@@ -47,6 +47,10 @@ runs. It scales the constrained East KV reserve to 96% of the measured
 1,205,376-token capacity, reserves 65% of each destination's migration window
 for KV, and requests 41.4% of removable source power. All three deadline-blind
 controls missed 45 seconds and reached the target in 55.5--59.5 seconds.
+The reduced evidence and raw scenario attempts are retained in
+`outputs/east-germany-hardware-gap-h100-20260812/`, copied from node run root
+`/datadrive/queue-haul-network/hardware-gap-h100-002`. Its artifact manifest
+also addresses the uncommitted reusable stack logs.
 
 ## System boundary
 
@@ -364,7 +368,8 @@ The H100 frontier keeps the 4x16K, 8x16K, and 16x16K width bridge, expands the
 matched scenarios cover Queue-Haul, greedy, Lagrangian greedy,
 isolated-fastest, KV-only, replay-only, power-blind, and deadline-blind using
 only the two measured natural WAN paths; no bandwidth cap or fixed destination
-split is applied.
+split is applied. H100 destination load is normalized to the measured
+604-prefill/64-decode service rates used by the live background generator.
 
 ```bash
 uv run python queue-haul/network_campaign.py prepare --design frontier \

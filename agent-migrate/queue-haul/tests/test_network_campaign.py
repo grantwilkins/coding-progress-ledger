@@ -452,6 +452,7 @@ def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(
 
 def test_h100_frontier_adds_width_16_packs_and_one_width_32_tail(
         monkeypatch, tmp_path):
+    monkeypatch.setattr(n, "H100_CAMPAIGN", True)
     monkeypatch.setattr(n, "FRONTIER_PACKS", n.frontier_packs(True))
     monkeypatch.setattr(n, "FRONTIER_POLICIES", n.frontier_policies(True))
 
@@ -465,6 +466,8 @@ def test_h100_frontier_adds_width_16_packs_and_one_width_32_tail(
         "kv_only", "replay_only", "queue_haul_power_blind",
         n.DEADLINE_BLIND_POLICY,
     }
+    assert {row["load_normalization"] for row in plan["scenarios"]} == {
+        "destination_service"}
     assert {row["pack"] for row in plan["scenarios"]} == {
         "4x16k", "8x16k", "16x8k", "16x16k", "16x24k", "16x31k",
         "32x31k",
@@ -476,6 +479,28 @@ def test_h100_frontier_adds_width_16_packs_and_one_width_32_tail(
     assert all(len(row["sessions"]) == 32 and sum(
         session["initial_tokens"] for session in row["sessions"]
     ) == 1_007_616 for row in tail)
+
+
+def test_h100_frontier_high_load_fits_destination_service_envelope(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(n, "H100_CAMPAIGN", True)
+    monkeypatch.setattr(n, "FRONTIER_PACKS", n.frontier_packs(True))
+    monkeypatch.setattr(n, "FRONTIER_POLICIES", n.frontier_policies(True))
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 4), n.freeze_contract(calibration()),
+        seed=7, design="frontier")
+    scenario = next(row for row in plan["scenarios"]
+                    if row["pack"] == "4x16k"
+                    and row["policy"] == "greedy"
+                    and {value[0] for value in row["background"].values()}
+                    == {.9})
+    profile = n.ModelProfile.load(
+        n.MODEL_PATH.with_name("gpt_oss_20b_h100_tp1.json"))
+
+    assert n.plan_joint_scenario(
+        scenario, {node: {"kv_fraction": 0}
+                   for node in scenario["background"]},
+        profile, scenario["planner_seed"]) == []
 
 
 def test_constraint_plan_freezes_four_single_block_stress_cases(tmp_path):
