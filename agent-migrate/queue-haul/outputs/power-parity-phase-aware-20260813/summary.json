@@ -1,0 +1,27 @@
+{
+  "evidence_status": "descriptive_in_sample",
+  "source": "/scratch/users/gfw/qh-power-parity-random-20260812/power_parity.csv",
+  "model": {
+    "form": "P0 + delta_p * (a*f + b*g) / (1 + a*f + b*g)",
+    "P0_w": 87.77238805689501,
+    "delta_p_w": 117.3685288710951,
+    "a_per_prefill_tps": 0.00032815420503721327,
+    "b_per_decode_tps": 0.008579728695286165,
+    "F_prefill_tps": 1448.32,
+    "scheduled_tokens": 512,
+    "pre_processed_tokens": [604, 64],
+    "post_processed_tokens": [12, 64]
+  },
+  "episodes": 350,
+  "maximum_predicted_shed_w": 53.77409870160693,
+  "slope_through_origin": 0.9973215557280054,
+  "ols_slope": 0.9845574051263258,
+  "ols_intercept_w": 0.4600614566560563,
+  "measured_minus_predicted_bias_w": 0.0000002714081008597142,
+  "mae_w": 6.969449056494952,
+  "rmse_w": 8.66104692259763,
+  "correlation": 0.8405858835443325,
+  "within_5w_fraction": 0.4257142857142857,
+  "within_10w_fraction": 0.7485714285714286,
+  "overprediction_fraction": 0.56
+}

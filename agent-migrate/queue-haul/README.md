@@ -801,6 +801,12 @@ uv run python queue-haul/power_parity_experiment.py prepare \
 sbatch queue-haul/outputs/power-parity-random-plan/run.sbatch
 ```
 
+The completed 350-scenario run is retained in scratch. The descriptive
+phase-aware refit under `outputs/power-parity-phase-aware-20260813/` uses the
+same observations for fitting and parity, so it is not held-out evidence. Its
+shed regression has a 0.997 through-origin slope, effectively zero aggregate
+bias, and 8.66 W RMSE; the CSV preserves all policy repeats.
+
 Reduction runs automatically and can also be repeated without hardware:
 
 ```bash
