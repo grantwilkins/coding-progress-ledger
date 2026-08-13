@@ -61,7 +61,19 @@ def grouped_repeat_cv(points: list[dict], idle_w: float, far_load: float,
                 abs(error) <= 5 for error in errors)}
 
 
-def collect(root: Path, profile: ModelProfile) -> list[dict]:
+def baseline_gate(rows: list[dict]) -> tuple[set[str], dict]:
+    values = [float(row["baseline_source_power_w"]) for row in rows]
+    median = statistics.median(values)
+    mad = statistics.median(abs(value - median) for value in values)
+    tolerance = max(5., 3 * 1.4826 * mad)
+    rejected = {row["scenario_id"] for row in rows
+                if abs(float(row["baseline_source_power_w"]) - median) > tolerance}
+    return rejected, {"baseline_median_w": median, "baseline_mad_w": mad,
+                      "baseline_tolerance_w": tolerance,
+                      "baseline_rejected_scenarios": sorted(rejected)}
+
+
+def collect(root: Path, profile: ModelProfile) -> tuple[list[dict], dict]:
     plan = json.loads((root / "plan.json").read_text())
     manifest_path = Path(plan["manifest"]["path"])
     if manifest_path.parts[0] == "queue-haul":
@@ -72,10 +84,13 @@ def collect(root: Path, profile: ModelProfile) -> list[dict]:
         results = {row["scenario_id"]: row for row in csv.DictReader(handle)}
     with (root / "trailing_power.csv").open(newline="") as handle:
         trailing = list(csv.DictReader(handle))
+    rejected, gate = baseline_gate(trailing)
     phase, points = profile.case().phase_power, []
     if phase is None:
         raise ValueError("pack fit requires phase power")
     for measured in trailing:
+        if measured["scenario_id"] in rejected:
+            continue
         scenario, result_row = scenarios[measured["scenario_id"]], results[measured["scenario_id"]]
         problem, *_ = network._scenario_problem(scenario, manifest, profile)
         result = json.loads((root / "scenarios" / measured["scenario_id"]
@@ -96,7 +111,7 @@ def collect(root: Path, profile: ModelProfile) -> list[dict]:
                            "load": phase.load(sum(row.expected_f for row in kept),
                                               sum(row.expected_g for row in kept)),
                            "power_w": float(watts)})
-    return points
+    return points, gate
 
 
 def fit(profile_path: Path, root: Path, out_profile: Path, summary_path: Path,
@@ -105,7 +120,7 @@ def fit(profile_path: Path, root: Path, out_profile: Path, summary_path: Path,
     phase = profile.case().phase_power
     if phase is None:
         raise ValueError("pack fit requires phase power")
-    points = collect(root, profile)
+    points, baseline = collect(root, profile)
     curve, metrics = fit_curve(points, phase.p0_w, profile.max_power_load, far_power_w)
     metrics.update(grouped_repeat_cv(points, phase.p0_w, profile.max_power_load,
                                      far_power_w))
@@ -128,7 +143,8 @@ def fit(profile_path: Path, root: Path, out_profile: Path, summary_path: Path,
     summary = {"schema": "queue-haul-pack-power-fit-v1", **metrics,
                "gate_passed": metrics["grouped_repeat_cv_mae_w"] <= 5
                and metrics["grouped_repeat_cv_within_5w_fraction"] >= .8,
-               "points": len(points), "curve": curve, "scope": "recorded-28-seed-8"}
+               "points": len(points), "curve": curve, "scope": "recorded-28-seed-8",
+               **baseline}
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     return summary
 

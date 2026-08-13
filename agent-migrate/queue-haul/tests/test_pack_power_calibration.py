@@ -1,6 +1,6 @@
 import pytest
 
-from pack_power_calibration import bootstrap_curves, fit_curve, grouped_repeat_cv
+from pack_power_calibration import baseline_gate, bootstrap_curves, fit_curve, grouped_repeat_cv
 
 
 def test_fit_curve_is_monotone_and_anchors_far_power():
@@ -23,3 +23,11 @@ def test_bootstrap_curves_resample_whole_repeats():
     cv = grouped_repeat_cv(points, 100, 1, 300)
     assert cv["grouped_repeat_cv_mae_w"] == pytest.approx(1)
     assert cv["grouped_repeat_cv_within_5w_fraction"] == 1
+
+
+def test_baseline_gate_rejects_only_nonsteady_full_pack_windows():
+    rows = [{"scenario_id": str(i), "baseline_source_power_w": value}
+            for i, value in enumerate((278, 279, 280, 281, 170))]
+    rejected, summary = baseline_gate(rows)
+    assert rejected == {"4"}
+    assert summary["baseline_median_w"] == 279
