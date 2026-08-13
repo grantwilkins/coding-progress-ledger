@@ -55,3 +55,14 @@ def test_run_plan_resumes_completed_cells(tmp_path, monkeypatch):
         "g_tps": 1, "power_mean_w": 110})
     result = calibration.run_plan(plan, profile, out, resume=True)
     assert [row["mixture"] for row in result] == ["prefill", "decode"]
+
+
+def test_fit_accepts_compact_identifiable_group_holdouts():
+    compact = []
+    for mixture, ratio in (("prefill75", .25), ("mixed", 1), ("decode", 4)):
+        for load in (.2, .5, .8):
+            f, g = 1000 * load, 1000 * load * ratio
+            z = .001 * f + .002 * g
+            compact.append({"mixture": mixture, "repeat": 0, "f_tps": f,
+                            "g_tps": g, "power_mean_w": 100 + 200 * z / (1 + z)})
+    assert calibration.fit(compact, 100, bootstrap_samples=2)["gate_passed"]

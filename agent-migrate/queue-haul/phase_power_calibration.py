@@ -142,11 +142,11 @@ def _predict(parameters, f, g, p0):
     return p0 + delta * z / (1 + z)
 
 
-def _fit(rows: list[dict], p0: float):
+def _fit(rows: list[dict], p0: float, minimum: int = 3):
     f = np.asarray([float(row["f_tps"]) for row in rows])
     g = np.asarray([float(row["g_tps"]) for row in rows])
     watts = np.asarray([float(row["power_mean_w"]) for row in rows])
-    if len(rows) < 8 or np.linalg.matrix_rank(np.column_stack((f, g))) != 2:
+    if len(rows) < minimum or np.linalg.matrix_rank(np.column_stack((f, g))) != 2:
         raise ValueError("phase power fit needs identifiable prefill/decode coverage")
     scale_f, scale_g = max(f.max(), 1), max(g.max(), 1)
     result = least_squares(
@@ -171,7 +171,7 @@ def _hull(rows: list[dict]) -> list[list[float]]:
 def fit(rows: list[dict], idle_power_w: float, bootstrap_samples: int = 200,
         seed: int = 1) -> dict:
     required = {"mixture", "repeat", "f_tps", "g_tps", "power_mean_w"}
-    if idle_power_w <= 0 or bootstrap_samples < 1 or not rows \
+    if idle_power_w <= 0 or bootstrap_samples < 1 or len(rows) < 8 \
             or any(not required <= row.keys() for row in rows):
         raise ValueError("invalid phase power measurements")
     groups = sorted({str(row["mixture"]) for row in rows})
