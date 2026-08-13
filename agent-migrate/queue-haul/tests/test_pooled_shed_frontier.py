@@ -17,7 +17,9 @@ import csv
 
 import pytest
 
-from plot_pooled_shed_frontier import hardware_point, POLICY_STYLE_IDS, pooled_summary
+from plot_pooled_shed_frontier import (
+    hardware_point, POLICY_STYLE_IDS, pooled_summary, queue_haul_cutoff,
+)
 
 
 def test_pooled_summary_normalizes_cases_and_keeps_policy_coordinates():
@@ -49,6 +51,14 @@ def test_pooled_summary_normalizes_cases_and_keeps_policy_coordinates():
 
 def test_pooled_frontier_maps_true_greedy_identity():
     assert POLICY_STYLE_IDS["independent_fastest"] == "isolated_fastest"
+
+
+def test_queue_haul_cutoff_uses_nonzero_interpolated_parity_crossing():
+    rows = [
+        {"policy": "queue_haul_lp", "requested_fraction": x, "median": y}
+        for x, y in ((0, 0), (.5, .7), (.75, .7), (1, .7))
+    ]
+    assert queue_haul_cutoff(rows) == pytest.approx(.7)
 
 
 def test_hardware_point_pools_matched_queue_haul_runs(tmp_path):

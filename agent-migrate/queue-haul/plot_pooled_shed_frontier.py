@@ -102,12 +102,31 @@ def hardware_point(path: Path, requested_fraction: float) -> dict:
             "observations": len(rows)}
 
 
+def queue_haul_cutoff(summary) -> float:
+    rows = sorted((row for row in summary if row["policy"] == "queue_haul_lp"),
+                  key=lambda row: row["requested_fraction"])
+    if len(rows) < 2:
+        raise RuntimeError("Queue-Haul frontier requires at least two points")
+    crossings = []
+    for left, right in zip(rows, rows[1:]):
+        x0, x1 = left["requested_fraction"], right["requested_fraction"]
+        d0, d1 = left["median"] - x0, right["median"] - x1
+        if x0 > 0 and d0 == 0:
+            crossings.append(x0)
+        if d0 > 0 >= d1:
+            crossings.append(x0 + (x1 - x0) * d0 / (d0 - d1))
+    if not crossings:
+        raise RuntimeError("Queue-Haul median frontier does not cross parity")
+    return max(crossings)
+
+
 def write_plot(summary, out: Path, measured=None) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.ticker import PercentFormatter
 
+    cutoff = queue_haul_cutoff(summary)
     fig, axis = plt.subplots(figsize=(4, 3))
     for policy in POLICIES:
         selected = [row for row in summary if row["policy"] == policy]
@@ -122,14 +141,15 @@ def write_plot(summary, out: Path, measured=None) -> None:
             x, [row["median"] for row in selected],
             **plot_style.policy_style(POLICY_STYLE_IDS[policy]),
         )
-    axis.plot((0, 1), (0, 1), color="black", linestyle=":", linewidth=1)
+    axis.plot((0, cutoff), (0, cutoff), color="black", linestyle=":",
+              linewidth=1)
     if measured:
         axis.scatter(measured["requested_fraction"],
                      measured["attained_fraction"], marker="*", s=110,
                      color=plot_style.POLICY_COLORS["queue_haul"],
                      edgecolor="black", linewidth=.8, zorder=5,
                      label="H100 measured Queue-Haul")
-    axis.set(xlim=(0, 1), ylim=(0, 1),
+    axis.set(xlim=(0, cutoff), ylim=(0, 1),
              xlabel="Requested Fraction of Power",
              ylabel="Shed Power by Deadline")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
