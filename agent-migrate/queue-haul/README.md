@@ -782,8 +782,11 @@ the median gap from the final source request to migration is 0.075 s, and only
 3/840 episodes cover a one-second window plus a one-second settling guard. The
 script therefore hard-fails direct parity reduction instead of averaging
 migration warm-up power. `--audit-only --out PATH` writes the episode-level
-window audit without claiming measured shed; a new hardware run with an
-explicit pre-migration hold is required for the parity plot.
+window audit without claiming measured shed. `--raw-delta --out PATH` writes an
+explicitly `warmup_contaminated_immediate_pre` exploratory delta from the final
+second before migration to the one-second post-switch window after a one-second
+guard. A new hardware run with an explicit pre-migration hold is required for a
+settled-state parity claim.
 
 Reduction runs automatically and can also be repeated without hardware:
 

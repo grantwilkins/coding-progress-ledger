@@ -56,7 +56,8 @@ def _mean(rows: list[dict], start: int, end: int) -> float:
     raise RuntimeError("power samples do not cover settled window")
 
 
-def source_power_shed(path: Path, result: dict) -> tuple[float, float, float]:
+def source_power_shed(path: Path, result: dict,
+                      pre_guard_ns=SETTLE_NS) -> tuple[float, float, float]:
     with path.open() as handle:
         rows = [{"monotonic_ns": int(row["monotonic_ns"]),
                  "gpu": int(row["gpu"]), "power_w": float(row["power_w"])}
@@ -69,7 +70,8 @@ def source_power_shed(path: Path, result: dict) -> tuple[float, float, float]:
     migrations = result["migrations"]
     start = min(row["initial_start_ns"] for row in migrations)
     switched = max(row["switch_end_ns"] for row in migrations)
-    before = _mean(source, start - SETTLE_NS - WINDOW_NS, start - SETTLE_NS)
+    before = _mean(source, start - pre_guard_ns - WINDOW_NS,
+                   start - pre_guard_ns)
     after = _mean(source, switched + SETTLE_NS,
                   switched + SETTLE_NS + WINDOW_NS)
     return before, after, before - after
@@ -98,7 +100,7 @@ def settled_pre_available(last_request: int, migration_start: int) -> bool:
 
 
 def load_points(contemporaneous=CONTEMPORANEOUS, fixed: Path = FIXED,
-                audit=False) -> list[dict]:
+                audit=False, raw_delta=False) -> list[dict]:
     sources = [(Path(root), CONTEMPORANEOUS_METHODS)
                for root in contemporaneous] + [(Path(fixed), {"kv_only", "replay_only"})]
     plans = [(root, json.loads((root / "plan.json").read_text()), allowed)
@@ -136,12 +138,15 @@ def load_points(contemporaneous=CONTEMPORANEOUS, fixed: Path = FIXED,
                 scenario_root / "events.jsonl", source_port, start)
             gap = start - last_request
             valid = settled_pre_available(last_request, start)
-            if not audit and not valid:
+            if not audit and not raw_delta and not valid:
                 raise RuntimeError(
                     f"no settled pre-migration power window for {scenario['scenario_id']}"
                 )
             before, after, measured = (None, None, None) if audit else \
-                source_power_shed(scenario_root / "power.csv", result)
+                source_power_shed(
+                    scenario_root / "power.csv", result,
+                    0 if raw_delta else SETTLE_NS,
+                )
             matches[method].add(scenario["match_id"])
             rows.append({
                 "scenario_id": scenario["scenario_id"],
@@ -152,6 +157,8 @@ def load_points(contemporaneous=CONTEMPORANEOUS, fixed: Path = FIXED,
                 "pre_settle_gap_s": gap / NS,
                 "post_trace_after_switch_s": (result["ended_ns"] - switched) / NS,
                 "valid_settled_windows": valid,
+                "measurement_kind": "none" if audit else
+                    "warmup_contaminated_immediate_pre" if raw_delta else "settled",
                 "requested_shed_w": scenario["power_target_fraction"] * full_shed,
                 "predicted_shed_w": predicted_shed(scenario, curve),
                 "measured_shed_w": measured,
@@ -223,15 +230,17 @@ def main() -> None:
     parser.add_argument("--fixed-root", type=Path, default=FIXED)
     parser.add_argument("--out", type=Path, default=OUTPUT)
     parser.add_argument("--csv-only", action="store_true")
-    parser.add_argument("--audit-only", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--audit-only", action="store_true")
+    mode.add_argument("--raw-delta", action="store_true")
     args = parser.parse_args()
     roots = args.contemporaneous_root or CONTEMPORANEOUS
-    rows = load_points(roots, args.fixed_root, args.audit_only)
+    rows = load_points(roots, args.fixed_root, args.audit_only, args.raw_delta)
     if args.audit_only:
         write_csv(rows, args.out.with_suffix(".csv"))
         return
     rows, scale = normalize(rows)
-    if args.csv_only:
+    if args.csv_only or args.raw_delta:
         write_csv(rows, args.out.with_suffix(".csv"))
     else:
         write_plot(rows, scale, args.out)

@@ -19,7 +19,7 @@ def test_source_power_shed_excludes_migration_power(tmp_path):
                          "utilization_pct", "memory_mib", "valid"))
         for second in range(10):
             for gpu in range(2):
-                power = 80 if gpu else 200 if second < 3 else 500 if second < 6 else 80
+                power = 80 if gpu else 200 if second < 2 else 500 if second < 6 else 80
                 writer.writerow((second * 10**9, 0, gpu, power, 0, 0, 1))
     result = {"migrations": [{"initial_start_ns": 3 * 10**9,
                                "switch_end_ns": 6 * 10**9}]}
@@ -27,6 +27,7 @@ def test_source_power_shed_excludes_migration_power(tmp_path):
     before, after, shed = source_power_shed(path, result)
 
     assert (before, after, shed) == (200, 80, 120)
+    assert source_power_shed(path, result, 0) == (500, 80, 420)
 
 
 def test_source_power_shed_requires_two_gpus_and_covered_windows(tmp_path):
