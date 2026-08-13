@@ -78,6 +78,20 @@ def test_compact_campaign_is_balanced_and_fit_ready():
         "prefill75": 3, "mixed": 2, "decode": 4}
 
 
+def test_select_power_anchors(tmp_path):
+    measurements, plan = tmp_path / "measurements.csv", tmp_path / "plan.json"
+    rows = [{"mixture": mixture, "target_service_load": load}
+            for mixture in ("prefill75", "mixed", "decode")
+            for load in (.1, .45, .65)]
+    write(measurements, rows)
+    plan.write_text(json.dumps({"power_anchors": [
+        {"mixture": row["mixture"], "load": row["target_service_load"]}
+        for row in rows]}))
+    selected = campaign.select_power_anchors(measurements, plan)
+    assert [(row["mixture"], float(row["target_service_load"])) for row in selected] == [
+        (row["mixture"], row["target_service_load"]) for row in rows]
+
+
 def test_plan_spans_requested_migration_design(tmp_path):
     parent = tmp_path / "parent.json"
     parent.write_text(json.dumps({"scenarios": [{"condition_id": "joint-shaped",

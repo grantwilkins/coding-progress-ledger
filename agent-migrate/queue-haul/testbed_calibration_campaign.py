@@ -114,6 +114,19 @@ def compact_campaign() -> dict:
     }
 
 
+def select_power_anchors(measurements: Path, campaign_path: Path) -> list[dict]:
+    anchors = {(row["mixture"], float(row["load"]))
+               for row in json.loads(campaign_path.read_text())["power_anchors"]
+               if "mixture" in row}
+    rows = _read(measurements)
+    selected = [row for row in rows
+                if (row["mixture"], float(row["target_service_load"])) in anchors]
+    if {row["mixture"] for row in selected} != {key[0] for key in anchors} \
+            or len(selected) < 8:
+        raise ValueError("compact power anchors are incomplete")
+    return selected
+
+
 def network_plan(parent_path: Path, campaign_path: Path,
                  completed_roots: list[Path] | None = None) -> dict:
     parent, campaign = json.loads(parent_path.read_text()), json.loads(campaign_path.read_text())
@@ -367,10 +380,16 @@ def main() -> None:
     n.add_argument("--missing-from", type=Path, action="append", default=[])
     c = sub.add_parser("compact")
     c.add_argument("--out", type=Path, required=True)
+    a = sub.add_parser("power-anchors")
+    a.add_argument("--campaign", type=Path, required=True)
+    a.add_argument("--measurements", type=Path, required=True)
+    a.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "compact":
         args.out.write_text(json.dumps(compact_campaign(), indent=2,
                                        sort_keys=True) + "\n")
+    elif args.command == "power-anchors":
+        _write(args.out, select_power_anchors(args.measurements, args.campaign))
     elif args.command == "network-plan":
         args.out.write_text(json.dumps(network_plan(args.parent, args.campaign,
                                                     args.missing_from),
