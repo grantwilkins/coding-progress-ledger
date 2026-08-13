@@ -123,3 +123,21 @@ def test_network_plan_groups_bandwidth_to_avoid_stack_reloads(tmp_path):
     plan = campaign.network_plan(parent, campaign_path)
     assert [row["bandwidth"] for row in plan["scenarios"]] == [
         "controlled_40", "natural", "natural"]
+
+
+def test_network_plan_skips_completed_scenarios(tmp_path):
+    parent = tmp_path / "parent.json"; campaign_path = tmp_path / "campaign.json"
+    session = {"session_id": "a", "template_id": "a", "initial_tokens": 10}
+    parent.write_text(json.dumps({"scenarios": [{"condition_id": "joint-shaped",
+        "repeat": 0, "sessions": [session]}], "network_contract": {"paths": {
+            node: {"natural_mbps": 100, "controlled_mbps": {"40": 40}}
+            for node in ("east", "germany")}}}))
+    cell = {"destination": "east", "destination_prefill_load": .25,
+            "concurrency": 1, "action_mix": "replay_only", "context_tokens": 10,
+            "repeat": 0, "bandwidth": "natural"}
+    campaign_path.write_text(json.dumps({"pack": "p", "migration_screening_cells": [cell]}))
+    full = campaign.network_plan(parent, campaign_path)
+    result = tmp_path / "old" / "scenarios" / full["scenarios"][0]["scenario_id"] \
+        / "attempt-0001" / "result.json"
+    result.parent.mkdir(parents=True); result.write_text("{}")
+    assert campaign.network_plan(parent, campaign_path, [tmp_path / "old"])["scenarios"] == []

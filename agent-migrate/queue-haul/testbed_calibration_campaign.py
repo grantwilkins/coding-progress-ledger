@@ -114,7 +114,8 @@ def compact_campaign() -> dict:
     }
 
 
-def network_plan(parent_path: Path, campaign_path: Path) -> dict:
+def network_plan(parent_path: Path, campaign_path: Path,
+                 completed_roots: list[Path] | None = None) -> dict:
     parent, campaign = json.loads(parent_path.read_text()), json.loads(campaign_path.read_text())
     template = next(row for row in parent["scenarios"]
                     if row["condition_id"] == "joint-shaped" and row["repeat"] == 0)
@@ -157,6 +158,9 @@ def network_plan(parent_path: Path, campaign_path: Path) -> dict:
             "deadline_s": 300, "sessions": sessions, "moves": moves,
             "calibration_cell": cell,
         })
+    completed = {path.parent.parent.name for root in completed_roots or []
+                 for path in root.glob("scenarios/*/attempt-*/result.json")}
+    scenarios = [row for row in scenarios if row["scenario_id"] not in completed]
     scenarios.sort(key=lambda row: row["bandwidth"])
     return {**parent, "design": "calibration", "policies": list(ACTION_MIXES),
             "conditions": [], "repeats": 1, "sessions_per_scenario": None,
@@ -360,6 +364,7 @@ def main() -> None:
     n.add_argument("--parent", type=Path, required=True)
     n.add_argument("--campaign", type=Path, required=True)
     n.add_argument("--out", type=Path, required=True)
+    n.add_argument("--missing-from", type=Path, action="append", default=[])
     c = sub.add_parser("compact")
     c.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
@@ -367,7 +372,8 @@ def main() -> None:
         args.out.write_text(json.dumps(compact_campaign(), indent=2,
                                        sort_keys=True) + "\n")
     elif args.command == "network-plan":
-        args.out.write_text(json.dumps(network_plan(args.parent, args.campaign),
+        args.out.write_text(json.dumps(network_plan(args.parent, args.campaign,
+                                                    args.missing_from),
                                        indent=2, sort_keys=True) + "\n")
     elif args.command == "inventory":
         scenario_ids = ({row["scenario_id"] for row in json.loads(args.plan.read_text())["scenarios"]}
