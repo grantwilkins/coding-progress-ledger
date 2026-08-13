@@ -62,3 +62,22 @@ def test_plan_spans_requested_migration_design(tmp_path):
     plan = campaign.make_plan(parent)
     assert len(plan["migration_cells"]) == 2 * 3 * 4 * 3 * 3 * 2 * 3
     assert len(plan["migration_screening_cells"]) == 2 * 3 * 4 * 3
+
+
+def test_network_plan_materializes_fixed_screening_moves(tmp_path):
+    parent = tmp_path / "parent.json"; campaign_path = tmp_path / "campaign.json"
+    sessions = [{"session_id": str(i), "template_id": str(i),
+                 "initial_tokens": value} for i, value in enumerate((10, 20, 30, 40))]
+    parent.write_text(json.dumps({"scenarios": [{"condition_id": "joint-shaped",
+        "repeat": 0, "sessions": sessions}], "network_contract": {"paths": {
+            node: {"natural_mbps": 100, "controlled_mbps": {"40": 40}}
+            for node in ("east", "germany")}}}))
+    campaign_path.write_text(json.dumps({"pack": "p", "migration_screening_cells": [{
+        "destination": "east", "destination_prefill_load": .6, "concurrency": 2,
+        "action_mix": "mixed", "context_tokens": 20, "bandwidth": "controlled_40",
+        "repeat": 0}]}))
+    plan = campaign.network_plan(parent, campaign_path)
+    scenario = plan["scenarios"][0]
+    assert [row["method"] for row in scenario["moves"]] == ["replay", "kv_transfer"]
+    assert scenario["background"] == {"east": [.6, 0], "germany": [0, 0]}
+    assert scenario["bandwidth_mbps"] == {"east": 40, "germany": 40}

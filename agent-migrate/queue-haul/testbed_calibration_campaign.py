@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import random
 import statistics
@@ -76,6 +77,53 @@ def make_plan(parent_path: Path, seed: int = 1) -> dict:
                   "p90_timing_absolute_error_s": 1,
                   "false_feasible": 0, "correctness_failures": 0},
     }
+
+
+def network_plan(parent_path: Path, campaign_path: Path) -> dict:
+    parent, campaign = json.loads(parent_path.read_text()), json.loads(campaign_path.read_text())
+    template = next(row for row in parent["scenarios"]
+                    if row["condition_id"] == "joint-shaped" and row["repeat"] == 0)
+    available = template["sessions"]
+    scenarios = []
+    for index, cell in enumerate(campaign["migration_screening_cells"]):
+        selected = sorted(available, key=lambda row: abs(
+            int(row["initial_tokens"]) - int(cell["context_tokens"])))[:cell["concurrency"]]
+        sessions = [{**row, "order": order,
+                     "session_id": f"{row['template_id']}-calibration-{index}-{order}"}
+                    for order, row in enumerate(selected)]
+        methods = (["replay"] * len(sessions) if cell["action_mix"] == "replay_only" else
+                   ["kv_transfer"] * len(sessions) if cell["action_mix"] == "kv_only" else
+                   ["replay" if order % 2 == 0 else "kv_transfer"
+                    for order in range(len(sessions))])
+        moves = [{"session_id": session["session_id"],
+                  "destination_instance": cell["destination"],
+                  "destination_pool": f"pool/{cell['destination']}",
+                  "method": method, "order": order,
+                  "path": [f"link/{cell['destination']}"]}
+                 for order, (session, method) in enumerate(zip(sessions, methods))]
+        identity = json.dumps(cell, sort_keys=True, separators=(",", ":"))
+        bandwidths = {node: (parent["network_contract"]["paths"][node]["natural_mbps"]
+                             if cell["bandwidth"] == "natural" else
+                             parent["network_contract"]["paths"][node]
+                             ["controlled_mbps"]["40"])
+                      for node in ("east", "germany")}
+        scenarios.append({
+            "scenario_id": hashlib.sha256(identity.encode()).hexdigest()[:16],
+            "design": "calibration", "condition_id": "migration-screening",
+            "condition_index": index, "policy": cell["action_mix"],
+            "repeat": cell["repeat"], "pack": campaign["pack"],
+            "background": {node: [cell["destination_prefill_load"]
+                                   if node == cell["destination"] else 0, 0]
+                           for node in ("east", "germany")},
+            "load_normalization": "destination_service", "load_warmup_s": 15,
+            "bandwidth": cell["bandwidth"],
+            "bandwidth_mbps": bandwidths,
+            "deadline_s": 300, "sessions": sessions, "moves": moves,
+            "calibration_cell": cell,
+        })
+    return {**parent, "design": "calibration", "policies": list(ACTION_MIXES),
+            "conditions": [], "repeats": 1, "sessions_per_scenario": None,
+            "scenarios": scenarios}
 
 
 def _first_response(request: dict) -> int:
@@ -247,8 +295,15 @@ def main() -> None:
     i.add_argument("--root", type=Path, action="append", required=True)
     i.add_argument("--out", type=Path, required=True)
     i.add_argument("--summary", type=Path, required=True)
+    n = sub.add_parser("network-plan")
+    n.add_argument("--parent", type=Path, required=True)
+    n.add_argument("--campaign", type=Path, required=True)
+    n.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "inventory":
+    if args.command == "network-plan":
+        args.out.write_text(json.dumps(network_plan(args.parent, args.campaign),
+                                       indent=2, sort_keys=True) + "\n")
+    elif args.command == "inventory":
         rows, value = inventory(args.root); _write(args.out, rows)
         args.summary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
     else:

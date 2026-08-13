@@ -825,10 +825,15 @@ def validate_plan(plan: dict) -> None:
         * len(SEPARATION_POLICIES) if design == "separation" \
         else HARDWARE_GAP_REPEATS * sum(
             len(row[-1]) for row in HARDWARE_GAP_MATRIX
-        ) if design == "hardware_gap" else 0
+        ) if design == "hardware_gap" else len(scenarios) if design == "calibration" else 0
     if len(scenarios) != expected \
             or len({row["scenario_id"] for row in scenarios}) != len(scenarios):
         raise ValueError(f"network plan must contain exactly {expected} unique scenarios")
+    if design == "calibration":
+        if any(not row.get("moves") or row.get("load_normalization") != "destination_service"
+               for row in scenarios):
+            raise ValueError("calibration scenarios require fixed moves and service load")
+        return
     if design == "frontier":
         contract = plan["network_contract"]
         blocks = {}
@@ -1951,7 +1956,11 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             root / "source_load.jsonl")
         loads["source"].start()
     try:
-        if scenario["design"] in {
+        if scenario["design"] == "calibration":
+            time.sleep(scenario.get("load_warmup_s", 5))
+            moves = scenario["moves"]
+            write_checkpoint(root / "decision.json", {"moves": moves})
+        elif scenario["design"] in {
                 "joint", "frontier", "constraint", "separation",
                 "hardware_gap"}:
             time.sleep(scenario.get("load_warmup_s", 5))
@@ -2040,6 +2049,13 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     if not diagnostic and any(row["method"] == "kv_transfer"
            and row["request"]["cached_tokens"] <= 0 for row in results):
         raise RuntimeError("KV reconstruction reported no cached tokens")
+    block_tokens = profile.case().kv_transfer.block_tokens
+    block_bytes = profile.case().kv_transfer.block_bytes
+    for row in results:
+        if row["method"] == "kv_transfer" and "request" in row:
+            cached = int(row["request"].get("cached_tokens", 0))
+            row["request"]["logical_kv_bytes"] = cached // block_tokens * block_bytes
+            row["request"]["logical_kv_chunks"] = cached // block_tokens
     sleep_start_ns = sleep_end_ns = None
     if not diagnostic:
         testbed.set_source_sleep(stack.cfg, True)
