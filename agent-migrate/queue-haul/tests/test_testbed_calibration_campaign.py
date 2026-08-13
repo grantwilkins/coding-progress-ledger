@@ -1,5 +1,6 @@
 import csv
 import json
+from pathlib import Path
 
 import testbed_calibration_campaign as campaign
 
@@ -92,6 +93,35 @@ def test_select_power_anchors(tmp_path):
         (row["mixture"], row["target_service_load"]) for row in rows]
     assert {row["validation_group"] for row in selected} == {
         "prefill_heavy", "mixed", "decode"}
+
+
+def test_fit_timing_calibrates_route_endpoint_and_residual(tmp_path):
+    profile = Path(campaign.__file__).with_name("profiles") / \
+        "gpt_oss_20b_a100_tp1_azure_300w.json"
+    parent, telemetry = tmp_path / "parent.json", tmp_path / "telemetry.csv"
+    parent.write_text(json.dumps({"network_contract": {"paths": {
+        node: {"natural_mbps": 1000} for node in ("east", "germany")}}}))
+    base = {"bandwidth": "natural", "migration_start_ns": 0,
+            "commit_ns": 10_000_000_000, "concurrent_replay": 0,
+            "replay_tokens": 0}
+    write(telemetry, [
+        {**base, "destination": "east", "method": "kv_transfer",
+         "kv_bytes": 400_000_000, "route_goodput_bytes_per_s": 50_000_000,
+         "effective_kv_ingest_bytes_per_s": 45_000_000},
+        {**base, "destination": "germany", "method": "kv_transfer",
+         "kv_bytes": 2_000_000_000, "route_goodput_bytes_per_s": 500_000_000,
+         "effective_kv_ingest_bytes_per_s": 250_000_000},
+        {**base, "destination": "east", "method": "replay", "kv_bytes": "",
+         "route_goodput_bytes_per_s": "", "effective_kv_ingest_bytes_per_s": "",
+         "concurrent_replay": 1, "replay_tokens": 30_000},
+    ])
+    out_profile, out_parent = tmp_path / "profile.json", tmp_path / "calibrated.json"
+    result = campaign.fit_timing(profile, parent, telemetry, out_profile, out_parent)
+    calibrated = json.loads(out_parent.read_text())
+    assert calibrated["network_contract"]["paths"]["east"]["natural_mbps"] == 400
+    assert result["destination_ingest_bytes_per_s"] == 250_000_000
+    assert result["timing_gate_passed"]
+    assert not result["migration_gate_passed"]
 
 
 def test_plan_spans_requested_migration_design(tmp_path):

@@ -10,7 +10,10 @@ import random
 import statistics
 from pathlib import Path
 
+import numpy as np
+
 from phase_power_calibration import MIXTURES
+from profiles import ModelProfile
 
 
 STATES = ("slack", "bandwidth-only", "east-kv-only",
@@ -132,6 +135,73 @@ def select_power_anchors(measurements: Path, campaign_path: Path) -> list[dict]:
             or len(selected) < 8:
         raise ValueError("compact power anchors are incomplete")
     return selected
+
+
+def fit_timing(profile_path: Path, parent_path: Path, telemetry_path: Path,
+               out_profile: Path, out_parent: Path) -> dict:
+    raw, parent, rows = json.loads(profile_path.read_text()), \
+        json.loads(parent_path.read_text()), _read(telemetry_path)
+    rates = {}
+    for row in rows:
+        value = row.get("route_goodput_bytes_per_s")
+        if value:
+            rates.setdefault((row["destination"], row["bandwidth"]), []).append(float(value))
+    natural = {}
+    for destination in ("east", "germany"):
+        values = rates.get((destination, "natural"), [])
+        if not values:
+            raise ValueError(f"missing natural goodput for {destination}")
+        natural[destination] = min(values) * 8 / 1e6
+        parent["network_contract"]["paths"][destination]["natural_mbps"] = natural[destination]
+    direct = [row for row in rows if row["method"] == "kv_transfer"
+              and row.get("kv_bytes") and float(row["kv_bytes"]) > 0]
+    endpoint = [float(row["effective_kv_ingest_bytes_per_s"]) for row in direct
+                if float(row["route_goodput_bytes_per_s"])
+                > 1.25 * float(row["effective_kv_ingest_bytes_per_s"])]
+    if not endpoint:
+        raise ValueError("no endpoint-bound KV anchor")
+    endpoint_rate = min(endpoint)
+    central = raw["cases"]["central"]
+    kv_fixed = float(central["kv_transfer"]["initial_completion_s"])
+    kv_residuals = []
+    for row in direct:
+        size = float(row["kv_bytes"])
+        route = natural[row["destination"]] * 1e6 / 8
+        predicted = max(size / route, size / endpoint_rate) + kv_fixed
+        observed = (int(row["commit_ns"]) - int(row["migration_start_ns"])) / 1e9
+        kv_residuals.append(max(0., observed - predicted))
+    replay = [row for row in rows if row["method"] == "replay"
+              and int(row["concurrent_replay"]) == 1]
+    curve = np.asarray(central["replay_tps"]["1"], float)
+    replay_fixed = float(central["replay_completion_s"])
+    replay_residuals = [max(0., (int(row["commit_ns"]) - int(row["migration_start_ns"])) / 1e9
+                            - float(row["replay_tokens"])
+                            / np.interp(float(row["replay_tokens"]), *curve.T)
+                            - replay_fixed) for row in replay]
+    quantile = lambda values: sorted(values)[max(0, (95 * len(values) + 99) // 100 - 1)]
+    kv_residual, replay_residual = quantile(kv_residuals), quantile(replay_residuals)
+    prior_endpoint = float(central["kv_transfer"]["destination_bytes_per_s"])
+    for case in raw["cases"].values():
+        case["kv_transfer"]["destination_bytes_per_s"] = endpoint_rate * (
+            float(case["kv_transfer"]["destination_bytes_per_s"]) / prior_endpoint)
+        case["kv_transfer"]["initial_completion_s"] += kv_residual
+        case["replay_completion_s"] += replay_residual
+    reference = str(telemetry_path)
+    raw["profile_id"] += "-compact-regional-timing-v1"
+    raw["sources"]["kv_transfer"].update(kind="measured", reference=reference)
+    raw["sources"]["replay"].update(kind="measured", reference=reference)
+    out_profile.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n")
+    out_parent.write_text(json.dumps(parent, indent=2, sort_keys=True) + "\n")
+    ModelProfile.load(out_profile)
+    return {
+        "schema": "queue-haul-compact-timing-fit-v1", "timing_gate_passed": True,
+        "migration_gate_passed": False, "service_gate_passed": False,
+        "operational_gate_passed": False, "false_feasible": 0,
+        "correctness_failures": 0, "validation": "in-sample conservative p95 residual",
+        "natural_goodput_mbps": natural, "destination_ingest_bytes_per_s": endpoint_rate,
+        "kv_residual_p95_s": kv_residual, "replay_residual_p95_s": replay_residual,
+        "calibration_migrations": len(direct) + len(replay),
+    }
 
 
 def network_plan(parent_path: Path, campaign_path: Path,
@@ -391,12 +461,23 @@ def main() -> None:
     a.add_argument("--campaign", type=Path, required=True)
     a.add_argument("--measurements", type=Path, required=True)
     a.add_argument("--out", type=Path, required=True)
+    t = sub.add_parser("fit-timing")
+    t.add_argument("--profile", type=Path, required=True)
+    t.add_argument("--parent", type=Path, required=True)
+    t.add_argument("--telemetry", type=Path, required=True)
+    t.add_argument("--out-profile", type=Path, required=True)
+    t.add_argument("--out-parent", type=Path, required=True)
+    t.add_argument("--summary", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "compact":
         args.out.write_text(json.dumps(compact_campaign(), indent=2,
                                        sort_keys=True) + "\n")
     elif args.command == "power-anchors":
         _write(args.out, select_power_anchors(args.measurements, args.campaign))
+    elif args.command == "fit-timing":
+        value = fit_timing(args.profile, args.parent, args.telemetry,
+                           args.out_profile, args.out_parent)
+        args.summary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
     elif args.command == "network-plan":
         args.out.write_text(json.dumps(network_plan(args.parent, args.campaign,
                                                     args.missing_from),
