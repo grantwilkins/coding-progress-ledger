@@ -86,7 +86,23 @@ def write_csv(rows, path: Path) -> None:
         writer.writerows(rows)
 
 
-def write_plot(summary, out: Path) -> None:
+def hardware_point(path: Path, requested_fraction: float) -> dict:
+    with path.open() as handle:
+        rows = [row for row in csv.DictReader(handle)
+                if row["policy"] == "queue_haul_robust"]
+    cases = {(row["condition_index"], row["repeat"]) for row in rows}
+    if len(rows) != 15 or len(cases) != 15 or any(
+            row["status"] != "complete" or not row["deadline_met"] == "True"
+            for row in rows):
+        raise RuntimeError("H100 hardware point requires 15 complete matched runs")
+    attained = [requested_fraction * float(row["realized_shed_w"])
+                / float(row["requested_shed_w"]) for row in rows]
+    return {"requested_fraction": requested_fraction,
+            "attained_fraction": float(np.median(attained)),
+            "observations": len(rows)}
+
+
+def write_plot(summary, out: Path, measured=None) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -107,6 +123,12 @@ def write_plot(summary, out: Path) -> None:
             **plot_style.policy_style(POLICY_STYLE_IDS[policy]),
         )
     axis.plot((0, 1), (0, 1), color="black", linestyle=":", linewidth=1)
+    if measured:
+        axis.scatter(measured["requested_fraction"],
+                     measured["attained_fraction"], marker="*", s=110,
+                     color=plot_style.POLICY_COLORS["queue_haul"],
+                     edgecolor="black", linewidth=.8, zorder=5,
+                     label="H100 measured Queue-Haul")
     axis.set(xlim=(0, 1), ylim=(0, 1),
              xlabel="Requested Fraction of Power",
              ylabel="Shed Power by Deadline")
@@ -131,12 +153,15 @@ def main() -> None:
     parser.add_argument("--plan", action="append", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--points", type=int, default=31)
+    parser.add_argument("--hardware-results", type=Path)
     args = parser.parse_args()
     rows = sweep(args.plan, args.points)
     summary = pooled_summary(rows)
     write_csv(rows, args.out.with_name(f"{args.out.name}_cases.csv"))
     write_csv(summary, args.out.with_suffix(".csv"))
-    write_plot(summary, args.out)
+    measured = hardware_point(args.hardware_results, .414) \
+        if args.hardware_results else None
+    write_plot(summary, args.out, measured)
 
 
 if __name__ == "__main__":

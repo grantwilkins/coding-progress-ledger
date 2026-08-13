@@ -706,6 +706,19 @@ designed cases, not repeated-run confidence intervals. Deadline-blind plans
 against 90 seconds but receives credit only for shed attained by the common
 30-second cutoff.
 
+The H100 counterpart pools the five completed hardware-gap states using the
+measured H100 profile. Its star is the median of 15 matched Queue-Haul robust
+hardware runs at the common 41.4% request; the curves remain modeled 30-second
+frontiers rather than interpolated hardware measurements:
+
+```bash
+QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python \
+  queue-haul/plot_pooled_shed_frontier.py \
+  --plan queue-haul/outputs/east-germany-hardware-gap-h100-20260812/plan.json \
+  --hardware-results queue-haul/outputs/east-germany-hardware-gap-h100-20260812/results.csv \
+  --out queue-haul/outputs/east-germany-pooled-shed-frontier-h100-20260812/pooled_shed_frontier
+```
+
 ```bash
 uv run python queue-haul/plot_pooled_shed_frontier.py \
   --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
