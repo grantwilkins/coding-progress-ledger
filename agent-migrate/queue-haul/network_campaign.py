@@ -365,7 +365,11 @@ def node_report() -> dict:
     if len(gpu) != 1:
         raise RuntimeError("each network node must expose exactly one GPU")
     name, memory = map(str.strip, gpu[0].split(","))
-    tracking = _output(["chronyc", "tracking"])
+    for _ in range(3):
+        tracking = _output(["chronyc", "tracking"])
+        if re.search(r"Leap status\s*:\s*Normal", tracking):
+            break
+        time.sleep(1)
     ptp = Path("/dev/ptp_hyperv")
     return {
         "git_sha": _output(["git", "rev-parse", "HEAD"]),
