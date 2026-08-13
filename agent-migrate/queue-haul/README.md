@@ -47,6 +47,10 @@ runs. It scales the constrained East KV reserve to 96% of the measured
 1,205,376-token capacity, reserves 65% of each destination's migration window
 for KV, and requests 41.4% of removable source power. All three deadline-blind
 controls missed 45 seconds and reached the target in 55.5--59.5 seconds.
+The reduced evidence and raw scenario attempts are retained in
+`outputs/east-germany-hardware-gap-h100-20260812/`, copied from node run root
+`/datadrive/queue-haul-network/hardware-gap-h100-002`. Its artifact manifest
+also addresses the uncommitted reusable stack logs.
 
 ## System boundary
 

@@ -1,0 +1,380 @@
+{
+  "checks": [
+    {
+      "calibration": {
+        "contract": {
+          "aggregate": {
+            "controlled_mbps": {
+              "40": 4900,
+              "80": 9800
+            },
+            "natural_mbps": 12322.282702439763
+          },
+          "paths": {
+            "east": {
+              "controlled_mbps": {
+                "40": 600,
+                "80": 1200
+              },
+              "natural_mbps": 1512.6771092106105,
+              "rtt_ms": 142.0
+            },
+            "germany": {
+              "controlled_mbps": {
+                "40": 4300,
+                "80": 8600
+              },
+              "natural_mbps": 10811.283731372238,
+              "rtt_ms": 18.1
+            }
+          },
+          "schema": "queue-haul-network-contract-v1"
+        },
+        "path": "/datadrive/queue-haul-network/control/calibration-h100-westus3-australia-southcentral-001.json",
+        "sha256": "2f694a20c14eb20674a38655d438cb7aadcff3cfb0e7a721b8d006cd0a29da82"
+      },
+      "hosts": {
+        "east": {
+          "clock_uncertainty_ms": 0.022133999999999997,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "7dedc8f24c5dcef831599203dc78a47617215d32",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.12.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "australiaeast",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        },
+        "germany": {
+          "clock_uncertainty_ms": 0.018782,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "7dedc8f24c5dcef831599203dc78a47617215d32",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.13.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "southcentralus",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        },
+        "westus3": {
+          "clock_uncertainty_ms": 0.017751,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "7dedc8f24c5dcef831599203dc78a47617215d32",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.11.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "WestUS3",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        }
+      },
+      "wall_ns": 1786547774858516573
+    },
+    {
+      "calibration": {
+        "contract": {
+          "aggregate": {
+            "controlled_mbps": {
+              "40": 4900,
+              "80": 9800
+            },
+            "natural_mbps": 12322.282702439763
+          },
+          "paths": {
+            "east": {
+              "controlled_mbps": {
+                "40": 600,
+                "80": 1200
+              },
+              "natural_mbps": 1512.6771092106105,
+              "rtt_ms": 142.0
+            },
+            "germany": {
+              "controlled_mbps": {
+                "40": 4300,
+                "80": 8600
+              },
+              "natural_mbps": 10811.283731372238,
+              "rtt_ms": 18.1
+            }
+          },
+          "schema": "queue-haul-network-contract-v1"
+        },
+        "path": "/datadrive/queue-haul-network/control/calibration-h100-westus3-australia-southcentral-001.json",
+        "sha256": "2f694a20c14eb20674a38655d438cb7aadcff3cfb0e7a721b8d006cd0a29da82"
+      },
+      "hosts": {
+        "east": {
+          "clock_uncertainty_ms": 0.01895,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.12.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "australiaeast",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        },
+        "germany": {
+          "clock_uncertainty_ms": 0.021495999999999998,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.13.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "southcentralus",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        },
+        "westus3": {
+          "clock_uncertainty_ms": 0.019626,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.11.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "WestUS3",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        }
+      },
+      "wall_ns": 1786548835129440632
+    },
+    {
+      "calibration": {
+        "contract": {
+          "aggregate": {
+            "controlled_mbps": {
+              "40": 4900,
+              "80": 9800
+            },
+            "natural_mbps": 12322.282702439763
+          },
+          "paths": {
+            "east": {
+              "controlled_mbps": {
+                "40": 600,
+                "80": 1200
+              },
+              "natural_mbps": 1512.6771092106105,
+              "rtt_ms": 142.0
+            },
+            "germany": {
+              "controlled_mbps": {
+                "40": 4300,
+                "80": 8600
+              },
+              "natural_mbps": 10811.283731372238,
+              "rtt_ms": 18.1
+            }
+          },
+          "schema": "queue-haul-network-contract-v1"
+        },
+        "path": "/datadrive/queue-haul-network/control/calibration-h100-westus3-australia-southcentral-001.json",
+        "sha256": "2f694a20c14eb20674a38655d438cb7aadcff3cfb0e7a721b8d006cd0a29da82"
+      },
+      "hosts": {
+        "east": {
+          "clock_uncertainty_ms": 0.063023,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.12.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "australiaeast",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        },
+        "germany": {
+          "clock_uncertainty_ms": 0.039728,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.13.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "southcentralus",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        },
+        "westus3": {
+          "clock_uncertainty_ms": 0.019661,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.11.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "WestUS3",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        }
+      },
+      "wall_ns": 1786553657423182648
+    },
+    {
+      "calibration": {
+        "contract": {
+          "aggregate": {
+            "controlled_mbps": {
+              "40": 4900,
+              "80": 9800
+            },
+            "natural_mbps": 12322.282702439763
+          },
+          "paths": {
+            "east": {
+              "controlled_mbps": {
+                "40": 600,
+                "80": 1200
+              },
+              "natural_mbps": 1512.6771092106105,
+              "rtt_ms": 142.0
+            },
+            "germany": {
+              "controlled_mbps": {
+                "40": 4300,
+                "80": 8600
+              },
+              "natural_mbps": 10811.283731372238,
+              "rtt_ms": 18.1
+            }
+          },
+          "schema": "queue-haul-network-contract-v1"
+        },
+        "path": "/datadrive/queue-haul-network/control/calibration-h100-westus3-australia-southcentral-001.json",
+        "sha256": "2f694a20c14eb20674a38655d438cb7aadcff3cfb0e7a721b8d006cd0a29da82"
+      },
+      "hosts": {
+        "east": {
+          "clock_uncertainty_ms": 0.049415,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.12.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "australiaeast",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        },
+        "germany": {
+          "clock_uncertainty_ms": 0.014272,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.13.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "southcentralus",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        },
+        "westus3": {
+          "clock_uncertainty_ms": 0.045874,
+          "datadrive": true,
+          "dirty": false,
+          "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+          "gpu": "NVIDIA H100 NVL",
+          "gpu_memory_mib": 95830,
+          "lmcache": "0.5.1",
+          "priority": "Spot",
+          "private_ip": "10.11.0.4",
+          "ptp": "/dev/ptp0",
+          "region": "WestUS3",
+          "vllm": "0.22.0",
+          "vm_size": "Standard_NC40ads_H100_v5"
+        }
+      },
+      "wall_ns": 1786560630982547898
+    }
+  ],
+  "dirty": false,
+  "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+  "hosts": {
+    "east": {
+      "datadrive": true,
+      "dirty": false,
+      "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+      "gpu": "NVIDIA H100 NVL",
+      "gpu_memory_mib": 95830,
+      "lmcache": "0.5.1",
+      "priority": "Spot",
+      "private_ip": "10.12.0.4",
+      "ptp": "/dev/ptp0",
+      "region": "australiaeast",
+      "vllm": "0.22.0",
+      "vm_size": "Standard_NC40ads_H100_v5"
+    },
+    "germany": {
+      "datadrive": true,
+      "dirty": false,
+      "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+      "gpu": "NVIDIA H100 NVL",
+      "gpu_memory_mib": 95830,
+      "lmcache": "0.5.1",
+      "priority": "Spot",
+      "private_ip": "10.13.0.4",
+      "ptp": "/dev/ptp0",
+      "region": "southcentralus",
+      "vllm": "0.22.0",
+      "vm_size": "Standard_NC40ads_H100_v5"
+    },
+    "westus3": {
+      "datadrive": true,
+      "dirty": false,
+      "git_sha": "1c76b4878d5574f08bc71fa6b359fc9ad31b68cc",
+      "gpu": "NVIDIA H100 NVL",
+      "gpu_memory_mib": 95830,
+      "lmcache": "0.5.1",
+      "priority": "Spot",
+      "private_ip": "10.11.0.4",
+      "ptp": "/dev/ptp0",
+      "region": "WestUS3",
+      "vllm": "0.22.0",
+      "vm_size": "Standard_NC40ads_H100_v5"
+    }
+  },
+  "plan_sha256": "735359d6b59bf7796b17f7459d99100ac57a8cf4d36043b5d5b2bafb0262d64f",
+  "schema": "queue-haul-network-run-v1"
+}

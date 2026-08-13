@@ -1,0 +1,280 @@
+{
+  "admission_mode": "normal",
+  "background": {
+    "east": [
+      0.25,
+      0.96
+    ],
+    "germany": [
+      0.75,
+      0
+    ]
+  },
+  "background_kv_headroom_tokens": {
+    "east": 668,
+    "germany": 668
+  },
+  "bandwidth": "natural",
+  "bandwidth_mbps": {
+    "east": 1512.6771092106105,
+    "germany": 10811.283731372238
+  },
+  "condition_id": "free-bandwidth",
+  "condition_index": 3,
+  "context_seed": 8,
+  "deadline_s": 45,
+  "design": "hardware_gap",
+  "expected_admission": true,
+  "full_horizon_s": 90,
+  "kv_capacity_fraction": {
+    "east": 0.04,
+    "germany": 1
+  },
+  "load_normalization": "destination_service",
+  "load_warmup_s": 30,
+  "migration_headroom": {
+    "east": {
+      "replay": 0.35
+    },
+    "germany": {
+      "replay": 0.35
+    }
+  },
+  "objective": "max_shed",
+  "pack": "recorded-28-seed-8",
+  "planner_seed": 3132462555855514116,
+  "planning_deadline_s": 30,
+  "planning_state": "free-bandwidth",
+  "policy": "queue_haul",
+  "repeat": 0,
+  "requested_shed_fraction": 0.414,
+  "scenario_id": "0d3d3ad384024b70",
+  "sessions": [
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-separation-0",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-separation-1",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2",
+      "template_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-separation-3",
+      "template_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 4,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-4",
+      "template_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 31547,
+      "job_class": "coding",
+      "order": 5,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5",
+      "template_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 6,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6",
+      "template_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 7,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-7",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 8,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-separation-8",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 9,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-separation-9",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 31547,
+      "job_class": "coding",
+      "order": 10,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10",
+      "template_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 11,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-separation-11",
+      "template_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 12,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12",
+      "template_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 31547,
+      "job_class": "coding",
+      "order": 13,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13",
+      "template_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 14,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14",
+      "template_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 15,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 16,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-separation-16",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 17,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-separation-17",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 18,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18",
+      "template_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 19,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-separation-19",
+      "template_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 31547,
+      "job_class": "coding",
+      "order": 20,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20",
+      "template_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 21,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21",
+      "template_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 22,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22",
+      "template_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 23,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-23",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30785,
+      "job_class": "coding",
+      "order": 24,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-separation-24",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 25,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-separation-25",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 14042,
+      "job_class": "coding",
+      "order": 26,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26",
+      "template_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 31547,
+      "job_class": "coding",
+      "order": 27,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-separation-27",
+      "template_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    }
+  ],
+  "source_load": 0.8,
+  "workload": "agentic_tool_loop"
+}
