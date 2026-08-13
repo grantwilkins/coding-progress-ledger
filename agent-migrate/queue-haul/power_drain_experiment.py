@@ -26,7 +26,7 @@ from simulate import (ExecutionResult, ExecutionScenario, NetworkLink, PowerNode
 
 
 ROOT = Path(__file__).parent
-DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
+DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_h100_tp1.json"
 DEFAULT_WORKLOADS = tuple(ROOT / f"profiles/{name}.json" for name in (
     "interactive_coding", "coding", "agentic_tool_loop",
 ))

@@ -16,15 +16,17 @@ Plausible wrong implementations:
 - Mark a later continuation as the first destination token.
 - Place Switch or Resume markers on the wrong lane or measured event time.
 - Put event-marker labels over the timeline instead of in its legend.
+- Swap transfer colors, leave Drain named, or lose the marker/hatch semantics.
 """
 
 import csv
 import json
 
 import pytest
+from matplotlib.colors import to_rgba
 
 import plot_testbed_kv_timeline as timeline_plot
-from plot_testbed_kv_timeline import extract, write
+from plot_testbed_kv_timeline import BARRIER_ALPHA, COLORS, extract, write
 
 
 def _csv(path, rows):
@@ -138,12 +140,31 @@ def test_timeline_marks_switch_and_resume_events(tmp_path, monkeypatch):
 
     ax = timeline_plot.plt.gcf().axes[0]
     assert not ax.texts
-    assert {text.get_text() for text in ax.get_legend().get_texts()} \
-        >= {"Switch", "Resume"}
+    legend = ax.get_legend()
+    labels = [text.get_text() for text in legend.get_texts()]
+    assert "Barrier" in labels and "Drain" not in labels
+    handles = dict(zip(labels, legend.legend_handles))
+    assert handles["Tool Call"].get_hatch() == "//"
+    assert handles["Barrier"].get_alpha() == BARRIER_ALPHA
+    assert handles["Switch"].get_marker() == "8"
+    assert to_rgba(handles["Switch"].get_markerfacecolor()) \
+        == to_rgba(COLORS["switch"])
+    assert handles["Resume"].get_marker() == "*"
+    assert to_rgba(handles["Resume"].get_markerfacecolor()) \
+        == to_rgba(COLORS["resume"])
     markers = [marker.get_offsets()[0].tolist() for marker in ax.collections]
     assert markers[0] == pytest.approx([2.5, -.32])
     assert markers[1] == pytest.approx([4.15, .32])
     assert [marker.get_sizes()[0] for marker in ax.collections] == [150, 150]
+
+
+def test_gantt_semantic_colors():
+    tab10 = timeline_plot.plt.get_cmap("tab10").colors
+    assert COLORS["context"] == tab10[2]
+    assert COLORS["kv"] == tab10[4]
+    assert COLORS["switch"] == tab10[3]
+    assert COLORS["tool"] == COLORS["barrier"] == tab10[7]
+    assert COLORS["resume"] == "#D4A017"
 
 
 def test_replay_uses_the_same_measured_clock(tmp_path):

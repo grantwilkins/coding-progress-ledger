@@ -15,7 +15,7 @@ contract, not an inferred GPU inventory.
 
 The repository contains:
 
-- measured GPT-OSS-20B/A100 power curves;
+- a measured GPT-OSS-20B/H100 NVL TP=1 occupancy and GPU-power curve;
 - working replay and compatible KV handoff on two A100s, with 24/24 serial and
   90/90 bounded-campaign migrations completing by their deadlines;
 - 105/105 passing bounded-campaign gates and 6/6 passing parallel-KV gates;
@@ -33,6 +33,24 @@ with ordered eager-parallel launch. The archived destination service campaign
 does not provide an accepted shared-load capacity boundary, so simulator
 service headroom remains a sensitivity. That boundary is not required for the
 dedicated two-A100 migration claim.
+
+The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
+H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
+1,205,376 production KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
+and measured through offered load `ell=12.566`. Admission remains bounded at
+`ell=0.96647`. Raw benchmark and power samples are under
+`outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
+remain clearly marked A100-derived estimates until rerun on H100.
+
+The completed 72-scenario H100 hardware-gap campaign has no failed or missing
+runs. It scales the constrained East KV reserve to 96% of the measured
+1,205,376-token capacity, reserves 65% of each destination's migration window
+for KV, and requests 41.4% of removable source power. All three deadline-blind
+controls missed 45 seconds and reached the target in 55.5--59.5 seconds.
+The reduced evidence and raw scenario attempts are retained in
+`outputs/east-germany-hardware-gap-h100-20260812/`, copied from node run root
+`/datadrive/queue-haul-network/hardware-gap-h100-002`. Its artifact manifest
+also addresses the uncommitted reusable stack logs.
 
 ## System boundary
 
@@ -59,6 +77,24 @@ evidence status. The scenario supplies link rates. The pool planner enforces
 ongoing event capacity and conservative replica-second debt and reports required
 recovery.
 
+`repair_controller.py` is an optional in-memory feasibility latch; fixed planning
+remains the default. Progress updates only refresh ETAs. Two consecutive deadline
+miss forecasts request one residual repair, while hard failures request one
+immediately. `repair_destination` keeps committed work fixed, prices active work
+by its measured remainder, prefers unchanged assignments, and proposes a diff
+only when it restores the target. Otherwise it reports the attainable shed and
+leaves execution unchanged.
+
+`repair_shadow_campaign.py` is the narrow RAMR validation: three seeded repeats
+each of a sustained 10-to-1 Gbps cut, replay load from rho 0 to 0.8, and both.
+It requests two A100-SXM4-80GB GPUs, records but does not apply proposed diffs,
+and validates the trigger policy rather than live redirection or performance.
+
+`repair_plan_shift_campaign.py` independently replans and simulates the original,
+Germany-only 2.2-Gbps bandwidth, and East-only rho-0.976 prefill snapshots at a
+50% shed target. It writes complete plans, diffs, action counts, and a normalized
+action-mix plot. These are snapshot replans, not applied residual diffs.
+
 ## Evidence flow
 
 ```text
@@ -83,6 +119,12 @@ public Internet. No Azure CLI access is needed on the VMs. The relevant Azure
 contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/networking/design-guide/cross-region),
 [Linux PTP/chrony](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/time-sync),
 and [Spot Scheduled Events](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/scheduled-events).
+
+The H100 path uses West US 3 (`10.11.0.4`) as source and Australia East
+(`10.12.0.4`) plus South Central US (`10.13.0.4`) as destinations via
+`azure_network_cluster_australia_southcentral.json`. Set
+`QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json`; the A100 profile remains the
+network campaign default so archived plans retain their original meaning.
 
 The node map across the provided cluster files is:
 
@@ -139,8 +181,8 @@ source ~/.bashrc
 This installs Valkey, `chrony`, and `iperf3`, configures chrony against Azure's
 stable `/dev/ptp_hyperv` device, waits for synchronization, installs the pinned
 Python 3.12/vLLM 0.22.0/LMCache 0.5.1 CUDA 12.9 runtime, and stores the pinned
-GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without the
-A100, persistent data mount, PTP device, or pinned runtime.
+GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without
+`nvidia-smi`, the persistent data mount, PTP device, or pinned runtime.
 
 From the Sweden Central source, establish and verify SSH host keys once, then confirm
 that the same commit is checked out everywhere:
@@ -321,6 +363,14 @@ and an 80% modeled removable-power target. The source load is 80%; replay
 requests explicitly bypass LMCache and KV requests require positive cache
 evidence only as a warning.
 
+The H100 frontier keeps the 4x16K, 8x16K, and 16x16K width bridge, expands the
+8K, 24K, and 31K packs to width 16, and adds one 32x31K red-zone tail. Its 304
+matched scenarios cover Queue-Haul, greedy, Lagrangian greedy,
+isolated-fastest, KV-only, replay-only, power-blind, and deadline-blind using
+only the two measured natural WAN paths; no bandwidth cap or fixed destination
+split is applied. H100 destination load is normalized to the measured
+604-prefill/64-decode service rates used by the live background generator.
+
 ```bash
 uv run python queue-haul/network_campaign.py prepare --design frontier \
   --cluster queue-haul/azure_network_cluster_east_germany.json \
@@ -417,6 +467,8 @@ intentionally oversized target remains unmet, and no episode contains a
 request, KV-evidence, load-drift, or queueing warning.
 Migration timing ends when parallel reconstruction finishes; draining background
 load happens afterward and is excluded from `migration_s` and `deadline_met`.
+Each background generator caps pending work at its eight request workers, so
+overload cannot create a stale client-side queue that lengthens episode cleanup.
 Reduction writes matched Tab10 attainment and action-composition figures; the
 simulator additionally writes the Phase-I dual table and figure. There is no
 adaptive refinement or CDF for this single-block diagnostic.
@@ -574,6 +626,106 @@ manifest are retained in
 `outputs/east-germany-hardware-gap-hardware-20260810/`; large traces remain in
 the raw run root.
 
+`plot_hardware_constraint_timeline.py` reconstructs the all-bind repeat-0
+Queue-Haul, power-blind, and deadline-blind resource accounting. KV and service
+curves are residual headroom consumed after measured cutover; migration curves
+are modeled work charged to Queue-Haul's 30-second planning budget in measured
+completion order, not sampled instantaneous utilization.
+
+```bash
+uv run python queue-haul/plot_hardware_constraint_timeline.py \
+  --raw-root /datadrive/queue-haul-network/hardware-gap-001 \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-hardware-gap-hardware-20260810/constraint_timeline
+```
+
+The requested-shed frontier is a model sweep over that frozen all-bind hardware
+scenario, not additional hardware observations. It retains raw overshed above
+the requested-equals-attained diagonal and carries the last safe attainment
+forward when a larger request is unsafe. Its second panel reports Queue-Haul
+LP's modeled resource pressure and action/destination mix; those are diagnostic
+rather than the primary comparison.
+
+```bash
+uv run python queue-haul/plot_hardware_shed_frontier.py \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-hardware-gap-frontier-20260810/shed_frontier
+```
+
+The pooled publication view removes those diagnostic panels and standardizes
+twelve constraint, separation, and hardware-gap operating points to a common
+30-second cutoff. Requested and attained shed are normalized by each case's
+removable power before equal-weight pooling; raw overshed remains visible above
+the diagonal. Lines are medians and ribbons are the interquartile spread across
+designed cases, not repeated-run confidence intervals. Deadline-blind plans
+against 90 seconds but receives credit only for shed attained by the common
+30-second cutoff.
+
+```bash
+uv run python queue-haul/plot_pooled_shed_frontier.py \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_shed_frontier
+```
+
+The companion hardware target-attainment plot retains uncapped overshed for the
+six deadline-safe policies in the 63 separation episodes. It divides realized
+shed by requested shed within each episode before pooling the three repeats, so
+values above 100% explicitly show target overshoot rather than extra physical
+efficiency. Deadline-blind is omitted because its recorded shed is eventual,
+not shed attained by the deadline.
+
+```bash
+uv run python queue-haul/plot_hardware_target_attainment.py \
+  --results queue-haul/outputs/east-germany-separation-hardware-20260809/results.csv \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-hardware-target-attainment-20260810/target_attainment
+```
+
+The companion resource-pressure view compares the same cases at two-thirds of
+removable power, where Queue-Haul usually succeeds and the restricted policies
+usually fail. Its four facets sum physical use and capacity across destinations
+for prefill service, KV headroom, replay time, and bandwidth-sensitive KV
+transfer time. Points are designed cases, filled when the target is met by 30
+seconds; diamonds and whiskers are the equal-case mean and 95% case-bootstrap
+interval.
+
+```bash
+uv run python queue-haul/plot_pooled_resource_pressure.py \
+  --cases queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_shed_frontier_cases.csv \
+  --out queue-haul/outputs/east-germany-pooled-resource-pressure-20260810/resource_pressure
+```
+
+The action-adaptation views use the same equal-case sweep. The primary chart
+shows Queue-Haul's selected-action composition across six succinct bound-
+constraint states at a common 67% target. Every 100%-stacked bar uses the same
+28-session pack; absolute selected-session counts are intentionally omitted.
+
+```bash
+uv run python queue-haul/plot_pooled_action_adaptation.py \
+  --cases queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_shed_frontier_cases.csv \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out-dir queue-haul/outputs/east-germany-action-adaptation-20260811
+```
+
+The time-to-binding view uses the same two-thirds stress point. It estimates
+completion-ordered slack for VRAM, network-transfer, and prefill constraints;
+each class reports its tightest component without exposing destination names.
+Thin step curves are the twelve cases, thick curves are policy medians, and a
+cross marks the first time a case reaches at most 5% residual slack. The
+deadline-blind trajectory likewise shows only its first 30 seconds.
+
+```bash
+uv run python queue-haul/plot_pooled_resource_slack.py \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-pooled-resource-slack-20260810/resource_slack
+```
+
 In the separate standard handoff experiment, each policy uses the same eight
 pinned agentic sessions. An independent 80%-load stream serves on Sweden while
 both destinations sustain 50% background inference.
@@ -658,14 +810,38 @@ planner's Queue-Haul LP, Queue-Haul Greedy, KV-only, and replay-only recorded
 destination-method selections. Run
 `uv run python queue-haul/plot_network_action_breakdown.py`.
 
-`plot_hardware_power_parity.py` groups the completed width-8 policy and joint
-network scenarios into stacked power-target outcome bars for Queue-Haul LP,
-Queue-Haul Greedy, KV-only, and replay-only, sorted by target attainment.
-Each bar reports below, on, or above the normalized deadline-admitted shed.
-On target includes deviations within ±5 percentage points. Achieved shed uses
-the trailing power window from hardware completion times; the two three-node
-handoffs use measured Sweden pre/post power. Run
-`uv run python queue-haul/plot_hardware_power_parity.py`.
+`plot_hardware_power_parity.py` audits the 840 matched Queue-Haul LP, Queue-Haul
+Greedy, True Greedy, KV-only, replay-only, power-blind, and deadline-blind raw
+traces. These runs do not provide the required settled pre-migration window:
+the median gap from the final source request to migration is 0.075 s, and only
+3/840 episodes cover a one-second window plus a one-second settling guard. The
+script therefore hard-fails direct parity reduction instead of averaging
+migration warm-up power. `--audit-only --out PATH` writes the episode-level
+window audit without claiming measured shed. `--raw-delta --out PATH` writes an
+explicitly `warmup_contaminated_immediate_pre` exploratory delta from the final
+second before migration to the one-second post-switch window after a one-second
+guard. A new hardware run with an explicit pre-migration hold is required for a
+settled-state parity claim.
+
+`power_parity_experiment.py` supplies that focused run without campaign controls:
+50 matched random migration sizes per policy (350 runs total), a five-second
+settled source window at load 0.4, and a five-second settled window at the
+remaining source load. It reduces the direct GPU-0 means against the pinned
+RAMR A100 power curve and writes the CSV plus y=x PNG/PDF.
+
+```bash
+uv run python queue-haul/power_parity_experiment.py prepare \
+  --source-plan queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json \
+  --out queue-haul/outputs/power-parity-random-plan
+sbatch queue-haul/outputs/power-parity-random-plan/run.sbatch
+```
+
+The completed 350-scenario run is retained in scratch. The descriptive
+phase-aware refit under `outputs/power-parity-phase-aware-20260813/` uses the
+same observations for fitting and parity, so it is not held-out evidence. Its
+shed regression has a 0.997 through-origin slope, effectively zero aggregate
+bias, and 8.66 W RMSE; grouped five-fold episode cross-validation retains a
+0.999 slope, 0.11 W bias, and 8.78 W RMSE. The CSV preserves all policy repeats.
 
 Reduction runs automatically and can also be repeated without hardware:
 
@@ -869,8 +1045,81 @@ elapsed time with an interquartile band, plus paired attainment–completion
 points and a CDF of measured session downtime per modeled watt shed. This idle
 evidence also includes an episode migration-makespan-per-modeled-watt CDF and
 supports timing and projected, not realized, power attainment.
+`plot-reduced --pooled-with` adds supplied reduced campaigns to every pooled,
+bandwidth, condition, attainment, power, and Pareto plot.
 The pinned 2026-07-30 bundles predate `greedy_lagrangian`; they do not constitute
 hardware evidence for it. A new two-A100 run is required for that claim.
+Matched reruns of either reduced bundle use its frozen plan as the cohort source.
+The three network baselines use resource-aware per-session fastest, uniform-gain
+power-blind LP, and a 600-second deadline-blind planning horizon while retaining
+the source plan's 19/30-second scoring deadlines:
+
+```bash
+uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
+  --source-plan queue-haul/outputs/policy-hardware-width8-frontier-20260730/plan.json \
+  --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_20260730.json \
+  --out queue-haul/outputs/policy-hardware-width8-frontier-network-baselines-plan
+uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
+  --source-plan queue-haul/outputs/policy-hardware-width8-packing-20260730/plan.json \
+  --out queue-haul/outputs/policy-hardware-width8-packing-network-baselines-plan
+uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
+  --source-plan queue-haul/outputs/policy-hardware-width8-packing-20260730/plan.json \
+  --policies queue_haul greedy isolated_fastest queue_haul_power_blind queue_haul_deadline_blind \
+  --out queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-plan
+for shard in 0 1; do uv run python queue-haul/policy_hardware_campaign.py prepare-baselines \
+  --source-plan queue-haul/outputs/policy-hardware-width8-packing-20260730/plan.json \
+  --policies queue_haul greedy isolated_fastest queue_haul_power_blind queue_haul_deadline_blind \
+  --condition-shard "$shard" 2 \
+  --out queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-shard${shard}-plan; done
+```
+
+The 720-scenario contemporaneous packing rerun completed as RAMR jobs 38607705
+and 38607709. Both 360-scenario condition shards validate independently; their
+checksum-pinned reduced evidence is under
+`outputs/policy-hardware-width8-packing-contemporaneous-20260811/`, with pooled
+graphs at the top level and shard-1 provenance nested under `shard1/`. The
+pooled migration CDF compares Queue-Haul, greedy, isolated-fastest, power-blind,
+and deadline-blind on this single contemporaneous cohort. Rebuild the pooled
+and per-condition graphs with:
+
+```bash
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
+  --out queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811 \
+  --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json \
+  --pooled-with queue-haul/outputs/policy-hardware-width8-packing-contemporaneous-20260811/shard1 \
+  --cdf-policies queue_haul isolated_fastest queue_haul_power_blind queue_haul_deadline_blind
+```
+
+The completed reduced baselines are checksum-pinned under each 2026-07-30
+bundle in `network-baselines-20260811/`; the parent graphs pool both campaigns.
+The packing bundle's 30-second full-attainment CDF pools packing and frontier
+parent and baseline episodes. It uses an 8-by-4-inch plot, 17-point axis text,
+Okabe–Ito colors, distinct line styles, and a collision-free legend inside the
+lower-right axes. The deadline is labeled vertically in italics on its line.
+
+The canonical output style is `plot_style.py`: 8-by-5 inches, 15-point titles,
+labels, and ticks, 11-point legends and annotations, 3-point lines, and 220 DPI.
+Plot-specific layouts may use the shared compact size. New and modified plot
+producers must inherit it. Policy identities are:
+
+| Internal name | Display name | Okabe–Ito | Line |
+|---|---|---:|---|
+| `queue_haul` | Queue-Haul LP | `#0072B2` | solid |
+| `greedy` | Queue-Haul Greedy | `#E69F00` | dashed |
+| `greedy_lagrangian` | Queue-Haul Lagrangian Greedy | `#F0E442` | dash-dot-dot |
+| `isolated_fastest` | True Greedy | `#D55E00` | long dash |
+| `kv_only` | KV Migrate Only | `#56B4E9` | dash-dot |
+| `replay_only` | Replay Context Only | `#CC79A7` | dotted |
+| `queue_haul_power_blind` | Queue-Haul Power Blind | `#009E73` | short dash |
+| `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | `#000000` | fine dotted |
+
+Rebuild them with:
+
+```bash
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced --out queue-haul/outputs/policy-hardware-width8-frontier-20260730 --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_20260730.json --pooled-with queue-haul/outputs/policy-hardware-width8-frontier-20260730/network-baselines-20260811
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced --out queue-haul/outputs/policy-hardware-width8-packing-20260730 --model-profile queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json --pooled-with queue-haul/outputs/policy-hardware-width8-packing-20260730/network-baselines-20260811 queue-haul/outputs/policy-hardware-width8-frontier-20260730 queue-haul/outputs/policy-hardware-width8-frontier-20260730/network-baselines-20260811
+```
+
 capacity_sweep_campaign.py keeps the completed two-point load run as a
 pilot and builds the publication load curve at
 0,.25,.50,.65,.75,.80,.85,.875,.90,.925,.95,.975. Normalized offered load is
@@ -968,8 +1217,9 @@ the merge accepts exactly five complete blocks, checks profile, calibration,
 manifest, context, and trace provenance, and emits the 800-row final result.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
-reductions; `plot_migration_results.py` writes their shared-axis parity plot.
-The parity plot compares Queue-Haul LP with greedy only.
+reductions. The contemporaneous packing traces retain raw `power.csv`,
+`result.json`, and plans, but their warm-up-to-migration timing is insufficient
+for the same direct measurement.
 `outputs/live-power-shed/` retains the 2026-08-06 two-A100 seamless full-shed
 run. The Queue-Haul LP arm moved all eight sessions under continuous 4 rps
 source and 1 rps destination agentic load with `kv_both` and 33 GB L1 pools;
@@ -987,10 +1237,11 @@ checksum-pinned raw data.
 Sweden-to-East-US-2/West-Germany campaign with 80% source and 50% load at each
 destination. Queue Haul admitted all eight sessions in 29.669 s and KV-only in
 25.159 s; replay-only admitted six before the fixed 30-second deadline. The
-bundle includes raw `power.csv`, load and transfer telemetry, separate 500 ms
-mean regional-power plots covering each completed arm's full trace, with the
-post-switch flush ending when measured source power reaches its idle band, and
-the exact plan and composed non-formal calibration used.
+bundle includes raw `power.csv`, load and transfer telemetry, and separate 500
+ms mean regional-power plots cropped from session-state preparation through GPU
+sleep. Each trace reports percent of the 300 W per-GPU TDP and marks Migration,
+Switch, Barrier, and Sleep. The bundle also retains the exact plan and composed
+non-formal calibration used.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast

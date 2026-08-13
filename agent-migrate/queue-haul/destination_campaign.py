@@ -39,7 +39,7 @@ EVIDENCE = {
     "old_migration_results": "reuse",
 }
 IMAGE_SHA256 = "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab"
-BASELINE_PROFILE = Path(__file__).with_name("profiles") / "gpt_oss_20b_a100_tp1.json"
+BASELINE_PROFILE = Path(__file__).with_name("profiles") / "gpt_oss_20b_h100_tp1.json"
 SLO = {
     "normal": {"p90_ttft_s": 2, "p90_mean_tpot_s": 0.1},
     "emergency": {"p90_ttft_s": 10, "p90_mean_tpot_s": 0.25},

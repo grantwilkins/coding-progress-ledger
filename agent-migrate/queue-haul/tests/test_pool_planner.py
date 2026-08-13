@@ -61,6 +61,7 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
                          DestinationType, FluidMigrationService, LoadedCoefficients,
                          MigrationComponents)
 from planner import plan, source_power
+from repair_controller import (Assignment, Attempt, LedgerSnapshot, RepairRequest)
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _baseline_policy,
                           _candidate_oracle,
@@ -704,6 +705,42 @@ def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)
         f"r{i}", route, methods, flex, debt, fluid,
     ) for i, (baseline, route) in enumerate(zip(baselines, routes)))
     return DestinationArchitecture(DESTINATION_SCHEMA, FP, (q,), pools, residency)
+
+
+def repair_request(*, target, deadline, attempts=(), routes=()):
+    return RepairRequest(1, "soft:1", 0, LedgerSnapshot(
+        5, target, deadline, 0, 0, 0, frozenset(), frozenset(("a", "b")),
+        attempts, routes, (),
+    ))
+
+
+def test_repair_continues_remaining_work_on_the_current_replica(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    current = Attempt(
+        "a", 0, Assignment("replay", "t0", "p0"), "running",
+        100, 99, 5, 105, rate=1,
+    )
+
+    result = pool_planner.repair_destination(
+        scenario, profile, architecture(),
+        repair_request(target=10, deadline=9, attempts=(current,), routes=(("wan", 1),)),
+    )
+
+    assert result.reaches_target
+    assert result.moves[0].assignment == current.assignment
+    assert result.moves[0].duration_s == pytest.approx(1)
+
+
+def test_repair_reports_the_revised_maximum_for_an_impossible_target(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+
+    result = pool_planner.repair_destination(
+        scenario, profile, architecture(normal=1, emergency=1),
+        repair_request(target=100, deadline=20),
+    )
+
+    assert not result.reaches_target
+    assert result.attainable_watts == pytest.approx(20)
 
 
 def test_fluid_pool_charges_serial_replay_work_to_replica_speedup(tmp_path):

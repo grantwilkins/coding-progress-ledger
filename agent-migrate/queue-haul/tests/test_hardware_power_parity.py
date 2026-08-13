@@ -1,95 +1,92 @@
-"""
-Claim:
-Each hardware point compares deadline-admitted and achieved source-power shed
-on the same 0--100% episode scale and enters one outcome bucket for its displayed
-method; displayed methods are ordered by their met-or-exceeded rate.
-
-Plausible wrong implementations:
-- Use the campaign-wide 100% goal instead of the policy's admitted request.
-- Normalize by migrations pooled across scenarios instead of within each episode.
-- Use elapsed campaign time instead of per-scenario completion timestamps.
-- Include unmeasured missing scenarios as zero-achievement observations.
-- Pool methods, flip the error sign, or mark equality as an undershoot.
-- Retain excluded methods or sort displayed methods by the wrong statistic.
-- Apply a relative 5% tolerance or exclude either exact five-point boundary.
-"""
+"""Direct source-power parity must use raw, settled trace windows."""
 
 import csv
-import json
-from types import SimpleNamespace
 
-from plot_hardware_power_parity import load_network, load_policy, method_outcomes
+import matplotlib.pyplot as plt
+import pytest
 
-
-def _scenario(scenario_id="s", policy="queue_haul", admitted=4):
-    sessions = [{"session_id": str(i)} for i in range(8)]
-    return {
-        "scenario_id": scenario_id, "policy": policy, "sessions": sessions,
-        "deadline_s": 10,
-        "moves": [{"session_id": str(i), "deadline_admitted": i < admitted}
-                  for i in range(8)],
-    }
+from plot_hardware_power_parity import (
+    METHODS, normalize, predicted_shed, settled_pre_available,
+    source_power_shed, write_plot,
+)
 
 
-def test_policy_uses_per_episode_admitted_and_achieved_shed(tmp_path):
-    scenario = _scenario()
-    (tmp_path / "plan.json").write_text(json.dumps({"scenarios": [scenario]}))
-    with (tmp_path / "policy_attainment.csv").open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=(
-            "scenario_id", "policy", "power_attainment_fraction"))
-        writer.writeheader()
-        writer.writerow({"scenario_id": "s", "policy": "queue_haul",
-                         "power_attainment_fraction": .375})
+def test_source_power_shed_excludes_migration_power(tmp_path):
+    path = tmp_path / "power.csv"
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(("monotonic_ns", "wall_ns", "gpu", "power_w",
+                         "utilization_pct", "memory_mib", "valid"))
+        for second in range(10):
+            for gpu in range(2):
+                power = 80 if gpu else 200 if second < 2 else 500 if second < 6 else 80
+                writer.writerow((second * 10**9, 0, gpu, power, 0, 0, 1))
+    result = {"migrations": [{"initial_start_ns": 3 * 10**9,
+                               "switch_end_ns": 6 * 10**9}]}
 
-    assert load_policy(tmp_path)[0] == {
-        "campaign": tmp_path.name, "scenario_id": "s",
-        "method": "queue_haul", "requested_percent": 50,
-        "achieved_percent": 37.5, "marker": "x",
-    }
+    before, after, shed = source_power_shed(path, result)
 
-
-def test_network_uses_completion_times_and_omits_missing_cases(tmp_path):
-    complete, missing = _scenario(), _scenario("missing")
-    (tmp_path / "plan.json").write_text(
-        json.dumps({"scenarios": [complete, missing]}))
-    attempt = tmp_path / "scenarios/s/attempt-0001"
-    attempt.mkdir(parents=True)
-    (attempt / "decision.json").write_text(
-        json.dumps({"moves": complete["moves"]}))
-    ends = [4_000_000_000] * 4 + [11_000_000_000] * 4
-    (attempt / "result.json").write_text(json.dumps({
-        "status": "complete", "started_ns": 0,
-        "requests": [{"request": {"end_ns": end}} for end in ends],
-    }))
-    curve = SimpleNamespace(power=lambda load: 100 + 100 * load)
-
-    rows = load_network(tmp_path, curve, 5)
-
-    assert len(rows) == 1
-    assert rows[0]["requested_percent"] == 50
-    assert rows[0]["achieved_percent"] == 50
-    assert rows[0]["marker"] == "o"
+    assert (before, after, shed) == (200, 80, 120)
+    assert source_power_shed(path, result, 0) == (500, 80, 420)
 
 
-def test_outcomes_classify_the_error_sign_and_equality_boundary():
-    rows = [
-        {"method": method, "requested_percent": 50,
-         "achieved_percent": achieved}
-        for method, achieved in (("queue_haul", 44), ("queue_haul", 45),
-                                 ("queue_haul", 50), ("queue_haul", 55),
-                                 ("queue_haul", 56), ("greedy", 50),
-                                 ("random", 50))
-    ]
+def test_source_power_shed_requires_two_gpus_and_covered_windows(tmp_path):
+    path = tmp_path / "power.csv"
+    path.write_text(
+        "monotonic_ns,wall_ns,gpu,power_w,utilization_pct,memory_mib,valid\n"
+        "0,0,0,100,0,0,1\n")
+    result = {"migrations": [{"initial_start_ns": 3 * 10**9,
+                               "switch_end_ns": 6 * 10**9}]}
+    with pytest.raises(RuntimeError, match="two measured GPUs"):
+        source_power_shed(path, result)
 
-    assert method_outcomes(rows) == [
-        ("greedy", [
-            ("Below target", 0, 0),
-            ("On target", 1, 100),
-            ("Above target", 0, 0),
-        ]),
-        ("queue_haul", [
-            ("Below target", 1, 20),
-            ("On target", 3, 60),
-            ("Above target", 1, 20),
-        ]),
-    ]
+
+def test_settled_pre_window_requires_window_and_guard():
+    assert settled_pre_available(0, 2 * 10**9)
+    assert not settled_pre_available(1, 2 * 10**9)
+
+
+def test_normalization_uses_complete_cohort_maximum_request():
+    rows = [{"method": method, "requested_shed_w": 20,
+             "predicted_shed_w": 10, "measured_shed_w": -2}
+            for method in METHODS]
+    rows.append({"method": METHODS[0], "requested_shed_w": 40,
+                 "predicted_shed_w": 10, "measured_shed_w": -2})
+
+    normalized, scale = normalize(rows)
+
+    assert scale == 40
+    assert {(row["predicted_percent"], row["measured_percent"])
+            for row in normalized} == {(25, -5)}
+
+
+def test_prediction_counts_only_planner_admitted_moves():
+    class Curve:
+        @staticmethod
+        def power(load):
+            return 100 * load
+
+    scenario = {"sessions": [{}] * 4, "moves": [
+        {"deadline_admitted": True}, {"deadline_admitted": True},
+        {"deadline_admitted": False}, {"deadline_admitted": False},
+    ]}
+
+    assert predicted_shed(scenario, Curve()) == 20
+
+
+def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
+    rows, scale = normalize([
+        {"method": method, "requested_shed_w": 10,
+         "predicted_shed_w": 10, "measured_shed_w": repeat}
+        for method in METHODS for repeat in (8, 12)
+    ])
+    monkeypatch.setattr(plt, "close", lambda _: None)
+
+    write_plot(rows, scale, tmp_path / "parity")
+
+    axis = plt.gcf().axes[0]
+    assert axis.lines[0].get_xdata().tolist() == axis.lines[0].get_ydata().tolist()
+    assert axis.get_xlim() == axis.get_ylim()
+    assert len(axis.collections) == len(METHODS)
+    assert all(len(collection.get_offsets()) == 2 for collection in axis.collections)
+    assert {text.get_text() for text in axis.texts} >= {"Overshed", "Undershed"}

@@ -13,11 +13,11 @@ import numpy as np
 
 from power_profile_reduce import binned_curve
 
-CONFIG = "gpt-oss-20b-a100_tp1"
+CONFIG = "gpt-oss-20b-h100_tp1"
 ROOT = Path(__file__).resolve().parents[3]
 PTRACE = ROOT / "powertrace-sim"
 RAW_DIR = PTRACE / "data" / "sharegpt-benchmark-gpt-oss-20b-a100"
-OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_a100_tp1_window_sensitivity"
+OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_h100_tp1_window_sensitivity"
 WINDOWS = (1.0, 2.0, 5.0, 10.0, 30.0)
 
 

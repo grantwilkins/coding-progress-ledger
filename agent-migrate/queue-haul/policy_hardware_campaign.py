@@ -7,6 +7,7 @@ import csv
 import json
 import math
 import random
+from dataclasses import replace
 from pathlib import Path
 
 import matplotlib
@@ -16,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import migration_profiler as profiler
+import plot_style
 from destination import dedicated_sink_architecture
 from migration import ORDERED_EAGER_PARALLEL_V1
 from planner import _duration, plan
@@ -26,7 +28,7 @@ from simulate import ExecutionScenario, NetworkLink, PowerNode, ServingInstance,
 ROOT = Path(__file__).parent
 EXECUTION_CONTRACT = ORDERED_EAGER_PARALLEL_V1
 DEFAULT_MANIFEST = Path("queue-haul/outputs/coding-manifest.json")
-DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
+DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_h100_tp1.json"
 DEFAULT_WORKLOADS = tuple(ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 ))
@@ -41,37 +43,27 @@ CONTEXT_PACKS = {
 }
 POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "isolated_fastest",
-    "kv_only", "replay_only",
+    "kv_only", "replay_only", "queue_haul_power_blind",
+    "queue_haul_deadline_blind",
 )
-DEFAULT_POLICIES = tuple(policy for policy in POLICIES
-                         if policy != "isolated_fastest")
+DEFAULT_POLICIES = (
+    "queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only",
+)
+NETWORK_BASELINES = (
+    "isolated_fastest", "queue_haul_power_blind",
+    "queue_haul_deadline_blind",
+)
+RERUN_POLICIES = ("queue_haul", "greedy", *NETWORK_BASELINES)
+DEADLINE_BLIND_HORIZON_S = 600
+CDF_POLICIES = plot_style.POLICIES
+TAB10_COLORS = CDF_COLORS = plot_style.POLICY_COLORS
 PACKING_POLICIES = (
     "queue_haul", "greedy", "isolated_fastest", "kv_only", "replay_only",
 )
-LABELS = {
-    "queue_haul": "QH choice/order", "greedy": "Greedy choice/order",
-    "greedy_lagrangian": "Lagrangian greedy choice/order",
-    "isolated_fastest": "Per-session fastest", "random": "Random choice/order",
-    "kv_only": "KV only", "replay_only": "Replay only",
-}
-CDF_COLORS = {
-    "queue_haul": "#B1040E", "greedy": "#008566",
-    "greedy_lagrangian": "#620059",
-    "isolated_fastest": "#5E3C99",
-    "kv_only": "#006CB8", "replay_only": "#E98300",
-}
-CDF_LABELS = {
-    "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
-    "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
-    "isolated_fastest": "Per-session fastest",
-    "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
-}
-CDF_LINESTYLES = {
-    "queue_haul": "-", "greedy": "--", "greedy_lagrangian": (0, (3, 1, 1, 1)),
-    "isolated_fastest": (0, (5, 1)),
-    "kv_only": "-.", "replay_only": ":",
-}
-CDF_FIGSIZE = (5, 4)
+LABELS = CDF_LABELS = plot_style.POLICY_NAMES
+CDF_LINESTYLES = plot_style.POLICY_LINESTYLES
+CDF_FIGSIZE = plot_style.COMPACT_FIGSIZE
+plot_style.apply()
 
 
 def _portable_path(path: Path) -> str:
@@ -121,24 +113,30 @@ def _ranked_moves(sessions, methods, scenario, profile, offset=0):
 
 def _moves(policy, scenario, routes, profile, seed):
     sessions = list(scenario.sessions)
-    if policy in {"queue_haul", "greedy", "greedy_lagrangian", "random"}:
-        solver = {"queue_haul": "lp_work_first", "greedy": "greedy",
-                  "greedy_lagrangian": "greedy_lagrangian",
-                  "random": "random"}[policy]
+    solvers = {
+        "queue_haul": "lp_work_first", "greedy": "greedy",
+        "greedy_lagrangian": "greedy_lagrangian", "random": "random",
+        "isolated_fastest": "isolated_fastest",
+        "queue_haul_power_blind": "lp_power_blind",
+        "queue_haul_deadline_blind": "lp_work_first",
+    }
+    if policy in solvers:
         destination = dedicated_sink_architecture(
             profile, "destination", ("link",),
         ) if policy == "greedy_lagrangian" else None
+        planning_scenario = replace(
+            scenario, deadline_s=DEADLINE_BLIND_HORIZON_S,
+            end_s=max(scenario.end_s, DEADLINE_BLIND_HORIZON_S),
+        ) if policy == "queue_haul_deadline_blind" else scenario
         result = plan(
-            scenario, profile, routes, solver, seed=seed, destination=destination,
+            planning_scenario, profile, routes, solvers[policy], seed=seed,
+            destination=destination,
         )
         moves = result.moves
     else:
-        fixed_method = None if policy == "isolated_fastest" else {
-            "kv_only": "kv_transfer", "replay_only": "replay",
-        }[policy]
+        fixed_method = {"kv_only": "kv_transfer", "replay_only": "replay"}[policy]
         moves = _ranked_moves(
-            sessions, (fixed_method,) if fixed_method
-            else ("replay", "kv_transfer"), scenario, profile,
+            sessions, (fixed_method,), scenario, profile,
         )
     admitted = {
         move.session_id if hasattr(move, "session_id") else move[0]
@@ -375,12 +373,96 @@ def validate_policy_plan(plan_: dict) -> None:
             raise ValueError("policies must consume the same complete episode")
 
 
-def prepare(manifest: Path, out: Path, **kwargs) -> dict:
-    plan_ = make_plan(manifest, **kwargs)
+def matched_baseline_plan(source_path: Path, policies=NETWORK_BASELINES,
+                          model_path: Path | None = None,
+                          condition_shard=None) -> dict:
+    source = json.loads(source_path.read_text())
+    manifest_path = Path(source["manifest"]["path"])
+    source_model_path = Path(source["model_profile"]["path"])
+    manifest_path = manifest_path if manifest_path.is_absolute() \
+        else ROOT.parent / manifest_path
+    source_model_path = source_model_path if source_model_path.is_absolute() \
+        else ROOT.parent / source_model_path
+    model_path = model_path or source_model_path
+    manifest = json.loads(manifest_path.read_text())
+    profiler.validate_plan(source, manifest)
+    validate_policy_plan(source)
+    if profiler.file_hash(manifest_path) != source["manifest"]["sha256"] \
+            or profiler.file_hash(model_path) != source["model_profile"]["sha256"]:
+        raise ValueError("source plan inputs changed")
+    policies = tuple(policies)
+    if not policies or len(set(policies)) != len(policies) \
+            or not set(policies) <= set(RERUN_POLICIES):
+        raise ValueError("invalid matched baseline policies")
+    profile, rng, scenarios = ModelProfile.load(model_path), \
+        random.Random(source["seed"]), []
+    episode_order = list(dict.fromkeys(
+        row["episode"] for row in source["scenarios"]
+    ))
+    if condition_shard:
+        index, count = condition_shard
+        conditions = sorted({row["condition"] for row in source["scenarios"]})
+        if not 0 <= index < count or not conditions[index::count]:
+            raise ValueError("invalid matched condition shard")
+        selected = set(conditions[index::count])
+        episode_order = [source_episode for source_episode in episode_order
+                         if next(row["condition"] for row in source["scenarios"]
+                                 if row["episode"] == source_episode) in selected]
+    for episode, source_episode in enumerate(episode_order):
+        rows = [row for row in source["scenarios"]
+                if row["episode"] == source_episode]
+        control = {**next(row for row in rows if row["policy"] == "control"),
+                   "episode": episode}
+        block = [control]
+        problem, routes = _problem(
+            profile, control["sessions"], control["bandwidth_mbps"],
+            control["required_deadline_s"],
+        )
+        for policy in policies:
+            moves = _moves(
+                policy, problem, routes, profile,
+                profiler.stable_seed(source["seed"], source_episode, policy),
+            )
+            move_rows = [{
+                **next(row for row in control["sessions"]
+                       if row["session_id"] == move["session_id"]),
+                **move,
+            } for move in moves]
+            scenario_id = profiler.object_hash([
+                control["match_id"], policy, move_rows,
+            ])[:16]
+            block.append({
+                **control, "scenario_id": f"p-{scenario_id}",
+                "kind": "migration", "method": move_rows[0]["method"]
+                if len({row["method"] for row in move_rows}) == 1 else "mixed",
+                "policy": policy, "moves": move_rows,
+            })
+        rng.shuffle(block)
+        scenarios.extend(block)
+    output = {
+        **source, "episodes": len(episode_order), "policies": list(policies),
+        "scenarios": scenarios,
+        "model_profile": {
+            **source["model_profile"], "path": _portable_path(model_path),
+        },
+        "baseline_source_plan": {
+            "path": _portable_path(source_path),
+            "sha256": profiler.file_hash(source_path),
+        },
+        **({"baseline_condition_shard": list(condition_shard)}
+           if condition_shard else {}),
+    }
+    profiler.validate_plan(output, manifest)
+    validate_policy_plan(output)
+    return output
+
+
+def _prepare(plan_: dict, out: Path) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     plan_path = out / "plan.json"
     profiler.write_json(plan_path, plan_)
     job = out / "run.sh"
+    stack_scenarios = 30 - 30 % (len(plan_["policies"]) + 1)
     job.write_text("""#!/usr/bin/env bash
 set -euo pipefail
 : "${QH_POLICY_RUN_ROOT:?set QH_POLICY_RUN_ROOT}"
@@ -388,14 +470,16 @@ export QH_LMCACHE_MODE="${QH_LMCACHE_MODE:-mp}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir/../../.."
 status=0
-run=(uv run python queue-haul/migration_profiler.py run --plan "$script_dir/plan.json" --run-root "$QH_POLICY_RUN_ROOT" --stack-scenarios 30)
+run=(uv run python queue-haul/migration_profiler.py run --plan "$script_dir/plan.json" --run-root "$QH_POLICY_RUN_ROOT" --stack-scenarios %d)
 [[ -z "${QH_RESUME_FROM_GIT_SHA:-}" ]] || run+=(--resume-from-git-sha "$QH_RESUME_FROM_GIT_SHA")
 "${run[@]}" || status=$?
 [[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]] || exit "$status"
 uv run python queue-haul/policy_hardware_campaign.py reduce \
   --run-root "$QH_POLICY_RUN_ROOT"
+uv run python queue-haul/policy_hardware_campaign.py validate \
+  --run-root "$QH_POLICY_RUN_ROOT" --expected-episodes %d --policies %s
 exit "$status"
-""")
+""" % (stack_scenarios, plan_["episodes"], " ".join(plan_["policies"])))
     job.chmod(0o755)
     (out / "run.sbatch").write_text("""#!/bin/bash
 #SBATCH --job-name=qh-policy-parallel
@@ -405,7 +489,7 @@ exit "$status"
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:2
 #SBATCH --constraint=GPU_SKU:A100_SXM4&GPU_MEM:80GB
-#SBATCH --mem=256G
+#SBATCH --mem=128G
 #SBATCH --time=12:00:00
 #SBATCH --output=policy-hardware-%j.out
 #SBATCH --error=policy-hardware-%j.err
@@ -421,6 +505,18 @@ export QH_PORT_OFFSET="${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}"
 bash "$script_dir/run.sh"
 """)
     return plan_
+
+
+def prepare(manifest: Path, out: Path, **kwargs) -> dict:
+    return _prepare(make_plan(manifest, **kwargs), out)
+
+
+def prepare_baselines(source_plan: Path, out: Path,
+                      policies=NETWORK_BASELINES,
+                      model_path: Path | None = None,
+                      condition_shard=None) -> dict:
+    return _prepare(matched_baseline_plan(
+        source_plan, policies, model_path, condition_shard), out)
 
 
 def _time(start, end):
@@ -771,39 +867,40 @@ def plot_max_session_ttft_per_watt(rows, summaries, power_curve, out):
 
 def plot_full_power_attainment(summaries, power_window_s, out,
                                deadline_s=30):
-    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
-    for policy in POLICIES:
+    fig, ax = plt.subplots(figsize=plot_style.WIDE_FIGSIZE)
+    for policy in CDF_POLICIES:
         x, y = full_power_attainment_curve(
             summaries, policy, deadline_s, power_window_s
         )
         if len(x):
-            ax.step(
-                x, y, where="post", color=CDF_COLORS[policy],
-                linestyle=CDF_LINESTYLES[policy], linewidth=3,
-                label=CDF_LABELS[policy],
-            )
+            ax.step(x, y, where="post", **plot_style.policy_style(policy))
     ax.axvline(deadline_s, color="black", linestyle="--", linewidth=1.5)
     ax.text(
-        deadline_s, 1.01, f"{deadline_s:g} s Deadline",
-        transform=ax.get_xaxis_transform(), ha="center", va="bottom",
-        fontsize=11,
+        deadline_s, .4, f"{deadline_s:g} s deadline",
+        transform=ax.get_xaxis_transform(), ha="center", va="center",
+        rotation=90, fontstyle="italic",
+        fontsize=plot_style.LARGE_ANNOTATION_FONT_SIZE,
+        bbox={"facecolor": "white", "edgecolor": "none", "pad": 1},
     )
     ax.set(
         xlabel="Time to Full Power-Shed Attainment (s)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.set_xlim(left=0)
-    ax.tick_params(labelsize=15)
-    ax.xaxis.label.set_size(15)
-    ax.yaxis.label.set_size(15)
+    ax.set_xlim(0, 3 * deadline_s)
+    ax.tick_params(labelsize=plot_style.LARGE_FONT_SIZE)
+    ax.xaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
+    ax.yaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
     ax.grid(alpha=.25)
-    if ax.get_legend_handles_labels()[0]:
-        ax.legend(frameon=False, fontsize=11, loc="lower right")
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(handles, labels, loc="lower right", framealpha=1,
+                  facecolor="white", edgecolor="none",
+                  fontsize=plot_style.LARGE_LEGEND_FONT_SIZE)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
             out / f"policy_hardware_{deadline_s:g}s_full_power_attainment_cdf.{suffix}",
-            dpi=220,
+            dpi=plot_style.SAVE_DPI,
         )
     plt.close(fig)
 
@@ -817,7 +914,6 @@ def plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out):
         math.ceil(len(values) / 2), 2, figsize=(12, 3.8 * math.ceil(len(values) / 2)),
         sharex=True, sharey=True, squeeze=False,
     )
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     for ax, value in zip(axes.flat, values):
         ids = {key for key, item in bandwidth.items() if item == value}
         selected_rows = [row for row in rows if row["scenario_id"] in ids]
@@ -831,7 +927,7 @@ def plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out):
             if len(x):
                 ax.step(
                     np.r_[0, x], np.r_[0, y], where="post",
-                    color=colors[policy], label=LABELS[policy],
+                    color=TAB10_COLORS[policy], label=LABELS[policy],
                 )
         ax.set(
             title=f"{value / 1000:g} Gbit/s",
@@ -855,7 +951,6 @@ def plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out):
 
 
 def plot_power_shed(rows, summaries, power_curve, out):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     times = np.asarray(sorted({
         0, *(float(row["reaction_commit_s"]) for row in rows)
     }))
@@ -867,11 +962,11 @@ def plot_power_shed(rows, summaries, power_curve, out):
             rows, summaries, policy, power_curve, times
         )
         ax.step(
-            times, median, where="post", color=colors[policy],
+            times, median, where="post", color=TAB10_COLORS[policy],
             label=LABELS[policy],
         )
         ax.fill_between(
-            times, low, high, step="post", color=colors[policy], alpha=.12
+            times, low, high, step="post", color=TAB10_COLORS[policy], alpha=.12
         )
     ax.set(
         title="Pooled episodes (median; shaded IQR)",
@@ -1001,7 +1096,6 @@ def pareto_points(attainment, summaries):
 
 
 def plot_hardware_pareto(attainment, summaries, out):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     points = pareto_points(attainment, summaries)
     fig, ax = plt.subplots(figsize=(6.4, 4.4))
     for policy in POLICIES:
@@ -1012,7 +1106,7 @@ def plot_hardware_pareto(attainment, summaries, out):
         ax.scatter(
             [row["shed_percent"] for row in selected],
             [row["deadline_fraction"] for row in selected],
-            color=colors[policy], alpha=.45, s=28,
+            color=TAB10_COLORS[policy], alpha=.45, s=28,
             label=f"{LABELS[policy]} ({count}/{len(selected)} frontier)",
             zorder=len(POLICIES) - POLICIES.index(policy),
         )
@@ -1043,26 +1137,48 @@ def plot_hardware_pareto(attainment, summaries, out):
     plt.close(fig)
 
 
-def _pooled_results(paths):
-    rows, summaries = [], []
+def _pooled_csv(paths, name):
+    rows = []
     for path in paths:
-        with (path / "policy_migrations.csv").open() as stream:
+        with (path / name).open() as stream:
             rows.extend(csv.DictReader(stream))
-        with (path / "policy_episodes.csv").open() as stream:
-            summaries.extend(csv.DictReader(stream))
-    return rows, summaries
+    return rows
+
+
+def _pooled_results(paths):
+    return tuple(_pooled_csv(paths, name) for name in
+                 ("policy_migrations.csv", "policy_episodes.csv"))
+
+
+def validate_repeats(rows, policies, repetitions):
+    cells = {}
+    for row in rows:
+        cells.setdefault((row["policy"], row["condition"]), set()).add(
+            int(row["repeat"])
+        )
+    conditions = {condition for _, condition in cells}
+    if not conditions or any(
+        len(cells.get((policy, condition), ())) != repetitions
+        for condition in conditions for policy in policies
+    ) or any(
+        len({frozenset(cells[policy, condition]) for policy in policies}) != 1
+        for condition in conditions
+    ):
+        raise RuntimeError("baseline conditions do not have exact repetitions")
+    return len(conditions)
 
 
 
 def validate_run(run_root: Path, expected_episodes=120,
-                 policy="isolated_fastest"):
+                 policies=("isolated_fastest",)):
+    policies = (policies,) if isinstance(policies, str) else tuple(policies)
     plan_path = run_root / "plan.json"
     plan_ = json.loads(plan_path.read_text())
     validate_policy_plan(plan_)
     metadata = json.loads((run_root / "run_metadata.json").read_text())
     model_path = ROOT.parent / plan_["model_profile"]["path"]
     manifest_path = ROOT.parent / plan_["manifest"]["path"]
-    if plan_["policies"] != [policy] or plan_["episodes"] != expected_episodes \
+    if plan_["policies"] != list(policies) or plan_["episodes"] != expected_episodes \
             or metadata.get("dirty") \
             or metadata.get("plan_sha256") != profiler.file_hash(plan_path) \
             or metadata.get("plan_object_sha256") != profiler.object_hash(plan_) \
@@ -1081,9 +1197,10 @@ def validate_run(run_root: Path, expected_episodes=120,
         attainment = list(csv.DictReader(stream))
     scenario_ids = {
         row["scenario_id"] for row in plan_["scenarios"]
-        if row["policy"] == policy
+        if row["policy"] in policies
     }
-    if len(summaries) != expected_episodes \
+    expected_rows = expected_episodes * len(policies)
+    if len(summaries) != expected_rows \
             or {row["scenario_id"] for row in summaries} != scenario_ids \
             or len(attainment) != expected_episodes \
             or {row["scenario_id"] for row in attainment} != scenario_ids \
@@ -1092,17 +1209,14 @@ def validate_run(run_root: Path, expected_episodes=120,
                    or row["matched_control_complete"] != "True"
                    for row in summaries):
         raise RuntimeError("baseline reduction is incomplete")
-    cells = {}
-    for row in summaries:
-        cells.setdefault(row["condition"], set()).add(int(row["repeat"]))
-    expected_repeats = set(range(plan_["episodes_per_cell"]))
-    if not cells or any(repeats != expected_repeats
-                        for repeats in cells.values()):
-        raise RuntimeError("baseline conditions do not have exact repetitions")
+    conditions = validate_repeats(
+        summaries, policies, plan_["episodes_per_cell"],
+    )
     report = {
         "schema": "queue-haul-policy-baseline-validation-v1",
-        "valid": True, "policy": policy, "episodes": len(summaries),
-        "attainment_rows": len(attainment), "conditions": len(cells),
+        "valid": True, "policies": list(policies),
+        "episodes": expected_episodes,
+        "attainment_rows": len(attainment), "conditions": conditions,
         "repetitions_per_condition": plan_["episodes_per_cell"],
         "executed_scenarios": len(plan_["scenarios"]),
         "git_sha": metadata["git_sha"],
@@ -1192,32 +1306,34 @@ def common_packing_comparison(packing: Path, baseline: Path, out: Path):
     return classified
 
 
-def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
-    plan_ = json.loads((out / "plan.json").read_text())
-    rows, summaries = _pooled_results((out,))
-    with (out / "policy_attainment.csv").open() as stream:
-        attainment = list(csv.DictReader(stream))
-    pooled_rows, pooled_summaries = _pooled_results(pooled_with)
-    plot_destination_ttft(rows + pooled_rows, summaries + pooled_summaries, out)
-    plot_max_session_ttft(
-        rows + pooled_rows, summaries + pooled_summaries, out
-    )
-    plot_destination_ttft_by_bandwidth(
-        rows, summaries, plan_["scenarios"], out
-    )
+def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=(),
+                 cdf_policies=CDF_POLICIES):
+    paths = (out, *pooled_with)
+    rows, summaries = _pooled_results(paths)
+    attainment = _pooled_csv(paths, "policy_attainment.csv")
+    scenarios = sum((json.loads((path / "plan.json").read_text())["scenarios"]
+                     for path in paths), [])
+    plot(rows, summaries, out, "pooled", cdf_policies)
+    plot_attainment(attainment, out, "pooled")
+    for condition in sorted({row["condition"] for row in summaries}):
+        plot([row for row in rows if row["condition"] == condition],
+             [row for row in summaries if row["condition"] == condition],
+             out, condition, cdf_policies)
+        plot_attainment(
+            [row for row in attainment if row["condition"] == condition],
+            out, condition,
+        )
+    plot_destination_ttft(rows, summaries, out)
+    plot_max_session_ttft(rows, summaries, out)
+    plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out)
     model = ModelProfile.load(model_path)
     power_curve = model.case().power_curve
     plot_power_shed(rows, summaries, power_curve, out)
     plot_hardware_pareto(attainment, summaries, out)
-    plot_disruption(rows + pooled_rows, summaries + pooled_summaries,
-                    power_curve, out)
-    plot_migration_time_per_watt(summaries + pooled_summaries, power_curve, out)
-    plot_max_session_ttft_per_watt(
-        rows + pooled_rows, summaries + pooled_summaries, power_curve, out
-    )
-    plot_full_power_attainment(
-        summaries + pooled_summaries, model.power_window_s, out
-    )
+    plot_disruption(rows, summaries, power_curve, out)
+    plot_migration_time_per_watt(summaries, power_curve, out)
+    plot_max_session_ttft_per_watt(rows, summaries, power_curve, out)
+    plot_full_power_attainment(summaries, model.power_window_s, out)
 
 
 def representative_timeline(rows, summaries):
@@ -1274,10 +1390,9 @@ def plot_timeline(rows, out):
     plt.close(fig)
 
 
-def plot(rows, summaries, out, cohort=None):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+def plot(rows, summaries, out, cohort=None, policy_order=CDF_POLICIES):
     fig, axes = plt.subplots(1, 3, figsize=(13, 4))
-    policies = [policy for policy in POLICIES
+    policies = [policy for policy in policy_order
                 if any(row["policy"] == policy for row in summaries)]
     for policy in policies:
         for ax, field in zip(
@@ -1287,7 +1402,7 @@ def plot(rows, summaries, out, cohort=None):
             x, y = completion_curve(rows, summaries, policy, field)
             ax.step(
                 np.r_[0, x], np.r_[0, y],
-                where="post", color=colors[policy], label=LABELS[policy],
+                where="post", **plot_style.policy_style(policy),
             )
     axes[0].set_title("Controller queue → first token")
     axes[1].set_title("Destination TTFT")
@@ -1311,8 +1426,7 @@ def plot(rows, summaries, out, cohort=None):
 
 
 def plot_attainment(rows, out, condition=None):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    deadlines = sorted({row["required_deadline_s"] for row in rows})
+    deadlines = sorted({float(row["required_deadline_s"]) for row in rows})
     fig, axes = plt.subplots(
         1, len(deadlines), figsize=(4.4 * len(deadlines), 4), squeeze=False
     )
@@ -1320,14 +1434,14 @@ def plot_attainment(rows, out, condition=None):
     for ax, deadline in zip(axes, deadlines):
         for policy in POLICIES:
             values = sorted(
-                100 * row["power_attainment_fraction"] for row in rows
+                100 * float(row["power_attainment_fraction"]) for row in rows
                 if row["policy"] == policy
-                and row["required_deadline_s"] == deadline
+                and float(row["required_deadline_s"]) == deadline
             )
             if values:
                 ax.step(
                     values, np.arange(1, len(values) + 1) / len(values),
-                    where="post", color=colors[policy], label=LABELS[policy],
+                    where="post", color=TAB10_COLORS[policy], label=LABELS[policy],
                 )
         ax.set(
             title=f"{deadline:g} s requirement",
@@ -1368,6 +1482,13 @@ def parse_args(argv=None):
                          choices=tuple(CONTEXT_PACKS))
     command.add_argument("--policies", nargs="+", choices=POLICIES,
                          default=DEFAULT_POLICIES)
+    command = sub.add_parser("prepare-baselines")
+    command.add_argument("--source-plan", type=Path, required=True)
+    command.add_argument("--model-profile", type=Path)
+    command.add_argument("--out", type=Path, required=True)
+    command.add_argument("--policies", nargs="+", choices=RERUN_POLICIES,
+                         default=NETWORK_BASELINES)
+    command.add_argument("--condition-shard", type=int, nargs=2)
     command = sub.add_parser("reduce")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path)
@@ -1375,11 +1496,13 @@ def parse_args(argv=None):
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL)
     command.add_argument("--pooled-with", type=Path, nargs="*", default=())
+    command.add_argument("--cdf-policies", nargs="+", choices=CDF_POLICIES,
+                         default=CDF_POLICIES)
     command = sub.add_parser("validate")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--expected-episodes", type=int, default=120)
-    command.add_argument("--policy", choices=POLICIES,
-                         default="isolated_fastest")
+    command.add_argument("--policies", nargs="+", choices=POLICIES,
+                         default=("isolated_fastest",))
     command = sub.add_parser("plot-common-packing")
     command.add_argument("--packing-run", type=Path, required=True)
     command.add_argument("--baseline-run", type=Path, required=True)
@@ -1400,12 +1523,18 @@ def main(argv=None):
             required_deadlines_s=args.required_deadlines_s,
             context_packs=args.context_packs or (), policies=args.policies,
         )
+    elif args.command == "prepare-baselines":
+        prepare_baselines(
+            args.source_plan, args.out, args.policies, args.model_profile,
+            args.condition_shard,
+        )
     elif args.command == "reduce":
         reduce_run(args.run_root, args.out)
     elif args.command == "plot-reduced":
-        plot_reduced(args.out, args.model_profile, args.pooled_with)
+        plot_reduced(args.out, args.model_profile, args.pooled_with,
+                     args.cdf_policies)
     elif args.command == "validate":
-        validate_run(args.run_root, args.expected_episodes, args.policy)
+        validate_run(args.run_root, args.expected_episodes, args.policies)
     else:
         common_packing_comparison(args.packing_run, args.baseline_run, args.out)
 

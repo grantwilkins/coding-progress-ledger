@@ -6,6 +6,10 @@ import pytest
 import power_rate_sweep as sweep
 
 
+def test_calibration_prompt_uses_requested_size():
+    assert sweep.calibration_prompt(3) == "power calibration x x x "
+
+
 def test_gpu_guard_requires_azure_300w_a100(monkeypatch):
     monkeypatch.setattr(sweep.subprocess, "check_output",
                         lambda *_args, **_kwargs: "NVIDIA A100 80GB PCIe, 300.00\n")

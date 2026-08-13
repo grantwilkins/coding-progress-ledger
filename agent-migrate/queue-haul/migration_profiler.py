@@ -1459,6 +1459,44 @@ def warm_sessions(sessions, concurrency):
         list(pool.map(lambda session: session.warm(), sessions))
 
 
+def power_validation_hooks(cfg, root: Path, spec: dict | None):
+    if spec is None:
+        return None, None, lambda: None, None
+    from network_campaign import SinkLoad
+
+    pre, post = float(spec["pre_load"]), float(spec["post_load"])
+    settle, window = float(spec["settle_s"]), float(spec["window_s"])
+    prefill = float(spec["prefill_tps"])
+    if not 0 <= post < pre < 1 or min(settle, window, prefill) <= 0:
+        raise ValueError("invalid power-validation load or window")
+    interval, current, windows = float(spec.get("sample_interval_s", .25)), None, {}
+
+    def measure(name, rho):
+        nonlocal current
+        if current:
+            current.close()
+            current = None
+        if rho:
+            current = SinkLoad(
+                cfg, cfg.src_port, prefill, rho, root / f"{name}_load.jsonl",
+            )
+            current.start()
+        time.sleep(settle)
+        start = time.monotonic_ns()
+        end = start + round(window * 1e9)
+        time.sleep(window)
+        time.sleep(interval)
+        windows[f"{name}_window_ns"] = [start, end]
+
+    def close():
+        nonlocal current
+        if current:
+            current.close()
+            current = None
+
+    return lambda: measure("pre", pre), lambda: measure("post", post), close, windows
+
+
 def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                  root: Path, run_id: str, destination_load=None,
                  configure_proxy: bool = True, before_moves=None) -> dict:
@@ -1470,6 +1508,8 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
     write_json(root / "scenario.json", scenario)
     if configure_proxy:
         restart_proxy(stack, cfg, root, scenario["bandwidth_mbps"])
+    power_before, power_after, power_close, power_windows = \
+        power_validation_hooks(cfg, root, scenario.get("power_validation"))
     event_log = EventLog(root / "events.jsonl", run_id, scenario["scenario_id"])
     sampler = PowerSampler(root / "power.csv",
                            scenario.get("power_interval_s", .25)) \
@@ -1550,12 +1590,16 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                     ] if schedule and scenario.get(
                         "copy_policy", "initial_final"
                     ) == "initial_final" else []
+                    if power_before:
+                        power_before()
                     if before_moves:
                         before_moves()
                     moves_start_ns = time.monotonic_ns()
                     rows = MigrationController(
                         runtime, move_concurrency,
                     ).run(moves)
+                    if power_after:
+                        power_after()
                     for future in activity_futures:
                         future.result()
                 if any(not row.succeeded for row in rows):
@@ -1618,6 +1662,7 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
             "source_sleep_ns": sleep_times,
             "migrations": [asdict(row) for row in migration_results], "activities": activities, "continuations": continuations,
             "destination_load": destination_load.summary() if destination_load else None,
+            "power_validation": power_windows,
             "session_cache_keys": {
                 session_id: sorted(session.cache_keys)
                 for session_id, session in sessions.items()
@@ -1629,25 +1674,28 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                 b.set_source_sleep(cfg, False)
         finally:
             try:
-                if runtime:
-                    runtime.close()
+                power_close()
             finally:
                 try:
-                    if sampler:
-                        sampler.close()
+                    if runtime:
+                        runtime.close()
                 finally:
-                    time.sleep(.3)
-                    event_log.close()
-                    if b.lmcache_mode() == "legacy":
-                        write_cache_slice(
-                            cache_log, root / "cache_operations.jsonl",
-                            start_ns, time.monotonic_ns(),
-                        )
-                    else:
-                        for name, offset in mp_offsets.items():
-                            write_csv_tail(
-                                stack.run_root / name, root / name, offset,
+                    try:
+                        if sampler:
+                            sampler.close()
+                    finally:
+                        time.sleep(.3)
+                        event_log.close()
+                        if b.lmcache_mode() == "legacy":
+                            write_cache_slice(
+                                cache_log, root / "cache_operations.jsonl",
+                                start_ns, time.monotonic_ns(),
                             )
+                        else:
+                            for name, offset in mp_offsets.items():
+                                write_csv_tail(
+                                    stack.run_root / name, root / name, offset,
+                                )
     result["wire_bytes"] = b.count_delta(
         proxy_before, b.proxy_counts(proxy_log),
     )
@@ -2572,7 +2620,7 @@ def reduce_run(run_root: Path) -> None:
         if row["kind"] == "migration" and control and row["continuation_ttft_s"] is not None:
             row["continuation_difference_s"] = row["continuation_ttft_s"] - control["continuation_ttft_s"]
     from profiles import ModelProfile
-    profile = ModelProfile.load(Path(__file__).with_name("profiles") / "gpt_oss_20b_a100_tp1.json")
+    profile = ModelProfile.load(Path(__file__).with_name("profiles") / "gpt_oss_20b_h100_tp1.json")
     for row in migrations:
         row["current_model_time_s"] = current_model_time(row, profile)
     write_csv(run_root / "migrations.csv", migrations)
