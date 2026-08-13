@@ -149,7 +149,7 @@ def write_plot(summary, out: Path, measured=None) -> None:
                      color=plot_style.POLICY_COLORS["queue_haul"],
                      edgecolor="black", linewidth=.8, zorder=5,
                      label="H100 measured Queue-Haul")
-    axis.set(xlim=(0, cutoff), ylim=(0, 1),
+    axis.set(xlim=(0, .8), ylim=(0, 1),
              xlabel="Requested Fraction of Power",
              ylabel="Shed Power by Deadline")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
@@ -160,7 +160,7 @@ def write_plot(summary, out: Path, measured=None) -> None:
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, fontsize=10, ncol=1,
-               loc="center left", bbox_to_anchor=(.92, .5))
+               loc="center left", bbox_to_anchor=(.94, .5))
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,

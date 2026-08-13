@@ -704,9 +704,9 @@ removable power before equal-weight pooling; raw overshed remains visible above
 the diagonal. Lines are medians and ribbons are the interquartile spread across
 designed cases, not repeated-run confidence intervals. Deadline-blind plans
 against 90 seconds but receives credit only for shed attained by the common
-30-second cutoff. The x-axis ends at the nonzero intersection of Queue-Haul
-LP's median frontier with requested-equals-attained parity; the y-axis retains
-the full 0--100% removable-power range.
+30-second cutoff. The x-axis ends at 80%, just beyond the nonzero intersection
+of Queue-Haul LP's median frontier with requested-equals-attained parity; the
+y-axis retains the full 0--100% removable-power range.
 
 The companion attainment-time ECDF uses the same twelve cases at the common
 67% stress point. Each event is the first modeled target crossing plus the
