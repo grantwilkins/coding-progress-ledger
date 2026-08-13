@@ -214,8 +214,8 @@ def write_plot(rows: list[dict], _scale: float, out: Path) -> None:
     axis.set_aspect("equal", adjustable="box")
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False,
-               loc="center left", bbox_to_anchor=(.66, .54))
+    axis.legend(handles, labels, frameon=False, loc="center left",
+                bbox_to_anchor=(1.02, .5), borderaxespad=0)
     fig.tight_layout(rect=(0, 0, .65, 1))
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):

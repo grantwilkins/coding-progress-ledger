@@ -106,12 +106,13 @@ def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
     assert all(len(collection.get_offsets()) == 2 for collection in axis.collections)
     assert {collection.get_label() for collection in axis.collections} == \
         {"Queue-Haul LP", "Queue-Haul Greedy"}
-    legend = plt.gcf().legends[0]
+    legend = axis.get_legend()
     assert {text.get_text() for text in legend.texts} == \
         {"Queue-Haul LP", "Queue-Haul Greedy"}
     assert {text.get_fontsize() for text in legend.texts} == \
         {plot_style.LEGEND_FONT_SIZE}
     assert not plt.gcf().texts
+    assert legend.get_bbox_to_anchor()._bbox.x0 == pytest.approx(1.02)
     assert [path.suffix for path, _ in saves] == [".png", ".pdf"]
     assert all(kwargs["bbox_inches"] == "tight" for _, kwargs in saves)
     assert {text.get_text() for text in axis.texts} >= {"Overshed", "Undershed"}
