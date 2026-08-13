@@ -775,11 +775,15 @@ planner's Queue-Haul LP, Queue-Haul Greedy, KV-only, and replay-only recorded
 destination-method selections. Run
 `uv run python queue-haul/plot_network_action_breakdown.py`.
 
-`plot_hardware_power_parity.py` plots predicted against directly measured source-
-power shed for the 36 Queue-Haul LP and Greedy live power-drain runs. Both axes
-use the maximum request across all 90 campaign runs as their shared denominator;
-the diagonal marks exact agreement and overshed remains visible. Run
-`uv run python queue-haul/plot_hardware_power_parity.py`.
+`plot_hardware_power_parity.py` audits the 840 matched Queue-Haul LP, Queue-Haul
+Greedy, True Greedy, KV-only, replay-only, power-blind, and deadline-blind raw
+traces. These runs do not provide the required settled pre-migration window:
+the median gap from the final source request to migration is 0.075 s, and only
+3/840 episodes cover a one-second window plus a one-second settling guard. The
+script therefore hard-fails direct parity reduction instead of averaging
+migration warm-up power. `--audit-only --out PATH` writes the episode-level
+window audit without claiming measured shed; a new hardware run with an
+explicit pre-migration hold is required for the parity plot.
 
 Reduction runs automatically and can also be repeated without hardware:
 
@@ -1155,10 +1159,9 @@ the merge accepts exactly five complete blocks, checks profile, calibration,
 manifest, context, and trace provenance, and emits the 800-row final result.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
-reductions. `plot_hardware_power_parity.py` plots the 36 Queue-Haul LP and Greedy
-runs, normalizing both axes by the maximum requested shed across all 90 campaign
-runs; values above 100% and below zero remain visible around the shared-axis
-parity line.
+reductions. The contemporaneous packing traces retain raw `power.csv`,
+`result.json`, and plans, but their warm-up-to-migration timing is insufficient
+for the same direct measurement.
 `outputs/live-power-shed/` retains the 2026-08-06 two-A100 seamless full-shed
 run. The Queue-Haul LP arm moved all eight sessions under continuous 4 rps
 source and 1 rps destination agentic load with `kv_both` and 33 GB L1 pools;
