@@ -90,6 +90,9 @@ def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
          "predicted_shed_w": 10, "measured_shed_w": repeat}
         for method in METHODS for repeat in (8, 12)
     ])
+    saves = []
+    monkeypatch.setattr(plt.Figure, "savefig",
+                        lambda _, path, **kwargs: saves.append((path, kwargs)))
     monkeypatch.setattr(plt, "close", lambda _: None)
 
     write_plot(rows, scale, tmp_path / "parity")
@@ -109,4 +112,6 @@ def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
     assert {text.get_fontsize() for text in legend.texts} == \
         {plot_style.LEGEND_FONT_SIZE}
     assert not plt.gcf().texts
+    assert [path.suffix for path, _ in saves] == [".png", ".pdf"]
+    assert all(kwargs["bbox_inches"] == "tight" for _, kwargs in saves)
     assert {text.get_text() for text in axis.texts} >= {"Overshed", "Undershed"}

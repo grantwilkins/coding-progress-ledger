@@ -216,10 +216,11 @@ def write_plot(rows: list[dict], _scale: float, out: Path) -> None:
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False,
                loc="center left", bbox_to_anchor=(.66, .54))
-    fig.subplots_adjust(left=.13, right=.65, bottom=.15, top=.97)
+    fig.tight_layout(rect=(0, 0, .65, 1))
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
-        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
+        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
+                    bbox_inches="tight")
     plt.close(fig)
     write_csv(rows, out.with_suffix(".csv"))
 
