@@ -61,3 +61,4 @@ def test_plan_spans_requested_migration_design(tmp_path):
                                      {"initial_tokens": 30}]}]}))
     plan = campaign.make_plan(parent)
     assert len(plan["migration_cells"]) == 2 * 3 * 4 * 3 * 3 * 2 * 3
+    assert len(plan["migration_screening_cells"]) == 2 * 3 * 4 * 3

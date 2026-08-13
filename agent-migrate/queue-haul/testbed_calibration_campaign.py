@@ -44,10 +44,23 @@ def make_plan(parent_path: Path, seed: int = 1) -> dict:
     rng = random.Random(seed)
     for cells in (service, migration, operational):
         rng.shuffle(cells)
+    screening = [{"destination": destination, "destination_prefill_load": load,
+                  "concurrency": concurrency, "action_mix": action_mix,
+                  "context_tokens": anchors[(i + j + k) % len(anchors)],
+                  "bandwidth": BANDWIDTHS[(i + 2 * j + k) % len(BANDWIDTHS)],
+                  "repeat": 0}
+                 for i, destination in enumerate(("east", "germany"))
+                 for j, load in enumerate(LOADS)
+                 for k, concurrency in enumerate(CONCURRENCIES)
+                 for action_mix in ACTION_MIXES]
+    rng.shuffle(screening)
     return {
         "schema": "queue-haul-targeted-calibration-plan-v1",
         "parent": str(parent_path), "pack": "recorded-28-seed-8", "seed": seed,
         "service_cells": service, "migration_cells": migration,
+        "migration_screening_cells": screening,
+        "migration_campaign_mode": "run screening first; add two confirmation repeats only "
+                                   "for retained cells after grouped residual analysis",
         "operational_cells": operational,
         "telemetry_required": [
             "migration_start_ns", "destination_ready_ns", "commit_ns",

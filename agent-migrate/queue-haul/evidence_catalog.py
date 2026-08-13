@@ -34,7 +34,8 @@ def classify(path: Path) -> tuple[str, list[str]]:
             "hardware-gap" in text or "separation" in text):
         return "model_credited", ["completion-derived source-power shed"]
     if name in {"reduced.json", "summary.json", "power_curve.csv", "trailing_power.csv",
-                "power_summary.csv", "queue_summary.csv"} \
+                "power_summary.csv", "queue_summary.csv",
+                "migration-telemetry-existing.csv"} \
             or name.endswith(".summary.json") or "calibration" in name:
         return "derived_from_measurement", ["reduced measurement"]
     if name in {"plan.json", "scenario.json"} or name.startswith("plan-"):
@@ -46,7 +47,7 @@ def catalog(root: Path) -> dict:
     names = {"power.csv", "results.csv", "result.json", "summary.json", "reduced.json",
              "power_curve.csv", "levels.json", "run_metadata.json", "plan.json",
              "scenario.json", "source_load.jsonl", "power_summary.csv", "queue_summary.csv",
-             "trailing_power.csv",
+             "trailing_power.csv", "migration-telemetry-existing.csv",
              "proxy_bytes.csv", "proxy_connections.csv", "resp_transfers.csv",
              "metrics_sweden.csv", "metrics_east.csv", "metrics_germany.csv"}
     paths = sorted(path for path in root.rglob("*") if path.is_file()
