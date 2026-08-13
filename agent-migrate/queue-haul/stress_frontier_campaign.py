@@ -13,6 +13,7 @@ import numpy as np
 
 import network_campaign as network
 import evidence_catalog as evidence
+import plot_style
 from planner import _expected_scenario, plan as solve, source_power
 from profiles import ModelProfile, RateCurve
 from simulate import predict
@@ -22,7 +23,7 @@ SCHEMA = "queue-haul-stress-frontier-plan-v1"
 POLICIES = ("queue_haul", "greedy", "replay_only", "kv_only",
             "isolated_fastest", "queue_haul_power_blind",
             network.DEADLINE_BLIND_POLICY)
-REFERENCE = "exact_modeled_milp_optimum"
+REFERENCE = plot_style.REFERENCE
 DEADLINES = tuple(range(10, 61, 5))
 REGIMES = (
     ("jointly-binding", .75, .90, "controlled_40"),
@@ -280,22 +281,20 @@ def _plot(frontier: list[dict], stem: Path, empirical: bool) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    plot_style.apply()
     fig, ax = plt.subplots(figsize=(8.4, 5.4))
     for policy in (*POLICIES, REFERENCE):
         selected = [row for row in frontier if row["policy"] == policy]
         ax.plot([row["deadline_s"] for row in selected],
                 [row["coverage_90_shed_w"] for row in selected],
-                color="black" if policy == REFERENCE else None,
-                linewidth=2.5 if policy == REFERENCE else 1.5,
-                label=("exact modeled MILP optimum" if policy == REFERENCE
-                       else policy.replace("queue_haul", "Queue-Haul").replace("_", " ")))
+                **plot_style.policy_style(policy))
     ax.set(xlabel="Deadline (s)", ylabel="90%-coverage trailing-window shed (W)",
            title=("Empirical deadline–shed frontier" if empirical else
                   "Modeled stress-suite sensitivity"))
     ax.legend(frameon=False, fontsize=8, ncol=2)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
-        fig.savefig(stem.with_suffix(f".{suffix}"), dpi=200)
+        fig.savefig(stem.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
 

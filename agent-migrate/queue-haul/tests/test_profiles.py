@@ -99,6 +99,11 @@ def test_phase_power_separates_service_and_power_load(tmp_path):
     assert case.phase_power.contains(100, 10)
     assert not case.phase_power.contains(1000, 100)
 
+    raw["cases"]["central"]["phase_power"]["measured_power_curve"] = [
+        [0, 10], [.5, 70], [1, 95]]
+    case = ModelProfile.load(write(tmp_path, raw, "measured-phase.json")).case()
+    assert case.power(.75) == pytest.approx(82.5)
+
 
 def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):
     case = ModelProfile.load(write(tmp_path, profile())).case()

@@ -104,6 +104,7 @@ class PhasePower:
     within_5w_fraction: float
     bootstrap: tuple[tuple[float, float, float, float], ...]
     provenance_sha256: str
+    measured_power_curve: tuple[tuple[float, float], ...] = ()
 
     @classmethod
     def parse(cls, raw: dict) -> "PhasePower":
@@ -112,8 +113,8 @@ class PhasePower:
             "b_s_per_decode_token", "valid_hull", "grouped_cv_rmse_w",
             "within_5w_fraction", "bootstrap", "provenance_sha256",
         }
-        if set(raw) != required:
-            raise ValueError(f"phase_power fields must be {sorted(required)}")
+        if set(raw) not in (required, required | {"measured_power_curve"}):
+            raise ValueError(f"phase_power fields must be {sorted(required)} plus optional measured_power_curve")
         hull = tuple(tuple(map(float, point)) for point in raw["valid_hull"])
         bootstrap = tuple(tuple(map(float, row)) for row in raw["bootstrap"])
         value = cls(
@@ -123,7 +124,9 @@ class PhasePower:
             float(raw["grouped_cv_rmse_w"]),
             float(raw["within_5w_fraction"]), bootstrap,
             str(raw["provenance_sha256"]),
+            tuple(tuple(map(float, point)) for point in raw.get("measured_power_curve", ())),
         )
+        curve = np.asarray(value.measured_power_curve, float)
         if value.p0_w < 0 or value.delta_w <= 0 \
                 or min(value.a_s_per_prefill_token,
                        value.b_s_per_decode_token) <= 0 \
@@ -132,7 +135,10 @@ class PhasePower:
                 or value.grouped_cv_rmse_w < 0 \
                 or not 0 <= value.within_5w_fraction <= 1 \
                 or any(len(row) != 4 or min(row) <= 0 for row in bootstrap) \
-                or len(value.provenance_sha256) != 64:
+                or len(value.provenance_sha256) != 64 \
+                or value.measured_power_curve and (curve.ndim != 2 or curve.shape[1] != 2
+                    or curve[0, 0] != 0 or np.any(np.diff(curve[:, 0]) <= 0)
+                    or np.any(np.diff(curve[:, 1]) < 0)):
             raise ValueError("invalid phase-aware power calibration")
         return value
 
@@ -146,6 +152,11 @@ class PhasePower:
         if load < -1e-12:
             raise ValueError("power load must be nonnegative")
         z = max(0.0, load)
+        if self.measured_power_curve:
+            curve = np.asarray(self.measured_power_curve)
+            if z > curve[-1, 0] + 1e-12:
+                raise ValueError(f"power load {z} outside measured curve")
+            return float(np.interp(z, curve[:, 0], curve[:, 1]))
         return self.p0_w + self.delta_w * z / (1 + z)
 
     def contains(self, prefill_tps: float, decode_tps: float) -> bool:

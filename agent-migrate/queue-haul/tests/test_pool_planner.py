@@ -326,6 +326,14 @@ def test_clarabel_invalid_final_solution_falls_back_to_highs(
     assert pool_planner._lp(table, 3, stats) == expected
     assert called == [(table, 3, stats)]
 
+
+def test_clarabel_solver_error_falls_back_to_highs(monkeypatch):
+    table, expected = _hand_lp_table(), {1, 2}
+    monkeypatch.setattr(pool_planner.cp.Problem, "solve", lambda *args, **kwargs: (
+        _ for _ in ()).throw(pool_planner.cp.error.SolverError()))
+    monkeypatch.setattr(pool_planner, "_lp_highs", lambda *args: expected)
+    assert pool_planner._lp(table, 3) == expected
+
 @pytest.mark.parametrize("target, shortfall", ((3, 0), (4, 1)))
 def test_column_generation_matches_flat_lp_and_certifies_both_phases(
     target, shortfall,

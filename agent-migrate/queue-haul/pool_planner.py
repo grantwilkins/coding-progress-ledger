@@ -1158,16 +1158,25 @@ def _lp(table: CandidateTable, target: float, stats=None):
     def solve(objective, constraints, maximize=False):
         nonlocal native_s, solves, iterations
         p = cp.Problem(cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints)
-        p.solve(solver=cp.CLARABEL)
+        try:
+            p.solve(solver=cp.CLARABEL)
+        except cp.error.SolverError:
+            return None
         native_s += p.solver_stats.solve_time or 0
         iterations += p.solver_stats.num_iters or 0
         solves += 1
         return p
     problem = solve(work @ x, base + [gains @ x >= target])
+    if problem is None:
+        return _lp_highs(table, target, stats)
     if problem.status in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE):
         problem = solve(gains @ x, base, True)
+        if problem is None:
+            return _lp_highs(table, target, stats)
         best = float(problem.value)
         problem = solve(work @ x, base + [gains @ x >= best - 1e-7])
+        if problem is None:
+            return _lp_highs(table, target, stats)
     values = None if x.value is None else np.asarray(x.value)
     if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) \
             or values is None or not np.isfinite(values).all():
