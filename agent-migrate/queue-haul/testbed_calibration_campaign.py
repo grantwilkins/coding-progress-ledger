@@ -33,6 +33,13 @@ COMPACT_CELLS = (
     ("germany", .25, 1, "replay_only", 30785, "natural"),
     ("germany", .6, 2, "mixed", 30785, "natural"),
 )
+COMPACT_POWER_CELLS = (
+    ("decode", .8), ("mixed", .45), ("prefill", .8),
+    ("prefill75", .65), ("decode", .45), ("prefill75", .1),
+    ("decode", .1), ("mixed", .1), ("decode75", .45),
+    ("decode75", .65), ("decode75", 1.), ("decode", .65),
+    ("prefill75", .8),
+)
 
 
 def make_plan(parent_path: Path, seed: int = 1) -> dict:
@@ -105,10 +112,7 @@ def compact_campaign() -> dict:
         "power_anchors": [
             {"kind": "idle", "path": "phase-power-v1/idle/power.csv"},
             *[{"mixture": mixture, "load": load}
-              for mixture, loads in (("prefill75", (.1, .65, .8)),
-                                      ("mixed", (.1, .45)),
-                                      ("decode", (.1, .45, .65, .8)))
-              for load in loads],
+              for mixture, load in COMPACT_POWER_CELLS],
         ],
         "timing_model": "component rates plus conservative held-out residual quantile",
     }
@@ -119,7 +123,10 @@ def select_power_anchors(measurements: Path, campaign_path: Path) -> list[dict]:
                for row in json.loads(campaign_path.read_text())["power_anchors"]
                if "mixture" in row}
     rows = _read(measurements)
-    selected = [row for row in rows
+    groups = {"prefill": "prefill_heavy", "prefill75": "prefill_heavy",
+              "decode75": "mixed"}
+    selected = [{**row, "validation_group": groups.get(row["mixture"], row["mixture"])}
+                for row in rows
                 if (row["mixture"], float(row["target_service_load"])) in anchors]
     if {row["mixture"] for row in selected} != {key[0] for key in anchors} \
             or len(selected) < 8:

@@ -174,31 +174,31 @@ def fit(rows: list[dict], idle_power_w: float, bootstrap_samples: int = 200,
     if idle_power_w <= 0 or bootstrap_samples < 1 or len(rows) < 8 \
             or any(not required <= row.keys() for row in rows):
         raise ValueError("invalid phase power measurements")
-    groups = sorted({str(row["mixture"]) for row in rows})
-    if len(groups) < 3 or any(sum(str(row["mixture"]) == group for row in rows) < 2
-                              for group in groups):
+    group = lambda row: str(row.get("validation_group", row["mixture"]))
+    groups = sorted({group(row) for row in rows})
+    if len(groups) < 3 or any(sum(group(row) == name for row in rows) < 2
+                              for name in groups):
         raise ValueError("grouped validation needs three mixtures with repeats")
     parameters = _fit(rows, idle_power_w)
     errors, heldout = [], []
-    for group in groups:
-        train = [row for row in rows if str(row["mixture"]) != group]
-        test = [row for row in rows if str(row["mixture"]) == group]
+    for name in groups:
+        train = [row for row in rows if group(row) != name]
+        test = [row for row in rows if group(row) == name]
         fitted = _fit(train, idle_power_w)
         for row in test:
             error = float(_predict(fitted, float(row["f_tps"]), float(row["g_tps"]),
                                    idle_power_w) - float(row["power_mean_w"]))
             errors.append(error)
-            heldout.append({"mixture": group,
+            heldout.append({"mixture": row["mixture"], "validation_group": name,
                             "target_service_load": row.get("target_service_load"),
                             "error_w": error})
     rmse = float(np.sqrt(np.mean(np.square(errors))))
     within = float(np.mean(np.abs(errors) <= 5))
-    group_bias = {group: float(np.mean([row["error_w"] for row in heldout
-                                        if row["mixture"] == group]))
-                  for group in groups}
+    group_bias = {name: float(np.mean([row["error_w"] for row in heldout
+                                      if row["validation_group"] == name]))
+                  for name in groups}
     rng, bootstrap = np.random.default_rng(seed), []
-    grouped = {group: [row for row in rows if str(row["mixture"]) == group]
-               for group in groups}
+    grouped = {name: [row for row in rows if group(row) == name] for name in groups}
     for _ in range(bootstrap_samples):
         sample = [items[i] for items in grouped.values()
                   for i in rng.integers(0, len(items), len(items))]

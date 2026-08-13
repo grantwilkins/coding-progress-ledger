@@ -66,3 +66,13 @@ def test_fit_accepts_compact_identifiable_group_holdouts():
             compact.append({"mixture": mixture, "repeat": 0, "f_tps": f,
                             "g_tps": g, "power_mean_w": 100 + 200 * z / (1 + z)})
     assert calibration.fit(compact, 100, bootstrap_samples=2)["gate_passed"]
+
+
+def test_fit_holds_out_validation_groups():
+    compact = rows()
+    for row in compact:
+        row["validation_group"] = {"prefill": "prefill_heavy",
+            "prefill75": "prefill_heavy", "decode75": "mixed"}.get(
+                row["mixture"], row["mixture"])
+    fitted = calibration.fit(compact, 98, bootstrap_samples=2)
+    assert fitted["groups"] == ["decode", "mixed", "prefill_heavy"]

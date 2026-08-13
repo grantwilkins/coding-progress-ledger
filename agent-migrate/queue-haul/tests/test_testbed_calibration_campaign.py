@@ -74,8 +74,8 @@ def test_compact_campaign_is_balanced_and_fit_ready():
     assert {value: sum(row["bandwidth"] == value for row in cells)
             for value in campaign.BANDWIDTHS} == {"natural": 6, "controlled_40": 6}
     mixtures = [row["mixture"] for row in plan["power_anchors"] if "mixture" in row]
-    assert {value: mixtures.count(value) for value in set(mixtures)} == {
-        "prefill75": 3, "mixed": 2, "decode": 4}
+    assert len(mixtures) == 13
+    assert set(mixtures) == set(campaign.MIXTURES)
 
 
 def test_select_power_anchors(tmp_path):
@@ -90,6 +90,8 @@ def test_select_power_anchors(tmp_path):
     selected = campaign.select_power_anchors(measurements, plan)
     assert [(row["mixture"], float(row["target_service_load"])) for row in selected] == [
         (row["mixture"], row["target_service_load"]) for row in rows]
+    assert {row["validation_group"] for row in selected} == {
+        "prefill_heavy", "mixed", "decode"}
 
 
 def test_plan_spans_requested_migration_design(tmp_path):
