@@ -750,6 +750,17 @@ values above 100% explicitly show target overshoot rather than extra physical
 efficiency. Deadline-blind is omitted because its recorded shed is eventual,
 not shed attained by the deadline.
 
+The matched A100 migration-timing parity view compares the pre-run modeled
+episode makespan with the measured hardware migration duration for Queue-Haul
+LP and Queue-Haul Greedy across the nine separation conditions/repeats:
+
+```bash
+uv run python queue-haul/plot_migration_timing_parity.py \
+  --predictions queue-haul/outputs/east-germany-separation-20260809/simulation/separation_predictions.csv \
+  --measurements queue-haul/outputs/east-germany-separation-hardware-20260809/results.csv \
+  --out queue-haul/outputs/east-germany-migration-timing-parity-20260813/migration_timing_parity
+```
+
 ```bash
 uv run python queue-haul/plot_hardware_target_attainment.py \
   --results queue-haul/outputs/east-germany-separation-hardware-20260809/results.csv \
