@@ -18,6 +18,8 @@ Plausible wrong implementations:
 - Mix 19-second plans into the 30-second attainment curve.
 - Average bandwidth cells instead of retaining every episode in its cell.
 - Count the independently-fastest, deadline-infeasible tail as selected actions.
+- Relabel a 0-1 attainment fraction as percent without scaling it by 100.
+- Keep column panels oversized, clipped, or with external/LP-suffixed legends.
 - Retain bespoke colors or the default size in the full-attainment CDF.
 - Put the full-attainment legend outside the axes or across a plotted line.
 - Plot destination-only prefill instead of migration-to-first-token latency.
@@ -641,7 +643,7 @@ def test_full_power_attainment_includes_late_events_and_power_window():
 
 
 def test_bandwidth_summary_preserves_episode_denominators_and_admitted_actions(
-        tmp_path):
+        tmp_path, monkeypatch):
     """Bandwidth success is per episode; action shares exclude fallback tails.
 
     Plausible mistakes are dropping failed episodes, omitting the power window,
@@ -703,7 +705,27 @@ def test_bandwidth_summary_preserves_episode_denominators_and_admitted_actions(
             "kv_transfer_share": pytest.approx(1 / 3),
         },
     ]
+    figures, subplots = [], campaign.plt.subplots
+
+    def capture(*args, **kwargs):
+        result = subplots(*args, **kwargs)
+        figures.append(result[0])
+        return result
+
+    monkeypatch.setattr(campaign.plt, "subplots", capture)
     campaign.plot_bandwidth_summary(summaries, scenarios, 5, tmp_path)
+    attainment_ax, action_ax = [figure.axes[0] for figure in figures]
+    assert [tuple(figure.get_size_inches()) for figure in figures] \
+        == [(4, 3), (4, 3)]
+    assert attainment_ax.get_ylabel() == "Percent Deadline Met (%)"
+    assert attainment_ax.lines[0].get_ydata().tolist() == [50, 0]
+    assert [text.get_text() for text in attainment_ax.get_legend().texts] \
+        == ["Queue-Haul", "Replay Context Only", "KV Migrate Only"]
+    assert action_ax.get_ylabel() == "Queue-Haul Action Share"
+    assert max(max(line.get_ydata()) for line in action_ax.lines) <= 1
+    assert [ax.get_legend()._loc for ax in (attainment_ax, action_ax)] == [3, 4]
+    assert [ax.xaxis.label.get_fontsize() for ax in (attainment_ax, action_ax)] \
+        == [11, 11]
     for name in ("attainment", "action_mix"):
         base = tmp_path / f"policy_hardware_30s_{name}_by_bandwidth"
         assert base.with_suffix(".csv").exists()

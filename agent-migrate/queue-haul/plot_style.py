@@ -6,7 +6,10 @@ import matplotlib
 FIGSIZE = (8, 5)
 WIDE_FIGSIZE = (8, 4)
 COMPACT_FIGSIZE = (5, 4)
+COLUMN_FIGSIZE = (4, 3)
 FONT_SIZE = 15
+COLUMN_FONT_SIZE = 11
+COLUMN_LEGEND_FONT_SIZE = 9
 LARGE_FONT_SIZE = 17
 LEGEND_FONT_SIZE = ANNOTATION_FONT_SIZE = 11
 LARGE_LEGEND_FONT_SIZE = 12
@@ -23,6 +26,7 @@ POLICY_NAMES = dict(zip(POLICIES, (
     "True Greedy", "KV Migrate Only", "Replay Context Only",
     "Queue-Haul Power Blind", "Queue-Haul Deadline Blind",
 )))
+SHORT_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "Queue-Haul"}
 POLICY_COLORS = dict(zip(POLICIES, (
     "#0072B2", "#E69F00", "#F0E442", "#D55E00",
     "#56B4E9", "#CC79A7", "#009E73", "#000000",
@@ -128,10 +132,10 @@ def apply():
     })
 
 
-def policy_style(policy):
+def policy_style(policy, names=POLICY_NAMES):
     return {
         "color": POLICY_COLORS[policy],
         "linestyle": POLICY_LINESTYLES[policy],
         "linewidth": LINE_WIDTH,
-        "label": POLICY_NAMES[policy],
+        "label": names[policy],
     }

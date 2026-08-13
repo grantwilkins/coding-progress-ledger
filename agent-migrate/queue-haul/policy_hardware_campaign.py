@@ -969,6 +969,13 @@ def plot_full_power_attainment(summaries, power_window_s, out,
     plt.close(fig)
 
 
+def _format_column_axis(ax):
+    ax.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
+    for axis in (ax.xaxis, ax.yaxis):
+        axis.label.set_size(plot_style.COLUMN_FONT_SIZE)
+    ax.grid(alpha=.25)
+
+
 def plot_bandwidth_summary(summaries, scenarios, power_window_s, out,
                            deadline_s=30):
     attainment, actions = bandwidth_summary(
@@ -979,22 +986,25 @@ def plot_bandwidth_summary(summaries, scenarios, power_window_s, out,
     prefix = out / f"policy_hardware_{deadline_s:g}s"
     attainment_out = Path(f"{prefix}_attainment_by_bandwidth")
     profiler.write_csv(attainment_out.with_suffix(".csv"), attainment)
-    fig, ax = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    fig, ax = plt.subplots(figsize=plot_style.COLUMN_FIGSIZE)
     for policy in BANDWIDTH_POLICIES:
         rows = [row for row in attainment if row["policy"] == policy]
         ax.plot(
             [row["bandwidth_gbps"] for row in rows],
-            [row["attainment_fraction"] for row in rows],
-            marker="o", markersize=7, **plot_style.policy_style(policy),
+            [100 * row["attainment_fraction"] for row in rows],
+            marker="o", markersize=7, **plot_style.policy_style(
+                policy, plot_style.SHORT_POLICY_NAMES
+            ),
         )
     bandwidths = [row["bandwidth_gbps"] for row in actions]
     ax.set(
         xlabel="Bandwidth (Gbit/s)",
-        ylabel=f"Episodes meeting {deadline_s:g} s (fraction)",
-        xticks=bandwidths, ylim=(-.02, 1.02),
+        ylabel="Percent Deadline Met (%)",
+        xticks=bandwidths, ylim=(-2, 102),
     )
-    ax.grid(alpha=.25)
-    ax.legend(frameon=False, loc="lower left")
+    _format_column_axis(ax)
+    ax.legend(frameon=False, loc="lower left",
+              fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(attainment_out.with_suffix(f".{suffix}"),
@@ -1003,7 +1013,7 @@ def plot_bandwidth_summary(summaries, scenarios, power_window_s, out,
 
     actions_out = Path(f"{prefix}_action_mix_by_bandwidth")
     profiler.write_csv(actions_out.with_suffix(".csv"), actions)
-    fig, ax = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    fig, ax = plt.subplots(figsize=plot_style.COLUMN_FIGSIZE)
     for method in ("replay", "kv_transfer"):
         ax.plot(
             bandwidths, [row[f"{method}_share"] for row in actions],
@@ -1012,12 +1022,12 @@ def plot_bandwidth_summary(summaries, scenarios, power_window_s, out,
         )
     ax.set(
         xlabel="Bandwidth (Gbit/s)",
-        ylabel="Queue-Haul action share",
+        ylabel="Queue-Haul Action Share",
         xticks=bandwidths, ylim=(-.02, 1.02),
     )
-    ax.grid(alpha=.25)
-    ax.legend(frameon=False, loc="lower center", bbox_to_anchor=(.5, 1),
-              ncol=2)
+    _format_column_axis(ax)
+    ax.legend(frameon=False, loc="lower right", ncol=2,
+              fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(actions_out.with_suffix(f".{suffix}"),
