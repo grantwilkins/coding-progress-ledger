@@ -187,7 +187,7 @@ def write_csv(rows: list[dict], out: Path) -> None:
         writer.writerows(rows)
 
 
-def write_plot(rows: list[dict], scale: float, out: Path) -> None:
+def write_plot(rows: list[dict], _scale: float, out: Path) -> None:
     plotted = [row for row in rows if row["method"] in PLOT_METHODS]
     values = [row[key] for row in plotted
               for key in ("predicted_percent", "measured_percent")]
@@ -196,7 +196,7 @@ def write_plot(rows: list[dict], scale: float, out: Path) -> None:
     limits = lower - padding, upper + padding
     fig, axis = plt.subplots(figsize=plot_style.FIGSIZE)
     axis.plot(limits, limits, color="black", linestyle="--", linewidth=1.5,
-              label="Prediction = measurement", zorder=1)
+              zorder=1)
     for method in PLOT_METHODS:
         selected = [row for row in plotted if row["method"] == method]
         axis.scatter(
@@ -214,11 +214,8 @@ def write_plot(rows: list[dict], scale: float, out: Path) -> None:
     axis.set_aspect("equal", adjustable="box")
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, fontsize=9,
+    fig.legend(handles, labels, frameon=False,
                loc="center left", bbox_to_anchor=(.66, .54))
-    fig.text(.98, .02,
-             f"Maximum prediction = {scale:.1f} W; {len(plotted)} episodes",
-             ha="right", fontsize=9)
     fig.subplots_adjust(left=.13, right=.65, bottom=.15, top=.97)
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):

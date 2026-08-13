@@ -14,6 +14,7 @@ import csv
 import matplotlib.pyplot as plt
 import pytest
 
+import plot_style
 from plot_hardware_power_parity import (
     METHODS, PLOT_METHODS, normalize, predicted_shed, settled_pre_available,
     source_power_shed, write_plot,
@@ -102,4 +103,10 @@ def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
     assert all(len(collection.get_offsets()) == 2 for collection in axis.collections)
     assert {collection.get_label() for collection in axis.collections} == \
         {"Queue-Haul LP", "Queue-Haul Greedy"}
+    legend = plt.gcf().legends[0]
+    assert {text.get_text() for text in legend.texts} == \
+        {"Queue-Haul LP", "Queue-Haul Greedy"}
+    assert {text.get_fontsize() for text in legend.texts} == \
+        {plot_style.LEGEND_FONT_SIZE}
+    assert not plt.gcf().texts
     assert {text.get_text() for text in axis.texts} >= {"Overshed", "Undershed"}
