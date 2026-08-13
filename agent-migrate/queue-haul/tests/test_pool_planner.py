@@ -101,6 +101,20 @@ def test_public_solver_surface_hard_fails_retired_greedies(tmp_path):
             )
 
 
+def test_exact_max_shed_uses_phase_power_load_not_candidate_credit():
+    sessions = (SimpleNamespace(session_id="prefill"),
+                SimpleNamespace(session_id="decode"))
+    candidates = tuple(Candidate(i, "replay", 0, 100 - i, 1, 1, (), 0, (0, 0), 0)
+                       for i in range(2))
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(2)), csr_matrix([[1, 1]]),
+        ("only-one",), (1,), ("count",), 1,
+    )
+    power = SimpleNamespace(route={"prefill": "source", "decode": "source"},
+                            ell={"prefill": .1, "decode": .9})
+    assert pool_planner._max_shed(table, power) == {1}
+
+
 def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):
     scenario = replace(problem(), sessions=(
         replace(problem().sessions[0], expected_f=5),

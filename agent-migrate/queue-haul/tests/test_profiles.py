@@ -78,6 +78,28 @@ def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
         ModelProfile.load(write(tmp_path, raw, "convex.json"))
 
 
+def test_phase_power_separates_service_and_power_load(tmp_path):
+    raw = profile()
+    raw["schema"] = "queue-haul-model-profile-v5"
+    raw["max_power_load"] = 1
+    raw["cases"]["central"]["phase_power"] = {
+        "p0_w": 10, "delta_w": 90,
+        "a_s_per_prefill_token": .001,
+        "b_s_per_decode_token": .01,
+        "valid_hull": [[0, 0], [1000, 0], [0, 100]],
+        "grouped_cv_rmse_w": 2, "within_5w_fraction": .9,
+        "bootstrap": [[10, 90, .001, .01]],
+        "provenance_sha256": "0" * 64,
+    }
+    case = ModelProfile.load(write(tmp_path, raw)).case()
+    assert case.service_load(100, 0) == 1
+    assert case.power_load(100, 0) == .1
+    assert case.power_load(0, 100) == 1
+    assert case.power(1) == 55
+    assert case.phase_power.contains(100, 10)
+    assert not case.phase_power.contains(1000, 100)
+
+
 def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):
     case = ModelProfile.load(write(tmp_path, profile())).case()
     assert case.prefill.rate(500.5, 1) == pytest.approx(75)

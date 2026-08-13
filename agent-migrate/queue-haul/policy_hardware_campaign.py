@@ -93,7 +93,7 @@ def _problem(profile, sessions, bandwidth_mbps, deadline_s):
         for row in sessions
     )
     scenario = ExecutionScenario(
-        deadline_s, deadline_s, case.power_curve.power(0), "awake", 0,
+        deadline_s, deadline_s, case.power(0), "awake", 0,
         (PowerNode("source-node", 1, True),
          PowerNode("destination-node", 1, False)),
         (ServingInstance("source", ("source-node",)),

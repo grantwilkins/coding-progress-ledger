@@ -816,7 +816,9 @@ def _source_removed_gain(power, source, removed_load):
     if power.profile.power_scope == "gpu":
         return sum(
             power.slot_power[node][slot]
-            - power.case.power_curve.power(power.slots[node][slot] - share)
+            - (power.case.phase_power.power(power.slots[node][slot] - share)
+               if power.case.phase_power else
+               power.case.power_curve.power(power.slots[node][slot] - share))
             for node, slot in owned if power.nodes[node].local
         )
     slots = {}

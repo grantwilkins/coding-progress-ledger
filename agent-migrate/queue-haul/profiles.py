@@ -10,6 +10,7 @@ import numpy as np
 
 
 PROFILE_SCHEMA = "queue-haul-model-profile-v4"
+PHASE_PROFILE_SCHEMA = "queue-haul-model-profile-v5"
 WORKLOAD_SCHEMA = "queue-haul-workload-profile-v2"
 SOURCE_SECTIONS = ("power", "service", "capacity", "replay", "kv_transfer", "transitions")
 ACTION_POWER = {"replay", "kv_transfer", "replay_on_request", "catch_up", "sleep", "off"}
@@ -91,6 +92,71 @@ class PowerCurve:
 
 
 @dataclass(frozen=True)
+class PhasePower:
+    """Identifiable phase-aware source power calibration."""
+
+    p0_w: float
+    delta_w: float
+    a_s_per_prefill_token: float
+    b_s_per_decode_token: float
+    valid_hull: tuple[tuple[float, float], ...]
+    grouped_cv_rmse_w: float
+    within_5w_fraction: float
+    bootstrap: tuple[tuple[float, float, float, float], ...]
+    provenance_sha256: str
+
+    @classmethod
+    def parse(cls, raw: dict) -> "PhasePower":
+        required = {
+            "p0_w", "delta_w", "a_s_per_prefill_token",
+            "b_s_per_decode_token", "valid_hull", "grouped_cv_rmse_w",
+            "within_5w_fraction", "bootstrap", "provenance_sha256",
+        }
+        if set(raw) != required:
+            raise ValueError(f"phase_power fields must be {sorted(required)}")
+        hull = tuple(tuple(map(float, point)) for point in raw["valid_hull"])
+        bootstrap = tuple(tuple(map(float, row)) for row in raw["bootstrap"])
+        value = cls(
+            float(raw["p0_w"]), float(raw["delta_w"]),
+            float(raw["a_s_per_prefill_token"]),
+            float(raw["b_s_per_decode_token"]), hull,
+            float(raw["grouped_cv_rmse_w"]),
+            float(raw["within_5w_fraction"]), bootstrap,
+            str(raw["provenance_sha256"]),
+        )
+        if value.p0_w < 0 or value.delta_w <= 0 \
+                or min(value.a_s_per_prefill_token,
+                       value.b_s_per_decode_token) <= 0 \
+                or len(hull) < 3 or any(len(point) != 2 or min(point) < 0
+                                       for point in hull) \
+                or value.grouped_cv_rmse_w < 0 \
+                or not 0 <= value.within_5w_fraction <= 1 \
+                or any(len(row) != 4 or min(row) <= 0 for row in bootstrap) \
+                or len(value.provenance_sha256) != 64:
+            raise ValueError("invalid phase-aware power calibration")
+        return value
+
+    def load(self, prefill_tps: float, decode_tps: float) -> float:
+        if min(prefill_tps, decode_tps) < 0:
+            raise ValueError("phase rates must be nonnegative")
+        return (self.a_s_per_prefill_token * prefill_tps
+                + self.b_s_per_decode_token * decode_tps)
+
+    def power(self, load: float) -> float:
+        if load < -1e-12:
+            raise ValueError("power load must be nonnegative")
+        z = max(0.0, load)
+        return self.p0_w + self.delta_w * z / (1 + z)
+
+    def contains(self, prefill_tps: float, decode_tps: float) -> bool:
+        point = np.asarray((prefill_tps, decode_tps), float)
+        hull = np.asarray(self.valid_hull, float)
+        edges, offsets = np.roll(hull, -1, axis=0) - hull, point - hull
+        crosses = edges[:, 0] * offsets[:, 1] - edges[:, 1] * offsets[:, 0]
+        return bool(np.all(crosses >= -1e-8) or np.all(crosses <= 1e-8))
+
+
+@dataclass(frozen=True)
 class ActionPower:
     concurrency: np.ndarray
     source_w: np.ndarray
@@ -169,6 +235,7 @@ class ProfileCase:
     sleep_s: float
     shutdown_s: float | None
     action_power_w: dict[str, ActionPower]
+    phase_power: PhasePower | None = None
 
     @classmethod
     def parse(cls, case_id: str, raw: dict) -> "ProfileCase":
@@ -182,6 +249,7 @@ class ProfileCase:
             float(raw["sleep_s"]),
             None if raw["shutdown_s"] is None else float(raw["shutdown_s"]),
             {str(k): ActionPower.parse(v) for k, v in raw["action_power_w"].items()},
+            PhasePower.parse(raw["phase_power"]) if "phase_power" in raw else None,
         )
         if set(value.action_power_w) != ACTION_POWER:
             raise ValueError(f"action_power_w fields must be {sorted(ACTION_POWER)}")
@@ -191,9 +259,20 @@ class ProfileCase:
             raise ValueError("rates, times, and power must be nonnegative; F and G must be positive")
         if value.shutdown_s is not None and value.shutdown_s < 0:
             raise ValueError("shutdown time must be nonnegative")
-        if value.power_curve.power(0) + value.sleep_power_delta_w < 0:
+        if value.power(0) + value.sleep_power_delta_w < 0:
             raise ValueError("sleep power must be nonnegative")
         return value
+
+    def service_load(self, prefill_tps: float, decode_tps: float) -> float:
+        return prefill_tps / self.F + decode_tps / self.G
+
+    def power_load(self, prefill_tps: float, decode_tps: float) -> float:
+        return (self.phase_power.load(prefill_tps, decode_tps)
+                if self.phase_power else self.service_load(prefill_tps, decode_tps))
+
+    def power(self, load: float) -> float:
+        return (self.phase_power.power(load)
+                if self.phase_power else self.power_curve.power(load))
 
 
 @dataclass(frozen=True)
@@ -208,6 +287,7 @@ class ModelProfile:
     power_scope: str
     power_window_s: float
     max_ell: float
+    max_power_load: float
     kv_capacity_tokens: int
     max_destination_replays: int
     max_destination_kv_streams: int
@@ -217,7 +297,7 @@ class ModelProfile:
     @classmethod
     def load(cls, path: str | Path) -> "ModelProfile":
         raw = json.loads(Path(path).read_text())
-        if raw.get("schema") != PROFILE_SCHEMA:
+        if raw.get("schema") not in {PROFILE_SCHEMA, PHASE_PROFILE_SCHEMA}:
             raise ValueError(f"expected schema {PROFILE_SCHEMA!r}")
         sources = {k: Source.parse(v) for k, v in raw["sources"].items()}
         missing = set(SOURCE_SECTIONS) - set(sources)
@@ -231,6 +311,7 @@ class ModelProfile:
             raw["profile_id"], raw["status"], raw["model"], raw["hardware"],
             raw["precision"], int(raw["tensor_parallel"]), int(raw["gpus_per_node"]),
             raw["power_scope"], float(raw["power_window_s"]), float(raw["max_ell"]),
+            float(raw.get("max_power_load", raw["max_ell"])),
             int(raw["kv_capacity_tokens"]), int(raw["max_destination_replays"]),
             int(raw["max_destination_kv_streams"]), sources, cases,
         )
@@ -239,14 +320,18 @@ class ModelProfile:
         if value.power_scope not in {"gpu", "server"}:
             raise ValueError(f"unknown power scope {value.power_scope!r}")
         if not value.profile_id or value.tensor_parallel < 1 or value.gpus_per_node < 1 \
-                or min(value.power_window_s, value.max_ell,
+                or min(value.power_window_s, value.max_ell, value.max_power_load,
                        value.kv_capacity_tokens) <= 0:
             raise ValueError("invalid profile identity or limits")
         if min(value.max_destination_replays, value.max_destination_kv_streams) < 1:
             raise ValueError("destination concurrency limits must be positive")
         for case in cases.values():
-            if value.max_ell > case.power_curve.ell[-1]:
-                raise ValueError("max_ell exceeds the calibrated power curve")
+            if case.phase_power is None and value.max_power_load > case.power_curve.ell[-1]:
+                raise ValueError("max_power_load exceeds the calibrated power curve")
+            if raw["schema"] == PHASE_PROFILE_SCHEMA and case.phase_power is None:
+                raise ValueError("v5 profiles require phase-aware power")
+            if raw["status"] == "validated" and case.phase_power is None:
+                raise ValueError("validated profiles require phase-aware power")
         return value
 
     def case(self, case_id: str = "central") -> ProfileCase:

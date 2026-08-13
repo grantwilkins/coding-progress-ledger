@@ -175,7 +175,7 @@ def main() -> None:
     rows = [row for root in POLICY_ROOTS for row in load_policy(root)]
     joint = NETWORK_ROOT / "joint-queue-002-partial-086"
     rows += load_network(joint, model.case().power_curve, model.power_window_s)
-    rows += [load_handoff(NETWORK_ROOT / name, model.case().power_curve.power(0))
+    rows += [load_handoff(NETWORK_ROOT / name, model.case().power(0))
              for name in ("handoff", "handoff-010")]
     write_plot(rows, args.out)
 

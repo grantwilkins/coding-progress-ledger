@@ -611,6 +611,36 @@ uv run python power_rate_sweep.py --out PATH --window-s 20 --warmup-s 5 --worker
 uv run python power_rate_sweep.py --out PATH --reduce-only --prefill-capacity-tps 1448.32 --decode-capacity-tps 1260.38 --idle-power-w 98.11623555 --curve-max-rate 12
 ```
 
+The scalar Azure curve remains estimated evidence. The promotion campaign uses
+`phase_power_calibration.py` to measure five prefill/decode mixtures at six load
+levels and three repeats, fit `z = a f + b g`, and validate by holding out whole
+mixtures. A v5 profile keeps destination service load (`f/F + g/G`) separate
+from phase-aware power load and hard-fails outside the calibrated `(f,g)` hull.
+
+```bash
+uv run python phase_power_calibration.py prepare --out /datadrive/queue-haul-network/phase-power-v1
+uv run python phase_power_calibration.py run --plan /datadrive/queue-haul-network/phase-power-v1/plan.json --profile profiles/gpt_oss_20b_a100_tp1_azure_300w.json --out /datadrive/queue-haul-network/phase-power-v1/run
+uv run python phase_power_calibration.py fit --base-profile profiles/gpt_oss_20b_a100_tp1_azure_300w.json --measurements /datadrive/queue-haul-network/phase-power-v1/run/measurements.csv --idle-power-w 98.11623555 --out-profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --summary outputs/azure-calibration/power-summary.json
+uv run python testbed_calibration_campaign.py prepare --parent outputs/east-germany-separation-20260809/plan.json --out outputs/azure-calibration/testbed-plan.json
+```
+
+`evidence_catalog.py` writes an immutable-raw, checksum-bound sidecar at
+`/datadrive/queue-haul-network/evidence-catalog.json`. Existing
+`realized_shed_w` hardware-gap fields are cataloged as `model_credited`;
+`trailing-power` separately derives direct five-second Sweden power windows.
+The final `stress_frontier_campaign.py` plan contains 40 equal-weight states and
+runs Queue-Haul, six baselines, and the exact modeled MILP optimum independently
+at 10--60 second deadlines. Reduction uses the fifth-smallest of 40 values and
+automatically retains the title “Modeled stress-suite sensitivity” until every
+power, timing, correctness, provenance, transition, and hardware-window gate
+passes.
+
+```bash
+uv run python stress_frontier_campaign.py prepare --parent outputs/east-germany-separation-20260809/plan.json --profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --out outputs/azure-calibration/stress-plan.json
+uv run python stress_frontier_campaign.py run --plan outputs/azure-calibration/stress-plan.json --shard 0 --shards 40 --out outputs/azure-calibration/stress-00.csv
+uv run python stress_frontier_campaign.py reduce --results outputs/azure-calibration/stress-*.csv --profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --power-summary outputs/azure-calibration/power-summary.json --destination-summary outputs/azure-calibration/destination-summary.json --trailing-power /datadrive/queue-haul-network/hardware-gap-001/trailing_power.csv --catalog /datadrive/queue-haul-network/evidence-catalog.json --out outputs/azure-calibration/frontier.json
+```
+
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
 single-link campaigns plus the successful `handoff-009` and bidirectional-cache
 `handoff-010` three-node evidence, including raw 100-ms power, request,

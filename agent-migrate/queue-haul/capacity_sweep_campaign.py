@@ -130,7 +130,7 @@ def _scenario(profile, goodput_mbps: float) -> ExecutionScenario:
     ) for index, context in enumerate(CONTEXTS))
     case = profile.case()
     return ExecutionScenario(
-        PLANNER_DEADLINE_S, PLANNER_DEADLINE_S, case.power_curve.power(0),
+        PLANNER_DEADLINE_S, PLANNER_DEADLINE_S, case.power(0),
         "awake", 0,
         (PowerNode("source-node", 1, True),
          PowerNode("destination-node", 1, False)),
