@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import migration_profiler as profiler
+import plot_style
 from destination import dedicated_sink_architecture
 from migration import ORDERED_EAGER_PARALLEL_V1
 from planner import _duration, plan
@@ -54,41 +55,15 @@ NETWORK_BASELINES = (
 )
 RERUN_POLICIES = ("queue_haul", "greedy", *NETWORK_BASELINES)
 DEADLINE_BLIND_HORIZON_S = 600
+CDF_POLICIES = plot_style.POLICIES
+TAB10_COLORS = CDF_COLORS = plot_style.POLICY_COLORS
 PACKING_POLICIES = (
     "queue_haul", "greedy", "isolated_fastest", "kv_only", "replay_only",
 )
-LABELS = {
-    "queue_haul": "QH choice/order", "greedy": "Greedy choice/order",
-    "greedy_lagrangian": "Lagrangian greedy choice/order",
-    "isolated_fastest": "Per-session fastest", "random": "Random choice/order",
-    "kv_only": "KV only", "replay_only": "Replay only",
-    "queue_haul_power_blind": "Power blind",
-    "queue_haul_deadline_blind": "Deadline blind",
-}
-CDF_COLORS = {
-    "queue_haul": "#B1040E", "greedy": "#008566",
-    "greedy_lagrangian": "#620059",
-    "isolated_fastest": "#5E3C99",
-    "kv_only": "#006CB8", "replay_only": "#E98300",
-    "queue_haul_power_blind": "#CC79A7",
-    "queue_haul_deadline_blind": "#56B4E9",
-}
-CDF_LABELS = {
-    "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
-    "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
-    "isolated_fastest": "Per-session fastest",
-    "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
-    "queue_haul_power_blind": "Queue-Haul Power Blind",
-    "queue_haul_deadline_blind": "Queue-Haul Deadline Blind",
-}
-CDF_LINESTYLES = {
-    "queue_haul": "-", "greedy": "--", "greedy_lagrangian": (0, (3, 1, 1, 1)),
-    "isolated_fastest": (0, (5, 1)),
-    "kv_only": "-.", "replay_only": ":",
-    "queue_haul_power_blind": (0, (3, 1)),
-    "queue_haul_deadline_blind": (0, (1, 1)),
-}
-CDF_FIGSIZE = (5, 4)
+LABELS = CDF_LABELS = plot_style.POLICY_NAMES
+CDF_LINESTYLES = plot_style.POLICY_LINESTYLES
+CDF_FIGSIZE = plot_style.COMPACT_FIGSIZE
+plot_style.apply()
 
 
 def _portable_path(path: Path) -> str:
@@ -892,39 +867,40 @@ def plot_max_session_ttft_per_watt(rows, summaries, power_curve, out):
 
 def plot_full_power_attainment(summaries, power_window_s, out,
                                deadline_s=30):
-    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
-    for policy in POLICIES:
+    fig, ax = plt.subplots(figsize=plot_style.WIDE_FIGSIZE)
+    for policy in CDF_POLICIES:
         x, y = full_power_attainment_curve(
             summaries, policy, deadline_s, power_window_s
         )
         if len(x):
-            ax.step(
-                x, y, where="post", color=CDF_COLORS[policy],
-                linestyle=CDF_LINESTYLES[policy], linewidth=3,
-                label=CDF_LABELS[policy],
-            )
+            ax.step(x, y, where="post", **plot_style.policy_style(policy))
     ax.axvline(deadline_s, color="black", linestyle="--", linewidth=1.5)
     ax.text(
-        deadline_s, 1.01, f"{deadline_s:g} s Deadline",
-        transform=ax.get_xaxis_transform(), ha="center", va="bottom",
-        fontsize=11,
+        deadline_s, .4, f"{deadline_s:g} s deadline",
+        transform=ax.get_xaxis_transform(), ha="center", va="center",
+        rotation=90, fontstyle="italic",
+        fontsize=plot_style.LARGE_ANNOTATION_FONT_SIZE,
+        bbox={"facecolor": "white", "edgecolor": "none", "pad": 1},
     )
     ax.set(
         xlabel="Time to Full Power-Shed Attainment (s)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.set_xlim(left=0)
-    ax.tick_params(labelsize=15)
-    ax.xaxis.label.set_size(15)
-    ax.yaxis.label.set_size(15)
+    ax.set_xlim(0, 3 * deadline_s)
+    ax.tick_params(labelsize=plot_style.LARGE_FONT_SIZE)
+    ax.xaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
+    ax.yaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
     ax.grid(alpha=.25)
-    if ax.get_legend_handles_labels()[0]:
-        ax.legend(frameon=False, fontsize=11, loc="lower right")
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(handles, labels, loc="lower right", framealpha=1,
+                  facecolor="white", edgecolor="none",
+                  fontsize=plot_style.LARGE_LEGEND_FONT_SIZE)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
             out / f"policy_hardware_{deadline_s:g}s_full_power_attainment_cdf.{suffix}",
-            dpi=220,
+            dpi=plot_style.SAVE_DPI,
         )
     plt.close(fig)
 
@@ -938,7 +914,6 @@ def plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out):
         math.ceil(len(values) / 2), 2, figsize=(12, 3.8 * math.ceil(len(values) / 2)),
         sharex=True, sharey=True, squeeze=False,
     )
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     for ax, value in zip(axes.flat, values):
         ids = {key for key, item in bandwidth.items() if item == value}
         selected_rows = [row for row in rows if row["scenario_id"] in ids]
@@ -952,7 +927,7 @@ def plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out):
             if len(x):
                 ax.step(
                     np.r_[0, x], np.r_[0, y], where="post",
-                    color=colors[policy], label=LABELS[policy],
+                    color=TAB10_COLORS[policy], label=LABELS[policy],
                 )
         ax.set(
             title=f"{value / 1000:g} Gbit/s",
@@ -976,7 +951,6 @@ def plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out):
 
 
 def plot_power_shed(rows, summaries, power_curve, out):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     times = np.asarray(sorted({
         0, *(float(row["reaction_commit_s"]) for row in rows)
     }))
@@ -988,11 +962,11 @@ def plot_power_shed(rows, summaries, power_curve, out):
             rows, summaries, policy, power_curve, times
         )
         ax.step(
-            times, median, where="post", color=colors[policy],
+            times, median, where="post", color=TAB10_COLORS[policy],
             label=LABELS[policy],
         )
         ax.fill_between(
-            times, low, high, step="post", color=colors[policy], alpha=.12
+            times, low, high, step="post", color=TAB10_COLORS[policy], alpha=.12
         )
     ax.set(
         title="Pooled episodes (median; shaded IQR)",
@@ -1122,7 +1096,6 @@ def pareto_points(attainment, summaries):
 
 
 def plot_hardware_pareto(attainment, summaries, out):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     points = pareto_points(attainment, summaries)
     fig, ax = plt.subplots(figsize=(6.4, 4.4))
     for policy in POLICIES:
@@ -1133,7 +1106,7 @@ def plot_hardware_pareto(attainment, summaries, out):
         ax.scatter(
             [row["shed_percent"] for row in selected],
             [row["deadline_fraction"] for row in selected],
-            color=colors[policy], alpha=.45, s=28,
+            color=TAB10_COLORS[policy], alpha=.45, s=28,
             label=f"{LABELS[policy]} ({count}/{len(selected)} frontier)",
             zorder=len(POLICIES) - POLICIES.index(policy),
         )
@@ -1229,7 +1202,7 @@ def validate_run(run_root: Path, expected_episodes=120,
     expected_rows = expected_episodes * len(policies)
     if len(summaries) != expected_rows \
             or {row["scenario_id"] for row in summaries} != scenario_ids \
-            or len(attainment) != expected_rows \
+            or len(attainment) != expected_episodes \
             or {row["scenario_id"] for row in attainment} != scenario_ids \
             or any(row["status"] != "complete"
                    or row["completed_migrations"] != row["planned_migrations"]
@@ -1333,18 +1306,19 @@ def common_packing_comparison(packing: Path, baseline: Path, out: Path):
     return classified
 
 
-def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
+def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=(),
+                 cdf_policies=CDF_POLICIES):
     paths = (out, *pooled_with)
     rows, summaries = _pooled_results(paths)
     attainment = _pooled_csv(paths, "policy_attainment.csv")
     scenarios = sum((json.loads((path / "plan.json").read_text())["scenarios"]
                      for path in paths), [])
-    plot(rows, summaries, out, "pooled")
+    plot(rows, summaries, out, "pooled", cdf_policies)
     plot_attainment(attainment, out, "pooled")
     for condition in sorted({row["condition"] for row in summaries}):
         plot([row for row in rows if row["condition"] == condition],
              [row for row in summaries if row["condition"] == condition],
-             out, condition)
+             out, condition, cdf_policies)
         plot_attainment(
             [row for row in attainment if row["condition"] == condition],
             out, condition,
@@ -1416,10 +1390,9 @@ def plot_timeline(rows, out):
     plt.close(fig)
 
 
-def plot(rows, summaries, out, cohort=None):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+def plot(rows, summaries, out, cohort=None, policy_order=CDF_POLICIES):
     fig, axes = plt.subplots(1, 3, figsize=(13, 4))
-    policies = [policy for policy in POLICIES
+    policies = [policy for policy in policy_order
                 if any(row["policy"] == policy for row in summaries)]
     for policy in policies:
         for ax, field in zip(
@@ -1429,7 +1402,7 @@ def plot(rows, summaries, out, cohort=None):
             x, y = completion_curve(rows, summaries, policy, field)
             ax.step(
                 np.r_[0, x], np.r_[0, y],
-                where="post", color=colors[policy], label=LABELS[policy],
+                where="post", **plot_style.policy_style(policy),
             )
     axes[0].set_title("Controller queue → first token")
     axes[1].set_title("Destination TTFT")
@@ -1453,7 +1426,6 @@ def plot(rows, summaries, out, cohort=None):
 
 
 def plot_attainment(rows, out, condition=None):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     deadlines = sorted({float(row["required_deadline_s"]) for row in rows})
     fig, axes = plt.subplots(
         1, len(deadlines), figsize=(4.4 * len(deadlines), 4), squeeze=False
@@ -1469,7 +1441,7 @@ def plot_attainment(rows, out, condition=None):
             if values:
                 ax.step(
                     values, np.arange(1, len(values) + 1) / len(values),
-                    where="post", color=colors[policy], label=LABELS[policy],
+                    where="post", color=TAB10_COLORS[policy], label=LABELS[policy],
                 )
         ax.set(
             title=f"{deadline:g} s requirement",
@@ -1524,6 +1496,8 @@ def parse_args(argv=None):
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL)
     command.add_argument("--pooled-with", type=Path, nargs="*", default=())
+    command.add_argument("--cdf-policies", nargs="+", choices=CDF_POLICIES,
+                         default=CDF_POLICIES)
     command = sub.add_parser("validate")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--expected-episodes", type=int, default=120)
@@ -1557,7 +1531,8 @@ def main(argv=None):
     elif args.command == "reduce":
         reduce_run(args.run_root, args.out)
     elif args.command == "plot-reduced":
-        plot_reduced(args.out, args.model_profile, args.pooled_with)
+        plot_reduced(args.out, args.model_profile, args.pooled_with,
+                     args.cdf_policies)
     elif args.command == "validate":
         validate_run(args.run_root, args.expected_episodes, args.policies)
     else:

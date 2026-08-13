@@ -14,13 +14,18 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-COLORS = {"sweden": "#8C1515", "east": "#006CB8",
-          "west": "#008566", "germany": "#008566"}
+TAB10 = plt.get_cmap("tab10").colors
+COLORS = {"sweden": TAB10[0], "east": TAB10[1],
+          "west": TAB10[2], "germany": TAB10[2]}
 REGIONS = {"sweden": "sweden-central", "east": "eastus-2",
            "west": "west-europe", "germany": "germany-west-central"}
-SPANS = (("Migration", "handoff_start", "handoff_end", "#DAD7CB", .5),)
+SPANS = (
+    ("Migration", "handoff_start", "handoff_end", "#BCBD22", .12),
+    ("Barrier", "traffic_switched", "source_drained", "#7F7F7F", .18),
+    ("Sleep", "sleep_start", "sleep_ready", "#9467BD", .12),
+)
 BIN_S = .5
-IDLE_MARGIN_W = 5
+TDP_W = 300
 
 
 def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
@@ -42,7 +47,7 @@ def bin_mean(points: list[tuple[float, float]]) -> tuple[list[float], list[float
 
 def style(axis, xlim: tuple[float, float], ylabel: str) -> None:
     axis.set_xlim(*xlim)
-    axis.set_ylabel(ylabel, size=16)
+    axis.set_ylabel(ylabel, size=14)
     axis.tick_params(labelsize=14)
     axis.grid(alpha=.25)
     for spine in axis.spines.values():
@@ -56,8 +61,11 @@ def reduce(run_root: Path) -> list[dict]:
              "post": ("post_start", "post_end")}
     if "traffic_switched" in phases:
         names["post"] = ("sleep_ready", "post_end")
-        names |= {"migration": ("handoff_start", "handoff_end"),
-                  "source_fall": ("traffic_switched", "sleep_ready")}
+        names |= {
+            "migration": ("handoff_start", "handoff_end"),
+            "barrier": ("traffic_switched", "source_drained"),
+            "sleep": ("sleep_start", "sleep_ready"),
+        }
     windows = {name: ((phases[start]["wall_ns"] - base) / 1e9,
                       (phases[end]["wall_ns"] - base) / 1e9)
                for name, (start, end) in names.items()}
@@ -75,7 +83,7 @@ def reduce(run_root: Path) -> list[dict]:
                          "mean_power_w": statistics.fmean(values),
                          "median_power_w": statistics.median(values)})
     with (run_root / "power_summary.csv").open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=rows[0])
+        writer = csv.DictWriter(handle, fieldnames=rows[0], lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     if result.get("schema") == "queue-haul-three-node-handoff-v2":
@@ -98,38 +106,36 @@ def reduce(run_root: Path) -> list[dict]:
                     "max_waiting": max(float(row["vllm:num_requests_waiting"]) for row in selected),
                 })
         with (run_root / "queue_summary.csv").open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=queue[0])
+            writer = csv.DictWriter(
+                handle, fieldnames=queue[0], lineterminator="\n"
+            )
             writer.writeheader()
             writer.writerows(queue)
 
     marker = {name: (phase["wall_ns"] - base) / 1e9
               for name, phase in phases.items()}
-    idle_w = next(row["median_power_w"] for row in rows
-                  if row["node"] == "sweden" and row["phase"] == "post")
-    idle_s = next(seconds for seconds, watts in zip(*bin_mean(power["sweden"]))
-                  if seconds >= marker["traffic_switched"]
-                  and watts <= idle_w + IDLE_MARGIN_W)
-    xlim = (0, marker["post_end"])
+    plot_start, plot_end = marker["handoff_start"], marker["sleep_ready"]
     plt.style.use("default")
     figure, axis = plt.subplots(figsize=(9, 4))
     for node, points in power.items():
-        axis.plot(*bin_mean(points), lw=1.5,
+        x, y = bin_mean(points)
+        selected = [(seconds - plot_start, 100 * watts / TDP_W)
+                    for seconds, watts in zip(x, y)
+                    if plot_start <= seconds <= plot_end]
+        axis.plot(*zip(*selected), lw=2,
                   color=COLORS[node], label=REGIONS[node])
-    for label, start, end, color, alpha in SPANS:
-        if start in marker and end in marker:
-            axis.axvspan(marker[start], marker[end], color=color, alpha=alpha,
-                         label=label)
-    for name in ("handoff_start", "handoff_end"):
-        if name in marker:
-            axis.axvline(marker[name], color="black", lw=.7, ls=":")
+    for label, span_start, span_end, color, alpha in SPANS:
+        if span_start in marker and span_end in marker:
+            axis.axvspan(marker[span_start] - plot_start,
+                         marker[span_end] - plot_start,
+                         color=color, alpha=alpha, label=label)
     if "traffic_switched" in marker:
-        axis.axvline(marker["traffic_switched"], color="#007C92", lw=1.5,
-                    ls="--", label="Switch")
-        axis.axvspan(marker["traffic_switched"], idle_s, color="#6F4E7C",
-                    alpha=.12, label="Shutdown flush")
-    style(axis, xlim, "Power per GPU (W)")
-    axis.set_xlabel("Time (s)", size=16)
-    axis.legend(frameon=False, fontsize=13, loc="upper center",
+        axis.axvline(marker["traffic_switched"] - marker["handoff_start"],
+                    color="#D62728", lw=1.5, ls="--",
+                    label="Switch")
+    style(axis, (0, plot_end - plot_start), "Normalized Power (%)")
+    axis.set_xlabel("Time since migration began (s)", size=16)
+    axis.legend(frameon=False, fontsize=14, loc="upper center",
                 bbox_to_anchor=(.5, -.2), ncol=3)
     figure.tight_layout()
     for suffix in ("png", "pdf"):

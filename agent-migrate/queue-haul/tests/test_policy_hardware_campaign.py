@@ -16,6 +16,8 @@ Plausible wrong implementations:
 - Drop failed full-target episodes or forget the trailing power window.
 - Clip full-target completions at the deadline instead of extending the CDF.
 - Mix 19-second plans into the 30-second attainment curve.
+- Retain bespoke colors or the default size in the full-attainment CDF.
+- Put the full-attainment legend outside the axes or across a plotted line.
 - Plot destination-only prefill instead of migration-to-first-token latency.
 - Average or pool migrations instead of taking each complete episode's maximum.
 - Divide by a shed percentage or linear load instead of modeled watts.
@@ -42,6 +44,7 @@ import numpy as np
 import pytest
 
 import policy_hardware_campaign as campaign
+import plot_style
 from migration import ORDERED_EAGER_PARALLEL_V1
 from policy_hardware_campaign import (
     CDF_COLORS,
@@ -506,14 +509,17 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     )["matched_control_complete"]
 
 
-def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
+def test_plot_selects_only_requested_pooled_policies(
         tmp_path, monkeypatch):
     rows = [
         {"policy": policy, "reaction_readiness_s": ready,
          "migration_ttft_s": ttft, "reaction_commit_s": commit}
         for policy, ready, ttft, commit in (
             ("queue_haul", 10, 1, 11), ("greedy", 9, 2, 12),
+            ("isolated_fastest", 8, 1.5, 10),
             ("kv_only", 11, 3, 14), ("replay_only", 12, 4, 16),
+            ("queue_haul_power_blind", 13, 5, 18),
+            ("queue_haul_deadline_blind", 14, 6, 20),
             ("random", 100, 100, 100),
         )
     ]
@@ -522,20 +528,31 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
          "realized_source_power_drop_w": power}
         for policy, power in (
             ("queue_haul", 300), ("greedy", 200),
+            ("isolated_fastest", 275),
             ("kv_only", 250), ("replay_only", 150), ("random", 400),
+            ("queue_haul_power_blind", 225),
+            ("queue_haul_deadline_blind", 175),
         )
     ]
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
 
-    campaign.plot(rows, summaries, tmp_path)
+    selected = (
+        "queue_haul", "isolated_fastest", "queue_haul_power_blind",
+        "queue_haul_deadline_blind",
+    )
+    campaign.plot(rows, summaries, tmp_path, policy_order=selected)
 
     figure = campaign.plt.gcf()
     assert [text.get_text() for text in figure.legends[0].texts] == [
-        campaign.LABELS["queue_haul"], campaign.LABELS["greedy"],
-        campaign.LABELS["kv_only"], campaign.LABELS["replay_only"],
+        campaign.LABELS["queue_haul"], campaign.LABELS["isolated_fastest"],
+        campaign.LABELS["queue_haul_power_blind"],
+        campaign.LABELS["queue_haul_deadline_blind"],
     ]
     assert len(figure.axes[1].lines) == 4
-    assert figure.axes[1].get_xlim()[1] < 5
+    assert figure.axes[1].get_xlim()[1] < 7
+    assert [line.get_color() for line in figure.axes[1].lines] == [
+        campaign.CDF_COLORS[policy] for policy in selected
+    ]
 
 
 def test_deadline_attainment_uses_episode_target_and_inclusive_deadline():
@@ -599,7 +616,7 @@ def test_common_packing_chart_uses_120_matched_rows_and_five_point_band(
         "replay_only": (0, 120, 0),
     }
     labels = [row.get_text() for row in campaign.plt.gcf().axes[0].get_yticklabels()]
-    assert labels[2] == "Per-session fastest (n=120)"
+    assert labels[2] == "True Greedy (n=120)"
     assert (out / "policy_hardware_common_packing.pdf").exists()
 
 
@@ -620,23 +637,41 @@ def test_full_power_attainment_includes_late_events_and_power_window():
     assert y.tolist() == [0, .25, .5, .75]
 
 
-def test_full_power_attainment_marks_deadline_and_moves_legend(
+def test_full_power_attainment_uses_all_cases_and_requested_layout(
         tmp_path, monkeypatch):
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
-    campaign.plot_full_power_attainment([{
-        "policy": "queue_haul", "required_deadline_s": 30,
-        "commit_100_s": 5,
-    }], 5, tmp_path)
+    campaign.plot_full_power_attainment([
+        {"policy": policy, "required_deadline_s": 30, "commit_100_s": 5}
+        for policy in campaign.CDF_POLICIES
+    ], 5, tmp_path)
 
-    ax = campaign.plt.gcf().axes[0]
+    figure = campaign.plt.gcf()
+    ax = figure.axes[0]
     legend = ax.get_legend()
     assert [text.get_text() for text in legend.texts] \
-        == [CDF_LABELS["queue_haul"]]
+        == [CDF_LABELS[policy] for policy in campaign.CDF_POLICIES]
+    assert not figure.legends
+    assert legend._ncols == 1
     assert legend._loc == 4
+    assert legend.get_frame().get_alpha() == 1
+    assert tuple(figure.get_size_inches()) == (8, 4)
+    assert ax.xaxis.label.get_fontsize() == 17
+    assert legend.get_texts()[0].get_fontsize() == 12
+    assert [line.get_color() for line in ax.lines[:-1]] \
+        == [CDF_COLORS[policy] for policy in campaign.CDF_POLICIES]
+    assert len({str(CDF_LINESTYLES[policy])
+                for policy in campaign.CDF_POLICIES}) == len(campaign.CDF_POLICIES)
+    figure.canvas.draw()
+    box = legend.get_window_extent(figure.canvas.get_renderer()).expanded(1.02, 1.08)
+    assert not any(line.get_path().transformed(line.get_transform())
+                   .intersects_bbox(box, filled=False) for line in ax.lines)
     assert list(ax.lines[-1].get_xdata()) == [30, 30]
     assert ax.lines[-1].get_linestyle() == "--"
-    assert [text.get_text() for text in ax.texts] == ["30 s Deadline"]
-    assert ax.texts[0].get_position() == (30, 1.01)
+    assert [text.get_text() for text in ax.texts] == ["30 s deadline"]
+    assert ax.texts[0].get_position() == (30, .4)
+    assert ax.texts[0].get_rotation() == 90
+    assert ax.texts[0].get_fontstyle() == "italic"
+    assert ax.texts[0].get_fontsize() == 13
 
 
 def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
@@ -659,30 +694,10 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     assert ax.get_title() == ""
     assert ax.get_xlabel() == "Migration + Destination TTFT (s)"
     assert ax.get_ylabel() == "Cumulative Distribution"
-    assert CDF_COLORS == {
-        "queue_haul": "#B1040E", "greedy": "#008566",
-        "greedy_lagrangian": "#620059",
-        "isolated_fastest": "#5E3C99",
-        "kv_only": "#006CB8", "replay_only": "#E98300",
-        "queue_haul_power_blind": "#CC79A7",
-        "queue_haul_deadline_blind": "#56B4E9",
-    }
-    assert CDF_LABELS == {
-        "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
-        "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
-        "isolated_fastest": "Per-session fastest",
-        "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
-        "queue_haul_power_blind": "Queue-Haul Power Blind",
-        "queue_haul_deadline_blind": "Queue-Haul Deadline Blind",
-    }
-    assert CDF_LINESTYLES == {
-        "queue_haul": "-", "greedy": "--",
-        "greedy_lagrangian": (0, (3, 1, 1, 1)),
-        "isolated_fastest": (0, (5, 1)),
-        "kv_only": "-.", "replay_only": ":",
-        "queue_haul_power_blind": (0, (3, 1)),
-        "queue_haul_deadline_blind": (0, (1, 1)),
-    }
+    assert CDF_COLORS is plot_style.POLICY_COLORS
+    assert CDF_LABELS is plot_style.POLICY_NAMES
+    assert CDF_LINESTYLES is plot_style.POLICY_LINESTYLES
+    assert CDF_LABELS["isolated_fastest"] == "True Greedy"
 
 
 def test_max_session_ttft_uses_slowest_session_in_each_complete_episode(
