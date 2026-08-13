@@ -206,15 +206,15 @@ def write_plot(rows: list[dict], scale: float, out: Path) -> None:
         )
     axis.text(.03, .95, "Overshed", transform=axis.transAxes, va="top")
     axis.text(.97, .05, "Undershed", transform=axis.transAxes, ha="right")
-    axis.set(xlabel="Planner-predicted shed (% of max request)",
-             ylabel="Measured shed (% of max request)",
+    axis.set(xlabel="Phase-aware predicted shed (% of max prediction)",
+             ylabel="Measured shed (% of max prediction)",
              xlim=limits, ylim=limits)
     axis.set_aspect("equal", adjustable="box")
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, fontsize=9,
                loc="center left", bbox_to_anchor=(.66, .54))
-    fig.text(.98, .02, f"Maximum request = {scale:.1f} W; {len(rows)} episodes",
+    fig.text(.98, .02, f"Maximum prediction = {scale:.1f} W; {len(rows)} episodes",
              ha="right", fontsize=9)
     fig.subplots_adjust(left=.13, right=.65, bottom=.15, top=.97)
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,13 @@
-"""Direct source-power parity must use raw, settled trace windows."""
+"""
+Claim:
+Power parity compares settled measured shed with phase-aware predicted shed
+using one common normalization.
+
+Plausible wrong implementations:
+- Plot the legacy utilization-only prediction.
+- Normalize prediction and measurement with different maxima.
+- Label the phase-aware prediction as the planner's old power estimate.
+"""
 
 import csv
 
@@ -87,6 +96,8 @@ def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
     axis = plt.gcf().axes[0]
     assert axis.lines[0].get_xdata().tolist() == axis.lines[0].get_ydata().tolist()
     assert axis.get_xlim() == axis.get_ylim()
+    assert axis.get_xlabel() == \
+        "Phase-aware predicted shed (% of max prediction)"
     assert len(axis.collections) == len(METHODS)
     assert all(len(collection.get_offsets()) == 2 for collection in axis.collections)
     assert {text.get_text() for text in axis.texts} >= {"Overshed", "Undershed"}

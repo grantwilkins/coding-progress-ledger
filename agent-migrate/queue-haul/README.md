@@ -900,6 +900,8 @@ same observations for fitting and parity, so it is not held-out evidence. Its
 shed regression has a 0.997 through-origin slope, effectively zero aggregate
 bias, and 8.66 W RMSE; grouped five-fold episode cross-validation retains a
 0.999 slope, 0.11 W bias, and 8.78 W RMSE. The CSV preserves all policy repeats.
+The parity x-axis reports shed from the fitted
+`P0 + delta_p * z / (1 + z)` model with `z = a*f + b*g`.
 
 Reduction runs automatically and can also be repeated without hardware:
 
