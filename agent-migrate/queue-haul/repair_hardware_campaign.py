@@ -45,7 +45,7 @@ from repair_plan_shift_campaign import (
 
 
 ROOT = Path(__file__).parent
-SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v4"
+SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v5"
 RESULT_SCHEMA = "queue-haul-scheduled-repair-hardware-result-v2"
 REPEATS = 3
 CALIBRATION_CONTEXTS = (1536, 7680, 32256)
@@ -361,8 +361,11 @@ def _timing_summary(rows: list[dict], gate: dict, template: dict) -> dict:
             bandwidth = [row["bandwidth_mbps"] * 125_000 for row in rows
                          if row["node"] == node]
             if bandwidth:
+                supported = component["bandwidth_range_bytes_per_s"]
                 component["bandwidth_range_bytes_per_s"] = [
-                    min(bandwidth), max(bandwidth)]
+                    min(supported[0], *bandwidth),
+                    max(supported[1], *bandwidth),
+                ]
             component["allow_extrapolation"] = False
             component["provenance"] += (
                 "; live 0.1x fit on contexts "

@@ -14,6 +14,7 @@ import json
 import pytest
 
 import repair_hardware_campaign as campaign
+from destination import MigrationComponents
 
 
 def test_ttft_uses_request_start_and_first_content_token():
@@ -205,3 +206,26 @@ def test_planning_uses_effective_ceiling_until_raw_path_is_cut():
         assert natural[node] == min(raw[node], ceiling)
     assert cut["east"] == pytest.approx(raw["east"] * campaign.CUT_SCALE)
     assert cut["germany"] == natural["germany"]
+
+
+def test_timing_fit_extends_support_to_single_live_bandwidth():
+    template = campaign._template(json.loads(campaign.DEFAULT_PARENT.read_text()))
+    original = template["migration_components"]["east"]["replay"][
+        "bandwidth_range_bytes_per_s"]
+    gate = {
+        "contexts": list(campaign.CALIBRATION_CONTEXTS),
+        "repeats": campaign.REPEATS,
+        "absolute_error_s": 1,
+        "relative_error": .15,
+        "error_rule": "absolute_or_relative",
+    }
+    rows = _synthetic_timing_rows()
+    live = min(row["bandwidth_mbps"] * 125_000 for row in rows
+               if row["node"] == "east")
+
+    summary = campaign._timing_summary(rows, gate, template)
+    fitted = summary["fits"]["east"]["migration_components"]["replay"]
+
+    assert fitted["bandwidth_range_bytes_per_s"] == [
+        min(original[0], live), max(original[1], live)]
+    MigrationComponents(**fitted)
