@@ -31,6 +31,10 @@ POLICY_LINESTYLES = dict(zip(POLICIES, (
     "-", "--", (0, (3, 1, 1, 1)), (0, (5, 1)), "-.", ":",
     (0, (3, 1)), (0, (1, 1)),
 )))
+REFERENCE = "exact_modeled_milp_optimum"
+POLICY_NAMES[REFERENCE] = "Exact modeled MILP optimum"
+POLICY_COLORS[REFERENCE] = "#000000"
+POLICY_LINESTYLES[REFERENCE] = "-"
 ACTION_NAMES = {
     "replay": "Replay", "kv_transfer": "KV transfer",
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",

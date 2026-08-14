@@ -102,6 +102,20 @@ def test_public_solver_surface_hard_fails_retired_greedies(tmp_path):
             )
 
 
+def test_exact_max_shed_uses_phase_power_load_not_candidate_credit():
+    sessions = (SimpleNamespace(session_id="prefill"),
+                SimpleNamespace(session_id="decode"))
+    candidates = tuple(Candidate(i, "replay", 0, 100 - i, 1, 1, (), 0, (0, 0), 0)
+                       for i in range(2))
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(2)), csr_matrix([[1, 1]]),
+        ("only-one",), (1,), ("count",), 1,
+    )
+    power = SimpleNamespace(route={"prefill": "source", "decode": "source"},
+                            ell={"prefill": .1, "decode": .9})
+    assert pool_planner._max_shed(table, power) == {1}
+
+
 def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):
     scenario = replace(problem(), sessions=(
         replace(problem().sessions[0], expected_f=5),
@@ -311,6 +325,14 @@ def test_clarabel_invalid_final_solution_falls_back_to_highs(
 
     assert pool_planner._lp(table, 3, stats) == expected
     assert called == [(table, 3, stats)]
+
+
+def test_clarabel_solver_error_falls_back_to_highs(monkeypatch):
+    table, expected = _hand_lp_table(), {1, 2}
+    monkeypatch.setattr(pool_planner.cp.Problem, "solve", lambda *args, **kwargs: (
+        _ for _ in ()).throw(pool_planner.cp.error.SolverError()))
+    monkeypatch.setattr(pool_planner, "_lp_highs", lambda *args: expected)
+    assert pool_planner._lp(table, 3) == expected
 
 @pytest.mark.parametrize("target, shortfall", ((3, 0), (4, 1)))
 def test_column_generation_matches_flat_lp_and_certifies_both_phases(

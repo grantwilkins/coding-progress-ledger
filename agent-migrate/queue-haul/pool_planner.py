@@ -120,7 +120,9 @@ def _destination_duration(session, method, case, path, links, horizon, component
         return route(_log_bytes(session, tokens)) \
             + components.compute_completion_factor * compute + case.switch_s
     size = case.kv_transfer.sealed_bytes(tokens)
-    return max(route(size), size / case.kv_transfer.destination_bytes_per_s) \
+    ingest = components.kv_ingest_bytes_per_s \
+        or case.kv_transfer.destination_bytes_per_s
+    return max(route(size), size / ingest) \
         + components.residual_s + _kv_catch_up_s(
         session, tokens, case, horizon,
     )
@@ -712,13 +714,13 @@ def _max_shed(table: CandidateTable, power: ExpectedPower):
             raise RuntimeError(f"maximum-shed MILP returned {result.message}")
         return result.x
 
+    # Any optimizer returned by the primary MILP is an exact maximum-shed
+    # reference.  A former second MILP minimized migration work while pinning
+    # the floating-point optimum to within 1e-9.  That cosmetic tie-break can
+    # take orders of magnitude longer to prove because HiGHS must reason about
+    # an almost-exact dense equality; it does not change the reference shed.
     maximum = optimize(-loads, base)
-    selected = optimize(
-        np.asarray([candidate.migration_work_s for candidate in table.candidates]),
-        (base, LinearConstraint(csr_matrix(loads.reshape(1, -1)),
-                                loads @ maximum - 1e-9, np.inf)),
-    )
-    return set(np.flatnonzero(selected > .5))
+    return set(np.flatnonzero(maximum > .5))
 
 
 def _scarcity_prices(table, matrix, eligible=None):
@@ -818,7 +820,9 @@ def _source_removed_gain(power, source, removed_load):
     if power.profile.power_scope == "gpu":
         return sum(
             power.slot_power[node][slot]
-            - power.case.power_curve.power(power.slots[node][slot] - share)
+            - (power.case.phase_power.power(power.slots[node][slot] - share)
+               if power.case.phase_power else
+               power.case.power_curve.power(power.slots[node][slot] - share))
             for node, slot in owned if power.nodes[node].local
         )
     slots = {}
@@ -1156,16 +1160,25 @@ def _lp(table: CandidateTable, target: float, stats=None):
     def solve(objective, constraints, maximize=False):
         nonlocal native_s, solves, iterations
         p = cp.Problem(cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints)
-        p.solve(solver=cp.CLARABEL)
+        try:
+            p.solve(solver=cp.CLARABEL)
+        except cp.error.SolverError:
+            return None
         native_s += p.solver_stats.solve_time or 0
         iterations += p.solver_stats.num_iters or 0
         solves += 1
         return p
     problem = solve(work @ x, base + [gains @ x >= target])
+    if problem is None:
+        return _lp_highs(table, target, stats)
     if problem.status in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE):
         problem = solve(gains @ x, base, True)
+        if problem is None:
+            return _lp_highs(table, target, stats)
         best = float(problem.value)
         problem = solve(work @ x, base + [gains @ x >= best - 1e-7])
+        if problem is None:
+            return _lp_highs(table, target, stats)
     values = None if x.value is None else np.asarray(x.value)
     if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) \
             or values is None or not np.isfinite(values).all():

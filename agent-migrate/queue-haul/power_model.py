@@ -11,13 +11,26 @@ class ExpectedPower:
         self.nodes = {n.node_id: n for n in scenario.nodes}
         self.instances = {i.instance_id: i for i in scenario.instances}
         self.sessions = {s.session_id: s for s in scenario.sessions}
+        if self.case.phase_power:
+            phase_by_instance = {i.instance_id: [0.0, 0.0] for i in scenario.instances}
+            for session in scenario.sessions:
+                phase_by_instance[session.source_instance][0] += session.expected_f
+                phase_by_instance[session.source_instance][1] += session.expected_g
+            outside = [instance for instance, rates in phase_by_instance.items()
+                       if not self.case.phase_power.contains(*rates)]
+            if outside:
+                raise ValueError(f"instance phase load outside calibrated hull: {outside}")
         self.ell = {
-            s.session_id: self.case.power_load(s.expected_f, s.expected_g)
+            s.session_id: (self.case.phase_power.load(s.expected_f, s.expected_g)
+                           if self.case.phase_power else
+                           s.expected_f / self.case.F + s.expected_g / self.case.G)
             for s in scenario.sessions
         }
         self.instance_load = {i.instance_id: 0.0 for i in scenario.instances}
         for session in scenario.sessions:
             self.instance_load[session.source_instance] += self.ell[session.session_id]
+        if max(self.instance_load.values(), default=0) > profile.max_power_load + 1e-9:
+            raise ValueError("instance power load exceeds calibrated range")
         self.slots = {n.node_id: [0.0] * n.gpus for n in scenario.nodes}
         used = {n.node_id: 0 for n in scenario.nodes}
         self.instance_slots = {}
@@ -39,7 +52,7 @@ class ExpectedPower:
         self.state = {node_id: "awake" for node_id in self.nodes}
         self.removed = set()
         self.slot_power = {
-            node_id: [self.case.power_curve.power(load) for load in loads]
+            node_id: [self._curve_power(load) for load in loads]
             for node_id, loads in self.slots.items()
         } if self.profile.power_scope == "gpu" else {}
         self.node_power = {node_id: self._power(node_id) for node_id in self.nodes}
@@ -48,20 +61,24 @@ class ExpectedPower:
             for local in (True, False)
         }
 
+    def _curve_power(self, load: float) -> float:
+        return (self.case.phase_power.power(load) if self.case.phase_power
+                else self.case.power_curve.power(load))
+
     def _power(self, node_id: str, slots=None, state=None) -> float:
         node = self.nodes[node_id]
         state = self.state[node_id] if state is None else state
         if state == "off":
             return 0.0
         if state == "sleep":
-            sleeping = self.case.power_curve.power(0) + self.case.sleep_power_delta_w
+            sleeping = self._curve_power(0) + self.case.sleep_power_delta_w
             return sleeping * (node.gpus if self.profile.power_scope == "gpu" else 1)
         if self.profile.power_scope == "gpu":
             if slots is None:
                 return sum(self.slot_power[node_id])
-            return sum(self.case.power_curve.power(load) for load in slots)
+            return sum(self._curve_power(load) for load in slots)
         slots = self.slots[node_id] if slots is None else slots
-        return self.case.power_curve.power(sum(slots))
+        return self._curve_power(sum(slots))
 
     def power(self, local: bool) -> float:
         return self.total[local]
@@ -80,11 +97,14 @@ class ExpectedPower:
 
     def _change_instance(self, instance_id: str, delta: float) -> None:
         owned = self.instance_slots[instance_id]
+        if not -1e-9 <= self.instance_load[instance_id] + delta \
+                <= self.profile.max_power_load + 1e-9:
+            raise ValueError("instance power load exceeds calibrated range")
         self.instance_load[instance_id] += delta
         for node_id, slot in owned:
             self.slots[node_id][slot] += delta / len(owned)
             if self.profile.power_scope == "gpu":
-                self.slot_power[node_id][slot] = self.case.power_curve.power(
+                self.slot_power[node_id][slot] = self._curve_power(
                     self.slots[node_id][slot]
                 )
 
@@ -130,12 +150,12 @@ class ExpectedPower:
                 after = self._power(node_id, state=self.scenario.final_state)
             elif self.profile.power_scope == "gpu":
                 after = sum(
-                    self.case.power_curve.power(changed[slot])
+                    self._curve_power(changed[slot])
                     if slot in changed else watts
                     for slot, watts in enumerate(self.slot_power[node_id])
                 )
             else:
-                after = self.case.power_curve.power(sum(
+                after = self._curve_power(sum(
                     changed.get(slot, load)
                     for slot, load in enumerate(self.slots[node_id])
                 ))

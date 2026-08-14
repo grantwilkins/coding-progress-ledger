@@ -1,0 +1,34 @@
+{
+  "artifact": "regional timing plus fixed-pack power Pareto simulation",
+  "claim": "modeled stress-suite sensitivity",
+  "empirical_hero_frontier": false,
+  "hardware": {
+    "source": "Sweden Azure A100 PCIe, 300 W cap",
+    "destinations": [
+      "East US 2",
+      "Germany West Central"
+    ]
+  },
+  "power": {
+    "evidence": "direct 5 s trailing-window measurements for recorded-28-seed-8",
+    "grouped_repeat_cv_mae_w": 9.712437711157138,
+    "gate_passed": false,
+    "interpretation": "pack-specific measured model with bootstrap sensitivity; not yet a transferable empirical power law"
+  },
+  "timing": {
+    "evidence": "108 reconstructed migrations from 54 East US 2 and 54 Germany West Central method-route-context repeats",
+    "holdout": "entire 32256-token context cell across route, method, and repeat",
+    "kv_payload_matches": "54/54",
+    "kv_holdout_mae_s": 0.46269777786111177,
+    "replay_holdout_mae_s": 0.44513171982986954,
+    "conservative_deadline_coverage": 1.0,
+    "gate_passed": true
+  },
+  "frontier": {
+    "states": 40,
+    "coverage_order_statistic": "fifth-smallest (90% suite coverage)",
+    "reference": "exact modeled MILP optimum",
+    "power_evidence_kind": "model_credited"
+  },
+  "schema": "queue-haul-artifact-label-v1"
+}

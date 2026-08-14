@@ -60,6 +60,39 @@ def test_mp_scenario_rejects_proxy_restart_and_mismatched_bandwidth(monkeypatch,
                        tmp_path, "run", configure_proxy=False)
 
 
+def test_power_validation_uses_settled_five_second_windows(monkeypatch, tmp_path):
+    clock, loads = [0.0], []
+
+    class Load:
+        def __init__(self, _cfg, _port, _prefill, rho, path):
+            self.rho, self.path, self.closed = rho, path, False
+            loads.append(self)
+
+        def start(self):
+            pass
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr("network_campaign.SinkLoad", Load)
+    monkeypatch.setattr(c.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(c.time, "monotonic_ns", lambda: round(clock[0] * 1e9))
+    before, after, close, windows = c.power_validation_hooks(
+        SimpleNamespace(src_port=1), tmp_path,
+        {"pre_load": .4, "post_load": .2, "prefill_tps": 100,
+         "settle_s": 5, "window_s": 5, "sample_interval_s": .25},
+    )
+
+    before()
+    after()
+    close()
+
+    assert [load.rho for load in loads] == [.4, .2]
+    assert all(load.closed for load in loads)
+    assert windows == {"pre_window_ns": [5_000_000_000, 10_000_000_000],
+                       "post_window_ns": [15_250_000_000, 20_250_000_000]}
+
+
 def test_shared_mp_csv_slice_contains_only_new_scenario_rows(tmp_path):
     source, destination = tmp_path / "shared.csv", tmp_path / "scenario.csv"
     source.write_text("time,value\n1,old\n")

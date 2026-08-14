@@ -15,7 +15,7 @@ contract, not an inferred GPU inventory.
 
 The repository contains:
 
-- raw GPT-OSS-20B/H100 NVL TP=1 service and GPU-power sweeps;
+- a measured GPT-OSS-20B/H100 NVL TP=1 occupancy and GPU-power curve;
 - working replay and compatible KV handoff on two A100s, with 24/24 serial and
   90/90 bounded-campaign migrations completing by their deadlines;
 - 105/105 passing bounded-campaign gates and 6/6 passing parallel-KV gates;
@@ -36,13 +36,11 @@ dedicated two-A100 migration claim.
 
 The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
 H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
-and 1,205,376 production KV-cache tokens. The checked-in 168.39 W power envelope
-uses offered prompt/output tokens as its load axis; overload points are not
-realized-work measurements, so it is an assumption rather than a validated H100
-power calibration. Admission remains bounded at service load `ell=0.96647`. Raw
-benchmark and power samples are under `outputs/h100-profile-20260811/`. Replay,
-KV-transfer, and transition timings are A100-derived estimates until rerun on
-H100.
+1,205,376 production KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
+and measured through offered load `ell=12.566`. Admission remains bounded at
+`ell=0.96647`. Raw benchmark and power samples are under
+`outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
+remain clearly marked A100-derived estimates until rerun on H100.
 
 The completed 72-scenario H100 hardware-gap campaign has no failed or missing
 runs. It scales the constrained East KV reserve to 96% of the measured
@@ -53,108 +51,6 @@ The reduced evidence and raw scenario attempts are retained in
 `outputs/east-germany-hardware-gap-h100-20260812/`, copied from node run root
 `/datadrive/queue-haul-network/hardware-gap-h100-002`. Its artifact manifest
 also addresses the uncommitted reusable stack logs.
-
-### H100 frontier model audit
-
-`frontier_model_audit.py` separates service load from diagnostic power load
-`ell = alpha*f + beta*g` and retrospectively replays all 304 completed scenarios.
-The 2026-08-14 fit fixes `alpha=1/F` and estimates `beta=0.000979`, reducing mixed-
-sweep RMSE from 11.61 W to 4.19 W. This fit is not installed in the production
-profile: `beta` falls from 0.00200 to 0.000979 as higher-rate mixed points are
-included, so the existing one-dimensional sweeps underidentify it.
-
-The recalibration lowers the median modeled 80%-of-removable target from 58.12 W
-to 40.73 W but leaves fixed-plan attainment at 26/304 by the deadline and 33/304
-eventually. Only 6/38 Queue-Haul conditions are model-feasible at that target.
-Timing is independently optimistic: scenario actual/predicted duration is 1.77x
-at median and 2.93x at p90, while replay is 3.17x at median. Nominal destination
-loads of 0.85--0.95 achieved only 0.41--0.44 in Australia East and about 0.51 in
-South Central US before migration. The plan's legacy destination ID `germany`
-maps to region `southcentralus`; no campaign destination was in Germany.
-
-Power attainment in this campaign is model-recomputed, not measured. Its source
-load is one independent generator, so a completed migration does not remove that
-session's physical source traffic. A clean rerun must use open-loop load with
-server-side completed-work counters and a hard achieved-load tolerance, route or
-stop per-session source traffic at commit, and sample aligned source/destination
-power windows. Before rerunning, profile replay and KV on H100 across both paths,
-8K/16K/24K/31K contexts, concurrency 1/2/4/8/16, and achieved load 0/0.5/0.8;
-record upload, network, queue, replay, KV, residual, and commit phases separately.
-Fit `alpha`, `beta`, and a monotone concave power curve on a two-dimensional
-prefill/decode grid and validate it on held-out agentic mixes.
-
-```bash
-QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python frontier_model_audit.py \
-  --run-root /datadrive/queue-haul-network/frontier-h100-width16-32tail-002 \
-  --manifest outputs/coding-manifest.json \
-  --profile profiles/gpt_oss_20b_h100_tp1.json \
-  --prefill-levels outputs/h100-profile-20260811/power-sweep-prefill/levels.json \
-  --mixed-levels outputs/h100-profile-20260811/power-sweep/levels.json \
-  --out outputs/frontier-h100-model-audit-20260814
-```
-
-The machine-readable summary and scenario, session-timing, destination-load,
-and exact-ceiling tables are in `outputs/frontier-h100-model-audit-20260814/`.
-
-### Live H100 timing calibration
-
-`live_timing_campaign.py` fits only measured regional transfers. The earlier
-broad retrospective model is diagnostic only: its eight-transfer live pilot
-failed because South Central US KV had 1.49x median lateness. The replacement
-uses 48 paired transfers: 8K/16K/24K/31K x Australia East/South Central US x
-replay/KV x three repeats. Repeats 0--1 fit the model and repeat 2 is held out.
-Each context/repeat has one deterministic prompt instance shared across its four
-randomized paths. The target is initial time to first streamed response (TTFR),
-not request completion. KV size is the sum of RESP GET payloads; GET-only data
-time and the wider EXISTS-plus-GET envelope are both retained.
-
-```bash
-QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py fit \
-  --run-root /datadrive/queue-haul-network/frontier-h100-width16-32tail-002 \
-  --out outputs/h100-live-timing-fit-20260814
-
-uv run python live_timing_campaign.py make-plan --stage pilot \
-  --manifest outputs/coding-manifest.json \
-  --cluster /datadrive/queue-haul-network/control/cluster-frontier-h100-a2d2a97f.json \
-  --out /datadrive/queue-haul-network/control/h100-live-timing-pilot.json
-
-uv run python live_timing_campaign.py validate \
-  --model outputs/h100-live-timing-fit-20260814/model.json \
-  --run-root /datadrive/queue-haul-network/h100-live-timing-pilot \
-  --out /datadrive/queue-haul-network/h100-live-timing-pilot/validation.json
-
-QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py make-plan \
-  --stage targeted --manifest outputs/coding-manifest.json \
-  --cluster CLUSTER.json --calibration CALIBRATION.json --out PLAN.json
-QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py run \
-  --plan PLAN.json --cluster CLUSTER.json --calibration CALIBRATION.json \
-  --run-root RUN_ROOT
-QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py refit-targeted \
-  --profile profiles/gpt_oss_20b_h100_tp1.json --run-root RUN_ROOT --out FIT_ROOT
-uv run python plot_live_timing_parity.py \
-  --source FIT_ROOT/holdout_predictions.csv \
-  --out outputs/h100_live_timing_parity
-uv run python plot_live_timing_parity.py \
-  --source FIT_ROOT/holdout_predictions.csv --model FIT_ROOT/model.json \
-  --profile FIT_ROOT/profile.json \
-  --history-run-root HISTORICAL_RUN_ROOT --log \
-  --out outputs/h100_live_timing_parity_all \
-  --queue-out outputs/h100_live_queue_makespan_parity
-```
-
-The fit hard-gates overall, every path, and every context at MdAPE <=10%, p90
-lateness <=1.2x, median bias 0.95--1.05x, at least 90% within 20%, and maximum
-lateness <=1.25x. It only emits `profile.json` and a regional
-`calibration.json` when all gates pass. Production runs must consume both
-(`QH_MODEL_PROFILE=FIT_ROOT/profile.json` and the fitted calibration); the
-profile rejects replay contexts outside 8192--31488. Do not run this campaign
-concurrently with another workload on the source H100.
-The parity plot pools the 16 unseen replay and KV holdouts on shared axes with
-an exact prediction-equals-measurement reference; calibration rows are excluded.
-The second command adds prior live transfers without refitting and uses log axes
-to expose whether the isolated model transfers to loaded, concurrent settings.
-Its queue plot sums isolated work on each regional action path and takes the
-critical path, matching the planner's serialized path-resource constraint.
 
 ## System boundary
 
@@ -867,66 +763,34 @@ uv run python power_rate_sweep.py --out PATH --window-s 20 --warmup-s 5 --worker
 uv run python power_rate_sweep.py --out PATH --reduce-only --prefill-capacity-tps 1448.32 --decode-capacity-tps 1260.38 --idle-power-w 98.11623555 --curve-max-rate 12
 ```
 
-That legacy runner derives load from requests started in the window, so its
-overload points are offered-demand diagnostics, not realized-work calibration.
-`power_model_campaign.py` instead measures complete synchronous batches between
-power-window boundaries and verifies their exact API token usage against vLLM's
-computed-prefill, generation, and cached-token counters. It randomizes a
-discovery grid spanning pure-prefill,
-decode-heavy, exact 604/64-token campaign, and agentic mixes across concurrency
-1/2/4/8/16, then tests unseen contexts and concurrency 3/6/12. The fit remains
-uncalibrated unless its held-out error, per-family error, coefficient stability,
-replicate stability, R2, and zero-cache gates all pass. Run it as a background
-unit that owns the vLLM server lifecycle:
-
-The fitted link is explicitly
-`P = P0 + A*z/(1+z)`, where `z = alpha*f + beta*g`; the saved alpha and beta
-already include the saturation scale. No exponential link or extra knee is
-part of this model. The fit artifact also reports whether a normalized `f*g`
-term reduces residual RMSE on discovery and confirmation cells; that term is
-diagnostic and is not silently added to the accepted base model.
+The scalar Azure curve remains estimated evidence. The promotion campaign uses
+`phase_power_calibration.py` to measure five prefill/decode mixtures at six load
+levels and three repeats, fit `z = a f + b g`, and validate by holding out whole
+mixtures. A v5 profile keeps destination service load (`f/F + g/G`) separate
+from phase-aware power load and hard-fails outside the calibrated `(f,g)` hull.
 
 ```bash
-systemd-run --user --unit=queue-haul-h100-power-CAMPAIGN \
-  --working-directory="$PWD" .venv/bin/python queue-haul/power_model_campaign.py \
-  --model MODEL_SNAPSHOT --vllm .venv/bin/vllm --out OUTPUT_DIRECTORY
+uv run python phase_power_calibration.py prepare --out /datadrive/queue-haul-network/phase-power-v1
+uv run python phase_power_calibration.py run --plan /datadrive/queue-haul-network/phase-power-v1/plan.json --profile profiles/gpt_oss_20b_a100_tp1_azure_300w.json --out /datadrive/queue-haul-network/phase-power-v1/run
+uv run python phase_power_calibration.py fit --base-profile profiles/gpt_oss_20b_a100_tp1_azure_300w.json --measurements /datadrive/queue-haul-network/phase-power-v1/run/measurements.csv --idle-power-w 98.11623555 --out-profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --summary outputs/azure-calibration/power-summary.json
+uv run python testbed_calibration_campaign.py prepare --parent outputs/east-germany-separation-20260809/plan.json --out outputs/azure-calibration/testbed-plan.json
 ```
 
-An interrupted run resumes only after validating its original SHA/configuration,
-deterministic completed prefix, request accounting, and every power sample file.
-Explicitly identified uncommitted suffix artifacts are replaced; committed
-JSONL rows are appended and `fsync`ed before progress is printed:
+`evidence_catalog.py` writes an immutable-raw, checksum-bound sidecar at
+`/datadrive/queue-haul-network/evidence-catalog.json`. Existing
+`realized_shed_w` hardware-gap fields are cataloged as `model_credited`;
+`trailing-power` separately derives direct five-second Sweden power windows.
+The final `stress_frontier_campaign.py` plan contains 40 equal-weight states and
+runs Queue-Haul, six baselines, and the exact modeled MILP optimum independently
+at 10--60 second deadlines. Reduction uses the fifth-smallest of 40 values and
+automatically retains the title “Modeled stress-suite sensitivity” until every
+power, timing, correctness, provenance, transition, and hardware-window gate
+passes.
 
 ```bash
-uv run python queue-haul/power_model_campaign.py --resume \
-  --expected-sha ORIGINAL_FULL_SHA --discard-orphan-sequences SEQUENCE ... \
-  --model MODEL_SNAPSHOT --vllm .venv/bin/vllm --out OUTPUT_DIRECTORY
-```
-
-Runs started by older code retain their in-memory result as provisional. After
-all 111 cells complete, refit offline without acquiring the GPU; this hard-fails
-on an incomplete/non-deterministic grid, archives `fit.json` as
-`fit-exponential-provisional.json` (or reconstructs that provisional artifact
-when an older run failed while serializing it), and promotes the rational result:
-
-```bash
-uv run python queue-haul/power_model_campaign.py --refit-only \
-  --model MODEL_SNAPSHOT --out OUTPUT_DIRECTORY
-```
-
-If a holdout exposes a stable regime change, collect the separate targeted
-follow-up without changing the original evidence. It randomizes three fitting
-and three independent validation repeats at each of concurrency 3, 6, and 12
-for the 4096-prefill/512-decode case, brackets every request batch with an idle
-cell, and records synchronized SM/memory clocks, temperature, pstate, and clock
-event reasons. The fit remains strictly rational in realized prefill/decode
-rates and must pass both the original and targeted holdout gates:
-
-```bash
-systemd-run --user --unit=queue-haul-h100-power-followup-CAMPAIGN \
-  --working-directory="$PWD" .venv/bin/python queue-haul/power_model_campaign.py \
-  --followup-base COMPLETE_V5_OUTPUT --model MODEL_SNAPSHOT \
-  --vllm .venv/bin/vllm --out NEW_OUTPUT_DIRECTORY
+uv run python stress_frontier_campaign.py prepare --parent outputs/east-germany-separation-20260809/plan.json --profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --out outputs/azure-calibration/stress-plan.json
+uv run python stress_frontier_campaign.py run --plan outputs/azure-calibration/stress-plan.json --shard 0 --shards 40 --out outputs/azure-calibration/stress-00.csv
+uv run python stress_frontier_campaign.py reduce --results outputs/azure-calibration/stress-*.csv --profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --power-summary outputs/azure-calibration/power-summary.json --destination-summary outputs/azure-calibration/destination-summary.json --trailing-power /datadrive/queue-haul-network/hardware-gap-001/trailing_power.csv --catalog /datadrive/queue-haul-network/evidence-catalog.json --out outputs/azure-calibration/frontier.json
 ```
 
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
@@ -946,11 +810,38 @@ planner's Queue-Haul LP, Queue-Haul Greedy, KV-only, and replay-only recorded
 destination-method selections. Run
 `uv run python queue-haul/plot_network_action_breakdown.py`.
 
-`plot_hardware_power_parity.py` plots predicted against directly measured source-
-power shed for the 36 Queue-Haul LP and Greedy live power-drain runs. Both axes
-use the maximum request across all 90 campaign runs as their shared denominator;
-the diagonal marks exact agreement and overshed remains visible. Run
-`uv run python queue-haul/plot_hardware_power_parity.py`.
+`plot_hardware_power_parity.py` audits the 840 matched Queue-Haul LP, Queue-Haul
+Greedy, True Greedy, KV-only, replay-only, power-blind, and deadline-blind raw
+traces. These runs do not provide the required settled pre-migration window:
+the median gap from the final source request to migration is 0.075 s, and only
+3/840 episodes cover a one-second window plus a one-second settling guard. The
+script therefore hard-fails direct parity reduction instead of averaging
+migration warm-up power. `--audit-only --out PATH` writes the episode-level
+window audit without claiming measured shed. `--raw-delta --out PATH` writes an
+explicitly `warmup_contaminated_immediate_pre` exploratory delta from the final
+second before migration to the one-second post-switch window after a one-second
+guard. A new hardware run with an explicit pre-migration hold is required for a
+settled-state parity claim.
+
+`power_parity_experiment.py` supplies that focused run without campaign controls:
+50 matched random migration sizes per policy (350 runs total), a five-second
+settled source window at load 0.4, and a five-second settled window at the
+remaining source load. It reduces the direct GPU-0 means against the pinned
+RAMR A100 power curve and writes the CSV plus y=x PNG/PDF.
+
+```bash
+uv run python queue-haul/power_parity_experiment.py prepare \
+  --source-plan queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json \
+  --out queue-haul/outputs/power-parity-random-plan
+sbatch queue-haul/outputs/power-parity-random-plan/run.sbatch
+```
+
+The completed 350-scenario run is retained in scratch. The descriptive
+phase-aware refit under `outputs/power-parity-phase-aware-20260813/` uses the
+same observations for fitting and parity, so it is not held-out evidence. Its
+shed regression has a 0.997 through-origin slope, effectively zero aggregate
+bias, and 8.66 W RMSE; grouped five-fold episode cross-validation retains a
+0.999 slope, 0.11 W bias, and 8.78 W RMSE. The CSV preserves all policy repeats.
 
 Reduction runs automatically and can also be repeated without hardware:
 
@@ -1326,10 +1217,9 @@ the merge accepts exactly five complete blocks, checks profile, calibration,
 manifest, context, and trace provenance, and emits the 800-row final result.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
-reductions. `plot_hardware_power_parity.py` plots the 36 Queue-Haul LP and Greedy
-runs, normalizing both axes by the maximum requested shed across all 90 campaign
-runs; values above 100% and below zero remain visible around the shared-axis
-parity line.
+reductions. The contemporaneous packing traces retain raw `power.csv`,
+`result.json`, and plans, but their warm-up-to-migration timing is insufficient
+for the same direct measurement.
 `outputs/live-power-shed/` retains the 2026-08-06 two-A100 seamless full-shed
 run. The Queue-Haul LP arm moved all eight sessions under continuous 4 rps
 source and 1 rps destination agentic load with `kv_both` and 33 GB L1 pools;

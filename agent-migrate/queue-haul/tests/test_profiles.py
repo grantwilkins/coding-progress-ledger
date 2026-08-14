@@ -67,7 +67,6 @@ def write(tmp_path, value, name="profile.json"):
 
 def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
     p = ModelProfile.load(write(tmp_path, profile()))
-    assert p.case().power_load(50, 40) == pytest.approx(1)
     assert p.case().power_curve.power(0.75) == pytest.approx(35)
     assert p.case().power_curve.power(-1e-14) == pytest.approx(10)
     with pytest.raises(ValueError, match="outside"):
@@ -79,15 +78,33 @@ def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
         ModelProfile.load(write(tmp_path, raw, "convex.json"))
 
 
-def test_power_load_coefficients_are_independent_of_service_rates(tmp_path):
+def test_phase_power_separates_service_and_power_load(tmp_path):
     raw = profile()
-    raw["cases"]["central"].update(power_alpha=.001, power_beta=.01)
+    raw["schema"] = "queue-haul-model-profile-v5"
+    raw["max_power_load"] = 1
+    raw["cases"]["central"]["phase_power"] = {
+        "p0_w": 10, "delta_w": 90,
+        "a_s_per_prefill_token": .001,
+        "b_s_per_decode_token": .01,
+        "valid_hull": [[0, 0], [1000, 0], [0, 100]],
+        "grouped_cv_rmse_w": 2, "within_5w_fraction": .9,
+        "bootstrap": [[10, 90, .001, .01]],
+        "provenance_sha256": "0" * 64,
+    }
     case = ModelProfile.load(write(tmp_path, raw)).case()
-    assert case.power_load(50, 40) == pytest.approx(.45)
+    assert case.service_load(100, 0) == 1
+    assert case.power_load(100, 0) == .1
+    assert case.power_load(0, 100) == 1
+    assert case.power(1) == 55
+    assert case.phase_power.contains(100, 10)
+    assert not case.phase_power.contains(1000, 100)
 
-    raw["cases"]["central"]["power_beta"] = 0
-    with pytest.raises(ValueError, match="power load coefficients"):
-        ModelProfile.load(write(tmp_path, raw, "invalid-power-weight.json"))
+    raw["cases"]["central"]["phase_power"]["measured_power_curve"] = [
+        [0, 10], [.5, 70], [1, 95]]
+    raw["cases"]["central"]["phase_power"]["measured_power_bootstrap"] = [[
+        [0, 10], [.5, 65], [1, 90]]]
+    case = ModelProfile.load(write(tmp_path, raw, "measured-phase.json")).case()
+    assert case.power(.75) == pytest.approx(82.5)
 
 
 def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):

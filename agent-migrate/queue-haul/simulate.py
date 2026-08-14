@@ -374,7 +374,7 @@ def fluid_pipeline_completion(work, starts, ends, capacity):
 class ExecutionSimulator:
     def __init__(self, scenario: ExecutionScenario, profile: ModelProfile,
                  moves: tuple[PlannedMove, ...], case_id: str = "central",
-                 detailed: bool = True):
+                 detailed: bool = True, destination=None):
         self.scenario, self.profile, self.case = scenario, profile, profile.case(case_id)
         self.detailed = detailed
         self.nodes = {n.node_id: n for n in scenario.nodes}
@@ -385,14 +385,26 @@ class ExecutionSimulator:
             instance: ("kv_destination", instance) for instance in self.instances
         }
         self.moves = tuple(sorted(moves, key=lambda m: m.order))
+        self.migration_components = {}
+        if destination:
+            types = destination.type_by_id
+            self.migration_components = {
+                replica.replica_id: types[pool.type_id].migration or {}
+                for pool in destination.pools for replica in pool.replicas
+            }
         self.pace_links = {
             index: ("pace", index) for index, move in enumerate(self.moves)
             if move.rate_limit_bytes_per_s is not None
         }
         self.rate_links = {
             **self.links,
-            **{link: self.case.kv_transfer.destination_bytes_per_s
-               for link in self.kv_links.values()},
+            **{link: (self.migration_components.get(instance, {})
+                      .get("kv_transfer").kv_ingest_bytes_per_s
+                      if self.migration_components.get(instance, {}).get("kv_transfer")
+                      and self.migration_components[instance]["kv_transfer"]
+                      .kv_ingest_bytes_per_s is not None
+                      else self.case.kv_transfer.destination_bytes_per_s)
+               for instance, link in self.kv_links.items()},
             **{
                 self.pace_links[index]: self.moves[index].rate_limit_bytes_per_s
                 for index in self.pace_links
@@ -650,6 +662,8 @@ class ExecutionSimulator:
 
     def _endpoint(self, index: int, phase: str, detail: tuple[int, int] | None = None):
         state = self.states[index]
+        components = self.migration_components.get(
+            state.move.destination_instance, {}).get(state.move.method)
         replay_tokens, blocks = detail or self._payload(index, phase)[1:]
         replay = state.move.method == "replay" or (
             state.move.method == "replay_on_request" and phase == "wake"
@@ -673,6 +687,8 @@ class ExecutionSimulator:
             duration = replay_tokens / self.case.replay.rate(
                 rate_context, active,
             ) + self.case.replay_completion_s
+            if components:
+                duration *= components.compute_completion_factor
             if phase == "initial":
                 state.initial_replay_start = self.time
             elif phase == "catch_up":
@@ -683,6 +699,7 @@ class ExecutionSimulator:
                 self.case.kv_transfer.catch_up_fixed_s
                 + replay_tokens / self.case.kv_transfer.tail_replay_tps
                 if phase == "catch_up"
+                else components.residual_s if components
                 else self.case.kv_transfer.initial_completion_s
             )
         else:
@@ -1215,7 +1232,8 @@ def _run(scenario, profile, moves, case_id, destination, detailed):
     fluid = destination and any(pool.fluid_migration for pool in destination.pools)
     result = _run_fluid(
         scenario, profile, moves, case_id, destination, detailed,
-    ) if fluid else ExecutionSimulator(scenario, profile, moves, case_id, detailed).run()
+    ) if fluid else ExecutionSimulator(
+        scenario, profile, moves, case_id, detailed, destination).run()
     if destination:
         from pool_planner import destination_service_execution
         rows = destination_service_execution(

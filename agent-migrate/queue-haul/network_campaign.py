@@ -28,7 +28,8 @@ import migration_profiler as profiler
 import policy_hardware_campaign as policy_campaign
 from destination_runner import MetricsSampler
 from destination import (DestinationArchitecture, DestinationPool,
-                         DestinationReplica, dedicated_sink_architecture)
+                         DestinationReplica, MigrationComponents,
+                         dedicated_sink_architecture)
 from planner import _expected_scenario, plan as solve, source_power
 from pool_planner import candidate_table, phase_one_capacity_duals
 from power_model import ExpectedPower
@@ -387,7 +388,11 @@ def node_report() -> dict:
     if len(gpu) != 1:
         raise RuntimeError("each network node must expose exactly one GPU")
     name, memory = map(str.strip, gpu[0].split(","))
-    tracking = _output(["chronyc", "tracking"])
+    for _ in range(3):
+        tracking = _output(["chronyc", "tracking"])
+        if re.search(r"Leap status\s*:\s*Normal", tracking):
+            break
+        time.sleep(1)
     ptp = Path("/dev/ptp_hyperv")
     return {
         "git_sha": _output(["git", "rev-parse", "HEAD"]),
@@ -855,10 +860,15 @@ def validate_plan(plan: dict) -> None:
         * len(SEPARATION_POLICIES) if design == "separation" \
         else HARDWARE_GAP_REPEATS * sum(
             len(row[-1]) for row in HARDWARE_GAP_MATRIX
-        ) if design == "hardware_gap" else 0
+        ) if design == "hardware_gap" else len(scenarios) if design == "calibration" else 0
     if len(scenarios) != expected \
             or len({row["scenario_id"] for row in scenarios}) != len(scenarios):
         raise ValueError(f"network plan must contain exactly {expected} unique scenarios")
+    if design == "calibration":
+        if any(not row.get("moves") or row.get("load_normalization") != "destination_service"
+               for row in scenarios):
+            raise ValueError("calibration scenarios require fixed moves and service load")
+        return
     if design == "frontier":
         contract = plan["network_contract"]
         blocks = {}
@@ -1639,8 +1649,23 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
     template = dedicated_sink_architecture(profile, destinations[0],
                                            (links[0].link_id,))
     dtype = template.types[0]
+    types = {}
+    for node in destinations:
+        raw = scenario.get("migration_components", {}).get(node)
+        migration = None if raw is None else {
+            method: MigrationComponents(
+                tuple(value["context_range"]),
+                tuple(value["bandwidth_range_bytes_per_s"]),
+                value["provenance"],
+                value.get("compute_completion_factor", 1),
+                value.get("residual_s", 0),
+                value.get("kv_ingest_bytes_per_s"),
+            ) for method, value in raw.items()
+        }
+        types[node] = dtype if migration is None else replace(
+            dtype, type_id=f"{dtype.type_id}/{node}", migration=migration)
     pools = tuple(DestinationPool(
-        f"pool/{node}", dtype.type_id,
+        f"pool/{node}", types[node].type_id,
         (DestinationReplica(
             node, destination_background_work(
                 dtype, float(scenario["background"][node][0]))
@@ -1653,7 +1678,8 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
         migration_headroom=scenario.get("migration_headroom", {}).get(node),
     ) for node in destinations)
     architecture = DestinationArchitecture(
-        template.schema, template.source_compatibility, template.types, pools)
+        template.schema, template.source_compatibility,
+        tuple({value.type_id: value for value in types.values()}.values()), pools)
     routes = {("source", node): (f"link/{node}",) for node in destinations}
     return problem, architecture, routes, requested_shed_w
 
@@ -1865,10 +1891,9 @@ def diagnostic_outcomes(scenario: dict, results: list[dict], demand: dict,
 
 class SinkLoad:
     def __init__(self, cfg: testbed.Config, port: int, prefill_tps: float,
-                 rho: float, path: Path, decode_tps: float | None = None,
-                 max_pending: int = 8):
+                 rho: float, path: Path, decode_tps: float | None = None):
         if prefill_tps <= 0 or decode_tps is not None and decode_tps <= 0 \
-                or not 0 < rho < 1 or max_pending < 1:
+                or not 0 < rho < 1:
             raise ValueError("invalid sink load")
         self.cfg, self.port, self.rho, self.path, self.decode_tps = (
             cfg, port, rho, path, decode_tps)
@@ -1876,7 +1901,6 @@ class SinkLoad:
             SINK_LOAD_PREFILL_TOKENS / prefill_tps
             + SINK_LOAD_DECODE_TOKENS / decode_tps
         ) / rho if decode_tps is not None else 512 / (rho * prefill_tps)
-        self.max_pending = max_pending
         self.stop, self.error = threading.Event(), None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
@@ -1905,9 +1929,9 @@ class SinkLoad:
         futures, rows, index = [], [], 0
         next_at = time.monotonic()
         try:
-            with ThreadPoolExecutor(max_workers=self.max_pending) as pool:
+            with ThreadPoolExecutor(max_workers=8) as pool:
                 while not self.stop.is_set():
-                    if len(futures) == self.max_pending:
+                    if len(futures) == 8:
                         rows.append(futures.pop(0).result())
                         if self.stop.is_set():
                             break
@@ -1953,7 +1977,6 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                          root: Path, prefill_tps: float) -> dict:
     diagnostic = scenario["design"] in {
         "frontier", "constraint", "separation", "hardware_gap"}
-    timing = scenario["design"] == "timing_live"
     root.mkdir(parents=True, exist_ok=False)
     (root / "scenario.json").write_text(
         json.dumps(scenario, indent=2, sort_keys=True) + "\n")
@@ -1980,8 +2003,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 stack.cfg, stack.ports[node.id]["api"],
                 destination_rates[0] if service_load else prefill_tps, compute,
                 root / f"sink_load_{node.id}.jsonl",
-                destination_rates[1] if service_load else None,
-                scenario.get("load_max_pending", 8))
+                destination_rates[1] if service_load else None)
             loads[node.id].start()
     if scenario.get("source_load"):
         loads["source"] = SinkLoad(
@@ -1989,7 +2011,11 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             root / "source_load.jsonl")
         loads["source"].start()
     try:
-        if timing or scenario["design"] in {
+        if scenario["design"] == "calibration":
+            time.sleep(scenario.get("load_warmup_s", 5))
+            moves = scenario["moves"]
+            write_checkpoint(root / "decision.json", {"moves": moves})
+        elif scenario["design"] in {
                 "joint", "frontier", "constraint", "separation",
                 "hardware_gap"}:
             time.sleep(scenario.get("load_warmup_s", 5))
@@ -2010,16 +2036,13 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                     (node.id for node in nodes),
                     pool.map(snapshot, nodes),
                 ))
-            if timing:
-                moves = scenario["moves"]
-            else:
-                demand = agentic_demand(
-                    sessions, scenario["sessions"], profile,
-                    scenario.get("source_load", .4))
+            demand = agentic_demand(
+                sessions, scenario["sessions"], profile,
+                scenario.get("source_load", .4))
             if scenario["design"] == "hardware_gap":
                 moves, decision = plan_hardware_gap_scenario(
                     scenario, snapshots, profile, demand)
-            elif not timing:
+            else:
                 moves = plan_joint_scenario(
                     scenario, snapshots, profile, scenario["planner_seed"],
                     demand)
@@ -2081,6 +2104,13 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     if not diagnostic and any(row["method"] == "kv_transfer"
            and row["request"]["cached_tokens"] <= 0 for row in results):
         raise RuntimeError("KV reconstruction reported no cached tokens")
+    block_tokens = profile.case().kv_transfer.block_tokens
+    block_bytes = profile.case().kv_transfer.block_bytes
+    for row in results:
+        if row["method"] == "kv_transfer" and "request" in row:
+            cached = int(row["request"].get("cached_tokens", 0))
+            row["request"]["logical_kv_bytes"] = cached // block_tokens * block_bytes
+            row["request"]["logical_kv_chunks"] = cached // block_tokens
     sleep_start_ns = sleep_end_ns = None
     if not diagnostic:
         testbed.set_source_sleep(stack.cfg, True)

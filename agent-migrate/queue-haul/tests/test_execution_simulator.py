@@ -35,6 +35,7 @@ from dataclasses import replace
 import pytest
 
 import simulate
+from destination import MigrationComponents, dedicated_sink_architecture
 from profiles import ModelProfile
 from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, PlannedMove,
                       PowerNode, ServingInstance, SimRequest, SimSession, execute,
@@ -271,6 +272,34 @@ def test_configured_parallel_kv_copy_shares_destination_capacity(tmp_path):
     )
 
     assert [row.initial_ready_s for row in result.sessions] == pytest.approx([2, 2])
+
+
+def test_execution_uses_regional_migration_components(tmp_path):
+    profile = model(tmp_path, switch=0, destination_rate=1e12)
+    architecture = dedicated_sink_architecture(profile, "dest", ("wan",))
+    components = {
+        "replay": MigrationComponents((1, 100), (1, 2000), "regional", 2, 0),
+        "kv_transfer": MigrationComponents(
+            (1, 100), (1, 2000), "regional", 1, 3, 50),
+    }
+    architecture = replace(
+        architecture,
+        types=(replace(architecture.types[0], migration=components),),
+    )
+    session = SimSession("a", "source", 10, 0, 0, 1)
+    topology = scenario((session,), links=(NetworkLink("wan", 1000),))
+
+    kv = execute(topology, profile, (
+        PlannedMove("a", "dest", "kv_transfer", 0, ("wan",),
+                    destination_pool="dedicated-sink"),
+    ), destination=architecture)
+    replay = execute(topology, profile, (
+        PlannedMove("a", "dest", "replay", 0, ("wan",),
+                    destination_pool="dedicated-sink"),
+    ), destination=architecture)
+
+    assert kv.sessions[0].committed_s == pytest.approx(5)
+    assert replay.sessions[0].committed_s == pytest.approx(.201)
 
 
 def test_action_power_is_total_for_concurrent_actions(tmp_path):
