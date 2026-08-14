@@ -169,6 +169,14 @@ class ProfileCase:
     sleep_s: float
     shutdown_s: float | None
     action_power_w: dict[str, ActionPower]
+    power_alpha: float | None = None
+    power_beta: float | None = None
+
+    def power_load(self, f: float, g: float) -> float:
+        if self.power_alpha is None and self.power_beta is None:
+            return f / self.F + g / self.G
+        return f * (self.power_alpha or 1 / self.F) \
+            + g * (self.power_beta or 1 / self.G)
 
     @classmethod
     def parse(cls, case_id: str, raw: dict) -> "ProfileCase":
@@ -182,6 +190,8 @@ class ProfileCase:
             float(raw["sleep_s"]),
             None if raw["shutdown_s"] is None else float(raw["shutdown_s"]),
             {str(k): ActionPower.parse(v) for k, v in raw["action_power_w"].items()},
+            *(float(raw[key]) if key in raw else None
+              for key in ("power_alpha", "power_beta")),
         )
         if set(value.action_power_w) != ACTION_POWER:
             raise ValueError(f"action_power_w fields must be {sorted(ACTION_POWER)}")
@@ -189,6 +199,9 @@ class ProfileCase:
             value.replay_completion_s, value.switch_s, value.sleep_s,
         ) < 0:
             raise ValueError("rates, times, and power must be nonnegative; F and G must be positive")
+        if any(weight is not None and weight <= 0
+               for weight in (value.power_alpha, value.power_beta)):
+            raise ValueError("power load coefficients must be positive")
         if value.shutdown_s is not None and value.shutdown_s < 0:
             raise ValueError("shutdown time must be nonnegative")
         if value.power_curve.power(0) + value.sleep_power_delta_w < 0:

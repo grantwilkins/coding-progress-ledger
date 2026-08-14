@@ -1,0 +1,263 @@
+{
+  "schema": "queue-haul-frontier-model-audit-v1",
+  "scenarios": 304,
+  "calibration": {
+    "alpha": 8.759804411087108e-05,
+    "beta": 0.0009786979976519076,
+    "effective_F": 11415.78,
+    "effective_G": 1021.7656543685591,
+    "beta_over_alpha": 11.172601027634697,
+    "mixed_rmse_w": 4.193567780122923,
+    "mixed_mae_w": 3.7739829680131454,
+    "power_curve": [
+      [
+        0,
+        94.4744
+      ],
+      [
+        0.0998792898952152,
+        111.83382716049384
+      ],
+      [
+        0.7987802848338001,
+        168.387375
+      ],
+      [
+        0.966470634449,
+        168.387375
+      ]
+    ],
+    "prefill_points": 5,
+    "mixed_points": 8,
+    "previous_alpha": 8.759804411087108e-05,
+    "previous_beta": 0.0022157227687671717,
+    "previous_mixed_bias_w": 9.13983634755155,
+    "previous_mixed_rmse_w": 11.610077492991573,
+    "beta_sensitivity": {
+      "0.5": 0.0020040873833527474,
+      "1.0": 0.002038568574869543,
+      "1.5": 0.0017082230328676487,
+      "2.0": 0.0014949908724301523,
+      "2.5": 0.001358854502451332,
+      "3.0": 0.0011596242088897173,
+      "4.0": 0.0009786979976519076
+    }
+  },
+  "power": {
+    "recorded_target_met": 26,
+    "recalibrated_target_met": 26,
+    "recalibrated_eventual_target_met": 33,
+    "median_recorded_requested_shed_w": 58.122313132827834,
+    "median_recalibrated_requested_shed_w": 40.7292364772494,
+    "exact_feasible_conditions": 6,
+    "conditions": 38,
+    "fixed_plan_by_fraction": {
+      "0.4": {
+        "deadline": 62,
+        "eventual": 83
+      },
+      "0.5": {
+        "deadline": 35,
+        "eventual": 49
+      },
+      "0.6": {
+        "deadline": 28,
+        "eventual": 37
+      },
+      "0.7": {
+        "deadline": 28,
+        "eventual": 36
+      },
+      "0.8": {
+        "deadline": 26,
+        "eventual": 33
+      },
+      "0.9": {
+        "deadline": 21,
+        "eventual": 27
+      }
+    },
+    "fixed_plan_by_watts": {
+      "30": {
+        "deadline": 29,
+        "eventual": 38
+      },
+      "35": {
+        "deadline": 28,
+        "eventual": 36
+      },
+      "40": {
+        "deadline": 27,
+        "eventual": 34
+      },
+      "45": {
+        "deadline": 21,
+        "eventual": 27
+      },
+      "50": {
+        "deadline": 6,
+        "eventual": 6
+      },
+      "55": {
+        "deadline": 0,
+        "eventual": 0
+      }
+    }
+  },
+  "timing": {
+    "median_scenario_actual_over_predicted": 1.7650465114823377,
+    "p90_scenario_actual_over_predicted": 2.9253075164919458,
+    "by_method": {
+      "kv_transfer": {
+        "n": 1003,
+        "median": 0.8946624109806961,
+        "p90": 3.226950047533725
+      },
+      "replay": {
+        "n": 610,
+        "median": 3.1670635238692464,
+        "p90": 6.823715778584584
+      }
+    },
+    "by_destination": {
+      "australiaeast": {
+        "n": 526,
+        "median": 2.9017509132301136,
+        "p90": 6.4487321720626
+      },
+      "southcentralus": {
+        "n": 1087,
+        "median": 0.9863988787221852,
+        "p90": 4.56789261172875
+      }
+    },
+    "by_path": {
+      "australiaeast:kv_transfer": {
+        "n": 91,
+        "median": 1.835277354857792,
+        "p90": 6.285618819137929
+      },
+      "australiaeast:replay": {
+        "n": 435,
+        "median": 3.11186810214822,
+        "p90": 6.725956551180307
+      },
+      "southcentralus:kv_transfer": {
+        "n": 912,
+        "median": 0.8272429456633954,
+        "p90": 2.755322869672926
+      },
+      "southcentralus:replay": {
+        "n": 175,
+        "median": 3.351261270873749,
+        "p90": 8.483857320985587
+      }
+    },
+    "by_context": {
+      "8192": {
+        "n": 332,
+        "median": 0.9082923074281983,
+        "p90": 2.9001640063678953
+      },
+      "16384": {
+        "n": 768,
+        "median": 1.575688748802187,
+        "p90": 4.689976691376287
+      },
+      "24576": {
+        "n": 232,
+        "median": 2.8346435822512728,
+        "p90": 8.456918417027875
+      },
+      "31488": {
+        "n": 281,
+        "median": 3.1546630476185875,
+        "p90": 6.671161356617977
+      }
+    },
+    "by_pack": {
+      "16x16k": {
+        "n": 40,
+        "median": 1.7589760069230798,
+        "p90": 2.3362449109875545
+      },
+      "16x24k": {
+        "n": 38,
+        "median": 2.8122313304902145,
+        "p90": 2.9908081072260746
+      },
+      "16x31k": {
+        "n": 38,
+        "median": 3.1380043242542786,
+        "p90": 3.2588370859640703
+      },
+      "16x8k": {
+        "n": 40,
+        "median": 0.7478449586736597,
+        "p90": 1.3742207087551286
+      },
+      "32x31k": {
+        "n": 7,
+        "median": 2.7468163661327147,
+        "p90": 3.237474400857489
+      },
+      "4x16k": {
+        "n": 32,
+        "median": 1.1619461918967842,
+        "p90": 2.3545079176828727
+      },
+      "8x16k": {
+        "n": 96,
+        "median": 1.7766504167039394,
+        "p90": 2.376620212340957
+      }
+    }
+  },
+  "destination_load": {
+    "australiaeast:0.5": {
+      "n": 80,
+      "median": 0.40678094357073147,
+      "p90": 0.4406793555349591
+    },
+    "australiaeast:0.85": {
+      "n": 56,
+      "median": 0.4406793555349591,
+      "p90": 0.5084761794634144
+    },
+    "australiaeast:0.9": {
+      "n": 54,
+      "median": 0.40678094357073147,
+      "p90": 0.5084761794634144
+    },
+    "australiaeast:0.95": {
+      "n": 56,
+      "median": 0.40678094357073147,
+      "p90": 0.5084761794634144
+    },
+    "southcentralus:0.5": {
+      "n": 80,
+      "median": 0.5084761794634144,
+      "p90": 0.5084761794634144
+    },
+    "southcentralus:0.85": {
+      "n": 56,
+      "median": 0.5084761794634144,
+      "p90": 0.542374591427642
+    },
+    "southcentralus:0.9": {
+      "n": 56,
+      "median": 0.5084761794634144,
+      "p90": 0.542374591427642
+    },
+    "southcentralus:0.95": {
+      "n": 56,
+      "median": 0.5084761794634144,
+      "p90": 0.542374591427642
+    }
+  },
+  "limitations": [
+    "Power attainment is model-recomputed; migrated sessions did not drive source power.",
+    "Destination achieved load is inferred from request starts, not server work counters.",
+    "The counterfactual ceiling is model-based and does not repair timing error."
+  ]
+}

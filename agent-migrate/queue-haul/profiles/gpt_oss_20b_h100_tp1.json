@@ -42,7 +42,7 @@
       "relative_error": 0.0
     },
     "replay": {
-      "kind": "measured",
+      "kind": "assumed",
       "reference": "A100 estimates inherited from profiles/gpt_oss_20b_a100_tp1.json; H100 migration timing not yet measured",
       "valid_range": [
         3473.0,
@@ -51,7 +51,7 @@
       "relative_error": 0.3
     },
     "kv_transfer": {
-      "kind": "measured",
+      "kind": "assumed",
       "reference": "A100 estimates inherited from profiles/gpt_oss_20b_a100_tp1.json; H100 migration timing not yet measured",
       "valid_range": [
         170704896.0,

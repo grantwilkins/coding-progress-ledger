@@ -67,6 +67,7 @@ def write(tmp_path, value, name="profile.json"):
 
 def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
     p = ModelProfile.load(write(tmp_path, profile()))
+    assert p.case().power_load(50, 40) == pytest.approx(1)
     assert p.case().power_curve.power(0.75) == pytest.approx(35)
     assert p.case().power_curve.power(-1e-14) == pytest.approx(10)
     with pytest.raises(ValueError, match="outside"):
@@ -76,6 +77,17 @@ def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
     raw["cases"]["central"]["power_curve"] = [[0, 10], [0.5, 20], [1, 40]]
     with pytest.raises(ValueError, match="concave"):
         ModelProfile.load(write(tmp_path, raw, "convex.json"))
+
+
+def test_power_load_coefficients_are_independent_of_service_rates(tmp_path):
+    raw = profile()
+    raw["cases"]["central"].update(power_alpha=.001, power_beta=.01)
+    case = ModelProfile.load(write(tmp_path, raw)).case()
+    assert case.power_load(50, 40) == pytest.approx(.45)
+
+    raw["cases"]["central"]["power_beta"] = 0
+    with pytest.raises(ValueError, match="power load coefficients"):
+        ModelProfile.load(write(tmp_path, raw, "invalid-power-weight.json"))
 
 
 def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):

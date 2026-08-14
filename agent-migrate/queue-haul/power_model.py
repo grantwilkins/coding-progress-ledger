@@ -12,7 +12,7 @@ class ExpectedPower:
         self.instances = {i.instance_id: i for i in scenario.instances}
         self.sessions = {s.session_id: s for s in scenario.sessions}
         self.ell = {
-            s.session_id: s.expected_f / self.case.F + s.expected_g / self.case.G
+            s.session_id: self.case.power_load(s.expected_f, s.expected_g)
             for s in scenario.sessions
         }
         self.instance_load = {i.instance_id: 0.0 for i in scenario.instances}

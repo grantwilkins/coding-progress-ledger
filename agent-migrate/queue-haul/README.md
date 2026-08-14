@@ -15,7 +15,7 @@ contract, not an inferred GPU inventory.
 
 The repository contains:
 
-- a measured GPT-OSS-20B/H100 NVL TP=1 occupancy and GPU-power curve;
+- raw GPT-OSS-20B/H100 NVL TP=1 service and GPU-power sweeps;
 - working replay and compatible KV handoff on two A100s, with 24/24 serial and
   90/90 bounded-campaign migrations completing by their deadlines;
 - 105/105 passing bounded-campaign gates and 6/6 passing parallel-KV gates;
@@ -36,11 +36,13 @@ dedicated two-A100 migration claim.
 
 The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
 H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
-1,205,376 production KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
-and measured through offered load `ell=12.566`. Admission remains bounded at
-`ell=0.96647`. Raw benchmark and power samples are under
-`outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
-remain clearly marked A100-derived estimates until rerun on H100.
+and 1,205,376 production KV-cache tokens. The checked-in 168.39 W power envelope
+uses offered prompt/output tokens as its load axis; overload points are not
+realized-work measurements, so it is an assumption rather than a validated H100
+power calibration. Admission remains bounded at service load `ell=0.96647`. Raw
+benchmark and power samples are under `outputs/h100-profile-20260811/`. Replay,
+KV-transfer, and transition timings are A100-derived estimates until rerun on
+H100.
 
 The completed 72-scenario H100 hardware-gap campaign has no failed or missing
 runs. It scales the constrained East KV reserve to 96% of the measured
@@ -51,6 +53,48 @@ The reduced evidence and raw scenario attempts are retained in
 `outputs/east-germany-hardware-gap-h100-20260812/`, copied from node run root
 `/datadrive/queue-haul-network/hardware-gap-h100-002`. Its artifact manifest
 also addresses the uncommitted reusable stack logs.
+
+### H100 frontier model audit
+
+`frontier_model_audit.py` separates service load from diagnostic power load
+`ell = alpha*f + beta*g` and retrospectively replays all 304 completed scenarios.
+The 2026-08-14 fit fixes `alpha=1/F` and estimates `beta=0.000979`, reducing mixed-
+sweep RMSE from 11.61 W to 4.19 W. This fit is not installed in the production
+profile: `beta` falls from 0.00200 to 0.000979 as higher-rate mixed points are
+included, so the existing one-dimensional sweeps underidentify it.
+
+The recalibration lowers the median modeled 80%-of-removable target from 58.12 W
+to 40.73 W but leaves fixed-plan attainment at 26/304 by the deadline and 33/304
+eventually. Only 6/38 Queue-Haul conditions are model-feasible at that target.
+Timing is independently optimistic: scenario actual/predicted duration is 1.77x
+at median and 2.93x at p90, while replay is 3.17x at median. Nominal destination
+loads of 0.85--0.95 achieved only 0.41--0.44 in Australia East and about 0.51 in
+South Central US before migration. The plan's legacy destination ID `germany`
+maps to region `southcentralus`; no campaign destination was in Germany.
+
+Power attainment in this campaign is model-recomputed, not measured. Its source
+load is one independent generator, so a completed migration does not remove that
+session's physical source traffic. A clean rerun must use open-loop load with
+server-side completed-work counters and a hard achieved-load tolerance, route or
+stop per-session source traffic at commit, and sample aligned source/destination
+power windows. Before rerunning, profile replay and KV on H100 across both paths,
+8K/16K/24K/31K contexts, concurrency 1/2/4/8/16, and achieved load 0/0.5/0.8;
+record upload, network, queue, replay, KV, residual, and commit phases separately.
+Fit `alpha`, `beta`, and a monotone concave power curve on a two-dimensional
+prefill/decode grid and validate it on held-out agentic mixes.
+
+```bash
+QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python frontier_model_audit.py \
+  --run-root /datadrive/queue-haul-network/frontier-h100-width16-32tail-002 \
+  --manifest outputs/coding-manifest.json \
+  --profile profiles/gpt_oss_20b_h100_tp1.json \
+  --prefill-levels outputs/h100-profile-20260811/power-sweep-prefill/levels.json \
+  --mixed-levels outputs/h100-profile-20260811/power-sweep/levels.json \
+  --out outputs/frontier-h100-model-audit-20260814
+```
+
+The machine-readable summary and scenario, session-timing, destination-load,
+and exact-ceiling tables are in `outputs/frontier-h100-model-audit-20260814/`.
 
 ## System boundary
 
