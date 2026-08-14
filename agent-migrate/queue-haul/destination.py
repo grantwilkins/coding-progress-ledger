@@ -91,12 +91,15 @@ class MigrationComponents:
     provenance: str
     compute_completion_factor: float = 1.0
     residual_s: float = 0.0
+    kv_ingest_bytes_per_s: float | None = None
 
     def __post_init__(self):
         if not 0 < self.context_range[0] < self.context_range[1] \
                 or not 0 < self.bandwidth_range_bytes_per_s[0] \
                 < self.bandwidth_range_bytes_per_s[1] or not self.provenance \
-                or self.compute_completion_factor <= 0 or self.residual_s < 0:
+                or self.compute_completion_factor <= 0 or self.residual_s < 0 \
+                or self.kv_ingest_bytes_per_s is not None \
+                and self.kv_ingest_bytes_per_s <= 0:
             raise ValueError("invalid migration components")
 
     def extrapolates(self, context: float, bandwidth: float) -> tuple[str, ...]:
@@ -260,6 +263,7 @@ class DestinationArchitecture:
                         value["provenance"],
                         value.get("compute_completion_factor", 1),
                         value.get("residual_s", 0),
+                        value.get("kv_ingest_bytes_per_s"),
                     ) for method, value in item["migration"].items()
                 },
                 item.get("evidence_status", "sensitivity"),

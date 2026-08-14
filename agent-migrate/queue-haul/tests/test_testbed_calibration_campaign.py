@@ -124,6 +124,63 @@ def test_fit_timing_calibrates_route_endpoint_and_residual(tmp_path):
     assert not result["migration_gate_passed"]
 
 
+def test_regional_timing_holds_out_largest_context_and_checks_kv_bytes(tmp_path):
+    profile = Path(campaign.__file__).with_name("profiles") / \
+        "gpt_oss_20b_a100_tp1_azure_300w.json"
+    model = campaign.ModelProfile.load(profile).case()
+    parent, telemetry = tmp_path / "parent.json", tmp_path / "telemetry.csv"
+    paths = {node: {"natural_mbps": 1000,
+                    "controlled_mbps": {"40": 400, "80": 800}}
+             for node in ("east", "germany")}
+    parent.write_text(json.dumps({
+        "network_contract": {"paths": paths, "aggregate": {
+            "natural_mbps": 2000, "controlled_mbps": {"40": 800, "80": 1600}}},
+        "scenarios": [{"bandwidth": "natural",
+                       "bandwidth_mbps": {"east": 1000, "germany": 1000}}],
+    }))
+    rows = []
+    contexts = (4096, 8192, 16384)
+    rates = {"east": {"controlled_40": 80e6, "controlled_80": 120e6,
+                      "natural": 150e6},
+             "germany": {"controlled_40": 200e6, "controlled_80": 250e6,
+                          "natural": 300e6}}
+    replay_factors = {"east": .8, "germany": .6}
+    for destination in rates:
+        for bandwidth, rate in rates[destination].items():
+            for context in contexts:
+                for repeat in range(3):
+                    kv_bytes = model.kv_transfer.sealed_bytes(context)
+                    kv_s = kv_bytes / rate + (2 if destination == "east" else 1)
+                    x, values = model.replay.by_concurrency[1]
+                    replay_rate = model.replay.rate(context, 1) \
+                        if x[0] <= context <= x[-1] else min(values)
+                    replay_s = replay_factors[destination] * (
+                        context / replay_rate + model.replay_completion_s)
+                    base = {"scenario_id": f"{destination}-{bandwidth}-{context}-{repeat}",
+                            "destination": destination, "bandwidth": bandwidth,
+                            "context_tokens": context, "migration_start_ns": 0,
+                            "repeat": repeat}
+                    rows.extend((
+                        {**base, "method": "kv_transfer", "kv_bytes": kv_bytes,
+                         "replay_tokens": 0, "commit_ns": round(kv_s * 1e9)},
+                        {**base, "method": "replay", "kv_bytes": "",
+                         "replay_tokens": context,
+                         "commit_ns": round(replay_s * 1e9)},
+                    ))
+    write(telemetry, rows)
+    calibrated, predictions = tmp_path / "calibrated.json", tmp_path / "predictions.csv"
+
+    result = campaign.fit_regional_timing(
+        profile, parent, telemetry, calibrated, predictions)
+
+    assert result["holdout_context"] == 16384
+    assert result["kv_byte_mismatches"] == 0
+    assert result["migration_gate_passed"]
+    assert all(value["coverage"] >= .9 for value in result["held_out"].values())
+    contract = json.loads(calibrated.read_text())["network_contract"]
+    assert all("migration_components" in value for value in contract["paths"].values())
+
+
 def test_bundle_summary_preserves_modeled_label_and_gates(tmp_path):
     values = [
         {"schema": "queue-haul-phase-power-fit-v1", "gate_passed": False},

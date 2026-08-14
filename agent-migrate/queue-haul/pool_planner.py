@@ -120,7 +120,9 @@ def _destination_duration(session, method, case, path, links, horizon, component
         return route(_log_bytes(session, tokens)) \
             + components.compute_completion_factor * compute + case.switch_s
     size = case.kv_transfer.sealed_bytes(tokens)
-    return max(route(size), size / case.kv_transfer.destination_bytes_per_s) \
+    ingest = components.kv_ingest_bytes_per_s \
+        or case.kv_transfer.destination_bytes_per_s
+    return max(route(size), size / ingest) \
         + components.residual_s + _kv_catch_up_s(
         session, tokens, case, horizon,
     )
@@ -712,13 +714,13 @@ def _max_shed(table: CandidateTable, power: ExpectedPower):
             raise RuntimeError(f"maximum-shed MILP returned {result.message}")
         return result.x
 
+    # Any optimizer returned by the primary MILP is an exact maximum-shed
+    # reference.  A former second MILP minimized migration work while pinning
+    # the floating-point optimum to within 1e-9.  That cosmetic tie-break can
+    # take orders of magnitude longer to prove because HiGHS must reason about
+    # an almost-exact dense equality; it does not change the reference shed.
     maximum = optimize(-loads, base)
-    selected = optimize(
-        np.asarray([candidate.migration_work_s for candidate in table.candidates]),
-        (base, LinearConstraint(csr_matrix(loads.reshape(1, -1)),
-                                loads @ maximum - 1e-9, np.inf)),
-    )
-    return set(np.flatnonzero(selected > .5))
+    return set(np.flatnonzero(maximum > .5))
 
 
 def _scarcity_prices(table, matrix, eligible=None):

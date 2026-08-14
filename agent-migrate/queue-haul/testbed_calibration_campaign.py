@@ -6,6 +6,7 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import random
 import statistics
 from pathlib import Path
@@ -204,6 +205,192 @@ def fit_timing(profile_path: Path, parent_path: Path, telemetry_path: Path,
     }
 
 
+def _quantile(values: list[float], probability: float) -> float:
+    if not values or not 0 < probability <= 1:
+        raise ValueError("quantile requires finite observations and probability")
+    return sorted(values)[math.ceil(probability * len(values)) - 1]
+
+
+def _prediction_metrics(rows: list[dict]) -> dict:
+    absolute = [abs(row["predicted_s"] - row["observed_s"]) for row in rows]
+    relative = [error / row["observed_s"] for error, row in zip(absolute, rows)]
+    return {
+        "rows": len(rows), "mae_s": statistics.fmean(absolute),
+        "median_relative_error": statistics.median(relative),
+        "p90_relative_error": _quantile(relative, .9),
+        "p90_absolute_error_s": _quantile(absolute, .9),
+        "bias_s": statistics.fmean(
+            row["predicted_s"] - row["observed_s"] for row in rows),
+        "coverage": statistics.fmean(
+            row["predicted_s"] >= row["observed_s"] for row in rows),
+    }
+
+
+def fit_regional_timing(profile_path: Path, parent_path: Path,
+                        telemetry_path: Path, out_parent: Path,
+                        out_predictions: Path) -> dict:
+    """Fit regional timing on two contexts and validate on the largest context."""
+    profile = ModelProfile.load(profile_path)
+    case, parent, rows = profile.case(), json.loads(parent_path.read_text()), \
+        _read(telemetry_path)
+    contexts = sorted({int(row["context_tokens"]) for row in rows})
+    if len(contexts) < 3:
+        raise ValueError("regional timing needs at least three context cells")
+    holdout, training_contexts = contexts[-1], contexts[:-1]
+    destinations = sorted(parent["network_contract"]["paths"])
+    labels = ("controlled_40", "controlled_80", "natural")
+    fits, predictions = {}, []
+    for destination in destinations:
+        selected = [row for row in rows if row["destination"] == destination]
+        if {row["method"] for row in selected} != {"replay", "kv_transfer"}:
+            raise ValueError(f"incomplete methods for {destination}")
+        training = [row for row in selected
+                    if int(row["context_tokens"]) in training_contexts]
+        kv_training = [row for row in training if row["method"] == "kv_transfer"]
+        route_rates = {}
+        for label in labels:
+            cell = [row for row in kv_training if row["bandwidth"] == label]
+            cell_contexts = sorted({int(row["context_tokens"]) for row in cell})
+            if len(cell_contexts) < 2:
+                raise ValueError(f"{destination}/{label} lacks two training contexts")
+            low, high = cell_contexts[0], cell_contexts[-1]
+            medians = {context: statistics.median(
+                (int(row["commit_ns"]) - int(row["migration_start_ns"])) / 1e9
+                for row in cell if int(row["context_tokens"]) == context)
+                for context in (low, high)}
+            sizes = {context: statistics.median(
+                float(row["kv_bytes"]) for row in cell
+                if int(row["context_tokens"]) == context)
+                for context in (low, high)}
+            slope = (medians[high] - medians[low]) / (sizes[high] - sizes[low])
+            if slope <= 0:
+                raise ValueError(f"nonpositive KV timing slope for {destination}/{label}")
+            route_rates[label] = (1 / slope) * (.9 if label == "controlled_40" else 1)
+        kv_residual = _quantile([
+            (int(row["commit_ns"]) - int(row["migration_start_ns"])) / 1e9
+            - float(row["kv_bytes"]) / route_rates[row["bandwidth"]]
+            for row in kv_training
+        ], .9)
+        replay_ratios = []
+        for row in training:
+            if row["method"] != "replay":
+                continue
+            tokens = int(row["replay_tokens"])
+            x, rates = case.replay.by_concurrency[1]
+            rate = case.replay.rate(tokens, 1) if x[0] <= tokens <= x[-1] \
+                else float(min(rates))
+            base = tokens / rate + case.replay_completion_s
+            observed = (int(row["commit_ns"]) - int(row["migration_start_ns"])) / 1e9
+            replay_ratios.append(observed / base)
+        replay_factor = 1.05 * statistics.median(replay_ratios)
+        rate_values = list(route_rates.values())
+        provenance = f"{telemetry_path} grouped context holdout {holdout}"
+        components = {
+            "replay": {
+                "context_range": [contexts[0], contexts[-1]],
+                "bandwidth_range_bytes_per_s": [min(rate_values) * .99,
+                                                  max(rate_values) * 1.01],
+                "provenance": provenance,
+                "compute_completion_factor": replay_factor,
+                "residual_s": 0,
+            },
+            "kv_transfer": {
+                "context_range": [contexts[0], contexts[-1]],
+                "bandwidth_range_bytes_per_s": [min(rate_values) * .99,
+                                                  max(rate_values) * 1.01],
+                "provenance": provenance,
+                "compute_completion_factor": 1,
+                "residual_s": max(0, kv_residual),
+                "kv_ingest_bytes_per_s": max(rate_values),
+            },
+        }
+        fits[destination] = {
+            "effective_pipeline_mbps": {
+                label: route_rates[label] * 8 / 1e6 for label in labels},
+            "replay_compute_completion_factor": replay_factor,
+            "kv_residual_s": max(0, kv_residual),
+            "kv_ingest_lower_bound_bytes_per_s": max(rate_values),
+            "migration_components": components,
+        }
+        for row in selected:
+            observed = (int(row["commit_ns"]) - int(row["migration_start_ns"])) / 1e9
+            if row["method"] == "kv_transfer":
+                expected_bytes = case.kv_transfer.sealed_bytes(int(row["context_tokens"]))
+                predicted = (float(row["kv_bytes"]) / route_rates[row["bandwidth"]]
+                             + max(0, kv_residual))
+            else:
+                expected_bytes = 0
+                tokens = int(row["replay_tokens"])
+                x, rates = case.replay.by_concurrency[1]
+                rate = case.replay.rate(tokens, 1) if x[0] <= tokens <= x[-1] \
+                    else float(min(rates))
+                predicted = replay_factor * (
+                    tokens / rate + case.replay_completion_s) + case.switch_s
+            predictions.append({
+                "scenario_id": row["scenario_id"], "destination": destination,
+                "method": row["method"], "bandwidth": row["bandwidth"],
+                "context_tokens": int(row["context_tokens"]),
+                "split": "holdout_context" if int(row["context_tokens"]) == holdout
+                else "training", "predicted_s": predicted, "observed_s": observed,
+                "error_s": predicted - observed,
+                "expected_kv_bytes": expected_bytes,
+                "observed_kv_bytes": int(row["kv_bytes"] or 0),
+            })
+    contract = parent["network_contract"]
+    for destination, fit in fits.items():
+        path = contract["paths"][destination]
+        path["natural_mbps"] = fit["effective_pipeline_mbps"]["natural"]
+        path["controlled_mbps"]["40"] = fit["effective_pipeline_mbps"]["controlled_40"]
+        path["controlled_mbps"]["80"] = fit["effective_pipeline_mbps"]["controlled_80"]
+        path["migration_components"] = fit["migration_components"]
+    contract["aggregate"]["natural_mbps"] = sum(
+        row["natural_mbps"] for row in contract["paths"].values())
+    for percent in ("40", "80"):
+        contract["aggregate"]["controlled_mbps"][percent] = sum(
+            row["controlled_mbps"][percent] for row in contract["paths"].values())
+    components = {destination: fit["migration_components"]
+                  for destination, fit in fits.items()}
+    for scenario in parent.get("scenarios", []):
+        scenario["migration_components"] = components
+        label = scenario.get("bandwidth")
+        if label in labels and isinstance(scenario.get("bandwidth_mbps"), dict):
+            scenario["bandwidth_mbps"] = {
+                destination: (contract["paths"][destination]["natural_mbps"]
+                              if label == "natural" else
+                              contract["paths"][destination]["controlled_mbps"]
+                              [label.removeprefix("controlled_")])
+                for destination in scenario["bandwidth_mbps"]
+            }
+    parent["timing_calibration"] = {
+        "schema": "queue-haul-regional-timing-fit-v2",
+        "telemetry": str(telemetry_path),
+        "telemetry_sha256": hashlib.sha256(telemetry_path.read_bytes()).hexdigest(),
+        "training_contexts": training_contexts, "holdout_context": holdout,
+    }
+    out_parent.write_text(json.dumps(parent, indent=2, sort_keys=True) + "\n")
+    _write(out_predictions, predictions)
+    holdout_rows = [row for row in predictions if row["split"] == "holdout_context"]
+    metrics = {method: _prediction_metrics([
+        row for row in holdout_rows if row["method"] == method])
+        for method in ("replay", "kv_transfer")}
+    byte_mismatches = sum(row["expected_kv_bytes"] != row["observed_kv_bytes"]
+                          for row in predictions if row["method"] == "kv_transfer")
+    def passed(value):
+        return value["median_relative_error"] <= .10 \
+            and (value["p90_relative_error"] <= .15
+                 or value["p90_absolute_error_s"] <= 1) \
+            and value["coverage"] >= .9
+    return {
+        "schema": "queue-haul-regional-timing-fit-v2",
+        "validation": "largest context cell held out across method, route, and repeat",
+        "training_contexts": training_contexts, "holdout_context": holdout,
+        "fits": fits, "held_out": metrics,
+        "kv_byte_mismatches": byte_mismatches,
+        "migration_gate_passed": byte_mismatches == 0
+        and all(passed(value) for value in metrics.values()),
+    }
+
+
 def bundle_summary(paths: list[Path]) -> dict:
     values = {path.name: json.loads(path.read_text()) for path in paths}
     power = next(value for value in values.values()
@@ -306,6 +493,15 @@ def inventory(roots: list[Path], scenario_ids: set[str] | None = None) -> tuple[
             with connection_path.open(newline="") as handle:
                 route_by_connection.update({row["connection_id"]: row["route"]
                                             for row in csv.DictReader(handle)})
+        transfer_events = []
+        for transfer_path in root.glob("stacks/*/resp_transfers.csv"):
+            with transfer_path.open(newline="") as handle:
+                transfer_events.extend({**row, "route": route_by_connection.get(
+                    row["connection_id"])} for row in csv.DictReader(handle))
+        proxy_bytes = []
+        for byte_path in root.glob("stacks/*/proxy_bytes.csv"):
+            with byte_path.open(newline="") as handle:
+                proxy_bytes.extend(csv.DictReader(handle))
         power = []
         for power_path in root.glob("stacks/*/power.csv"):
             with power_path.open(newline="") as handle:
@@ -335,19 +531,39 @@ def inventory(roots: list[Path], scenario_ids: set[str] | None = None) -> tuple[
                                  "start_ns": int(request["start_ns"]),
                                  "ready_ns": _first_response(request),
                                  "end_ns": int(request["end_ns"])})
+            episode_transfers = [row for row in transfer_events
+                                 if start <= int(row["end_ns"]) <= end]
+            if not episode_transfers:
+                episode_transfers = [{**row, "route": route_by_connection.get(
+                    row["connection_id"])} for row in result.get("resp_transfers", [])]
             route_transfers = {}
-            for transfer in result.get("resp_transfers", []):
-                route = route_by_connection.get(transfer["connection_id"])
-                if route and transfer["command"] == "GET":
-                    route_transfers.setdefault(route, []).append(transfer)
+            for transfer in episode_transfers:
+                if transfer["route"] and transfer["command"] == "GET":
+                    route_transfers.setdefault(transfer["route"], []).append(transfer)
             for item in requests:
                 move, request = item["move"], item["move"]["request"]
                 destination, route = move["destination_instance"], f"kv/{move['destination_instance']}"
                 transfers = route_transfers.get(route, [])
                 route_bytes = int(result.get("wire_bytes", {}).get(
                     f"{route}/target_to_client", 0))
-                route_span = (max((int(row["end_ns"]) for row in transfers), default=0)
-                              - min((int(row["start_ns"]) for row in transfers), default=0))
+                byte_rows = [row for row in proxy_bytes
+                             if row["route"] == route
+                             and row["direction"] == "target_to_client"
+                             and int(row["bytes"]) > 0
+                             and start <= int(row["monotonic_ns"]) <= end] \
+                    if item["method"] == "kv_transfer" and route_bytes else []
+                if byte_rows:
+                    route_span = max(int(row["monotonic_ns"])
+                                     + int(row["interval_ns"]) for row in byte_rows) \
+                        - min(int(row["monotonic_ns"]) for row in byte_rows)
+                    measured_route_bytes = sum(int(row["bytes"]) for row in byte_rows)
+                    goodput_source = "proxy_interval_bytes"
+                else:
+                    route_span = (max((int(row["end_ns"]) for row in transfers), default=0)
+                                  - min((max(item["start_ns"], int(row["start_ns"]))
+                                         for row in transfers), default=0))
+                    measured_route_bytes = route_bytes
+                    goodput_source = "episode_wire_over_transfer_span"
                 payload = sum(int(row["payload_bytes"]) for row in transfers)
                 same_kv = [row for row in requests if row["method"] == "kv_transfer"
                            and row["move"]["destination_instance"] == destination]
@@ -363,13 +579,16 @@ def inventory(roots: list[Path], scenario_ids: set[str] | None = None) -> tuple[
                     "destination_ready_ns": item["ready_ns"], "commit_ns": item["end_ns"],
                     "replay_tokens": replay_tokens if item["method"] == "replay" else 0,
                     "kv_bytes": direct_kv, "episode_route_kv_bytes": payload,
+                    "route_wire_bytes": route_bytes,
                     "kv_bytes_attribution": "direct_single_migration" if direct_kv is not None
                     else "episode_route_only",
                     "context_tokens": sessions.get(move["session_id"], {}).get("initial_tokens"),
                     "concurrent_replay": _overlap(requests, item, "replay"),
                     "concurrent_kv": _overlap(requests, item, "kv_transfer"),
                     "destination_prefill_load": background[0] if isinstance(background, list) else None,
-                    "route_goodput_bytes_per_s": route_bytes / (route_span / 1e9) if route_span > 0 else None,
+                    "route_goodput_bytes_per_s": measured_route_bytes / (route_span / 1e9)
+                    if route_span > 0 else None,
+                    "route_goodput_source": goodput_source if route_span > 0 else None,
                     "effective_replay_tokens_per_s": replay_tokens / ready_s
                     if item["method"] == "replay" else None,
                     "effective_kv_ingest_bytes_per_s": direct_kv / ready_s
@@ -379,6 +598,7 @@ def inventory(roots: list[Path], scenario_ids: set[str] | None = None) -> tuple[
                     "switch_s": (int(switch[0]) - int(result["ended_ns"])) / 1e9
                     if switch[0] is not None else None,
                     "bandwidth": scenario.get("bandwidth"), "deadline_s": scenario.get("deadline_s"),
+                    "repeat": scenario.get("repeat"),
                     "deadline_admitted": move.get("deadline_admitted"),
                     "episode_deadline_met": result.get("deadline_met"), "source": str(path),
                     "source_power_mean_w": statistics.fmean(
@@ -493,6 +713,13 @@ def main() -> None:
     t.add_argument("--out-profile", type=Path, required=True)
     t.add_argument("--out-parent", type=Path, required=True)
     t.add_argument("--summary", type=Path, required=True)
+    rt = sub.add_parser("fit-regional-timing")
+    rt.add_argument("--profile", type=Path, required=True)
+    rt.add_argument("--parent", type=Path, required=True)
+    rt.add_argument("--telemetry", type=Path, required=True)
+    rt.add_argument("--out-parent", type=Path, required=True)
+    rt.add_argument("--predictions", type=Path, required=True)
+    rt.add_argument("--summary", type=Path, required=True)
     b = sub.add_parser("bundle-summary")
     b.add_argument("--artifact", type=Path, action="append", required=True)
     b.add_argument("--out", type=Path, required=True)
@@ -505,6 +732,11 @@ def main() -> None:
     elif args.command == "fit-timing":
         value = fit_timing(args.profile, args.parent, args.telemetry,
                            args.out_profile, args.out_parent)
+        args.summary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+    elif args.command == "fit-regional-timing":
+        value = fit_regional_timing(
+            args.profile, args.parent, args.telemetry,
+            args.out_parent, args.predictions)
         args.summary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
     elif args.command == "bundle-summary":
         args.out.write_text(json.dumps(bundle_summary(args.artifact), indent=2,

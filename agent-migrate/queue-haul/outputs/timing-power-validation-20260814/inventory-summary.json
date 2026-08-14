@@ -1,0 +1,27 @@
+{
+  "bandwidths": [
+    "controlled_40",
+    "controlled_80",
+    "natural"
+  ],
+  "destinations": [
+    "east",
+    "germany"
+  ],
+  "direct_per_migration_kv_bytes": 54,
+  "kv_migrations": 54,
+  "methods": [
+    "kv_transfer",
+    "replay"
+  ],
+  "migrations": 108,
+  "requires_new_per_migration_transfer_ids": false,
+  "scenarios": 108,
+  "schema": "queue-haul-migration-telemetry-inventory-v1",
+  "source_power_covered_migrations": 108,
+  "timestamp_semantics": {
+    "commit_ns": "verified reconstruction response end",
+    "destination_ready_ns": "first response stream chunk",
+    "migration_start_ns": "destination request start"
+  }
+}

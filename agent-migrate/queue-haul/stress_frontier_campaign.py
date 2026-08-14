@@ -164,6 +164,11 @@ def _scenario(template: dict, state: dict, deadline: int, contract: dict) -> dic
             "east": network.HARDWARE_GAP_BACKGROUND_KV_TOKENS,
             "germany": network.HARDWARE_GAP_BACKGROUND_KV_TOKENS,
         },
+        "migration_components": {
+            node: contract["paths"][node]["migration_components"]
+            for node in bandwidth
+            if "migration_components" in contract["paths"][node]
+        },
         "admission_mode": "normal", "objective": "max_shed",
     }
 

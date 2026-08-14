@@ -1,0 +1,17 @@
+deadline_s,state_id,regime,policy,shed_by_deadline_w,deadline_met,selected_sessions,migration_makespan_s,profile_case,power_evidence_kind
+30,jointly-binding-5,jointly-binding,queue_haul,118.05117085113946,False,17,24.35898296397899,bootstrap,model_credited
+30,jointly-binding-5,jointly-binding,greedy,111.49339999991511,False,15,24.954676549620025,bootstrap,model_credited
+30,jointly-binding-5,jointly-binding,replay_only,111.49339999991511,False,13,23.9995299164381,bootstrap,model_credited
+30,jointly-binding-5,jointly-binding,kv_only,99.99678873761536,False,7,23.949945912601937,bootstrap,model_credited
+30,jointly-binding-5,jointly-binding,isolated_fastest,98.89749328450475,False,13,24.35898296397899,bootstrap,model_credited
+30,jointly-binding-5,jointly-binding,queue_haul_power_blind,111.49339999991511,False,17,24.35898296397899,bootstrap,model_credited
+30,jointly-binding-5,jointly-binding,queue_haul_deadline_blind,108.9498332041922,False,26,,bootstrap,model_credited
+30,jointly-binding-5,jointly-binding,exact_modeled_milp_optimum,118.05117085113946,False,17,24.35898296397899,bootstrap,model_credited
+60,east-kv-only-5,east-kv-only,queue_haul,178.22774902122944,True,28,54.216649062639966,bootstrap,model_credited
+60,east-kv-only-5,east-kv-only,greedy,150.52034941881817,False,20,41.901841975738925,bootstrap,model_credited
+60,east-kv-only-5,east-kv-only,replay_only,150.52034941881817,False,20,41.901841975738925,bootstrap,model_credited
+60,east-kv-only-5,east-kv-only,kv_only,112.76119124044527,False,16,53.72133818266443,bootstrap,model_credited
+60,east-kv-only-5,east-kv-only,isolated_fastest,122.39528682452988,False,17,41.901841975738925,bootstrap,model_credited
+60,east-kv-only-5,east-kv-only,queue_haul_power_blind,178.22774902122944,True,28,52.9270652758621,bootstrap,model_credited
+60,east-kv-only-5,east-kv-only,queue_haul_deadline_blind,143.9594202926557,False,20,50.3745907851815,bootstrap,model_credited
+60,east-kv-only-5,east-kv-only,exact_modeled_milp_optimum,178.22774902122944,True,28,54.216649062639966,bootstrap,model_credited

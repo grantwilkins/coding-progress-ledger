@@ -1,0 +1,111 @@
+{
+  "fits": {
+    "east": {
+      "effective_pipeline_mbps": {
+        "controlled_40": 700.2876711183561,
+        "controlled_80": 982.3991608325624,
+        "natural": 1254.6707312864407
+      },
+      "kv_ingest_lower_bound_bytes_per_s": 156833841.4108051,
+      "kv_residual_s": 2.02951052625,
+      "migration_components": {
+        "kv_transfer": {
+          "bandwidth_range_bytes_per_s": [
+            86660599.30089657,
+            158402179.82491314
+          ],
+          "compute_completion_factor": 1,
+          "context_range": [
+            1536,
+            32256
+          ],
+          "kv_ingest_bytes_per_s": 156833841.4108051,
+          "provenance": "outputs/timing-power-validation-20260814/migrations.csv grouped context holdout 32256",
+          "residual_s": 2.02951052625
+        },
+        "replay": {
+          "bandwidth_range_bytes_per_s": [
+            86660599.30089657,
+            158402179.82491314
+          ],
+          "compute_completion_factor": 0.8223763714167739,
+          "context_range": [
+            1536,
+            32256
+          ],
+          "provenance": "outputs/timing-power-validation-20260814/migrations.csv grouped context holdout 32256",
+          "residual_s": 0
+        }
+      },
+      "replay_compute_completion_factor": 0.8223763714167739
+    },
+    "germany": {
+      "effective_pipeline_mbps": {
+        "controlled_40": 2932.9105732461658,
+        "controlled_80": 3761.6507159342996,
+        "natural": 3097.1776076575784
+      },
+      "kv_ingest_lower_bound_bytes_per_s": 470206339.49178743,
+      "kv_residual_s": 1.07197782775,
+      "migration_components": {
+        "kv_transfer": {
+          "bandwidth_range_bytes_per_s": [
+            362947683.43921304,
+            474908402.88670534
+          ],
+          "compute_completion_factor": 1,
+          "context_range": [
+            1536,
+            32256
+          ],
+          "kv_ingest_bytes_per_s": 470206339.49178743,
+          "provenance": "outputs/timing-power-validation-20260814/migrations.csv grouped context holdout 32256",
+          "residual_s": 1.07197782775
+        },
+        "replay": {
+          "bandwidth_range_bytes_per_s": [
+            362947683.43921304,
+            474908402.88670534
+          ],
+          "compute_completion_factor": 0.6173170220918441,
+          "context_range": [
+            1536,
+            32256
+          ],
+          "provenance": "outputs/timing-power-validation-20260814/migrations.csv grouped context holdout 32256",
+          "residual_s": 0
+        }
+      },
+      "replay_compute_completion_factor": 0.6173170220918441
+    }
+  },
+  "held_out": {
+    "kv_transfer": {
+      "bias_s": 0.46269777786111177,
+      "coverage": 1.0,
+      "mae_s": 0.46269777786111177,
+      "median_relative_error": 0.04841508850709261,
+      "p90_absolute_error_s": 1.0977206500000012,
+      "p90_relative_error": 0.12123779003029289,
+      "rows": 18
+    },
+    "replay": {
+      "bias_s": 0.44513171982986954,
+      "coverage": 1.0,
+      "mae_s": 0.44513171982986954,
+      "median_relative_error": 0.06878789491694326,
+      "p90_absolute_error_s": 0.608828687952661,
+      "p90_relative_error": 0.08261110568629562,
+      "rows": 18
+    }
+  },
+  "holdout_context": 32256,
+  "kv_byte_mismatches": 0,
+  "migration_gate_passed": true,
+  "schema": "queue-haul-regional-timing-fit-v2",
+  "training_contexts": [
+    1536,
+    7680
+  ],
+  "validation": "largest context cell held out across method, route, and repeat"
+}

@@ -28,7 +28,8 @@ import migration_profiler as profiler
 import policy_hardware_campaign as policy_campaign
 from destination_runner import MetricsSampler
 from destination import (DestinationArchitecture, DestinationPool,
-                         DestinationReplica, dedicated_sink_architecture)
+                         DestinationReplica, MigrationComponents,
+                         dedicated_sink_architecture)
 from planner import _expected_scenario, plan as solve, source_power
 from pool_planner import candidate_table, phase_one_capacity_duals
 from power_model import ExpectedPower
@@ -1648,8 +1649,23 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
     template = dedicated_sink_architecture(profile, destinations[0],
                                            (links[0].link_id,))
     dtype = template.types[0]
+    types = {}
+    for node in destinations:
+        raw = scenario.get("migration_components", {}).get(node)
+        migration = None if raw is None else {
+            method: MigrationComponents(
+                tuple(value["context_range"]),
+                tuple(value["bandwidth_range_bytes_per_s"]),
+                value["provenance"],
+                value.get("compute_completion_factor", 1),
+                value.get("residual_s", 0),
+                value.get("kv_ingest_bytes_per_s"),
+            ) for method, value in raw.items()
+        }
+        types[node] = dtype if migration is None else replace(
+            dtype, type_id=f"{dtype.type_id}/{node}", migration=migration)
     pools = tuple(DestinationPool(
-        f"pool/{node}", dtype.type_id,
+        f"pool/{node}", types[node].type_id,
         (DestinationReplica(
             node, destination_background_work(
                 dtype, float(scenario["background"][node][0]))
@@ -1662,7 +1678,8 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
         migration_headroom=scenario.get("migration_headroom", {}).get(node),
     ) for node in destinations)
     architecture = DestinationArchitecture(
-        template.schema, template.source_compatibility, template.types, pools)
+        template.schema, template.source_compatibility,
+        tuple({value.type_id: value for value in types.values()}.values()), pools)
     routes = {("source", node): (f"link/{node}",) for node in destinations}
     return problem, architecture, routes, requested_shed_w
 
