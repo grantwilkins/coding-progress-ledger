@@ -589,6 +589,7 @@
       7680,
       32256
     ],
+    "error_rule": "absolute_or_relative",
     "relative_error": 0.15,
     "repeats": 3
   },
@@ -1143,14 +1144,14 @@
       },
       {
         "path": "queue-haul/repair_hardware_campaign.py",
-        "sha256": "5732b58ea0347362c334979fb299fd64993d8cb9cbd9c289b7d36bfddf4aa57d"
+        "sha256": "0f06e4d4964c56a207b76cedcf5ce92872a4a8cb821db35d8c713b8ef8a2f37e"
       },
       {
         "path": "queue-haul/repair_plan_shift_campaign.py",
         "sha256": "555737a1f3ec0b43d1d0f472adca34e2a604acae2f97a5673bc296f94f07bd75"
       }
     ],
-    "git_sha": "60cd730246bace652a73816cd2c85496ef2ec822"
+    "git_sha": "4f77bdcca91ba3b0be1f1b37c7b7ac6bb300a2c8"
   },
   "manifest": {
     "path": "queue-haul/outputs/coding-manifest.json",
@@ -1193,7 +1194,7 @@
     "sha256": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe"
   },
   "repeats": 3,
-  "schema": "queue-haul-scheduled-repair-hardware-plan-v2",
+  "schema": "queue-haul-scheduled-repair-hardware-plan-v3",
   "timing_calibration": {
     "holdout_context": 32256,
     "schema": "queue-haul-regional-timing-fit-v2",
