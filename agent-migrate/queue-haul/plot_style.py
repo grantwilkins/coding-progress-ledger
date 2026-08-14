@@ -44,6 +44,12 @@ ACTION_COLORS = {
     "east_kv_transfer": "#56B4E9", "germany_kv_transfer": "#0072B2",
     "not_moved": "#999999",
 }
+TIMING_ACTION_NAMES = {"replay": ACTION_NAMES["replay"],
+                       "kv_transfer": ACTION_NAMES["kv_transfer"],
+                       "mixed": "Mixed"}
+TIMING_ACTION_COLORS = {"replay": ACTION_COLORS["replay"],
+                        "kv_transfer": ACTION_COLORS["kv_transfer"],
+                        "mixed": "#009E73"}
 ACTION_HATCHES = {
     "east_replay": "..", "east_kv_transfer": "xx",
     "germany_replay": "//", "germany_kv_transfer": "\\\\",

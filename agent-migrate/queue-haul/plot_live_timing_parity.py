@@ -13,6 +13,7 @@ import numpy as np
 
 import plot_style
 from live_timing_campaign import collect
+from profiles import ModelProfile
 
 
 ACTIONS = ("replay", "kv_transfer")
@@ -30,15 +31,17 @@ def load(path: Path) -> list[dict]:
         raise ValueError("parity plot requires the complete unseen four-path holdout")
     return [{"action": row["method"], "region": row["destination"],
              "cohort": "new_holdout",
+             "scenario_id": row["scenario_id"],
              "context_tokens": int(row["context_tokens"]),
              "predicted_s": float(row["predicted_s"]),
              "measured_s": float(row["initial_time_to_first_response_s"])}
             for row in rows]
 
 
-def load_history(run_root: Path, model_path: Path) -> list[dict]:
+def load_history(run_root: Path, model_path: Path, profile_path: Path) -> list[dict]:
     model = json.loads(model_path.read_text())
     curve = np.asarray(model["replay_tps"]).T
+    kv = ModelProfile.load(profile_path).case().kv_transfer
     rows = collect(run_root)
     if not rows or any(not model["valid_context_tokens"][0]
                        <= row["context_tokens"]
@@ -50,14 +53,33 @@ def load_history(run_root: Path, model_path: Path) -> list[dict]:
             predicted = row["context_tokens"] / np.interp(
                 row["context_tokens"], *curve)
         else:
-            size = row["measured_kv_bytes"]
+            size = kv.sealed_bytes(row["context_tokens"])
             predicted = model["kv_initial_completion_s"] + max(
                 size / model["kv_effective_path_bytes_per_s"][row["destination"]],
                 size / model["kv_destination_bytes_per_s"])
         out.append({"action": row["method"], "region": row["destination"],
-                    "cohort": "historical", "context_tokens": row["context_tokens"],
+                    "cohort": "historical", "scenario_id": row["scenario_id"],
+                    "context_tokens": row["context_tokens"],
                     "predicted_s": float(predicted),
                     "measured_s": row["initial_time_to_first_response_s"]})
+    return out
+
+
+def queue_rows(rows: list[dict]) -> list[dict]:
+    groups = {}
+    for row in rows:
+        groups.setdefault(row["scenario_id"], []).append(row)
+    out = []
+    for scenario_id, group in groups.items():
+        paths = {}
+        for row in group:
+            key = row["region"], row["action"]
+            paths[key] = paths.get(key, 0) + row["predicted_s"]
+        actions = {row["action"] for row in group}
+        out.append({"scenario_id": scenario_id,
+                    "action": next(iter(actions)) if len(actions) == 1 else "mixed",
+                    "predicted_s": max(paths.values()),
+                    "measured_s": max(row["measured_s"] for row in group)})
     return out
 
 
@@ -108,19 +130,60 @@ def write(rows: list[dict], out: Path, log_scale: bool = False) -> None:
         writer.writerows(rows)
 
 
+def write_queue(rows: list[dict], out: Path) -> None:
+    limit = 1.04 * max(row[key] for row in rows
+                       for key in ("predicted_s", "measured_s"))
+    lower = .9 * min(row[key] for row in rows
+                     for key in ("predicted_s", "measured_s"))
+    fig, axis = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    axis.plot([lower, limit], [lower, limit], color="black", linestyle="--",
+              linewidth=1.5, label="Prediction = measurement")
+    for action in ("replay", "kv_transfer", "mixed"):
+        selected = [row for row in rows if row["action"] == action]
+        if selected:
+            axis.scatter([row["predicted_s"] for row in selected],
+                         [row["measured_s"] for row in selected],
+                         color=plot_style.TIMING_ACTION_COLORS[action], s=22,
+                         alpha=.55, label=plot_style.TIMING_ACTION_NAMES[action])
+    axis.set(xlabel="Predicted queue makespan (s)",
+             ylabel="Measured queue makespan (s)",
+             xscale="log", yscale="log", xlim=(lower, limit), ylim=(lower, limit),
+             title=f"Queue completion parity (n={len(rows):,})")
+    axis.set_aspect("equal", adjustable="box")
+    axis.grid(alpha=.2)
+    axis.legend(frameon=False, fontsize=8, loc="upper left")
+    fig.tight_layout()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    for suffix in ("png", "pdf"):
+        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
+    plt.close(fig)
+    with out.with_suffix(".csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=rows[0], lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--history-run-root", type=Path)
     parser.add_argument("--model", type=Path)
+    parser.add_argument("--profile", type=Path)
+    parser.add_argument("--queue-out", type=Path)
     parser.add_argument("--log", action="store_true")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    if bool(args.history_run_root) != bool(args.model):
-        parser.error("--history-run-root and --model must be provided together")
+    if len([value for value in (args.history_run_root, args.model, args.profile)
+            if value]) not in (0, 3):
+        parser.error("--history-run-root, --model, and --profile must be provided together")
     rows = load(args.source)
     if args.history_run_root:
-        rows += load_history(args.history_run_root, args.model)
+        history = load_history(args.history_run_root, args.model, args.profile)
+        rows += history
+        if args.queue_out:
+            write_queue(queue_rows(history), args.queue_out)
+    elif args.queue_out:
+        parser.error("--queue-out requires historical inputs")
     write(rows, args.out, args.log)
 
 

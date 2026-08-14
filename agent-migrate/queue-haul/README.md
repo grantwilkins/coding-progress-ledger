@@ -136,8 +136,10 @@ uv run python plot_live_timing_parity.py \
   --out outputs/h100_live_timing_parity
 uv run python plot_live_timing_parity.py \
   --source FIT_ROOT/holdout_predictions.csv --model FIT_ROOT/model.json \
+  --profile FIT_ROOT/profile.json \
   --history-run-root HISTORICAL_RUN_ROOT --log \
-  --out outputs/h100_live_timing_parity_all
+  --out outputs/h100_live_timing_parity_all \
+  --queue-out outputs/h100_live_queue_makespan_parity
 ```
 
 The fit hard-gates overall, every path, and every context at MdAPE <=10%, p90
@@ -151,6 +153,8 @@ The parity plot pools the 16 unseen replay and KV holdouts on shared axes with
 an exact prediction-equals-measurement reference; calibration rows are excluded.
 The second command adds prior live transfers without refitting and uses log axes
 to expose whether the isolated model transfers to loaded, concurrent settings.
+Its queue plot sums isolated work on each regional action path and takes the
+critical path, matching the planner's serialized path-resource constraint.
 
 ## System boundary
 

@@ -37,6 +37,8 @@ def test_apply_sets_documented_defaults():
 
 
 def test_selected_actions_have_unique_hatches():
+    assert plot_style.TIMING_ACTION_NAMES["mixed"] == "Mixed"
+    assert plot_style.TIMING_ACTION_COLORS["mixed"] == "#009E73"
     actions = ("east_replay", "east_kv_transfer", "germany_replay",
                "germany_kv_transfer")
     assert len({plot_style.ACTION_HATCHES[action] for action in actions}) == 4

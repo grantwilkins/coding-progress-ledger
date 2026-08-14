@@ -5,19 +5,22 @@ from itertools import product
 import json
 
 import matplotlib.pyplot as plt
+from types import SimpleNamespace
 
-from plot_live_timing_parity import ACTIONS, REGIONS, load, load_history, write
+from plot_live_timing_parity import (
+    ACTIONS, REGIONS, load, load_history, queue_rows, write, write_queue,
+)
 
 
 def test_live_timing_parity_pools_four_holdout_paths(tmp_path, monkeypatch):
     source = tmp_path / "predictions.csv"
     with source.open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=(
-            "split", "method", "destination", "context_tokens",
+            "scenario_id", "split", "method", "destination", "context_tokens",
             "predicted_s", "initial_time_to_first_response_s"))
         writer.writeheader()
         for index, (action, region) in enumerate(product(ACTIONS, REGIONS)):
-            writer.writerow({"split": "holdout", "method": action,
+            writer.writerow({"scenario_id": str(index), "split": "holdout", "method": action,
                              "destination": region, "context_tokens": 8192,
                              "predicted_s": index + 1,
                              "initial_time_to_first_response_s": index + 1.1})
@@ -46,18 +49,29 @@ def test_history_uses_frozen_replay_and_regional_kv_model(tmp_path, monkeypatch)
             "australiaeast": 50, "southcentralus": 200},
     }))
     monkeypatch.setattr("plot_live_timing_parity.collect", lambda _: [
-        {"method": "replay", "destination": "australiaeast",
+        {"scenario_id": "mixed", "method": "replay",
+         "destination": "australiaeast",
          "context_tokens": 8192, "measured_kv_bytes": 0,
          "initial_time_to_first_response_s": 5},
-        {"method": "kv_transfer", "destination": "australiaeast",
+        {"scenario_id": "mixed", "method": "kv_transfer",
+         "destination": "australiaeast",
          "context_tokens": 8192, "measured_kv_bytes": 100,
          "initial_time_to_first_response_s": 4},
-        {"method": "kv_transfer", "destination": "southcentralus",
+        {"scenario_id": "mixed", "method": "kv_transfer",
+         "destination": "southcentralus",
          "context_tokens": 8192, "measured_kv_bytes": 100,
          "initial_time_to_first_response_s": 3},
     ])
+    kv = SimpleNamespace(sealed_bytes=lambda _tokens: 100)
+    profile = SimpleNamespace(case=lambda: SimpleNamespace(kv_transfer=kv))
+    monkeypatch.setattr("plot_live_timing_parity.ModelProfile.load", lambda _: profile)
 
-    rows = load_history(tmp_path, model)
+    rows = load_history(tmp_path, model, tmp_path / "profile.json")
 
     assert [row["predicted_s"] for row in rows] == [4, 3, 2]
     assert {row["cohort"] for row in rows} == {"historical"}
+    queues = queue_rows(rows)
+    assert queues == [{"scenario_id": "mixed", "action": "mixed",
+                       "predicted_s": 4, "measured_s": 5}]
+    write_queue(queues, tmp_path / "queue")
+    assert (tmp_path / "queue.png").stat().st_size
