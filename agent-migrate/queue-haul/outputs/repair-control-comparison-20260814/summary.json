@@ -1,0 +1,109 @@
+{
+  "action_mix": {
+    "no_replan": {
+      "east_kv_transfer": 1,
+      "east_replay": 4,
+      "germany_kv_transfer": 3,
+      "germany_replay": 7,
+      "not_moved": 0
+    },
+    "replan": {
+      "east_kv_transfer": 1,
+      "east_replay": 5,
+      "germany_kv_transfer": 0,
+      "germany_replay": 3,
+      "not_moved": 6
+    }
+  },
+  "metrics": {
+    "no_replan": {
+      "deadline_shed_w": [
+        38.94541057517755,
+        38.94541057517755,
+        38.94541057517755
+      ],
+      "executed_actions": [
+        15,
+        15,
+        15
+      ],
+      "means": {
+        "deadline_shed_w": 38.94541057517755,
+        "executed_actions": 15,
+        "time_to_target_s": 21.647755926333335,
+        "ttft_max_s": 91.72781830466667,
+        "ttft_p50_s": 10.750449938666666,
+        "ttft_p90_s": 63.284985416666665
+      },
+      "time_to_target_s": [
+        21.702492197,
+        21.662848987,
+        21.577926595
+      ],
+      "ttft_max_s": [
+        91.717570365,
+        91.740534559,
+        91.72534999
+      ],
+      "ttft_p50_s": [
+        10.730085931,
+        10.832113093,
+        10.689150792
+      ],
+      "ttft_p90_s": [
+        63.256967643,
+        63.235487619,
+        63.362500988
+      ]
+    },
+    "replan": {
+      "deadline_shed_w": [
+        34.28728063226477,
+        34.28728063226477,
+        34.28728063226477
+      ],
+      "executed_actions": [
+        9,
+        9,
+        9
+      ],
+      "means": {
+        "deadline_shed_w": 34.28728063226477,
+        "executed_actions": 9,
+        "time_to_target_s": 17.574553684666665,
+        "ttft_max_s": 14.413723677666667,
+        "ttft_p50_s": 3.4527146286666666,
+        "ttft_p90_s": 13.913378690666667
+      },
+      "time_to_target_s": [
+        17.498463655,
+        17.637044562,
+        17.588152837
+      ],
+      "ttft_max_s": [
+        14.337451475,
+        14.475122051,
+        14.428597507
+      ],
+      "ttft_p50_s": [
+        3.437648074,
+        3.50450551,
+        3.415990302
+      ],
+      "ttft_p90_s": [
+        13.804236152,
+        14.035290444,
+        13.900609476
+      ]
+    }
+  },
+  "repeats": 3,
+  "representative": {
+    "control_episode_id": "844c4ddc47487c51",
+    "decision_s": 6.245153932,
+    "event_s": 4.964967936,
+    "repaired_episode_id": "52b37230a7c6ebf5",
+    "requested_shed_w": 30.928316227187338
+  },
+  "schema": "queue-haul-repair-control-comparison-v1"
+}
