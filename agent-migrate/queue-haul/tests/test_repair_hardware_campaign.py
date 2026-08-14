@@ -63,6 +63,81 @@ def test_hardware_plan_has_calibration_gate_and_exact_repair_grid(tmp_path):
     assert "repair_hardware_campaign.py run" in script
 
 
+def _control_plan_shape():
+    base = json.loads((campaign.ROOT / (
+        "outputs/repair-scheduled-hardware-20260814/plan.json")).read_text())
+    episodes = []
+    for row in base["episodes"]:
+        if (row["bandwidth_state"], row["prefill_state"]) \
+                == ("germany", "germany"):
+            episodes.append({
+                **row,
+                "episode_id": f"control-{row['repeat']}",
+                "paired_repair_episode_id": row["episode_id"],
+                "paired_result": {"path": "/paired/result.json",
+                                  "sha256": "result-hash"},
+                "expected_initial_moves_sha256": "moves-hash",
+            })
+    return {
+        **base,
+        "schema": campaign.CONTROL_SCHEMA,
+        "apply_policy": campaign.CONTROL_POLICY,
+        "episodes": episodes,
+        "control_of": {"path": "base-plan.json", "sha256": "plan-hash"},
+        "paired_hardware_run": {
+            "validation": {"path": "/paired/validation.json",
+                           "sha256": "validation-hash"}},
+    }
+
+
+def test_repair_disabled_control_is_exact_paired_condition():
+    plan = _control_plan_shape()
+
+    campaign.validate_plan(plan)
+
+    assert len(plan["episodes"]) == 3
+    assert {(row["bandwidth_state"], row["prefill_state"], row["repeat"])
+            for row in plan["episodes"]} == {
+        ("germany", "germany", 0),
+        ("germany", "germany", 1),
+        ("germany", "germany", 2),
+    }
+
+
+def test_repair_disabled_control_validation_accepts_successful_no_apply(tmp_path):
+    plan = _control_plan_shape()
+    for episode in plan["episodes"]:
+        root = tmp_path / "episodes" / episode["episode_id"]
+        root.mkdir(parents=True)
+        (root / "result.json").write_text(json.dumps({
+            "repair_outcome": "disabled",
+            "shadow_guard": {"passed": True},
+            "repair_result": {"reaches_target": True},
+            "target_met": False,
+            "requests": [{
+                "session_id": "session",
+                "method": "replay",
+                "destination_instance": "germany",
+                "ttft_s": .5,
+                "request": {
+                    "status_code": 200,
+                    "start_ns": 1,
+                    "first_byte_ns": 500_000_001,
+                    "end_ns": 600_000_001,
+                },
+            }],
+        }))
+
+    summary = campaign.reduce(plan, tmp_path)
+
+    assert summary["schema"] \
+        == "queue-haul-repair-disabled-control-validation-v1"
+    assert summary["passed"] is True
+    assert summary["disabled"] == summary["would_repair"] == 3
+    assert summary["target_met"] == 0
+    assert summary["http_200"] == summary["ttft_rows"] == 3
+
+
 def test_timing_promotion_only_expands_the_measured_lower_bound():
     parent = json.loads(campaign.DEFAULT_PARENT.read_text())
     template = campaign._template(parent)

@@ -46,7 +46,10 @@ from repair_plan_shift_campaign import (
 
 ROOT = Path(__file__).parent
 SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v5"
+CONTROL_SCHEMA = "queue-haul-scheduled-repair-disabled-control-plan-v1"
 RESULT_SCHEMA = "queue-haul-scheduled-repair-hardware-result-v2"
+APPLY_POLICY = "shadow_validate_then_apply_pending_only"
+CONTROL_POLICY = "shadow_validate_but_keep_original_pending"
 REPEATS = 3
 CALIBRATION_CONTEXTS = (1536, 7680, 32256)
 CALIBRATION_METHODS = ("replay", "kv_transfer")
@@ -168,7 +171,7 @@ def make_plan(parent_path: Path, cluster_path: Path,
         "calibration_cells": calibration_cells,
         "episodes": episodes,
         "repeats": REPEATS,
-        "apply_policy": "shadow_validate_then_apply_pending_only",
+        "apply_policy": APPLY_POLICY,
         "implementation": {
             "git_sha": git_sha, "dirty": dirty,
             "files": [{
@@ -180,20 +183,26 @@ def make_plan(parent_path: Path, cluster_path: Path,
 
 
 def validate_plan(plan: dict) -> None:
-    if plan.get("schema") != SCHEMA or plan.get("repeats") != REPEATS \
+    is_control = plan.get("schema") == CONTROL_SCHEMA
+    expected_episode_count = REPEATS if is_control else 16 * REPEATS
+    if plan.get("schema") not in {SCHEMA, CONTROL_SCHEMA} \
+            or plan.get("repeats") != REPEATS \
             or len(plan.get("calibration_cells", ())) != 36 \
-            or len(plan.get("episodes", ())) != 16 * REPEATS \
+            or len(plan.get("episodes", ())) != expected_episode_count \
             or len(plan.get("implementation", {}).get("files", ())) \
             != len(IMPLEMENTATION_FILES):
         raise ValueError("invalid scheduled repair hardware plan shape")
     if len({row["cell_id"] for row in plan["calibration_cells"]}) != 36 \
-            or len({row["episode_id"] for row in plan["episodes"]}) != 48:
+            or len({row["episode_id"] for row in plan["episodes"]}) \
+            != expected_episode_count:
         raise ValueError("scheduled repair IDs are not unique")
     grid = {(row["bandwidth_state"], row["prefill_state"], row["repeat"])
             for row in plan["episodes"]}
-    expected = {(bandwidth, prefill, repeat)
-                for bandwidth in LOCATION_STATES
-                for prefill in LOCATION_STATES for repeat in range(REPEATS)}
+    expected = ({("germany", "germany", repeat)
+                 for repeat in range(REPEATS)} if is_control else {
+        (bandwidth, prefill, repeat)
+        for bandwidth in LOCATION_STATES
+        for prefill in LOCATION_STATES for repeat in range(REPEATS)})
     calibration_grid = {
         (row["node"], row["method"], row["context_tokens"], row["repeat"])
         for row in plan["calibration_cells"]
@@ -208,7 +217,7 @@ def validate_plan(plan: dict) -> None:
     if grid != expected or calibration_grid != expected_calibration \
             or implementation != set(IMPLEMENTATION_FILES) \
             or plan.get("apply_policy") \
-            != "shadow_validate_then_apply_pending_only" \
+            != (CONTROL_POLICY if is_control else APPLY_POLICY) \
             or plan.get("calibration_gate", {}).get("error_rule") \
             != "absolute_or_relative" \
             or any(row["cut_scale"] != CUT_SCALE
@@ -219,14 +228,82 @@ def validate_plan(plan: dict) -> None:
                                or row["move_concurrency"] != MOVE_CONCURRENCY
                                for row in plan["episodes"]):
         raise ValueError("scheduled repair grid changed")
+    if is_control and (
+            not plan.get("control_of", {}).get("sha256")
+            or not plan.get("paired_hardware_run", {}).get("validation", {}).get(
+                "sha256")
+            or any(not row.get("paired_repair_episode_id")
+                   or not row.get("paired_result", {}).get("sha256")
+                   or not row.get("expected_initial_moves_sha256")
+                   for row in plan["episodes"])):
+        raise ValueError("repair-disabled control provenance is incomplete")
 
 
-def prepare(parent_path: Path, cluster_path: Path, calibration_path: Path,
-            out: Path) -> dict:
-    plan = make_plan(parent_path, cluster_path, calibration_path)
-    validate_plan(plan)
-    out.mkdir(parents=True, exist_ok=True)
-    profiler.write_json(out / "plan.json", plan)
+def make_control_plan(base_plan_path: Path, paired_run_root: Path) -> dict:
+    """Pair a no-apply control with the accepted Germany repair episodes."""
+    base = json.loads(base_plan_path.read_text())
+    validate_plan(base)
+    if base["schema"] != SCHEMA or base["apply_policy"] != APPLY_POLICY:
+        raise ValueError("control requires a full applied-repair hardware plan")
+    validation_path = paired_run_root / "validation.json"
+    validation = json.loads(validation_path.read_text())
+    if not validation.get("passed"):
+        raise ValueError("paired hardware run did not pass validation")
+    episodes = []
+    for original in base["episodes"]:
+        if (original["bandwidth_state"], original["prefill_state"]) \
+                != ("germany", "germany"):
+            continue
+        result_path = (paired_run_root / "episodes" /
+                       original["episode_id"] / "result.json")
+        result = json.loads(result_path.read_text())
+        if result.get("status") != "complete" \
+                or result.get("repair_outcome") != "applied" \
+                or not result.get("target_met"):
+            raise ValueError(
+                f"paired episode is not an applied success: {result_path}")
+        episodes.append({
+            **original,
+            "episode_id": _hash(
+                "repair-disabled-control", original["episode_id"]),
+            "paired_repair_episode_id": original["episode_id"],
+            "paired_result": {
+                "path": str(result_path.resolve()),
+                "sha256": profiler.file_hash(result_path),
+            },
+            "expected_initial_moves_sha256": profiler.object_hash(
+                result["initial_moves"]),
+        })
+    git_sha, dirty = profiler.git_state(True)
+    control = {
+        **base,
+        "schema": CONTROL_SCHEMA,
+        "episodes": episodes,
+        "apply_policy": CONTROL_POLICY,
+        "control_of": {
+            "path": _portable(base_plan_path),
+            "sha256": profiler.file_hash(base_plan_path),
+        },
+        "paired_hardware_run": {
+            "path": str(paired_run_root.resolve()),
+            "validation": {
+                "path": str(validation_path.resolve()),
+                "sha256": profiler.file_hash(validation_path),
+            },
+        },
+        "implementation": {
+            "git_sha": git_sha, "dirty": dirty,
+            "files": [{
+                "path": _portable(ROOT / name),
+                "sha256": profiler.file_hash(ROOT / name),
+            } for name in IMPLEMENTATION_FILES],
+        },
+    }
+    validate_plan(control)
+    return control
+
+
+def _write_run_script(out: Path) -> None:
     script = out / "run.sh"
     script.write_text("""#!/usr/bin/env bash
 set -euo pipefail
@@ -242,6 +319,24 @@ uv run python queue-haul/repair_hardware_campaign.py validate \
   --plan "$script_dir/plan.json" --run-root "$QH_REPAIR_RUN_ROOT"
 """)
     script.chmod(0o755)
+
+
+def prepare_control(base_plan_path: Path, paired_run_root: Path,
+                    out: Path) -> dict:
+    plan = make_control_plan(base_plan_path, paired_run_root)
+    out.mkdir(parents=True, exist_ok=True)
+    profiler.write_json(out / "plan.json", plan)
+    _write_run_script(out)
+    return plan
+
+
+def prepare(parent_path: Path, cluster_path: Path, calibration_path: Path,
+            out: Path) -> dict:
+    plan = make_plan(parent_path, cluster_path, calibration_path)
+    validate_plan(plan)
+    out.mkdir(parents=True, exist_ok=True)
+    profiler.write_json(out / "plan.json", plan)
+    _write_run_script(out)
     return plan
 
 
@@ -514,7 +609,7 @@ def _run_calibration(stack, plan, parent, manifest, profile, root: Path) -> dict
 
 def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
                  root: Path):
-    """Run one pending-only guarded repair while active attempts continue."""
+    """Run a guarded repair or its paired no-apply hardware control."""
     root.mkdir(parents=True, exist_ok=False)
     network._clear_cluster(stack)
     network.set_live_bandwidth(stack, {})
@@ -561,6 +656,13 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
                 "initial hardware plan has no moves: "
                 f"{result.failure_reason or 'unknown'}; "
                 f"power shortfall {result.power_shortfall_w:.6f} W")
+        initial_moves = [asdict(move) for move in result.moves]
+        if plan["apply_policy"] == CONTROL_POLICY \
+                and profiler.object_hash(initial_moves) \
+                != episode["expected_initial_moves_sha256"]:
+            raise RuntimeError(
+                "repair-disabled control initial plan differs from paired "
+                f"repair episode {episode['paired_repair_episode_id']}")
         table = pool_planner.candidate_table(
             problem, profile, architecture, "normal", ExpectedPower(problem, profile))
         candidates = _candidate_map(table, architecture)
@@ -778,7 +880,8 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
                 "removed_from_impaired": removed_from_impaired,
                 "unsafe_unstaged_kv": unsafe_kv,
             }
-            if shadow_guard["passed"]:
+            if shadow_guard["passed"] \
+                    and plan["apply_policy"] == APPLY_POLICY:
                 proposal = decision
                 controller.acknowledge(proposal.proposal_id, "applied", decision_s)
                 repaired = _planned_moves(proposal.moves, changed_architecture)
@@ -808,11 +911,15 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
             "prefill_control_ack": prefill_ack,
             "shadow_guard": shadow_guard,
             "repair_outcome": (
+                "disabled" if plan["apply_policy"] == CONTROL_POLICY else
                 "applied" if proposal else
                 "revised_maximum" if isinstance(decision, RevisedMaximum) else
                 "unchanged"),
+            "apply_policy": plan["apply_policy"],
+            "paired_repair_episode_id": episode.get(
+                "paired_repair_episode_id"),
             "repair_result": None if repair_result is None else asdict(repair_result),
-            "initial_moves": [asdict(move) for move in result.moves],
+            "initial_moves": initial_moves,
             "requests": request_rows,
             "ttft_recorded": all(row["ttft_s"] is not None
                                  for row in request_rows),
@@ -843,6 +950,18 @@ def run(plan_path: Path, key: Path, run_root: Path) -> dict:
             != plan["cluster_input"]["sha256"] \
             or profiler.file_hash(network.MODEL_PATH) != plan["model_profile"]["sha256"]:
         raise RuntimeError("scheduled repair plan input changed")
+    if plan["apply_policy"] == CONTROL_POLICY:
+        control_of = _resolve(plan["control_of"]["path"])
+        validation = Path(
+            plan["paired_hardware_run"]["validation"]["path"])
+        paired_results = [Path(row["paired_result"]["path"])
+                          for row in plan["episodes"]]
+        if profiler.file_hash(control_of) != plan["control_of"]["sha256"] \
+                or profiler.file_hash(validation) \
+                != plan["paired_hardware_run"]["validation"]["sha256"] \
+                or any(profiler.file_hash(path) != row["paired_result"]["sha256"]
+                       for path, row in zip(paired_results, plan["episodes"])):
+            raise RuntimeError("paired repair hardware evidence changed")
     for row in plan["implementation"]["files"]:
         if profiler.file_hash(_resolve(row["path"])) != row["sha256"]:
             raise RuntimeError(
@@ -925,6 +1044,8 @@ def reduce(plan: dict, run_root: Path) -> dict:
         "prefill_state": row["prefill_state"], "repeat": row["repeat"],
         "repair_outcome": row["repair_outcome"],
         "shadow_guard_passed": row["shadow_guard"]["passed"],
+        "would_repair": bool((row.get("repair_result") or {}).get(
+            "reaches_target", False)) and row["shadow_guard"]["passed"],
         "target_met": row["target_met"],
     } for row in results]
     if rows:
@@ -946,22 +1067,41 @@ def reduce(plan: dict, run_root: Path) -> dict:
         profiler.write_csv(run_root / "repair_ttft.csv", ttft_rows)
     ttfts = [row["ttft_s"] for row in ttft_rows
              if row["ttft_s"] is not None]
-    control = [row for row in rows if row["bandwidth_state"] == "none"
-               and row["prefill_state"] == "none"]
-    passed = len(rows) == len(plan["episodes"]) \
+    is_control = plan["apply_policy"] == CONTROL_POLICY
+    baseline = [row for row in rows if row["bandwidth_state"] == "none"
+                and row["prefill_state"] == "none"]
+    request_rows = [request for row in results for request in row["requests"]]
+    requests_passed = all(
+        request["request"].get("status_code") == 200
+        for request in request_rows)
+    common_passed = len(rows) == len(plan["episodes"]) \
         and bool(ttft_rows) and len(ttfts) == len(ttft_rows) \
-        and all(row["target_met"] for row in control) \
-        and any(row["repair_outcome"] == "applied" for row in rows) \
-        and all(row["target_met"] for row in rows
-                if row["repair_outcome"] == "applied") \
-        and all(row["repair_outcome"] != "applied"
-                or row["shadow_guard_passed"] for row in rows)
+        and requests_passed
+    passed = (common_passed
+              and all(row["repair_outcome"] == "disabled"
+                      and row["would_repair"] for row in rows)) \
+        if is_control else (common_passed
+              and all(row["target_met"] for row in baseline)
+              and any(row["repair_outcome"] == "applied" for row in rows)
+              and all(row["target_met"] for row in rows
+                      if row["repair_outcome"] == "applied")
+              and all(row["repair_outcome"] != "applied"
+                      or row["shadow_guard_passed"] for row in rows))
     summary = {
-        "schema": "queue-haul-scheduled-repair-hardware-validation-v2",
+        "schema": (
+            "queue-haul-repair-disabled-control-validation-v1"
+            if is_control else
+            "queue-haul-scheduled-repair-hardware-validation-v2"),
         "expected": len(plan["episodes"]), "completed": len(rows),
         "applied": sum(row["repair_outcome"] == "applied" for row in rows),
         "revised_maximum": sum(row["repair_outcome"] == "revised_maximum"
                                for row in rows),
+        "disabled": sum(row["repair_outcome"] == "disabled" for row in rows),
+        "would_repair": sum(row["would_repair"] for row in rows),
+        "target_met": sum(row["target_met"] for row in rows),
+        "http_200": sum(
+            request["request"].get("status_code") == 200
+            for request in request_rows),
         "ttft_rows": len(ttfts),
         "ttft_p50_s": statistics.median(ttfts) if ttfts else None,
         "ttft_p90_s": sorted(ttfts)[int(.9 * (len(ttfts) - 1))]
@@ -981,6 +1121,10 @@ def parse_args(argv=None):
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--calibration", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
+    command = sub.add_parser("prepare-control")
+    command.add_argument("--base-plan", type=Path, required=True)
+    command.add_argument("--paired-run-root", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("run")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path, required=True)
@@ -995,6 +1139,8 @@ def main(argv=None):
     args = parse_args(argv)
     if args.command == "prepare":
         prepare(args.parent, args.cluster, args.calibration, args.out)
+    elif args.command == "prepare-control":
+        prepare_control(args.base_plan, args.paired_run_root, args.out)
     elif args.command == "run":
         print(json.dumps(run(
             args.plan, args.ssh_key.expanduser(), args.run_root), indent=2))
