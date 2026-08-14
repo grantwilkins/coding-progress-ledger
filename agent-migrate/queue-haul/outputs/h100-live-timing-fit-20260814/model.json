@@ -1,0 +1,131 @@
+{
+  "coefficients": [
+    1.0298316479374638,
+    0.49417416752842913,
+    0.2530054204628936,
+    -0.7181201210309621,
+    1.564275818145049,
+    -0.028282226502054773,
+    0.26815131064762016,
+    0.22187771379457896,
+    1.642610872187179,
+    0.08426295238954128,
+    1.2195726359867107,
+    0.10540104195388343,
+    0.057090411461373794,
+    -0.013191420911230135,
+    -0.7924819909416112,
+    0.828694196082125,
+    0.23011777582138826,
+    -3.627810057845971,
+    4.533554224687326,
+    0.05311060719965564,
+    0.4285029907337705,
+    0.168857199153827,
+    1.5909786858162347,
+    0.12830712359021335,
+    1.221365939128775,
+    0.12281212424581794,
+    0.04996023549899663,
+    0.02335884535253369
+  ],
+  "cross_validation": [
+    {
+      "fold": 0,
+      "median_absolute_percentage_error": 0.11024561667681937,
+      "median_actual_over_predicted": 0.9971919593008853,
+      "n": 510,
+      "p90_actual_over_predicted": 1.3194275128806014,
+      "within_20_percent": 0.6470588235294118
+    },
+    {
+      "fold": 1,
+      "median_absolute_percentage_error": 0.09636918984755788,
+      "median_actual_over_predicted": 1.0061238903720215,
+      "n": 438,
+      "p90_actual_over_predicted": 1.265683681924207,
+      "within_20_percent": 0.6917808219178082
+    },
+    {
+      "fold": 2,
+      "median_absolute_percentage_error": 0.092460616971353,
+      "median_actual_over_predicted": 1.0151166626506198,
+      "n": 300,
+      "p90_actual_over_predicted": 1.3147444478559083,
+      "within_20_percent": 0.7066666666666667
+    },
+    {
+      "fold": 3,
+      "median_absolute_percentage_error": 0.09721285799060397,
+      "median_actual_over_predicted": 1.0101813044886492,
+      "n": 235,
+      "p90_actual_over_predicted": 1.3128649156548844,
+      "within_20_percent": 0.7021276595744681
+    },
+    {
+      "fold": 4,
+      "median_absolute_percentage_error": 0.10995615984041618,
+      "median_actual_over_predicted": 1.0282277929914267,
+      "n": 157,
+      "p90_actual_over_predicted": 1.4245933262594974,
+      "within_20_percent": 0.7452229299363057
+    }
+  ],
+  "feature_names": [
+    "australiaeast:kv_transfer:intercept",
+    "australiaeast:kv_transfer:log_context",
+    "australiaeast:kv_transfer:log_context_sq",
+    "australiaeast:kv_transfer:log_same_path_width",
+    "australiaeast:kv_transfer:log_destination_width",
+    "australiaeast:kv_transfer:destination_load",
+    "australiaeast:kv_transfer:order_fraction",
+    "australiaeast:replay:intercept",
+    "australiaeast:replay:log_context",
+    "australiaeast:replay:log_context_sq",
+    "australiaeast:replay:log_same_path_width",
+    "australiaeast:replay:log_destination_width",
+    "australiaeast:replay:destination_load",
+    "australiaeast:replay:order_fraction",
+    "southcentralus:kv_transfer:intercept",
+    "southcentralus:kv_transfer:log_context",
+    "southcentralus:kv_transfer:log_context_sq",
+    "southcentralus:kv_transfer:log_same_path_width",
+    "southcentralus:kv_transfer:log_destination_width",
+    "southcentralus:kv_transfer:destination_load",
+    "southcentralus:kv_transfer:order_fraction",
+    "southcentralus:replay:intercept",
+    "southcentralus:replay:log_context",
+    "southcentralus:replay:log_context_sq",
+    "southcentralus:replay:log_same_path_width",
+    "southcentralus:replay:log_destination_width",
+    "southcentralus:replay:destination_load",
+    "southcentralus:replay:order_fraction"
+  ],
+  "gate": {
+    "max_fold_mdape": 0.15,
+    "max_fold_p90_late_ratio": 1.5,
+    "median_bias_ratio": [
+      0.9090909090909091,
+      1.1
+    ],
+    "passed": true
+  },
+  "paths": [
+    "australiaeast:kv_transfer",
+    "australiaeast:replay",
+    "southcentralus:kv_transfer",
+    "southcentralus:replay"
+  ],
+  "run_root": "/datadrive/queue-haul-network/frontier-h100-width16-32tail-002",
+  "samples": 1640,
+  "schema": "queue-haul-live-timing-v1",
+  "source": "measured_live_transfers",
+  "stage_semantics": {
+    "api_upload_s": "measured at the source proxy",
+    "client_residual_s": "measured proxy-to-client completion",
+    "internal_queue_s": "not identifiable without server tracing",
+    "kv_transfer_window_s": "measured RESP transfer envelope",
+    "remote_to_first_byte_s": "measured route plus queue plus replay/KV ingest envelope",
+    "response_stream_s": "measured destination response stream"
+  }
+}

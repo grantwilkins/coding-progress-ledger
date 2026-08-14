@@ -1865,9 +1865,10 @@ def diagnostic_outcomes(scenario: dict, results: list[dict], demand: dict,
 
 class SinkLoad:
     def __init__(self, cfg: testbed.Config, port: int, prefill_tps: float,
-                 rho: float, path: Path, decode_tps: float | None = None):
+                 rho: float, path: Path, decode_tps: float | None = None,
+                 max_pending: int = 8):
         if prefill_tps <= 0 or decode_tps is not None and decode_tps <= 0 \
-                or not 0 < rho < 1:
+                or not 0 < rho < 1 or max_pending < 1:
             raise ValueError("invalid sink load")
         self.cfg, self.port, self.rho, self.path, self.decode_tps = (
             cfg, port, rho, path, decode_tps)
@@ -1875,6 +1876,7 @@ class SinkLoad:
             SINK_LOAD_PREFILL_TOKENS / prefill_tps
             + SINK_LOAD_DECODE_TOKENS / decode_tps
         ) / rho if decode_tps is not None else 512 / (rho * prefill_tps)
+        self.max_pending = max_pending
         self.stop, self.error = threading.Event(), None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
@@ -1903,9 +1905,9 @@ class SinkLoad:
         futures, rows, index = [], [], 0
         next_at = time.monotonic()
         try:
-            with ThreadPoolExecutor(max_workers=8) as pool:
+            with ThreadPoolExecutor(max_workers=self.max_pending) as pool:
                 while not self.stop.is_set():
-                    if len(futures) == 8:
+                    if len(futures) == self.max_pending:
                         rows.append(futures.pop(0).result())
                         if self.stop.is_set():
                             break
@@ -1951,6 +1953,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                          root: Path, prefill_tps: float) -> dict:
     diagnostic = scenario["design"] in {
         "frontier", "constraint", "separation", "hardware_gap"}
+    timing = scenario["design"] == "timing_live"
     root.mkdir(parents=True, exist_ok=False)
     (root / "scenario.json").write_text(
         json.dumps(scenario, indent=2, sort_keys=True) + "\n")
@@ -1977,7 +1980,8 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 stack.cfg, stack.ports[node.id]["api"],
                 destination_rates[0] if service_load else prefill_tps, compute,
                 root / f"sink_load_{node.id}.jsonl",
-                destination_rates[1] if service_load else None)
+                destination_rates[1] if service_load else None,
+                scenario.get("load_max_pending", 8))
             loads[node.id].start()
     if scenario.get("source_load"):
         loads["source"] = SinkLoad(
@@ -1985,7 +1989,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             root / "source_load.jsonl")
         loads["source"].start()
     try:
-        if scenario["design"] in {
+        if timing or scenario["design"] in {
                 "joint", "frontier", "constraint", "separation",
                 "hardware_gap"}:
             time.sleep(scenario.get("load_warmup_s", 5))
@@ -2006,13 +2010,16 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                     (node.id for node in nodes),
                     pool.map(snapshot, nodes),
                 ))
-            demand = agentic_demand(
-                sessions, scenario["sessions"], profile,
-                scenario.get("source_load", .4))
+            if timing:
+                moves = scenario["moves"]
+            else:
+                demand = agentic_demand(
+                    sessions, scenario["sessions"], profile,
+                    scenario.get("source_load", .4))
             if scenario["design"] == "hardware_gap":
                 moves, decision = plan_hardware_gap_scenario(
                     scenario, snapshots, profile, demand)
-            else:
+            elif not timing:
                 moves = plan_joint_scenario(
                     scenario, snapshots, profile, scenario["planner_seed"],
                     demand)

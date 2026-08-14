@@ -96,6 +96,37 @@ QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python frontier_model_audit.py
 The machine-readable summary and scenario, session-timing, destination-load,
 and exact-ceiling tables are in `outputs/frontier-h100-model-audit-20260814/`.
 
+### Live H100 timing calibration
+
+`live_timing_campaign.py` fits only measured regional transfers and holds out
+entire condition groups. The retrospective 1,640-transfer fit has 9.2--11.0%
+median absolute error and 1.27--1.42x p90 lateness across five folds. It remains
+provisional until its eight-transfer Australia East/South Central US pilot
+passes on the same frozen commit. The proxy records request/response byte
+boundaries and exact KV RESP windows; route plus internal queue plus
+reconstruction remains one envelope until destination server tracing exists.
+
+```bash
+QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py fit \
+  --run-root /datadrive/queue-haul-network/frontier-h100-width16-32tail-002 \
+  --out outputs/h100-live-timing-fit-20260814
+
+uv run python live_timing_campaign.py make-plan --stage pilot \
+  --manifest outputs/coding-manifest.json \
+  --cluster /datadrive/queue-haul-network/control/cluster-frontier-h100-a2d2a97f.json \
+  --out /datadrive/queue-haul-network/control/h100-live-timing-pilot.json
+
+uv run python live_timing_campaign.py validate \
+  --model outputs/h100-live-timing-fit-20260814/model.json \
+  --run-root /datadrive/queue-haul-network/h100-live-timing-pilot \
+  --out /datadrive/queue-haul-network/h100-live-timing-pilot/validation.json
+```
+
+The full plan covers 8K/16K/24K/31K contexts, concurrency 1/2/4/8, achieved
+load 0/0.5/0.8, both methods, both regions, and a held-out third repeat. The
+runner hard-fails if aligned achieved load differs from its cell by more than
+0.05. Do not run it concurrently with another workload on the source H100.
+
 ## System boundary
 
 A handoff prepares state in the background, quiesces at a request boundary,

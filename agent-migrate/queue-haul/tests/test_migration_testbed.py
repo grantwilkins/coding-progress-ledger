@@ -639,6 +639,10 @@ def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
     assert len(connections) == 1
     assert int(connections[0]["client_to_target_bytes"]) == 512
     assert connections[0]["key_hash"] == ""
+    assert 0 < int(connections[0]["client_first_byte_ns"]) \
+        <= int(connections[0]["client_last_byte_ns"])
+    assert connections[0]["target_first_byte_ns"] == ""
+    assert connections[0]["target_last_byte_ns"] == ""
 
 
 
@@ -687,6 +691,11 @@ def test_resp_proxy_attributes_and_shapes_each_returned_body(tmp_path):
         s.hashlib.sha256(key).hexdigest() for key in (b"session-a", b"session-b")
     ]
     assert int(rows[0]["start_ns"]) < int(rows[1]["end_ns"])
+    connection = next(csv.DictReader(
+        (tmp_path / "proxy_connections.csv").open()))
+    assert all(int(connection[name]) > 0 for name in (
+        "client_first_byte_ns", "client_last_byte_ns",
+        "target_first_byte_ns", "target_last_byte_ns"))
 
 def test_smoke2_live_cli_is_wired_with_1gbps_default():
     args = s.parse_args(["smoke2-live", "--run-root", "/tmp/live-proof"])
