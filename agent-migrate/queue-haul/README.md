@@ -833,13 +833,16 @@ claiming new hardware observations. Each of 1,000 paired draws resamples
 conversation templates and then one whole supported state tuple per template,
 normalizes the 28-session source pack to the
 campaign's 0.4 load, refits the balanced regional timing cells, and samples one
-joint phase-power bootstrap tuple. All eight HBM/bandwidth/prefill states share
+joint phase-power bootstrap tuple. All eight HBM/bandwidth/destination-compute
+states share
 that draw. The planner uses measured East US 2 and Germany West Central routes
 and a conservative route-plus-shared-migration-work envelope; background
-prefill consumes service headroom but does not assert an unmeasured migration
-slowdown. Stacked boundaries are the median Replay and median total-moved
-shares, while black intervals show their 5--95% ranges. Target misses and
-one-factor-release checks remain in the output tables.
+inference consumes shared prefill/decode destination-compute headroom but does
+not assert an unmeasured load-dependent migration slowdown. Every enabled
+factor is applied to both destinations, using region-specific route rates.
+Stacked boundaries are the median Replay and median total-moved shares, while
+black intervals show their 5--95% ranges. Target misses and one-factor-release
+checks remain in the output tables.
 The eight states are independent branches. Their fractional LP opportunity
 sets must expand on every release; any rounded-planner regressions are reported
 rather than repaired with a counterfactual plan. Noisy bootstrap route draws

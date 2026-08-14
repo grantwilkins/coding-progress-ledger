@@ -15,6 +15,7 @@ Plausible wrong implementations:
 - Call a target hit from power shortfall alone when execution feasibility failed.
 - Ignore the requested regional timing fit and measured route rates.
 - Make a state depend on whether a tighter counterfactual was solved first.
+- Apply a constrained factor to only one destination or retain a prefill-only label.
 """
 
 import numpy as np
@@ -26,6 +27,8 @@ from profiles import ModelProfile
 def test_factorial_is_exact_and_uses_only_declared_levels():
     cases = campaign.factorial_cases()
 
+    assert campaign.FACTORS == ("hbm", "bandwidth", "dest_compute")
+    assert campaign.LABELS[frozenset(("dest_compute",))] == "Dest. compute"
     assert len(cases) == 8
     assert {constraints for _, _, constraints in cases} == {
         frozenset(factor for factor, enabled in zip(campaign.FACTORS, flags)
@@ -190,6 +193,43 @@ def test_central_surface_uses_regional_timing_and_routes():
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
     assert summary["migration_gate_passed"]
     assert all(row["coverage"] == 1 for row in summary["held_out"].values())
+
+
+def test_factor_levels_apply_to_both_destinations():
+    fits = campaign.central_timing_fits()
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 28, 4))
+    states = {}
+    for constraints in (frozenset(), frozenset(campaign.FACTORS)):
+        scenario, architecture, _, _ = campaign.build_problem(
+            profile, pack, constraints, 2 / 3, fits,
+        )
+        states[bool(constraints)] = (scenario, architecture)
+
+    for constrained, bandwidth_level, compute_level, hbm_level in (
+        (False, "natural", .25, 0), (True, "controlled_40", .95, .9),
+    ):
+        scenario, architecture = states[constrained]
+        rates = {link.link_id: link.bytes_per_s for link in scenario.links}
+        assert rates == {
+            f"link/{region}": fits[region]["effective_pipeline_mbps"][
+                bandwidth_level] * 125_000
+            for region in campaign.REGIONS
+        }
+        for pool in architecture.pools:
+            dtype, replica = architecture.type_by_id[pool.type_id], pool.replicas[0]
+            pressure = max(
+                np.asarray(dtype.normals) @ np.asarray(replica.baseline_work)
+                / np.asarray(dtype.bounds["normal"])
+            )
+            resident = np.floor(
+                hbm_level * dtype.kv_capacity_tokens / dtype.kv_block_tokens
+            ) * dtype.kv_block_tokens
+            assert np.isclose(pressure, compute_level)
+            assert replica.baseline_kv_tokens == resident
+        assert {pool.replicas[0].replica_id for pool in architecture.pools} == \
+            set(campaign.REGIONS)
 
 
 def test_bootstrap_preserves_bandwidth_release_order():

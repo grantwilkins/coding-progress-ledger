@@ -3,31 +3,31 @@
   "claim": "conservative measurement-calibrated workload sensitivity",
   "cross_method_coupling": 1,
   "factor_activation_rate": {
-    "bandwidth-hbm-prefill/bandwidth": 0.265,
-    "bandwidth-hbm-prefill/hbm": 0.42,
-    "bandwidth-hbm-prefill/prefill": 1.0,
+    "bandwidth-dest_compute-hbm/bandwidth": 0.265,
+    "bandwidth-dest_compute-hbm/dest_compute": 1.0,
+    "bandwidth-dest_compute-hbm/hbm": 0.42,
+    "bandwidth-dest_compute/bandwidth": 0.483,
+    "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.875,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth-prefill/bandwidth": 0.483,
-    "bandwidth-prefill/prefill": 1.0,
     "bandwidth/bandwidth": 1.0,
-    "hbm-prefill/hbm": 0.445,
-    "hbm-prefill/prefill": 1.0,
-    "hbm/hbm": 1.0,
-    "prefill/prefill": 1.0
+    "dest_compute-hbm/dest_compute": 1.0,
+    "dest_compute-hbm/hbm": 0.445,
+    "dest_compute/dest_compute": 1.0,
+    "hbm/hbm": 1.0
   },
   "factor_levels": {
     "bandwidth": [
       "natural",
       "controlled_40"
     ],
+    "dest_compute": [
+      0.25,
+      0.95
+    ],
     "hbm": [
       0.0,
       0.9
-    ],
-    "prefill": [
-      0.25,
-      0.95
     ]
   },
   "inputs": {
@@ -45,7 +45,7 @@
     "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
     "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
     "each sampled pack is normalized to the pooled campaign's 0.4 source load",
-    "prefill pressure consumes measured service headroom; loaded-prefill migration slowdown is not modeled",
+    "destination compute pressure consumes shared prefill/decode service headroom; load-dependent migration slowdown is not modeled",
     "route plus shared destination work is a conservative no-overlap envelope",
     "timing audits are grouped retrospective checks, not untouched validation sets",
     "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
@@ -132,12 +132,12 @@
   "target_met_rate": {
     "All bound": 0.339,
     "Bandwidth": 0.989,
-    "Bandwidth + prefill": 0.339,
+    "Bandwidth + compute": 0.339,
+    "Dest. compute": 0.353,
     "HBM": 0.983,
     "HBM + bandwidth": 0.982,
-    "HBM + prefill": 0.349,
-    "None bound": 0.991,
-    "Prefill": 0.353
+    "HBM + compute": 0.349,
+    "None bound": 0.991
   },
   "unique_timing_draws": 1000,
   "workload": {

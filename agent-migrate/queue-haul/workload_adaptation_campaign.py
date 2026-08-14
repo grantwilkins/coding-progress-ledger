@@ -47,22 +47,22 @@ TIMING_PARENT = ROOT / "outputs/timing-power-validation-20260814/separation-regi
 OUT = ROOT / "outputs/workload-action-adaptation-20260814"
 BASE_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 WIDTH8_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
-FACTORS = ("hbm", "bandwidth", "prefill")
+FACTORS = ("hbm", "bandwidth", "dest_compute")
 ORDER = (
-    frozenset(("hbm",)), frozenset(("bandwidth",)), frozenset(("prefill",)),
-    frozenset(("hbm", "bandwidth")), frozenset(("hbm", "prefill")),
-    frozenset(("bandwidth", "prefill")), frozenset(FACTORS), frozenset(),
+    frozenset(("hbm",)), frozenset(("bandwidth",)), frozenset(("dest_compute",)),
+    frozenset(("hbm", "bandwidth")), frozenset(("hbm", "dest_compute")),
+    frozenset(("bandwidth", "dest_compute")), frozenset(FACTORS), frozenset(),
 )
 LABELS = {
     frozenset(("hbm",)): "HBM", frozenset(("bandwidth",)): "Bandwidth",
-    frozenset(("prefill",)): "Prefill",
+    frozenset(("dest_compute",)): "Dest. compute",
     frozenset(("hbm", "bandwidth")): "HBM + bandwidth",
-    frozenset(("hbm", "prefill")): "HBM + prefill",
-    frozenset(("bandwidth", "prefill")): "Bandwidth + prefill",
+    frozenset(("hbm", "dest_compute")): "HBM + compute",
+    frozenset(("bandwidth", "dest_compute")): "Bandwidth + compute",
     frozenset(FACTORS): "All bound", frozenset(): "None bound",
 }
 LEVELS = {"hbm": (0.0, .9), "bandwidth": ("natural", "controlled_40"),
-          "prefill": (.25, .95)}
+          "dest_compute": (.25, .95)}
 REGIONS = ("east", "germany")
 ACTIONS = ("replay", "kv_transfer", "not_moved")
 POWER_TOLERANCE_W = 1e-6
@@ -254,7 +254,7 @@ def build_problem(profile, sessions, constraints, target_fraction, fits):
         pools.append(DestinationPool(
             f"pool/{region}", dtype.type_id,
             (DestinationReplica(
-                region, tuple(values["prefill"] * direction), resident,
+                region, tuple(values["dest_compute"] * direction), resident,
             ),), f"route/{region}", (f"link/{region}",),
             fluid_migration=service,
         ))
@@ -368,7 +368,7 @@ def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3
 def factor_checks(rows):
     by_case = {constraints: case_id for case_id, _, constraints in factorial_cases()}
     utilization = {"hbm": "hbm_utilization", "bandwidth": "migration_utilization",
-                   "prefill": "service_utilization"}
+                   "dest_compute": "service_utilization"}
     checks = []
     for replicate in sorted({row["replicate"] for row in rows}):
         selected = {row["case_id"]: row for row in rows
@@ -673,7 +673,7 @@ def main():
             "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
             "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
             "each sampled pack is normalized to the pooled campaign's 0.4 source load",
-            "prefill pressure consumes measured service headroom; loaded-prefill migration slowdown is not modeled",
+            "destination compute pressure consumes shared prefill/decode service headroom; load-dependent migration slowdown is not modeled",
             "route plus shared destination work is a conservative no-overlap envelope",
             "timing audits are grouped retrospective checks, not untouched validation sets",
             "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
