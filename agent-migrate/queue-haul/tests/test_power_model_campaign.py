@@ -58,3 +58,40 @@ def test_fit_uses_realized_rates_and_recovers_saturating_model():
     assert fit["beta_s_per_decode_token"] == pytest.approx(1 / 500, rel=.03)
     assert fit["power_idle_w"] == pytest.approx(80)
     assert fit["power_max_w"] == pytest.approx(300, rel=.03)
+
+
+def usage(prompt=10, decode=2, cached=0):
+    return {"usage": {"prompt_tokens": prompt, "completion_tokens": decode,
+                      "prompt_tokens_details": {"cached_tokens": cached}}}
+
+
+def counters(prompt=20, decode=4, cached=0):
+    return {campaign.PROMPT_COUNTER: prompt, campaign.DECODE_COUNTER: decode,
+            campaign.CACHED_COUNTER: cached}
+
+
+def test_accounting_accepts_only_complete_exact_realized_batches():
+    cell = campaign.Cell("discovery", "campaign", 10, 2, 2, 0)
+
+    result = campaign.accounting(cell, [usage(), usage()], 1, counters())
+
+    assert result["realized_prefill_tokens"] == 20
+    assert result["realized_decode_tokens"] == 4
+
+
+@pytest.mark.parametrize(("requests", "batches", "metric", "match"), (
+    ([usage()], 1, counters(10, 2), "completed 1 of 2"),
+    ([usage(cached=1), usage()], 1, counters(cached=1), "cached prompt"),
+    ([usage(), usage()], 1, counters(30, 4), "counter/API disagreement"),
+))
+def test_accounting_hard_fails_incomplete_cached_or_disagreeing_work(
+        requests, batches, metric, match):
+    cell = campaign.Cell("discovery", "campaign", 10, 2, 2, 0)
+    with pytest.raises(RuntimeError, match=match):
+        campaign.accounting(cell, requests, batches, metric)
+
+
+def test_nonidle_zero_work_hard_fails():
+    cell = campaign.Cell("discovery", "campaign", 0, 0, 1, 0)
+    with pytest.raises(RuntimeError, match="zero work"):
+        campaign.accounting(cell, [usage(0, 0)], 1, counters(0, 0))

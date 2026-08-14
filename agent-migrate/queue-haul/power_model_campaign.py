@@ -11,6 +11,7 @@ import statistics
 import subprocess
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -20,6 +21,8 @@ import numpy as np
 PROMPT_COUNTER = "vllm:prompt_tokens_total"
 DECODE_COUNTER = "vllm:generation_tokens_total"
 CACHED_COUNTER = "vllm:prompt_tokens_cached_total"
+COUNTER_TOLERANCE_FRACTION = .001
+COUNTER_TOLERANCE_TOKENS = 1
 
 
 @dataclass(frozen=True)
@@ -89,11 +92,14 @@ def metrics(url: str) -> tuple[dict[str, float], int]:
     return parse_metrics(text), (before + after) // 2
 
 
-def gpu_row() -> list[str]:
-    return subprocess.check_output([
+def gpu_sample() -> tuple:
+    before = time.monotonic_ns()
+    row = subprocess.check_output([
         "nvidia-smi", "--query-gpu=timestamp,power.draw,utilization.gpu,memory.used",
         "--format=csv,noheader,nounits",
     ], text=True).strip().split(",")
+    after = time.monotonic_ns()
+    return (before + after) // 2, time.time_ns(), *map(str.strip, row)
 
 
 def sample_power(path: Path, stop: threading.Event, errors: list[BaseException]) -> None:
@@ -103,7 +109,7 @@ def sample_power(path: Path, stop: threading.Event, errors: list[BaseException])
             writer.writerow(("monotonic_ns", "wall_ns", "gpu_timestamp", "power_w",
                              "utilization_pct", "memory_mib"))
             while not stop.is_set():
-                writer.writerow((time.monotonic_ns(), time.time_ns(), *map(str.strip, gpu_row())))
+                writer.writerow(gpu_sample())
                 handle.flush()
                 stop.wait(.1)
     except BaseException as exc:
@@ -126,71 +132,99 @@ def completion(url: str, cell: Cell, request_id: int) -> dict:
             "usage": result["usage"]}
 
 
-def run_cell(cell: Cell, base_url: str, out: Path, warmup_s: float,
-             window_s: float, cooldown_s: float, sequence: int) -> dict:
+def batch(url: str, cell: Cell, first_id: int) -> list[dict]:
+    with ThreadPoolExecutor(max_workers=cell.concurrency) as pool:
+        rows = list(pool.map(lambda i: completion(url, cell, first_id + i),
+                             range(cell.concurrency)))
+    if len(rows) != cell.concurrency:
+        raise RuntimeError("incomplete synchronous batch")
+    return rows
+
+
+def accounting(cell: Cell, requests: list[dict], batches: int,
+               deltas: dict[str, float]) -> dict:
+    expected = batches * cell.concurrency
+    if len(requests) != expected or (cell.concurrency and len(requests) % cell.concurrency):
+        raise RuntimeError(f"completed {len(requests)} of {expected} measured requests")
+    prompt = sum(int(row["usage"]["prompt_tokens"]) for row in requests)
+    decode = sum(int(row["usage"]["completion_tokens"]) for row in requests)
+    cached = sum(int((row["usage"].get("prompt_tokens_details") or {})
+                     .get("cached_tokens", 0)) for row in requests)
+    expected_prompt = expected * cell.prompt_tokens
+    expected_decode = expected * cell.output_tokens
+    if prompt != expected_prompt or decode != expected_decode:
+        raise RuntimeError(f"API usage {(prompt, decode)} != scheduled {(expected_prompt, expected_decode)}")
+    if cached or deltas[CACHED_COUNTER]:
+        raise RuntimeError(f"cached prompt tokens observed: API={cached}, counter={deltas[CACHED_COUNTER]}")
+    if cell.concurrency and prompt + decode == 0:
+        raise RuntimeError("non-idle cell completed zero work")
+    if not cell.concurrency and (requests or sum(deltas.values())):
+        raise RuntimeError("idle cell reported inference work")
+    for name, observed, exact in ((PROMPT_COUNTER, deltas[PROMPT_COUNTER], prompt),
+                                  (DECODE_COUNTER, deltas[DECODE_COUNTER], decode)):
+        tolerance = max(COUNTER_TOLERANCE_TOKENS,
+                        COUNTER_TOLERANCE_FRACTION * exact)
+        if abs(observed - exact) > tolerance:
+            raise RuntimeError(f"{name} counter/API disagreement: {observed} != {exact} ± {tolerance}")
+    return {"reported_prompt_tokens": deltas[PROMPT_COUNTER],
+            "realized_prefill_tokens": prompt, "realized_decode_tokens": decode,
+            "cached_prompt_tokens": cached, "counter_tolerance_fraction":
+            COUNTER_TOLERANCE_FRACTION, "counter_tolerance_tokens": COUNTER_TOLERANCE_TOKENS}
+
+
+def run_cell(cell: Cell, base_url: str, out: Path, window_s: float,
+             cooldown_s: float, sequence: int) -> dict:
     label = f"{sequence:03d}-{cell.stage}-{cell.family}-p{cell.prompt_tokens}-g{cell.output_tokens}-c{cell.concurrency}-r{cell.replicate}"
     power_path = out / "power" / f"{label}.csv"
     stop = threading.Event()
     errors: list[BaseException] = []
-    requests: list[dict] = []
-    lock = threading.Lock()
     sampler = threading.Thread(target=sample_power, args=(power_path, stop, errors))
     sampler.start()
-
-    def worker(worker_id: int) -> None:
-        request_id = sequence * 1_000_000 + worker_id
-        try:
-            while not stop.is_set():
-                result = completion(f"{base_url}/v1/completions", cell, request_id)
-                with lock:
-                    requests.append(result)
-                request_id += cell.concurrency or 1
-        except BaseException as exc:
-            if not stop.is_set():
-                errors.append(exc)
-                stop.set()
-
-    workers = []
-    if cell.concurrency:
-        workers = [threading.Thread(target=worker, args=(i,))
-                   for i in range(cell.concurrency)]
-        for worker_thread in workers:
-            worker_thread.start()
-    time.sleep(warmup_s)
-    start_metrics, start_ns = metrics(f"{base_url}/metrics")
-    time.sleep(window_s)
-    end_metrics, end_ns = metrics(f"{base_url}/metrics")
-    stop.set()
-    for worker_thread in workers:
-        worker_thread.join()
-    sampler.join()
+    try:
+        url = f"{base_url}/v1/completions"
+        first_id = sequence * 1_000_000
+        if cell.concurrency:
+            batch(url, cell, first_id)
+        start_metrics, _ = metrics(f"{base_url}/metrics")
+        start_ns = time.monotonic_ns()
+        requests: list[dict] = []
+        batches = 0
+        if cell.concurrency:
+            while (time.monotonic_ns() - start_ns) / 1e9 < window_s:
+                requests.extend(batch(url, cell, first_id + (batches + 1) * cell.concurrency))
+                batches += 1
+        else:
+            time.sleep(window_s)
+        end_ns = time.monotonic_ns()
+        end_metrics, _ = metrics(f"{base_url}/metrics")
+    finally:
+        stop.set(); sampler.join()
     if errors:
         raise errors[0]
-    time.sleep(cooldown_s)
     duration = (end_ns - start_ns) / 1e9
     deltas = {name: end_metrics[name] - start_metrics[name] for name in start_metrics}
     if min(deltas.values()) < 0:
         raise RuntimeError("vLLM counter reset during cell")
+    work = accounting(cell, requests, batches, deltas)
+    if any(row["start_ns"] < start_ns or row["end_ns"] > end_ns for row in requests):
+        raise RuntimeError("measured request crossed a power boundary")
     with power_path.open() as handle:
         power = [float(row["power_w"]) for row in csv.DictReader(handle)
                  if start_ns <= int(row["monotonic_ns"]) < end_ns]
     if len(power) < 5 * duration:
         raise RuntimeError(f"only {len(power)} synchronized power samples in {duration:.1f}s")
     row = {**asdict(cell), "sequence": sequence, "start_ns": start_ns,
-           "end_ns": end_ns, "window_s": duration,
-           "reported_prompt_tokens": deltas[PROMPT_COUNTER],
-           "realized_prefill_tokens": deltas[PROMPT_COUNTER] - deltas[CACHED_COUNTER],
-           "realized_decode_tokens": deltas[DECODE_COUNTER],
-           "cached_prompt_tokens": deltas[CACHED_COUNTER],
-           "realized_prefill_tps": (deltas[PROMPT_COUNTER] - deltas[CACHED_COUNTER]) / duration,
-           "realized_decode_tps": deltas[DECODE_COUNTER] / duration,
+           "end_ns": end_ns, "window_s": duration, "batches": batches, **work,
+           "realized_prefill_tps": work["realized_prefill_tokens"] / duration,
+           "realized_decode_tps": work["realized_decode_tokens"] / duration,
            "power_mean_w": statistics.fmean(power),
            "power_p50_w": statistics.median(power), "power_samples": len(power),
-           "completed_requests": sum(start_ns <= r["end_ns"] < end_ns for r in requests),
+           "completed_requests": len(requests),
            "request_count": len(requests), "power_path": str(power_path)}
     with (out / "requests.jsonl").open("a") as handle:
         for request_row in requests:
             handle.write(json.dumps({"cell": label, **request_row}) + "\n")
+    time.sleep(cooldown_s)
     return row
 
 
@@ -302,7 +336,7 @@ def run(args) -> None:
     (args.out / "power").mkdir()
     metadata = {"started_wall_ns": time.time_ns(), "gpu": gpu,
                 "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-                "window_s": args.window_s, "warmup_s": args.warmup_s,
+                "minimum_window_s": args.window_s, "warmup": "one complete batch",
                 "cooldown_s": args.cooldown_s, "seed": args.seed}
     (args.out / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     server_log = (args.out / "server.log").open("w")
@@ -320,8 +354,8 @@ def run(args) -> None:
         wait_ready(base_url, server)
         rows = []
         for sequence, cell in enumerate(cells(args.seed)):
-            row = run_cell(cell, base_url, args.out, args.warmup_s,
-                           args.window_s, args.cooldown_s, sequence)
+            row = run_cell(cell, base_url, args.out, args.window_s,
+                           args.cooldown_s, sequence)
             rows.append(row)
             with (args.out / "cells.jsonl").open("a") as handle:
                 handle.write(json.dumps(row) + "\n")
@@ -351,11 +385,10 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8100)
     parser.add_argument("--window-s", type=float, default=12)
-    parser.add_argument("--warmup-s", type=float, default=4)
     parser.add_argument("--cooldown-s", type=float, default=2)
     parser.add_argument("--seed", type=int, default=20260814)
     args = parser.parse_args(argv)
-    if min(args.window_s, args.warmup_s, args.cooldown_s) <= 0:
+    if min(args.window_s, args.cooldown_s) <= 0:
         raise ValueError("cell durations must be positive")
     return args
 

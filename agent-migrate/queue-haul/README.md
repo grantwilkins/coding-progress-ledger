@@ -840,9 +840,10 @@ uv run python power_rate_sweep.py --out PATH --reduce-only --prefill-capacity-tp
 
 That legacy runner derives load from requests started in the window, so its
 overload points are offered-demand diagnostics, not realized-work calibration.
-`power_model_campaign.py` instead differences vLLM's computed-prefill,
-generation, and cached-token counters over the same timestamps as 100-ms H100
-power samples. It randomizes a discovery grid spanning pure-prefill,
+`power_model_campaign.py` instead measures complete synchronous batches between
+power-window boundaries and verifies their exact API token usage against vLLM's
+computed-prefill, generation, and cached-token counters. It randomizes a
+discovery grid spanning pure-prefill,
 decode-heavy, exact 604/64-token campaign, and agentic mixes across concurrency
 1/2/4/8/16, then tests unseen contexts and concurrency 3/6/12. The fit remains
 uncalibrated unless its held-out error, per-family error, coefficient stability,
