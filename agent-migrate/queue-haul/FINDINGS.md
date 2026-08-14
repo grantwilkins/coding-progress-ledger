@@ -18,6 +18,152 @@ All 767 artifacts listed in `SHA256SUMS` match; the archive contains those
 artifacts plus the manifest itself. The local `data/` copy is ignored by Git
 and is not part of the evidence commit.
 
+## Prefill, decode, and holding audit
+
+The 2026-08-14 audit rejects a new decode-hold constraint for now. It also
+rejects predicting numeric TTFT or TBT changes from `ell`, service slack, or
+simulator queue debt. Keep these quantities separate:
+
+| Quantity | Unit | Current status |
+|---|---|---|
+| prefill work `P` | context-conditioned prefill service-seconds per horizon | represented by the first destination-work coordinate |
+| decode work `D` | context-conditioned decode service-seconds per horizon | represented by the second destination-work coordinate |
+| resident state `K` | block-rounded KV tokens or bytes | represented separately as stock |
+| active decode `N(t)` | scheduled sequence occupancy or sequence-seconds | not identified and not a session count |
+| backlog `Q(t)` | offered requests/work waiting for admission | observable state, not a holding reservation |
+
+The existing two-dimensional destination halfspaces can express independent or
+coupled `P,D` budgets. Power remains a separate phase-rate model. Add an
+independent, context-conditioned `N` row only if a matched hardware campaign
+shows that it removes held-out false-feasible decisions beyond `P,D,K`. Do not
+put `P,D,N,K`, transition debt, or power into one scalar.
+
+### Complete serving-data inventory
+
+| Corpus | Scale | What it establishes | What it does not establish |
+|---|---:|---|---|
+| A100 stage-1 prefill | 6 levels, 324 requests, one physical bundle | intrinsic concurrency-one TTFT versus prompt length | bursts, mixed load, independent uncertainty |
+| A100 stage-1 decode | 27 levels, 3,577 requests, three physical context bundles | a context/concurrency latency cliff and saturation throughput | an independently repeated SLO boundary |
+| v7 anchors | 18 runs across 4K/16K/24K and phase | context means, queue and running-width diagnostics | tail ITL; histogram labels were discarded |
+| v7 mixed service | 113 executions, 9,181 requests | five descriptive cache-correct anchors | a boundary: 47 runs are missing-work invalid, 60 append-hot, one under-hit |
+| v7 loaded migration | 27 executions, 36 foreground requests | matched qualitative replay-versus-KV interference | a percentile interference surface |
+| H100 profile | one 16-request prefill burst and one 128-request decode burst | aggregate saturation anchors | production SLO capacity or context curves |
+| stored network/frontier/handoff streams | 154,009 requests | first-network-response and inter-SSE stall diagnostics | true TTFT/ITL or open-loop stability |
+| live-power-oneoff | one 1,816-request output-one storm | queued prefills can drive p90 TTFT to 27--103 s | decode behavior |
+| live-power-shed | one mixed-load run, 7,166 engine samples | running/waiting occupancy across a handoff | request-level tail latency |
+| continuation probes | 12,606 requests | post-migration continuation response | active-decode capacity |
+| capacity reductions | 1,048 episode rows | migration deadline and drain outcomes | latency fitting; raw request/engine traces were not retained |
+| migration microcampaigns | 819 scenarios | exact KV bytes, catch-up, concurrency gates, and migration timing | service hold or an eviction/residency SLO |
+| phase-power calibration | 14 mixture measurements | phase direction can matter to source power | a validated joint power/SLO promise; grouped-CV RMSE is 7.99 W and the gate fails |
+
+The stored stream corpus comprises 9,972 old network, 79,940 A100 frontier,
+63,012 H100 hardware-gap, and 1,085 live-handoff requests. Its load generator
+blocks after eight futures, records no scheduled arrival, and therefore becomes
+closed/concurrency-capped under pressure. `first_byte_ns` equals request end for
+8.1%, 44.4%, 99.9%, and 45.0% of those four groups because the client waits for
+visible `delta.content`; the first SSE event is available separately. An SSE
+event is not necessarily one token. The prefill-only pacing formula also uses
+512 tokens for a measured 604-token prompt, understating offered prefill by
+18%. These records are descriptive interference evidence only.
+
+The evidence catalog is not complete for serving analysis: it omits
+`requests.json`, `engine.csv`, `service_requests.csv`, H100 `prefill.json` and
+`decode.json`, compressed episode/engine files, and west sink streams. Raw
+serving arrays and all histogram labels must be checksum-cataloged before any
+model promotion.
+
+Power cannot repair the latency gap. The phase-aware source-power form is a
+reasonable separate coordinate, but its held-out gate and the packed-power
+gate both fail. Power coefficients are not service-facet weights, and service
+debt cannot be converted into watts or milliseconds. A future paired service
+campaign may sample power concurrently, but power and latency require separate
+acceptance gates.
+
+### Measured prefill/decode separation
+
+The isolated A100 prefill staircase holds concurrency at one. Its p95 TTFT
+rises from 34.321 ms at 256 input tokens to 65.838 ms at 1K, 283.493 ms at 4K,
+589.069 ms at 8K, 1.954 s at 16K, and 4.618 s at 28K while throughput remains
+2,430--2,981 input tok/s. This is an execution-length curve, not a prefill-storm
+curve.
+
+For the decode staircase, the following uses diagnostic p95 thresholds of
+TTFT <=2 s and ITL <=100 ms. The repository's legacy policy is p90, so this is
+an intentionally stricter comparison, not a replacement SLO.
+
+| Context | Max-throughput point | ITL-safe point | Joint TTFT/ITL-safe point |
+|---:|---|---|---|
+| 256 | N=256, 3,774 tok/s, 1.681 s / 48.0 ms | same | same |
+| 4,096 | N=256, 1,377 tok/s, 43.417 s / 629.1 ms | N=64, 812 tok/s, 37.7 ms ITL | N=4, 78 tok/s, 1.269 s / 23.0 ms |
+| 8,192 | N=128, 630 tok/s, 56.112 s / 857.3 ms | N=64, 514 tok/s, 45.9 ms ITL | N=2, 42 tok/s, 1.801 s / 22.8 ms |
+
+`service_profile_reduce.py` selects the maximum aggregate decode throughput
+and ignores both latency columns. The profile then stores that aggregate rate
+under concurrency key `1`, and `simulate.py` consumes it as a single-request
+rate. At 256/4K/8K, the resulting modeled token intervals are
+0.265/0.848/1.587 ms versus measured concurrency-one p95 ITL
+22.206/22.484/22.016 ms: 84x/27x/14x optimistic. The H100 profile also reuses
+the A100 context tables despite having different H100 saturation `F,G`.
+Consequently, current simulated TBT is invalid.
+
+The H100 runs are saturation anchors for another serving class. The prefill
+run reports mean/p99 TTFT 5.458/11.464 s. The decode run reports 451.318 output
+tok/s, mean TPOT 261.986 ms, p99 ITL 942.994 ms, and p99 TTFT 18.022 s. It used
+GPU-memory utilization 0.9 and raw KV capacity 2,472,995, while the migration
+stack uses 0.75 and advertises 1,205,376. They cannot share an SLO envelope.
+
+### A/B and held-context falsification
+
+`outputs/service-holdout-20260814/summary.json` contains the reproducible
+analysis. Four simulated traces have exactly 4,096 prefill and 8,192 decode
+tokens over 30 seconds, identical `(p,d)=(0.09427,0.21665)`, and identical
+modeled power. Smooth arrivals give p95 TTFT 45.6 ms; synchronous arrivals give
+7.066 s. With the same arrivals and decode-token total, putting four long
+decodes first versus last changes p95 TTFT from 5.012 to 7.750 s. This proves
+that mean work does not determine this simulator's queueing result.
+
+It does not validate a serving model. The simulator FCFS-serializes whole
+requests, always reports peak active decode one, and gives the same modeled
+TBT 0.873 ms for every shape. It contains no token iterations, continuous
+batching, chunked-prefill interference, sequence slowdown, preemption, or
+output-length uncertainty.
+
+A leave-one-context-out diagnostic on the 27 decode cells compares achieved
+work alone with the observed iteration-time proxy
+`1000 * concurrency / achieved_output_tps`. Work alone has 111.4 ms MAE,
+80.6% MAPE, and four false-feasible cells at each 100 and 250 ms. The proxy
+has 84.7 ms MAE, 39.0% MAPE, one false-feasible cell at 100 ms, and three at
+250 ms. Both use achieved throughput, so both leak post-outcome information
+and neither is an admission model. The result is only evidence that an
+occupancy/iteration signal may be useful and requires a controlled test.
+
+At the common v7 radius 0.096953, the four cache-correct runs have p95 active
+decode occupancy from one to four while p90 per-request mean TPOT remains
+22.646--23.687 ms. The fifth anchor at radius 0.114063 has p95 occupancy eight
+and p90 mean TPOT 24.706 ms. Scalar work therefore does not identify hold, but
+all five points pass and true token gaps are absent, so the data do not show
+that hold is needed to predict an SLO boundary.
+
+### SLO semantics
+
+Freeze the target population, threshold, quantile, and window before the
+validation campaign. Observations can establish feasibility and headroom; they
+must not define and validate the objective on the same runs. Report both raw
+TTFT/true-ITL distributions and attainment/goodput against the frozen SLO.
+
+The denominator is all eligible offered requests, not successful requests.
+Timeouts, incomplete output, rejections, OOMs, and process failures are misses.
+For a session-level SLO, first declare whether every eligible turn or a fixed
+fraction of turns must pass, then report good sessions divided by all offered
+sessions. During experiments, physical process/cache-reset runs remain the
+independent unit; requests and tokens are correlated observations within a run.
+
+Keep the current p90 TTFT <=2 s and p90 per-request mean TPOT <=100 ms labeled
+as the legacy research contract. Mean TPOT is not tail TBT. A product-facing
+TBT/ITL quantile and threshold must be selected externally, then frozen. The
+current honest output is binary membership and slack in an advertised
+sensitivity envelope, not a predicted millisecond change.
+
 ## Service evidence
 
 The 47 summaries classified infeasible contain 50 requests with HTTP status

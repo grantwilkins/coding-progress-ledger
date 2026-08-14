@@ -239,6 +239,95 @@ recorded concurrency-one v7 schedules and measured 16K/10-Gbps and
 24K/5-Gbps cells. A robust foreground tail-SLO claim still requires enforced
 idle/drained migration or additional impact evidence.
 
+## Prefill/decode holding follow-up
+
+Do not add a decode-hold planner field before this test. The minimum necessity
+campaign is 24 physical runs, with at most nine additional runs if the knee is
+not bracketed.
+
+### Instrumentation gate
+
+Pin one production serving class; prefer the H100 migration stack at
+`gpu_memory_utilization=0.75`. Fingerprint model/tokenizer/image, GPU, TP/PP,
+vLLM and CUDA, scheduler policy, `max_num_seqs`, `max_num_batched_tokens`,
+chunked prefill, APC, block size, KV capacity, eager/graph mode, and cache
+policy. Restart the process and clear cache between physical repeats.
+
+Record scheduled and actual arrivals, offered prompt/output tokens, admission,
+first generated token, every output-token timestamp, finish reason, `[DONE]`,
+running/waiting/preemption/KV time series, and intended versus cached prefix.
+Preserve Prometheus histogram labels and buckets; the current label-stripping
+reduction destroys ITL quantiles. Hard-fail configuration drift, a cache
+contract violation, incomplete output, or offered-arrival error above 1%.
+Failures remain SLO misses rather than disappearing from the denominator.
+
+### Paired necessity design
+
+Use one middle context family at one clearly inside load and one adaptively
+located SLO knee. Each 60-second matched block has identical total normalized
+prefill work `P`, decode work `D`, context histogram, and physical KV stock
+`K`. Run three shapes:
+
+1. smooth prefills and staggered many-short decodes;
+2. the same request/output multiset with prefills clustered at two declared
+   short windows; and
+3. smooth prefills with the same decode-token total concentrated into
+   few-long, synchronized decodes.
+
+Park neutral sessions when necessary to equalize KV and session inventory.
+Use three independent process restarts for `3 shapes x 2 loads`, giving 18
+runs. Hold out a second context family at the selected knee and run the
+baseline plus whichever shaped treatment differs, again with three restarts,
+giving six final-validation runs. If the initial loads do not bracket pass and
+fail, add one outside load for all three shapes and repeats, giving nine more.
+
+Split by whole process/cache-reset execution. Keep paired nodes and phases in
+the same fold. Hold out complete contexts, workload shapes, and a temporal
+campaign block. Never use realized overlap, completed throughput, queue depth,
+admitted starts, or first/end times as admission features. Candidate features
+must be scheduled offered `P,D`, a multiscale prefill-burst envelope, and a
+context-conditioned forecast of active decode derived from enforced request
+rate and output caps.
+
+Predeclare these nested models:
+
+- baseline: horizon `P,D` plus block-rounded `K`;
+- burst: baseline plus maximum short-window prefill service debt;
+- hold: burst plus one context-conditioned active-sequence or
+  sequence-second row; and
+- interaction: only if the factorial has independent support.
+
+Promote the burst row only if it improves held-out classification. Promote the
+decode-hold row only if equal-`P,D,K` shapes move the safe boundary by more than
+15% at both tuning loads, the direction repeats on the held-out context, and
+one monotone occupancy term reduces held-out radial error below 10% with no
+false-feasible validation cell. Otherwise retain `P,D,K` only. Every promoted
+model hard-fails outside its measured context, load, burst, output-length,
+scheduler, KV, and power hull.
+
+Keep the existing run-level policies: an inside point passes at least two of
+three independent runs, an outside point fails at least two of three, and a
+disagreement grows to five. Require a radial bracket at most 5%, complete
+drain, the frozen queue-drift tolerance, and no OOM, restart, or rejection.
+Report false-infeasible cells and interval coverage as secondary costs.
+
+Only after the base service test passes should migration be introduced. If a
+percentile interference bound is required, run replay, KV, and no-migration on
+the identical inside and knee traces with three repeats: 18 additional runs.
+The existing data already support qualitative KV-over-replay method ordering,
+so omit this stage otherwise.
+
+If “hold” instead means physical residency over horizon `H`, run a separate
+stock experiment at 25/50/75/90% physical KV fill, churn/wait for `H`, and
+resume random sentinels near the decode knee with three restarts. Measure
+eviction, recompute, cache hits, TTFT, true ITL, and preemption. A synthetic KV
+reservation is not residency evidence.
+
+Before promotion, extend the checksum catalog to raw request arrays, engine
+telemetry, full histogram buckets, H100 saturation JSON, compressed episode
+records, and every regional sink stream. Retaining only reduced queue/drain
+summaries makes later SLO fitting impossible.
+
 ## Three-region Azure follow-up
 
 The three-region campaign is implemented but is not yet evidence. Sweden

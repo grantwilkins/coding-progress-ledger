@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+import plot_style
 from profiles import (
     ACTION_POWER,
     SOURCE_SECTIONS,
@@ -31,6 +32,9 @@ from simulate import (
     SimSession,
     execute,
 )
+
+
+plot_style.apply()
 
 
 def _profile() -> ModelProfile:
@@ -62,6 +66,7 @@ def _profile() -> ModelProfile:
         1,
         1,
         "gpu",
+        1,
         1,
         1,
         1000,
@@ -147,7 +152,8 @@ def write(out: Path) -> None:
         writer.writerows(rows)
 
     background = "#FAFAF7"
-    copy_color, switch_color, power_color = "#2F80ED", "#F2C94C", "#176B52"
+    copy_color = plot_style.ACTION_COLORS["kv_transfer"]
+    switch_color, power_color = "#F2C94C", "#176B52"
     fig = plt.figure(figsize=(11, 6), facecolor=background)
     grid = fig.add_gridspec(
         2,
@@ -313,7 +319,7 @@ def write(out: Path) -> None:
     )
     fig.savefig(
         out / "simulator_validation.png",
-        dpi=180,
+        dpi=plot_style.SAVE_DPI,
         facecolor=background,
         transparent=False,
     )

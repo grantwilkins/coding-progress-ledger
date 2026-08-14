@@ -34,6 +34,15 @@ does not provide an accepted shared-load capacity boundary, so simulator
 service headroom remains a sensitivity. That boundary is not required for the
 dedicated two-A100 migration claim.
 
+`service_holdout_analysis.py` reproduces the prefill/decode staircase audit,
+leave-one-context-out decode ablation, and matched-work request-simulation
+falsification. It reports why those traces do not yet support a TTFT/TBT or
+decode-hold admission guarantee.
+
+```bash
+uv run python service_holdout_analysis.py --out outputs/service-holdout-20260814/summary.json
+```
+
 The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
 H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
 1,205,376 production KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
