@@ -196,6 +196,79 @@ must be selected and then frozen. The current honest output is binary membership
 and slack in an advertised sensitivity envelope, not a predicted millisecond
 change.
 
+### Queue-Haul performance boundary
+
+The paper-facing question is causal and narrower than serving simulation:
+holding the offered session trace fixed, how do user-visible latency and SLO
+attainment change when Queue-Haul places those sessions on a destination with
+little remaining service slack? Keep the capacity constraints as admission
+guards and measure this policy effect separately. Do not add modeled TTFT or TBT
+to the planner.
+
+The GPT-OSS-20B timing implementation in `~/powertrace-sim` is not a portable
+latency oracle. It is a full discrete-event continuous-batching simulator with
+chunked prefill, decode scheduling, KV/seat admission, and configuration-specific
+iteration-time calibration. Its legacy GPT-OSS-20B data used vLLM 0.11.0 with
+async scheduling, compilation, APC, and a 2,048-token batch limit; the current
+Queue-Haul serving class uses vLLM 0.22.0, eager execution, different memory
+settings, and a different cache/migration topology. Importing its predicted
+milliseconds would require the configuration transfer validation that this
+project deliberately does not have.
+
+Its newer raw disaggregated GPT-OSS-20B measurements--one A100 prefill role and
+one A100 decode role, each TP1--are nevertheless a useful external empirical
+sensitivity reference. They are not the monolithic Queue-Haul serving class.
+The checked reduction in
+`outputs/service-holdout-20260814/summary.json` uses all offered requests in the
+attainment denominator and derives per-request mean TPOT as total streamed
+decode duration divided by emitted tokens after the first. Stream-event gaps
+remain labeled as transport events, not true token ITL.
+
+- In the short mixed ShareGPT family, increasing nominal load from 0.25 to
+  4 requests/s raises p90 per-request mean TPOT from 4.95--5.00 ms to
+  9.09--9.12 ms, a conservative 1.82x increase. P90 TTFT remains
+  76--97 ms at 4 requests/s and every recorded cell passes the loose legacy
+  2 s/100 ms rule.
+- In the fixed roughly 8.3K-input/64-output family, 1 request/s gives p90 TTFT
+  1.975--1.986 s and 90.7% joint request attainment. At 2 requests/s, p90 TTFT
+  is 28.844--46.045 s and attainment is 1.7--5.0%, while p90 per-request mean
+  TPOT remains 4.899--4.902 ms. Even the least adverse recorded-cell comparison
+  is a 14.52x TTFT increase and an 85.7-point attainment loss.
+
+These are within-family load effects, not a controlled comparison between the
+families: the 8.3K campaign also changes the workload, token budget, and vLLM
+batch limit. They establish the mechanism and show why one scalar `ell` cannot
+be presented as a latency model. They do not estimate a Queue-Haul treatment
+effect or certify the current serving class.
+
+The current repository contributes two additional pieces. The H100 power sweep
+shows zero of 13 long-prefill requests completing inside its 10-second window
+near `ell=0.940`, versus 29 of 40 short-mixed requests near `ell=0.966`; this is
+a right-censored, single-sweep stability proxy, not an SLO result. The loaded
+migration pairs below quantify the transient direction: KV transfer has much
+smaller observed foreground penalties than replay. What remains unsupported is
+steady-state post-placement degradation for Queue-Haul itself.
+
+Bootstrapping requests cannot fill that gap. It can quantify sampling error
+inside a recorded trace. The PowerTrace rates have only two or three recorded
+cells sharing campaign stacks, and the Queue-Haul archive has no matched
+spread-versus-packed steady-state treatment. Resample physical restart blocks
+only after collecting that counterfactual; until then report raw ranges and no
+confidence claim.
+
+The smallest paper-facing closure is therefore a policy-reserve experiment,
+not another serving model. Replay the same offered sessions under no move,
+Queue-Haul with the existing 20% service-flex reserve, and Queue-Haul with a 5%
+reserve. Use the checksum-pinned validation packs with the largest and smallest
+prefill-service share; the current profile selects `coding` and
+`agentic_tool_loop`. Preload each planned state so this comparison measures
+steady-state placement, then report system-wide and per-replica raw latency,
+joint attainment, failures, queue drift, and power shed across six paired
+restart blocks. The resulting claim is the measured power/SLO change from a
+more marginal Queue-Haul placement on those packs. Migration remains the
+separate matched transient result, and no milliseconds-from-load predictor is
+introduced.
+
 ## Service evidence
 
 The 47 summaries classified infeasible contain 50 requests with HTTP status

@@ -1,5 +1,5 @@
 {
-  "schema": "queue-haul-service-holdout-v2",
+  "schema": "queue-haul-service-holdout-v3",
   "inputs": {
     "prefill": "outputs/stage1_gpt_oss_20b_a100_tp1_eager_quick2_prefill_rho.csv",
     "decode": "outputs/stage1_gpt_oss_20b_a100_tp1_eager_quick2_decode_context.csv",
@@ -867,5 +867,641 @@
         "observed_to_modeled_ratio": 13.874253928080385
       }
     ]
+  },
+  "powertrace_empirical_reference": {
+    "evidence_role": "external disaggregated-serving empirical sensitivity; not a Queue-Haul treatment effect or admission model",
+    "slo": {
+      "ttft_s": 2,
+      "request_mean_tpot_s": 0.1,
+      "denominator": "all offered requests; uncompleted requests are misses"
+    },
+    "families": {
+      "short_mixed": {
+        "campaign": "data/disagg/gpt-oss-20b-a100-pd-35613154",
+        "configuration": {
+          "clock": {
+            "engine_timestamp_basis": "unix_epoch",
+            "local_utc_offset_s": -25200.0,
+            "power_timestamp_basis": "local_wall_time",
+            "proxy_timestamp_basis": "unix_epoch_nanoseconds",
+            "request_timestamp_basis": "unix_epoch"
+          },
+          "container_image": "/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif",
+          "deployment": "disaggregated_prefill",
+          "hardware": "A100-80GB",
+          "mode": "campaign",
+          "model": "openai/gpt-oss-20b",
+          "roles": {
+            "decode": {
+              "gpu_uuid": "GPU-713d5b24-2a1e-fd4a-7685-c3d195ff9230",
+              "tp": 1
+            },
+            "prefill": {
+              "gpu_uuid": "GPU-c5d32af0-0857-3b36-6541-1a688a9ec165",
+              "tp": 1
+            }
+          },
+          "server": {
+            "async_scheduling": true,
+            "enable_chunked_prefill": true,
+            "gpu_memory_utilization": 0.9,
+            "kv_connector": "NixlConnector",
+            "kv_load_failure_policy": "fail",
+            "max_model_len": 131072,
+            "max_num_batched_tokens": 8192,
+            "max_num_seqs": 256
+          },
+          "workload": {
+            "arrival_process": "poisson",
+            "dataset": "sharegpt",
+            "dataset_path": "/home/groups/ramr/gfw/ShareGPT_V3_unfiltered_cleaned_split.json",
+            "nominal_duration_s": 600,
+            "rates": [
+              0.25,
+              2.0,
+              4.0
+            ],
+            "repeats": 3,
+            "seed": 0
+          }
+        },
+        "metadata_sha256": "3afaf2461dd008b988903251734bb6129f3f88e21e0007ba8d356010911a91f7",
+        "cells": [
+          {
+            "cell": "rate-0p25-repeat-0",
+            "nominal_request_rate": 0.25,
+            "offered_requests": 150,
+            "completed_requests": 150,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 302.52666666666664,
+            "mean_output_tokens": 214.23333333333332,
+            "decode_metric_eligible_requests": 150,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 0.24587801541713084,
+            "p90_ttft_ms": 92.15877866372465,
+            "p90_request_mean_tpot_ms": 4.999714835162555,
+            "p95_stream_event_gap_ms": 5.270087253302336,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "701ccb349a1833eddad868068cb181ae9551f0ab5fc958419e93bde1656f733a"
+          },
+          {
+            "cell": "rate-0p25-repeat-1",
+            "nominal_request_rate": 0.25,
+            "offered_requests": 150,
+            "completed_requests": 150,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 302.52666666666664,
+            "mean_output_tokens": 217.1,
+            "decode_metric_eligible_requests": 150,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 0.24589137124673396,
+            "p90_ttft_ms": 51.14980069920421,
+            "p90_request_mean_tpot_ms": 4.954914173895933,
+            "p95_stream_event_gap_ms": 5.267775058746337,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "ccc3cf2ccbf2748e6c2a395d1e482dc84802704718287344dda2f1a54b734a93"
+          },
+          {
+            "cell": "rate-0p25-repeat-2",
+            "nominal_request_rate": 0.25,
+            "offered_requests": 150,
+            "completed_requests": 150,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 302.52666666666664,
+            "mean_output_tokens": 217.1,
+            "decode_metric_eligible_requests": 150,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 0.24589822617224225,
+            "p90_ttft_ms": 49.50731573626399,
+            "p90_request_mean_tpot_ms": 4.95613943865224,
+            "p95_stream_event_gap_ms": 5.291867488995194,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "5411c2e626a54ceed80df45b1399fe6fb21e9820ef552fbdad9907c807bc2a4b"
+          },
+          {
+            "cell": "rate-2-repeat-0",
+            "nominal_request_rate": 2.0,
+            "offered_requests": 1200,
+            "completed_requests": 1200,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 285.745,
+            "mean_output_tokens": 197.57833333333335,
+            "decode_metric_eligible_requests": 1199,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 1.967777111961446,
+            "p90_ttft_ms": 100.57895937934522,
+            "p90_request_mean_tpot_ms": 7.362578640736285,
+            "p95_stream_event_gap_ms": 8.047863841056824,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "eefb6b577ed44075f980f2ff8565abb2baf6401fbcdbfde8cf6f782e9b9974ae"
+          },
+          {
+            "cell": "rate-2-repeat-1",
+            "nominal_request_rate": 2.0,
+            "offered_requests": 1200,
+            "completed_requests": 1200,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 285.745,
+            "mean_output_tokens": 197.87083333333334,
+            "decode_metric_eligible_requests": 1199,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 1.967674610491004,
+            "p90_ttft_ms": 66.32485296577217,
+            "p90_request_mean_tpot_ms": 7.4093366644400005,
+            "p95_stream_event_gap_ms": 8.091943152248858,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "3077f6eb96c4e6be5e57c3649ff34616cd09e721eb0e6376925b9defdcbc65c0"
+          },
+          {
+            "cell": "rate-2-repeat-2",
+            "nominal_request_rate": 2.0,
+            "offered_requests": 1200,
+            "completed_requests": 1200,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 285.745,
+            "mean_output_tokens": 197.52666666666667,
+            "decode_metric_eligible_requests": 1199,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 1.9679381277718007,
+            "p90_ttft_ms": 63.88811385259033,
+            "p90_request_mean_tpot_ms": 7.397988560691215,
+            "p95_stream_event_gap_ms": 8.042061096057296,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "2babe31d9eecf99e95bb6e29a43bd6857b41f868d761351ddcde887c4ec093ea"
+          },
+          {
+            "cell": "rate-4-repeat-0",
+            "nominal_request_rate": 4.0,
+            "offered_requests": 2400,
+            "completed_requests": 2400,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 292.4691666666667,
+            "mean_output_tokens": 205.40541666666667,
+            "decode_metric_eligible_requests": 2399,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 3.846593954812179,
+            "p90_ttft_ms": 97.3726919852197,
+            "p90_request_mean_tpot_ms": 9.118266436501894,
+            "p95_stream_event_gap_ms": 9.565592929720879,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "ab5dad95f66c8887fae0f6b533706dca3e10e35e2ace3f835b04b695bc0377aa"
+          },
+          {
+            "cell": "rate-4-repeat-1",
+            "nominal_request_rate": 4.0,
+            "offered_requests": 2400,
+            "completed_requests": 2400,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 292.4691666666667,
+            "mean_output_tokens": 206.025,
+            "decode_metric_eligible_requests": 2399,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 3.84638291261856,
+            "p90_ttft_ms": 76.04376673698425,
+            "p90_request_mean_tpot_ms": 9.086883465364778,
+            "p95_stream_event_gap_ms": 9.604546241462229,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "3f1a0c2acff6b582ff2ec2662cab28522bf4fdf4b66375d54006cef581380aaa"
+          },
+          {
+            "cell": "rate-4-repeat-2",
+            "nominal_request_rate": 4.0,
+            "offered_requests": 2400,
+            "completed_requests": 2400,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 292.4691666666667,
+            "mean_output_tokens": 205.39541666666668,
+            "decode_metric_eligible_requests": 2399,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 3.8461206433383732,
+            "p90_ttft_ms": 76.64837576448916,
+            "p90_request_mean_tpot_ms": 9.098313517892096,
+            "p95_stream_event_gap_ms": 9.625374339520931,
+            "joint_request_attainment": 1.0,
+            "legacy_run_pass": true,
+            "sha256": "46ee4eee24f3d45684bb36603ea606b42ec52d18d2a3e5f677f32a0654d573a1"
+          }
+        ],
+        "by_rate": [
+          {
+            "nominal_request_rate": 0.25,
+            "recorded_cells": 3,
+            "metrics": {
+              "p90_ttft_ms": {
+                "median": 51.14980069920421,
+                "range": [
+                  49.50731573626399,
+                  92.15877866372465
+                ]
+              },
+              "p90_request_mean_tpot_ms": {
+                "median": 4.95613943865224,
+                "range": [
+                  4.954914173895933,
+                  4.999714835162555
+                ]
+              },
+              "p95_stream_event_gap_ms": {
+                "median": 5.270087253302336,
+                "range": [
+                  5.267775058746337,
+                  5.291867488995194
+                ]
+              },
+              "joint_request_attainment": {
+                "median": 1.0,
+                "range": [
+                  1.0,
+                  1.0
+                ]
+              }
+            },
+            "legacy_run_passes": 3
+          },
+          {
+            "nominal_request_rate": 2.0,
+            "recorded_cells": 3,
+            "metrics": {
+              "p90_ttft_ms": {
+                "median": 66.32485296577217,
+                "range": [
+                  63.88811385259033,
+                  100.57895937934522
+                ]
+              },
+              "p90_request_mean_tpot_ms": {
+                "median": 7.397988560691215,
+                "range": [
+                  7.362578640736285,
+                  7.4093366644400005
+                ]
+              },
+              "p95_stream_event_gap_ms": {
+                "median": 8.047863841056824,
+                "range": [
+                  8.042061096057296,
+                  8.091943152248858
+                ]
+              },
+              "joint_request_attainment": {
+                "median": 1.0,
+                "range": [
+                  1.0,
+                  1.0
+                ]
+              }
+            },
+            "legacy_run_passes": 3
+          },
+          {
+            "nominal_request_rate": 4.0,
+            "recorded_cells": 3,
+            "metrics": {
+              "p90_ttft_ms": {
+                "median": 76.64837576448916,
+                "range": [
+                  76.04376673698425,
+                  97.3726919852197
+                ]
+              },
+              "p90_request_mean_tpot_ms": {
+                "median": 9.098313517892096,
+                "range": [
+                  9.086883465364778,
+                  9.118266436501894
+                ]
+              },
+              "p95_stream_event_gap_ms": {
+                "median": 9.604546241462229,
+                "range": [
+                  9.565592929720879,
+                  9.625374339520931
+                ]
+              },
+              "joint_request_attainment": {
+                "median": 1.0,
+                "range": [
+                  1.0,
+                  1.0
+                ]
+              }
+            },
+            "legacy_run_passes": 3
+          }
+        ]
+      },
+      "long_prefill": {
+        "campaign": "data/disagg/gpt-oss-20b-a100-pd-confirmatory-35692922",
+        "configuration": {
+          "analysis_protocol": {
+            "calibration_cell": "rate-2-repeat-0",
+            "calibration_parameters": [
+              "prefill idle",
+              "decode idle",
+              "prefill nonnegative dynamic gain",
+              "decode nonnegative dynamic gain"
+            ],
+            "dynamic_gain": "max(0, x dot y / x dot x) above fixed role idle",
+            "equal_parameter_null": "source-scheduler role busy fraction plus the same fixed idle and one fitted nonnegative gain",
+            "fit_loss": "pointwise squared error in watts per role",
+            "heldout_cells": [
+              "rate-1-repeat-0",
+              "rate-2-repeat-1",
+              "rate-1-repeat-1",
+              "rate-2-repeat-2"
+            ],
+            "heldout_role_acceptance": {
+              "correlation_min": 0.8,
+              "model_to_duty_null_loss_ratio_max": 0.95,
+              "p95_error_pct_max": 10.0,
+              "std_ratio_max": 1.25,
+              "std_ratio_min": 0.8
+            },
+            "measured_replay_acceptance": {
+              "correlation_min": 0.8,
+              "scope": "each role and load"
+            },
+            "plot_processing": "no smoothing, averaging, or interpolation",
+            "sample_mapping": "evaluate the 250 ms source-ledger bin containing each query midpoint; retain every sample and never average duplicate bins",
+            "temporal_alignment": "no fitted lag, interpolation, or warping",
+            "uncertainty_unit": "cell; report every held-out cell and paired replay range"
+          },
+          "clock": {
+            "engine_timestamp_basis": "unix_epoch",
+            "local_utc_offset_s": -25200.0,
+            "power_timestamp_basis": "local query midpoint wall time",
+            "proxy_timestamp_basis": "unix_epoch_nanoseconds",
+            "request_timestamp_basis": "unix_epoch"
+          },
+          "container_image": "/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif",
+          "deployment": "disaggregated_prefill",
+          "hardware": "A100-80GB",
+          "mode": "campaign",
+          "model": "openai/gpt-oss-20b",
+          "power_measurement": {
+            "interval_ms": 250,
+            "profile": "core_timed",
+            "raw_samples": true,
+            "sample_timestamp": "host query start/end midpoint",
+            "source": "nvidia-smi power.draw"
+          },
+          "protocol": "prospective_cache_disabled_confirmation_v1",
+          "roles": {
+            "decode": {
+              "gpu_uuid": "GPU-713d5b24-2a1e-fd4a-7685-c3d195ff9230",
+              "tp": 1
+            },
+            "prefill": {
+              "gpu_uuid": "GPU-e2681f6e-8d94-2d66-484f-43ea602335f9",
+              "tp": 1
+            }
+          },
+          "server": {
+            "async_scheduling": true,
+            "enable_chunked_prefill": true,
+            "enable_prefix_caching": false,
+            "gpu_memory_utilization": 0.9,
+            "kv_connector": "NixlConnector",
+            "kv_load_failure_policy": "fail",
+            "max_model_len": 131072,
+            "max_num_batched_tokens": 2048,
+            "max_num_seqs": 256
+          },
+          "workload": {
+            "arrival_process": "poisson",
+            "cells": [
+              {
+                "prompts": 600,
+                "rate": 2.0,
+                "repeat": 0,
+                "seed": 0,
+                "split": "calibration"
+              },
+              {
+                "prompts": 300,
+                "rate": 1.0,
+                "repeat": 0,
+                "seed": 2,
+                "split": "evaluation"
+              },
+              {
+                "prompts": 600,
+                "rate": 2.0,
+                "repeat": 1,
+                "seed": 1,
+                "split": "evaluation"
+              },
+              {
+                "prompts": 300,
+                "rate": 1.0,
+                "repeat": 1,
+                "seed": 2,
+                "split": "evaluation"
+              },
+              {
+                "prompts": 600,
+                "rate": 2.0,
+                "repeat": 2,
+                "seed": 1,
+                "split": "evaluation"
+              }
+            ],
+            "dataset": "random",
+            "idle_window_s": 30,
+            "ignore_eos": true,
+            "input_tokens": 8192,
+            "nominal_duration_s": 300,
+            "output_tokens": 64,
+            "shared_prefix_tokens": 0,
+            "token_range_ratio": 0.25
+          }
+        },
+        "metadata_sha256": "4a2260b9dab8c92c413c9ac06e38f522a5cb467cbc2b24480466a1aeab839188",
+        "cells": [
+          {
+            "cell": "rate-1-repeat-0",
+            "nominal_request_rate": 1.0,
+            "offered_requests": 300,
+            "completed_requests": 300,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 8324.85,
+            "mean_output_tokens": 64.27,
+            "decode_metric_eligible_requests": 300,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 0.9841044608186184,
+            "p90_ttft_ms": 1975.0639349222183,
+            "p90_request_mean_tpot_ms": 4.896888839979013,
+            "p95_stream_event_gap_ms": 5.140432342886924,
+            "joint_request_attainment": 0.9066666666666666,
+            "legacy_run_pass": true,
+            "sha256": "3a374bb7fdd7df1d3aa650a4a7d69341bddc7868250522377af99fd3cbac28fa"
+          },
+          {
+            "cell": "rate-1-repeat-1",
+            "nominal_request_rate": 1.0,
+            "offered_requests": 300,
+            "completed_requests": 300,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 8324.85,
+            "mean_output_tokens": 64.27,
+            "decode_metric_eligible_requests": 300,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 0.9841326293323648,
+            "p90_ttft_ms": 1986.2013373523953,
+            "p90_request_mean_tpot_ms": 4.904463042624486,
+            "p95_stream_event_gap_ms": 5.127903819084168,
+            "joint_request_attainment": 0.9066666666666666,
+            "legacy_run_pass": true,
+            "sha256": "67cbb2c043de92a7ce580bd8856bbff55ed7f268107d758cac7a9a4dfd172d84"
+          },
+          {
+            "cell": "rate-2-repeat-0",
+            "nominal_request_rate": 2.0,
+            "offered_requests": 600,
+            "completed_requests": 600,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 8265.466666666667,
+            "mean_output_tokens": 64.31666666666666,
+            "decode_metric_eligible_requests": 600,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 1.7492334237231253,
+            "p90_ttft_ms": 46044.60062086582,
+            "p90_request_mean_tpot_ms": 4.899002349379923,
+            "p95_stream_event_gap_ms": 5.134901963174344,
+            "joint_request_attainment": 0.016666666666666666,
+            "legacy_run_pass": false,
+            "sha256": "aa4c2201ba3a33198f3d8a2e33bc83e62c6dd4f55753901bb0b043259c57b48c"
+          },
+          {
+            "cell": "rate-2-repeat-1",
+            "nominal_request_rate": 2.0,
+            "offered_requests": 600,
+            "completed_requests": 600,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 8278.403333333334,
+            "mean_output_tokens": 64.22666666666667,
+            "decode_metric_eligible_requests": 600,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 1.7293379718358874,
+            "p90_ttft_ms": 28901.726394332945,
+            "p90_request_mean_tpot_ms": 4.901904985778064,
+            "p95_stream_event_gap_ms": 5.150522105395794,
+            "joint_request_attainment": 0.05,
+            "legacy_run_pass": false,
+            "sha256": "371cb5384defaa1b6c575cb167e6e79e9a6fedb8ec130128988b3b1225ec18ef"
+          },
+          {
+            "cell": "rate-2-repeat-2",
+            "nominal_request_rate": 2.0,
+            "offered_requests": 600,
+            "completed_requests": 600,
+            "service_failure_rate": 0.0,
+            "mean_input_tokens": 8278.403333333334,
+            "mean_output_tokens": 64.22666666666667,
+            "decode_metric_eligible_requests": 600,
+            "decode_metric_missing_requests": 0,
+            "observed_completion_rate": 1.729772615262963,
+            "p90_ttft_ms": 28843.529722839594,
+            "p90_request_mean_tpot_ms": 4.8992540834630764,
+            "p95_stream_event_gap_ms": 5.143642239272594,
+            "joint_request_attainment": 0.05,
+            "legacy_run_pass": false,
+            "sha256": "9dbef3e4e64ac05dd3d1a9a5c877d381ab066d167f46a432ffb1f1830d9c6daf"
+          }
+        ],
+        "by_rate": [
+          {
+            "nominal_request_rate": 1.0,
+            "recorded_cells": 2,
+            "metrics": {
+              "p90_ttft_ms": {
+                "median": 1980.6326361373067,
+                "range": [
+                  1975.0639349222183,
+                  1986.2013373523953
+                ]
+              },
+              "p90_request_mean_tpot_ms": {
+                "median": 4.900675941301749,
+                "range": [
+                  4.896888839979013,
+                  4.904463042624486
+                ]
+              },
+              "p95_stream_event_gap_ms": {
+                "median": 5.134168080985546,
+                "range": [
+                  5.127903819084168,
+                  5.140432342886924
+                ]
+              },
+              "joint_request_attainment": {
+                "median": 0.9066666666666666,
+                "range": [
+                  0.9066666666666666,
+                  0.9066666666666666
+                ]
+              }
+            },
+            "legacy_run_passes": 2
+          },
+          {
+            "nominal_request_rate": 2.0,
+            "recorded_cells": 3,
+            "metrics": {
+              "p90_ttft_ms": {
+                "median": 28901.726394332945,
+                "range": [
+                  28843.529722839594,
+                  46044.60062086582
+                ]
+              },
+              "p90_request_mean_tpot_ms": {
+                "median": 4.8992540834630764,
+                "range": [
+                  4.899002349379923,
+                  4.901904985778064
+                ]
+              },
+              "p95_stream_event_gap_ms": {
+                "median": 5.143642239272594,
+                "range": [
+                  5.134901963174344,
+                  5.150522105395794
+                ]
+              },
+              "joint_request_attainment": {
+                "median": 0.05,
+                "range": [
+                  0.016666666666666666,
+                  0.05
+                ]
+              }
+            },
+            "legacy_run_passes": 0
+          }
+        ]
+      }
+    },
+    "contrasts": {
+      "short_mixed_0p25_to_4_rps": {
+        "median_p90_request_mean_tpot_ratio": 1.8357662512349064,
+        "conservative_p90_request_mean_tpot_ratio": 1.817480349370633
+      },
+      "long_prefill_1_to_2_rps": {
+        "median_p90_ttft_ratio": 14.592169121628743,
+        "conservative_p90_ttft_ratio": 14.521956651830672,
+        "conservative_attainment_drop_points": 85.66666666666666
+      }
+    },
+    "uncertainty_boundary": "Report recorded-cell ranges. Cells share campaign stacks and there are only two or three per rate; request bootstrap measures within-trace sampling only and cannot create independent runs or a missing Queue-Haul counterfactual."
   }
 }

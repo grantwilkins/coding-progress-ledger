@@ -38,13 +38,18 @@ dedicated two-A100 migration claim.
 leaky context-bundle retrospective diagnostic, and matched-work
 request-simulation falsification. It keeps pooled-token ITL separate from
 per-request decode duration and reports why those traces do not yet support a
-TTFT/ITL or decode-hold admission guarantee.
+TTFT/ITL or decode-hold admission guarantee. Supplying `--powertrace-root`
+adds the raw disaggregated GPT-OSS empirical sensitivity reference; it is
+explicitly not used as a Queue-Haul latency model.
 
 ```bash
-uv run python service_holdout_analysis.py --out outputs/service-holdout-20260814/summary.json
+uv run python service_holdout_analysis.py \
+  --powertrace-root ~/powertrace-sim \
+  --out outputs/service-holdout-20260814/summary.json
 ```
 
-The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
+The audit's primary profile is the A100 staircase profile; its default H100
+comparison input is `profiles/gpt_oss_20b_h100_tp1.json`. The latter's 2026-08-11
 H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
 1,205,376 production KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
 and measured through offered load `ell=12.566`. Admission remains bounded at
