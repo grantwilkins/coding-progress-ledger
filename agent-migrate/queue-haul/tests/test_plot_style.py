@@ -58,8 +58,7 @@ def test_power_validation_methods_have_unique_markers():
 
 
 def test_power_families_have_shared_names_colors_and_markers():
-    assert set(plot_style.POWER_FAMILY_NAMES) == {
-        "idle", "prefill", "decode", "agentic", "campaign"}
+    assert set(plot_style.POWER_FAMILY_NAMES) == {"idle", "sessions"}
     assert set(plot_style.POWER_FAMILY_NAMES) == set(plot_style.POWER_FAMILY_COLORS) \
         == set(plot_style.POWER_FAMILY_MARKERS)
-    assert len(set(plot_style.POWER_FAMILY_MARKERS.values())) == 5
+    assert len(set(plot_style.POWER_FAMILY_MARKERS.values())) == 2

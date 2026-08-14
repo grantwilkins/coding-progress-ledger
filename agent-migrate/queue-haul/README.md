@@ -64,9 +64,9 @@ tokens or counter/window violations. Its frozen rational model is
 have 2.37 W MAE and 4.34 W p90 absolute error; the fit remains explicitly
 `holdout_failed` because its `R^2=0.942` misses the declared 0.95 gate. The
 pooled parity view also applies that frozen fit to 38 valid cells from the prior
-physical H100. It classifies all 149 points by workload composition, naming
-mixed cells "Prefill + decode," and reports their aggregate 3.56 W MAE and
-`R^2=0.919`. Interrupted and
+physical H100. It plots all 149 points while folding every non-idle workload
+composition into one "Sessions" series and reports their aggregate 3.56 W MAE
+and `R^2=0.919`. Interrupted and
 offered-work-attributed sweeps are excluded.
 
 ```bash

@@ -73,7 +73,8 @@ def write(rows: list[dict], out: Path) -> None:
     axis.plot(limits, limits, color="black", linestyle="--", linewidth=1.5,
               label="Ideal")
     for family in plot_style.POWER_FAMILY_NAMES:
-        selected = [row for row in rows if row["family"] == family]
+        selected = [row for row in rows if (
+            "idle" if row["family"] == "idle" else "sessions") == family]
         if selected:
             axis.scatter([row["predicted_power_w"] for row in selected],
                          [row["measured_power_w"] for row in selected],
