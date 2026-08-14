@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import random
 import statistics
 import subprocess
@@ -33,6 +34,51 @@ class Cell:
     output_tokens: int
     concurrency: int
     replicate: int
+
+
+def cell_label(sequence: int, cell: Cell) -> str:
+    return (f"{sequence:03d}-{cell.stage}-{cell.family}-p{cell.prompt_tokens}"
+            f"-g{cell.output_tokens}-c{cell.concurrency}-r{cell.replicate}")
+
+
+def append_jsonl(path: Path, rows: list[dict]) -> None:
+    with path.open("a") as handle:
+        for row in rows:
+            handle.write(json.dumps(row) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def validate_row_numbers(row: dict, watts: list[float]) -> None:
+    duration = (row["end_ns"] - row["start_ns"]) / 1e9
+    if not math.isclose(row["window_s"], duration, abs_tol=1e-9) \
+            or not math.isclose(row["realized_prefill_tps"],
+                                row["realized_prefill_tokens"] / duration, rel_tol=1e-12) \
+            or not math.isclose(row["realized_decode_tps"],
+                                row["realized_decode_tokens"] / duration, rel_tol=1e-12):
+        raise RuntimeError(f"row {row['sequence']} has inconsistent window/rates")
+    tolerance = max(row["counter_tolerance_tokens"],
+                    row["counter_tolerance_fraction"] * row["realized_prefill_tokens"])
+    if abs(row["reported_prompt_tokens"] - row["realized_prefill_tokens"]) > tolerance:
+        raise RuntimeError(f"row {row['sequence']} has counter/API disagreement")
+    if not math.isclose(row["power_mean_w"], statistics.fmean(watts), rel_tol=1e-12) \
+            or not math.isclose(row["power_p50_w"], statistics.median(watts), rel_tol=1e-12):
+        raise RuntimeError(f"row {row['sequence']} has inconsistent power reduction")
+
+
+def validate_request_evidence(label: str, row: dict, evidence: list[dict]) -> None:
+    if len(evidence) != row["request_count"]:
+        raise RuntimeError(f"{label} request evidence count mismatch")
+    if any(item["start_ns"] < row["start_ns"] or item["end_ns"] > row["end_ns"]
+           for item in evidence):
+        raise RuntimeError(f"{label} request crossed a committed boundary")
+    cached = sum(int((item["usage"].get("prompt_tokens_details") or {})
+                     .get("cached_tokens", 0)) for item in evidence)
+    if cached or sum(item["usage"]["prompt_tokens"] for item in evidence) \
+            != row["realized_prefill_tokens"] \
+            or sum(item["usage"]["completion_tokens"] for item in evidence) \
+            != row["realized_decode_tokens"]:
+        raise RuntimeError(f"{label} request token/cache evidence mismatch")
 
 
 def cells(seed: int = 1) -> list[Cell]:
@@ -174,7 +220,7 @@ def accounting(cell: Cell, requests: list[dict], batches: int,
 
 def run_cell(cell: Cell, base_url: str, out: Path, window_s: float,
              cooldown_s: float, sequence: int) -> dict:
-    label = f"{sequence:03d}-{cell.stage}-{cell.family}-p{cell.prompt_tokens}-g{cell.output_tokens}-c{cell.concurrency}-r{cell.replicate}"
+    label = cell_label(sequence, cell)
     power_path = out / "power" / f"{label}.csv"
     stop = threading.Event()
     errors: list[BaseException] = []
@@ -221,9 +267,8 @@ def run_cell(cell: Cell, base_url: str, out: Path, window_s: float,
            "power_p50_w": statistics.median(power), "power_samples": len(power),
            "completed_requests": len(requests),
            "request_count": len(requests), "power_path": str(power_path)}
-    with (out / "requests.jsonl").open("a") as handle:
-        for request_row in requests:
-            handle.write(json.dumps({"cell": label, **request_row}) + "\n")
+    append_jsonl(out / "requests.jsonl",
+                 [{"cell": label, **request_row} for request_row in requests])
     time.sleep(cooldown_s)
     return row
 
@@ -330,16 +375,94 @@ def wait_ready(base_url: str, server: subprocess.Popen, timeout_s: float = 600) 
     raise TimeoutError("vLLM did not become healthy")
 
 
+def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
+    if not args.expected_sha or len(args.expected_sha) != 40:
+        raise ValueError("resume requires the full original --expected-sha")
+    metadata = json.loads((args.out / "metadata.json").read_text())
+    expected = {"gpu": gpu, "git_sha": args.expected_sha,
+                "minimum_window_s": args.window_s,
+                "warmup": "one complete batch", "cooldown_s": args.cooldown_s,
+                "seed": args.seed}
+    for key, value in expected.items():
+        if metadata.get(key) != value:
+            raise RuntimeError(f"resume metadata mismatch for {key}: {metadata.get(key)!r} != {value!r}")
+    if str(args.model) not in (args.out / "server.log").read_text(errors="replace"):
+        raise RuntimeError("resume model does not match original server log")
+    raw = (args.out / "cells.jsonl").read_text().splitlines()
+    if not raw or any(not line.strip() for line in raw):
+        raise RuntimeError("resume requires a nonempty unambiguous cells prefix")
+    rows = [json.loads(line) for line in raw]
+    if len(rows) >= len(plan) or (args.out / "fit.json").exists():
+        raise RuntimeError("campaign is not an incomplete resumable prefix")
+    valid_power = set()
+    valid_labels = {}
+    for sequence, (row, cell) in enumerate(zip(rows, plan, strict=False)):
+        identity = {**asdict(cell), "sequence": sequence}
+        if any(row.get(key) != value for key, value in identity.items()):
+            raise RuntimeError(f"row {sequence} does not match deterministic prefix")
+        expected_requests = row["batches"] * cell.concurrency
+        if row["request_count"] != expected_requests \
+                or row["completed_requests"] != expected_requests:
+            raise RuntimeError(f"row {sequence} has incomplete request accounting")
+        if row["cached_prompt_tokens"] or (cell.concurrency and
+                                            not row["realized_prefill_tokens"] + row["realized_decode_tokens"]):
+            raise RuntimeError(f"row {sequence} has invalid realized work")
+        path = args.out / "power" / f"{cell_label(sequence, cell)}.csv"
+        if row["power_path"] != str(path) or not path.is_file() or not path.stat().st_size:
+            raise RuntimeError(f"row {sequence} has invalid power evidence")
+        with path.open() as handle:
+            watts = [float(sample["power_w"]) for sample in csv.DictReader(handle)
+                     if row["start_ns"] <= int(sample["monotonic_ns"]) < row["end_ns"]]
+        if len(watts) != row["power_samples"] or len(watts) < 5 * row["window_s"]:
+            raise RuntimeError(f"row {sequence} has incomplete power samples")
+        validate_row_numbers(row, watts)
+        valid_power.add(path)
+        valid_labels[cell_label(sequence, cell)] = row
+    requests = {label: [] for label in valid_labels}
+    for line in (args.out / "requests.jsonl").read_text().splitlines():
+        request_row = json.loads(line)
+        if request_row.get("cell") not in requests:
+            raise RuntimeError("request evidence falls outside committed prefix")
+        requests[request_row["cell"]].append(request_row)
+    for label, row in valid_labels.items():
+        validate_request_evidence(label, row, requests[label])
+    discard = set(args.discard_orphan_sequences)
+    if any(sequence < len(rows) or sequence >= len(plan) for sequence in discard):
+        raise RuntimeError("orphan discard sequence is not in the uncommitted suffix")
+    discard_paths = {args.out / "power" / f"{cell_label(sequence, plan[sequence])}.csv"
+                     for sequence in discard}
+    artifacts = set((args.out / "power").glob("*.csv"))
+    if artifacts != valid_power | discard_paths or not all(path.exists() for path in discard_paths):
+        raise RuntimeError("power artifacts do not equal committed prefix plus explicit orphans")
+    for path in discard_paths:
+        path.unlink()
+    current_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    append_jsonl(args.out / "resumes.jsonl", [{"wall_ns": time.time_ns(),
+                                                "original_sha": args.expected_sha,
+                                                "resume_sha": current_sha,
+                                                "next_sequence": len(rows),
+                                                "discarded_orphans": sorted(discard)}])
+    return rows
+
+
 def run(args) -> None:
     gpu = validate_gpu()
-    args.out.mkdir(parents=True, exist_ok=False)
-    (args.out / "power").mkdir()
-    metadata = {"started_wall_ns": time.time_ns(), "gpu": gpu,
-                "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-                "minimum_window_s": args.window_s, "warmup": "one complete batch",
-                "cooldown_s": args.cooldown_s, "seed": args.seed}
-    (args.out / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    server_log = (args.out / "server.log").open("w")
+    plan = cells(args.seed)
+    if args.resume:
+        rows = validate_resume(args, gpu, plan)
+        log_path = args.out / f"server-resume-{len(list(args.out.glob('server-resume-*.log'))) + 1:03d}.log"
+    else:
+        if args.expected_sha or args.discard_orphan_sequences:
+            raise ValueError("orphan/SHA options require --resume")
+        args.out.mkdir(parents=True, exist_ok=False)
+        (args.out / "power").mkdir()
+        metadata = {"started_wall_ns": time.time_ns(), "gpu": gpu,
+                    "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+                    "minimum_window_s": args.window_s, "warmup": "one complete batch",
+                    "cooldown_s": args.cooldown_s, "seed": args.seed}
+        (args.out / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+        rows, log_path = [], args.out / "server.log"
+    server_log = log_path.open("x")
     server_cmd = [args.vllm, "serve", str(args.model), "--host", args.host,
                   "--port", str(args.port), "--served-model-name", "openai/gpt-oss-20b",
                   "--tensor-parallel-size", "1", "--max-model-len", "32768",
@@ -352,13 +475,12 @@ def run(args) -> None:
     try:
         base_url = f"http://{args.host}:{args.port}"
         wait_ready(base_url, server)
-        rows = []
-        for sequence, cell in enumerate(cells(args.seed)):
+        for sequence in range(len(rows), len(plan)):
+            cell = plan[sequence]
             row = run_cell(cell, base_url, args.out, args.window_s,
                            args.cooldown_s, sequence)
             rows.append(row)
-            with (args.out / "cells.jsonl").open("a") as handle:
-                handle.write(json.dumps(row) + "\n")
+            append_jsonl(args.out / "cells.jsonl", [row])
             print(json.dumps(row), flush=True)
         fit = saturating_fit(rows)
         report = validate(rows, fit)
@@ -387,6 +509,9 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--window-s", type=float, default=12)
     parser.add_argument("--cooldown-s", type=float, default=2)
     parser.add_argument("--seed", type=int, default=20260814)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--expected-sha")
+    parser.add_argument("--discard-orphan-sequences", nargs="*", type=int, default=[])
     args = parser.parse_args(argv)
     if min(args.window_s, args.cooldown_s) <= 0:
         raise ValueError("cell durations must be positive")

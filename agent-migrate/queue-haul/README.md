@@ -864,6 +864,17 @@ systemd-run --user --unit=queue-haul-h100-power-CAMPAIGN \
   --model MODEL_SNAPSHOT --vllm .venv/bin/vllm --out OUTPUT_DIRECTORY
 ```
 
+An interrupted run resumes only after validating its original SHA/configuration,
+deterministic completed prefix, request accounting, and every power sample file.
+Explicitly identified uncommitted suffix artifacts are replaced; committed
+JSONL rows are appended and `fsync`ed before progress is printed:
+
+```bash
+uv run python queue-haul/power_model_campaign.py --resume \
+  --expected-sha ORIGINAL_FULL_SHA --discard-orphan-sequences SEQUENCE ... \
+  --model MODEL_SNAPSHOT --vllm .venv/bin/vllm --out OUTPUT_DIRECTORY
+```
+
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
 single-link campaigns plus the successful `handoff-009` and bidirectional-cache
 `handoff-010` three-node evidence, including raw 100-ms power, request,

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import pytest
 
 import power_model_campaign as campaign
@@ -95,3 +98,97 @@ def test_nonidle_zero_work_hard_fails():
     cell = campaign.Cell("discovery", "campaign", 0, 0, 1, 0)
     with pytest.raises(RuntimeError, match="zero work"):
         campaign.accounting(cell, [usage(0, 0)], 1, counters(0, 0))
+
+
+def resume_fixture(tmp_path, monkeypatch):
+    plan = campaign.cells(7)
+    gpu = {"name": "NVIDIA H100 NVL", "uuid": "GPU-x", "power_limit_w": 400.0}
+    sha = "a" * 40
+    out = tmp_path / "run"
+    power = out / "power"
+    power.mkdir(parents=True)
+    path = power / f"{campaign.cell_label(0, plan[0])}.csv"
+    path.write_text("monotonic_ns,power_w\n" + "".join(f"{i},100\n" for i in range(60)))
+    row = {**campaign.asdict(plan[0]), "sequence": 0, "start_ns": 0,
+           "end_ns": 12_000_000_000, "window_s": 12, "batches": 0,
+           "realized_prefill_tokens": 0, "realized_decode_tokens": 0,
+           "realized_prefill_tps": 0, "realized_decode_tps": 0,
+           "reported_prompt_tokens": 0, "counter_tolerance_tokens": 1,
+           "counter_tolerance_fraction": .001, "power_mean_w": 100,
+           "power_p50_w": 100,
+           "cached_prompt_tokens": 0, "power_samples": 60,
+           "request_count": 0, "completed_requests": 0, "power_path": str(path)}
+    (out / "cells.jsonl").write_text(json.dumps(row) + "\n")
+    (out / "requests.jsonl").write_text("")
+    (out / "metadata.json").write_text(json.dumps({"gpu": gpu, "git_sha": sha,
+        "minimum_window_s": 12, "warmup": "one complete batch", "cooldown_s": 2,
+        "seed": 7}))
+    model = tmp_path / "model"
+    (out / "server.log").write_text(str(model))
+    orphan = power / f"{campaign.cell_label(1, plan[1])}.csv"
+    orphan.write_text("partial")
+    args = SimpleNamespace(out=out, model=model, expected_sha=sha, window_s=12,
+                           cooldown_s=2, seed=7, discard_orphan_sequences=[1])
+    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *_a, **_k: "b" * 40 + "\n")
+    return args, gpu, plan, orphan
+
+
+def test_resume_validates_prefix_and_replaces_only_explicit_orphan(tmp_path, monkeypatch):
+    args, gpu, plan, orphan = resume_fixture(tmp_path, monkeypatch)
+    before = [(args.out / name).read_bytes() for name in ("metadata.json", "cells.jsonl",
+                                                           "requests.jsonl")]
+
+    rows = campaign.validate_resume(args, gpu, plan)
+
+    assert len(rows) == 1
+    assert not orphan.exists()
+    assert before == [(args.out / name).read_bytes() for name in
+                      ("metadata.json", "cells.jsonl", "requests.jsonl")]
+    assert json.loads((args.out / "resumes.jsonl").read_text())["next_sequence"] == 1
+
+
+def test_resume_rejects_mismatched_prefix_or_unlisted_artifact(tmp_path, monkeypatch):
+    args, gpu, plan, _ = resume_fixture(tmp_path, monkeypatch)
+    row = json.loads((args.out / "cells.jsonl").read_text())
+    row["family"] = "wrong"
+    (args.out / "cells.jsonl").write_text(json.dumps(row) + "\n")
+    with pytest.raises(RuntimeError, match="deterministic prefix"):
+        campaign.validate_resume(args, gpu, plan)
+
+    args, gpu, plan, _ = resume_fixture(tmp_path / "second", monkeypatch)
+    (args.out / "power" / "unknown.csv").write_text("x")
+    with pytest.raises(RuntimeError, match="power artifacts"):
+        campaign.validate_resume(args, gpu, plan)
+
+
+def test_committed_request_evidence_must_stay_inside_boundary_and_uncached():
+    row = {"start_ns": 10, "end_ns": 20, "request_count": 1,
+           "realized_prefill_tokens": 10, "realized_decode_tokens": 2}
+    evidence = [{"start_ns": 10, "end_ns": 20, **usage()}]
+    campaign.validate_request_evidence("cell", row, evidence)
+
+    evidence[0]["end_ns"] = 21
+    with pytest.raises(RuntimeError, match="crossed a committed boundary"):
+        campaign.validate_request_evidence("cell", row, evidence)
+    evidence[0]["end_ns"] = 20
+    evidence[0]["usage"]["prompt_tokens_details"]["cached_tokens"] = 1
+    with pytest.raises(RuntimeError, match="token/cache"):
+        campaign.validate_request_evidence("cell", row, evidence)
+
+
+def test_committed_row_recomputes_window_rates_counters_and_power():
+    row = {"sequence": 1, "start_ns": 0, "end_ns": 2_000_000_000,
+           "window_s": 2, "realized_prefill_tokens": 20,
+           "realized_decode_tokens": 4, "realized_prefill_tps": 10,
+           "realized_decode_tps": 2, "reported_prompt_tokens": 20,
+           "counter_tolerance_tokens": 1, "counter_tolerance_fraction": .001,
+           "power_mean_w": 20, "power_p50_w": 20}
+    campaign.validate_row_numbers(row, [10, 20, 30])
+
+    row["reported_prompt_tokens"] = 22
+    with pytest.raises(RuntimeError, match="counter/API"):
+        campaign.validate_row_numbers(row, [10, 20, 30])
+    row["reported_prompt_tokens"] = 20
+    row["power_mean_w"] = 21
+    with pytest.raises(RuntimeError, match="power reduction"):
+        campaign.validate_row_numbers(row, [10, 20, 30])
