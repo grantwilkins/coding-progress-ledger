@@ -299,12 +299,41 @@ def saturating_fit(rows: list[dict]) -> dict:
     mse, base_beta, scale, amplitude = best
     return {"schema": "queue-haul-rational-power-v1",
             "link": "P=P0+A*z/(1+z); z=alpha*f+beta*g",
-            "power_idle_w": p0, "power_amplitude_w": amplitude,
-            "power_max_w": p0 + amplitude,
-            "alpha_s_per_prefill_token": scale * base_alpha,
-            "beta_s_per_decode_token": scale * base_beta,
-            "F_prefill_tps": fcap, "G_decode_tps": gcap,
+            "power_idle_w": float(p0), "power_amplitude_w": float(amplitude),
+            "power_max_w": float(p0 + amplitude),
+            "alpha_s_per_prefill_token": float(scale * base_alpha),
+            "beta_s_per_decode_token": float(scale * base_beta),
+            "F_prefill_tps": float(fcap), "G_decode_tps": float(gcap),
             "discovery_rmse_w": math.sqrt(mse)}
+
+
+def exponential_fit(rows: list[dict]) -> dict:
+    train = [r for r in rows if r["stage"] == "discovery"]
+    idle = [r["power_mean_w"] for r in rows if r["stage"] == "idle"]
+    p0 = statistics.median(idle)
+    fcap = max(r["realized_prefill_tps"] for r in train if r["family"] == "prefill")
+    gcap = max(r["realized_decode_tps"] for r in train if r["family"] == "decode")
+    alpha = 1 / fcap
+    f = np.array([r["realized_prefill_tps"] for r in train])
+    g = np.array([r["realized_decode_tps"] for r in train])
+    power = np.array([r["power_mean_w"] for r in train])
+    best = None
+    for beta in np.geomspace(.2 / gcap, 5 / gcap, 161):
+        ell = alpha * f + beta * g
+        for knee in np.geomspace(.02, 5, 161):
+            x = 1 - np.exp(-ell / knee)
+            amplitude = max(0.0, float(np.dot(x, power - p0) / np.dot(x, x)))
+            mse = float(np.mean((power - p0 - amplitude * x) ** 2))
+            candidate = (mse, beta, knee, amplitude)
+            best = candidate if best is None or candidate < best else best
+    mse, beta, knee, amplitude = best
+    return {"schema": "queue-haul-exponential-power-provisional-v1",
+            "status": "provisional_reconstructed_after_serialization_failure",
+            "power_idle_w": float(p0), "power_max_w": float(p0 + amplitude),
+            "alpha_s_per_prefill_token": float(alpha),
+            "beta_s_per_decode_token": float(beta),
+            "F_prefill_tps": float(fcap), "G_decode_tps": float(gcap),
+            "ell_knee": float(knee), "discovery_rmse_w": math.sqrt(mse)}
 
 
 def predict(row: dict, fit: dict) -> float:
@@ -334,20 +363,21 @@ def validate(rows: list[dict], fit: dict) -> dict:
     mean = statistics.fmean(r["power_mean_w"] for r in held)
     ss_res = sum((r["power_mean_w"] - predict(r, fit)) ** 2 for r in held)
     ss_tot = sum((r["power_mean_w"] - mean) ** 2 for r in held)
-    report = {"holdout_cells": len(held), "holdout_mae_w": statistics.fmean(errors),
+    report = {"holdout_cells": int(len(held)), "holdout_mae_w": float(statistics.fmean(errors)),
               "holdout_p90_abs_error_w": float(np.quantile(errors, .9)),
-              "holdout_r2": 1 - ss_res / ss_tot, "family_mae_w": family_mae,
-              "beta_split_relative_difference": stability,
+              "holdout_r2": float(1 - ss_res / ss_tot),
+              "family_mae_w": {name: float(value) for name, value in family_mae.items()},
+              "beta_split_relative_difference": float(stability),
               "replicate_p90_difference_w": replicate_p90,
-              "cached_prompt_tokens": sum(r["cached_prompt_tokens"] for r in rows)}
+              "cached_prompt_tokens": int(sum(r["cached_prompt_tokens"] for r in rows))}
     report["gates"] = {
-        "holdout_mae_le_5w": report["holdout_mae_w"] <= 5,
-        "holdout_p90_le_10w": report["holdout_p90_abs_error_w"] <= 10,
-        "holdout_r2_ge_0p95": report["holdout_r2"] >= .95,
-        "each_family_mae_le_8w": max(family_mae.values()) <= 8,
-        "beta_split_difference_le_20pct": stability <= .2,
-        "replicate_p90_difference_le_8w": replicate_p90 <= 8,
-        "zero_cached_prompt_tokens": report["cached_prompt_tokens"] == 0,
+        "holdout_mae_le_5w": bool(report["holdout_mae_w"] <= 5),
+        "holdout_p90_le_10w": bool(report["holdout_p90_abs_error_w"] <= 10),
+        "holdout_r2_ge_0p95": bool(report["holdout_r2"] >= .95),
+        "each_family_mae_le_8w": bool(max(family_mae.values()) <= 8),
+        "beta_split_difference_le_20pct": bool(stability <= .2),
+        "replicate_p90_difference_le_8w": bool(replicate_p90 <= 8),
+        "zero_cached_prompt_tokens": bool(report["cached_prompt_tokens"] == 0),
     }
     report["passed"] = all(report["gates"].values())
     return report
@@ -395,13 +425,13 @@ def complete_rows(out: Path, seed: int) -> list[dict]:
 def refit(args) -> None:
     rows = complete_rows(args.out, args.seed)
     fit_path = args.out / "fit.json"
-    if not fit_path.is_file():
-        raise RuntimeError("offline refit requires the provisional in-run fit.json")
     provisional = args.out / "fit-exponential-provisional.json"
     if provisional.exists():
         raise RuntimeError("provisional exponential fit is already archived")
     with provisional.open("xb") as handle:
-        handle.write(fit_path.read_bytes()); handle.flush(); os.fsync(handle.fileno())
+        payload = fit_path.read_bytes() if fit_path.is_file() else (
+            json.dumps(exponential_fit(rows), indent=2) + "\n").encode()
+        handle.write(payload); handle.flush(); os.fsync(handle.fileno())
     result = fit_result(rows)
     temporary = fit_path.with_suffix(".rational.tmp")
     with temporary.open("x") as handle:

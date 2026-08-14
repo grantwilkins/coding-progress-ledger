@@ -885,7 +885,8 @@ uv run python queue-haul/power_model_campaign.py --resume \
 Runs started by older code retain their in-memory result as provisional. After
 all 111 cells complete, refit offline without acquiring the GPU; this hard-fails
 on an incomplete/non-deterministic grid, archives `fit.json` as
-`fit-exponential-provisional.json`, and promotes the rational result:
+`fit-exponential-provisional.json` (or reconstructs that provisional artifact
+when an older run failed while serializing it), and promotes the rational result:
 
 ```bash
 uv run python queue-haul/power_model_campaign.py --refit-only \

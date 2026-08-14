@@ -51,7 +51,8 @@ def synthetic_rows(alpha=1 / 1000, beta=1 / 500):
                          "realized_decode_tps": g,
                          "power_mean_w": 80 + 220 * z / (1 + z),
                          "cached_prompt_tokens": 0})
-    return rows * 15 + [{"stage": "idle", "power_mean_w": 80}] * 3
+    return rows * 15 + [{"stage": "idle", "power_mean_w": 80,
+                         "cached_prompt_tokens": 0}] * 3
 
 
 def test_fit_uses_realized_rates_and_recovers_saturating_model():
@@ -63,6 +64,23 @@ def test_fit_uses_realized_rates_and_recovers_saturating_model():
     assert fit["power_max_w"] == pytest.approx(300, rel=.03)
     assert fit["link"] == "P=P0+A*z/(1+z); z=alpha*f+beta*g"
     assert "ell_knee" not in fit
+
+
+def test_fit_result_is_json_serializable():
+    rows = synthetic_rows()
+    rows += [{**row, "stage": "confirmation"} for row in rows[:18]]
+
+    result = campaign.fit_result(rows)
+
+    json.dumps(result)
+    assert all(type(value) is bool for value in result["validation"]["gates"].values())
+
+
+def test_exponential_provisional_is_json_serializable():
+    provisional = campaign.exponential_fit(synthetic_rows())
+
+    json.dumps(provisional)
+    assert provisional["status"] == "provisional_reconstructed_after_serialization_failure"
 
 
 def test_offline_refit_hard_fails_incomplete_grid(tmp_path):
