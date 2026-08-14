@@ -54,6 +54,16 @@ TIMING_ACTION_NAMES = {"replay": ACTION_NAMES["replay"],
 TIMING_ACTION_COLORS = {"replay": ACTION_COLORS["replay"],
                         "kv_transfer": ACTION_COLORS["kv_transfer"],
                         "mixed": "#009E73"}
+POWER_FAMILY_NAMES = {
+    "idle": "Idle", "prefill": "Prefill", "decode": "Decode",
+    "agentic": "Agentic", "campaign": "Campaign mix",
+}
+POWER_FAMILY_COLORS = {
+    "idle": "#777777", "prefill": "#E98300", "decode": "#006CB8",
+    "agentic": "#009E73", "campaign": "#CC79A7",
+}
+POWER_FAMILY_MARKERS = dict(zip(
+    POWER_FAMILY_NAMES, ("o", "^", "s", "D", "P")))
 ACTION_HATCHES = {
     "east_replay": "..", "east_kv_transfer": "xx",
     "germany_replay": "//", "germany_kv_transfer": "\\\\",

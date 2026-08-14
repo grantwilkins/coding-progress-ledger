@@ -1,0 +1,145 @@
+"""Plot the frozen rational H100 power model against every measured cell."""
+
+import argparse
+import csv
+import json
+from pathlib import Path
+import statistics
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+import plot_style
+from power_model_campaign import predict
+
+
+STAGE_COUNTS = {"discovery": 90, "confirmation": 18, "idle": 3}
+plot_style.apply()
+
+
+def measured_rows(run_root: Path, fit: dict, cohort: str) -> list[dict]:
+    cells = [json.loads(line) for line in (run_root / "cells.jsonl").read_text().splitlines()]
+    if [row["sequence"] for row in cells] != list(range(len(cells))) or any(
+            row["cached_prompt_tokens"] or
+            (row["family"] != "idle" and not row["completed_requests"]) or
+            row["power_samples"] / row["window_s"] < 5 for row in cells):
+        raise ValueError("retrospective power cells fail accounting gates")
+    rows = []
+    gpu_uuid = json.loads((run_root / "metadata.json").read_text())["gpu"]["uuid"]
+    for row in cells:
+        predicted = predict(row, fit)
+        rows.append({"sequence": row["sequence"], "stage": row["stage"],
+                     "family": row["family"], "cohort": cohort,
+                     "source_gpu_uuid": gpu_uuid,
+                     "prompt_tokens": row["prompt_tokens"],
+                     "output_tokens": row["output_tokens"],
+                     "concurrency": row["concurrency"],
+                     "realized_prefill_tps": row["realized_prefill_tps"],
+                     "realized_decode_tps": row["realized_decode_tps"],
+                     "predicted_power_w": predicted,
+                     "measured_power_w": row["power_mean_w"],
+                     "residual_w": row["power_mean_w"] - predicted})
+    return rows
+
+
+def load(run_root: Path, history_roots: tuple[Path, ...] | list[Path] = ()) \
+        -> tuple[list[dict], dict]:
+    result = json.loads((run_root / "fit.json").read_text())
+    if result["schema"] != "queue-haul-rational-power-fit-v1":
+        raise ValueError("power parity requires the rational H100 fit")
+    fit = result["fit"]
+    cells = measured_rows(run_root, fit, "fit_campaign")
+    counts = {stage: sum(row["stage"] == stage for row in cells) for stage in STAGE_COUNTS}
+    if counts != STAGE_COUNTS or len(cells) != sum(STAGE_COUNTS.values()):
+        raise ValueError("power parity requires the complete 111-cell campaign")
+    primary_gpu = json.loads((run_root / "metadata.json").read_text())["gpu"]
+    for root in history_roots:
+        gpu = json.loads((root / "metadata.json").read_text())["gpu"]
+        if (gpu["name"], gpu["power_limit_w"]) != (
+                primary_gpu["name"], primary_gpu["power_limit_w"]):
+            raise ValueError("retrospective power hardware is incompatible")
+        cells += measured_rows(root, fit, "retrospective")
+    return cells, result
+
+
+def write(rows: list[dict], result: dict, out: Path) -> None:
+    values = [row[key] for row in rows
+              for key in ("predicted_power_w", "measured_power_w")]
+    margin = .04 * (max(values) - min(values))
+    limits = min(values) - margin, max(values) + margin
+    fig, axis = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    axis.plot(limits, limits, color="black", linestyle="--", linewidth=1.5,
+              label="Prediction = measurement")
+    for family in plot_style.POWER_FAMILY_NAMES:
+        history = [row for row in rows
+                   if row["family"] == family and row["cohort"] == "retrospective"]
+        current = [row for row in rows
+                   if row["family"] == family and row["cohort"] == "fit_campaign"]
+        if history:
+            axis.scatter([row["predicted_power_w"] for row in history],
+                         [row["measured_power_w"] for row in history],
+                         color=plot_style.POWER_FAMILY_COLORS[family],
+                         marker=plot_style.POWER_FAMILY_MARKERS[family],
+                         s=14, alpha=.22)
+        if current:
+            axis.scatter([row["predicted_power_w"] for row in current],
+                         [row["measured_power_w"] for row in current],
+                         color=plot_style.POWER_FAMILY_COLORS[family],
+                         marker=plot_style.POWER_FAMILY_MARKERS[family],
+                         s=30, alpha=.58,
+                         label=plot_style.POWER_FAMILY_NAMES[family])
+    held = [row for row in rows
+            if row["stage"] == "confirmation" and row["cohort"] == "fit_campaign"]
+    axis.scatter([row["predicted_power_w"] for row in held],
+                 [row["measured_power_w"] for row in held], facecolors="none",
+                 edgecolors="black", s=58, linewidth=.8,
+                 label="Unseen confirmation")
+    if any(row["cohort"] == "retrospective" for row in rows):
+        axis.scatter([], [], color="#777777", s=14, alpha=.35,
+                     label="Prior H100 device")
+    validation = result["validation"]
+    history = [row for row in rows if row["cohort"] == "retrospective"]
+    history_text = ""
+    if history:
+        mean = statistics.fmean(row["measured_power_w"] for row in history)
+        residual = [row["measured_power_w"] - row["predicted_power_w"]
+                    for row in history]
+        total = sum((row["measured_power_w"] - mean) ** 2 for row in history)
+        history_text = (f"\nPrior GPU MAE {statistics.fmean(map(abs, residual)):.2f} W"
+                        f"\nPrior GPU $R^2$ {1 - sum(x*x for x in residual) / total:.3f}")
+    axis.set(xlabel="Predicted GPU power (W)", ylabel="Measured GPU power (W)",
+             xlim=limits, ylim=limits,
+             title=f"H100 GPU power parity (n={len(rows)})")
+    axis.text(.98, .03,
+              f"Holdout MAE {validation['holdout_mae_w']:.2f} W\n"
+              f"Holdout $R^2$ {validation['holdout_r2']:.3f}{history_text}",
+              ha="right", va="bottom", transform=axis.transAxes,
+              fontsize=plot_style.ANNOTATION_FONT_SIZE)
+    axis.set_aspect("equal", adjustable="box")
+    axis.grid(alpha=.2)
+    axis.legend(frameon=False, fontsize=8, loc="upper left")
+    fig.tight_layout()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    for suffix in ("png", "pdf"):
+        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
+    plt.close(fig)
+    with out.with_suffix(".csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=rows[0], lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-root", type=Path, required=True)
+    parser.add_argument("--history-run-root", type=Path, action="append", default=[])
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+    rows, result = load(args.run_root, args.history_run_root)
+    write(rows, result, args.out)
+
+
+if __name__ == "__main__":
+    main()

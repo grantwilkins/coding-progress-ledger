@@ -42,6 +42,24 @@ and measured through offered load `ell=12.566`. Admission remains bounded at
 `outputs/h100-profile-20260811/`. Replay, KV-transfer, and transition timings
 remain clearly marked A100-derived estimates until rerun on H100.
 
+The separate boundary-aligned H100 power campaign retains 111 measured cells
+(90 discovery, 18 unseen confirmation, and three idle anchors) with no cached
+tokens or counter/window violations. Its frozen rational model is
+`P=P0+A z/(1+z)`, `z=alpha f+beta g`, without a cross term. The unseen cells
+have 2.37 W MAE and 4.34 W p90 absolute error; the fit remains explicitly
+`holdout_failed` because its `R^2=0.942` misses the declared 0.95 gate. The
+pooled parity view also applies that frozen fit to 38 valid cells from the prior
+physical H100. That external-device cohort has 5.17 W MAE and `R^2=0.840`, so
+device transfer is visibly weaker than the unseen same-device result.
+Interrupted and offered-work-attributed sweeps are excluded.
+
+```bash
+uv run python queue-haul/plot_h100_power_parity.py \
+  --run-root /datadrive/queue-haul-power/h100-realized-20260814-005 \
+  --history-run-root /datadrive/queue-haul-power/h100-realized-20260814-004 \
+  --out queue-haul/outputs/h100_power_model_parity
+```
+
 The completed 72-scenario H100 hardware-gap campaign has no failed or missing
 runs. It scales the constrained East KV reserve to 96% of the measured
 1,205,376-token capacity, reserves 65% of each destination's migration window
