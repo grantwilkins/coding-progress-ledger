@@ -11,6 +11,8 @@ Plausible wrong implementations:
 
 import json
 
+import pytest
+
 import repair_hardware_campaign as campaign
 
 
@@ -73,4 +75,80 @@ def test_timing_promotion_only_expands_the_measured_lower_bound():
         for component in promoted["migration_components"][node].values():
             assert component["bandwidth_range_bytes_per_s"][0] <= expected
             assert component["allow_extrapolation"] is False
-            assert "validated live at 0.1x route rate" in component["provenance"]
+            assert "pending live 0.1x route calibration" in component["provenance"]
+
+
+def _synthetic_timing_rows():
+    rows = []
+    parameters = {
+        ("east", "replay"): .6,
+        ("east", "kv_transfer"): 1.8,
+        ("germany", "replay"): .5,
+        ("germany", "kv_transfer"): .9,
+    }
+    for node in ("east", "germany"):
+        for method in campaign.CALIBRATION_METHODS:
+            for context in campaign.CALIBRATION_CONTEXTS:
+                for repeat in range(campaign.REPEATS):
+                    base = context / 100_000
+                    scale = context / 10_000 if method == "replay" else 1.0
+                    observed = base + parameters[node, method] * scale
+                    rows.append({
+                        "cell_id": f"{node}-{method}-{context}-{repeat}",
+                        "node": node, "method": method,
+                        "context_tokens": context, "repeat": repeat,
+                        "bandwidth_mbps": 100.0,
+                        "status": "complete", "observed_s": observed,
+                        "fit_base_s": base, "fit_scale_s": scale,
+                        "ttft_s": observed, "kv_verified": True,
+                    })
+    return rows
+
+
+def test_timing_fit_trains_small_contexts_and_gates_on_32k_holdout():
+    template = campaign._template(json.loads(campaign.DEFAULT_PARENT.read_text()))
+    gate = {
+        "relative_error": .15, "absolute_error_s": 1.0,
+        "contexts": list(campaign.CALIBRATION_CONTEXTS),
+        "repeats": campaign.REPEATS,
+    }
+
+    summary = campaign._timing_summary(
+        _synthetic_timing_rows(), gate, template)
+
+    assert summary["passed"] is True
+    assert summary["training_contexts"] == [1536, 7680]
+    assert summary["holdout_context"] == 32256
+    assert summary["held_out_rows"] == 12
+    assert summary["ttft_rows"] == 36
+    assert summary["fits"]["east"]["migration_components"][
+        "replay"]["compute_completion_factor"] == pytest.approx(.6)
+    assert summary["fits"]["germany"]["migration_components"][
+        "kv_transfer"]["residual_s"] == pytest.approx(.9)
+
+    missing_ttft = _synthetic_timing_rows()
+    missing_ttft[0]["ttft_s"] = None
+    assert campaign._timing_summary(
+        missing_ttft, gate, template)["passed"] is False
+
+
+def test_low_bandwidth_fit_is_applied_only_to_cut_nodes():
+    scenario = {"migration_components": {
+        "east": {"replay": {"compute_completion_factor": 1}},
+        "germany": {"replay": {"compute_completion_factor": 2}},
+    }}
+    timing = {"fits": {
+        "east": {"migration_components": {
+            "replay": {"compute_completion_factor": .5}}},
+        "germany": {"migration_components": {
+            "replay": {"compute_completion_factor": .6}}},
+    }}
+
+    fitted = campaign._apply_timing_fit(scenario, timing, ("east",))
+
+    assert fitted["migration_components"]["east"]["replay"][
+        "compute_completion_factor"] == .5
+    assert fitted["migration_components"]["germany"]["replay"][
+        "compute_completion_factor"] == 2
+    assert scenario["migration_components"]["east"]["replay"][
+        "compute_completion_factor"] == 1

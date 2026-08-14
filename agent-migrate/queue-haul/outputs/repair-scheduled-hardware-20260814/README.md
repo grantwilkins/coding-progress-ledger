@@ -5,7 +5,10 @@ profile, cluster, network calibration, timing summary, and all nine
 implementation files. It contains 36 mandatory 0.1x regional timing checks and
 48 main episodes (16 location combinations times three repeats).
 
-The main grid runs only if the timing gate passes. During each episode the job
+The calibration fits the 0.1x regional timing components on the 1,536- and
+7,680-token cells and gates exclusively on all repeated 32,256-token holdouts.
+The main grid runs only if the held-out p90 error is at most 15% and one second.
+During each episode the job
 applies live route and uncached-prefill controls at 25% aggregate planned work,
 observes a second sample one second later, shadow-validates the residual diff,
 and applies only pending-work changes that reduce impaired-resource work. An

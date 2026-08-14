@@ -45,8 +45,8 @@ from repair_plan_shift_campaign import (
 
 
 ROOT = Path(__file__).parent
-SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v1"
-RESULT_SCHEMA = "queue-haul-scheduled-repair-hardware-result-v1"
+SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v2"
+RESULT_SCHEMA = "queue-haul-scheduled-repair-hardware-result-v2"
 REPEATS = 3
 CALIBRATION_CONTEXTS = (1536, 7680, 32256)
 CALIBRATION_METHODS = ("replay", "kv_transfer")
@@ -250,7 +250,7 @@ def _promote_components(template: dict, contract: dict) -> dict:
             component["bandwidth_range_bytes_per_s"][0] = min(
                 component["bandwidth_range_bytes_per_s"][0], cut)
             component["allow_extrapolation"] = False
-            component["provenance"] += "; validated live at 0.1x route rate"
+            component["provenance"] += "; pending live 0.1x route calibration"
     return value
 
 
@@ -273,36 +273,147 @@ def _scenario(template: dict, plan: dict, episode: dict) -> dict:
     return scenario
 
 
-def _timing_summary(rows: list[dict], gate: dict) -> dict:
-    errors = [abs(row["observed_s"] - row["predicted_s"])
-              for row in rows if row["status"] == "complete"]
-    relative = [error / max(row["observed_s"], 1e-12)
-                for error, row in zip(errors, (
-                    row for row in rows if row["status"] == "complete"))]
+def _p90(values: list[float]) -> float | None:
+    return sorted(values)[int(.9 * (len(values) - 1))] if values else None
+
+
+def _timing_terms(problem, architecture, profile, node: str,
+                  method: str) -> dict[str, float]:
+    """Return the calibrated formula's fixed and fitted timing terms."""
+    session = next(row for row in problem.sessions
+                   if row.source_instance == "source")
+    pool = next(row for row in architecture.pools
+                if row.pool_id == f"pool/{node}")
+    component = architecture.type_by_id[pool.type_id].migration[method]
+    links = {link.link_id: link.bytes_per_s for link in problem.links}
+    horizon = problem.deadline_s - problem.controller_delay_s \
+        - profile.power_window_s
+
+    def duration(value):
+        return pool_planner._destination_duration(
+            session, method, profile.case("central"), pool.route, links,
+            horizon, value)
+
+    original = duration(component)
+    if method == "replay":
+        one = duration(replace(component, compute_completion_factor=1))
+        two = duration(replace(component, compute_completion_factor=2))
+        scale = two - one
+        base = one - scale
+    else:
+        base = duration(replace(component, residual_s=0))
+        scale = 1.0
+    if scale <= 0 or base < 0:
+        raise RuntimeError("invalid regional timing fit terms")
+    return {
+        "original_predicted_s": original,
+        "fit_base_s": base,
+        "fit_scale_s": scale,
+    }
+
+
+def _timing_summary(rows: list[dict], gate: dict, template: dict) -> dict:
+    """Fit small contexts and gate exclusively on the 32k holdout cells."""
+    contexts = tuple(gate["contexts"])
+    training_contexts, holdout_context = contexts[:-1], contexts[-1]
+    fits, predictions = {}, []
+    for node in ("east", "germany"):
+        components = {}
+        for method in CALIBRATION_METHODS:
+            training = [row for row in rows
+                        if row["node"] == node and row["method"] == method
+                        and row["context_tokens"] in training_contexts
+                        and row["status"] == "complete"]
+            if method == "replay":
+                denominator = sum(row["fit_scale_s"] ** 2 for row in training)
+                parameter = max(1e-9, sum(
+                    row["fit_scale_s"]
+                    * (row["observed_s"] - row["fit_base_s"])
+                    for row in training) / denominator) if denominator else None
+            else:
+                parameter = max(0.0, statistics.mean(
+                    row["observed_s"] - row["fit_base_s"]
+                    for row in training)) if training else None
+            component = json.loads(json.dumps(
+                template["migration_components"][node][method]))
+            if parameter is not None:
+                if method == "replay":
+                    component["compute_completion_factor"] = parameter
+                else:
+                    component["residual_s"] = parameter
+            bandwidth = [row["bandwidth_mbps"] * 125_000 for row in rows
+                         if row["node"] == node]
+            if bandwidth:
+                component["bandwidth_range_bytes_per_s"] = [
+                    min(bandwidth), max(bandwidth)]
+            component["allow_extrapolation"] = False
+            component["provenance"] += (
+                "; live 0.1x fit on contexts "
+                f"{list(training_contexts)}, holdout {holdout_context}")
+            components[method] = component
+            for row in rows:
+                if row["node"] != node or row["method"] != method \
+                        or row["status"] != "complete" or parameter is None:
+                    continue
+                predicted = row["fit_base_s"] + parameter * row["fit_scale_s"]
+                error = abs(row["observed_s"] - predicted)
+                predictions.append({
+                    "cell_id": row["cell_id"], "node": node,
+                    "method": method,
+                    "context_tokens": row["context_tokens"],
+                    "repeat": row["repeat"],
+                    "split": ("holdout_context"
+                              if row["context_tokens"] == holdout_context
+                              else "training"),
+                    "observed_s": row["observed_s"],
+                    "predicted_s": predicted,
+                    "error_s": error,
+                    "relative_error": error / max(row["observed_s"], 1e-12),
+                })
+        fits[node] = {"migration_components": components}
+    holdout = [row for row in predictions
+               if row["split"] == "holdout_context"]
+    errors = [row["error_s"] for row in holdout]
+    relative = [row["relative_error"] for row in holdout]
     ttfts = [row["ttft_s"] for row in rows if row.get("ttft_s") is not None]
-    passed = bool(rows) and len(errors) == len(rows) \
-        and len(ttfts) == len(rows) \
-        and statistics.median(relative) <= gate["relative_error"] \
-        and sorted(relative)[int(.9 * (len(relative) - 1))] \
-        <= gate["relative_error"] \
-        and sorted(errors)[int(.9 * (len(errors) - 1))] \
-        <= gate["absolute_error_s"] \
+    expected_rows = 2 * len(CALIBRATION_METHODS) * len(contexts) \
+        * gate["repeats"]
+    expected_holdout = 2 * len(CALIBRATION_METHODS) * gate["repeats"]
+    passed = len(rows) == expected_rows \
+        and all(row["status"] == "complete" for row in rows) \
+        and len(ttfts) == expected_rows \
+        and len(holdout) == expected_holdout \
+        and _p90(relative) is not None \
+        and _p90(relative) <= gate["relative_error"] \
+        and _p90(errors) <= gate["absolute_error_s"] \
         and all(row.get("kv_verified", True) for row in rows)
     return {
-        "schema": "queue-haul-repair-10x-timing-gate-v1",
+        "schema": "queue-haul-repair-10x-timing-fit-v2",
         "rows": len(rows),
-        "median_relative_error": statistics.median(relative) if relative else None,
-        "p90_relative_error": sorted(relative)[int(.9 * (len(relative) - 1))]
-        if relative else None,
-        "p90_absolute_error_s": sorted(errors)[int(.9 * (len(errors) - 1))]
-        if errors else None,
+        "training_contexts": list(training_contexts),
+        "holdout_context": holdout_context,
+        "held_out_rows": len(holdout),
+        "held_out_median_relative_error": (
+            statistics.median(relative) if relative else None),
+        "held_out_p90_relative_error": _p90(relative),
+        "held_out_p90_absolute_error_s": _p90(errors),
         "ttft_rows": len(ttfts),
         "ttft_p50_s": statistics.median(ttfts) if ttfts else None,
-        "ttft_p90_s": sorted(ttfts)[int(.9 * (len(ttfts) - 1))]
-        if ttfts else None,
+        "ttft_p90_s": _p90(ttfts),
         "ttft_max_s": max(ttfts) if ttfts else None,
+        "fits": fits,
+        "predictions": predictions,
         "passed": passed,
     }
+
+
+def _apply_timing_fit(scenario: dict, timing: dict,
+                      nodes: tuple[str, ...]) -> dict:
+    value = json.loads(json.dumps(scenario))
+    for node in nodes:
+        value["migration_components"][node] = json.loads(json.dumps(
+            timing["fits"][node]["migration_components"]))
+    return value
 
 
 def _run_calibration(stack, plan, parent, manifest, profile, root: Path) -> dict:
@@ -330,27 +441,29 @@ def _run_calibration(stack, plan, parent, manifest, profile, root: Path) -> dict
             "design": "calibration", "scenario_id": cell["cell_id"],
             "sessions": [cell["session"]], "moves": [move],
             "background": {"east": [0, 0], "germany": [0, 0]},
+            "source_load": 0,
             "deadline_s": network.ORACLE_STALE_HORIZON_S,
             "load_warmup_s": 0,
         }
-        raw = network.run_network_scenario(
-            stack, manifest, scenario, cell_root / "raw", profile.case().F)
+        raw_path = cell_root / "raw" / "result.json"
+        raw = json.loads(raw_path.read_text()) if raw_path.exists() else \
+            network.run_network_scenario(
+                stack, manifest, scenario, cell_root / "raw", profile.case().F)
         modeled = _scenario(_promote_components(template, plan["network_contract"]),
                             plan, {"episode_id": cell["cell_id"],
                             "bandwidth_state": cell["node"],
                             "prefill_state": "none"})
         modeled["sessions"] = [cell["session"]]
         modeled["background"] = {"east": [0, 0], "germany": [0, 0]}
+        modeled["source_load"] = 0
         problem, architecture, _, _, _ = network._scenario_problem(
             modeled, manifest, profile)
-        table = pool_planner.candidate_table(
-            problem, profile, architecture, "normal", ExpectedPower(problem, profile))
-        candidate = _candidate_map(table, architecture)[
-            (cell["session"]["session_id"], cell["method"], f"pool/{cell['node']}")]
+        terms = _timing_terms(
+            problem, architecture, profile, cell["node"], cell["method"])
         row = {
-            **cell, "schema": "queue-haul-repair-10x-timing-row-v1",
+            **cell, **terms,
+            "schema": "queue-haul-repair-10x-timing-row-v2",
             "status": raw["status"], "observed_s": raw["migration_s"],
-            "predicted_s": candidate.duration_s,
             "ttft_s": _ttft_s(raw["requests"][0]["request"]),
             "bandwidth_control_ack": bandwidth_ack,
             "kv_verified": cell["method"] != "kv_transfer" or bool(
@@ -358,20 +471,31 @@ def _run_calibration(stack, plan, parent, manifest, profile, root: Path) -> dict
         }
         profiler.write_json(result_path, row)
         rows.append(row)
+        profiler.write_json(root / "progress.json", {
+            "schema": "queue-haul-repair-calibration-progress-v1",
+            "completed": len(rows),
+            "expected": len(plan["calibration_cells"]),
+            "latest_cell_id": cell["cell_id"],
+            "latest_ttft_s": row["ttft_s"],
+        })
     profiler.write_csv(root / "timing_rows.csv", rows)
-    summary = _timing_summary(rows, plan["calibration_gate"])
+    summary = _timing_summary(rows, plan["calibration_gate"], template)
+    profiler.write_csv(root / "timing_predictions.csv", summary["predictions"])
     profiler.write_json(root / "summary.json", summary)
     return summary
 
 
-def _run_episode(stack, plan, parent, manifest, profile, episode, root: Path):
+def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
+                 root: Path):
     """Run one pending-only guarded repair while active attempts continue."""
     root.mkdir(parents=True, exist_ok=False)
     network._clear_cluster(stack)
     network.set_live_bandwidth(stack, {})
     network.set_live_prefill(stack, {"east": None, "germany": None})
     template = _promote_components(_template(parent), plan["network_contract"])
-    scenario = _scenario(template, plan, episode)
+    scenario = _apply_timing_fit(
+        _scenario(template, plan, episode), timing,
+        _affected(episode["bandwidth_state"]))
     profiler.write_json(root / "scenario.json", scenario)
     records = network.scenario_records(manifest, scenario)
     messages = {row["session_id"]: profiler.calibration_messages(
@@ -394,8 +518,12 @@ def _run_episode(stack, plan, parent, manifest, profile, episode, root: Path):
             for node in stack.cluster.destinations}
         demand = network.agentic_demand(
             records, scenario["sessions"], profile, scenario["source_load"])
-        natural = {**scenario, "bandwidth_mbps": network._bandwidths(
-            plan["network_contract"], "natural")}
+        natural = {
+            **scenario,
+            "bandwidth_mbps": network._bandwidths(
+                plan["network_contract"], "natural"),
+            "migration_components": _template(parent)["migration_components"],
+        }
         problem, architecture, routes, target = network.joint_problem(
             natural, snapshots, profile, demand)
         result = network.solve(
@@ -694,12 +822,25 @@ def run(plan_path: Path, key: Path, run_root: Path) -> dict:
     network.host_check(cluster, key)
     run_root.mkdir(parents=True, exist_ok=True)
     profiler.write_json(run_root / "plan.json", plan)
+    stack_root = run_root / f"stack-{_hash(str(run_root.resolve()))}"
     stack = network.start_cluster(
         cluster, key, plan["network_contract"], "natural",
-        run_root / "stack", power_interval_s=.1)
+        stack_root, power_interval_s=.1)
     try:
+        profiler.write_json(run_root / "status.json", {
+            "schema": "queue-haul-repair-hardware-status-v1",
+            "phase": "calibration", "completed": 0,
+            "expected": len(plan["calibration_cells"]),
+        })
         timing = _run_calibration(
             stack, plan, parent, manifest, profile, run_root / "calibration")
+        profiler.write_json(run_root / "status.json", {
+            "schema": "queue-haul-repair-hardware-status-v1",
+            "phase": "calibration_complete",
+            "completed": len(plan["calibration_cells"]),
+            "expected": len(plan["calibration_cells"]),
+            "gate_passed": timing["passed"],
+        })
         if not timing["passed"]:
             raise RuntimeError("0.1x timing calibration gate failed; main grid not run")
         results = []
@@ -709,12 +850,32 @@ def run(plan_path: Path, key: Path, run_root: Path) -> dict:
                 results.append(json.loads(path.read_text()))
             else:
                 results.append(_run_episode(
-                    stack, plan, parent, manifest, profile, episode, path.parent))
+                    stack, plan, parent, manifest, profile, timing,
+                    episode, path.parent))
+            profiler.write_json(run_root / "status.json", {
+                "schema": "queue-haul-repair-hardware-status-v1",
+                "phase": "episodes",
+                "completed": len(results),
+                "expected": len(plan["episodes"]),
+                "latest_episode_id": episode["episode_id"],
+            })
+    except Exception as error:
+        profiler.write_json(run_root / "status.json", {
+            "schema": "queue-haul-repair-hardware-status-v1",
+            "phase": "failed", "error": f"{type(error).__name__}: {error}",
+        })
+        raise
     finally:
         network.stop_cluster(stack)
     summary = reduce(plan, run_root)
     if not summary["passed"]:
         raise RuntimeError("scheduled repair hardware validation failed")
+    profiler.write_json(run_root / "status.json", {
+        "schema": "queue-haul-repair-hardware-status-v1",
+        "phase": "complete", "validation_passed": True,
+        "completed": len(plan["episodes"]),
+        "expected": len(plan["episodes"]),
+    })
     return summary
 
 
@@ -762,7 +923,7 @@ def reduce(plan: dict, run_root: Path) -> dict:
         and all(row["repair_outcome"] != "applied"
                 or row["shadow_guard_passed"] for row in rows)
     summary = {
-        "schema": "queue-haul-scheduled-repair-hardware-validation-v1",
+        "schema": "queue-haul-scheduled-repair-hardware-validation-v2",
         "expected": len(plan["episodes"]), "completed": len(rows),
         "applied": sum(row["repair_outcome"] == "applied" for row in rows),
         "revised_maximum": sum(row["repair_outcome"] == "revised_maximum"

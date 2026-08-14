@@ -1589,11 +1589,12 @@ def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
     messages = messages + [{"role": "user", "content":
                             f"Reply only with session state code {code}."}]
     for attempt in range(2):
+        request_options = ({"request_headers": {
+            "X-QH-Prefill-Class": prefill_class}}
+            if prefill_class else {})
         result, text = profiler.stream_chat(
             cfg, port, messages, 128, profiler.messages_hash(messages), timeout_s,
-            bypass_lmcache, request_headers=(
-                {"X-QH-Prefill-Class": prefill_class}
-                if prefill_class else None))
+            bypass_lmcache, **request_options)
         if result.status_code == 200 and code in text:
             return {**asdict(result), "state_code_verified": True,
                     "probe_attempts": attempt + 1}
