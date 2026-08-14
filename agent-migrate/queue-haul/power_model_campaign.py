@@ -312,7 +312,8 @@ def run(args) -> None:
                   "--max-num-seqs", "256", "--max-num-batched-tokens", "8192",
                   "--kv-cache-dtype", "auto", "--block-size", "16",
                   "--enable-chunked-prefill", "--enforce-eager",
-                  "--gpu-memory-utilization", ".75", "--disable-hybrid-kv-cache-manager"]
+                  "--gpu-memory-utilization", ".75", "--disable-hybrid-kv-cache-manager",
+                  "--no-enable-prefix-caching"]
     server = subprocess.Popen(server_cmd, stdout=server_log, stderr=subprocess.STDOUT)
     try:
         base_url = f"http://{args.host}:{args.port}"
