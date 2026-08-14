@@ -794,9 +794,9 @@ uv run python queue-haul/plot_pooled_resource_pressure.py \
 
 The action-adaptation views use the same equal-case sweep. The primary chart
 shows Queue-Haul's total replay/KV composition under all eight combinations of
-HBM, bandwidth, and prefill constraints at a common 67% target. Every 100%-
-stacked bar uses the same 28-session pack; absolute selected-session counts and
-destination identities are intentionally omitted.
+HBM, bandwidth, and prefill constraints at a common 67% target. Gray reports
+sessions left at the source, so every 100%-stacked bar accounts for the same
+28-session pack; destination identities are intentionally omitted.
 
 ```bash
 uv run python queue-haul/plot_pooled_action_adaptation.py \

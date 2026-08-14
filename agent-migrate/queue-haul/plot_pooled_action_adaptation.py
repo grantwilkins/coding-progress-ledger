@@ -147,9 +147,11 @@ def controlled_action_mixes(rows):
             raise RuntimeError("action mix requires an accounted 28-session pack")
         mix = {
             "replay": (int(row["east_replay"])
-                       + int(row["germany_replay"])) / selected,
+                       + int(row["germany_replay"])) / int(row["sessions"]),
             "kv_transfer": (int(row["east_kv_transfer"])
-                            + int(row["germany_kv_transfer"])) / selected,
+                            + int(row["germany_kv_transfer"]))
+            / int(row["sessions"]),
+            "not_moved": 1 - selected / int(row["sessions"]),
         }
         if not np.isclose(sum(mix.values()), 1):
             raise RuntimeError("selected-action mix does not sum to one")
@@ -169,7 +171,7 @@ def _controlled_action_mix(rows, out):
 
     fig, axis = plt.subplots(figsize=ACTION_MIX_FIGSIZE)
     left = np.zeros(len(rows))
-    for action in ("replay", "kv_transfer"):
+    for action in ("replay", "kv_transfer", "not_moved"):
         values = np.asarray([row[action] for row in rows]) * 100
         axis.barh(range(len(rows)), values, left=left,
                   color=plot_style.ACTION_COLORS[action],
@@ -178,7 +180,7 @@ def _controlled_action_mix(rows, out):
         left += values
     axis.set(yticks=range(len(rows)),
              yticklabels=[row["bound_constraint"] for row in rows],
-             xlim=(0, 100), xlabel="Selected-action share (%)")
+             xlim=(0, 100), xlabel="Source-session share (%)")
     axis.invert_yaxis()
     axis.grid(axis="x", alpha=.2)
     axis.tick_params(labelsize=ACTION_MIX_TICK_SIZE)

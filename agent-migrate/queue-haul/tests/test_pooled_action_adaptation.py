@@ -1,14 +1,14 @@
 """
 Claim:
-Action views select one Queue-Haul plan per case. Controlled bars report the
-total replay/KV composition of selected actions from matched 28-session packs
-under every combination of HBM, bandwidth, and prefill bottlenecks.
+Action views select one Queue-Haul plan per case. Controlled bars account for
+every source session as replay, KV transfer, or not moved in matched 28-session
+packs under every combination of HBM, bandwidth, and prefill bottlenecks.
 
 Plausible wrong implementations:
 - Pool raw action counts, overweighting cases with more sessions.
 - Swap a regional action column or fail to combine both regions.
 - Mix policies or duplicate a designed case at a requested-shed coordinate.
-- Normalize controlled bars by all source sessions instead of selected actions.
+- Normalize by selected actions and hide changes in how many sessions move.
 - Include unaccounted selected sessions or a mismatched pack.
 - Omit a constraint combination or bind the wrong subset.
 """
@@ -54,14 +54,14 @@ def test_fraction_selection_rejects_duplicate_case_and_other_policy():
         at_fraction([chosen, chosen], .5)
 
 
-def test_controlled_mix_normalizes_selected_actions_without_n(monkeypatch):
+def test_controlled_mix_accounts_for_every_source_session(monkeypatch):
     monkeypatch.setattr("plot_pooled_action_adaptation.ACTION_MIX_CASES",
                         (("case", "Bandwidth"),))
     rows = [row("case", 28, (3, 1, 7, 4), fraction=2 / 3)]
 
     assert controlled_action_mixes(rows) == [{
         "bound_constraint": "Bandwidth",
-        "replay": 10 / 15, "kv_transfer": 5 / 15,
+        "replay": 10 / 28, "kv_transfer": 5 / 28, "not_moved": 13 / 28,
     }]
 
     rows[0]["selected_sessions"] = 16
