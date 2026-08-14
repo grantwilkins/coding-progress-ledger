@@ -1518,3 +1518,36 @@ audit and retained evidence.
 - Add semantic tests for every source change.
 - Run `uv run pytest` after every change.
 - Commit each completed task separately with a descriptive message.
+
+## Model-architecture campaign
+
+`model_architecture_campaign.py` reuses the migration profiler and base planner
+for the pinned GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B checkpoints. It
+keeps BF16 KV, TP1, 32K context, eight sessions, 90% GPU memory, and exact token
+shapes fixed across A100 and H100 arms. Use the native vLLM 0.22/LMCache 0.5.1
+stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`.
+
+```bash
+uv run python model_architecture_campaign.py prepare --out-dir runs/model-architecture/plans
+uv run python model_architecture_campaign.py run-profile --plan PLAN.json --run-root RUN-smoke --smoke-only
+uv run python model_architecture_campaign.py run-profile --plan PLAN.json --run-root RUN-full
+uv run python model_architecture_campaign.py freeze-profile --base-profile BASE.json --run-root RUN-full --smoke-root RUN-smoke --geometry kv_geometry.csv --out PROFILE.json
+```
+
+Run the smoke command for all six arms before any full run. `BASE.json` must be
+the model/hardware arm's measured service and power profile. The geometry CSV
+has one row per context, repeat, and runtime-reported cache group with columns
+`context_tokens,repeat,group,resident_bytes,capacity_bytes,transfer_bytes`.
+Profile freezing requires all five contexts and three repeats, checks group
+totals against measured LMCache payloads, and rejects held-out median/P90 timing
+error above 10%/15%, P90 absolute error above one second, or any false-feasible
+19/30-second deadline.
+
+Pass six `--arm MODEL HARDWARE PROFILE GATE` arguments to `screen`. It writes
+the paired fixed-arrival and 40%-utilization-matched analysis, cache-only and
+compute-only counterfactuals, the canonical action-mix figure, and six live
+plans totaling 36 runs. Screening proceeds only with an in-grid crossover and
+either a confidence-separated 10-point action-share change or a feasibility
+flip. Execute each live plan with `run-profile`, then pass the six
+`--run MODEL HARDWARE ROOT` arguments to `validate-live`. Interpret accepted
+differences as architecture/deployment behavior, not a causal sparsity effect.

@@ -1197,7 +1197,7 @@ def test_reduce_validates_and_writes_interpretable_tables_and_plots(
                 "1000000000,0,0,90,0,0,1\n1000000000,0,1,110,0,0,1\n"
                 "2200000000,0,0,90,0,0,1\n2200000000,0,1,110,0,0,1\n")
 
-    c.reduce_run(tmp_path)
+    c.reduce_run(tmp_path, None)
 
     for name in ("migrations.csv", "service_requests.csv", "scenarios.csv",
                  "benchmark_summary.csv",

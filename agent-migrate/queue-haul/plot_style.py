@@ -71,6 +71,13 @@ ACTION_HATCHES = {
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "--",
 }
+MODELS = ("openai/gpt-oss-20b", "Qwen/Qwen3.8-27B",
+          "google/gemma-4-26B-A4B-it")
+MODEL_NAMES = dict(zip(MODELS, ("GPT-OSS-20B", "Qwen3.8-27B",
+                                "Gemma-4-26B-A4B")))
+MODEL_COLORS = dict(zip(MODELS, ("#0072B2", "#D55E00", "#009E73")))
+MODEL_LINESTYLES = dict(zip(MODELS, ("-", "--", ":")))
+MODEL_MARKERS = dict(zip(MODELS, ("o", "s", "^")))
 REPAIR_NAMES = {
     "unchanged": "No repair needed",
     "applied": "Repair applied",

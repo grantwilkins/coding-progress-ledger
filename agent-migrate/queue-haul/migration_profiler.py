@@ -246,7 +246,7 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
               session_ids: tuple[str, ...] | list[str] = (),
               activity_tokens: tuple[int, ...] | list[int] = (),
               serving_concurrency: tuple[int, ...] | list[int] = (),
-              final_state: str = "awake") -> dict:
+              final_state: str = "awake", exact_tokens: bool = False) -> dict:
     manifest = json.loads(manifest_path.read_text())
     validate_manifest(manifest)
     serving_concurrency = list(serving_concurrency) or [1]
@@ -279,7 +279,9 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
                         random.Random(stable_seed(seed, size, active, repeat)).shuffle(chosen)
                         chosen = chosen[:count]
                     session_rows = [{"session_id": row["id"], "job_class": row["job_class"],
-                                     "turn_index": nearest_turn(row, size), "order": order}
+                                     "turn_index": 0 if exact_tokens else nearest_turn(row, size),
+                                     **({"initial_tokens": size} if exact_tokens else {}),
+                                     "order": order}
                                     for order, row in enumerate(chosen)]
                     for serving in serving_concurrency:
                         match_id = object_hash(
@@ -2567,7 +2569,8 @@ def current_model_time(row: dict, profile) -> float | None:
     ) + case.replay_completion_s
 
 
-def reduce_run(run_root: Path) -> None:
+def reduce_run(run_root: Path, profile_path: Path | None = Path(__file__).with_name(
+        "profiles") / "gpt_oss_20b_h100_tp1.json") -> None:
     metadata = json.loads((run_root / "run_metadata.json").read_text())
     if metadata.get("schema") not in SCHEMAS[RUN_SCHEMA]:
         raise ValueError("unsupported run schema")
@@ -2655,9 +2658,10 @@ def reduce_run(run_root: Path) -> None:
         if row["kind"] == "migration" and control and row["continuation_ttft_s"] is not None:
             row["continuation_difference_s"] = row["continuation_ttft_s"] - control["continuation_ttft_s"]
     from profiles import ModelProfile
-    profile = ModelProfile.load(Path(__file__).with_name("profiles") / "gpt_oss_20b_h100_tp1.json")
+    profile = ModelProfile.load(profile_path) if profile_path else None
     for row in migrations:
-        row["current_model_time_s"] = current_model_time(row, profile)
+        row["current_model_time_s"] = current_model_time(row, profile) \
+            if profile else None
     write_csv(run_root / "migrations.csv", migrations)
     write_csv(run_root / "scenarios.csv", scenarios)
     if services:
