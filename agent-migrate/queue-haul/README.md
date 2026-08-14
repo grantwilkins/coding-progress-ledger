@@ -131,6 +131,13 @@ QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py
   --run-root RUN_ROOT
 QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py refit-targeted \
   --profile profiles/gpt_oss_20b_h100_tp1.json --run-root RUN_ROOT --out FIT_ROOT
+uv run python plot_live_timing_parity.py \
+  --source FIT_ROOT/holdout_predictions.csv \
+  --out outputs/h100_live_timing_parity
+uv run python plot_live_timing_parity.py \
+  --source FIT_ROOT/holdout_predictions.csv --model FIT_ROOT/model.json \
+  --history-run-root HISTORICAL_RUN_ROOT --log \
+  --out outputs/h100_live_timing_parity_all
 ```
 
 The fit hard-gates overall, every path, and every context at MdAPE <=10%, p90
@@ -140,6 +147,10 @@ lateness <=1.25x. It only emits `profile.json` and a regional
 (`QH_MODEL_PROFILE=FIT_ROOT/profile.json` and the fitted calibration); the
 profile rejects replay contexts outside 8192--31488. Do not run this campaign
 concurrently with another workload on the source H100.
+The parity plot pools the 16 unseen replay and KV holdouts on shared axes with
+an exact prediction-equals-measurement reference; calibration rows are excluded.
+The second command adds prior live transfers without refitting and uses log axes
+to expose whether the isolated model transfers to loaded, concurrent settings.
 
 ## System boundary
 
