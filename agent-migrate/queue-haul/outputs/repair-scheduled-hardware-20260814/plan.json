@@ -1111,7 +1111,7 @@
     }
   ],
   "implementation": {
-    "dirty": true,
+    "dirty": false,
     "files": [
       {
         "path": "queue-haul/destination.py",
@@ -1127,7 +1127,7 @@
       },
       {
         "path": "queue-haul/network_campaign.py",
-        "sha256": "c52415147c98c33d7beed16832168a59db51b3778a34e841f37d8b0676af8a57"
+        "sha256": "4e1cc93f563faffce133ce84f1e31715a21bb504f8a1e09292002be0c24fcf82"
       },
       {
         "path": "queue-haul/pool_planner.py",
@@ -1143,14 +1143,14 @@
       },
       {
         "path": "queue-haul/repair_hardware_campaign.py",
-        "sha256": "c6f63d0b2930c98a316d6174ea99404dba401d66cdfbdfc80eb0adea31a98d5d"
+        "sha256": "5732b58ea0347362c334979fb299fd64993d8cb9cbd9c289b7d36bfddf4aa57d"
       },
       {
         "path": "queue-haul/repair_plan_shift_campaign.py",
         "sha256": "555737a1f3ec0b43d1d0f472adca34e2a604acae2f97a5673bc296f94f07bd75"
       }
     ],
-    "git_sha": "44c98fa34d2e1d7d71c3e3027ca3b5365a74f551"
+    "git_sha": "60cd730246bace652a73816cd2c85496ef2ec822"
   },
   "manifest": {
     "path": "queue-haul/outputs/coding-manifest.json",
@@ -1193,7 +1193,7 @@
     "sha256": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe"
   },
   "repeats": 3,
-  "schema": "queue-haul-scheduled-repair-hardware-plan-v1",
+  "schema": "queue-haul-scheduled-repair-hardware-plan-v2",
   "timing_calibration": {
     "holdout_context": 32256,
     "schema": "queue-haul-regional-timing-fit-v2",
