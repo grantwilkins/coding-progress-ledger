@@ -1,4 +1,14 @@
-"""The H100 power parity view uses the frozen fit and all measured cells."""
+"""
+Claim:
+The H100 power parity view plots every measured cell once by workload family and
+reports MAE and R² over that complete pooled set.
+
+Plausible wrong implementations:
+- Drop retrospective or confirmation cells while removing their legend labels.
+- Retain cohort overlays that plot confirmation cells twice.
+- Keep classifying dots by campaign cohort instead of workload family.
+- Report stored holdout statistics instead of recomputing pooled metrics.
+"""
 
 import json
 
@@ -13,8 +23,7 @@ def test_h100_power_parity_has_exact_reference_and_complete_grid(tmp_path, monke
     fit = {"power_idle_w": 90, "power_amplitude_w": 100,
            "alpha_s_per_prefill_token": .001,
            "beta_s_per_decode_token": .01}
-    result = {"schema": "queue-haul-rational-power-fit-v1", "fit": fit,
-              "validation": {"holdout_mae_w": 2.5, "holdout_r2": .94}}
+    result = {"schema": "queue-haul-rational-power-fit-v1", "fit": fit}
     (root / "fit.json").write_text(json.dumps(result))
     (root / "metadata.json").write_text(json.dumps({
         "gpu": {"name": "NVIDIA H100 NVL", "uuid": "GPU-new",
@@ -43,10 +52,10 @@ def test_h100_power_parity_has_exact_reference_and_complete_grid(tmp_path, monke
     prior = [{**cells[index], "sequence": index} for index in range(2)]
     (history / "cells.jsonl").write_text(
         "".join(json.dumps(row) + "\n" for row in prior))
-    rows, loaded = load(root, [history])
+    rows = load(root, [history])
     monkeypatch.setattr(plt, "close", lambda _: None)
 
-    write(rows, loaded, tmp_path / "parity")
+    write(rows, tmp_path / "parity")
 
     axis = plt.gcf().axes[0]
     assert len(rows) == 113
@@ -57,3 +66,26 @@ def test_h100_power_parity_has_exact_reference_and_complete_grid(tmp_path, monke
     assert abs(rows[0]["predicted_power_w"] - expected) < 1e-12
     for suffix in ("csv", "png", "pdf"):
         assert (tmp_path / f"parity.{suffix}").stat().st_size
+
+
+def test_h100_power_parity_pools_metrics_and_classifies_only_by_family(
+        tmp_path, monkeypatch):
+    rows = [
+        {"family": "prefill", "cohort": "fit_campaign", "stage": "confirmation",
+         "predicted_power_w": 0., "measured_power_w": 0.},
+        {"family": "prefill", "cohort": "retrospective", "stage": "discovery",
+         "predicted_power_w": 1., "measured_power_w": 2.},
+        {"family": "decode", "cohort": "fit_campaign", "stage": "discovery",
+         "predicted_power_w": 2., "measured_power_w": 2.},
+        {"family": "decode", "cohort": "retrospective", "stage": "confirmation",
+         "predicted_power_w": 3., "measured_power_w": 4.},
+    ]
+    monkeypatch.setattr(plt, "close", lambda _: None)
+
+    write(rows, tmp_path / "parity")
+
+    axis = plt.gcf().axes[0]
+    assert not axis.get_title()
+    assert [item.get_label() for item in axis.collections] == ["Prefill", "Decode"]
+    assert sum(len(item.get_offsets()) for item in axis.collections) == len(rows)
+    assert axis.texts[0].get_text() == "MAE 0.50 W\n$R^2$ 0.750"

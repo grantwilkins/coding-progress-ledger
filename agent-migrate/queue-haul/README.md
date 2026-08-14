@@ -64,9 +64,9 @@ tokens or counter/window violations. Its frozen rational model is
 have 2.37 W MAE and 4.34 W p90 absolute error; the fit remains explicitly
 `holdout_failed` because its `R^2=0.942` misses the declared 0.95 gate. The
 pooled parity view also applies that frozen fit to 38 valid cells from the prior
-physical H100. That external-device cohort has 5.17 W MAE and `R^2=0.840`, so
-device transfer is visibly weaker than the unseen same-device result.
-Interrupted and offered-work-attributed sweeps are excluded.
+physical H100. It classifies all 149 points only by workload family and reports
+their aggregate 3.56 W MAE and `R^2=0.919`. Interrupted and
+offered-work-attributed sweeps are excluded.
 
 ```bash
 uv run python queue-haul/plot_h100_power_parity.py \
