@@ -281,33 +281,36 @@ def saturating_fit(rows: list[dict]) -> dict:
     p0 = statistics.median(idle)
     fcap = max(r["realized_prefill_tps"] for r in train if r["family"] == "prefill")
     gcap = max(r["realized_decode_tps"] for r in train if r["family"] == "decode")
-    alpha = 1 / fcap
+    base_alpha = 1 / fcap
     f = np.array([r["realized_prefill_tps"] for r in train])
     g = np.array([r["realized_decode_tps"] for r in train])
     power = np.array([r["power_mean_w"] for r in train])
     best = None
-    for beta in np.geomspace(.2 / gcap, 5 / gcap, 161):
-        ell = alpha * f + beta * g
-        for knee in np.geomspace(.02, 5, 161):
-            x = 1 - np.exp(-ell / knee)
+    for base_beta in np.geomspace(.2 / gcap, 5 / gcap, 161):
+        ell = base_alpha * f + base_beta * g
+        for scale in np.geomspace(.2, 50, 161):
+            z = scale * ell
+            x = z / (1 + z)
             amplitude = max(0.0, float(np.dot(x, power - p0) / np.dot(x, x)))
             predicted = p0 + amplitude * x
             mse = float(np.mean((power - predicted) ** 2))
-            candidate = (mse, beta, knee, amplitude)
+            candidate = (mse, base_beta, scale, amplitude)
             best = candidate if best is None or candidate < best else best
-    mse, beta, knee, amplitude = best
-    return {"power_idle_w": p0, "power_max_w": p0 + amplitude,
-            "alpha_s_per_prefill_token": alpha,
-            "beta_s_per_decode_token": beta, "F_prefill_tps": fcap,
-            "G_decode_tps": gcap, "ell_knee": knee,
+    mse, base_beta, scale, amplitude = best
+    return {"schema": "queue-haul-rational-power-v1",
+            "link": "P=P0+A*z/(1+z); z=alpha*f+beta*g",
+            "power_idle_w": p0, "power_amplitude_w": amplitude,
+            "power_max_w": p0 + amplitude,
+            "alpha_s_per_prefill_token": scale * base_alpha,
+            "beta_s_per_decode_token": scale * base_beta,
+            "F_prefill_tps": fcap, "G_decode_tps": gcap,
             "discovery_rmse_w": math.sqrt(mse)}
 
 
 def predict(row: dict, fit: dict) -> float:
-    ell = (fit["alpha_s_per_prefill_token"] * row["realized_prefill_tps"]
-           + fit["beta_s_per_decode_token"] * row["realized_decode_tps"])
-    return fit["power_idle_w"] + (fit["power_max_w"] - fit["power_idle_w"]) * (
-        1 - math.exp(-ell / fit["ell_knee"]))
+    z = (fit["alpha_s_per_prefill_token"] * row["realized_prefill_tps"]
+         + fit["beta_s_per_decode_token"] * row["realized_decode_tps"])
+    return fit["power_idle_w"] + fit["power_amplitude_w"] * z / (1 + z)
 
 
 def validate(rows: list[dict], fit: dict) -> dict:
@@ -348,6 +351,64 @@ def validate(rows: list[dict], fit: dict) -> dict:
     }
     report["passed"] = all(report["gates"].values())
     return report
+
+
+def fit_result(rows: list[dict]) -> dict:
+    fit = saturating_fit(rows)
+    report = validate(rows, fit)
+    return {"schema": "queue-haul-rational-power-fit-v1",
+            "status": "calibrated" if report["passed"] else "holdout_failed",
+            "fit": fit, "interaction_diagnostic": interaction_diagnostic(rows, fit),
+            "validation": report}
+
+
+def interaction_diagnostic(rows: list[dict], fit: dict) -> dict:
+    result = {}
+    for stage in ("discovery", "confirmation"):
+        selected = [row for row in rows if row["stage"] == stage]
+        interaction = np.array([(row["realized_prefill_tps"] / fit["F_prefill_tps"])
+                                * (row["realized_decode_tps"] / fit["G_decode_tps"])
+                                for row in selected])
+        residual = np.array([row["power_mean_w"] - predict(row, fit) for row in selected])
+        slope = float(np.dot(interaction, residual) / np.dot(interaction, interaction))
+        result[stage] = {"residual_w_per_normalized_f_g": slope,
+                         "base_rmse_w": float(np.sqrt(np.mean(residual ** 2))),
+                         "adjusted_rmse_w": float(np.sqrt(np.mean((residual - slope * interaction) ** 2))),
+                         "residual_interaction_correlation": float(np.corrcoef(
+                             interaction, residual)[0, 1])}
+    return result
+
+
+def complete_rows(out: Path, seed: int) -> list[dict]:
+    plan = cells(seed)
+    lines = (out / "cells.jsonl").read_text().splitlines()
+    if len(lines) != len(plan):
+        raise RuntimeError(f"offline refit requires all {len(plan)} cells, found {len(lines)}")
+    rows = [json.loads(line) for line in lines]
+    for sequence, (row, cell) in enumerate(zip(rows, plan, strict=True)):
+        if any(row.get(key) != value for key, value in
+               {**asdict(cell), "sequence": sequence}.items()):
+            raise RuntimeError(f"row {sequence} does not match deterministic grid")
+    return rows
+
+
+def refit(args) -> None:
+    rows = complete_rows(args.out, args.seed)
+    fit_path = args.out / "fit.json"
+    if not fit_path.is_file():
+        raise RuntimeError("offline refit requires the provisional in-run fit.json")
+    provisional = args.out / "fit-exponential-provisional.json"
+    if provisional.exists():
+        raise RuntimeError("provisional exponential fit is already archived")
+    with provisional.open("xb") as handle:
+        handle.write(fit_path.read_bytes()); handle.flush(); os.fsync(handle.fileno())
+    result = fit_result(rows)
+    temporary = fit_path.with_suffix(".rational.tmp")
+    with temporary.open("x") as handle:
+        handle.write(json.dumps(result, indent=2) + "\n"); handle.flush(); os.fsync(handle.fileno())
+    os.replace(temporary, fit_path)
+    if not result["validation"]["passed"]:
+        raise RuntimeError("rational power calibration holdout gates failed")
 
 
 def validate_gpu() -> dict:
@@ -482,12 +543,9 @@ def run(args) -> None:
             rows.append(row)
             append_jsonl(args.out / "cells.jsonl", [row])
             print(json.dumps(row), flush=True)
-        fit = saturating_fit(rows)
-        report = validate(rows, fit)
-        result = {"status": "calibrated" if report["passed"] else "holdout_failed",
-                  "fit": fit, "validation": report}
+        result = fit_result(rows)
         (args.out / "fit.json").write_text(json.dumps(result, indent=2) + "\n")
-        if not report["passed"]:
+        if not result["validation"]["passed"]:
             raise RuntimeError("power calibration holdout gates failed")
     finally:
         server.terminate()
@@ -512,6 +570,7 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--expected-sha")
     parser.add_argument("--discard-orphan-sequences", nargs="*", type=int, default=[])
+    parser.add_argument("--refit-only", action="store_true")
     args = parser.parse_args(argv)
     if min(args.window_s, args.cooldown_s) <= 0:
         raise ValueError("cell durations must be positive")
@@ -519,4 +578,5 @@ def parse_args(argv: list[str] | None = None):
 
 
 if __name__ == "__main__":
-    run(parse_args())
+    parsed = parse_args()
+    refit(parsed) if parsed.refit_only else run(parsed)

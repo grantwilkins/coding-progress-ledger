@@ -858,6 +858,13 @@ uncalibrated unless its held-out error, per-family error, coefficient stability,
 replicate stability, R2, and zero-cache gates all pass. Run it as a background
 unit that owns the vLLM server lifecycle:
 
+The fitted link is explicitly
+`P = P0 + A*z/(1+z)`, where `z = alpha*f + beta*g`; the saved alpha and beta
+already include the saturation scale. No exponential link or extra knee is
+part of this model. The fit artifact also reports whether a normalized `f*g`
+term reduces residual RMSE on discovery and confirmation cells; that term is
+diagnostic and is not silently added to the accepted base model.
+
 ```bash
 systemd-run --user --unit=queue-haul-h100-power-CAMPAIGN \
   --working-directory="$PWD" .venv/bin/python queue-haul/power_model_campaign.py \
@@ -873,6 +880,16 @@ JSONL rows are appended and `fsync`ed before progress is printed:
 uv run python queue-haul/power_model_campaign.py --resume \
   --expected-sha ORIGINAL_FULL_SHA --discard-orphan-sequences SEQUENCE ... \
   --model MODEL_SNAPSHOT --vllm .venv/bin/vllm --out OUTPUT_DIRECTORY
+```
+
+Runs started by older code retain their in-memory result as provisional. After
+all 111 cells complete, refit offline without acquiring the GPU; this hard-fails
+on an incomplete/non-deterministic grid, archives `fit.json` as
+`fit-exponential-provisional.json`, and promotes the rational result:
+
+```bash
+uv run python queue-haul/power_model_campaign.py --refit-only \
+  --model MODEL_SNAPSHOT --out OUTPUT_DIRECTORY
 ```
 
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West

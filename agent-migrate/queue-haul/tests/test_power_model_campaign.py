@@ -43,13 +43,13 @@ def synthetic_rows(alpha=1 / 1000, beta=1 / 500):
     for replicate in range(2):
         for family, f, g in (("prefill", 1000, 1), ("decode", 100, 500),
                              ("campaign", 500, 250)):
-            ell = alpha * f + beta * g
+            z = alpha * f + beta * g
             rows.append({"stage": "discovery", "family": family,
                          "replicate": replicate, "prompt_tokens": 1,
                          "output_tokens": 1, "concurrency": 1,
                          "realized_prefill_tps": f,
                          "realized_decode_tps": g,
-                         "power_mean_w": 80 + 220 * (1 - __import__("math").exp(-ell / .8)),
+                         "power_mean_w": 80 + 220 * z / (1 + z),
                          "cached_prompt_tokens": 0})
     return rows * 15 + [{"stage": "idle", "power_mean_w": 80}] * 3
 
@@ -57,10 +57,18 @@ def synthetic_rows(alpha=1 / 1000, beta=1 / 500):
 def test_fit_uses_realized_rates_and_recovers_saturating_model():
     fit = campaign.saturating_fit(synthetic_rows())
 
-    assert fit["alpha_s_per_prefill_token"] == pytest.approx(1 / 1000)
+    assert fit["alpha_s_per_prefill_token"] == pytest.approx(1 / 1000, rel=.03)
     assert fit["beta_s_per_decode_token"] == pytest.approx(1 / 500, rel=.03)
     assert fit["power_idle_w"] == pytest.approx(80)
     assert fit["power_max_w"] == pytest.approx(300, rel=.03)
+    assert fit["link"] == "P=P0+A*z/(1+z); z=alpha*f+beta*g"
+    assert "ell_knee" not in fit
+
+
+def test_offline_refit_hard_fails_incomplete_grid(tmp_path):
+    (tmp_path / "cells.jsonl").write_text("")
+    with pytest.raises(RuntimeError, match="requires all 111 cells"):
+        campaign.complete_rows(tmp_path, 20260814)
 
 
 def usage(prompt=10, decode=2, cached=0):
