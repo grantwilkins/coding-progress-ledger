@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import statistics
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -42,6 +43,7 @@ from repair_plan_shift_campaign import (
     _resolve,
     _schedule_rows,
 )
+from simulate import PlannedMove
 
 
 ROOT = Path(__file__).parent
@@ -364,9 +366,16 @@ def _scenario(template: dict, plan: dict, episode: dict) -> dict:
             f"prefill-{episode['prefill_state']}"),
         "bandwidth": "scheduled_0.1x",
         "bandwidth_mbps": rates,
-        "requested_shed_fraction": TARGET_SHED_FRACTION,
+        "requested_shed_fraction": episode.get(
+            "target_shed_fraction", TARGET_SHED_FRACTION),
+        "deadline_s": episode.get("power_deadline_s", scenario["deadline_s"]),
+        "planning_deadline_s": episode.get(
+            "power_deadline_s", scenario.get(
+                "planning_deadline_s", scenario["deadline_s"])),
         "admission_mode": "normal",
     })
+    if "healthy_east_load" in episode:
+        scenario["background"]["east"][0] = episode["healthy_east_load"]
     return scenario
 
 
@@ -614,7 +623,15 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
     network._clear_cluster(stack)
     network.set_live_bandwidth(stack, {})
     network.set_live_prefill(stack, {"east": None, "germany": None})
-    template = _promote_components(_template(parent), plan["network_contract"])
+    natural_template = json.loads(json.dumps(_template(parent)))
+    if "context_seed" in episode:
+        context_rng = random.Random(episode["context_seed"])
+        support = tuple(episode.get(
+            "context_support", (14_042, 30_785, 31_547)))
+        for session in natural_template["sessions"]:
+            session["initial_tokens"] = context_rng.choice(support)
+    template = _promote_components(
+        natural_template, plan["network_contract"])
     scenario = _apply_timing_fit(
         _scenario(template, plan, episode), timing,
         _affected(episode["bandwidth_state"]))
@@ -643,26 +660,29 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         natural = {
             **scenario,
             "bandwidth_mbps": _planning_bandwidths(
-                _template(parent), plan, "none"),
-            "migration_components": _template(parent)["migration_components"],
+                natural_template, plan, "none"),
+            "migration_components": natural_template["migration_components"],
         }
         problem, architecture, routes, target = network.joint_problem(
             natural, snapshots, profile, demand)
         result = network.solve(
             problem, profile, routes, "lp_work_first", destination=architecture,
             admission_mode="normal")
+        if episode.get("frozen_initial_moves"):
+            result = replace(result, moves=tuple(PlannedMove(
+                **{**move, "path": tuple(move["path"])})
+                for move in episode["frozen_initial_moves"]))
         if not result.moves:
             raise RuntimeError(
                 "initial hardware plan has no moves: "
                 f"{result.failure_reason or 'unknown'}; "
                 f"power shortfall {result.power_shortfall_w:.6f} W")
         initial_moves = [asdict(move) for move in result.moves]
-        if plan["apply_policy"] == CONTROL_POLICY \
+        if episode.get("expected_initial_moves_sha256") \
                 and profiler.object_hash(initial_moves) \
                 != episode["expected_initial_moves_sha256"]:
             raise RuntimeError(
-                "repair-disabled control initial plan differs from paired "
-                f"repair episode {episode['paired_repair_episode_id']}")
+                "hardware initial plan differs from the frozen preflight plan")
         table = pool_planner.candidate_table(
             problem, profile, architecture, "normal", ExpectedPower(problem, profile))
         candidates = _candidate_map(table, architecture)
@@ -680,7 +700,8 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         active: dict[Future, object] = {}
         submitted_ns: dict[str, int] = {}
         pending = list(sorted(result.moves, key=lambda move: move.order))
-        executor = ThreadPoolExecutor(max_workers=MOVE_CONCURRENCY)
+        move_concurrency = episode.get("move_concurrency", MOVE_CONCURRENCY)
+        executor = ThreadPoolExecutor(max_workers=move_concurrency)
 
         def reconstruct(move):
             began = time.monotonic_ns()
@@ -693,7 +714,7 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
                     "started_ns": began, "ended_ns": time.monotonic_ns()}
 
         def submit() -> None:
-            while pending and len(active) < MOVE_CONCURRENCY:
+            while pending and len(active) < move_concurrency:
                 move = pending.pop(0)
                 submitted_ns[move.session_id] = time.monotonic_ns()
                 active[executor.submit(reconstruct, move)] = move
@@ -714,7 +735,13 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
                 durations[move.session_id],
                 (now - submitted_ns[move.session_id]) / 1e9)
                 for move in active.values())
-            if progress / total_work >= TRIGGER_WORK_FRACTION:
+            elapsed_s = (now - started_ns) / 1e9
+            fixed_fault_s = episode.get("fault_at_s")
+            triggered = (
+                elapsed_s >= fixed_fault_s if fixed_fault_s is not None else
+                progress / total_work >= episode.get(
+                    "trigger_work_fraction", TRIGGER_WORK_FRACTION))
+            if triggered:
                 break
             submit()
             if not active and not pending:
@@ -805,7 +832,15 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         controller.observe(ObservationBatch(
             1, event_s, route_rates=route_rates,
             prefill_capacities=capacities))
-        time.sleep(1)
+        detection_delay_s = max(0.0, episode.get(
+            "detection_at_s", event_s + 1.0) - episode.get(
+                "fault_at_s", event_s))
+        detection_deadline = time.monotonic() + detection_delay_s
+        while time.monotonic() < detection_deadline:
+            collect()
+            if plan["apply_policy"] == CONTROL_POLICY:
+                submit()
+            time.sleep(min(.05, max(0.0, detection_deadline - time.monotonic())))
         collect()
         decision_s = (time.monotonic_ns() - started_ns) / 1e9
         updates = tuple(AttemptUpdate(
@@ -822,12 +857,24 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
             2, decision_s, attempts=updates, route_rates=route_rates,
             prefill_capacities=capacities))
         repair_result = proposal = None
+        solver_timings = []
         for _ in range(2):
             if not isinstance(decision, RepairRequest):
                 break
+            solver_started_s = (time.monotonic_ns() - started_ns) / 1e9
             repair_result = pool_planner.repair_destination(
                 changed_problem, profile, changed_architecture, decision, "normal")
-            decision = controller.complete_repair(repair_result, decision_s)
+            solver_ended_s = (time.monotonic_ns() - started_ns) / 1e9
+            solver_timings.append({
+                "request_id": decision.request_id,
+                "started_s": solver_started_s,
+                "ended_s": solver_ended_s,
+                "duration_s": solver_ended_s - solver_started_s,
+            })
+            decision = controller.complete_repair(repair_result, solver_ended_s)
+        proposal_s = ((time.monotonic_ns() - started_ns) / 1e9
+                      if isinstance(decision, ProposedDiff) else None)
+        apply_s = None
         shadow_guard = {"passed": False, "reason": "no target-restoring proposal"}
         if isinstance(decision, ProposedDiff):
             changed = {row.session_id for row in decision.changes}
@@ -883,16 +930,23 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
             if shadow_guard["passed"] \
                     and plan["apply_policy"] == APPLY_POLICY:
                 proposal = decision
-                controller.acknowledge(proposal.proposal_id, "applied", decision_s)
+                apply_s = (time.monotonic_ns() - started_ns) / 1e9
+                controller.acknowledge(proposal.proposal_id, "applied", apply_s)
                 repaired = _planned_moves(proposal.moves, changed_architecture)
                 pending = [move for move in repaired
                            if move.session_id not in active_sessions
                            and move.session_id not in execution]
         elif isinstance(decision, RevisedMaximum):
             shadow_guard["attainable_watts"] = decision.attainable_watts
+
+        def model_target_reached() -> bool:
+            return power.drain_gain(frozenset(execution)) >= float(target) - 1e-8
+
         submit()
         while active or pending:
             collect()
+            if model_target_reached():
+                pending.clear()
             submit()
             if active:
                 time.sleep(.05)
@@ -901,10 +955,37 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         request_rows = list(execution.values())
         outcomes = network.diagnostic_outcomes(
             scenario, request_rows, demand, profile, started_ns)
+        cutoff_s = episode.get(
+            "migration_cutoff_s", scenario["deadline_s"] - profile.power_window_s)
+        cutoff_outcomes = network.diagnostic_outcomes(
+            {**scenario, "deadline_s": cutoff_s}, request_rows,
+            demand, profile, started_ns)
+        predecision_outcomes = network.diagnostic_outcomes(
+            {**scenario, "deadline_s": decision_s}, request_rows,
+            demand, profile, started_ns)
+        direct_power_rows = []
+        power_path = stack.run_root / "power.csv"
+        if power_path.is_file():
+            direct_power_rows = [{
+                **row,
+                "elapsed_s": (row["monotonic_ns"] - started_ns) / 1e9,
+            } for row in profiler.power_rows(power_path)
+                if started_ns <= row["monotonic_ns"] <= ended_ns]
+            if direct_power_rows:
+                profiler.write_csv(root / "source_power.csv", direct_power_rows)
+        proposal_changes = ([] if proposal is None else [
+            asdict(change) for change in proposal.changes])
+        initial_assignments = {move["session_id"]: {
+            "method": move["method"],
+            "destination": move["destination_instance"],
+            "pool": move["destination_pool"],
+        } for move in initial_moves}
         output = {
             "schema": RESULT_SCHEMA, "status": "complete",
             "episode_id": episode["episode_id"],
             "event_s": event_s, "decision_s": decision_s,
+            "proposal_s": proposal_s, "apply_s": apply_s,
+            "solver_timings": solver_timings,
             "bandwidth_control": cut_rates,
             "bandwidth_control_ack": bandwidth_ack,
             "prefill_control": gateway_rates,
@@ -920,10 +1001,31 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
                 "paired_repair_episode_id"),
             "repair_result": None if repair_result is None else asdict(repair_result),
             "initial_moves": initial_moves,
+            "initial_moves_sha256": profiler.object_hash(initial_moves),
+            "proposal_changes": proposal_changes,
+            "redirected_sessions": sum(
+                change.get("assignment") is not None
+                and initial_assignments.get(change["session_id"])
+                != change["assignment"]
+                for change in proposal_changes),
             "requests": request_rows,
             "ttft_recorded": all(row["ttft_s"] is not None
                                  for row in request_rows),
             "started_ns": started_ns, "ended_ns": ended_ns,
+            "migration_cutoff_s": cutoff_s,
+            "cutoff_shed_w": cutoff_outcomes["realized_shed_w"],
+            "target_met_by_cutoff": cutoff_outcomes["target_met"],
+            "predecision_shed_w": predecision_outcomes["realized_shed_w"],
+            "direct_source_power": {
+                "path": "source_power.csv",
+                "samples": len(direct_power_rows),
+                "semantics": (
+                    "direct A100 board-power trace for diagnosis; shed and "
+                    "attainment use completion-credited workload-model watts"),
+            },
+            "attainment_semantics": (
+                "modeled source watts credited only when a successful "
+                "migration request completes"),
             **outcomes,
         }
         profiler.write_json(root / "result.json", output)
