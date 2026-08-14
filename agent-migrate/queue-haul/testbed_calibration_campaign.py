@@ -226,13 +226,9 @@ def _prediction_metrics(rows: list[dict]) -> dict:
     }
 
 
-def fit_regional_timing(profile_path: Path, parent_path: Path,
-                        telemetry_path: Path, out_parent: Path,
-                        out_predictions: Path) -> dict:
-    """Fit regional timing on two contexts and validate on the largest context."""
-    profile = ModelProfile.load(profile_path)
-    case, parent, rows = profile.case(), json.loads(parent_path.read_text()), \
-        _read(telemetry_path)
+def regional_timing_model(profile: ModelProfile, parent: dict, rows: list[dict],
+                          provenance: str) -> tuple[dict, list[dict], list[int]]:
+    case = profile.case()
     contexts = sorted({int(row["context_tokens"]) for row in rows})
     if len(contexts) < 3:
         raise ValueError("regional timing needs at least three context cells")
@@ -284,13 +280,13 @@ def fit_regional_timing(profile_path: Path, parent_path: Path,
             replay_ratios.append(observed / base)
         replay_factor = 1.05 * statistics.median(replay_ratios)
         rate_values = list(route_rates.values())
-        provenance = f"{telemetry_path} grouped context holdout {holdout}"
+        source = f"{provenance} grouped context holdout {holdout}"
         components = {
             "replay": {
                 "context_range": [contexts[0], contexts[-1]],
                 "bandwidth_range_bytes_per_s": [min(rate_values) * .99,
                                                   max(rate_values) * 1.01],
-                "provenance": provenance,
+                "provenance": source,
                 "compute_completion_factor": replay_factor,
                 "residual_s": 0,
             },
@@ -298,7 +294,7 @@ def fit_regional_timing(profile_path: Path, parent_path: Path,
                 "context_range": [contexts[0], contexts[-1]],
                 "bandwidth_range_bytes_per_s": [min(rate_values) * .99,
                                                   max(rate_values) * 1.01],
-                "provenance": provenance,
+                "provenance": source,
                 "compute_completion_factor": 1,
                 "residual_s": max(0, kv_residual),
                 "kv_ingest_bytes_per_s": max(rate_values),
@@ -336,6 +332,19 @@ def fit_regional_timing(profile_path: Path, parent_path: Path,
                 "expected_kv_bytes": expected_bytes,
                 "observed_kv_bytes": int(row["kv_bytes"] or 0),
             })
+    return fits, predictions, contexts
+
+
+def fit_regional_timing(profile_path: Path, parent_path: Path,
+                        telemetry_path: Path, out_parent: Path,
+                        out_predictions: Path) -> dict:
+    """Fit regional timing on two contexts and validate on the largest context."""
+    profile = ModelProfile.load(profile_path)
+    parent, rows = json.loads(parent_path.read_text()), _read(telemetry_path)
+    fits, predictions, contexts = regional_timing_model(
+        profile, parent, rows, str(telemetry_path))
+    holdout, training_contexts = contexts[-1], contexts[:-1]
+    labels = ("controlled_40", "controlled_80", "natural")
     contract = parent["network_contract"]
     for destination, fit in fits.items():
         path = contract["paths"][destination]

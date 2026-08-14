@@ -44,7 +44,7 @@ ACTION_NAMES = {
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",
     "germany_replay": "Replay → Germany",
     "germany_kv_transfer": "KV transfer → Germany",
-    "not_moved": "Remains at source",
+    "not_moved": "Not moved",
 }
 ACTION_COLORS = {
     "replay": "#E98300", "kv_transfer": "#006CB8",

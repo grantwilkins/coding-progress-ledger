@@ -807,6 +807,22 @@ uv run python queue-haul/plot_pooled_action_adaptation.py \
   --out-dir queue-haul/outputs/east-germany-action-adaptation-20260811
 ```
 
+`bootstrap_action_adaptation.py` repeats those eight matched cases under 1,000
+paired calibration draws. It stratifies timing by destination, method,
+bandwidth, and context and samples each fitted phase-power tuple jointly. This
+is a modeled calibration-sensitivity distribution for the fixed 28-session
+pack, not 8,000 independent hardware observations. The stacked bars show joint-
+bootstrap mean shares; black whiskers mark the 5--95% Replay and total-moved
+boundaries, with a three-facet interval companion for the full composition.
+
+```bash
+uv run python queue-haul/bootstrap_action_adaptation.py \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out-dir queue-haul/outputs/east-germany-action-adaptation-20260811
+```
+
 The time-to-binding view uses the same two-thirds stress point. It estimates
 completion-ordered slack for VRAM, network-transfer, and prefill constraints;
 each class reports its tightest component without exposing destination names.
