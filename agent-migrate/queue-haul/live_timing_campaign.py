@@ -30,29 +30,22 @@ def write_json(path: Path, value: object) -> None:
 
 def make_plan(manifest_path: Path, cluster_path: Path, out: Path,
               stage: str) -> dict:
+    manifest_path = manifest_path.resolve()
     manifest = json.loads(manifest_path.read_text())
     cluster = network.Cluster.load(cluster_path)
-    widths, loads, repeats, contexts = ((1,), (0,), 1, (8192, 31488)) \
-        if stage == "pilot" else ((1, 2, 4, 8), (0, .5, .8), 3, CONTEXTS)
     templates = sorted(manifest["sessions"], key=lambda row: row["rank"])
     scenarios = []
-    for context in contexts:
-        for width in widths:
-            sessions = [{"session_id": row["id"], "initial_tokens": context,
-                         "order": order}
-                        for order, row in enumerate(templates[:width])]
-            for load in loads:
-                for node in cluster.destinations:
-                    for method in METHODS:
-                        for repeat in range(repeats):
-                            identity = [context, width, load, node.id, method,
-                                        repeat]
-                            scenarios.append({
+
+    def add(context, width, load, node, method, repeat, split):
+        sessions = [{"session_id": row["id"], "initial_tokens": context,
+                     "order": order}
+                    for order, row in enumerate(templates[:width])]
+        identity = [stage, context, width, load, node.id, method, repeat]
+        scenarios.append({
                                 "scenario_id": profiler.object_hash(identity)[:16],
                                 "cell_index": len(scenarios),
                                 "design": "timing_live", "stage": stage,
-                                "split": "holdout" if stage == "pilot"
-                                or repeat == repeats - 1 else "train",
+                                "split": split,
                                 "context_tokens": context, "concurrency": width,
                                 "destination": node.id, "region": node.region,
                                 "method": method, "destination_load": load,
@@ -72,6 +65,31 @@ def make_plan(manifest_path: Path, cluster_path: Path, out: Path,
                                     "deadline_admitted": True,
                                 } for row in sessions],
                             })
+
+    if stage == "targeted":
+        south = next(node for node in cluster.destinations
+                     if node.region == "southcentralus")
+        for context in (8192, 31488):
+            for repeat in range(2):
+                add(context, 1, 0, south, "kv_transfer", repeat, "calibration")
+        for node in cluster.destinations:
+            for method in METHODS:
+                if node != south or method != "kv_transfer":
+                    add(16384, 1, 0, node, method, 0, "holdout")
+        for context in (16384, 24576):
+            add(context, 1, 0, south, "kv_transfer", 0, "holdout")
+    else:
+        widths, loads, repeats, contexts = ((1,), (0,), 1, (8192, 31488)) \
+            if stage == "pilot" else ((1, 2, 4, 8), (0, .5, .8), 3, CONTEXTS)
+        for context in contexts:
+            for width in widths:
+                for load in loads:
+                    for node in cluster.destinations:
+                        for method in METHODS:
+                            for repeat in range(repeats):
+                                add(context, width, load, node, method, repeat,
+                                    "holdout" if stage == "pilot"
+                                    or repeat == repeats - 1 else "train")
     plan = {
         "schema": SCHEMA, "stage": stage,
         "git_sha": subprocess.check_output(
@@ -91,7 +109,7 @@ def validate_plan(plan: dict) -> None:
     if regions != set(REGIONS):
         raise ValueError("timing plan must use Australia East and South Central US")
     if any(row["method"] not in METHODS or row["context_tokens"] not in CONTEXTS
-           or row["split"] not in {"train", "holdout"}
+           or row["split"] not in {"train", "calibration", "holdout"}
            for row in plan["scenarios"]):
         raise ValueError("invalid timing cell")
 
@@ -131,7 +149,8 @@ def run(plan_path: Path, cluster_path: Path, calibration_path: Path,
     stack_index = len(list((run_root / "stacks").glob("stack-*"))) + 1
     stack = network.start_cluster(
         cluster, key, network.freeze_contract(calibration), "natural",
-        run_root / "stacks" / f"stack-{stack_index:04d}")
+        run_root / "stacks" /
+        f"{run_root.name}-stack-{stack_index:04d}")
     case = ModelProfile.load(network.MODEL_PATH).case()
     rates = (case.prefill.rate(network.SINK_LOAD_PREFILL_TOKENS, 1),
              case.decode.rate(network.SINK_LOAD_PREFILL_TOKENS, 1))
@@ -226,9 +245,11 @@ def collect(run_root: Path) -> list[dict]:
                 "decode_tail_s": (request["end_ns"] - first_response) / 1e9,
                 "api_upload_s": span(connection.get("client_first_byte_ns"),
                                      connection.get("client_last_byte_ns")),
-                "remote_to_first_byte_s": span(
+                "remote_response_start_s": span(
                     connection.get("client_last_byte_ns"),
                     connection.get("target_first_byte_ns")),
+                "response_header_to_token_s": span(
+                    connection.get("target_first_byte_ns"), first_response),
                 "response_stream_s": span(
                     connection.get("target_first_byte_ns"),
                     connection.get("target_last_byte_ns")),
@@ -303,8 +324,10 @@ def fit(run_root: Path, out: Path, folds: int = 5) -> dict:
                       "median_bias_ratio": [1 / 1.1, 1.1]},
              "stage_semantics": {
                  "api_upload_s": "measured at the source proxy",
-                 "remote_to_first_byte_s":
+                 "remote_response_start_s":
                      "measured route plus queue plus replay/KV ingest envelope",
+                 "response_header_to_token_s":
+                     "measured response-header to first generated token",
                  "kv_transfer_window_s": "measured RESP transfer envelope",
                  "response_stream_s": "measured destination response stream",
                  "client_residual_s": "measured proxy-to-client completion",
@@ -313,7 +336,8 @@ def fit(run_root: Path, out: Path, folds: int = 5) -> dict:
     out.mkdir(parents=True, exist_ok=False)
     write_json(out / "model.json", model)
     with (out / "holdout_predictions.csv").open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=predictions[0].keys())
+        writer = csv.DictWriter(handle, fieldnames=predictions[0].keys(),
+                                lineterminator="\n")
         writer.writeheader(); writer.writerows(predictions)
     if not gate:
         raise RuntimeError("retrospective timing validation gate failed")
@@ -345,6 +369,54 @@ def validate(model_path: Path, run_root: Path, out: Path) -> dict:
     return report
 
 
+def refit_targeted(model_path: Path, run_root: Path, out: Path) -> dict:
+    model, rows = json.loads(model_path.read_text()), collect(run_root)
+    calibration = [row for row in rows if row["split"] == "calibration"]
+    holdout = [row for row in rows if row["split"] == "holdout"]
+    path = "southcentralus:kv_transfer"
+    if len(calibration) != 4 or len(holdout) != 5 \
+            or {row["path"] for row in holdout} != set(model["paths"]) \
+            or any(row["path"] != path for row in calibration):
+        raise RuntimeError("targeted refit requires its exact live split contract")
+    coefficient = np.asarray(model["coefficients"], dtype=float)
+    old = np.exp(np.asarray(
+        [features(row, model["paths"]) for row in calibration]) @ coefficient)
+    design = np.asarray([[1, math.log(row["context_tokens"] / 8192)]
+                         for row in calibration])
+    correction = np.linalg.lstsq(
+        design, np.log([row["observed_s"] for row in calibration])
+        - np.log(old), rcond=None)[0]
+    names = model["feature_names"]
+    coefficient[names.index(f"{path}:intercept")] += correction[0]
+    coefficient[names.index(f"{path}:log_context")] += correction[1]
+    predicted = np.exp(np.asarray(
+        [features(row, model["paths"]) for row in holdout]) @ coefficient)
+    overall = metrics(holdout, predicted)
+    by_path = {value: metrics(
+        [row for row in holdout if row["path"] == value],
+        predicted[[row["path"] == value for row in holdout]])
+        for value in model["paths"]}
+    passed = overall["median_absolute_percentage_error"] <= .2 \
+        and .9 <= overall["median_actual_over_predicted"] <= 1.1 \
+        and overall["p90_actual_over_predicted"] <= 1.5 \
+        and all(.75 <= row["median_actual_over_predicted"] <= 4 / 3
+                for row in by_path.values())
+    fitted = {**model, "coefficients": coefficient.tolist(),
+              "targeted_calibration": {
+                  "source": "measured_live_transfers", "run_root": str(run_root),
+                  "path": path, "samples": len(calibration),
+                  "log_intercept_correction": float(correction[0]),
+                  "log_context_correction": float(correction[1])}}
+    report = {"schema": SCHEMA, "source": "unseen_live_holdout",
+              "overall": overall, "by_path": by_path, "passed": passed}
+    out.mkdir(parents=True, exist_ok=False)
+    write_json(out / "model.json", fitted)
+    write_json(out / "validation.json", report)
+    if not passed:
+        raise RuntimeError("targeted unseen-context timing gate failed")
+    return report
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -352,7 +424,8 @@ def parse_args() -> argparse.Namespace:
     command.add_argument("--manifest", type=Path, required=True)
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
-    command.add_argument("--stage", choices=("pilot", "full"), required=True)
+    command.add_argument("--stage", choices=("pilot", "targeted", "full"),
+                         required=True)
     command = sub.add_parser("run")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--cluster", type=Path, required=True)
@@ -364,6 +437,10 @@ def parse_args() -> argparse.Namespace:
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("validate")
+    command.add_argument("--model", type=Path, required=True)
+    command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
+    command = sub.add_parser("refit-targeted")
     command.add_argument("--model", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
@@ -380,8 +457,11 @@ def main() -> None:
             args.run_root, args.ssh_key.expanduser())
     elif args.command == "fit":
         print(json.dumps(fit(args.run_root, args.out), indent=2))
-    else:
+    elif args.command == "validate":
         print(json.dumps(validate(
+            args.model, args.run_root, args.out), indent=2))
+    else:
+        print(json.dumps(refit_targeted(
             args.model, args.run_root, args.out), indent=2))
 
 

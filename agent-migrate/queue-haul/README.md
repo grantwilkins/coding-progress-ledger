@@ -100,9 +100,10 @@ and exact-ceiling tables are in `outputs/frontier-h100-model-audit-20260814/`.
 
 `live_timing_campaign.py` fits only measured regional transfers and holds out
 entire condition groups. The retrospective 1,640-transfer fit has 9.2--11.0%
-median absolute error and 1.27--1.42x p90 lateness across five folds. It remains
-provisional until its eight-transfer Australia East/South Central US pilot
-passes on the same frozen commit. The proxy records request/response byte
+median absolute error and 1.27--1.42x p90 lateness across five folds. A fresh
+eight-transfer pilot had 10.2% overall median error and 1.45x p90 lateness, but
+correctly failed because South Central US KV had 1.49x median lateness (2.01x at
+8K and 0.96x at 31K). The proxy records request/response byte
 boundaries and exact KV RESP windows; route plus internal queue plus
 reconstruction remains one envelope until destination server tracing exists.
 
@@ -120,6 +121,13 @@ uv run python live_timing_campaign.py validate \
   --model outputs/h100-live-timing-fit-20260814/model.json \
   --run-root /datadrive/queue-haul-network/h100-live-timing-pilot \
   --out /datadrive/queue-haul-network/h100-live-timing-pilot/validation.json
+
+# Refit South Central US KV on 8K/31K only, then gate unseen 16K/24K contexts.
+uv run python live_timing_campaign.py make-plan --stage targeted \
+  --manifest outputs/coding-manifest.json --cluster CLUSTER.json --out PLAN.json
+uv run python live_timing_campaign.py refit-targeted \
+  --model outputs/h100-live-timing-fit-20260814/model.json \
+  --run-root RUN_ROOT --out FIT_ROOT
 ```
 
 The full plan covers 8K/16K/24K/31K contexts, concurrency 1/2/4/8, achieved

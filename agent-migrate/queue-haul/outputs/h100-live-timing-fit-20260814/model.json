@@ -125,7 +125,8 @@
     "client_residual_s": "measured proxy-to-client completion",
     "internal_queue_s": "not identifiable without server tracing",
     "kv_transfer_window_s": "measured RESP transfer envelope",
-    "remote_to_first_byte_s": "measured route plus queue plus replay/KV ingest envelope",
+    "remote_response_start_s": "measured route plus queue plus replay/KV ingest envelope",
+    "response_header_to_token_s": "measured response-header to first generated token",
     "response_stream_s": "measured destination response stream"
   }
 }

@@ -1,0 +1,44 @@
+{
+  "by_path": {
+    "australiaeast:kv_transfer": {
+      "median_absolute_percentage_error": 0.07291992640183848,
+      "median_actual_over_predicted": 1.0385466151781895,
+      "n": 2,
+      "p90_actual_over_predicted": 1.1011097661934872,
+      "within_20_percent": 1.0
+    },
+    "australiaeast:replay": {
+      "median_absolute_percentage_error": 0.11023360064623278,
+      "median_actual_over_predicted": 1.0238144530471411,
+      "n": 2,
+      "p90_actual_over_predicted": 1.1151032811531267,
+      "within_20_percent": 1.0
+    },
+    "southcentralus:kv_transfer": {
+      "median_absolute_percentage_error": 0.2728829075720899,
+      "median_actual_over_predicted": 1.4853444234953095,
+      "n": 2,
+      "p90_actual_over_predicted": 1.906484534042672,
+      "within_20_percent": 0.5
+    },
+    "southcentralus:replay": {
+      "median_absolute_percentage_error": 0.11710332042692395,
+      "median_actual_over_predicted": 1.0725424259504148,
+      "n": 2,
+      "p90_actual_over_predicted": 1.1786615962065736,
+      "within_20_percent": 1.0
+    }
+  },
+  "model": "queue-haul/outputs/h100-live-timing-fit-20260814/model.json",
+  "overall": {
+    "median_absolute_percentage_error": 0.10190212224698997,
+    "median_actual_over_predicted": 1.0385466151781895,
+    "n": 8,
+    "p90_actual_over_predicted": 1.4471648406432829,
+    "within_20_percent": 0.875
+  },
+  "passed": false,
+  "run_root": "/datadrive/queue-haul-network/h100-live-timing-pilot-66ae2f7f-r2",
+  "schema": "queue-haul-live-timing-v1",
+  "source": "new_live_holdout"
+}
