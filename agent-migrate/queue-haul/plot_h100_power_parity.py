@@ -69,9 +69,9 @@ def write(rows: list[dict], out: Path) -> None:
               for key in ("predicted_power_w", "measured_power_w")]
     margin = .04 * (max(values) - min(values))
     limits = min(values) - margin, max(values) + margin
-    fig, axis = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    fig, axis = plt.subplots(figsize=plot_style.HALF_COLUMN_FIGSIZE)
     axis.plot(limits, limits, color="black", linestyle="--", linewidth=1.5,
-              label="Prediction = measurement")
+              label="Ideal")
     for family in plot_style.POWER_FAMILY_NAMES:
         selected = [row for row in rows if row["family"] == family]
         if selected:
@@ -79,24 +79,28 @@ def write(rows: list[dict], out: Path) -> None:
                          [row["measured_power_w"] for row in selected],
                          color=plot_style.POWER_FAMILY_COLORS[family],
                          marker=plot_style.POWER_FAMILY_MARKERS[family],
-                         s=30, alpha=.58,
+                         s=12, alpha=.58,
                          label=plot_style.POWER_FAMILY_NAMES[family])
     mean = statistics.fmean(row["measured_power_w"] for row in rows)
     residuals = [row["measured_power_w"] - row["predicted_power_w"]
                  for row in rows]
     r2 = 1 - sum(x*x for x in residuals) / sum(
         (row["measured_power_w"] - mean) ** 2 for row in rows)
-    axis.set(xlabel="Predicted GPU power (W)", ylabel="Measured GPU power (W)",
+    axis.set(xlabel="Predicted GPU\npower (W)", ylabel="Measured GPU power (W)",
              xlim=limits, ylim=limits)
     axis.text(.98, .03,
               f"MAE {statistics.fmean(map(abs, residuals)):.2f} W\n"
               f"$R^2$ {r2:.3f}",
               ha="right", va="bottom", transform=axis.transAxes,
-              fontsize=plot_style.ANNOTATION_FONT_SIZE)
+              fontsize=plot_style.HALF_COLUMN_ANNOTATION_FONT_SIZE)
     axis.set_aspect("equal", adjustable="box")
-    axis.grid(alpha=.2)
-    axis.legend(frameon=False, fontsize=8, loc="upper left")
-    fig.tight_layout()
+    axis.grid(alpha=.2, linewidth=.4)
+    plot_style.half_column(axis)
+    axis.legend(frameon=False, fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE,
+                loc="lower center", bbox_to_anchor=(.5, 1.01), ncol=2,
+                columnspacing=.2, handlelength=1, handletextpad=.25,
+                labelspacing=.2, borderaxespad=0)
+    fig.tight_layout(pad=.3)
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)

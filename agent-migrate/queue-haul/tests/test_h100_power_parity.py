@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Retain cohort overlays that plot confirmation cells twice.
 - Label mixed prefill/decode cells as Agentic or as one pure phase.
 - Report stored holdout statistics instead of recomputing pooled metrics.
+- Keep a large canvas whose text becomes unreadable at half-column placement.
 """
 
 import json
@@ -89,6 +90,10 @@ def test_h100_power_parity_pools_metrics_and_classifies_only_by_family(
 
     axis = plt.gcf().axes[0]
     assert not axis.get_title()
+    assert axis.get_xlabel().replace("\n", " ") == "Predicted GPU power (W)"
+    assert axis.figure.get_size_inches().tolist() == [1.65, 1.75]
+    assert axis.xaxis.label.get_fontsize() >= 7.5
+    assert min(text.get_fontsize() for text in axis.legend_.texts) >= 6.5
     assert [item.get_label() for item in axis.collections] == [
         "Prefill", "Decode", "Prefill + decode"]
     assert sum(len(item.get_offsets()) for item in axis.collections) == len(rows)

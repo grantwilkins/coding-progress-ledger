@@ -131,28 +131,35 @@ def write(rows: list[dict], out: Path, log_scale: bool = False) -> None:
 
 
 def write_queue(rows: list[dict], out: Path) -> None:
-    limit = 1.04 * max(row[key] for row in rows
-                       for key in ("predicted_s", "measured_s"))
-    lower = .9 * min(row[key] for row in rows
-                     for key in ("predicted_s", "measured_s"))
-    fig, axis = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
-    axis.plot([lower, limit], [lower, limit], color="black", linestyle="--",
-              linewidth=1.5, label="Prediction = measurement")
+    limits = (1, 200)
+    fig, axis = plt.subplots(figsize=plot_style.HALF_COLUMN_FIGSIZE)
+    axis.plot(limits, limits, color="black", linestyle="--",
+              linewidth=1.5, label="Ideal")
     for action in ("replay", "kv_transfer", "mixed"):
         selected = [row for row in rows if row["action"] == action]
         if selected:
             axis.scatter([row["predicted_s"] for row in selected],
                          [row["measured_s"] for row in selected],
-                         color=plot_style.TIMING_ACTION_COLORS[action], s=22,
-                         alpha=.55, label=plot_style.TIMING_ACTION_NAMES[action])
-    axis.set(xlabel="Predicted queue makespan (s)",
-             ylabel="Measured queue makespan (s)",
-             xscale="log", yscale="log", xlim=(lower, limit), ylim=(lower, limit),
-             title=f"Queue completion parity (n={len(rows):,})")
+                         color=plot_style.TIMING_ACTION_COLORS[action], s=9,
+                         alpha=.58, label=plot_style.TIMING_ACTION_NAMES[action])
+    measured = np.array([row["measured_s"] for row in rows])
+    residuals = measured - np.array([row["predicted_s"] for row in rows])
+    r2 = 1 - residuals @ residuals / sum((measured - measured.mean()) ** 2)
+    axis.set(xlabel="Predicted Full\nMigration (s)",
+             ylabel="Measured Full Migration (s)",
+             xscale="log", yscale="log", xlim=limits, ylim=limits)
+    axis.text(.98, .03,
+              f"MAE {np.mean(abs(residuals)):.2f} s\n$R^2$ {r2:.3f}",
+              ha="right", va="bottom", transform=axis.transAxes,
+              fontsize=plot_style.HALF_COLUMN_ANNOTATION_FONT_SIZE)
     axis.set_aspect("equal", adjustable="box")
-    axis.grid(alpha=.2)
-    axis.legend(frameon=False, fontsize=8, loc="upper left")
-    fig.tight_layout()
+    axis.grid(alpha=.2, linewidth=.4)
+    plot_style.half_column(axis)
+    axis.legend(frameon=False, fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE,
+                loc="lower center", bbox_to_anchor=(.5, 1.01), ncol=2,
+                columnspacing=.2, handlelength=1, handletextpad=.25,
+                labelspacing=.2, borderaxespad=0)
+    fig.tight_layout(pad=.3)
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)

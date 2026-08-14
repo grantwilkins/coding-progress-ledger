@@ -76,6 +76,12 @@ uv run python queue-haul/plot_h100_power_parity.py \
   --out queue-haul/outputs/h100_power_model_parity
 ```
 
+The H100 full-migration parity view pools all 295 historical queue critical
+paths and reports 1.42 s MAE and `R^2=0.954`. Its fixed 1--200 s log axes retain
+the two observations above 100 seconds while labeling decades from `10^0`
+through `10^2`. This view and the H100 power parity view use native 1.65 x
+1.75 inch canvases for side-by-side placement within one USENIX column.
+
 The completed 72-scenario H100 hardware-gap campaign has no failed or missing
 runs. It scales the constrained East KV reserve to 96% of the measured
 1,205,376-token capacity, reserves 65% of each destination's migration window

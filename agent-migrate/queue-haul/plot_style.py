@@ -7,9 +7,13 @@ FIGSIZE = (8, 5)
 WIDE_FIGSIZE = (8, 4)
 COMPACT_FIGSIZE = (5, 4)
 COLUMN_FIGSIZE = (4, 3)
+HALF_COLUMN_FIGSIZE = (1.65, 1.75)
 FONT_SIZE = 15
 COLUMN_FONT_SIZE = 11
 COLUMN_LEGEND_FONT_SIZE = 9
+HALF_COLUMN_FONT_SIZE = 7.5
+HALF_COLUMN_LEGEND_FONT_SIZE = 6.5
+HALF_COLUMN_ANNOTATION_FONT_SIZE = 7
 LARGE_FONT_SIZE = 17
 LEGEND_FONT_SIZE = ANNOTATION_FONT_SIZE = 11
 LARGE_LEGEND_FONT_SIZE = 12
@@ -131,6 +135,14 @@ def apply():
         "ytick.labelsize": FONT_SIZE, "legend.fontsize": LEGEND_FONT_SIZE,
         "lines.linewidth": LINE_WIDTH,
     })
+
+
+def half_column(axis):
+    axis.tick_params(which="major", labelsize=HALF_COLUMN_FONT_SIZE,
+                     length=2, pad=1)
+    axis.tick_params(which="minor", length=1)
+    axis.xaxis.label.set_size(HALF_COLUMN_FONT_SIZE)
+    axis.yaxis.label.set_size(HALF_COLUMN_FONT_SIZE)
 
 
 def policy_style(policy, names=POLICY_NAMES):
