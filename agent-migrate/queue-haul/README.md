@@ -807,6 +807,23 @@ uv run python power_rate_sweep.py --out PATH --window-s 20 --warmup-s 5 --worker
 uv run python power_rate_sweep.py --out PATH --reduce-only --prefill-capacity-tps 1448.32 --decode-capacity-tps 1260.38 --idle-power-w 98.11623555 --curve-max-rate 12
 ```
 
+That legacy runner derives load from requests started in the window, so its
+overload points are offered-demand diagnostics, not realized-work calibration.
+`power_model_campaign.py` instead differences vLLM's computed-prefill,
+generation, and cached-token counters over the same timestamps as 100-ms H100
+power samples. It randomizes a discovery grid spanning pure-prefill,
+decode-heavy, exact 604/64-token campaign, and agentic mixes across concurrency
+1/2/4/8/16, then tests unseen contexts and concurrency 3/6/12. The fit remains
+uncalibrated unless its held-out error, per-family error, coefficient stability,
+replicate stability, R2, and zero-cache gates all pass. Run it as a background
+unit that owns the vLLM server lifecycle:
+
+```bash
+systemd-run --user --unit=queue-haul-h100-power-CAMPAIGN \
+  --working-directory="$PWD" .venv/bin/python queue-haul/power_model_campaign.py \
+  --model MODEL_SNAPSHOT --vllm .venv/bin/vllm --out OUTPUT_DIRECTORY
+```
+
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
 single-link campaigns plus the successful `handoff-009` and bidirectional-cache
 `handoff-010` three-node evidence, including raw 100-ms power, request,
