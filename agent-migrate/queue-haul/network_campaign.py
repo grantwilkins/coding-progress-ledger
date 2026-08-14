@@ -418,7 +418,8 @@ def ssh_command(node: Node, key: Path, remote: list[str]) -> list[str]:
         + " ".join(map(shlex.quote, remote))
     return [
         "ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
-        "-o", "ServerAliveInterval=15", "-i", str(key), "-p",
+        "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15",
+        "-i", str(key), "-p",
         str(node.ssh_port), f"{node.ssh_user}@{node.host}",
         "bash", "-lc", shlex.quote(script),
     ]

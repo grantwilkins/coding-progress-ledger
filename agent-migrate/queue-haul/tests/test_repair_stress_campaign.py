@@ -4,6 +4,7 @@ import json
 
 import repair_hardware_campaign as hardware
 import repair_stress_campaign as campaign
+import network_campaign as network
 
 
 def test_complete_preflight_selects_only_declared_qualifier():
@@ -60,3 +61,13 @@ def test_episode_scenario_uses_stress_deadline_target_and_headroom():
     assert scenario["deadline_s"] == 30
     assert scenario["planning_deadline_s"] == 30
     assert scenario["background"]["east"][0] == 0.25
+
+
+def test_remote_host_checks_have_a_finite_connect_timeout():
+    cluster = network.Cluster.load(
+        campaign.ROOT / "azure_network_cluster_east_germany.json")
+
+    command = network.ssh_command(
+        cluster.destinations[0], campaign.ROOT / "key", ["true"])
+
+    assert "ConnectTimeout=10" in command

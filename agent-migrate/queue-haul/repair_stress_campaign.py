@@ -14,6 +14,7 @@ import heapq
 import json
 import random
 import statistics
+import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -56,6 +57,7 @@ MIN_TARGET_TIME_GAP_S = 5.0
 MAX_PREDECISION_FRACTION = 0.25
 MIN_REDIRECTED_SESSIONS = 2
 HARDWARE_REPEATS = 5
+HOST_RETRY_S = 30.0
 MOVE_CONCURRENCIES = (4, 3, 2)
 CONTEXT_SEEDS = tuple(range(64))
 CONTEXT_SUPPORT = (14_042, 30_785, 31_547)
@@ -770,9 +772,34 @@ def run_hardware(plan_path: Path, key: Path, run_root: Path) -> dict:
         raise RuntimeError("pinned live 0.1x timing gate no longer passes")
     profile = ModelProfile.load(_resolve(plan["model_profile"]["path"]))
     cluster = network.Cluster.parse(plan["cluster"])
-    network.host_check(cluster, key)
     run_root.mkdir(parents=True, exist_ok=True)
+    existing_plan_path = run_root / "plan.json"
+    if existing_plan_path.is_file() \
+            and json.loads(existing_plan_path.read_text()) != plan:
+        raise RuntimeError("stress run root belongs to a different plan")
     profiler.write_json(run_root / "plan.json", plan)
+    host_attempt = 0
+    while True:
+        host_attempt += 1
+        profiler.write_json(run_root / "status.json", {
+            "schema": "queue-haul-repair-stress-status-v1",
+            "phase": "host_preflight", "attempt": host_attempt,
+            "completed": 0, "expected": len(plan["episodes"]),
+        })
+        try:
+            host_reports = network.host_check(cluster, key)
+        except Exception as error:
+            profiler.write_json(run_root / "status.json", {
+                "schema": "queue-haul-repair-stress-status-v1",
+                "phase": "waiting_for_hosts", "attempt": host_attempt,
+                "completed": 0, "expected": len(plan["episodes"]),
+                "retry_in_s": HOST_RETRY_S,
+                "error": f"{type(error).__name__}: {error}",
+            })
+            time.sleep(HOST_RETRY_S)
+            continue
+        profiler.write_json(run_root / "host_reports.json", host_reports)
+        break
     stack_root = run_root / f"stack-{profiler.object_hash(str(run_root))[:16]}"
     stack = network.start_cluster(
         cluster, key, plan["network_contract"], "natural", stack_root,
