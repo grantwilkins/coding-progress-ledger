@@ -239,6 +239,11 @@ def model_campaign_config(model: str) -> Config:
                   architecture_campaign=True)
 
 
+def model_chunk_tokens(cfg: Config) -> int:
+    return model_spec(cfg.model).chunk_tokens \
+        if getattr(cfg, "architecture_campaign", False) else 256
+
+
 def validate_model_runtime(cfg: Config) -> None:
     if not cfg.architecture_campaign:
         if cfg.model != MODEL:
@@ -313,7 +318,6 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
 
 
 def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
-    chunk_tokens = model_spec(cfg.model).chunk_tokens if cfg.architecture_campaign else 256
     env = {
         "PYTHONHASHSEED": "0",
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
@@ -328,7 +332,7 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_REMOTE_URL": remote_url,
         "LMCACHE_REMOTE_SERDE": "naive",
         "LMCACHE_LMCACHE_INSTANCE_ID": f"stage1b_{role}",
-        "LMCACHE_CHUNK_SIZE": str(chunk_tokens),
+        "LMCACHE_CHUNK_SIZE": str(model_chunk_tokens(cfg)),
         "LMCACHE_LOCAL_CPU": "False",
         "LMCACHE_MAX_LOCAL_CPU_SIZE": LMCACHE_MAX_LOCAL_CPU_GB,
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
@@ -417,7 +421,7 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
         "--host", bind_host, "--port", port, "--http-host", http_host,
         "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(),
         "--eviction-policy", "LRU",
-        "--chunk-size", spec.chunk_tokens if cfg.architecture_campaign else 256,
+        "--chunk-size", model_chunk_tokens(cfg),
         *(["--separate-object-groups"] if cfg.architecture_campaign
           and spec.separate_object_groups else []),
         "--max-workers", 8,
@@ -1445,8 +1449,9 @@ def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
 
 def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
                         transfer_offset: int, tokens: int,
-                        known_keys: set[str] | None = None) -> set[str]:
-    expected = tokens // 256
+                        known_keys: set[str] | None = None,
+                        chunk_tokens: int = 256) -> set[str]:
+    expected = tokens // chunk_tokens
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
         keys = mp_source_keys(transfers, transfer_offset) - (known_keys or set())
@@ -1457,7 +1462,7 @@ def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
 
 
 def mp_request_hit(log: Path, offset: int, request_id: str,
-                   require_all: bool = True) -> int:
+                   require_all: bool = True, chunk_tokens: int = 256) -> int:
     matches = [
         tuple(map(int, match.groups()[:4]))
         for match in MP_REQUEST.finditer(read_after(log, offset))
@@ -1469,7 +1474,7 @@ def mp_request_hit(log: Path, offset: int, request_id: str,
     retained, queried, l1, l2 = matches[0]
     if retained != l1 or l2 or require_all and retained != queried:
         raise RuntimeError(f"request {request_id} was not L1-only")
-    return retained * 256
+    return retained * chunk_tokens
 
 
 def set_source_sleep(cfg: Config, sleeping: bool) -> None:

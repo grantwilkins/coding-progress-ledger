@@ -23,6 +23,8 @@ Plausible wrong implementations:
 - Reduce incomplete, stale, or old-schema runs.
 - Drain future scheduled arrivals on the source after quiescence.
 - Drop paused arrivals or resume them through the old source route.
+- Assume every model uses 256-token LMCache chunks or one key per chunk.
+- Treat requested words as exact tokens across model-specific tokenizers.
 """
 
 from __future__ import annotations
@@ -780,30 +782,30 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
     calls = []
     session = SimpleNamespace(
         cache_keys={"stale", "k1", "k2"},
-        copied_keys={"stale", "k1"}, copied_token_ids=[0] * 256,
-        warm_cached_tokens=512,
-        prompt_tokens_by_hash={"h": 520},
+        copied_keys={"stale", "k1"}, copied_token_ids=[0] * 784,
+        warm_cached_tokens=1568,
+        prompt_tokens_by_hash={"h": 1570},
         probe=lambda messages: messages + [{"role": "user", "content": "probe"}],
     )
 
     def request(*_args, **_kwargs):
         calls.append("request")
         return c.RequestResult(
-            "r", 200, "h", 3, 4, prompt_tokens=768,
-            cached_tokens=768,
+            "r", 200, "h", 3, 4, prompt_tokens=1568,
+            cached_tokens=1568,
         ), "CODE"
 
     session.request = request
     monkeypatch.setattr(
         c.b, "mp_chat_tokens",
-        lambda _cfg, _messages: calls.append("tokenize") or [0] * 512,
+        lambda _cfg, _messages: calls.append("tokenize") or [0] * 1568,
     )
     monkeypatch.setattr(
         c.b, "mp_warm_prefetch",
         lambda *_args: calls.append("prefetch")
-        or {"total_keys": 2, "found_keys": 0},
+        or {"total_keys": 6, "found_keys": 0},
     )
-    monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 512)
+    monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 6)
     rows = c.b.resp_rows(transfers)
     monkeypatch.setattr(
         c.b, "resp_rows",
@@ -811,7 +813,10 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
     )
     runtime = c.LiveRuntime(
         {"s": session},
-        SimpleNamespace(api_proxy_port=1),
+        SimpleNamespace(
+            api_proxy_port=1, model="Qwen/Qwen3.8-27B",
+            architecture_campaign=True,
+        ),
         "none", sink, transfers,
         SimpleNamespace(write=lambda *_args, **_kwargs: None),
         tmp_path / "requests.jsonl",
@@ -823,9 +828,32 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
 
     assert calls == ["tokenize", "prefetch", "request"]
     assert session.copied_keys == {"stale", "k1", "k2"}
-    assert session.copied_token_ids == [0] * 512
+    assert session.copied_token_ids == [0] * 1568
     assert (result.logical_kv_chunks, result.logical_kv_bytes,
             result.processed_tokens) == (2, 20, 0)
+
+
+def test_architecture_calibration_renders_the_exact_prompt_tokens(monkeypatch):
+    session = {"id": "s", "state_code": "CODE"}
+
+    def render(_cfg, messages):
+        words = sum(row["content"].split().count("x") for row in messages)
+        return list(range(words + 13))
+
+    monkeypatch.setattr(c.b, "mp_chat_tokens", render)
+    messages = c.exact_calibration_messages(SimpleNamespace(), session, 100)
+
+    probe = messages + [{
+        "role": "user", "content": "Reply with session state code CODE.",
+    }]
+    assert len(render(None, probe)) == 100
+
+
+def test_model_chunk_size_controls_sealing():
+    cfg = c.b.model_campaign_config("Qwen/Qwen3.8-27B")
+
+    assert c.b.model_chunk_tokens(cfg) == 784
+    assert c.expected_hits("kv_transfer", "catch_up", 2000, 2000, 784) == 1568
 
 
 def test_request_schedule_is_relative_to_post_warm_epoch(tmp_path):
