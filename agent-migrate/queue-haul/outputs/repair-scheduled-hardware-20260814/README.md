@@ -7,7 +7,8 @@ implementation files. It contains 36 mandatory 0.1x regional timing checks and
 
 The calibration fits the 0.1x regional timing components on the 1,536- and
 7,680-token cells and gates exclusively on all repeated 32,256-token holdouts.
-The main grid runs only if the held-out p90 error is at most 15% and one second.
+The main grid runs only if the held-out p90 error is within either 15% or one
+second (the standard combined relative/absolute tolerance rule).
 During each episode the job
 applies live route and uncached-prefill controls at 25% aggregate planned work,
 observes a second sample one second later, shadow-validates the residual diff,

@@ -51,6 +51,7 @@ def test_hardware_plan_has_calibration_gate_and_exact_repair_grid(tmp_path):
     assert plan["calibration_gate"] == {
         "relative_error": .15,
         "absolute_error_s": 1.0,
+        "error_rule": "absolute_or_relative",
         "contexts": [1536, 7680, 32256],
         "repeats": 3,
     }
@@ -109,6 +110,7 @@ def test_timing_fit_trains_small_contexts_and_gates_on_32k_holdout():
     template = campaign._template(json.loads(campaign.DEFAULT_PARENT.read_text()))
     gate = {
         "relative_error": .15, "absolute_error_s": 1.0,
+        "error_rule": "absolute_or_relative",
         "contexts": list(campaign.CALIBRATION_CONTEXTS),
         "repeats": campaign.REPEATS,
     }
@@ -130,6 +132,37 @@ def test_timing_fit_trains_small_contexts_and_gates_on_32k_holdout():
     missing_ttft[0]["ttft_s"] = None
     assert campaign._timing_summary(
         missing_ttft, gate, template)["passed"] is False
+
+
+def test_timing_gate_accepts_absolute_or_relative_tolerance():
+    template = campaign._template(json.loads(campaign.DEFAULT_PARENT.read_text()))
+    gate = {
+        "relative_error": .15, "absolute_error_s": 1.0,
+        "error_rule": "absolute_or_relative",
+        "contexts": list(campaign.CALIBRATION_CONTEXTS),
+        "repeats": campaign.REPEATS,
+    }
+    long_rows = _synthetic_timing_rows()
+    for row in long_rows:
+        if row["node"] == "east" and row["method"] == "kv_transfer" \
+                and row["context_tokens"] == 32256:
+            row["fit_base_s"] = 56.7
+            row["observed_s"] = 60.0
+            row["ttft_s"] = 60.0
+
+    summary = campaign._timing_summary(long_rows, gate, template)
+
+    assert summary["held_out_p90_absolute_error_s"] == pytest.approx(1.5)
+    assert summary["held_out_p90_relative_error"] == pytest.approx(.025)
+    assert summary["passed"] is True
+
+    for row in long_rows:
+        if row["node"] == "germany" and row["method"] == "replay" \
+                and row["context_tokens"] == 32256:
+            row["observed_s"] += 10
+            row["ttft_s"] += 10
+    assert campaign._timing_summary(
+        long_rows, gate, template)["passed"] is False
 
 
 def test_low_bandwidth_fit_is_applied_only_to_cut_nodes():

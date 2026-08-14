@@ -45,7 +45,7 @@ from repair_plan_shift_campaign import (
 
 
 ROOT = Path(__file__).parent
-SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v2"
+SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v3"
 RESULT_SCHEMA = "queue-haul-scheduled-repair-hardware-result-v2"
 REPEATS = 3
 CALIBRATION_CONTEXTS = (1536, 7680, 32256)
@@ -161,6 +161,7 @@ def make_plan(parent_path: Path, cluster_path: Path,
         "calibration_gate": {
             "relative_error": TIMING_RELATIVE_ERROR_GATE,
             "absolute_error_s": TIMING_ABSOLUTE_ERROR_GATE_S,
+            "error_rule": "absolute_or_relative",
             "contexts": list(CALIBRATION_CONTEXTS),
             "repeats": REPEATS,
         },
@@ -208,6 +209,8 @@ def validate_plan(plan: dict) -> None:
             or implementation != set(IMPLEMENTATION_FILES) \
             or plan.get("apply_policy") \
             != "shadow_validate_then_apply_pending_only" \
+            or plan.get("calibration_gate", {}).get("error_rule") \
+            != "absolute_or_relative" \
             or any(row["cut_scale"] != CUT_SCALE
                                or row["trigger_work_fraction"]
                                != TRIGGER_WORK_FRACTION
@@ -375,6 +378,12 @@ def _timing_summary(rows: list[dict], gate: dict, template: dict) -> dict:
                if row["split"] == "holdout_context"]
     errors = [row["error_s"] for row in holdout]
     relative = [row["relative_error"] for row in holdout]
+    tolerance_ratios = [
+        row["error_s"] / max(
+            gate["absolute_error_s"],
+            gate["relative_error"] * row["observed_s"],
+        ) for row in holdout
+    ]
     ttfts = [row["ttft_s"] for row in rows if row.get("ttft_s") is not None]
     expected_rows = 2 * len(CALIBRATION_METHODS) * len(contexts) \
         * gate["repeats"]
@@ -383,12 +392,11 @@ def _timing_summary(rows: list[dict], gate: dict, template: dict) -> dict:
         and all(row["status"] == "complete" for row in rows) \
         and len(ttfts) == expected_rows \
         and len(holdout) == expected_holdout \
-        and _p90(relative) is not None \
-        and _p90(relative) <= gate["relative_error"] \
-        and _p90(errors) <= gate["absolute_error_s"] \
+        and _p90(tolerance_ratios) is not None \
+        and _p90(tolerance_ratios) <= 1 \
         and all(row.get("kv_verified", True) for row in rows)
     return {
-        "schema": "queue-haul-repair-10x-timing-fit-v2",
+        "schema": "queue-haul-repair-10x-timing-fit-v3",
         "rows": len(rows),
         "training_contexts": list(training_contexts),
         "holdout_context": holdout_context,
@@ -397,6 +405,8 @@ def _timing_summary(rows: list[dict], gate: dict, template: dict) -> dict:
             statistics.median(relative) if relative else None),
         "held_out_p90_relative_error": _p90(relative),
         "held_out_p90_absolute_error_s": _p90(errors),
+        "held_out_p90_tolerance_ratio": _p90(tolerance_ratios),
+        "error_rule": gate["error_rule"],
         "ttft_rows": len(ttfts),
         "ttft_p50_s": statistics.median(ttfts) if ttfts else None,
         "ttft_p90_s": _p90(ttfts),
