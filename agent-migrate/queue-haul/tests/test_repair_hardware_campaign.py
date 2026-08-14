@@ -185,3 +185,23 @@ def test_low_bandwidth_fit_is_applied_only_to_cut_nodes():
         "compute_completion_factor"] == 2
     assert scenario["migration_components"]["east"]["replay"][
         "compute_completion_factor"] == 1
+
+
+def test_planning_uses_effective_ceiling_until_raw_path_is_cut():
+    parent = json.loads(campaign.DEFAULT_PARENT.read_text())
+    template = campaign._template(parent)
+    plan = json.loads((campaign.ROOT / (
+        "outputs/repair-scheduled-hardware-20260814/plan.json")).read_text())
+    raw = campaign.network._bandwidths(plan["network_contract"], "natural")
+
+    natural = campaign._planning_bandwidths(template, plan, "none")
+    cut = campaign._planning_bandwidths(template, plan, "east")
+
+    for node in ("east", "germany"):
+        ceiling = min(
+            component["bandwidth_range_bytes_per_s"][1]
+            for component in template["migration_components"][node].values()
+        ) / 125_000
+        assert natural[node] == min(raw[node], ceiling)
+    assert cut["east"] == pytest.approx(raw["east"] * campaign.CUT_SCALE)
+    assert cut["germany"] == natural["germany"]

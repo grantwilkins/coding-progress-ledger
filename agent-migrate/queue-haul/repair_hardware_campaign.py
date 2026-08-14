@@ -45,7 +45,7 @@ from repair_plan_shift_campaign import (
 
 
 ROOT = Path(__file__).parent
-SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v3"
+SCHEMA = "queue-haul-scheduled-repair-hardware-plan-v4"
 RESULT_SCHEMA = "queue-haul-scheduled-repair-hardware-result-v2"
 REPEATS = 3
 CALIBRATION_CONTEXTS = (1536, 7680, 32256)
@@ -259,9 +259,8 @@ def _promote_components(template: dict, contract: dict) -> dict:
 
 def _scenario(template: dict, plan: dict, episode: dict) -> dict:
     scenario = json.loads(json.dumps(template))
-    rates = network._bandwidths(plan["network_contract"], "natural")
-    for node in _affected(episode["bandwidth_state"]):
-        rates[node] *= CUT_SCALE
+    rates = _planning_bandwidths(
+        template, plan, episode["bandwidth_state"])
     scenario.update({
         "design": "scheduled_repair_hardware",
         "scenario_id": episode["episode_id"],
@@ -274,6 +273,21 @@ def _scenario(template: dict, plan: dict, episode: dict) -> dict:
         "admission_mode": "normal",
     })
     return scenario
+
+
+def _planning_bandwidths(template: dict, plan: dict,
+                         bandwidth_state: str) -> dict[str, float]:
+    """Use effective timing ceilings unless a path is live-shaped to 0.1x."""
+    raw = network._bandwidths(plan["network_contract"], "natural")
+    affected = _affected(bandwidth_state)
+    return {
+        node: (raw[node] * CUT_SCALE if node in affected else min(
+            raw[node],
+            min(component["bandwidth_range_bytes_per_s"][1]
+                for component in template["migration_components"][node].values())
+            / 125_000,
+        )) for node in raw
+    }
 
 
 def _p90(values: list[float]) -> float | None:
@@ -530,8 +544,8 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
             records, scenario["sessions"], profile, scenario["source_load"])
         natural = {
             **scenario,
-            "bandwidth_mbps": network._bandwidths(
-                plan["network_contract"], "natural"),
+            "bandwidth_mbps": _planning_bandwidths(
+                _template(parent), plan, "none"),
             "migration_components": _template(parent)["migration_components"],
         }
         problem, architecture, routes, target = network.joint_problem(
@@ -539,6 +553,11 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         result = network.solve(
             problem, profile, routes, "lp_work_first", destination=architecture,
             admission_mode="normal")
+        if not result.moves:
+            raise RuntimeError(
+                "initial hardware plan has no moves: "
+                f"{result.failure_reason or 'unknown'}; "
+                f"power shortfall {result.power_shortfall_w:.6f} W")
         table = pool_planner.candidate_table(
             problem, profile, architecture, "normal", ExpectedPower(problem, profile))
         candidates = _candidate_map(table, architecture)
@@ -832,7 +851,9 @@ def run(plan_path: Path, key: Path, run_root: Path) -> dict:
     network.host_check(cluster, key)
     run_root.mkdir(parents=True, exist_ok=True)
     profiler.write_json(run_root / "plan.json", plan)
-    stack_root = run_root / f"stack-{_hash(str(run_root.resolve()))}"
+    stack_id = _hash(str(run_root.resolve()),
+                     plan["implementation"]["git_sha"])
+    stack_root = run_root / f"stack-{stack_id}"
     stack = network.start_cluster(
         cluster, key, plan["network_contract"], "natural",
         stack_root, power_interval_s=.1)
