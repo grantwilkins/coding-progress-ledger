@@ -35,9 +35,10 @@ service headroom remains a sensitivity. That boundary is not required for the
 dedicated two-A100 migration claim.
 
 `service_holdout_analysis.py` reproduces the prefill/decode staircase audit,
-leave-one-context-out decode ablation, and matched-work request-simulation
-falsification. It reports why those traces do not yet support a TTFT/TBT or
-decode-hold admission guarantee.
+leaky context-bundle retrospective diagnostic, and matched-work
+request-simulation falsification. It keeps pooled-token ITL separate from
+per-request decode duration and reports why those traces do not yet support a
+TTFT/ITL or decode-hold admission guarantee.
 
 ```bash
 uv run python service_holdout_analysis.py --out outputs/service-holdout-20260814/summary.json

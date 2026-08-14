@@ -241,9 +241,22 @@ idle/drained migration or additional impact evidence.
 
 ## Prefill/decode holding follow-up
 
-Do not add a decode-hold planner field before this test. The minimum necessity
-campaign is 24 physical runs, with at most nine additional runs if the knee is
-not bracketed.
+Do not add a decode-hold planner field before this test. Use a staged campaign:
+the quick necessity screen is 24 confirmatory runs plus 2--4 bracket scouts,
+or 26--28 planned valid runs. Reserve at most four measurement-invalid attempts,
+for a hard screen cap of 32 attempts. A promotion-ready held-context result
+requires 24 more confirmatory runs and
+2--4 more scouts, for 52--56 planned valid runs; reserve at most eight invalid
+attempts across both stages, for a hard base-promotion cap of 64 attempts. The
+first stage may reject the new dimension; it may not promote or certify one.
+At the 720 s run cap, the screen and base promotion attempt budgets consume at
+most 6.4 and 12.8 single-GPU hours respectively.
+
+Freeze one primary joint run rule before the scouts. Either retain the legacy
+rule--exact completion of every request, marginal p90 TTFT <=2 s, and marginal
+p90 per-request mean TPOT <=100 ms--or predeclare a product request-good rule
+with an exact decode statistic, thresholds, offered-request denominator, and
+attainment objective. Marginal p90 rules are not 90% joint request goodput.
 
 ### Instrumentation gate
 
@@ -253,80 +266,136 @@ vLLM and CUDA, scheduler policy, `max_num_seqs`, `max_num_batched_tokens`,
 chunked prefill, APC, block size, KV capacity, eager/graph mode, and cache
 policy. Restart the process and clear cache between physical repeats.
 
-Record scheduled and actual arrivals, offered prompt/output tokens, admission,
+Record scheduled and actual arrivals, offered prompt/output caps, admission,
 first generated token, every output-token timestamp, finish reason, `[DONE]`,
 running/waiting/preemption/KV time series, and intended versus cached prefix.
 Preserve Prometheus histogram labels and buckets; the current label-stripping
-reduction destroys ITL quantiles. Hard-fail configuration drift, a cache
-contract violation, incomplete output, or offered-arrival error above 1%.
-Failures remain SLO misses rather than disappearing from the denominator.
+reduction destroys ITL quantiles. Configuration, telemetry, cache-contract, or
+offered-arrival error above 1% makes a measurement invalid and eligible for one
+rerun only while the stage's global invalid-attempt reserve remains. A service
+timeout, rejection, OOM, crash, or incomplete output under a valid offered trace
+is instead an SLO miss; do not rerun it away.
+
+Use the existing open-loop driver with 60 s warmup, a 180--480 s measurement
+window, a 720 s run cap, and a predeclared drain cap. Preflight every trace for
+at least 200 offered requests and 10,000 planned token gaps. A shortfall in
+finite emitted gaps caused by service misses is a valid infeasible outcome, not
+an invalid measurement. Record any unmet runtime sample target rather than
+extending only unfavorable cells. A valid run must achieve the scheduled load
+within 1% without client-side completion backpressure.
 
 ### Paired necessity design
 
-Use one middle context family at one clearly inside load and one adaptively
-located SLO knee. Each 60-second matched block has identical total normalized
-prefill work `P`, decode work `D`, context histogram, and physical KV stock
-`K`. Run three shapes:
+At one middle context, construct the full `2 x 2` scheduled-traffic factorial:
 
-1. smooth prefills and staggered many-short decodes;
-2. the same request/output multiset with prefills clustered at two declared
-   short windows; and
-3. smooth prefills with the same decode-token total concentrated into
-   few-long, synchronized decodes.
+1. smooth prefill, low planned decode hold;
+2. burst prefill, low planned decode hold;
+3. smooth prefill, high planned decode hold; and
+4. burst prefill, high planned decode hold.
 
-Park neutral sessions when necessary to equalize KV and session inventory.
-Use three independent process restarts for `3 shapes x 2 loads`, giving 18
-runs. Hold out a second context family at the selected knee and run the
-baseline plus whichever shaped treatment differs, again with three restarts,
-giving six final-validation runs. If the initial loads do not bracket pass and
-fail, add one outside load for all three shapes and repeats, giving nine more.
+Use independent prompt-heavy/short-output and short-prompt/decode-heavy
+substreams, with at least two exact output tokens in every request. Change only
+the prompt-heavy arrival permutation for the burst factor and only the
+decode-heavy arrival permutation for the hold factor. Within each burst level,
+`B` must match across low/high hold; within each hold level, `N` must match
+across smooth/burst. Freeze the matching tolerances before the scouts.
 
-Split by whole process/cache-reset execution. Keep paired nodes and phases in
-the same fold. Hold out complete contexts, workload shapes, and a temporal
-campaign block. Never use realized overlap, completed throughput, queue depth,
-admitted starts, or first/end times as admission features. Candidate features
-must be scheduled offered `P,D`, a multiscale prefill-burst envelope, and a
-context-conditioned forecast of active decode derived from enforced request
-rate and output caps.
+All four cells must use the identical per-request prompt/output multiset,
+including the output-length histogram and context-conditioned decode work, and
+must match horizon, request count, normalized offered `P,D`, and initial
+block-rounded physical `K`. Only the schedule permutation may change. Keep
+memory away from its eviction knee; any parked equalization session issues no
+requests. Enforce exact output lengths with audited forced tokens.
 
-Predeclare these nested models:
+Freeze the two admission-time treatments before mixed-load collection. For
+isolated prefill service time `f0_i`, define
+`B_w = max_t(max(0, sum_{a_i in [t,t+w)} f0_i - w) / w)` and
+`B = max(B_tau_D, B_(tau_F/2))`. Define planned decode hold `N` as the peak
+overlap of intervals
+`[a_i + f0_i, a_i + f0_i + d0_i]`, where `a_i` is scheduled arrival and
+`f0_i,d0_i` are isolated per-context prefill/decode durations measured on this
+serving class and frozen before the factorial. This forecast uses only
+scheduled arrivals and output caps. Realized first/end times, active overlap,
+achieved throughput, queue depth, and admitted starts are outcomes, never
+admission features. Require `B_high >= 2 B_low > 0`, `N_high >= 2 N_low`, at
+most 1% relative error from each `B` target, and exact integer `N` targets.
 
-- baseline: horizon `P,D` plus block-rounded `K`;
-- burst: baseline plus maximum short-window prefill service debt;
-- hold: burst plus one context-conditioned active-sequence or
-  sequence-second row; and
-- interaction: only if the factorial has independent support.
+Use 2--4 baseline-only single-run scouts to locate adjacent radial loads around
+the joint run boundary, with safe/unsafe radius ratio at most 1.05. Scouts tune
+the design and are not confirmation evidence. If four scouts cannot bracket,
+censor the context and stop rather than widening the campaign silently.
 
-Promote the burst row only if it improves held-out classification. Promote the
-decode-hold row only if equal-`P,D,K` shapes move the safe boundary by more than
-15% at both tuning loads, the direction repeats on the held-out context, and
-one monotone occupancy term reduces held-out radial error below 10% with no
-false-feasible validation cell. Otherwise retain `P,D,K` only. Every promoted
-model hard-fails outside its measured context, load, burst, output-length,
-scheduler, KV, and power hull.
+Run all four shapes at both radial loads in three randomized restart blocks:
+`4 shapes x 2 loads x 3 blocks = 24` confirmatory runs. Counterbalance shape
+order, restart/clear/prewarm for every cell, reuse the exact paired trace
+multiset and seed within a block, record the block identifier, and keep the
+whole block in one inference fold. This screen estimates both main effects and
+their interaction at one context. It decides only whether temporal shape is
+material; three repeats do not estimate a production violation probability.
 
-Keep the existing run-level policies: an inside point passes at least two of
-three independent runs, an outside point fails at least two of three, and a
-disagreement grows to five. Require a radial bracket at most 5%, complete
-drain, the frozen queue-drift tolerance, and no OOM, restart, or rejection.
-Report false-infeasible cells and interval coverage as secondary costs.
+If neither treatment has a material paired effect, stop and retain `P,D,K`. If
+one does, repeat the entire 24-run factorial at a second context whose treatment
+labels were not inspected during fitting. Use 2--4 baseline scouts to normalize
+that context's joint boundary. This is the minimum promotion-ready design:
+48 confirmatory plus 4--8 scout runs. If a shape is not bracketed, one extra
+radial level costs a complete `4 shapes x 3 blocks = 12` run block; allow at
+most one such block per context. This raises the planned-valid-run cap to 80;
+the eight invalid-attempt reserve makes the absolute cap 88 attempts or 17.6
+single-GPU hours. Otherwise leave the model unpromoted.
 
-Only after the base service test passes should migration be introduced. If a
-percentile interference bound is required, run replay, KV, and no-migration on
-the identical inside and knee traces with three repeats: 18 additional runs.
-The existing data already support qualitative KV-over-replay method ordering,
-so omit this stage otherwise.
+### Labels and promotion gates
 
-If “hold” instead means physical residency over horizon `H`, run a separate
-stock experiment at 25/50/75/90% physical KV fill, churn/wait for `H`, and
-resume random sentinels near the decode knee with three restarts. Measure
-eviction, recompute, cache hits, TTFT, true ITL, and preemption. A synthetic KV
-reservation is not residency evidence.
+For each run, report the frozen primary rule, request attainment
+`sum(good_i)/N_offered`, request goodput
+`sum(good_i)/measurement_seconds`, service-failure rate
+`N_service_failures/N_offered`, completed-only latency distributions,
+offered-versus-actual arrivals, and queue/KV/preemption traces. A bracket cell
+must have three concordant independent run labels. Any mixed cell is unresolved
+and blocks promotion; do not spend uncounted cell-only repeats or break the
+paired restart blocks.
 
-Before promotion, extend the checksum catalog to raw request arrays, engine
-telemetry, full histogram buckets, H100 saturation JSON, compressed episode
-records, and every regional sink stream. Retaining only reduced queue/drain
-summaries makes later SLO fitting impossible.
+Require complete drain within the fixed cap and a 95% block-bootstrap upper
+bound on waiting-plus-client-backlog slope no greater than one request per
+measurement window. A valid service failure is always a request miss but makes
+the run infeasible only when the frozen availability/attainment rule is
+violated. It does not make the measurement invalid.
+
+For every shape, let `[r_safe, r_fail]` be the adjacent concordantly labeled
+radial bracket and use its geometric midpoint as the reported boundary coordinate.
+Index boundaries as `r_bn` for burst `b` and planned hold `n` in `{0,1}`. Burst
+contrasts are `r_10/r_00` and `r_11/r_01`; hold contrasts are `r_01/r_00` and
+`r_11/r_10`. A contrast is greater-than-15% adverse only when
+`r_fail_treatment < 0.85 * r_safe_control`, and a promoted main effect must have
+that direction in both strata and repeat in the held context. Treat 15% as the
+repository's existing model-error tolerance, not a tunable fitted coefficient.
+
+Replace `B,N` below by `(B-B_low)/(B_high-B_low)` and
+`(N-N_low)/(N_high-N_low)`. Because the `P,D` radial direction and `K` are fixed,
+fit the predeclared boundary family
+`log(r_hat_bn) = beta_0 - beta_B B - beta_N N - beta_BN B*N` by unweighted
+least squares on tuning-context geometric boundary midpoints, with `beta_0`
+unconstrained and the three burden coefficients constrained nonnegative.
+`M0`, `M_B`, `M_N`, and `M_B+N` fix unused
+coefficients to zero; fit `beta_BN` only after the two-main-effect model. Do not
+impute or fit an unbracketed cell.
+
+The interaction contrast is
+`Delta_BN = log(r_11)-log(r_10)-log(r_01)+log(r_00)`. Propagate each radial
+bracket through that formula; call the interaction material only when the
+resulting interval lies wholly below `-log(1.15)` and its negative sign repeats
+in the held context. A wholly positive interval is reported as subadditivity
+and leaves the combined region unpromoted. Weight each held-context shape
+equally. Radial error is
+`abs(predicted_boundary / observed_boundary - 1)`. Promotion requires zero
+predicted-safe/observed-unsafe held-context cells and median held-context radial
+error at most 15%; report false-infeasible cells and bracket coverage. Zero
+false-feasible cells here is a structural validation result, not a reliability
+confidence guarantee.
+
+Hard-fail admission outside the measured context, load, burst, planned-hold,
+output-length, KV, model, hardware, and scheduler hull. Gate power separately.
+Migration interference and physical KV residency are separate campaigns and
+must not be added to this go/no-go test.
 
 ## Three-region Azure follow-up
 

@@ -1,13 +1,14 @@
 """
 Claim:
 Mean prefill/decode work does not determine request-shape latency, and the
-current request simulator cannot validate decode hold or TBT.
+current request simulator cannot validate decode hold or token-gap ITL.
 
 Plausible wrong implementations:
 - Change total tokens or average power between an A/B pair.
 - Split individual requests, rather than contexts, across holdout folds.
 - Count queued requests as active decodes.
 - Treat aggregate saturation throughput as a single-request token rate.
+- Label pooled token gaps or mean decode duration as per-request TPOT/TBT.
 """
 
 from pathlib import Path
@@ -29,23 +30,25 @@ def test_matched_shapes_expose_only_serial_ttft_queueing():
     assert result["matched_p_d"] and result["matched_modeled_power"]
     assert rows["burst_uniform"]["p95_ttft_ms"] > 100 * rows["smooth_uniform"]["p95_ttft_ms"]
     assert {row["peak_active_decode"] for row in rows.values()} == {1}
-    assert len({round(row["p95_modeled_tbt_ms"], 12) for row in rows.values()}) == 1
+    assert len({round(row["p95_modeled_decode_ms_per_output_token"], 12)
+                for row in rows.values()}) == 1
     assert rows["burst_long_first"]["p95_ttft_ms"] > rows["burst_long_last"]["p95_ttft_ms"]
 
 
-def test_context_holdout_is_disjoint_and_hold_proxy_catches_more_normal_failures():
+def test_context_retrospective_is_disjoint_and_exposes_leakage():
     rows = analysis.read_rows(DECODE)
-    result = analysis.decode_holdout(rows, ModelProfile.load(PROFILE))
+    result = analysis.decode_retrospective(rows, ModelProfile.load(PROFILE))
     models = result["models"]
-    predictions = models["observed_iteration_proxy"]["predictions"]
+    predictions = models["concurrency_throughput_proxy"]["predictions"]
 
     assert all(row["heldout_context_tokens"] not in row["train_context_tokens"]
                for row in predictions)
-    assert models["work_only"]["normal"]["false_feasible"] == 4
-    assert models["observed_iteration_proxy"]["normal"]["false_feasible"] == 1
+    assert "profile normalization also includes heldout context" in result["limitation"]
+    assert models["profile_work_leaky"]["normal"]["false_feasible"] == 4
+    assert models["concurrency_throughput_proxy"]["normal"]["false_feasible"] == 1
 
 
-def test_profile_rate_is_not_single_request_tbt_evidence():
+def test_profile_rate_is_not_single_request_itl_tail_evidence():
     rows = analysis.read_rows(DECODE)
     mismatch = analysis.rate_mismatch(rows, ModelProfile.load(PROFILE))
 
@@ -53,12 +56,14 @@ def test_profile_rate_is_not_single_request_tbt_evidence():
     assert min(row["observed_to_modeled_ratio"] for row in mismatch) > 10
 
 
-def test_staircase_keeps_ttft_and_tbt_in_the_same_slo_gate():
+def test_staircase_keeps_ttft_and_pooled_itl_in_one_diagnostic_gate():
     summary = analysis.staircase_summary(analysis.read_rows(PREFILL),
                                          analysis.read_rows(DECODE))
     rows = {row["context_tokens"]: row for row in summary["decode"]}
 
-    assert rows[256]["normal_joint"]["max_tested_concurrency"] == 256
-    assert rows[4096]["normal_tbt"]["max_tested_concurrency"] == 64
-    assert rows[4096]["normal_joint"]["max_tested_concurrency"] == 4
-    assert rows[8192]["normal_joint"]["max_tested_concurrency"] == 2
+    assert rows[256]["normal_joint"]["safe_cell_concurrency_at_max_output_tps"] == 256
+    assert rows[4096]["normal_pooled_itl"]["safe_cell_concurrency_at_max_output_tps"] == 64
+    assert rows[4096]["normal_joint"]["safe_cell_concurrency_at_max_output_tps"] == 4
+    assert rows[8192]["normal_joint"]["safe_cell_concurrency_at_max_output_tps"] == 2
+    safe = rows[4096]["normal_joint"]
+    assert safe["planned_token_gaps_if_complete"] == safe["n_requests"] * 511

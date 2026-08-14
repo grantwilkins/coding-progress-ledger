@@ -87,24 +87,38 @@ rises from 34.321 ms at 256 input tokens to 65.838 ms at 1K, 283.493 ms at 4K,
 2,430--2,981 input tok/s. This is an execution-length curve, not a prefill-storm
 curve.
 
-For the decode staircase, the following uses diagnostic p95 thresholds of
-TTFT <=2 s and ITL <=100 ms. The repository's legacy policy is p90, so this is
-an intentionally stricter comparison, not a replacement SLO.
+For the decode staircase, the following uses descriptive sample-p95 thresholds
+of TTFT <=2 s across requests and ITL <=100 ms across pooled emitted token
+gaps. The latter is token-weighted: it is neither per-request TPOT nor a
+percentile over per-request gap-tail summaries. The repository's legacy policy
+is p90, so this is an intentionally stricter diagnostic, not an SLO or
+confidence bound.
 
-| Context | Max-throughput point | ITL-safe point | Joint TTFT/ITL-safe point |
+| Context | Max-throughput cell | Pooled-ITL-safe cell | Joint diagnostic cell |
 |---:|---|---|---|
 | 256 | N=256, 3,774 tok/s, 1.681 s / 48.0 ms | same | same |
 | 4,096 | N=256, 1,377 tok/s, 43.417 s / 629.1 ms | N=64, 812 tok/s, 37.7 ms ITL | N=4, 78 tok/s, 1.269 s / 23.0 ms |
 | 8,192 | N=128, 630 tok/s, 56.112 s / 857.3 ms | N=64, 514 tok/s, 45.9 ms ITL | N=2, 42 tok/s, 1.801 s / 22.8 ms |
 
+Here `N` is configured client concurrency, not measured active-decode
+occupancy. Each request emits exactly 512 output tokens.
+
+Each diagnostic cell is the threshold-passing tested concurrency with maximum
+achieved output throughput, not a proven monotone boundary. The 4K and 8K joint
+cells contain only 8 and 4 requests respectively. Exact completion would imply
+4,088 and 2,044 token gaps, but the reducer did not retain the number of finite
+ITLs it actually quantiled. Their request p95 TTFT estimates therefore have no
+useful tail-confidence claim.
+
 `service_profile_reduce.py` selects the maximum aggregate decode throughput
 and ignores both latency columns. The profile then stores that aggregate rate
 under concurrency key `1`, and `simulate.py` consumes it as a single-request
-rate. At 256/4K/8K, the resulting modeled token intervals are
-0.265/0.848/1.587 ms versus measured concurrency-one p95 ITL
-22.206/22.484/22.016 ms: 84x/27x/14x optimistic. The H100 profile also reuses
-the A100 context tables despite having different H100 saturation `F,G`.
-Consequently, current simulated TBT is invalid.
+rate. At 256/4K/8K, the resulting deterministic decode durations per output
+token are 0.265/0.848/1.587 ms versus measured concurrency-one pooled-token p95
+ITL 22.206/22.484/22.016 ms, ratios of 84x/27x/14x. These are different
+statistics, and the profile is not a calibrated tail model. The H100 profile
+also reuses the A100 context tables despite having different H100 saturation
+`F,G`. The simulator emits no token timestamps, so it has no simulated ITL/TBT.
 
 The H100 runs are saturation anchors for another serving class. The prefill
 run reports mean/p99 TTFT 5.458/11.464 s. The decode run reports 451.318 output
@@ -112,30 +126,33 @@ tok/s, mean TPOT 261.986 ms, p99 ITL 942.994 ms, and p99 TTFT 18.022 s. It used
 GPU-memory utilization 0.9 and raw KV capacity 2,472,995, while the migration
 stack uses 0.75 and advertises 1,205,376. They cannot share an SLO envelope.
 
-### A/B and held-context falsification
+### A/B and retrospective diagnostics
 
 `outputs/service-holdout-20260814/summary.json` contains the reproducible
 analysis. Four simulated traces have exactly 4,096 prefill and 8,192 decode
 tokens over 30 seconds, identical `(p,d)=(0.09427,0.21665)`, and identical
 modeled power. Smooth arrivals give p95 TTFT 45.6 ms; synchronous arrivals give
 7.066 s. With the same arrivals and decode-token total, putting four long
-decodes first versus last changes p95 TTFT from 5.012 to 7.750 s. This proves
+decodes first versus last changes p95 TTFT from 7.750 to 5.012 s. This proves
 that mean work does not determine this simulator's queueing result.
 
 It does not validate a serving model. The simulator FCFS-serializes whole
-requests, always reports peak active decode one, and gives the same modeled
-TBT 0.873 ms for every shape. It contains no token iterations, continuous
+requests, always reports peak active decode one, and gives the same p95
+per-request modeled mean decode duration of 0.873 ms/output-token for every
+shape. This is not TBT. It contains no token iterations, continuous
 batching, chunked-prefill interference, sequence slowdown, preemption, or
 output-length uncertainty.
 
-A leave-one-context-out diagnostic on the 27 decode cells compares achieved
-work alone with the observed iteration-time proxy
+A retrospective leave-one-context-bundle-out diagnostic on the 27 correlated
+decode staircase cells compares profile-normalized achieved work with the
+client-concurrency/throughput proxy
 `1000 * concurrency / achieved_output_tps`. Work alone has 111.4 ms MAE,
-80.6% MAPE, and four false-feasible cells at each 100 and 250 ms. The proxy
-has 84.7 ms MAE, 39.0% MAPE, one false-feasible cell at 100 ms, and three at
-250 ms. Both use achieved throughput, so both leak post-outcome information
-and neither is an admission model. The result is only evidence that an
-occupancy/iteration signal may be useful and requires a controlled test.
+80.6% MAPE, and four of 27 false-feasible cells at each 100 and 250 ms. The
+proxy has 84.7 ms MAE, 39.0% MAPE, one of 27 false-feasible cells at 100 ms,
+and three of 27 at 250 ms. Both use achieved throughput, and the profile
+normalizer itself includes the held-context maxima. Client concurrency is not
+active decode occupancy. This is a leaky retrospective diagnostic over only
+three physical bundles, with no confidence interval or promotion value.
 
 At the common v7 radius 0.096953, the four cache-correct runs have p95 active
 decode occupancy from one to four while p90 per-request mean TPOT remains
@@ -147,22 +164,37 @@ that hold is needed to predict an SLO boundary.
 ### SLO semantics
 
 Freeze the target population, threshold, quantile, and window before the
-validation campaign. Observations can establish feasibility and headroom; they
-must not define and validate the objective on the same runs. Report both raw
-TTFT/true-ITL distributions and attainment/goodput against the frozen SLO.
+validation campaign. Observations can establish feasibility and headroom. If
+they help select a product tier, those runs become tuning data and fresh runs
+must validate it. Report raw completed-request TTFT/true-ITL distributions,
+service-failure counts, and attainment/goodput against the frozen SLO.
 
-The denominator is all eligible offered requests, not successful requests.
-Timeouts, incomplete output, rejections, OOMs, and process failures are misses.
-For a session-level SLO, first declare whether every eligible turn or a fixed
-fraction of turns must pass, then report good sessions divided by all offered
-sessions. During experiments, physical process/cache-reset runs remain the
-independent unit; requests and tokens are correlated observations within a run.
+For request `i`, define `TTFT_i` over requests and `ITL_ij` over emitted token
+gaps. Per-request mean TPOT is a third statistic. Freeze one decode statistic
+`L_i` before collection, then define
+`good_i = exact_completion_i AND TTFT_i <= tau_F AND L_i <= tau_D` and request
+attainment as `sum(good_i) / N_offered`. Request goodput is separately
+`sum(good_i) / measurement_seconds`; service-failure rate is
+`N_service_failures / N_offered`. The offered-request denominator includes
+timeouts, incomplete output, rejections, OOMs, and service crashes as misses.
 
-Keep the current p90 TTFT <=2 s and p90 per-request mean TPOT <=100 ms labeled
-as the legacy research contract. Mean TPOT is not tail TBT. A product-facing
-TBT/ITL quantile and threshold must be selected externally, then frozen. The
-current honest output is binary membership and slack in an advertised
-sensitivity envelope, not a predicted millisecond change.
+The legacy classifier instead requires exact completion of every request and
+checks the two marginal conditions `p90(TTFT_i) <= 2 s` and
+`p90(mean_TPOT_i) <= 100 ms`. These marginal p90 conditions do not mean 90% of
+requests meet both; without further information their joint lower bound is
+80%. Label this a run-level legacy rule, not request goodput. A run label must
+also include the frozen stability/drain gate. Physical process/cache-reset
+runs are the independent units; requests and token gaps are correlated within
+a run.
+
+For a session SLO, first declare whether every eligible turn or a fixed fraction
+of turns must be good, then divide good sessions by all offered sessions. Do not
+condition any attainment denominator on successful completion.
+
+Mean TPOT is not tail ITL/TBT. A product-facing decode statistic and threshold
+must be selected and then frozen. The current honest output is binary membership
+and slack in an advertised sensitivity envelope, not a predicted millisecond
+change.
 
 ## Service evidence
 
