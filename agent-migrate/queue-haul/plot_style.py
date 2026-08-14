@@ -60,7 +60,7 @@ TIMING_ACTION_COLORS = {"replay": ACTION_COLORS["replay"],
                         "mixed": "#009E73"}
 POWER_FAMILY_NAMES = {
     "idle": "Idle", "prefill": "Prefill", "decode": "Decode",
-    "agentic": "Agentic", "campaign": "Campaign mix",
+    "agentic": "Prefill + decode", "campaign": "Campaign mix",
 }
 POWER_FAMILY_COLORS = {
     "idle": "#777777", "prefill": "#E98300", "decode": "#006CB8",

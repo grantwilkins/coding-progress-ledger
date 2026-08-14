@@ -1,12 +1,13 @@
 """
 Claim:
-The H100 power parity view plots every measured cell once by workload family and
-reports MAE and R² over that complete pooled set.
+The H100 power parity view plots every measured cell once by workload family,
+names mixed cells by their prefill/decode constituents, and reports MAE and R²
+over that complete pooled set.
 
 Plausible wrong implementations:
 - Drop retrospective or confirmation cells while removing their legend labels.
 - Retain cohort overlays that plot confirmation cells twice.
-- Keep classifying dots by campaign cohort instead of workload family.
+- Label mixed prefill/decode cells as Agentic or as one pure phase.
 - Report stored holdout statistics instead of recomputing pooled metrics.
 """
 
@@ -79,6 +80,8 @@ def test_h100_power_parity_pools_metrics_and_classifies_only_by_family(
          "predicted_power_w": 2., "measured_power_w": 2.},
         {"family": "decode", "cohort": "retrospective", "stage": "confirmation",
          "predicted_power_w": 3., "measured_power_w": 4.},
+        {"family": "agentic", "cohort": "fit_campaign", "stage": "discovery",
+         "predicted_power_w": 2., "measured_power_w": 2.},
     ]
     monkeypatch.setattr(plt, "close", lambda _: None)
 
@@ -86,6 +89,7 @@ def test_h100_power_parity_pools_metrics_and_classifies_only_by_family(
 
     axis = plt.gcf().axes[0]
     assert not axis.get_title()
-    assert [item.get_label() for item in axis.collections] == ["Prefill", "Decode"]
+    assert [item.get_label() for item in axis.collections] == [
+        "Prefill", "Decode", "Prefill + decode"]
     assert sum(len(item.get_offsets()) for item in axis.collections) == len(rows)
-    assert axis.texts[0].get_text() == "MAE 0.50 W\n$R^2$ 0.750"
+    assert axis.texts[0].get_text() == "MAE 0.40 W\n$R^2$ 0.750"
