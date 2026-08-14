@@ -95,6 +95,7 @@ TYPED_VLLM_FLAGS = {
     "--max-model-len",
     "--max-num-seqs",
     "--max-num-batched-tokens",
+    "--dtype",
     "--kv-cache-dtype",
     "--enable-chunked-prefill",
     "--enable-sleep-mode",
@@ -103,6 +104,9 @@ TYPED_VLLM_FLAGS = {
     "--block-size",
     "--disable-hybrid-kv-cache-manager",
     "--enable-prompt-tokens-details",
+    "--language-model-only",
+    "--mamba-cache-mode",
+    "--limit-mm-per-prompt",
     "--kv-transfer-config",
 }
 BILLED_DIRECTIONS = {("api", "client_to_target"), ("kv", "target_to_client")}
@@ -121,6 +125,27 @@ LMCACHE_SERVER_MAX_BYTES = int(os.environ.get("QH_LMCACHE_SERVER_MAX_BYTES", "0"
 MP_CONTEXT = re.compile(r"Registered non-GPU context.*model=([^,]+), world_size=(\d+)")
 MP_REQUEST = re.compile(r"(\d+)/(\d+) retained keys \((\d+) L1, (\d+) L2\).*external_request_id=([^,\)]+)")
 MP_STORED = re.compile(r"Stored (\d+) tokens")
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    revision: str
+    batched_tokens: int = 8192
+    chunk_tokens: int = 256
+    vllm_args: tuple[str, ...] = ()
+    unified_block_tokens: int | None = None
+    separate_object_groups: bool = False
+
+
+MODEL_SPECS = {
+    MODEL: ModelSpec(MODEL_REVISION),
+    "Qwen/Qwen3.8-27B": ModelSpec(
+        "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0", 1567, 784,
+        ("--language-model-only", "--mamba-cache-mode", "align"), 784, True),
+    "google/gemma-4-26B-A4B-it": ModelSpec(
+        "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
+        vllm_args=("--limit-mm-per-prompt", "image=0,audio=0")),
+}
 
 
 @dataclass(frozen=True)
@@ -144,6 +169,7 @@ class Config:
     max_model_len: int = 32768
     max_num_seqs: int = 256
     max_num_batched_tokens: int = 8192
+    architecture_campaign: bool = False
 
 
 @dataclass(frozen=True)
@@ -196,8 +222,46 @@ def model_snapshot_dir(hf_home: Path, model: str) -> Path:
     return hf_home / "hub" / f"models--{model.replace('/', '--')}" / "snapshots"
 
 
+def model_spec(model: str) -> ModelSpec:
+    if model not in MODEL_SPECS:
+        raise ValueError(f"unsupported model: {model}")
+    return MODEL_SPECS[model]
+
+
 def model_path(cfg: Config) -> Path:
-    return model_snapshot_dir(cfg.hf_home, cfg.model) / MODEL_REVISION
+    return model_snapshot_dir(cfg.hf_home, cfg.model) / model_spec(cfg.model).revision
+
+
+def model_campaign_config(model: str) -> Config:
+    spec = model_spec(model)
+    return Config(model=model, max_num_seqs=8,
+                  max_num_batched_tokens=spec.batched_tokens,
+                  architecture_campaign=True)
+
+
+def validate_model_runtime(cfg: Config) -> None:
+    if not cfg.architecture_campaign:
+        if cfg.model != MODEL:
+            raise ValueError("additional models require architecture_campaign")
+        return
+    spec = model_spec(cfg.model)
+    if (cfg.max_model_len, cfg.max_num_seqs, cfg.max_num_batched_tokens) != (
+            32768, 8, spec.batched_tokens):
+        raise ValueError("architecture-campaign runtime geometry changed")
+    if lmcache_mode() != "mp":
+        raise ValueError("architecture campaign requires QH_LMCACHE_MODE=mp")
+
+
+def validate_model_runtime_log(cfg: Config, text: str) -> None:
+    if not cfg.architecture_campaign:
+        return
+    if not re.search(r"(?:bfloat16|bf16).{0,80}kv.?cache|kv.?cache.{0,80}(?:bfloat16|bf16)",
+                     text, re.IGNORECASE):
+        raise RuntimeError("architecture campaign did not prove BF16 KV cache")
+    expected = model_spec(cfg.model).unified_block_tokens
+    if expected is not None and set(map(int, re.findall(
+            r"attention block size to (\d+) tokens", text, re.IGNORECASE))) != {expected}:
+        raise RuntimeError(f"runtime did not prove the {expected}-token unified block")
 
 
 def cache_dirs(cfg: Config, role: str) -> dict[str, Path]:
@@ -249,6 +313,7 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
 
 
 def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
+    chunk_tokens = model_spec(cfg.model).chunk_tokens if cfg.architecture_campaign else 256
     env = {
         "PYTHONHASHSEED": "0",
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
@@ -263,7 +328,7 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_REMOTE_URL": remote_url,
         "LMCACHE_REMOTE_SERDE": "naive",
         "LMCACHE_LMCACHE_INSTANCE_ID": f"stage1b_{role}",
-        "LMCACHE_CHUNK_SIZE": "256",
+        "LMCACHE_CHUNK_SIZE": str(chunk_tokens),
         "LMCACHE_LOCAL_CPU": "False",
         "LMCACHE_MAX_LOCAL_CPU_SIZE": LMCACHE_MAX_LOCAL_CPU_GB,
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
@@ -332,6 +397,8 @@ def redis_cmd(cfg: Config) -> list[str]:
 def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
                   http_host: str | None = None, l2_host: str | None = None,
                   l2_port: int | None = None) -> list[str]:
+    validate_model_runtime(cfg)
+    spec = model_spec(cfg.model)
     if role == "source":
         port, http_port, default_l2_port = (
             cfg.src_lmc_port, cfg.src_lmc_http_port, cfg.kv_proxy_port)
@@ -350,7 +417,10 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
         "--host", bind_host, "--port", port, "--http-host", http_host,
         "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(),
         "--eviction-policy", "LRU",
-        "--chunk-size", 256, "--max-workers", 8,
+        "--chunk-size", spec.chunk_tokens if cfg.architecture_campaign else 256,
+        *(["--separate-object-groups"] if cfg.architecture_campaign
+          and spec.separate_object_groups else []),
+        "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
     ]
     script = "\n".join([
@@ -364,6 +434,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
              gpu_index: int | None = None,
              bind_host: str | None = None,
              sleep_mode: bool | None = None) -> list[str]:
+    validate_model_runtime(cfg)
     reject_duplicate_extra(extra or [])
     if role == "source":
         port, gpu, engine_id, kv_port, rpc_port = cfg.src_port, 0, "s0", port_default(14579), "src"
@@ -377,6 +448,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
     else:
         raise ValueError(f"unknown role: {role}")
     kv_role = kv_role_for(role)
+    spec = model_spec(cfg.model)
 
     dirs = " ".join(shlex.quote(str(p)) for p in [tmpdir(cache_role), *cache_dirs(cfg, cache_role).values()])
     serve = [
@@ -397,6 +469,8 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         cfg.max_num_seqs,
         "--max-num-batched-tokens",
         cfg.max_num_batched_tokens,
+        *(["--dtype", "bfloat16", *spec.vllm_args]
+          if cfg.architecture_campaign else []),
         "--kv-cache-dtype",
         "auto",
         "--block-size",
@@ -407,7 +481,9 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         *(["--enable-sleep-mode"] if role == "source" and (
             sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
         ) else []),
-        *(["--gpu-memory-utilization", 0.75, "--disable-hybrid-kv-cache-manager", "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
+        *(["--gpu-memory-utilization", 0.9 if cfg.architecture_campaign else 0.75,
+           *([] if cfg.architecture_campaign else ["--disable-hybrid-kv-cache-manager"]),
+           "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         "--kv-transfer-config",
         kv_config(engine_id, kv_role, kv_port, rpc_port),
         *(extra or []),
@@ -477,6 +553,7 @@ def runtime_versions(cfg: Config) -> tuple[str, str]:
 
 
 def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
+    validate_model_runtime(cfg)
     validate_ports(cfg)
     failures = []
     native = runtime_mode() == "native"
@@ -1501,6 +1578,7 @@ def start_stack(cfg: Config, run_root: Path, mbps: float, extra: list[str] | Non
                 wait_tcp_process(cfg.host, port, 300, service, log)
         source = start_logged(vllm_cmd(cfg, "source", extra or []), run_root / "source.log")
         wait_health_process(cfg.host, cfg.src_port, health_timeout(), source, run_root / "source.log")
+        validate_model_runtime_log(cfg, read_text(run_root / "source.log"))
         return Stack(lmc, proxy, source, None, run_root, services, mbps)
     except BaseException:
         for proc in (source, proxy, *services, lmc):
@@ -1514,6 +1592,7 @@ def start_sink(stack: Stack, cfg: Config, extra: list[str] | None = None) -> Non
         return
     stack.sink = start_logged(vllm_cmd(cfg, "sink", extra or []), stack.run_root / "sink.log")
     wait_health_process(cfg.host, cfg.sink_port, health_timeout(), stack.sink, stack.run_root / "sink.log")
+    validate_model_runtime_log(cfg, read_text(stack.run_root / "sink.log"))
 
 
 def check_chat(result: dict, label: str) -> None:
@@ -1646,6 +1725,7 @@ def smoke1(cfg: Config, run_root: Path, extra: list[str]) -> Path:
         wait_tcp_process(cfg.host, cfg.lmc_port, 60, lmc, run_root / "lmcache.log")
         vllm = start_logged(vllm_cmd(cfg, "smoke1", extra), run_root / "vllm.log")
         wait_health_process(cfg.host, cfg.smoke_port, 1800, vllm, run_root / "vllm.log")
+        validate_model_runtime_log(cfg, read_text(run_root / "vllm.log"))
         chat_once(cfg, cfg.smoke_port)
         chat_once(cfg, cfg.smoke_port)
         time.sleep(3)

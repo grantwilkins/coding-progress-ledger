@@ -21,8 +21,14 @@ def test_setup_script_has_valid_bash_and_pinned_runtime_contract():
 
     for value in ("0.11.32", "3.12", "1.96.0", "vllm==0.22.0", "lmcache==0.5.1", "cu129"):
         assert value in text
-    assert "6cee5e81ee83917806bbde320786a8fb61efebee" in text
+    for model, revision in (
+        ("openai/gpt-oss-20b", "6cee5e81ee83917806bbde320786a8fb61efebee"),
+        ("Qwen/Qwen3.8-27B", "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"),
+        ("google/gemma-4-26B-A4B-it", "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"),
+    ):
+        assert model in text and revision in text
     assert "--exclude 'original/*' --exclude 'metal/*'" in text
+    assert "model-*.safetensors" not in text
     assert "HF_HOME=/datadrive" in text
     assert "HF_HUB_CACHE=/datadrive/hub" in text
     assert "QH_CACHE_ROOT=/datadrive/queue-haul-cache" in text
