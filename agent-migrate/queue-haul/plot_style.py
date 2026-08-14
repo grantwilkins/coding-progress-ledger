@@ -53,6 +53,16 @@ ACTION_HATCHES = {
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "",
 }
+REPAIR_NAMES = {
+    "unchanged": "No repair needed",
+    "applied": "Repair applied",
+    "revised_maximum": "Target unattainable",
+}
+REPAIR_COLORS = {
+    "unchanged": "#999999",
+    "applied": POLICY_COLORS["queue_haul"],
+    "revised_maximum": "#D55E00",
+}
 POWER_VALIDATION_METHODS = ("lp", "greedy", "milp", "power-unaware", "random")
 POWER_VALIDATION_NAMES = dict(zip(POWER_VALIDATION_METHODS, (
     "Queue-Haul LP", "Queue-Haul Greedy", "MILP", "Power unaware", "Random",

@@ -35,6 +35,7 @@ Plausible wrong implementations:
   stale decision after the all-bind admission check fails.
 """
 
+import asyncio
 import csv
 import json
 import threading
@@ -239,6 +240,46 @@ def test_hierarchical_limiter_enforces_route_and_source_caps():
     assert limiter.reserve("kv/east", "target_to_client", 60, 0) == 1
     assert limiter.reserve("kv/west", "target_to_client", 60, 0) == 1.2
     assert limiter.reserve("kv/east", "client_to_target", 10_000, 0) == 0
+
+
+def test_hierarchical_limiter_atomically_replaces_live_rates():
+    async def update():
+        limiter = testbed.BandwidthLimiter(100, {"east": 60})
+        value = await limiter.update(None, {"east": 6, "germany": 8})
+        return limiter, value
+
+    limiter, value = asyncio.run(update())
+    assert value == {
+        "aggregate_bps": None,
+        "route_bps": {"east": 6, "germany": 8},
+    }
+    assert limiter.aggregate is None
+    assert set(limiter.routes) == {"east", "germany"}
+
+
+def test_live_prefill_control_requires_and_updates_every_destination(monkeypatch):
+    calls = []
+    stack = SimpleNamespace(
+        cluster=SimpleNamespace(destinations=(
+            SimpleNamespace(id="east", host="10.1.0.4"),
+            SimpleNamespace(id="germany", host="10.3.0.4"),
+        )),
+        cfg=SimpleNamespace(sink_port=8200),
+    )
+    monkeypatch.setattr(
+        n.testbed, "http_json",
+        lambda *args: calls.append(args) or {"ok": True, "tokens_per_s": args[-1]["tokens_per_s"]},
+    )
+
+    result = n.set_live_prefill(stack, {"east": 100.0, "germany": None})
+
+    assert set(result) == {"east", "germany"}
+    assert [call[:4] for call in calls] == [
+        ("10.1.0.4", 8200, "POST", "/qh/prefill-control"),
+        ("10.3.0.4", 8200, "POST", "/qh/prefill-control"),
+    ]
+    with pytest.raises(ValueError, match="every destination"):
+        n.set_live_prefill(stack, {"east": 100.0})
 
 
 def test_linux_tcp_info_parser_uses_microseconds_and_total_retransmissions():
@@ -671,6 +712,24 @@ def test_destination_load_normalization_uses_both_service_rates(
     load.error = ValueError("short response")
     with pytest.raises(RuntimeError, match="ValueError: short response"):
         load.close()
+
+
+def test_repair_sink_load_marks_requests_for_live_prefill_control(
+        monkeypatch, tmp_path):
+    seen = {}
+    result = n.profiler.RequestResult("r", 200, "", 1, 2)
+    monkeypatch.setattr(
+        n.profiler, "stream_chat",
+        lambda *args, **kwargs: seen.update(kwargs) or (result, ""),
+    )
+    load = n.SinkLoad(
+        SimpleNamespace(), 1, 1000, .5, tmp_path / "load.jsonl",
+        prefill_class="background")
+
+    load._request(0)
+
+    assert seen["request_headers"] == {
+        "X-QH-Prefill-Class": "background"}
 
 
 def test_sink_load_caps_pending_requests(monkeypatch, tmp_path):

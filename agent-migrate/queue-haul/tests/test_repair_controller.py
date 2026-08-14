@@ -1,6 +1,6 @@
 from repair_controller import (
     Assignment, Attempt, AttemptUpdate, Failure, FeasibilityRepairController,
-    ObservationBatch, ProposedDiff, RepairMove, RepairRequest, RepairResult,
+    ObservationBatch, PrefillCapacity, ProposedDiff, RepairMove, RepairRequest, RepairResult,
     RevisedMaximum,
 )
 
@@ -41,6 +41,27 @@ def test_stale_attempt_generation_is_ignored():
 
     assert c.observe(update(1, 99, generation=0)) is None
     assert c.attempts["s"].completed_work == 20
+
+
+def test_prefill_capacity_is_versioned_in_the_ledger_snapshot():
+    c = controller(planned=20)
+    capacity = PrefillCapacity("p0", 512, 100)
+
+    assert c.observe(ObservationBatch(1, 1, prefill_capacities=(capacity,))) is None
+    assert c.budget_version == 1
+    assert c.snapshot(1).prefill_capacities == (capacity,)
+
+    c.observe(ObservationBatch(2, 2, prefill_capacities=(capacity,)))
+    assert c.budget_version == 1
+
+
+def test_progress_eta_cannot_beat_the_resource_schedule_floor():
+    c = FeasibilityRepairController(
+        (Attempt("s", 0, A, "running", 100, 99, 5, 9, rate=1),),
+        {"s"}, 10, 20, 1, lambda sessions: 10 * len(sessions),
+    )
+
+    assert c._eta(c.attempts["s"], 5) == 10
 
 
 def test_hard_failure_bypasses_soft_hysteresis_and_is_deduplicated():
