@@ -72,7 +72,7 @@ ACTION_HATCHES = {
     "replay": "..", "kv_transfer": "xx",
     "east_replay": "..", "east_kv_transfer": "xx",
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
-    "not_moved": "",
+    "not_moved": "--",
 }
 REPAIR_NAMES = {
     "unchanged": "No repair needed",

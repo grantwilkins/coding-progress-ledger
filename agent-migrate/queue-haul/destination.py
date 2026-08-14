@@ -175,6 +175,8 @@ class FluidMigrationService:
     source_power_w: dict[str, float]
     destination_power_w: dict[str, float]
     provenance: str
+    coupling: float = 0.0
+    route_overlap: bool = True
 
     def __post_init__(self):
         methods = {"replay", "kv_transfer"}
@@ -183,7 +185,9 @@ class FluidMigrationService:
                 or set(self.destination_power_w) != methods \
                 or min(*self.source_power_w.values(),
                        *self.destination_power_w.values()) < 0 \
-                or not self.provenance:
+                or not self.provenance or not 0 <= self.coupling <= 1 \
+                or not isinstance(self.route_overlap, bool) \
+                or not self.route_overlap and self.coupling != 1:
             raise ValueError("invalid fluid migration service")
 
 
@@ -211,7 +215,10 @@ class DestinationPool:
                 or self.migration_headroom is not None and (
                     not set(self.migration_headroom) <= set(self.methods)
                     or any(not 0 < value <= 1
-                           for value in self.migration_headroom.values())):
+                           for value in self.migration_headroom.values())) \
+                or self.fluid_migration is not None \
+                and self.fluid_migration.coupling \
+                and self.migration_headroom:
             raise ValueError("invalid destination pool")
 
 
@@ -227,11 +234,16 @@ class DestinationArchitecture:
         type_ids = [q.type_id for q in self.types]
         pool_ids = [p.pool_id for p in self.pools]
         replicas = [r.replica_id for p in self.pools for r in p.replicas]
+        serial = [i for i, pool in enumerate(self.pools)
+                  if pool.fluid_migration is not None
+                  and not pool.fluid_migration.route_overlap]
         if self.schema != DESTINATION_SCHEMA or not self.types or not self.pools \
                 or len(set(type_ids)) != len(type_ids) or len(set(pool_ids)) != len(pool_ids) \
                 or len(set(replicas)) != len(replicas) \
                 or not set(p.type_id for p in self.pools) <= set(type_ids) \
-                or self.residency_horizon_s is not None and self.residency_horizon_s < 0:
+                or self.residency_horizon_s is not None and self.residency_horizon_s < 0 \
+                or any(set(self.pools[i].route) & set(pool.route)
+                       for i in serial for j, pool in enumerate(self.pools) if i != j):
             raise ValueError("invalid destination architecture")
 
     @classmethod

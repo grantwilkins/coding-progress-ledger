@@ -1114,20 +1114,23 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
     pools = {pool.pool_id: pool for pool in destination.pools}
     if any(move.destination_pool not in pools for move in moves):
         raise ValueError("fluid moves require a destination pool")
-    paths = {move.path for move in moves}
-    if len(paths) > 1:
-        raise ValueError("fluid execution currently requires one shared site route")
+    paths = tuple(set(move.path for move in moves))
+    if any(set(paths[i]) & set(paths[j]) for i in range(len(paths))
+           for j in range(i + 1, len(paths))):
+        raise ValueError("fluid execution requires identical or disjoint routes")
     sessions = {session.session_id: session for session in scenario.sessions}
     case, start = profile.case(case_id), scenario.controller_delay_s
-    path = next(iter(paths), ())
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
-    bandwidth = min((links[link] for link in path), default=np.inf)
     route_bytes = np.array([
         sessions[move.session_id].log_bytes if move.method == "replay" else
         case.kv_transfer.sealed_bytes(sessions[move.session_id].context_tokens)
         for move in moves
     ], float)
-    network_done = np.full(len(moves), start + route_bytes.sum() / bandwidth)
+    network_done = np.empty(len(moves))
+    for path in paths:
+        members = [i for i, move in enumerate(moves) if move.path == path]
+        bandwidth = min((links[link] for link in path), default=np.inf)
+        network_done[members] = start + route_bytes[members].sum() / bandwidth
     commits = np.empty(len(moves))
     for pool_id, pool in pools.items():
         service = pool.fluid_migration
@@ -1137,6 +1140,28 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
         if service is None:
             raise ValueError("fluid execution cannot mix legacy destination pools")
         replay = [i for i in members if moves[i].method == "replay"]
+        kv = [i for i in members if moves[i].method == "kv_transfer"]
+        if service.coupling:
+            replay_work = sum(
+                sessions[moves[i].session_id].context_tokens / case.replay.rate(
+                    sessions[moves[i].session_id].context_tokens, 1,
+                ) + case.replay_completion_s for i in replay
+            ) / service.replay_speedup
+            q = destination.type_by_id[pool.type_id]
+            residual = q.migration["kv_transfer"].residual_s \
+                if q.migration else case.kv_transfer.initial_completion_s
+            kv_work = sum(route_bytes[i] / service.kv_ingest_bytes_per_s
+                          + residual for i in kv)
+            work = max(
+                replay_work + service.coupling * kv_work,
+                service.coupling * replay_work + kv_work,
+            ) / len(pool.replicas)
+            switches = len(members) * case.switch_s / len(pool.replicas)
+            done = (max(network_done[members[0]], start + work)
+                    if service.route_overlap else network_done[members[0]] + work)
+            done += switches
+            commits[members] = done
+            continue
         if replay:
             work = np.array([
                 sessions[moves[i].session_id].context_tokens / case.replay.rate(
@@ -1152,7 +1177,6 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
                 np.full(len(replay), case.replay_completion_s), capacity, streamed,
             )
             commits[replay] = done + case.switch_s
-        kv = [i for i in members if moves[i].method == "kv_transfer"]
         if kv:
             ingested = np.full(len(kv), max(
                 network_done[kv[0]], start + route_bytes[kv].sum() / (

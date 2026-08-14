@@ -828,6 +828,35 @@ uv run python queue-haul/bootstrap_action_adaptation.py \
   --out-dir queue-haul/outputs/east-germany-action-adaptation-20260811
 ```
 
+`workload_adaptation_campaign.py` adds workload-shape sensitivity without
+claiming new hardware observations. Each of 1,000 paired draws resamples
+conversation templates and then one whole supported state tuple per template,
+normalizes the 28-session source pack to the
+campaign's 0.4 load, refits the balanced regional timing cells, and samples one
+joint phase-power bootstrap tuple. All eight HBM/bandwidth/prefill states share
+that draw. The planner uses measured East US 2 and Germany West Central routes
+and a conservative route-plus-shared-migration-work envelope; background
+prefill consumes service headroom but does not assert an unmeasured migration
+slowdown. Stacked boundaries are the median Replay and median total-moved
+shares, while black intervals show their 5--95% ranges. Target misses and
+one-factor-release checks remain in the output tables.
+The eight states are independent branches. Their fractional LP opportunity
+sets must expand on every release; any rounded-planner regressions are reported
+rather than repaired with a counterfactual plan. Noisy bootstrap route draws
+are minimally projected to preserve natural bandwidth at or above the measured
+40%-route condition, and the projection rate is recorded.
+
+```bash
+uv run python queue-haul/workload_adaptation_campaign.py
+```
+
+The resulting 1,000 draws are a modeled calibration/workload sensitivity, not
+a confidence interval or 1,000 independent workloads. The regional single-move
+timing holdout passes its recorded gate; grouped local and width-8 timing audits
+remain retrospective, and the no-overlap envelope intentionally overpredicts
+many width-8 makespans rather than extrapolating the KV-heavy mixed evidence to
+Replay-majority plans.
+
 The time-to-binding view uses the same two-thirds stress point. It estimates
 completion-ordered slack for VRAM, network-transfer, and prefill constraints;
 each class reports its tightest component without exposing destination names.
