@@ -491,7 +491,8 @@ class ExecutionSimulator:
         active = set()
         for session in self.sessions.values():
             if session.state == "active":
-                resident[session.source_instance] += session.context_tokens
+                resident[session.source_instance] += self.profile.kv_admission_tokens(
+                    session.context_tokens)
                 active.add(session.session_id)
         if any(tokens > self.profile.kv_capacity_tokens for tokens in resident.values()):
             raise ValueError("serving instance exceeds resident KV capacity")
@@ -499,8 +500,9 @@ class ExecutionSimulator:
         for move in self.moves:
             session = self.sessions[move.session_id]
             if session.state == "active":
-                resident[session.source_instance] -= session.context_tokens
-                resident[move.destination_instance] += session.context_tokens
+                tokens = self.profile.kv_admission_tokens(session.context_tokens)
+                resident[session.source_instance] -= tokens
+                resident[move.destination_instance] += tokens
         if any(tokens > self.profile.kv_capacity_tokens for tokens in resident.values()):
             raise ValueError("serving instance exceeds resident KV capacity")
 
@@ -739,7 +741,8 @@ class ExecutionSimulator:
             self._event("replay_done", session_id, detail=state.move.destination_instance)
         if phase == "wake":
             destination = state.move.destination_instance
-            self.resident_tokens[destination] += self.context[session_id]
+            self.resident_tokens[destination] += self.profile.kv_admission_tokens(
+                self.context[session_id])
             self.resident_sessions.add(session_id)
             self._check_resident(destination)
             state.wake_ready = self.time
@@ -813,8 +816,9 @@ class ExecutionSimulator:
         state.committed = self.time
         source = self.sessions[session_id].source_instance
         if session_id in self.resident_sessions:
-            self.resident_tokens[source] -= self.context[session_id]
-            self.resident_tokens[state.move.destination_instance] += self.context[session_id]
+            tokens = self.profile.kv_admission_tokens(self.context[session_id])
+            self.resident_tokens[source] -= tokens
+            self.resident_tokens[state.move.destination_instance] += tokens
             self._check_resident(state.move.destination_instance)
         self.power_model.move(session_id, state.move.destination_instance)
         self.quiescing.discard(session_id)
@@ -893,6 +897,7 @@ class ExecutionSimulator:
     def _request_done(self, session_id: str, request_index: int):
         request = self.sessions[session_id].requests[request_index]
         added = request.prompt_tokens + request.output_tokens
+        previous = self.profile.kv_admission_tokens(self.context[session_id])
         self.context[session_id] += added
         if session_id in self.move_index and session_id not in self.quiescing:
             index = self.move_index[session_id]
@@ -901,7 +906,8 @@ class ExecutionSimulator:
                 self._append_available(index, str(request_index))
         if session_id in self.resident_sessions:
             instance = self.active_request_instance[session_id]
-            self.resident_tokens[instance] += added
+            self.resident_tokens[instance] += (
+                self.profile.kv_admission_tokens(self.context[session_id]) - previous)
             self._check_resident(instance)
         self.active_request_end[session_id] = self.time
         instance = self.active_request_instance.pop(session_id)

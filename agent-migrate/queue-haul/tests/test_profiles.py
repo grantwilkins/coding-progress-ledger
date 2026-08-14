@@ -12,6 +12,8 @@ Plausible wrong implementations:
 - Sample workload columns independently and create records absent from the trace.
 - Treat a legacy idle record as active or retain it as a third internal state.
 - Transfer a partial block proportionally or round it up.
+- Collapse heterogeneous cache groups into one byte pool and over-admit.
+- Extrapolate a cache or transfer curve beyond its measured contexts.
 - Accept malformed action-power concurrency curves.
 """
 
@@ -21,7 +23,8 @@ from pathlib import Path
 import pytest
 
 from profiles import (
-    PROFILE_SCHEMA, WORKLOAD_SCHEMA, ModelProfile, WorkloadProfile,
+    HYBRID_PROFILE_SCHEMA, PROFILE_SCHEMA, WORKLOAD_SCHEMA, KVGeometry,
+    ModelProfile, WorkloadProfile,
 )
 
 
@@ -127,6 +130,47 @@ def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):
     assert case.kv_transfer.initial_completion_s == .25
     assert case.kv_transfer.catch_up_fixed_s == .4
     assert case.kv_transfer.tail_replay_tps == 20
+
+
+def test_hybrid_cache_groups_prevent_scalar_false_admission(tmp_path):
+    raw = profile()
+    raw.update(
+        schema=HYBRID_PROFILE_SCHEMA,
+        kv_capacity_tokens=100,
+        kv_geometry={
+            "groups": ["full", "sliding"],
+            "capacity_bytes": [100, 100],
+            "resident_bytes": [[10, 80, 10], [20, 100, 100]],
+        },
+    )
+    raw["cases"]["central"]["kv_transfer"]["bytes_by_context"] = [
+        [10, 100], [20, 300],
+    ]
+
+    measured = ModelProfile.load(write(tmp_path, raw))
+    geometry, transfer = measured.kv_geometry, measured.case().kv_transfer
+    assert sum(geometry.bytes_at(10)) * 2 <= sum(geometry.capacity_bytes)
+    assert not geometry.fits((10, 10))
+    assert measured.kv_admission_tokens(10) == 80
+    assert transfer.sealed_bytes(15) == 200
+    assert transfer.scalar_residual() > .05
+    with pytest.raises(ValueError, match="outside"):
+        geometry.bytes_at(9)
+    with pytest.raises(ValueError, match="outside"):
+        transfer.sealed_bytes(21)
+
+
+def test_hybrid_admission_units_are_a_conservative_certificate():
+    geometry = KVGeometry.parse({
+        "groups": ["full", "sliding"],
+        "capacity_bytes": [100, 100],
+        "resident_bytes": [[10, 10, 40], [20, 40, 50], [30, 60, 60]],
+    })
+    contexts = (10, 20)
+
+    assert sum(geometry.pressure(context) for context in contexts) <= 1
+    assert geometry.fits(contexts)
+    assert max(geometry.utilization(contexts)) <= 1
 
 
 def test_default_profile_uses_measured_h100_capacity_and_rates():

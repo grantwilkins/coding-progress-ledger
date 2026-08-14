@@ -33,6 +33,7 @@ Plausible wrong implementations:
 - Change seeded random methods or move order while batching random choices.
 - Let a fixed-method baseline silently use the other migration mechanism.
 - Choose one globally fastest method for the isolated-fastest baseline.
+- Admit a hybrid-cache pack after one cache group is already full.
 """
 
 from dataclasses import replace
@@ -48,6 +49,7 @@ from planner import (
     _required_kv_rate, _round_lp, _route_resources, _solve_lp, plan,
 )
 from power_model import ExpectedPower
+from profiles import KVGeometry
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,
                       SimSession)
 from test_execution_simulator import model
@@ -70,6 +72,23 @@ def problem(requests=(), limit=20, final="awake"):
 
 
 PATHS = {(source, dest): ("wan",) for source in ("s0", "s1") for dest in ("t0", "t1")}
+
+
+def test_planner_uses_conservative_hybrid_cache_admission(tmp_path):
+    profile = replace(model(tmp_path, tp=1, kv_capacity=100), kv_geometry=KVGeometry.parse({
+        "groups": ["full", "sliding"],
+        "capacity_bytes": [100, 100],
+        "resident_bytes": [[10, 80, 10], [20, 100, 100]],
+    }))
+    scenario = problem()
+    destinations = scenario.instances[-2:-1]
+
+    resources = _migration_resources(
+        scenario, profile, PATHS, list(scenario.sessions), destinations,
+        profile.case(), 9,
+    )[2].toarray()
+
+    assert resources[-1] == pytest.approx([.8, .8, .8, .8])
 
 
 def test_lp_objective_variants_have_the_stated_priority():
