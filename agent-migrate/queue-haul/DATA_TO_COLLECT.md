@@ -26,7 +26,7 @@ correctness of this exact LMCache/vLLM contract.
 | stable execution ceiling | nonpositive backlog drift, complete drain, no OOM/restart/rejection | the same five legacy summaries pass but are not strict evidence | same targeted follow-up | reject final placements outside hard safety |
 | workload-direction domain | interactive-coding, coding, and agentic behavior | one legacy coding anchor and two for each other affinity; no admissible failure or mixed blob | none for sensitivity; targeted follow-up for evidence-robust admission | keep workload affinity as an evidence domain |
 | baseline service state | per-replica profile-compatible prefill/decode work, context, queue, and forecast window | raw request/engine telemetry exists; v7 `achieved_rho` is not a valid baseline | live telemetry at planning time | locate each replica inside its measured affinity blob |
-| Queue-Haul performance effect | paired system-wide TTFT/decode latency and joint attainment for the same offered sessions under no move, 20% reserve, and 5% reserve | migration transients and external phase-sensitivity anchors only; no steady-state placement counterfactual | 36-run matched policy experiment below | paper-facing causal performance result; do not fit a serving simulator |
+| Queue-Haul performance effect | incumbent p90 TTFT/mean TPOT, joint attainment, and stability versus measured normalized load under phase-separated added session work | migration transients and external phase-sensitivity anchors only; no clean steady-state placement curve | 54-cell discovery plus 18-cell held-out confirmation per hardware | hardware-specific service reserve and raw paper curve; do not fit a serving simulator |
 | live-state lease | freshness generation plus reservations for service, KV, endpoint, and route headroom | not implemented | transactional destination readback and lease at planning/commit time | fail closed if state changes or the lease expires |
 | allocatable KV supply | physical block capacity after weights, activations, graph captures, and runtime workspace | 963,152-token readback for vLLM 0.22.0 at 0.75 GPU-memory utilization; the older 1,214,544 value is another class | exact live preflight readback | per-replica HBM stock through the residency horizon |
 | incremental KV demand | block-rounded private history and projected growth | within-session reuse and exact migration blocks are proven; cross-session sharing is deliberately uncredited | none for v1 | sum private blocks per replica; shared-prefix unions are a later optimization |
@@ -242,110 +242,119 @@ idle/drained migration or additional impact evidence.
 
 ## Queue-Haul performance evaluation
 
-This is the paper-critical follow-up. Its estimand is the paired change caused
-by Queue-Haul placement, not the response surface of a general serving system:
+This is a measured calibration of the existing service constraint, not a new
+serving simulator. Hold a deterministic incumbent stream fixed at
+`rho_b=0.25`, preload the same fixed, predeclared pre-arrival parked stock in
+every main cell, and add Queue-Haul work until total scheduled load reaches
+`rho={0.25,0.50,0.70,0.85,0.95,1.10}`. The x coordinate is recomputed from all
+offered work during the frozen measurement window:
 
 ```text
-Delta attainment = attainment(Queue-Haul placement) - attainment(no move)
-Delta reserve = attainment(5% reserve) - attainment(20% reserve)
+rho = sum_r(append_r / R_P(4096) + output_r / R_D(4096)) / window_s.
 ```
 
-Use system-wide offered requests across source and destinations in every
-denominator. Also report per-replica outcomes so a destination penalty cannot
-be hidden by averaging. Freeze a joint request evaluation label--successful
-completion, TTFT <=2 s, and per-request mean TPOT <=100 ms--before collection,
-or replace it once with a predeclared product label. These are the legacy
-thresholds applied to a new joint offered-request label, not the repository's
-legacy marginal-p90 run rule. Preserve client-visible and engine-side TTFT,
-per-request mean TPOT, and true token-gap distributions regardless of the
-threshold. A successfully completed one-output-token request is TTFT-only and
-is excluded from decode-statistic distributions; a multi-token request without
-the required token timestamps is a request miss.
+No migration bytes move during this curve: it isolates the steady-state
+serving effect after sessions are placed. Existing replay/KV experiments remain
+the evidence for the distinct transfer transient.
 
-The archived policy plans are not replayable SLO episodes: their
-`request_schedule` fields are empty. Construct two deterministic workload packs
-from the checksum-pinned content-free manifest before hardware collection.
-For every validation job class, use all six session shapes returned by the
-current `manifest_sessions` transformation, create five deterministic aliases
-of each shape, and use one common uniform open-loop schedule. This gives 30
-sessions with equal shape weight. Scale the schedule once so the initial source
-has normalized offered service work 0.80, then keep that offered trace fixed
-across arms. With pinned isolated per-context rates, compute
+Plot only incumbent request performance. The top panel is p90 TTFT; the bottom
+is p90 per-request mean TPOT. Queue drain/stability and service failures mark a
+point infeasible rather than adding a third line. Preserve p50/p90/p95/p99,
+every returned token ID and SSE timestamp, and full Prometheus histograms. A
+multi-token SSE event is an exact completion but does not expose literal token
+gaps, so it invalidates TPOT/ITL measurement rather than counting as a service
+failure. P99 is reportable only with at least 1,000 incumbent requests in a
+cell; otherwise it is null.
+Horizontal latency targets are evaluation inputs, not values inferred from the
+curve.
 
-```text
-phase_share = sum(append/F(context)) /
-              sum(append/F(context) + output/G(context)).
-```
+Use one 4K controlled continuation pack so phase attribution is unambiguous.
+Incumbent requests use 3,840 cached +256 appended prompt tokens and 128 output
+tokens. Added prefill-heavy requests use 2,048+2,048/32; added decode-heavy
+requests use 4,032+64/512. Recalibrated phase shares must be at least 0.7 and at
+most 0.2 respectively. Eight sessions of every direction, including the parked
+direction, are prewarmed in every main cell. A matched baseline with only the
+incumbent sessions resident checks that parked KV alone is harmless.
 
-Select the eligible classes with the largest and smallest phase shares, without
-looking at mixed-load latency. The current frozen profile selects `coding` and
-`agentic_tool_loop`, with selection scores 0.478 and 0.028 respectively. These
-scores use the profile's inherited context curves and are selection metadata,
-not latency evidence; record the recalculated selection and rates for the actual
-serving stack. Pin the manifest rows, repetition order, prompt/output lengths,
-forced tokens, schedule, and initial block-rounded KV. If the two phase shares
-are less than 0.20 apart, make only a one-workload claim rather than relabeling
-nearly identical packs as phase coverage.
+Run A100 and H100 independently and never pool their boundaries. Before either
+headroom sweep, measure `R_P(4096)` at concurrency 1/4/16 and `R_D(4096)` at
+16/64/128 on the exact TP1, vLLM 0.22, eager, chunked-prefill, APC, block-16,
+8,192-batched-token, 256-sequence, `gpu_memory_utilization=0.75` Queue-Haul
+destination stack. Take the maximum stable throughput inside each fresh-process
+block and the median of three block maxima. The inherited H100 context table is
+not admissible normalization for this experiment. This is explicitly a
+synchronized-burst throughput normalizer, not an arrival-rate SLO boundary; an
+optimum at the largest tested concurrency is retained as right-censored.
 
-For each pack, derive every session's `expected_f` and `expected_g` from the
-exact offered trace over the measurement window. Use the current H100 serving
-class with two destinations at modeled background loads 0.25 and 0.75, the
-measured natural-route contract, and no synthetic KV reservation. Background
-requests remain identical across arms and count in system-wide outcomes. Hold
-source placement, deadline, routes, and initial KV fixed, then run the existing
-exact Queue-Haul planner with its max-shed objective once for each predeclared
-service-flex setting below. Freeze each returned assignment before service
-collection; do not tune it from observed latency.
+The frozen discovery core shares one direction-free baseline per block:
+`(1 baseline + 2 directions x 5 added-load points) x 3 restart blocks = 33`
+valid cells per hardware, plus 18 normalizer cells and three no-resident
+controls, or 54 cells per
+hardware. Follow the checksum-frozen randomized order in the plan. Run all
+calibration cells first; one headroom block produces an internal preview, and
+all three produce the scout curve.
+After thresholds are frozen, select the last passing and first failing points
+without changing the core data. Confirm one shared baseline and each direction's
+last-pass/first-fail in three unseen blocks (15 cells), then run a balanced
+check at the selected boundary in three blocks. It uses 128 output tokens and a
+block-rounded append length derived from that hardware's measured `R_P/R_D`,
+and must place 40--60% of normalized work in prefill. Thus the promotion stage
+is 18 cells per hardware and 72 including discovery. Matched-rho long/few versus
+short/many decode and smooth versus microburst prefill are optional domain
+checks; disagreement restricts the scalar contract rather than adding a planner
+dimension automatically.
 
-1. **no move:** retain the initial source assignment;
-2. **conservative Queue-Haul:** use a 20% modeled service-flex reserve;
-3. **marginal Queue-Haul:** use a 5% modeled service-flex reserve.
+Every cell uses a fresh process, cache reset, private-prefix prewarm, 60-second
+warmup, 240-second measurement window, absolute 180-second request deadline,
+180-second drain limit, and a smooth uniform open-loop schedule. Stability uses
+running plus waiting plus client-pending requests only inside the measurement
+window; it cannot be rescued by warmup or post-window drain. The measurement
+hard-fails a scrape gap over one second. A send slip over 50 ms,
+parser/configuration/cache-proof error, token-timing ambiguity, GPU
+preemption/Xid, or missing live-engine sampler invalidates the measurement.
+Timeout, rejection, incomplete output, OOM, or load-induced engine exit is a
+service miss and remains in the offered denominator. Partial request and metric
+evidence is written before failure classification. Invalid measurements may be
+rerun only immediately in place, before any later cell in the frozen order;
+otherwise stop the stage. Complete service failures may not be rerun.
 
-Use the max-shed objective so the two reserves expose the policy trade-off. A
-workload is eligible only if the 5% plan moves strictly more normalized work or
-attains strictly more source power shed than the 20% plan. This is a
-planner-only preflight, not hardware outcome selection. If fewer than two
-classes are eligible, report the classes that are and narrow the claim.
+Every calibration, discovery, and confirmation result carries the exact model
+revision, image-byte hash, vLLM/LMCache versions, semantic scheduler command,
+GPU SKU/UUID/memory/power/application clocks, commit, plan hash, and
+normalization hash. The runtime identity includes and rechecks the canonical
+vLLM, LMCache, and Redis launch commands, including environment-dependent GPU
+and KV roles. The image is hashed once per unchanged stage artifact, and each
+reducer reconstructs the observed wall-clock cell order and requires it to equal
+the frozen randomized order. Any cross-cell mismatch hard-fails reduction. Successful
+measurement requests must report exactly the block-rounded private prefix as
+cached; under-hit and append-hot cells are invalid because their actual prefill
+work no longer equals the x coordinate. Fixed parked stock is checked from the
+telemetry sample immediately after prewarm and before offered arrivals.
+The engine-reported live KV-token capacity is bound into the normalization;
+resident-minus-control occupancy must equal the planned block-rounded parked
+tokens divided by that capacity within two percentage points, and confirmation
+must reproduce the discovery preload.
+Measurement-start KV includes load-dependent active decodes, so it is retained
+as an outcome and is not used to match cells.
 
-Preload the exact selected state before each Queue-Haul measurement. This
-isolates steady-state placement; the existing matched loaded-migration evidence
-reports the transient separately. Reuse the exact offered schedule and output
-caps across all three arms, randomize arm order within a restart block, and
-restart/clear/prewarm before every run. Use a 60-second warmup and 300-second
-measurement window with at least 200 offered requests and a 600-second hard
-run-and-drain cap. Execute six paired restart blocks:
-`2 workload packs x 3 arms x 6 blocks = 36` valid runs. Use at most four
-single-run planner/arrival scouts before freezing the plan and reserve four
-measurement-invalid reruns, for a hard cap of 44 attempts. With a 600-second
-run cap, the confirmatory design costs at most 6 GPU-hours per participating
-GPU, or 18 GPU-hours for three simultaneously active GPUs.
-
-Record every offered request, scheduled and actual arrival, first token, each
-output-token timestamp, completion/failure, running/waiting/preemption/KV, and
-full drain. Instrumentation or schedule errors invalidate a run; service
-timeouts, incomplete outputs, rejections, OOMs, and crashes are valid SLO
-misses. For each workload report the six paired block deltas from no move to
-each Queue-Haul arm and from 20% to 5% reserve, with their median and range.
-Resample whole paired restart blocks only; a block bootstrap is an
-effect-variability summary, not a production reliability guarantee. Do not add
-outcome-dependent repeats. Report empirical TTFT and TPOT CDFs, the frozen
-joint-attainment point, true token-gap tails, service failures, queue drift, and
-measured power shed.
-
-The frozen measured-run rule is at least 90% joint request attainment, complete
-drain, and the existing one-request-per-window upper queue-drift tolerance. A
-reserve is supported for these measured packs only when all six runs for every
-pack satisfy that rule. This conservative finite-sample gate is not a fleet
-reliability or violation-probability guarantee.
-
-This experiment supports statements of the form “reducing Queue-Haul's modeled
-service reserve from 20% to 5% changed power shed by X and joint attainment by Y
-points, with p90 TTFT/TPOT changes Z/W, on these measured workload packs.” It
-does not support extrapolation to another serving class or a universal
-milliseconds-from-load equation. Advertise the smallest tested reserve that
-meets the frozen attainment and stability rule on every measured pack, then
-rerun the offline power-saving evaluation at that reserve; do not tune a
-latency simulator.
+For supplied targets `(tau_F,tau_D)`, the scout reports the largest contiguous
+load for which every restart drains, has bounded total in-system drift and
+exact-length completion, and satisfies incumbent p90 TTFT/TPOT. It also reports
+the target-independent physical-stability bracket, first failing point,
+censoring, and joint request attainment over all offered incumbents. The scout
+is never planner-usable. P1/P2 receive the minimum boundary across directions
+only when all unseen baseline/last-pass cells pass, all unseen first-fail cells
+fail, the balanced check passes, and the parked-KV control is within the frozen
+15% measurement tolerance. Every control and resident baseline must also be
+stable with 100% exact completion. Final reduction re-supplies the source core
+plan and scout and reproduces the checksum-bound confirmation plan; P1/P2
+accept the result only through `supported_bound()`. Report the raw curves and
+target sensitivity beside that scalar. The result supports a statement about
+the tested smooth 4K serving class and its fixed pre-arrival parked stock; it is
+not a maximum hardware-occupancy claim, universal latency equation, or fleet
+reliability guarantee. The confirmed value is a total-load cap:
+`b_f + b_g + sum_i(w_i,f + w_i,g) <= rho_safe`. Available added headroom is
+`rho_safe - (b_f + b_g)`, never `rho_safe` itself.
 
 ## Prefill/decode holding follow-up (optional model promotion)
 

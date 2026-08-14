@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import hashlib
 import http.client
 import json
@@ -167,9 +168,15 @@ def parse_metrics(text: str) -> dict[str, float]:
     return metrics
 
 
+def metric_record(text: str, start_ns: int, end_ns: int, wall_ns: int) -> dict:
+    return {"scrape_start_ns": start_ns, "monotonic_ns": end_ns,
+            "wall_ns": wall_ns, "prometheus_text": text}
+
+
 class MetricsSampler:
     def __init__(self, host: str, port: int, path: Path, period_s: float = .25):
         self.url, self.path, self.period_s = f"http://{host}:{port}/metrics", path, period_s
+        self.raw_path = path.with_suffix(".prom.jsonl.gz")
         self.stop, self.rows, self.error = threading.Event(), [], None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
@@ -177,31 +184,38 @@ class MetricsSampler:
 
     def _run(self):
         try:
-            while not self.stop.is_set():
-                with urllib.request.urlopen(self.url, timeout=5) as response:
-                    metrics = parse_metrics(response.read().decode())
-                missing = REQUIRED_METRICS - metrics.keys()
-                if missing:
-                    raise RuntimeError(f"missing destination metrics: {sorted(missing)}")
-                self.rows.append({"monotonic_ns": time.monotonic_ns(), "wall_ns": time.time_ns(), **metrics})
-                self.stop.wait(self.period_s)
+            with gzip.open(self.raw_path, "wt") as raw:
+                while not self.stop.is_set():
+                    start = time.monotonic_ns()
+                    with urllib.request.urlopen(self.url, timeout=5) as response:
+                        text = response.read().decode()
+                    end, wall = time.monotonic_ns(), time.time_ns()
+                    raw.write(json.dumps(metric_record(text, start, end, wall)) + "\n")
+                    metrics = parse_metrics(text)
+                    missing = REQUIRED_METRICS - metrics.keys()
+                    if missing:
+                        raise RuntimeError(f"missing destination metrics: {sorted(missing)}")
+                    self.rows.append({"monotonic_ns": end, "wall_ns": wall, **metrics})
+                    self.stop.wait(self.period_s)
         except Exception as exc:
             self.error = exc
 
     def close(self):
         self.stop.set(); self.thread.join(10)
+        if self.rows:
+            with self.path.open("w", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(self.rows[0]))
+                writer.writeheader(); writer.writerows(self.rows)
         if self.thread.is_alive() or self.error or not self.rows:
             raise RuntimeError("destination metrics sampler failed") from self.error
-        with self.path.open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(self.rows[0]))
-            writer.writeheader(); writer.writerows(self.rows)
 
 
 def completion_payload(model: str, prompt: list[int], output_tokens: int,
                        forced: int, bypass_lmcache: bool = False) -> dict:
     payload = {"model": model, "prompt": prompt, "max_tokens": output_tokens,
                "ignore_eos": True, "temperature": 0, "allowed_token_ids": [forced],
-               "stream": True, "stream_options": {"include_usage": True}}
+               "stream": True, "stream_options": {"include_usage": True},
+               "return_token_ids": True}
     if bypass_lmcache:
         payload["kv_transfer_params"] = {
             "qh_bypass_lmcache": True, "lmcache.skip_save": True,
@@ -209,37 +223,101 @@ def completion_payload(model: str, prompt: list[int], output_tokens: int,
     return payload
 
 
+def completion_row(status: int, start_ns: int, end_ns: int, usage: dict,
+                   events: list[dict], done: bool, request_id: str = "",
+                   finish_reason: str | None = None, error: str = "") -> dict:
+    prompt_tokens = int(usage.get("prompt_tokens", 0))
+    output_tokens = int(usage.get("completion_tokens", 0))
+    cached = int((usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0))
+    token_ids = [int(token) for event in events for token in event["token_ids"]]
+    exact = len(token_ids) == output_tokens and all(len(event["token_ids"]) == 1
+                                                    for event in events)
+    timestamps = [int(event["monotonic_ns"]) for event in events for _ in event["token_ids"]]
+    first = timestamps[0] if timestamps else None
+    itls = [(right - left) / 1e9 for left, right in zip(timestamps, timestamps[1:])]
+    return {"status": status, "error": error, "request_id": request_id,
+            "start_ns": start_ns, "first_ns": first, "last_token_ns":
+            timestamps[-1] if timestamps else None, "end_ns": end_ns,
+            "prompt_tokens": prompt_tokens, "output_tokens": output_tokens,
+            "recorded_output_tokens": len(token_ids), "cached_tokens": cached,
+            "done": done, "finish_reason": finish_reason,
+            "token_events": events, "token_ids": token_ids,
+            "token_itls_s": itls if exact else [],
+            "exact_token_timestamps": exact,
+            "ttft_s": (first - start_ns) / 1e9 if first is not None else None,
+            "mean_tpot_s": ((timestamps[-1] - first) / 1e9 / (output_tokens - 1)
+                            if exact and output_tokens > 1 else None)}
+
+
 def _completion(host: str, port: int, model: str, prompt: list[int], output_tokens: int,
                 forced: int, timeout_s: float, bypass_lmcache: bool = False) -> dict:
     body = json.dumps(completion_payload(
         model, prompt, output_tokens, forced, bypass_lmcache,
     ))
-    start, first, usage, chunks, done = time.monotonic_ns(), None, {}, [], False
+    start, usage, events, done = time.monotonic_ns(), {}, [], False
+    deadline = start + int(timeout_s * 1e9)
+    request_id, finish_reason, status = "", None, 0
     connection = http.client.HTTPConnection(host, port, timeout=timeout_s)
-    connection.request("POST", "/v1/completions", body, {"Content-Type": "application/json"})
-    response = connection.getresponse()
-    if response.status != 200:
-        error = response.read().decode(errors="ignore"); connection.close()
-        return {"status": response.status, "error": error, "start_ns": start,
-                "end_ns": time.monotonic_ns()}
-    while line := response.readline():
-        if not line.strip().startswith(b"data:"):
-            continue
-        now, data = time.monotonic_ns(), line.strip()[5:].strip()
-        if data == b"[DONE]":
-            done = True
-            break
-        item = json.loads(data); usage = item.get("usage") or usage
-        if item.get("choices"):
-            first = first or now; chunks.append(now)
-    connection.close(); end = time.monotonic_ns()
-    prompt_tokens, completion_tokens = int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0))
-    cached = int((usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0))
-    return {"status": response.status, "error": "", "start_ns": start, "first_ns": first or end,
-            "end_ns": end, "prompt_tokens": prompt_tokens, "output_tokens": completion_tokens,
-            "cached_tokens": cached, "done": done,
-            "ttft_s": ((first or end) - start) / 1e9,
-            "mean_tpot_s": (end - (first or end)) / 1e9 / max(1, completion_tokens - 1)}
+    def remaining() -> float:
+        seconds = (deadline - time.monotonic_ns()) / 1e9
+        if seconds <= 0:
+            raise TimeoutError("absolute request deadline")
+        return seconds
+    try:
+        connection.request("POST", "/v1/completions", body,
+                           {"Content-Type": "application/json"})
+        if connection.sock:
+            connection.sock.settimeout(remaining())
+        response = connection.getresponse()
+        status = response.status
+        if response.status != 200:
+            error = response.read().decode(errors="ignore")
+            return completion_row(response.status, start, time.monotonic_ns(), {}, [],
+                                  False, error=error)
+        while True:
+            if connection.sock:
+                connection.sock.settimeout(remaining())
+            line = response.readline()
+            if not line:
+                break
+            if not line.strip().startswith(b"data:"):
+                continue
+            now, data = time.monotonic_ns(), line.strip()[5:].strip()
+            if data == b"[DONE]":
+                done = True
+                break
+            item = json.loads(data)
+            request_id = request_id or item.get("id", "")
+            usage = item.get("usage") or usage
+            for choice in item.get("choices") or ():
+                if choice.get("token_ids"):
+                    events.append({"monotonic_ns": now,
+                                   "token_ids": list(choice["token_ids"])})
+                finish_reason = choice.get("finish_reason") or finish_reason
+        return completion_row(response.status, start, time.monotonic_ns(), usage,
+                              events, done, request_id, finish_reason)
+    except (OSError, http.client.HTTPException) as exc:
+        return completion_row(status, start, time.monotonic_ns(), usage, events, False,
+                              request_id, finish_reason,
+                              error=f"{type(exc).__name__}: {exc}")
+    finally:
+        connection.close()
+
+
+def service_completion(row: dict) -> bool:
+    planned = int(row.get("planned_output_tokens", row.get("output_tokens", -1)))
+    return bool(row.get("status") == 200 and not row.get("error") and row.get("done")
+                and row.get("finish_reason") == "length"
+                and row.get("output_tokens") == planned
+                and row.get("recorded_output_tokens") == planned)
+
+
+def exact_token_timing(row: dict) -> bool:
+    return service_completion(row) and bool(row.get("exact_token_timestamps"))
+
+
+def exact_completion(row: dict) -> bool:
+    return exact_token_timing(row)
 
 
 def agentic_messages(session: Session, index: int) -> list[dict]:
@@ -285,8 +363,10 @@ def issue(host: str, port: int, model: str, session: Session, index: int,
                       bypass_lmcache)
     row.update({"request_index": index, "session_id": session.session_id,
                 "scheduled_ns": scheduled_ns, "input_tokens": session.append_tokens,
+                "prefix_tokens": session.prefix_tokens,
                 "planned_prompt_tokens": len(prompt),
                 "planned_output_tokens": session.output_tokens,
+                "send_lateness_s": (row["start_ns"] - scheduled_ns) / 1e9,
                 "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
     return row
 
@@ -320,7 +400,7 @@ def prewarm(host: str, port: int, model: str, sessions: list[Session], timeout_s
         prompt, forced = session.prompt(-1)
         row = _completion(host, port, model, prompt[:session.prefix_tokens], 1, forced,
                           timeout_s, bypass_lmcache)
-        if row["status"] != 200 or row["error"] or not row.get("done") \
+        if not service_completion(row) \
                 or row.get("prompt_tokens") != session.prefix_tokens \
                 or row.get("output_tokens") != 1:
             raise RuntimeError(f"failed to prewarm {session.session_id}")
@@ -442,14 +522,14 @@ class DestinationLoad:
                         return
                     if time.monotonic() - scheduled > .25 or not gate.acquire(blocking=False):
                         raise RuntimeError("deterministic arrival trace slipped")
-                    pool.submit(one, index, time.time_ns())
+                    pool.submit(one, index, int(scheduled * 1e9))
                 return
             index = 0
             while not self.stop.wait(rng.expovariate(self.rate)):
                 while not self.admit.is_set():
                     if self.stop.wait(.1):
                         return
-                scheduled_ns = time.time_ns()
+                scheduled_ns = time.monotonic_ns()
                 if not gate.acquire(blocking=False):
                     self.blocked_arrivals += 1
                     while not gate.acquire(blocking=False):
@@ -629,12 +709,13 @@ def nest_bounds(bounds: dict[str, float]) -> dict[str, float]:
 
 
 def queue_drift_upper(rows: list[dict], requests=(), block_s: float = 30,
-                      samples: int = 2000) -> float:
+                      samples: int = 2000, include_running: bool = False) -> float:
     if len(rows) < 2:
         raise ValueError("queue drift needs sampled metrics")
     t0 = int(rows[0]["monotonic_ns"]); points = [
         ((int(r["monotonic_ns"]) - t0) / 1e9,
-         float(r["vllm:num_requests_waiting"]) + sum(
+         float(r["vllm:num_requests_waiting"])
+         + (float(r["vllm:num_requests_running"]) if include_running else 0) + sum(
              int(q.get("scheduled_ns", 0)) <= int(r["monotonic_ns"]) < int(q.get("start_ns", 0))
              for q in requests)) for r in rows]
     points = [p for p in points if p[0] >= points[-1][0] / 3]
@@ -652,8 +733,7 @@ def queue_drift_upper(rows: list[dict], requests=(), block_s: float = 30,
 
 def classify(requests: list[dict], metrics: list[dict], drained: bool,
              slos: dict, block_s: float = 30, samples: int = 2000) -> dict[str, bool]:
-    complete = bool(requests) and all(not r.get("error") and r.get("status") == 200 and
-                                      r.get("output_tokens") == r.get("planned_output_tokens") for r in requests)
+    complete = bool(requests) and all(exact_completion(r) for r in requests)
     ttft = np.quantile([r["ttft_s"] for r in requests], .9) if complete else math.inf
     tpot = np.quantile([r["mean_tpot_s"] for r in requests], .9) if complete else math.inf
     result = {mode: bool(complete and ttft <= policy["p90_ttft_s"] and

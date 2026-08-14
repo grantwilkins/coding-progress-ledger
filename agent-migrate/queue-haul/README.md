@@ -1503,8 +1503,54 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 - `migration_profiler.py` and `migration_profile_fit.py`: replay/KV handoff.
 - `destination_campaign.py` and `destination_runner.py`: targeted destination
   service and loaded-migration evidence.
+- `service_headroom_campaign.py`: exact-stack A100/H100 incumbent-latency curves
+  against Queue-Haul's normalized destination service load.
 - `service_surface_runner.py` and `service_profile_reduce.py`: isolated and
   mixed service profiles.
+
+Prepare the frozen cell matrix, follow its per-hardware run order, reduce one
+exact-stack normalization per hardware, then run and reduce the discovery cells:
+
+```bash
+uv run python service_headroom_campaign.py prepare --out runs/service-headroom/plan.json
+uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/plan.json --cell-id CELL --out /datadrive/service-headroom
+uv run python service_headroom_campaign.py reduce-calibration --plan runs/service-headroom/plan.json --hardware a100 --runs /datadrive/service-headroom --out /datadrive/service-headroom/a100-normalization.json
+uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/plan.json --cell-id CELL --normalization /datadrive/service-headroom/a100-normalization.json --out /datadrive/service-headroom
+uv run python service_headroom_campaign.py reduce --plan runs/service-headroom/plan.json --hardware a100 --runs /datadrive/service-headroom --ttft-target-s 1 --tpot-target-s .1 --out /datadrive/service-headroom/a100-scout.json
+```
+
+The discovery result cannot update P1/P2. Generate and execute its unseen
+confirmation plan, then reduce it:
+
+```bash
+uv run python service_headroom_campaign.py prepare-confirmation --plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --hardware a100 --out runs/service-headroom/a100-confirmation.json
+uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/a100-confirmation.json --cell-id CELL --normalization /datadrive/service-headroom/a100-normalization.json --out /datadrive/service-headroom-confirmation
+uv run python service_headroom_campaign.py reduce-confirmation --plan runs/service-headroom/a100-confirmation.json --core-plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --runs /datadrive/service-headroom-confirmation --out /datadrive/service-headroom/a100-confirmed.json
+```
+
+Only a confirmation result accepted by `supported_bound()` supplies a service
+limit; that loader rechecks the exact core plan, scout, confirmation plan, and
+all held-out decisions. It returns a total normalized-load cap, so P1/P2 use
+`b_f + b_g + sum_i(w_i,f + w_i,g) <= rho_safe`; available added headroom is
+`rho_safe - (b_f + b_g)`.
+The paper figure is P90, matching the DistServe-style comparison; P99 remains
+null unless a cell has at least 1,000 incumbent completions. TTFT and TPOT
+targets are declared evaluation inputs; raw P90 curves, joint
+offered-request attainment, physical stability, and censoring remain in the
+outputs. The harness preserves exact token IDs/events, labeled Prometheus
+scrapes, queue/KV/power series, partial failures, cache proof, and complete
+runtime identity, including the exact vLLM, LMCache, and Redis commands. It
+enforces the frozen randomized cell order and hashes an unchanged image once
+per stage. The balanced confirmation workload is derived from each hardware's
+normalization and must have a 40--60% prefill share. Live KV capacity and the
+planned block-rounded parked stock are bound into the normalization, checked
+against pre-arrival occupancy, and reproduced in confirmation. Use
+`QH_LMCACHE_MODE=mp` and submit A100 and H100 separately.
+Retry an invalid measurement immediately before starting the next frozen cell;
+a later retry violates the audited order and stops the stage. A valid service
+failure is never retried away.
+See `DATA_TO_COLLECT.md` for the 54-cell discovery and 18-cell confirmation
+matrix per hardware and the claim boundary.
 
 The verified 2026-07-23 destination bundle is retained under
 `outputs/destination-v7-20260722/`. Do not treat its service rows as an accepted
