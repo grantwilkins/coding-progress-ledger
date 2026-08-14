@@ -372,6 +372,8 @@ def _scenario(template: dict, plan: dict, episode: dict) -> dict:
         "planning_deadline_s": episode.get(
             "power_deadline_s", scenario.get(
                 "planning_deadline_s", scenario["deadline_s"])),
+        "full_horizon_s": episode.get(
+            "observation_horizon_s", scenario.get("full_horizon_s")),
         "admission_mode": "normal",
     })
     if "healthy_east_load" in episode:
@@ -945,7 +947,9 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         submit()
         while active or pending:
             collect()
-            if model_target_reached():
+            elapsed_s = (time.monotonic_ns() - started_ns) / 1e9
+            if model_target_reached() or elapsed_s >= episode.get(
+                    "observation_horizon_s", float("inf")):
                 pending.clear()
             submit()
             if active:
@@ -980,6 +984,22 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
             "destination": move["destination_instance"],
             "pool": move["destination_pool"],
         } for move in initial_moves}
+
+        def is_impaired(assignment: dict) -> bool:
+            return (
+                assignment["method"] == "kv_transfer"
+                and assignment["destination"] in bandwidth_nodes
+            ) or (
+                assignment["method"] == "replay"
+                and assignment["destination"] in prefill_nodes
+            )
+
+        causal_changes = [change for change in proposal_changes
+                          if change.get("assignment") is not None
+                          and change["session_id"] in initial_assignments
+                          and is_impaired(initial_assignments[
+                              change["session_id"]])
+                          and not is_impaired(change["assignment"])]
         output = {
             "schema": RESULT_SCHEMA, "status": "complete",
             "episode_id": episode["episode_id"],
@@ -1008,6 +1028,15 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
                 and initial_assignments.get(change["session_id"])
                 != change["assignment"]
                 for change in proposal_changes),
+            "causal_redirected_sessions": len(causal_changes),
+            "causal_method_switches": sum(
+                initial_assignments[change["session_id"]]["method"]
+                != change["assignment"]["method"]
+                for change in causal_changes),
+            "causal_destination_switches": sum(
+                initial_assignments[change["session_id"]]["destination"]
+                != change["assignment"]["destination"]
+                for change in causal_changes),
             "requests": request_rows,
             "ttft_recorded": all(row["ttft_s"] is not None
                                  for row in request_rows),

@@ -42,26 +42,36 @@ ROOT = Path(__file__).parent
 DEFAULT_BASE_PLAN = ROOT / "outputs/repair-scheduled-hardware-20260814/plan.json"
 DEFAULT_TIMING = Path(
     "/datadrive/queue-haul-repair-20260814-r3/calibration/summary.json")
-DEFAULT_OUT = ROOT / "outputs/repair-stress-hardware-20260814"
-SWEEP_SCHEMA = "queue-haul-repair-stress-preflight-v1"
-PLAN_SCHEMA = "queue-haul-repair-stress-hardware-plan-v1"
+DEFAULT_OUT = ROOT / "outputs/repair-stress-multiaxis-hardware-20260814"
+SWEEP_SCHEMA = "queue-haul-repair-stress-multiaxis-preflight-v2"
+PLAN_SCHEMA = "queue-haul-repair-stress-multiaxis-hardware-plan-v2"
 TARGET_FRACTIONS = (0.50, 0.55, 0.60, 0.65, 0.70)
-HEALTHY_EAST_LOADS = (0.50, 0.40, 0.30, 0.25)
 FAULT_AT_S = 1.0
 DETECTION_AT_S = 2.0
 POWER_DEADLINE_S = 30.0
 MIGRATION_CUTOFF_S = 25.0
+OBSERVATION_HORIZON_S = 120.0
+STABLE_LATEST_S = 15.0
 REPAIR_LATEST_S = 22.0
+CONTROL_MIN_TARGET_S = 30.0
 CONTROL_MIN_SHORTFALL_FRACTION = 0.05
-MIN_TARGET_TIME_GAP_S = 5.0
-MAX_PREDECISION_FRACTION = 0.25
+CONTROL_MIN_SHORTFALL_W = 1.5
+MIN_TARGET_TIME_GAP_S = 10.0
+MAX_PREDECISION_FRACTION = 0.15
 MIN_REDIRECTED_SESSIONS = 2
-HARDWARE_REPEATS = 5
+MIN_IMPAIRED_PENDING_SESSIONS = 2
+HARDWARE_REPEATS = 3
+HARDWARE_WORKLOADS_PER_AXIS = 2
 HOST_RETRY_S = 30.0
-MOVE_CONCURRENCIES = (4, 3, 2)
-CONTEXT_SEEDS = tuple(range(64))
+CONTEXT_SEEDS = tuple(range(256))
 CONTEXT_SUPPORT = (14_042, 30_785, 31_547)
-FAULT_STATE = "germany"
+HEALTHY_EAST_LOAD = 0.50
+MOVE_CONCURRENCY = 4
+FAULT_AXES = {
+    "bandwidth": ("germany", "none"),
+    "prefill": ("none", "germany"),
+    "joint": ("germany", "germany"),
+}
 
 
 def _resolve(path: str | Path) -> Path:
@@ -73,19 +83,22 @@ def _resolve(path: str | Path) -> Path:
 
 
 def _scenario(template: dict, plan: dict, target_fraction: float,
-              healthy_east_load: float, degraded: bool) -> dict:
+              healthy_east_load: float, bandwidth_state: str,
+              prefill_state: str) -> dict:
     scenario = json.loads(json.dumps(template))
-    state = FAULT_STATE if degraded else "none"
-    rates = hardware._planning_bandwidths(template, plan, state)
+    rates = hardware._planning_bandwidths(template, plan, bandwidth_state)
     scenario["background"]["east"][0] = healthy_east_load
     scenario.update({
         "design": "repair_stress_preflight",
-        "condition_id": f"early-{FAULT_STATE}-joint-0.1x",
-        "bandwidth": "scheduled_0.1x" if degraded else "natural",
+        "condition_id": (
+            f"bandwidth-{bandwidth_state}__prefill-{prefill_state}"),
+        "bandwidth": (
+            "scheduled_0.1x" if bandwidth_state != "none" else "natural"),
         "bandwidth_mbps": rates,
         "requested_shed_fraction": target_fraction,
         "deadline_s": POWER_DEADLINE_S,
         "planning_deadline_s": POWER_DEADLINE_S,
+        "full_horizon_s": OBSERVATION_HORIZON_S,
         "admission_mode": "normal",
     })
     return scenario
@@ -199,7 +212,10 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
                      healthy_east_load: float,
                      move_concurrency: int,
                      context_seed: int = 8,
-                     sweep_phase: str = "resource_headroom") -> dict:
+                     fault_axis: str = "joint") -> dict:
+    if fault_axis not in FAULT_AXES:
+        raise ValueError(f"unknown repair stress fault axis: {fault_axis}")
+    bandwidth_state, prefill_state = FAULT_AXES[fault_axis]
     raw_template = json.loads(json.dumps(hardware._template(parent)))
     context_rng = random.Random(context_seed)
     for session in raw_template["sessions"]:
@@ -207,11 +223,13 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
     template = hardware._promote_components(
         raw_template, plan["network_contract"])
     base_scenario = _scenario(
-        raw_template, plan, target_fraction, healthy_east_load, False)
+        raw_template, plan, target_fraction, healthy_east_load, "none", "none")
     degraded_scenario = hardware._apply_timing_fit(
-        _scenario(template, plan, target_fraction, healthy_east_load, True),
+        _scenario(
+            template, plan, target_fraction, healthy_east_load,
+            bandwidth_state, prefill_state),
         timing,
-        repair_sim._affected(FAULT_STATE))
+        repair_sim._affected(bandwidth_state))
     base = network._scenario_problem(base_scenario, manifest, profile)
     changed = network._scenario_problem(degraded_scenario, manifest, profile)
     problem, architecture, routes, target, _demand = base
@@ -234,7 +252,7 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
         initial.moves, durations, move_concurrency)
 
     capacities = repair_sim._prefill_observations(
-        changed_architecture, FAULT_STATE)
+        changed_architecture, prefill_state)
     observed_architecture = pool_planner._repair_architecture(
         changed_architecture, capacities)
     changed_table = pool_planner.candidate_table(
@@ -251,7 +269,15 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
         replacement = changed_map.get((
             move.session_id, move.method, move.destination_pool))
         rate = total / replacement.duration_s if replacement else 1.0
-        if replacement is None and move.destination_instance == FAULT_STATE:
+        if replacement is None \
+                and move.method == "kv_transfer" \
+                and move.destination_instance in repair_sim._affected(
+                    bandwidth_state):
+            rate *= hardware.CUT_SCALE
+        if replacement is None \
+                and move.method == "replay" \
+                and move.destination_instance in repair_sim._affected(
+                    prefill_state):
             rate *= hardware.CUT_SCALE
         completed = min(total, max(0.0, FAULT_AT_S - start_s))
         status = ("committed" if completed >= total else
@@ -304,7 +330,6 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
     decision = controller.observe(ObservationBatch(
         2, DETECTION_AT_S, attempts=updates, route_rates=route_rates,
         prefill_capacities=capacities))
-    request = decision if isinstance(decision, RepairRequest) else None
     repair_result = None
     for _ in range(2):
         if not isinstance(decision, RepairRequest):
@@ -329,6 +354,38 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
         if observed_attempts[move.session_id].status == "committed") \
         + repair_sim._planned_moves(repair_moves, changed_architecture)
     diff = repair_sim._diff(initial.moves, repair_final)
+    initial_by_session = {move.session_id: move for move in initial.moves}
+    final_by_session = {move.session_id: move for move in repair_final}
+
+    def impaired(method: str, destination: str) -> bool:
+        return (
+            method == "kv_transfer"
+            and destination in repair_sim._affected(bandwidth_state)
+        ) or (
+            method == "replay"
+            and destination in repair_sim._affected(prefill_state)
+        )
+
+    initial_impaired = {
+        move.session_id for move in initial.moves
+        if impaired(move.method, move.destination_instance)}
+    pending_impaired = {
+        attempt.session_id for attempt in attempts
+        if attempt.status == "pending" and attempt.session_id in initial_impaired}
+    causal_redirects = []
+    for session_id in sorted(initial_impaired & final_by_session.keys()):
+        before, after = initial_by_session[session_id], final_by_session[session_id]
+        if not impaired(after.method, after.destination_instance) \
+                and (before.method, before.destination_instance,
+                     before.destination_pool) \
+                != (after.method, after.destination_instance,
+                    after.destination_pool):
+            causal_redirects.append((before, after))
+    causal_method_switches = sum(
+        before.method != after.method for before, after in causal_redirects)
+    causal_destination_switches = sum(
+        before.destination_instance != after.destination_instance
+        for before, after in causal_redirects)
 
     stable = _attainment(power, stable_schedule, float(target), REPAIR_LATEST_S)
     repaired = _attainment(
@@ -347,29 +404,40 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
         for value in dtype.migration.values())
     shortfall_fraction = max(
         0.0, (float(target) - control["cutoff_shed_w"]) / float(target))
+    shortfall_w = max(0.0, float(target) - control["cutoff_shed_w"])
+    control_eventual_success = control["target_s"] is not None \
+        and control["target_s"] <= OBSERVATION_HORIZON_S
     qualifies = (
         outcome == "applied"
         and stable["target_s"] is not None
-        and stable["target_s"] <= REPAIR_LATEST_S
+        and stable["target_s"] <= STABLE_LATEST_S
         and repaired["target_s"] is not None
         and repaired["target_s"] <= REPAIR_LATEST_S
         and shortfall_fraction >= CONTROL_MIN_SHORTFALL_FRACTION
-        and (gap is None or gap >= MIN_TARGET_TIME_GAP_S)
+        and shortfall_w >= CONTROL_MIN_SHORTFALL_W
+        and control_eventual_success
+        and control["target_s"] >= CONTROL_MIN_TARGET_S
+        and gap is not None and gap >= MIN_TARGET_TIME_GAP_S
         and predecision_shed <= MAX_PREDECISION_FRACTION * float(target)
-        and diff["redirected_sessions"] >= MIN_REDIRECTED_SESSIONS
+        and len(pending_impaired) >= MIN_IMPAIRED_PENDING_SESSIONS
+        and len(causal_redirects) >= MIN_REDIRECTED_SESSIONS
         and no_extrapolation
     )
     return {
+        "fault_axis": fault_axis,
+        "bandwidth_state": bandwidth_state,
+        "prefill_state": prefill_state,
         "target_fraction": target_fraction,
         "healthy_east_load": healthy_east_load,
         "move_concurrency": move_concurrency,
         "context_seed": context_seed,
-        "sweep_phase": sweep_phase,
+        "sweep_phase": "common_workload_multiaxis",
         "requested_shed_w": float(target),
         "fault_at_s": FAULT_AT_S,
         "detection_at_s": DETECTION_AT_S,
         "power_deadline_s": POWER_DEADLINE_S,
         "migration_cutoff_s": MIGRATION_CUTOFF_S,
+        "observation_horizon_s": OBSERVATION_HORIZON_S,
         "outcome": outcome,
         "stable_target_s": stable["target_s"],
         "repair_target_s": repaired["target_s"],
@@ -377,10 +445,17 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
         "control_target_s": control["target_s"],
         "control_cutoff_shed_w": control["cutoff_shed_w"],
         "control_shortfall_fraction": shortfall_fraction,
+        "control_shortfall_w": shortfall_w,
+        "control_eventual_success": control_eventual_success,
         "target_time_gap_s": gap,
         "predecision_shed_w": predecision_shed,
         "predecision_fraction": predecision_shed / float(target),
         "diff": diff,
+        "initial_impaired_sessions": len(initial_impaired),
+        "pending_impaired_sessions": len(pending_impaired),
+        "causal_redirected_sessions": len(causal_redirects),
+        "causal_method_switches": causal_method_switches,
+        "causal_destination_switches": causal_destination_switches,
         "no_extrapolation": no_extrapolation,
         "qualifies": qualifies,
         "initial_moves": [asdict(move) for move in initial.moves],
@@ -406,20 +481,41 @@ def preflight(base_plan_path: Path, timing_path: Path, out: Path) -> dict:
     manifest_path = _resolve(plan["manifest"]["path"])
     manifest = json.loads(manifest_path.read_text())
     profile = ModelProfile.load(network.MODEL_PATH)
-    resource_cells = [_simulate_target(
-        parent, plan, timing, manifest, profile, target, east_load,
-        move_concurrency, 8, "resource_headroom")
-        for move_concurrency in MOVE_CONCURRENCIES
-        for east_load in HEALTHY_EAST_LOADS for target in TARGET_FRACTIONS]
-    workload_cells = [_simulate_target(
-        parent, plan, timing, manifest, profile, target, 0.50, 4,
-        context_seed, "workload_bootstrap")
-        for context_seed in CONTEXT_SEEDS for target in TARGET_FRACTIONS]
-    cells = resource_cells + workload_cells
-    qualifiers = [row for row in workload_cells if row["qualifies"]]
-    selected = min(qualifiers, key=lambda row: (
+    cells = [_simulate_target(
+        parent, plan, timing, manifest, profile, target,
+        HEALTHY_EAST_LOAD, MOVE_CONCURRENCY, context_seed, fault_axis)
+        for context_seed in CONTEXT_SEEDS for target in TARGET_FRACTIONS
+        for fault_axis in FAULT_AXES]
+    qualifiers = [row for row in cells if row["qualifies"]]
+    common_workloads = []
+    for context_seed in CONTEXT_SEEDS:
+        for target in TARGET_FRACTIONS:
+            rows = [row for row in cells if (
+                row["context_seed"] == context_seed
+                and row["target_fraction"] == target)]
+            if len(rows) == len(FAULT_AXES) and all(
+                    row["qualifies"] for row in rows):
+                common_workloads.append({
+                    "context_seed": context_seed,
+                    "target_fraction": target,
+                    "minimum_control_shortfall_fraction": min(
+                        row["control_shortfall_fraction"] for row in rows),
+                    "minimum_target_time_gap_s": min(
+                        row["target_time_gap_s"] for row in rows),
+                    "maximum_repair_target_s": max(
+                        row["repair_target_s"] for row in rows),
+                })
+    selected_group = min(common_workloads, key=lambda row: (
         -row["target_fraction"], row["context_seed"])) \
-        if qualifiers else None
+        if common_workloads else None
+    selected_cells = {fault_axis: sorted(
+        (row for row in qualifiers if row["fault_axis"] == fault_axis),
+        key=lambda row: (
+            -row["target_fraction"], -row["control_shortfall_fraction"],
+            row["repair_target_s"], row["context_seed"]),
+    )[:HARDWARE_WORKLOADS_PER_AXIS] for fault_axis in FAULT_AXES}
+    passed = all(len(rows) == HARDWARE_WORKLOADS_PER_AXIS
+                 for rows in selected_cells.values())
     summaries = [{
         key: value for key, value in row.items()
         if key not in {
@@ -430,7 +526,9 @@ def preflight(base_plan_path: Path, timing_path: Path, out: Path) -> dict:
     } for row in cells]
     bundle = {
         "schema": SWEEP_SCHEMA,
-        "semantics": "prospective full target sweep with fixed early fault",
+        "semantics": (
+            "prospective common-workload sweep across bandwidth-only, "
+            "prefill-only, and joint fixed early faults"),
         "base_plan": {"path": str(base_plan_path),
                       "sha256": profiler.file_hash(base_plan_path)},
         "timing": {"path": str(timing_path),
@@ -443,37 +541,44 @@ def preflight(base_plan_path: Path, timing_path: Path, out: Path) -> dict:
         "model_profile": {"path": str(network.MODEL_PATH),
                           "sha256": profiler.file_hash(network.MODEL_PATH)},
         "targets": list(TARGET_FRACTIONS),
-        "healthy_east_loads": list(HEALTHY_EAST_LOADS),
-        "move_concurrencies": list(MOVE_CONCURRENCIES),
+        "fault_axes": {key: list(value) for key, value in FAULT_AXES.items()},
+        "healthy_east_load": HEALTHY_EAST_LOAD,
+        "move_concurrency": MOVE_CONCURRENCY,
         "context_seeds": list(CONTEXT_SEEDS),
         "context_support": list(CONTEXT_SUPPORT),
         "qualification": {
+            "stable_latest_s": STABLE_LATEST_S,
             "repair_latest_s": REPAIR_LATEST_S,
+            "control_min_target_s": CONTROL_MIN_TARGET_S,
             "control_min_shortfall_fraction": CONTROL_MIN_SHORTFALL_FRACTION,
+            "control_min_shortfall_w": CONTROL_MIN_SHORTFALL_W,
             "minimum_target_time_gap_s": MIN_TARGET_TIME_GAP_S,
             "maximum_predecision_fraction": MAX_PREDECISION_FRACTION,
             "minimum_redirected_sessions": MIN_REDIRECTED_SESSIONS,
+            "minimum_impaired_pending_sessions": (
+                MIN_IMPAIRED_PENDING_SESSIONS),
+            "requires_control_eventual_success_by_s": OBSERVATION_HORIZON_S,
+            "hardware_workloads_per_axis": HARDWARE_WORKLOADS_PER_AXIS,
+            "selection_order": (
+                "highest target, largest control cutoff shortfall fraction, "
+                "earliest repair attainment, lowest context seed"),
             "requires_no_extrapolation": True,
         },
         "cells": summaries,
-        "selected_cell": selected,
+        "selected_cells": selected_cells,
+        "selected_group": selected_group,
+        "qualified_common_workloads": common_workloads,
         "qualified_targets": sorted({
             row["target_fraction"] for row in qualifiers}),
         "qualified_cells": [{
+            "fault_axis": row["fault_axis"],
             "target_fraction": row["target_fraction"],
             "healthy_east_load": row["healthy_east_load"],
             "move_concurrency": row["move_concurrency"],
             "context_seed": row["context_seed"],
         } for row in qualifiers],
-        "selected_target": None if selected is None else selected[
-            "target_fraction"],
-        "selected_healthy_east_load": None if selected is None else selected[
-            "healthy_east_load"],
-        "selected_move_concurrency": None if selected is None else selected[
-            "move_concurrency"],
-        "selected_context_seed": None if selected is None else selected[
-            "context_seed"],
-        "passed": selected is not None,
+        "selection_mode": "axis_specific_stress_cells",
+        "passed": passed,
     }
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_json(out / "preflight.json", bundle)
@@ -484,17 +589,18 @@ def preflight(base_plan_path: Path, timing_path: Path, out: Path) -> dict:
     return bundle
 
 
-def _selected_cell(preflight_bundle: dict) -> dict:
+def _selected_cells(preflight_bundle: dict) -> dict[str, list[dict]]:
     if not preflight_bundle.get("passed"):
         raise ValueError("stress hardware plan requires a passing preflight")
-    selected = preflight_bundle.get("selected_cell")
-    if not selected or not selected.get("qualifies") \
-            or selected["sweep_phase"] != "workload_bootstrap" \
-            or selected["target_fraction"] \
-            != preflight_bundle["selected_target"] \
-            or selected["context_seed"] \
-            != preflight_bundle["selected_context_seed"]:
-        raise ValueError("stress preflight selected cell is not unique")
+    selected = preflight_bundle.get("selected_cells", {})
+    if set(selected) != set(FAULT_AXES) or any(
+            len(rows) != HARDWARE_WORKLOADS_PER_AXIS
+            or any(not row.get("qualifies")
+                   or row["fault_axis"] != fault_axis
+                   or row["sweep_phase"] != "common_workload_multiaxis"
+                   for row in rows)
+            for fault_axis, rows in selected.items()):
+        raise ValueError("stress preflight did not select every fault axis")
     return selected
 
 
@@ -504,36 +610,47 @@ def make_hardware_plan(base_plan_path: Path, preflight_path: Path) -> dict:
     sweep = json.loads(preflight_path.read_text())
     if sweep.get("schema") != SWEEP_SCHEMA:
         raise ValueError("invalid stress preflight schema")
-    selected = _selected_cell(sweep)
-    initial_hash = profiler.object_hash(selected["initial_moves"])
-    pair_order = list(range(HARDWARE_REPEATS))
+    selected = _selected_cells(sweep)
+    pair_order = [
+        (fault_axis, workload_index, repeat)
+        for fault_axis, rows in selected.items()
+        for workload_index, _row in enumerate(rows)
+        for repeat in range(HARDWARE_REPEATS)]
     order_rng = random.Random(20260814)
     order_rng.shuffle(pair_order)
     episodes = []
-    for pair in pair_order:
+    for fault_axis, workload_index, repeat in pair_order:
+        cell = selected[fault_axis][workload_index]
+        pair_id = f"{fault_axis}-seed{cell['context_seed']}-{repeat}"
+        bandwidth_state, prefill_state = FAULT_AXES[fault_axis]
         policies = [hardware.APPLY_POLICY, hardware.CONTROL_POLICY]
         order_rng.shuffle(policies)
         for policy in policies:
             episodes.append({
                 "episode_id": profiler.object_hash((
-                    "repair-stress", pair, policy, selected["context_seed"],
-                    selected["target_fraction"]))[:16],
-                "pair": pair,
+                    "repair-stress-multiaxis", pair_id, policy,
+                    cell["context_seed"], cell["target_fraction"]))[:16],
+                "pair": pair_id,
+                "fault_axis": fault_axis,
+                "workload_index": workload_index,
+                "repeat": repeat,
                 "policy": policy,
-                "bandwidth_state": FAULT_STATE,
-                "prefill_state": FAULT_STATE,
+                "bandwidth_state": bandwidth_state,
+                "prefill_state": prefill_state,
                 "cut_scale": hardware.CUT_SCALE,
                 "fault_at_s": FAULT_AT_S,
                 "detection_at_s": DETECTION_AT_S,
                 "power_deadline_s": POWER_DEADLINE_S,
                 "migration_cutoff_s": MIGRATION_CUTOFF_S,
-                "target_shed_fraction": selected["target_fraction"],
-                "healthy_east_load": selected["healthy_east_load"],
-                "move_concurrency": selected["move_concurrency"],
-                "context_seed": selected["context_seed"],
+                "observation_horizon_s": OBSERVATION_HORIZON_S,
+                "target_shed_fraction": cell["target_fraction"],
+                "healthy_east_load": cell["healthy_east_load"],
+                "move_concurrency": cell["move_concurrency"],
+                "context_seed": cell["context_seed"],
                 "context_support": list(CONTEXT_SUPPORT),
-                "expected_initial_moves_sha256": initial_hash,
-                "frozen_initial_moves": selected["initial_moves"],
+                "expected_initial_moves_sha256": profiler.object_hash(
+                    cell["initial_moves"]),
+                "frozen_initial_moves": cell["initial_moves"],
             })
     implementation_paths = tuple(dict.fromkeys(
         hardware.IMPLEMENTATION_FILES + ("repair_stress_campaign.py",)))
@@ -541,8 +658,9 @@ def make_hardware_plan(base_plan_path: Path, preflight_path: Path) -> dict:
     plan = {
         "schema": PLAN_SCHEMA,
         "semantics": (
-            "five randomized interleaved early-fault repair/control pairs; "
-            "control dispatches continuously during detection"),
+            "three randomized repair/control pairs for each of two stress "
+            "workloads per fault axis; each pair freezes one workload and "
+            "initial plan; control dispatches continuously during detection"),
         "base_plan": {"path": str(base_plan_path.resolve()),
                       "sha256": profiler.file_hash(base_plan_path)},
         "preflight": {"path": str(preflight_path.resolve()),
@@ -555,14 +673,16 @@ def make_hardware_plan(base_plan_path: Path, preflight_path: Path) -> dict:
         "manifest": base["manifest"],
         "model_profile": base["model_profile"],
         "network_contract": base["network_contract"],
-        "selection": {
-            key: selected[key] for key in (
-                "sweep_phase", "target_fraction", "healthy_east_load",
+        "selection": {fault_axis: [{
+            key: row[key] for key in (
+                "fault_axis", "target_fraction", "healthy_east_load",
                 "move_concurrency", "context_seed", "requested_shed_w",
                 "stable_target_s", "repair_target_s", "control_target_s",
-                "control_shortfall_fraction", "predecision_fraction",
-                "diff", "no_extrapolation")
-        },
+                "control_shortfall_fraction", "control_shortfall_w",
+                "target_time_gap_s", "predecision_fraction",
+                "causal_redirected_sessions", "causal_method_switches",
+                "causal_destination_switches", "diff", "no_extrapolation")
+        } for row in rows] for fault_axis, rows in selected.items()},
         "qualification": sweep["qualification"],
         "pair_order_seed": 20260814,
         "repeats": HARDWARE_REPEATS,
@@ -583,10 +703,18 @@ def make_hardware_plan(base_plan_path: Path, preflight_path: Path) -> dict:
 def validate_hardware_plan(plan: dict) -> None:
     episodes = plan.get("episodes", ())
     pairs = {row.get("pair") for row in episodes}
+    expected_pairs = {
+        f"{fault_axis}-seed{cell['context_seed']}-{repeat}"
+        for fault_axis, cells in plan.get("selection", {}).items()
+        for cell in cells for repeat in range(HARDWARE_REPEATS)}
     if plan.get("schema") != PLAN_SCHEMA \
             or plan.get("repeats") != HARDWARE_REPEATS \
-            or len(episodes) != 2 * HARDWARE_REPEATS \
-            or pairs != set(range(HARDWARE_REPEATS)):
+            or set(plan.get("selection", {})) != set(FAULT_AXES) \
+            or any(len(cells) != HARDWARE_WORKLOADS_PER_AXIS
+                   for cells in plan.get("selection", {}).values()) \
+            or len(episodes) != (2 * HARDWARE_REPEATS * len(FAULT_AXES)
+                                 * HARDWARE_WORKLOADS_PER_AXIS) \
+            or pairs != expected_pairs:
         raise ValueError("invalid stress hardware plan shape")
     for pair in pairs:
         rows = [row for row in episodes if row["pair"] == pair]
@@ -600,6 +728,8 @@ def validate_hardware_plan(plan: dict) -> None:
            or row["fault_at_s"] != FAULT_AT_S
            or row["detection_at_s"] != DETECTION_AT_S
            or row["migration_cutoff_s"] != MIGRATION_CUTOFF_S
+           or (row["bandwidth_state"], row["prefill_state"])
+           != FAULT_AXES[row["fault_axis"]]
            for row in episodes):
         raise ValueError("stress hardware disturbance changed")
 
@@ -632,10 +762,15 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
         ) / row["requested_shed_w"])
         episode_rows.append({
             "episode_id": row["episode_id"], "pair": row["pair"],
+            "fault_axis": row["fault_axis"], "repeat": row["repeat"],
             "policy": row["policy"], "event_s": row["event_s"],
             "decision_s": row["decision_s"], "proposal_s": row["proposal_s"],
             "apply_s": row["apply_s"], "repair_outcome": row["repair_outcome"],
             "redirected_sessions": row["redirected_sessions"],
+            "causal_redirected_sessions": row["causal_redirected_sessions"],
+            "causal_method_switches": row["causal_method_switches"],
+            "causal_destination_switches": row[
+                "causal_destination_switches"],
             "requested_shed_w": row["requested_shed_w"],
             "cutoff_shed_w": row["cutoff_shed_w"],
             "cutoff_shortfall_fraction": shortfall,
@@ -648,6 +783,7 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
         })
         ttft_rows.extend({
             "episode_id": row["episode_id"], "pair": row["pair"],
+            "fault_axis": row["fault_axis"], "repeat": row["repeat"],
             "policy": row["policy"], "session_id": request["session_id"],
             "method": request["method"],
             "destination": request["destination_instance"],
@@ -663,7 +799,7 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
         profiler.write_csv(run_root / "ttft.csv", ttft_rows)
     common_rows = []
     pair_checks = []
-    for pair in range(HARDWARE_REPEATS):
+    for pair in sorted({row["pair"] for row in plan["episodes"]}):
         pair_results = [row for row in results if row["pair"] == pair]
         by_policy = {row["policy"]: row for row in pair_results}
         repair = by_policy.get(hardware.APPLY_POLICY)
@@ -675,15 +811,23 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
                             for row in control["requests"]}
             for session_id in sorted(repair_ttft.keys() & control_ttft.keys()):
                 common_rows.append({
-                    "pair": pair, "session_id": session_id,
+                    "pair": pair, "fault_axis": repair["fault_axis"],
+                    "repeat": repair["repeat"], "session_id": session_id,
                     "repair_ttft_s": repair_ttft[session_id],
                     "control_ttft_s": control_ttft[session_id],
                     "control_minus_repair_ttft_s": (
                         control_ttft[session_id] - repair_ttft[session_id]),
                 })
         requested = repair["requested_shed_w"] if repair else None
+        control_shortfall_w = (None if not control else max(
+            0.0, control["requested_shed_w"] - control["cutoff_shed_w"]))
+        time_gap_s = (None if not repair or not control
+                      or repair["time_to_target_s"] is None
+                      or control["time_to_target_s"] is None else
+                      control["time_to_target_s"] - repair["time_to_target_s"])
         pair_checks.append({
             "pair": pair,
+            "fault_axis": (repair or control or {}).get("fault_axis"),
             "complete": repair is not None and control is not None,
             "initial_plan_matched": bool(repair and control and
                 repair["initial_moves_sha256"] == control["initial_moves_sha256"]
@@ -696,10 +840,20 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
             "control_shortfall_fraction": (None if not control else max(
                 0.0, (control["requested_shed_w"] - control["cutoff_shed_w"])
                 / control["requested_shed_w"])),
+            "control_shortfall_w": control_shortfall_w,
+            "repair_time_to_target_s": (None if not repair else
+                repair["time_to_target_s"]),
+            "control_time_to_target_s": (None if not control else
+                control["time_to_target_s"]),
+            "target_time_gap_s": time_gap_s,
+            "control_eventual_success": bool(control
+                and control["eventual_target_met"]
+                and control["time_to_target_s"] is not None
+                and control["time_to_target_s"] <= OBSERVATION_HORIZON_S),
             "predecision_fraction": (None if not repair else
                 repair["predecision_shed_w"] / requested),
-            "redirected_sessions": (None if not repair else
-                repair["redirected_sessions"]),
+            "causal_redirected_sessions": (None if not repair else
+                repair["causal_redirected_sessions"]),
             "actual_timestamps_recorded": bool(repair and
                 repair["solver_timings"] and repair["proposal_s"] is not None
                 and repair["apply_s"] is not None),
@@ -718,19 +872,30 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
             and check["control_shortfall_fraction"] is not None
             and check["control_shortfall_fraction"]
             >= CONTROL_MIN_SHORTFALL_FRACTION
+            and check["control_shortfall_w"] is not None
+            and check["control_shortfall_w"] >= CONTROL_MIN_SHORTFALL_W
+            and check["repair_time_to_target_s"] is not None
+            and check["repair_time_to_target_s"] <= REPAIR_LATEST_S
+            and check["control_time_to_target_s"] is not None
+            and check["control_time_to_target_s"] >= CONTROL_MIN_TARGET_S
+            and check["target_time_gap_s"] is not None
+            and check["target_time_gap_s"] >= MIN_TARGET_TIME_GAP_S
+            and check["control_eventual_success"]
             and check["predecision_fraction"] is not None
             and check["predecision_fraction"] <= MAX_PREDECISION_FRACTION
-            and check["redirected_sessions"] is not None
-            and check["redirected_sessions"] >= MIN_REDIRECTED_SESSIONS
+            and check["causal_redirected_sessions"] is not None
+            and check["causal_redirected_sessions"]
+            >= MIN_REDIRECTED_SESSIONS
             and check["actual_timestamps_recorded"] and check["http_and_ttft"])
     ttfts = [row["ttft_s"] for row in ttft_rows]
     common_deltas = [row["control_minus_repair_ttft_s"] for row in common_rows]
     summary = {
-        "schema": "queue-haul-repair-stress-hardware-validation-v1",
+        "schema": "queue-haul-repair-stress-multiaxis-hardware-validation-v2",
         "semantics": (
             "primary endpoint is completion-credited modeled shed by the "
             "25-second migration cutoff; raw A100 traces are diagnostic"),
-        "expected_episodes": 2 * HARDWARE_REPEATS,
+        "expected_episodes": (2 * HARDWARE_REPEATS * len(FAULT_AXES)
+                              * HARDWARE_WORKLOADS_PER_AXIS),
         "completed_episodes": len(results),
         "pair_checks": pair_checks,
         "repair_target_by_cutoff": sum(
@@ -738,6 +903,19 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
         "control_target_by_cutoff": sum(
             not bool(row.get("control_missed_cutoff"))
             for row in pair_checks if row["complete"]),
+        "axes": {fault_axis: {
+            "pairs": sum(row["fault_axis"] == fault_axis
+                         for row in pair_checks),
+            "passed_pairs": sum(row["fault_axis"] == fault_axis
+                                and row.get("passed", False)
+                                for row in pair_checks),
+            "repair_target_by_cutoff": sum(
+                row["fault_axis"] == fault_axis
+                and row["repair_target_by_cutoff"] for row in pair_checks),
+            "control_target_by_cutoff": sum(
+                row["fault_axis"] == fault_axis
+                and not row["control_missed_cutoff"] for row in pair_checks),
+        } for fault_axis in FAULT_AXES},
         "ttft_rows": len(ttft_rows),
         "ttft_p50_s": statistics.median(ttfts) if ttfts else None,
         "ttft_p90_s": _p90(ttfts),
@@ -745,7 +923,8 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
         "common_session_ttft_rows": len(common_rows),
         "common_control_minus_repair_ttft_p50_s": (
             statistics.median(common_deltas) if common_deltas else None),
-        "passed": len(results) == 2 * HARDWARE_REPEATS
+        "passed": len(results) == (2 * HARDWARE_REPEATS * len(FAULT_AXES)
+                                    * HARDWARE_WORKLOADS_PER_AXIS)
         and all(row["passed"] for row in pair_checks),
     }
     profiler.write_json(run_root / "validation.json", summary)
@@ -880,8 +1059,13 @@ def main(argv=None):
             "schema": result["schema"],
             "cells": len(result["cells"]),
             "qualified_cells": result["qualified_cells"],
-            "selected_target": result["selected_target"],
-            "selected_context_seed": result["selected_context_seed"],
+            "selected": {fault_axis: [{
+                "context_seed": row["context_seed"],
+                "target_fraction": row["target_fraction"],
+                "repair_target_s": row["repair_target_s"],
+                "control_target_s": row["control_target_s"],
+            } for row in rows] for fault_axis, rows
+                in result["selected_cells"].items()},
             "passed": result["passed"],
         }, indent=2))
     elif args.command == "prepare-hardware":
