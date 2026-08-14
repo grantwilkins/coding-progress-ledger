@@ -69,6 +69,7 @@ POWER_FAMILY_COLORS = {
 POWER_FAMILY_MARKERS = dict(zip(
     POWER_FAMILY_NAMES, ("o", "^", "s", "D", "P")))
 ACTION_HATCHES = {
+    "replay": "..", "kv_transfer": "xx",
     "east_replay": "..", "east_kv_transfer": "xx",
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "",
