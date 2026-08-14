@@ -867,6 +867,19 @@ remain retrospective, and the no-overlap envelope intentionally overpredicts
 many width-8 makespans rather than extrapolating the KV-heavy mixed evidence to
 Replay-majority plans.
 
+`workload_power_frontier.py` carries 100 deterministic paired draws through the
+same seven-policy requested-shed frontier as the designed-case plot. The sweep
+reaches 100%, while the paper view retains the common 0--80% x-axis.
+Each workload-by-constraint state receives equal weight, and attained watts are
+normalized by that draw's removable power before pooling. The main CSV retains
+the normalized median/IQR; the companion `_power.csv` reports 5th, median, and
+95th percentile watts. These are modeled sensitivity ranges, not confidence
+intervals or new hardware observations.
+
+```bash
+uv run python queue-haul/workload_power_frontier.py
+```
+
 The time-to-binding view uses the same two-thirds stress point. It estimates
 completion-ordered slack for VRAM, network-transfer, and prefill constraints;
 each class reports its tightest component without exposing destination names.

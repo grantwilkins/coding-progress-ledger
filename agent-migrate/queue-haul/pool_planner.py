@@ -2397,7 +2397,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
                     if solver == "lp_column_generation_persistent" else
                     _lp_column_generation(table, target)
                     if solver == "lp_column_generation" else
-                    _lp_highs(table, target) if solver == "lp_highs" else
+                    _lp_highs(table, target)
+                    if solver in {"lp_highs", "lp_power_blind"} else
                     _lp(table, target) if solver.startswith("lp") else
                     _greedy(table, target))
     repairs, repair_s = 0, 0.0

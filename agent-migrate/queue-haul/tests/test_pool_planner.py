@@ -124,13 +124,13 @@ def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_pa
         replace(problem().sessions[1], expected_f=45),
     ))
     profile, seen = model(tmp_path, tp=1), []
-    original = pool_planner._lp
+    original = pool_planner._lp_highs
 
     def capture(table, target):
         seen.append([candidate.gain_w for candidate in table.candidates])
         return original(table, target)
 
-    monkeypatch.setattr(pool_planner, "_lp", capture)
+    monkeypatch.setattr(pool_planner, "_lp_highs", capture)
     plan(scenario, profile, PATHS, "lp_power_blind", destination=architecture())
 
     expected = ExpectedPower(scenario, profile).drain_gain(("a", "b")) / 2

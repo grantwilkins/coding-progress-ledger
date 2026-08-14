@@ -190,6 +190,29 @@ def ordered_timing_fit(profile, parent, rows, rng):
     return fits, projected
 
 
+def sample_draw(profile, templates, timing_rows, parent, rng, replicate, seed,
+                sessions):
+    pack = normalize_pack(profile, sample_pack(
+        templates, sessions, seed + replicate,
+    ))
+    fits, projected_regions = ordered_timing_fit(
+        profile, parent, timing_rows, rng,
+    )
+    timing_hash = hashlib.sha256(
+        json.dumps(fits, sort_keys=True).encode()
+    ).hexdigest()
+    phase = profile.case().phase_power
+    if phase is None or not phase.bootstrap:
+        raise ValueError("workload adaptation requires phase-power bootstrap draws")
+    power_index = int(rng.integers(len(phase.bootstrap)))
+    sampled_profile = state_profile(profile, {
+        "power_bootstrap_index": power_index, "service_multiplier": 1,
+        "replay_multiplier": 1, "kv_multiplier": 1,
+    })
+    return (sampled_profile, pack, fits, power_index, timing_hash,
+            projected_regions)
+
+
 def build_problem(profile, sessions, constraints, target_fraction, fits):
     values, case = state_values(constraints), profile.case()
     bandwidths = {region: fits[region]["effective_pipeline_mbps"][
@@ -329,23 +352,11 @@ def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3
     central_timing_fits()
     rng, rows = np.random.default_rng(seed), []
     for replicate in range(samples):
-        pack = normalize_pack(profile, sample_pack(
-            templates, sessions, seed + replicate,
-        ))
-        fits, projected_regions = ordered_timing_fit(
-            profile, parent, timing_rows, rng,
-        )
-        timing_hash = hashlib.sha256(
-            json.dumps(fits, sort_keys=True).encode()
-        ).hexdigest()
-        phase = profile.case().phase_power
-        if phase is None or not phase.bootstrap:
-            raise ValueError("workload adaptation requires phase-power bootstrap draws")
-        power_index = int(rng.integers(len(phase.bootstrap)))
-        sampled_profile = state_profile(profile, {
-            "power_bootstrap_index": power_index, "service_multiplier": 1,
-            "replay_multiplier": 1, "kv_multiplier": 1,
-        })
+        sampled_profile, pack, fits, power_index, timing_hash, projected_regions = \
+            sample_draw(
+                profile, templates, timing_rows, parent, rng, replicate, seed,
+                sessions,
+            )
         paired_target = None
         for case_id, label, constraints in factorial_cases():
             row = run_case(
