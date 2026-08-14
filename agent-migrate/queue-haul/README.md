@@ -96,22 +96,49 @@ ongoing event capacity and conservative replica-second debt and reports required
 recovery.
 
 `repair_controller.py` is an optional in-memory feasibility latch; fixed planning
-remains the default. Progress updates only refresh ETAs. Two consecutive deadline
-miss forecasts request one residual repair, while hard failures request one
-immediately. `repair_destination` keeps committed work fixed, prices active work
-by its measured remainder, prefers unchanged assignments, and proposes a diff
-only when it restores the target. Otherwise it reports the attainable shed and
-leaves execution unchanged.
+remains the default. Progress, route rate, replay rate, and observed per-pool
+prefill capacity update the versioned ledger. Two consecutive deadline-miss
+forecasts request one residual repair, while hard failures request one
+immediately. `repair_destination` lands committed work on its concrete replica,
+keeps explicitly locked running attempts fixed, prices their measured remainder
+with the regional timing components, and minimizes changes to repairable work.
+It proposes a diff only when that residual schedule restores the target;
+otherwise it reports the attainable shed and leaves execution unchanged.
 
 `repair_shadow_campaign.py` is the narrow RAMR validation: three seeded repeats
 each of a sustained 10-to-1 Gbps cut, replay load from rho 0 to 0.8, and both.
 It requests two A100-SXM4-80GB GPUs, records but does not apply proposed diffs,
 and validates the trigger policy rather than live redirection or performance.
 
-`repair_plan_shift_campaign.py` independently replans and simulates the original,
-Germany-only 2.2-Gbps bandwidth, and East-only rho-0.976 prefill snapshots at a
-50% shed target. It writes complete plans, diffs, action counts, and a normalized
-action-mix plot. These are snapshot replans, not applied residual diffs.
+The artifact in `outputs/repair-plan-shift-sim-20260812/` is superseded: that
+campaign independently solved degraded snapshots and cannot be interpreted as
+within-plan repair evidence. `repair_plan_shift_campaign.py` now starts from the
+passing regional A100 timing plan, runs one four-worker schedule to 25% aggregate
+planned work, sends two observations through the real repair ledger, and applies
+only target-restoring pending-work diffs. Its 16 cells cross bandwidth and
+prefill-capacity locations in `{none, east, germany, both}` at 0.1x. Bandwidth-cut
+cells remain explicitly labeled sensitivity evidence until the live 0.1x timing
+gate passes. The replacement output is in
+`outputs/repair-scheduled-sim-20260814/`.
+
+`repair_hardware_campaign.py` prepares the three-region Azure run. A source-side
+proxy changes live API/KV route rates without restarting connections, while a
+destination gateway imposes an aggregate uncached-prefill completion cap on
+background and replay requests. The job first runs 36 regional timing checks
+(two destinations, two migration methods, three contexts, three repeats) at
+0.1x bandwidth. It launches the 48 repair episodes only if median and p90
+relative error are at most 15%, p90 absolute error is at most one second, and KV
+reuse is verified. Every proposed diff is shadow-checked before application;
+active work cannot be redirected, changes cannot move work toward an impaired
+destination, and applied repairs must meet the measured hardware target.
+
+The pinned launch bundle is `outputs/repair-scheduled-hardware-20260814/`:
+
+```bash
+export QH_AZURE_SSH_KEY=/path/to/azure-key
+export QH_REPAIR_RUN_ROOT=/datadrive/queue-haul-repair-20260814
+outputs/repair-scheduled-hardware-20260814/run.sh
+```
 
 ## Evidence flow
 

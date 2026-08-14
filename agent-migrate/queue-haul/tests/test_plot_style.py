@@ -44,6 +44,15 @@ def test_selected_actions_have_unique_hatches():
     assert len({plot_style.ACTION_HATCHES[action] for action in actions}) == 4
 
 
+def test_repair_comparison_has_canonical_policy_and_event_styles():
+    assert plot_style.SCHEDULE_COMPARISON_NAMES == {
+        "replan": "QH replan", "no_replan": "No replan"}
+    assert plot_style.SCHEDULE_COMPARISON_COLORS["replan"] \
+        == plot_style.POLICY_COLORS["queue_haul"]
+    assert set(plot_style.EVENT_NAMES) == {
+        "resource_shift", "repair_decision", "shed_target"}
+
+
 def test_power_validation_methods_have_unique_markers():
     assert len(set(plot_style.POWER_VALIDATION_MARKERS.values())) == 5
 

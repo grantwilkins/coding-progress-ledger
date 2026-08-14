@@ -12,6 +12,7 @@ import re
 import select
 import shlex
 import signal
+import socket
 import statistics
 import subprocess
 import sys
@@ -33,6 +34,7 @@ from destination import (DestinationArchitecture, DestinationPool,
 from planner import _expected_scenario, plan as solve, source_power
 from pool_planner import candidate_table, phase_one_capacity_duals
 from power_model import ExpectedPower
+from prefill_gateway import CONTROL_PATH as PREFILL_CONTROL_PATH, PrefillGateway
 from profiles import ModelProfile, WorkloadProfile
 from simulate import (NetworkLink, PlannedMove, PowerNode, ServingInstance,
                       predict)
@@ -1225,7 +1227,8 @@ def bandwidth_limits(contract: dict, label: str
 
 
 def proxy_command(routes: list[testbed.Route], aggregate_mbps: float | None,
-                  route_mbps: dict[str, float], log: Path) -> list[str]:
+                  route_mbps: dict[str, float], log: Path,
+                  control_socket: Path | None = None) -> list[str]:
     command = [
         sys.executable, "queue-haul/migration_testbed.py", "proxy",
         "--routes-json", json.dumps([asdict(route) for route in routes]),
@@ -1233,6 +1236,8 @@ def proxy_command(routes: list[testbed.Route], aggregate_mbps: float | None,
     ]
     if aggregate_mbps:
         command += ["--aggregate-mbps", str(aggregate_mbps)]
+    if control_socket is not None:
+        command += ["--control-socket", str(control_socket)]
     return command
 
 
@@ -1253,7 +1258,7 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
     testbed.preflight(cfg, 1)
     run_root.mkdir(parents=True, exist_ok=False)
     (run_root / "node-serve.pid").write_text(str(os.getpid()))
-    cache = sink = None
+    cache = sink = gateway = None
     sampler = migration_profiler.PowerSampler(
         run_root / "power.csv", power_interval_s)
     stopped = threading.Event()
@@ -1270,12 +1275,19 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
         testbed.wait_tcp_process(
             "127.0.0.1", cfg.sink_lmc_port, 300, cache, cache_log)
         sink_log = run_root / "sink.log"
+        internal_cfg = replace(cfg, sink_port=cfg.sink_port + 2)
         extra = (["--num-gpu-blocks-override", str(kv_blocks)]
                  if kv_blocks is not None else [])
         sink = testbed.start_logged(testbed.vllm_cmd(
-            cfg, "sink", extra, gpu_index=0, bind_host=bind_host), sink_log)
+            internal_cfg, "sink", extra, gpu_index=0,
+            bind_host=bind_host), sink_log)
         testbed.wait_health_process(
-            bind_host, cfg.sink_port, testbed.health_timeout(), sink, sink_log)
+            bind_host, internal_cfg.sink_port, testbed.health_timeout(), sink, sink_log)
+        gateway = PrefillGateway(
+            bind_host, cfg.sink_port, bind_host, internal_cfg.sink_port,
+            run_root / "prefill_gateway.jsonl")
+        gateway.start()
+        testbed.wait_tcp(bind_host, cfg.sink_port, 30)
         sampler.start()
         print(json.dumps({
             "status": "ready", "node_id": node_id, "host": bind_host,
@@ -1287,6 +1299,8 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
     finally:
         if sampler.thread.is_alive():
             sampler.close()
+        if gateway:
+            gateway.close()
         for process in (sink, cache):
             if process:
                 testbed.stop_proc(process)
@@ -1306,6 +1320,51 @@ class ClusterStack:
     key: Path
     spot: ScheduledEventMonitor
     node_reports: dict[str, dict]
+    bandwidth_control_socket: Path
+
+
+def set_live_bandwidth(stack: ClusterStack,
+                       route_mbps: dict[str, float]) -> dict:
+    known = {node.id for node in stack.cluster.destinations}
+    if set(route_mbps) - known or any(value <= 0 for value in route_mbps.values()):
+        raise ValueError("invalid live bandwidth update")
+    payload = {
+        "aggregate_bps": None,
+        "route_bps": {node: value * 1_000_000 / 8
+                      for node, value in route_mbps.items()},
+    }
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        client.settimeout(10)
+        client.connect(str(stack.bandwidth_control_socket))
+        client.sendall((json.dumps(payload, separators=(",", ":")) + "\n").encode())
+        response = b""
+        while not response.endswith(b"\n"):
+            block = client.recv(4096)
+            if not block:
+                break
+            response += block
+    result = json.loads(response)
+    if not result.get("ok"):
+        raise RuntimeError(f"live bandwidth update failed: {result.get('error')}")
+    return result
+
+
+def set_live_prefill(stack: ClusterStack,
+                     tokens_per_s: dict[str, float | None]) -> dict[str, dict]:
+    nodes = {node.id: node for node in stack.cluster.destinations}
+    if set(tokens_per_s) != set(nodes) or any(
+        value is not None and value <= 0 for value in tokens_per_s.values()
+    ):
+        raise ValueError("live prefill update must cover every destination")
+    values = {}
+    for node_id, value in tokens_per_s.items():
+        result = testbed.http_json(
+            nodes[node_id].host, stack.cfg.sink_port, "POST",
+            PREFILL_CONTROL_PATH, {"tokens_per_s": value})
+        if not result.get("ok"):
+            raise RuntimeError(f"live prefill update failed for {node_id}")
+        values[node_id] = result
+    return values
 
 
 def _remote_ready(process: subprocess.Popen, timeout_s: float) -> dict:
@@ -1373,8 +1432,10 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
         lmc = testbed.start_logged(testbed.redis_cmd(cfg), lmc_log)
         testbed.wait_tcp_process("127.0.0.1", cfg.lmc_port, 60, lmc, lmc_log)
         proxy_log = run_root / "proxy.log"
+        bandwidth_control = run_root / "bandwidth-control.sock"
         proxy = testbed.start_logged(proxy_command(
-            routes, aggregate, rates, run_root / "proxy_bytes.csv"), proxy_log)
+            routes, aggregate, rates, run_root / "proxy_bytes.csv",
+            bandwidth_control), proxy_log)
         for route in routes:
             testbed.wait_tcp_process(
                 route.listen_host, route.listen_port, 30, proxy, proxy_log)
@@ -1425,7 +1486,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
         )
         return ClusterStack(
             cluster, cfg, local, sampler, remote, remote_roots, ports,
-            run_root, key, spot, reports,
+            run_root, key, spot, reports, bandwidth_control,
         )
     except BaseException:
         for node_id, process in remote.items():
@@ -1523,13 +1584,17 @@ def _clear_cluster(stack: ClusterStack) -> None:
 
 
 def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
-          timeout_s: float, bypass_lmcache: bool = False) -> dict:
+          timeout_s: float, bypass_lmcache: bool = False,
+          prefill_class: str | None = None) -> dict:
     messages = messages + [{"role": "user", "content":
                             f"Reply only with session state code {code}."}]
     for attempt in range(2):
+        request_options = ({"request_headers": {
+            "X-QH-Prefill-Class": prefill_class}}
+            if prefill_class else {})
         result, text = profiler.stream_chat(
             cfg, port, messages, 128, profiler.messages_hash(messages), timeout_s,
-            bypass_lmcache)
+            bypass_lmcache, **request_options)
         if result.status_code == 200 and code in text:
             return {**asdict(result), "state_code_verified": True,
                     "probe_attempts": attempt + 1}
@@ -1660,6 +1725,7 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
                 value.get("compute_completion_factor", 1),
                 value.get("residual_s", 0),
                 value.get("kv_ingest_bytes_per_s"),
+                value.get("allow_extrapolation", False),
             ) for method, value in raw.items()
         }
         types[node] = dtype if migration is None else replace(
@@ -1891,12 +1957,14 @@ def diagnostic_outcomes(scenario: dict, results: list[dict], demand: dict,
 
 class SinkLoad:
     def __init__(self, cfg: testbed.Config, port: int, prefill_tps: float,
-                 rho: float, path: Path, decode_tps: float | None = None):
+                 rho: float, path: Path, decode_tps: float | None = None,
+                 prefill_class: str | None = None):
         if prefill_tps <= 0 or decode_tps is not None and decode_tps <= 0 \
                 or not 0 < rho < 1:
             raise ValueError("invalid sink load")
-        self.cfg, self.port, self.rho, self.path, self.decode_tps = (
-            cfg, port, rho, path, decode_tps)
+        self.cfg, self.port, self.rho, self.path, self.decode_tps, \
+            self.prefill_class = (
+                cfg, port, rho, path, decode_tps, prefill_class)
         self.interval_s = (
             SINK_LOAD_PREFILL_TOKENS / prefill_tps
             + SINK_LOAD_DECODE_TOKENS / decode_tps
@@ -1913,10 +1981,15 @@ class SinkLoad:
             {"role": "user", "content":
              "Agentic trace turn 0: analyze tool output. " + "x " * 512},
         ]
-        result, _ = profiler.stream_chat(
+        args = (
             self.cfg, self.port, messages, 64,
             profiler.messages_hash(messages), 600, True, f"load-{index}",
-            self.decode_tps is not None)
+            self.decode_tps is not None,
+        )
+        result, _ = profiler.stream_chat(
+            *args, **({"request_headers": {
+                "X-QH-Prefill-Class": self.prefill_class,
+            }} if self.prefill_class else {}))
         row = asdict(result)
         if result.status_code != 200 or self.decode_tps is not None and (
             row["prompt_tokens"] != SINK_LOAD_PREFILL_TOKENS

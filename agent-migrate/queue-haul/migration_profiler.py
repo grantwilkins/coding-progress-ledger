@@ -652,13 +652,16 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
                 context_hash: str, timeout_s: float,
                 bypass_lmcache: bool = False,
                 cache_salt: str | None = None,
-                ignore_eos: bool = False) -> tuple[RequestResult, str]:
+                ignore_eos: bool = False,
+                request_headers: dict[str, str] | None = None,
+                ) -> tuple[RequestResult, str]:
     body = json.dumps(chat_payload(
         cfg, messages, max_tokens, bypass_lmcache, cache_salt, ignore_eos,
     ))
     start = time.monotonic_ns()
     conn = http.client.HTTPConnection(cfg.host, port, timeout=timeout_s)
-    conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
+    conn.request("POST", "/v1/chat/completions", body, {
+        "Content-Type": "application/json", **(request_headers or {})})
     response = conn.getresponse()
     chunks, text, request_id, first, prompt_tokens, output_tokens, cached_tokens = [], [], "", None, 0, 0, 0
     if response.status != 200:

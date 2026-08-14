@@ -561,6 +561,15 @@ class TokenBucket:
         if delay:
             await asyncio.sleep(delay)
 
+    def set_rate(self, rate_bps: float, now: float) -> None:
+        if rate_bps <= 0:
+            raise ValueError("rate_bps must be positive")
+        self.reserve(0, now)
+        self.rate = rate_bps
+        self.capacity = rate_bps * 0.01
+        self.tokens = min(self.tokens, self.capacity)
+        self.updated = now
+
 
 class BandwidthLimiter:
     def __init__(self, aggregate_bps: float | None,
@@ -587,6 +596,37 @@ class BandwidthLimiter:
             delay = self.reserve(route, direction, nbytes, time.monotonic())
         if delay:
             await asyncio.sleep(delay)
+
+    async def update(self, aggregate_bps: float | None,
+                     route_bps: dict[str, float]) -> dict:
+        if aggregate_bps is not None and aggregate_bps <= 0 \
+                or any(rate <= 0 for rate in route_bps.values()):
+            raise ValueError("bandwidth update rates must be positive")
+        async with self.lock:
+            now = time.monotonic()
+            if aggregate_bps is None:
+                self.aggregate = None
+            elif self.aggregate is None:
+                self.aggregate = TokenBucket(aggregate_bps)
+            else:
+                self.aggregate.set_rate(aggregate_bps, now)
+            updated = {}
+            for route, rate in route_bps.items():
+                bucket = self.routes.get(route)
+                if bucket is None:
+                    bucket = TokenBucket(rate)
+                else:
+                    bucket.set_rate(rate, now)
+                updated[route] = bucket
+            self.routes = updated
+            return self.snapshot()
+
+    def snapshot(self) -> dict:
+        return {
+            "aggregate_bps": None if self.aggregate is None else self.aggregate.rate,
+            "route_bps": {route: bucket.rate
+                          for route, bucket in sorted(self.routes.items())},
+        }
 
 
 class ByteLog:
@@ -980,7 +1020,8 @@ async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamW
 
 async def start_proxy(routes: list[Route], rate_bps: float | None,
                       log: Path | None = None,
-                      route_bps: dict[str, float] | None = None
+                      route_bps: dict[str, float] | None = None,
+                      control_socket: Path | None = None,
                       ) -> tuple[list[asyncio.AbstractServer], ByteLog | None]:
     limiter = BandwidthLimiter(rate_bps, route_bps)
     byte_log = ByteLog(log) if log else None
@@ -996,19 +1037,60 @@ async def start_proxy(routes: list[Route], rate_bps: float | None,
                 route.listen_port,
             )
         )
+    if control_socket is not None:
+        control_socket.parent.mkdir(parents=True, exist_ok=True)
+        if control_socket.exists():
+            control_socket.unlink()
+        control_log = control_socket.with_suffix(".jsonl").open(
+            "w", buffering=1)
+
+        async def control(reader, writer):
+            try:
+                raw = json.loads((await reader.readline()).decode())
+                aggregate = raw.get("aggregate_bps")
+                rates = {str(key): float(value)
+                         for key, value in raw.get("route_bps", {}).items()}
+                valid = {route.name for route in routes} | {
+                    route.name.rsplit("/", 1)[-1] for route in routes}
+                if set(rates) - valid:
+                    raise ValueError("bandwidth update contains an unknown route")
+                snapshot = await limiter.update(
+                    None if aggregate is None else float(aggregate), rates)
+                record = {"monotonic_ns": time.monotonic_ns(),
+                          "wall_ns": time.time_ns(), **snapshot}
+                control_log.write(json.dumps(record, separators=(",", ":")) + "\n")
+                response = {"ok": True, **snapshot}
+            except Exception as exc:
+                response = {"ok": False,
+                            "error": f"{type(exc).__name__}: {exc}"}
+            writer.write((json.dumps(response, separators=(",", ":")) + "\n").encode())
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
+
+        server = await asyncio.start_unix_server(control, path=control_socket)
+        server.qh_control_log = control_log
+        server.qh_control_socket = control_socket
+        servers.append(server)
     return servers, byte_log
 
 
 async def run_proxy(routes: list[Route], rate_bps: float | None,
                     log: Path | None = None,
-                    route_bps: dict[str, float] | None = None) -> None:
-    servers, byte_log = await start_proxy(routes, rate_bps, log, route_bps)
+                    route_bps: dict[str, float] | None = None,
+                    control_socket: Path | None = None) -> None:
+    servers, byte_log = await start_proxy(
+        routes, rate_bps, log, route_bps, control_socket)
     try:
         await asyncio.gather(*(server.serve_forever() for server in servers))
     finally:
         for server in servers:
             server.close()
             await server.wait_closed()
+            if hasattr(server, "qh_control_log"):
+                server.qh_control_log.close()
+                if server.qh_control_socket.exists():
+                    server.qh_control_socket.unlink()
         if byte_log:
             await byte_log.close()
 
@@ -1644,6 +1726,7 @@ def parse_args(argv: list[str] | None = None):
     sp.add_argument("--aggregate-mbps", type=float)
     sp.add_argument("--route-mbps-json")
     sp.add_argument("--log", type=Path)
+    sp.add_argument("--control-socket", type=Path)
     return p.parse_args(argv)
 
 
@@ -1683,7 +1766,8 @@ def main(argv: list[str] | None = None) -> None:
         return
     if args.cmd == "proxy":
         routes, aggregate, rates = proxy_config(args)
-        asyncio.run(run_proxy(routes, aggregate, args.log, rates))
+        asyncio.run(run_proxy(
+            routes, aggregate, args.log, rates, args.control_socket))
         return
 
     cfg = config_from_args(args)

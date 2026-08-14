@@ -108,8 +108,15 @@ def _baseline(scenario: ExecutionScenario, architecture: DestinationArchitecture
 
 def _destination_duration(session, method, case, path, links, horizon, components):
     tokens = _resident_tokens(session, horizon) or session.context_tokens
+    bandwidth = min(links[link] for link in path)
+    extrapolated = components.extrapolates(tokens, bandwidth)
+    if extrapolated and not components.allow_extrapolation:
+        raise ValueError(
+            "migration candidate outside calibrated " + "/".join(extrapolated)
+            + " range"
+        )
     def route(size):
-        return size / min(links[link] for link in path)
+        return size / bandwidth
     if method == "replay":
         contexts, rates = case.replay.by_concurrency[1]
         rate = case.replay.rate(tokens, 1) if contexts[0] <= tokens <= contexts[-1] \
@@ -2040,6 +2047,9 @@ def _repair_selection(table, architecture, target, attempts, soft):
     same = np.array([
         sid in current and current[sid].assignment.method == c.method
         and current[sid].assignment.pool == architecture.pools[c.pool].pool_id
+        and len(architecture.pools[c.pool].replicas) == 1
+        and current[sid].assignment.destination
+        == architecture.pools[c.pool].replicas[0].replica_id
         for sid, c in zip(session_ids, table.candidates)
     ])
     change = np.array([
@@ -2094,18 +2104,120 @@ def _repair_selection(table, architecture, target, attempts, soft):
     return selected, reaches
 
 
+def _repair_architecture(architecture, observations):
+    """Apply independently observed prefill capacities to destination pools."""
+    values = {row.pool: row for row in observations}
+    if len(values) != len(observations):
+        raise ValueError("duplicate repair prefill pool observation")
+    unknown = set(values) - {pool.pool_id for pool in architecture.pools}
+    if unknown:
+        raise ValueError(f"unknown repair prefill pools: {sorted(unknown)}")
+    if not values:
+        return architecture
+    types, pools = list(architecture.types), []
+    by_type = architecture.type_by_id
+    for pool in architecture.pools:
+        observation = values.get(pool.pool_id)
+        if observation is None:
+            pools.append(pool)
+            continue
+        current = by_type[pool.type_id]
+        scale = observation.tokens_per_s / current.prefill.at(
+            observation.context_tokens)
+        if scale <= 0:
+            raise ValueError("repair prefill scale must be positive")
+        migration = None if current.migration is None else {
+            method: replace(
+                component,
+                compute_completion_factor=(
+                    component.compute_completion_factor / scale
+                    if method == "replay" else
+                    component.compute_completion_factor
+                ),
+                provenance=(
+                    f"{component.provenance}; observed {pool.pool_id} prefill "
+                    f"{observation.tokens_per_s:g} tok/s at "
+                    f"{observation.context_tokens:g} tokens"
+                ),
+            ) for method, component in current.migration.items()
+        }
+        repaired = replace(
+            current,
+            type_id=f"{current.type_id}/repair/{pool.pool_id}",
+            prefill=replace(
+                current.prefill,
+                rates=tuple(rate * scale for rate in current.prefill.rates),
+            ),
+            migration=migration,
+            provenance=(
+                f"{current.provenance}; observed {pool.pool_id} prefill "
+                f"scale={scale:g}"
+            ),
+        )
+        replicas = tuple(replace(
+            replica,
+            baseline_work=(replica.baseline_work[0] / scale,
+                           replica.baseline_work[1]),
+        ) for replica in pool.replicas)
+        types.append(repaired)
+        pools.append(replace(pool, type_id=repaired.type_id, replicas=replicas))
+    return replace(architecture, types=tuple(types), pools=tuple(pools))
+
+
+def _land_committed_sessions(architecture, scenario, attempts, committed, horizon):
+    """Charge committed repair work to its concrete destination replica."""
+    if not committed:
+        return architecture
+    sessions = {session.session_id: session for session in scenario.sessions}
+    assignments = {session_id: attempts[session_id].assignment
+                   for session_id in committed if session_id in attempts}
+    known = {replica.replica_id for pool in architecture.pools
+             for replica in pool.replicas}
+    if any(value.destination not in known for value in assignments.values()):
+        raise ValueError("committed repair assignment has an unknown replica")
+    pools = []
+    for pool in architecture.pools:
+        q = architecture.type_by_id[pool.type_id]
+        replicas = []
+        for replica in pool.replicas:
+            work = np.asarray(replica.baseline_work, float)
+            kv = replica.baseline_kv_tokens
+            for session_id, assignment in assignments.items():
+                if assignment.destination != replica.replica_id:
+                    continue
+                session = sessions[session_id]
+                tokens = _resident_tokens(session, horizon)
+                work += q.work(
+                    session.expected_f, session.expected_g, tokens,
+                    q.migration is not None,
+                )
+                kv += tokens
+            replicas.append(replace(
+                replica, baseline_work=tuple(work), baseline_kv_tokens=kv))
+        pools.append(replace(pool, replicas=tuple(replicas)))
+    return replace(architecture, pools=tuple(pools))
+
+
 def repair_destination(scenario, profile, architecture, request: RepairRequest,
                        admission_mode="normal") -> RepairResult:
     """Solve one residual, target-restoring pool-aware repair."""
     state = request.snapshot
     if state.credit_deadline_s <= state.now_s:
         return RepairResult(request.request_id, state.budget_version, (), 0, False)
+    architecture = _repair_architecture(
+        architecture, state.prefill_capacities)
     attempts = {attempt.session_id: attempt for attempt in state.attempts}
+    locked = {session_id: attempt for session_id, attempt in attempts.items()
+              if attempt.status in {"pending", "running"}
+              and not attempt.repairable}
+    residency = architecture.residency_horizon_s
+    residency = scenario.end_s - state.now_s if residency is None else residency
+    architecture = _land_committed_sessions(
+        architecture, scenario, attempts, state.committed, residency)
     sessions = tuple(replace(
         session,
-        source_instance=(attempts[session.session_id].assignment.destination
-                         if session.session_id in state.committed else session.source_instance),
-        movable=session.session_id in state.source_sessions,
+        movable=(session.session_id in state.source_sessions
+                 and session.session_id not in locked),
     ) for session in scenario.sessions)
     rates = dict(state.route_rates)
     links = tuple(replace(link, bytes_per_s=rates.get(link.link_id, link.bytes_per_s))
@@ -2122,6 +2234,8 @@ def repair_destination(scenario, profile, architecture, request: RepairRequest,
     )
     active = {sid: attempt for sid, attempt in attempts.items()
               if attempt.status in {"pending", "running"}}
+    selectable = {sid: attempt for sid, attempt in active.items()
+                  if attempt.repairable}
     replay_rates = dict(state.replay_rates)
     full, candidates = {}, []
     case = profile.case("central")
@@ -2132,6 +2246,9 @@ def repair_destination(scenario, profile, architecture, request: RepairRequest,
             attempt = active.get(session.session_id)
             same = attempt and attempt.assignment.method == candidate.method \
                 and attempt.assignment.pool == pool.pool_id
+            same = bool(same and len(pool.replicas) == 1
+                        and attempt.assignment.destination
+                        == pool.replicas[0].replica_id)
             full[session.session_id, candidate.method, candidate.pool] = candidate
             if same:
                 fraction = (attempt.total_work - attempt.completed_work) / attempt.total_work
@@ -2146,28 +2263,52 @@ def repair_destination(scenario, profile, architecture, request: RepairRequest,
                                           for value in candidate.transition_work),
                 )
             elif candidate.method == "replay" and pool.pool_id in replay_rates:
+                components = architecture.type_by_id[pool.type_id].migration
+                factor = components["replay"].compute_completion_factor \
+                    if components else 1.0
+                route_s = candidate.route_bytes / min(
+                    link.bytes_per_s for link in residual.links
+                    if link.link_id in candidate.path)
                 candidate = replace(
                     candidate,
-                    duration_s=session.context_tokens / replay_rates[pool.pool_id]
-                    + case.replay_completion_s + case.switch_s,
+                    duration_s=route_s
+                    + session.context_tokens / replay_rates[pool.pool_id]
+                    + factor * case.replay_completion_s + case.switch_s,
                 )
             if candidate.duration_s + state.eta_guard_s <= oracle.migration_horizon_s:
                 candidates.append(candidate)
     table = _materialize_candidates(oracle, candidates)
     original_power = ExpectedPower(replace(scenario, final_state="awake",
                                            assumed_shutdown_s=None), profile)
-    committed = original_power.drain_gain(state.committed)
-    selected, lp_reaches = _repair_selection(
-        table, architecture, max(0.0, state.target_watts - committed),
-        tuple(active.values()), request.trigger.startswith("soft:"),
-    )
-    preferred = {sid: attempt.assignment for sid, attempt in active.items()}
+    fixed_moves = tuple(RepairMove(
+        session_id, attempt.assignment,
+        ((attempt.total_work - attempt.completed_work) / attempt.rate
+         + attempt.commit_overhead_s) if attempt.rate else
+        max(0.0, attempt.planned_commit_s - state.now_s),
+        attempt.total_work, attempt.commit_overhead_s,
+    ) for session_id, attempt in sorted(locked.items()))
+    fixed_on_time = {
+        move.session_id for move in fixed_moves
+        if max(
+            attempts[move.session_id].planned_commit_s,
+            state.now_s + move.duration_s,
+        ) + state.eta_guard_s <= state.credit_deadline_s
+    }
+    fixed_gain = original_power.drain_gain(state.committed | fixed_on_time)
+    remaining_target = max(0.0, state.target_watts - fixed_gain)
+    selected, lp_reaches = (set(), True) if remaining_target <= 1e-8 else \
+        _repair_selection(
+            table, architecture, remaining_target,
+            tuple(selectable.values()), request.trigger.startswith("soft:"),
+        )
+    preferred = {sid: attempt.assignment for sid, attempt in selectable.items()}
     assignment, rejected = _pack(
         table, selected, architecture, residual, admission_mode, True, preferred,
     )
     selected -= set(rejected)
     moved = {table.sessions[table.candidates[i].session].session_id for i in selected}
-    attainable = original_power.drain_gain(state.committed | moved)
+    attainable = original_power.drain_gain(
+        state.committed | fixed_on_time | moved)
     reaches = lp_reaches and not rejected and attainable >= state.target_watts - 1e-8
     moves = []
     for i in sorted(selected, key=lambda i: table.sessions[table.candidates[i].session].session_id):
@@ -2176,14 +2317,30 @@ def repair_destination(scenario, profile, architecture, request: RepairRequest,
         pool = architecture.pools[candidate.pool]
         attempt = active.get(session.session_id)
         same = attempt and attempt.assignment.method == candidate.method \
-            and attempt.assignment.pool == pool.pool_id
+            and attempt.assignment.pool == pool.pool_id \
+            and len(pool.replicas) == 1 \
+            and attempt.assignment.destination == assignment[i]
         total = attempt.total_work if same else (
             session.context_tokens if candidate.method == "replay" else
             full[session.session_id, candidate.method, candidate.pool].route_bytes
         )
-        overhead = (case.replay_completion_s + case.switch_s
-                    if candidate.method == "replay" else
-                    case.kv_transfer.initial_completion_s)
+        components = architecture.type_by_id[pool.type_id].migration
+        if candidate.method == "replay":
+            factor = components["replay"].compute_completion_factor \
+                if components else 1.0
+            compute = session.context_tokens / (
+                replay_rates[pool.pool_id]
+                if pool.pool_id in replay_rates else
+                case.replay.rate(session.context_tokens, 1) / factor
+            )
+            overhead = max(0.0, candidate.duration_s - compute)
+        else:
+            overhead = (components["kv_transfer"].residual_s
+                        if components else case.kv_transfer.initial_completion_s)
+            overhead += _kv_catch_up_s(
+                session, _resident_tokens(session, oracle.migration_horizon_s),
+                case, oracle.migration_horizon_s,
+            )
         moves.append(RepairMove(
             session.session_id,
             Assignment(candidate.method, assignment[i], pool.pool_id),
@@ -2191,7 +2348,9 @@ def repair_destination(scenario, profile, architecture, request: RepairRequest,
             attempt.commit_overhead_s if same else overhead,
         ))
     return RepairResult(
-        request.request_id, state.budget_version, tuple(moves), attainable, reaches,
+        request.request_id, state.budget_version,
+        tuple(sorted((*fixed_moves, *moves), key=lambda move: move.session_id)),
+        attainable, reaches,
     )
 
 

@@ -31,6 +31,7 @@ class Attempt:
     commit_overhead_s: float = 0.0
     rate: float | None = None
     soft_changed: bool = False
+    repairable: bool = True
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,19 @@ class Failure:
 
 
 @dataclass(frozen=True)
+class PrefillCapacity:
+    """Observed pool prefill capacity at one measured context."""
+
+    pool: str
+    context_tokens: float
+    tokens_per_s: float
+
+    def __post_init__(self):
+        if not self.pool or self.context_tokens <= 0 or self.tokens_per_s <= 0:
+            raise ValueError("invalid observed prefill capacity")
+
+
+@dataclass(frozen=True)
 class ObservationBatch:
     sample_id: int
     now_s: float
@@ -57,6 +71,7 @@ class ObservationBatch:
     route_rates: tuple[tuple[str, float], ...] = ()
     replay_rates: tuple[tuple[str, float], ...] = ()
     failures: tuple[Failure, ...] = ()
+    prefill_capacities: tuple[PrefillCapacity, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -72,6 +87,7 @@ class LedgerSnapshot:
     attempts: tuple[Attempt, ...]
     route_rates: tuple[tuple[str, float], ...]
     replay_rates: tuple[tuple[str, float], ...]
+    prefill_capacities: tuple[PrefillCapacity, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -141,6 +157,7 @@ class FeasibilityRepairController:
         self.source_sessions -= self.committed
         self.route_rates: dict[str, float] = {}
         self.replay_rates: dict[str, float] = {}
+        self.prefill_capacities: dict[str, PrefillCapacity] = {}
         self.plan_version = self.budget_version = self.last_sample_id = 0
         self.plan_feasible, self.consecutive_misses = True, 0
         self.feasible_samples = self.feasibility_epoch = 0
@@ -158,6 +175,7 @@ class FeasibilityRepairController:
             frozenset(self.source_sessions),
             tuple(sorted(self.attempts.values(), key=lambda a: a.session_id)),
             tuple(sorted(self.route_rates.items())), tuple(sorted(self.replay_rates.items())),
+            tuple(sorted(self.prefill_capacities.values(), key=lambda row: row.pool)),
         )
 
     def _eta(self, attempt: Attempt, now_s: float) -> float:
@@ -169,8 +187,10 @@ class FeasibilityRepairController:
             return attempt.planned_commit_s + self.eta_guard_s
         if attempt.rate <= 0:
             return inf
-        return now_s + (attempt.total_work - attempt.completed_work) / attempt.rate \
-            + attempt.commit_overhead_s + self.eta_guard_s
+        progress_eta = now_s \
+            + (attempt.total_work - attempt.completed_work) / attempt.rate \
+            + attempt.commit_overhead_s
+        return max(attempt.planned_commit_s, progress_eta) + self.eta_guard_s
 
     def _forecast(self, now_s: float, moves: tuple[RepairMove, ...] | None = None) -> float:
         on_time = set(self.committed)
@@ -231,6 +251,9 @@ class FeasibilityRepairController:
                     raise ValueError("observed rates must be positive")
                 changed |= target.get(key) != value
                 target[key] = value
+        for value in batch.prefill_capacities:
+            changed |= self.prefill_capacities.get(value.pool) != value
+            self.prefill_capacities[value.pool] = value
         self.budget_version += int(changed)
         failures = []
         for failure in batch.failures:

@@ -69,6 +69,43 @@ ACTION_HATCHES = {
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "",
 }
+REPAIR_NAMES = {
+    "unchanged": "No repair needed",
+    "applied": "Repair applied",
+    "revised_maximum": "Target unattainable",
+}
+REPAIR_COLORS = {
+    "unchanged": "#999999",
+    "applied": POLICY_COLORS["queue_haul"],
+    "revised_maximum": "#D55E00",
+}
+SCHEDULE_COMPARISON_NAMES = {
+    "replan": "QH replan",
+    "no_replan": "No replan",
+}
+SCHEDULE_COMPARISON_COLORS = {
+    "replan": POLICY_COLORS["queue_haul"],
+    "no_replan": "#555555",
+}
+SCHEDULE_COMPARISON_LINESTYLES = {
+    "replan": "-",
+    "no_replan": "--",
+}
+EVENT_NAMES = {
+    "resource_shift": "10× resource drop",
+    "repair_decision": "Replan decision",
+    "shed_target": "Shed target",
+}
+EVENT_COLORS = {
+    "resource_shift": "#D55E00",
+    "repair_decision": POLICY_COLORS["queue_haul"],
+    "shed_target": "#000000",
+}
+EVENT_LINESTYLES = {
+    "resource_shift": (0, (3, 1)),
+    "repair_decision": (0, (1, 1)),
+    "shed_target": "--",
+}
 POWER_VALIDATION_METHODS = ("lp", "greedy", "milp", "power-unaware", "random")
 POWER_VALIDATION_NAMES = dict(zip(POWER_VALIDATION_METHODS, (
     "Queue-Haul LP", "Queue-Haul Greedy", "MILP", "Power unaware", "Random",

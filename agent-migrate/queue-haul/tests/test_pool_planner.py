@@ -61,7 +61,8 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
                          DestinationType, FluidMigrationService, LoadedCoefficients,
                          MigrationComponents)
 from planner import plan, source_power
-from repair_controller import (Assignment, Attempt, LedgerSnapshot, RepairRequest)
+from repair_controller import (Assignment, Attempt, LedgerSnapshot, PrefillCapacity,
+                               RepairRequest)
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _baseline_policy,
                           _candidate_oracle,
@@ -737,6 +738,61 @@ def test_repair_continues_remaining_work_on_the_current_replica(tmp_path):
     assert result.reaches_target
     assert result.moves[0].assignment == current.assignment
     assert result.moves[0].duration_s == pytest.approx(1)
+
+
+def test_repair_keeps_locked_running_work_as_a_fixed_move(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    current = Attempt(
+        "a", 0, Assignment("replay", "t0", "p0"), "running",
+        100, 99, 5, 8, rate=1, repairable=False,
+    )
+
+    result = pool_planner.repair_destination(
+        scenario, profile, architecture(),
+        repair_request(target=10, deadline=9, attempts=(current,),
+                       routes=(("wan", 1),)),
+    )
+
+    assert result.reaches_target
+    assert len(result.moves) == 1
+    assert result.moves[0].assignment == current.assignment
+    assert result.moves[0].duration_s == pytest.approx(1)
+
+
+def test_repair_prefill_observation_scales_only_the_named_pool():
+    original = architecture()
+    east = original.pools[0]
+    reference = original.type_by_id[east.type_id].prefill.at(512)
+
+    repaired = pool_planner._repair_architecture(
+        original, (PrefillCapacity(east.pool_id, 512, reference / 10),))
+
+    east_type = repaired.type_by_id[repaired.pools[0].type_id]
+    west_type = repaired.type_by_id[repaired.pools[1].type_id]
+    assert east_type.prefill.at(512) == pytest.approx(reference / 10)
+    assert repaired.pools[0].replicas[0].baseline_work[0] \
+        == pytest.approx(original.pools[0].replicas[0].baseline_work[0] * 10)
+    assert west_type.prefill.at(512) == pytest.approx(reference)
+
+
+def test_repair_does_not_retain_progress_across_replicas(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    arch = architecture(routes=(("wan",),), baselines=((0, 0),), methods=("replay",))
+    arch = replace(arch, pools=(replace(
+        arch.pools[0], replicas=(DestinationReplica("t0"), DestinationReplica("t1")),
+    ),))
+    current = Attempt(
+        "a", 0, Assignment("replay", "t0", "p0"), "running",
+        100, 99, 5, 105, rate=1,
+    )
+
+    result = pool_planner.repair_destination(
+        scenario, profile, arch,
+        repair_request(target=10, deadline=200, attempts=(current,), routes=(("wan", 100),)),
+    )
+
+    assert result.moves[0].assignment.destination in {"t0", "t1"}
+    assert result.moves[0].duration_s > 1
 
 
 def test_repair_reports_the_revised_maximum_for_an_impossible_target(tmp_path):
@@ -1872,6 +1928,25 @@ def test_physical_destination_timing_keeps_route_time_unscaled(tmp_path):
 
     assert replay == pytest.approx(1 + .5 * .1)
     assert kv == pytest.approx(1 + 2)
+
+
+def test_physical_destination_timing_rejects_unmeasured_extrapolation(tmp_path):
+    profile = model(tmp_path, switch=0, tp=1)
+    session = replace(problem().sessions[0], context_tokens=10, log_bytes=100,
+                      expected_growth_tokens_per_s=0)
+    components = MigrationComponents((5, 20), (50, 200), "hand")
+
+    with pytest.raises(ValueError, match="outside calibrated bandwidth range"):
+        _destination_duration(
+            session, "replay", profile.case(), ("wan",), {"wan": 10}, 0,
+            components,
+        )
+
+    extrapolated = _destination_duration(
+        session, "replay", profile.case(), ("wan",), {"wan": 10}, 0,
+        replace(components, allow_extrapolation=True),
+    )
+    assert extrapolated > 0
 
 
 def test_kv_destination_timing_uses_ingest_floor(tmp_path):
