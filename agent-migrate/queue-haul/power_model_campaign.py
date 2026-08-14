@@ -104,6 +104,17 @@ def cells(seed: int = 1) -> list[Cell]:
     return [idle[0], *stages[0], idle[1], *stages[1], idle[2]]
 
 
+def followup_cells(seed: int = 1) -> list[Cell]:
+    work = [Cell(stage, "decode", 4096, 512, concurrency, replicate)
+            for stage in ("targeted_calibration", "targeted_validation")
+            for concurrency in (3, 6, 12) for replicate in range(3)]
+    random.Random(seed).shuffle(work)
+    plan = [Cell("idle", "idle", 0, 0, 0, 0)]
+    for replicate, cell in enumerate(work, 1):
+        plan += [cell, Cell("idle", "idle", 0, 0, 0, replicate)]
+    return plan
+
+
 def family(prompt: int, output: int) -> str:
     if output == 1:
         return "prefill"
@@ -141,7 +152,8 @@ def metrics(url: str) -> tuple[dict[str, float], int]:
 def gpu_sample() -> tuple:
     before = time.monotonic_ns()
     row = subprocess.check_output([
-        "nvidia-smi", "--query-gpu=timestamp,power.draw,utilization.gpu,memory.used",
+        "nvidia-smi", "--query-gpu=timestamp,power.draw,utilization.gpu,memory.used,"
+        "clocks.sm,clocks.mem,temperature.gpu,pstate,clocks_event_reasons.active",
         "--format=csv,noheader,nounits",
     ], text=True).strip().split(",")
     after = time.monotonic_ns()
@@ -153,7 +165,9 @@ def sample_power(path: Path, stop: threading.Event, errors: list[BaseException])
         with path.open("w", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(("monotonic_ns", "wall_ns", "gpu_timestamp", "power_w",
-                             "utilization_pct", "memory_mib"))
+                             "utilization_pct", "memory_mib", "sm_clock_mhz",
+                             "memory_clock_mhz", "temperature_c", "pstate",
+                             "active_clock_event_reasons"))
             while not stop.is_set():
                 writer.writerow(gpu_sample())
                 handle.flush()
@@ -255,8 +269,13 @@ def run_cell(cell: Cell, base_url: str, out: Path, window_s: float,
     if any(row["start_ns"] < start_ns or row["end_ns"] > end_ns for row in requests):
         raise RuntimeError("measured request crossed a power boundary")
     with power_path.open() as handle:
-        power = [float(row["power_w"]) for row in csv.DictReader(handle)
-                 if start_ns <= int(row["monotonic_ns"]) < end_ns]
+        samples = [row for row in csv.DictReader(handle)
+                   if start_ns <= int(row["monotonic_ns"]) < end_ns]
+    telemetry = ("sm_clock_mhz", "memory_clock_mhz", "temperature_c", "pstate",
+                 "active_clock_event_reasons")
+    if any(not sample.get(field) for sample in samples for field in telemetry):
+        raise RuntimeError("missing synchronized GPU telemetry")
+    power = [float(row["power_w"]) for row in samples]
     if len(power) < 5 * duration:
         raise RuntimeError(f"only {len(power)} synchronized power samples in {duration:.1f}s")
     row = {**asdict(cell), "sequence": sequence, "start_ns": start_ns,
@@ -273,12 +292,9 @@ def run_cell(cell: Cell, base_url: str, out: Path, window_s: float,
     return row
 
 
-def saturating_fit(rows: list[dict]) -> dict:
-    train = [r for r in rows if r["stage"] == "discovery"]
-    idle = [r["power_mean_w"] for r in rows if r["stage"] == "idle"]
-    if len(train) != 90 or len(idle) != 3:
-        raise ValueError("fit requires the complete discovery grid and three idle anchors")
-    p0 = statistics.median(idle)
+def rational_fit(train: list[dict], idle: list[dict]) -> dict:
+    idle_power = [r["power_mean_w"] for r in idle]
+    p0 = statistics.median(idle_power)
     fcap = max(r["realized_prefill_tps"] for r in train if r["family"] == "prefill")
     gcap = max(r["realized_decode_tps"] for r in train if r["family"] == "decode")
     base_alpha = 1 / fcap
@@ -305,6 +321,14 @@ def saturating_fit(rows: list[dict]) -> dict:
             "beta_s_per_decode_token": float(scale * base_beta),
             "F_prefill_tps": float(fcap), "G_decode_tps": float(gcap),
             "discovery_rmse_w": math.sqrt(mse)}
+
+
+def saturating_fit(rows: list[dict]) -> dict:
+    train = [r for r in rows if r["stage"] == "discovery"]
+    idle = [r for r in rows if r["stage"] == "idle"]
+    if len(train) != 90 or len(idle) != 3:
+        raise ValueError("fit requires the complete discovery grid and three idle anchors")
+    return rational_fit(train, idle)
 
 
 def exponential_fit(rows: list[dict]) -> dict:
@@ -407,6 +431,49 @@ def interaction_diagnostic(rows: list[dict], fit: dict) -> dict:
                          "residual_interaction_correlation": float(np.corrcoef(
                              interaction, residual)[0, 1])}
     return result
+
+
+def prediction_report(rows: list[dict], fit: dict) -> dict:
+    errors = [r["power_mean_w"] - predict(r, fit) for r in rows]
+    mean = statistics.fmean(r["power_mean_w"] for r in rows)
+    ss_res = sum(error ** 2 for error in errors)
+    ss_tot = sum((r["power_mean_w"] - mean) ** 2 for r in rows)
+    by_concurrency = {str(concurrency): statistics.fmean(
+        abs(r["power_mean_w"] - predict(r, fit)) for r in rows
+        if r["concurrency"] == concurrency)
+        for concurrency in sorted({r["concurrency"] for r in rows})}
+    return {"cells": len(rows), "mae_w": float(statistics.fmean(map(abs, errors))),
+            "p90_abs_error_w": float(np.quantile(np.abs(errors), .9)),
+            "rmse_w": float(math.sqrt(ss_res / len(rows))),
+            "r2": float(1 - ss_res / ss_tot),
+            "concurrency_mae_w": by_concurrency,
+            "max_abs_error_w": float(max(map(abs, errors)))}
+
+
+def followup_result(base: list[dict], rows: list[dict]) -> dict:
+    calibration = [row for row in rows if row["stage"] == "targeted_calibration"]
+    held = [row for row in rows if row["stage"] == "targeted_validation"]
+    expected = {3: 3, 6: 3, 12: 3}
+    for selected in (calibration, held):
+        if {c: sum(row["concurrency"] == c for row in selected) for c in expected} != expected:
+            raise RuntimeError("targeted follow-up requires three independent reps per concurrency")
+    fit = rational_fit([row for row in base if row["stage"] == "discovery"] + calibration,
+                       [row for row in base + rows if row["stage"] == "idle"])
+    original = validate(base, fit)
+    targeted = prediction_report(held, fit)
+    gates = {"original_holdout_passed": bool(original["passed"]),
+             "targeted_mae_le_5w": bool(targeted["mae_w"] <= 5),
+             "targeted_p90_le_10w": bool(targeted["p90_abs_error_w"] <= 10),
+             "targeted_r2_ge_0p95": bool(targeted["r2"] >= .95),
+             "each_targeted_concurrency_mae_le_8w": bool(
+                 max(targeted["concurrency_mae_w"].values()) <= 8),
+             "zero_cached_prompt_tokens": bool(sum(
+                 row["cached_prompt_tokens"] for row in rows) == 0)}
+    passed = all(gates.values())
+    return {"schema": "queue-haul-rational-power-followup-v1",
+            "status": "calibrated" if passed else "holdout_failed", "fit": fit,
+            "validation": {"original_v5": original, "targeted": targeted,
+                           "gates": gates, "passed": passed}}
 
 
 def complete_rows(out: Path, seed: int) -> list[dict]:
@@ -538,7 +605,13 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
 
 def run(args) -> None:
     gpu = validate_gpu()
-    plan = cells(args.seed)
+    plan = followup_cells(args.seed) if args.followup_base else cells(args.seed)
+    if args.followup_base:
+        base_metadata = json.loads((args.followup_base / "metadata.json").read_text())
+        if gpu != base_metadata["gpu"]:
+            raise RuntimeError("targeted follow-up requires the same v5 GPU")
+        if args.resume:
+            raise ValueError("targeted follow-up resume is not implemented")
     if args.resume:
         rows = validate_resume(args, gpu, plan)
         log_path = args.out / f"server-resume-{len(list(args.out.glob('server-resume-*.log'))) + 1:03d}.log"
@@ -551,6 +624,8 @@ def run(args) -> None:
                     "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                     "minimum_window_s": args.window_s, "warmup": "one complete batch",
                     "cooldown_s": args.cooldown_s, "seed": args.seed}
+        if args.followup_base:
+            metadata["followup_base"] = str(args.followup_base)
         (args.out / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
         rows, log_path = [], args.out / "server.log"
     server_log = log_path.open("x")
@@ -573,8 +648,11 @@ def run(args) -> None:
             rows.append(row)
             append_jsonl(args.out / "cells.jsonl", [row])
             print(json.dumps(row), flush=True)
-        result = fit_result(rows)
-        (args.out / "fit.json").write_text(json.dumps(result, indent=2) + "\n")
+        result = (followup_result(complete_rows(args.followup_base, args.seed), rows)
+                  if args.followup_base else fit_result(rows))
+        with (args.out / "fit.json").open("x") as handle:
+            handle.write(json.dumps(result, indent=2) + "\n")
+            handle.flush(); os.fsync(handle.fileno())
         if not result["validation"]["passed"]:
             raise RuntimeError("power calibration holdout gates failed")
     finally:
@@ -601,6 +679,7 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--expected-sha")
     parser.add_argument("--discard-orphan-sequences", nargs="*", type=int, default=[])
     parser.add_argument("--refit-only", action="store_true")
+    parser.add_argument("--followup-base", type=Path)
     args = parser.parse_args(argv)
     if min(args.window_s, args.cooldown_s) <= 0:
         raise ValueError("cell durations must be positive")

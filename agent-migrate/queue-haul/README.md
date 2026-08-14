@@ -893,6 +893,21 @@ uv run python queue-haul/power_model_campaign.py --refit-only \
   --model MODEL_SNAPSHOT --out OUTPUT_DIRECTORY
 ```
 
+If a holdout exposes a stable regime change, collect the separate targeted
+follow-up without changing the original evidence. It randomizes three fitting
+and three independent validation repeats at each of concurrency 3, 6, and 12
+for the 4096-prefill/512-decode case, brackets every request batch with an idle
+cell, and records synchronized SM/memory clocks, temperature, pstate, and clock
+event reasons. The fit remains strictly rational in realized prefill/decode
+rates and must pass both the original and targeted holdout gates:
+
+```bash
+systemd-run --user --unit=queue-haul-h100-power-followup-CAMPAIGN \
+  --working-directory="$PWD" .venv/bin/python queue-haul/power_model_campaign.py \
+  --followup-base COMPLETE_V5_OUTPUT --model MODEL_SNAPSHOT \
+  --vllm .venv/bin/vllm --out NEW_OUTPUT_DIRECTORY
+```
+
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
 single-link campaigns plus the successful `handoff-009` and bidirectional-cache
 `handoff-010` three-node evidence, including raw 100-ms power, request,

@@ -21,6 +21,19 @@ def test_grid_separates_discovery_and_unseen_confirmation_cells():
     assert (604, 64) in {(row.prompt_tokens, row.output_tokens) for row in held}
 
 
+def test_followup_randomizes_three_calibration_and_validation_reps_with_idle_brackets():
+    rows = campaign.followup_cells(4)
+
+    assert len(rows) == 37
+    assert all(row.stage == "idle" for row in rows[::2])
+    work = rows[1::2]
+    for stage in ("targeted_calibration", "targeted_validation"):
+        selected = [row for row in work if row.stage == stage]
+        assert {c: sum(row.concurrency == c for row in selected) for c in (3, 6, 12)} \
+               == {3: 3, 6: 3, 12: 3}
+    assert work != sorted(work, key=lambda row: (row.stage, row.concurrency, row.replicate))
+
+
 def test_parse_metrics_sums_engines_and_requires_realized_counters():
     text = """
 # HELP vllm:prompt_tokens_total Number of prefill tokens processed.
@@ -81,6 +94,11 @@ def test_exponential_provisional_is_json_serializable():
 
     json.dumps(provisional)
     assert provisional["status"] == "provisional_reconstructed_after_serialization_failure"
+
+
+def test_followup_requires_complete_independent_replicates():
+    with pytest.raises(RuntimeError, match="three independent reps"):
+        campaign.followup_result(synthetic_rows(), [])
 
 
 def test_offline_refit_hard_fails_incomplete_grid(tmp_path):
