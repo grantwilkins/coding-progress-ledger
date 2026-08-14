@@ -2,7 +2,7 @@
 Claim:
 Action views select one Queue-Haul plan per case. Controlled bars report the
 total replay/KV composition of selected actions from matched 28-session packs
-under exactly one HBM, bandwidth, or prefill bottleneck.
+under every combination of HBM, bandwidth, and prefill bottlenecks.
 
 Plausible wrong implementations:
 - Pool raw action counts, overweighting cases with more sessions.
@@ -10,7 +10,7 @@ Plausible wrong implementations:
 - Mix policies or duplicate a designed case at a requested-shed coordinate.
 - Normalize controlled bars by all source sessions instead of selected actions.
 - Include unaccounted selected sessions or a mismatched pack.
-- Leave a second constraint bound in a nominally single-bottleneck case.
+- Omit a constraint combination or bind the wrong subset.
 """
 
 import pytest
@@ -18,7 +18,7 @@ import pytest
 from plot_pooled_action_adaptation import (
     ACTION_MIX_CASES, ACTION_MIX_FIGSIZE, ACTION_MIX_LABEL_SIZE,
     ACTION_MIX_LEGEND_SIZE, ACTION_MIX_TICK_SIZE, at_fraction,
-    controlled_action_mixes, pooled_composition, single_bottleneck_scenarios,
+    constraint_scenarios, controlled_action_mixes, pooled_composition,
 )
 
 
@@ -69,7 +69,7 @@ def test_controlled_mix_normalizes_selected_actions_without_n(monkeypatch):
         controlled_action_mixes(rows)
 
 
-def test_single_bottleneck_scenarios_release_the_other_two_constraints():
+def test_constraint_scenarios_bind_each_requested_subset():
     released = {
         "background": {"east": [.25, 0], "germany": [.25, 0]},
         "kv_capacity_fraction": {"east": 1, "germany": 1},
@@ -82,24 +82,31 @@ def test_single_bottleneck_scenarios_release_the_other_two_constraints():
         "bandwidth": "controlled", "bandwidth_mbps": {"east": 1, "germany": 3},
     }
 
-    cases = single_bottleneck_scenarios(bound, released)
-    assert cases["single/hbm"]["background"] == {
+    cases = constraint_scenarios(bound, released)
+    assert cases["constraints/hbm"]["background"] == {
         "east": [.25, .9], "germany": [.25, 0]}
-    assert cases["single/hbm"]["bandwidth"] == "natural"
-    assert cases["single/hbm"]["kv_capacity_fraction"]["east"] == .1
-    assert cases["single/bandwidth"]["background"] == released["background"]
-    assert cases["single/bandwidth"]["bandwidth"] == "controlled"
-    assert cases["single/bandwidth"]["kv_capacity_fraction"]["east"] == 1
-    assert cases["single/prefill"]["background"] == {
+    assert cases["constraints/hbm"]["bandwidth"] == "natural"
+    assert cases["constraints/hbm"]["kv_capacity_fraction"]["east"] == .1
+    assert cases["constraints/bandwidth"]["background"] == released["background"]
+    assert cases["constraints/bandwidth"]["bandwidth"] == "controlled"
+    assert cases["constraints/bandwidth"]["kv_capacity_fraction"]["east"] == 1
+    assert cases["constraints/prefill"]["background"] == {
         "east": [.25, 0], "germany": [.75, 0]}
-    assert cases["single/prefill"]["kv_capacity_fraction"]["east"] == 1
+    assert cases["constraints/prefill"]["kv_capacity_fraction"]["east"] == 1
+    assert cases["constraints/hbm-bandwidth"]["bandwidth"] == "controlled"
+    assert cases["constraints/hbm-bandwidth"]["background"]["germany"] == [.25, 0]
+    assert cases["constraints/hbm-prefill"]["bandwidth"] == "natural"
+    assert cases["constraints/bandwidth-prefill"]["kv_capacity_fraction"]["east"] == 1
+    assert cases["constraints/all"]["background"] == bound["background"]
+    assert cases["constraints/all"]["bandwidth"] == "controlled"
+    assert cases["constraints/none"]["background"] == released["background"]
 
 
-def test_action_mix_uses_five_resource_states_with_bound_extremes_adjacent():
-    assert len(ACTION_MIX_CASES) == 5
+def test_action_mix_uses_all_eight_constraint_combinations():
+    assert len(ACTION_MIX_CASES) == 8
     assert ACTION_MIX_CASES[-2:] == (
-        ("single/all-bound", "All bound"),
-        ("single/none-bound", "None bound"),
+        ("constraints/all", "All bound"),
+        ("constraints/none", "None bound"),
     )
     assert all(case != "constraint/quota-30" for case, _ in ACTION_MIX_CASES)
     assert ACTION_MIX_FIGSIZE == (5.5, 3)

@@ -36,11 +36,14 @@ CASE_NAMES = {
     "constraint/quota-30": "Germany replay quota",
 }
 ACTION_MIX_CASES = (
-    ("single/hbm", "HBM"),
-    ("single/bandwidth", "Bandwidth"),
-    ("single/prefill", "Prefill"),
-    ("single/all-bound", "All bound"),
-    ("single/none-bound", "None bound"),
+    ("constraints/hbm", "HBM"),
+    ("constraints/bandwidth", "Bandwidth"),
+    ("constraints/prefill", "Prefill"),
+    ("constraints/hbm-bandwidth", "HBM + bandwidth"),
+    ("constraints/hbm-prefill", "HBM + prefill"),
+    ("constraints/bandwidth-prefill", "Bandwidth + prefill"),
+    ("constraints/all", "All bound"),
+    ("constraints/none", "None bound"),
 )
 plot_style.apply()
 
@@ -72,33 +75,32 @@ def pooled_composition(rows):
     return output
 
 
-def single_bottleneck_scenarios(bound, released):
-    def make(case, hbm=False, prefill=False, bandwidth=False):
+def constraint_scenarios(bound, released):
+    def make(case, constraints):
         scenario = {**released, "condition_id": case,
                     "planning_state": case}
         scenario["background"] = {
-            "east": bound["background"]["east"] if hbm
+            "east": bound["background"]["east"] if "hbm" in constraints
             else released["background"]["east"],
-            "germany": bound["background"]["germany"] if prefill
+            "germany": bound["background"]["germany"] if "prefill" in constraints
             else released["background"]["germany"],
         }
         scenario["kv_capacity_fraction"] = {
-            "east": bound["kv_capacity_fraction"]["east"] if hbm
+            "east": bound["kv_capacity_fraction"]["east"]
+            if "hbm" in constraints
             else released["kv_capacity_fraction"]["east"],
             "germany": released["kv_capacity_fraction"]["germany"],
         }
-        source = bound if bandwidth else released
+        source = bound if "bandwidth" in constraints else released
         scenario.update(bandwidth=source["bandwidth"],
                         bandwidth_mbps=source["bandwidth_mbps"])
         return scenario
 
-    return {
-        "single/hbm": make("single-hbm", hbm=True),
-        "single/bandwidth": make("single-bandwidth", bandwidth=True),
-        "single/prefill": make("single-prefill", prefill=True),
-        "single/all-bound": bound,
-        "single/none-bound": released,
-    }
+    names = (case.removeprefix("constraints/") for case, _ in ACTION_MIX_CASES)
+    return {f"constraints/{name}": make(name, set(name.split("-"))
+            if name not in {"all", "none"} else
+            {"hbm", "bandwidth", "prefill"} if name == "all" else set())
+            for name in names}
 
 
 def solve_case(scenario, manifest, profile, fraction):
@@ -117,16 +119,16 @@ def solve_case(scenario, manifest, profile, fraction):
     return problem, result
 
 
-def single_bottleneck_actions(plan_paths, fraction=2 / 3):
+def constraint_combination_actions(plan_paths, fraction=2 / 3):
     profile = campaign.ModelProfile.load(campaign.MODEL_PATH)
     cases = {case: (scenario, manifest)
              for case, scenario, manifest in pooled_cases(plan_paths)}
     bound, manifest = cases["hardware_gap/all-bind"]
     released, released_manifest = cases["hardware_gap/all-release"]
     if manifest != released_manifest:
-        raise RuntimeError("single-bottleneck cases require one matched pack")
+        raise RuntimeError("constraint combinations require one matched pack")
     rows = []
-    for case, scenario in single_bottleneck_scenarios(bound, released).items():
+    for case, scenario in constraint_scenarios(bound, released).items():
         problem, result = solve_case(scenario, manifest, profile, fraction)
         rows.append({"case_id": case, "sessions": len(problem.sessions),
                      "selected_sessions": len(result.moves),
@@ -416,7 +418,7 @@ def main():
         rows = list(csv.DictReader(handle))
     selected = at_fraction(rows)
     composition = pooled_composition(rows)
-    mixes = controlled_action_mixes(single_bottleneck_actions(args.plan))
+    mixes = controlled_action_mixes(constraint_combination_actions(args.plan))
     episodes = episode_actions(args.plan)
     write_csv(composition, args.out_dir / "pooled_demand_composition.csv")
     write_csv(episodes, args.out_dir / "matched_episode_actions.csv")
