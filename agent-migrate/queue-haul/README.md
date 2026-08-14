@@ -98,14 +98,15 @@ and exact-ceiling tables are in `outputs/frontier-h100-model-audit-20260814/`.
 
 ### Live H100 timing calibration
 
-`live_timing_campaign.py` fits only measured regional transfers and holds out
-entire condition groups. The retrospective 1,640-transfer fit has 9.2--11.0%
-median absolute error and 1.27--1.42x p90 lateness across five folds. A fresh
-eight-transfer pilot had 10.2% overall median error and 1.45x p90 lateness, but
-correctly failed because South Central US KV had 1.49x median lateness (2.01x at
-8K and 0.96x at 31K). The proxy records request/response byte
-boundaries and exact KV RESP windows; route plus internal queue plus
-reconstruction remains one envelope until destination server tracing exists.
+`live_timing_campaign.py` fits only measured regional transfers. The earlier
+broad retrospective model is diagnostic only: its eight-transfer live pilot
+failed because South Central US KV had 1.49x median lateness. The replacement
+uses 48 paired transfers: 8K/16K/24K/31K x Australia East/South Central US x
+replay/KV x three repeats. Repeats 0--1 fit the model and repeat 2 is held out.
+Each context/repeat has one deterministic prompt instance shared across its four
+randomized paths. The target is initial time to first streamed response (TTFR),
+not request completion. KV size is the sum of RESP GET payloads; GET-only data
+time and the wider EXISTS-plus-GET envelope are both retained.
 
 ```bash
 QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py fit \
@@ -122,18 +123,23 @@ uv run python live_timing_campaign.py validate \
   --run-root /datadrive/queue-haul-network/h100-live-timing-pilot \
   --out /datadrive/queue-haul-network/h100-live-timing-pilot/validation.json
 
-# Refit South Central US KV on 8K/31K only, then gate unseen 16K/24K contexts.
-uv run python live_timing_campaign.py make-plan --stage targeted \
-  --manifest outputs/coding-manifest.json --cluster CLUSTER.json --out PLAN.json
-uv run python live_timing_campaign.py refit-targeted \
-  --model outputs/h100-live-timing-fit-20260814/model.json \
-  --run-root RUN_ROOT --out FIT_ROOT
+QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py make-plan \
+  --stage targeted --manifest outputs/coding-manifest.json \
+  --cluster CLUSTER.json --calibration CALIBRATION.json --out PLAN.json
+QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py run \
+  --plan PLAN.json --cluster CLUSTER.json --calibration CALIBRATION.json \
+  --run-root RUN_ROOT
+QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python live_timing_campaign.py refit-targeted \
+  --profile profiles/gpt_oss_20b_h100_tp1.json --run-root RUN_ROOT --out FIT_ROOT
 ```
 
-The full plan covers 8K/16K/24K/31K contexts, concurrency 1/2/4/8, achieved
-load 0/0.5/0.8, both methods, both regions, and a held-out third repeat. The
-runner hard-fails if aligned achieved load differs from its cell by more than
-0.05. Do not run it concurrently with another workload on the source H100.
+The fit hard-gates overall, every path, and every context at MdAPE <=10%, p90
+lateness <=1.2x, median bias 0.95--1.05x, at least 90% within 20%, and maximum
+lateness <=1.25x. It only emits `profile.json` and a regional
+`calibration.json` when all gates pass. Production runs must consume both
+(`QH_MODEL_PROFILE=FIT_ROOT/profile.json` and the fitted calibration); the
+profile rejects replay contexts outside 8192--31488. Do not run this campaign
+concurrently with another workload on the source H100.
 
 ## System boundary
 
