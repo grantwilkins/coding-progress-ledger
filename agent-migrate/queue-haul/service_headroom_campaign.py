@@ -890,11 +890,13 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
             power.start()
             try:
                 wait_sampler(sampler)
+                prepared = [session.prompt(index)
+                            for index, session in enumerate(group)]
                 def issue(item):
                     time.sleep(max(0, epoch / 1e9 - time.monotonic()))
                     return serving.issue(
                         cfg.host, stack.port, cfg.model, item[1], item[0], epoch,
-                        plan["request_timeout_s"], True,
+                        plan["request_timeout_s"], True, prepared[item[0]],
                     )
                 with ThreadPoolExecutor(max_workers=cell["concurrency"]) as executor:
                     futures, gate = synchronized_submit(

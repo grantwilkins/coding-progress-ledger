@@ -357,8 +357,9 @@ def issue_chat(host: str, port: int, model: str, session: Session, index: int,
 
 def issue(host: str, port: int, model: str, session: Session, index: int,
           scheduled_ns: int, timeout_s: float,
-          bypass_lmcache: bool = False) -> dict:
-    prompt, forced = session.prompt(index)
+          bypass_lmcache: bool = False,
+          prepared: tuple[list[int], int] | None = None) -> dict:
+    prompt, forced = session.prompt(index) if prepared is None else prepared
     row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s,
                       bypass_lmcache)
     row.update({"request_index": index, "session_id": session.session_id,
