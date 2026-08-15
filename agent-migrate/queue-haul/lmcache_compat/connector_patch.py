@@ -195,10 +195,12 @@ def kv_major_attention_view(spec, kv_cache):
             f"{ratio} K/V-major kernel pages "
             f"({kernel_page_bytes * ratio} bytes) do not tile the "
             f"logical page ({spec.page_size_bytes} bytes)")
-    if not kv_cache.is_contiguous():
+    if not kv_cache[0].is_contiguous() or not kv_cache[1].is_contiguous():
         raise ValueError(
-            "K/V-major attention KV tensor must be contiguous to re-view "
-            "as logical pages")
+            "K/V-major attention K and V planes must each be contiguous; "
+            f"shape={tuple(kv_cache.shape)}, strides={kv_cache.stride()}, "
+            f"K_contiguous={kv_cache[0].is_contiguous()}, "
+            f"V_contiguous={kv_cache[1].is_contiguous()}")
     logical_pages = kernel_pages // ratio
     shape = (logical_pages, 2, logical_block_size,
              kv_cache.shape[3], kv_cache.shape[4])

@@ -107,8 +107,11 @@ def test_independent_transactions_use_parallel_connections(monkeypatch):
 
 
 def test_qwen_kv_major_attention_is_reviewed_without_copy():
-    kernel = torch.arange(2 * 98 * 16 * 2 * 4, dtype=torch.bfloat16).reshape(
-        2, 98, 16, 2, 4)
+    allocation = torch.arange(
+        2 * 99 * 16 * 2 * 4, dtype=torch.bfloat16).reshape(2, 99, 16, 2, 4)
+    kernel = allocation[:, :98]
+    assert not kernel.is_contiguous()
+    assert kernel[0].is_contiguous() and kernel[1].is_contiguous()
     spec = SimpleNamespace(
         block_size=784,
         page_size_bytes=2 * 784 * 2 * 4 * kernel.element_size(),
