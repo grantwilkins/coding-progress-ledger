@@ -1147,13 +1147,32 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
             raise ValueError("fluid execution cannot mix legacy destination pools")
         replay = [i for i in members if moves[i].method == "replay"]
         kv = [i for i in members if moves[i].method == "kv_transfer"]
+        q = destination.type_by_id[pool.type_id]
+        for i in members:
+            if q.migration is None:
+                continue
+            session = sessions[moves[i].session_id]
+            components = q.migration[moves[i].method]
+            bandwidth = min(links[link] for link in moves[i].path)
+            extrapolated = components.extrapolates(
+                session.context_tokens, bandwidth,
+            )
+            if extrapolated and not components.allow_extrapolation:
+                raise ValueError(
+                    "migration execution outside calibrated "
+                    + "/".join(extrapolated) + " range"
+                )
+
+        def replay_rate(i):
+            tokens = sessions[moves[i].session_id].context_tokens
+            return case.replay.rate(tokens, 1) if q.migration is None else \
+                case.replay.conservative_rate(tokens, 1)
+
         if service.coupling:
             replay_work = sum(
-                sessions[moves[i].session_id].context_tokens / case.replay.rate(
-                    sessions[moves[i].session_id].context_tokens, 1,
-                ) + case.replay_completion_s for i in replay
+                sessions[moves[i].session_id].context_tokens / replay_rate(i)
+                + case.replay_completion_s for i in replay
             ) / service.replay_speedup
-            q = destination.type_by_id[pool.type_id]
             residual = q.migration["kv_transfer"].residual_s \
                 if q.migration else case.kv_transfer.initial_completion_s
             kv_work = sum(route_bytes[i] / service.kv_ingest_bytes_per_s
@@ -1170,9 +1189,7 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
             continue
         if replay:
             work = np.array([
-                sessions[moves[i].session_id].context_tokens / case.replay.rate(
-                    sessions[moves[i].session_id].context_tokens, 1,
-                )
+                sessions[moves[i].session_id].context_tokens / replay_rate(i)
                 for i in replay
             ])
             capacity = len(pool.replicas) * service.replay_speedup
@@ -1189,7 +1206,6 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
                     len(pool.replicas) * service.kv_ingest_bytes_per_s
                 ),
             ))
-            q = destination.type_by_id[pool.type_id]
             residual = q.migration["kv_transfer"].residual_s \
                 if q.migration else case.kv_transfer.initial_completion_s
             commits[kv] = ingested + residual + case.switch_s

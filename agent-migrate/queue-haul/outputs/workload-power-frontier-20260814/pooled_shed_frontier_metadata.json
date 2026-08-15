@@ -1,5 +1,5 @@
 {
-  "claim": "modeled paired workload/calibration sensitivity",
+  "claim": "modeled power-attainment sensitivity over paired draws",
   "factor_levels": {
     "bandwidth": [
       "natural",
@@ -26,7 +26,9 @@
     "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
     "each workload draw and global constraint state receives equal weight",
     "the frontier remains modeled rather than hardware-measured",
-    "destination compute pressure affects service headroom but not migration timing"
+    "destination compute pressure affects service headroom but not migration timing",
+    "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
+    "the mixed Queue-Haul policy is Replay-dominant under these resources, so this frontier does not evidence Replay/KV method adaptation"
   ],
   "normalization": "safely attained watts / draw-specific removable watts",
   "policies": [

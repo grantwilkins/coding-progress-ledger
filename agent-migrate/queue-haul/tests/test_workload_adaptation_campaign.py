@@ -16,11 +16,14 @@ Plausible wrong implementations:
 - Ignore the requested regional timing fit and measured route rates.
 - Make a state depend on whether a tighter counterfactual was solved first.
 - Apply a constrained factor to only one destination or retain a prefill-only label.
+- Drop a migration method from contexts covered by the regional timing model.
 """
 
 import numpy as np
 
 import workload_adaptation_campaign as campaign
+from pool_planner import candidate_table
+from power_model import ExpectedPower
 from profiles import ModelProfile
 
 
@@ -193,6 +196,33 @@ def test_central_surface_uses_regional_timing_and_routes():
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
     assert summary["migration_gate_passed"]
     assert all(row["coverage"] == 1 for row in summary["held_out"].values())
+
+
+def test_supported_pack_has_replay_and_kv_candidates_for_every_session():
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(
+        profile, campaign.sample_pack(templates, 28, campaign.DEFAULT_SEED),
+    )
+    scenario, architecture, _, _ = campaign.build_problem(
+        profile, pack, frozenset(), 2 / 3, campaign.central_timing_fits(),
+    )
+    table = candidate_table(
+        scenario, profile, architecture, "normal",
+        ExpectedPower(scenario, profile),
+    )
+    slots = set(campaign.product(range(len(pack)), range(len(architecture.pools))))
+
+    for method in ("replay", "kv_transfer"):
+        assert {(candidate.session, candidate.pool) for candidate in table.candidates
+                if candidate.method == method} == slots
+    assert campaign.method_dominance(table, len(architecture.pools)) == {
+        "candidate_matched_pairs": len(slots),
+        "candidate_replay_only": 0, "candidate_kv_only": 0,
+        "candidate_neither": 0, "candidate_replay_dominates": len(slots),
+        "candidate_kv_dominates": 0, "candidate_equivalent": 0,
+        "candidate_incomparable": 0,
+    }
 
 
 def test_factor_levels_apply_to_both_destinations():

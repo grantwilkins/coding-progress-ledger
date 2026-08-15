@@ -118,10 +118,8 @@ def _destination_duration(session, method, case, path, links, horizon, component
     def route(size):
         return size / bandwidth
     if method == "replay":
-        contexts, rates = case.replay.by_concurrency[1]
-        rate = case.replay.rate(tokens, 1) if contexts[0] <= tokens <= contexts[-1] \
-            else float(min(rates))
-        compute = tokens / rate + case.replay_completion_s * (
+        compute = tokens / case.replay.conservative_rate(tokens, 1) \
+            + case.replay_completion_s * (
             1 + _changes(session, horizon)
         )
         return route(_log_bytes(session, tokens)) \
@@ -387,59 +385,74 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                     ),
                 )
                 if duration_key not in duration_cache:
-                    try:
-                        components = None if q.migration is None else q.migration[method]
-                        duration = (
-                            _duration(
-                                session, method, case, pool.route,
-                                links, migration_horizon,
-                            ) if components is None else
-                            _destination_duration(
-                                session, method, case, pool.route,
-                                links, migration_horizon, components,
-                            )
+                    components = None if q.migration is None else q.migration[method]
+                    if components is None:
+                        contexts = case.replay.by_concurrency[1][0]
+                        unsupported = not contexts[0] <= migration_tokens <= contexts[-1]
+                    else:
+                        unsupported = bool(components.extrapolates(
+                            migration_tokens, bandwidth,
+                        )) and not components.allow_extrapolation
+                    if unsupported:
+                        duration_cache[duration_key] = None
+                        continue
+                    duration = (
+                        _duration(
+                            session, method, case, pool.route,
+                            links, migration_horizon,
+                        ) if components is None else
+                        _destination_duration(
+                            session, method, case, pool.route,
+                            links, migration_horizon, components,
                         )
-                        migration_work = duration
-                        if pool.fluid_migration:
-                            service = pool.fluid_migration
-                            replicas = len(pool.replicas)
-                            if method == "replay":
-                                stream_work = migration_tokens / case.replay.rate(
-                                    migration_tokens, 1,
-                                ) / service.replay_speedup
-                                tail_work = case.replay_completion_s * (
-                                    1 + _changes(session, migration_horizon)
-                                ) / service.replay_speedup
-                                migration_work = stream_work + tail_work
-                                duration = max(
-                                    route_bytes[method] / bandwidth,
-                                    stream_work / replicas,
-                                ) + tail_work / replicas + case.switch_s
-                            else:
-                                tail_work = components.residual_s if components else \
-                                    case.kv_transfer.initial_completion_s
-                                stream_work = route_bytes[method] \
-                                    / service.kv_ingest_bytes_per_s
-                                migration_work = stream_work + tail_work
-                                duration = max(
-                                    route_bytes[method] / bandwidth,
-                                    stream_work / replicas,
-                                ) + tail_work / replicas + case.switch_s
-                            if service.coupling:
-                                migration_work += case.switch_s
-                                if not service.route_overlap:
-                                    migration_work += replicas * route_bytes[method] / bandwidth
-                        if method == "kv_transfer":
+                    )
+                    migration_work = duration
+                    if pool.fluid_migration:
+                        service = pool.fluid_migration
+                        replicas = len(pool.replicas)
+                        if method == "replay":
+                            stream_work = migration_tokens \
+                                / case.replay.conservative_rate(migration_tokens, 1) \
+                                / service.replay_speedup
+                            tail_work = case.replay_completion_s * (
+                                1 + _changes(session, migration_horizon)
+                            ) / service.replay_speedup
+                            migration_work = stream_work + tail_work
+                            duration = max(
+                                route_bytes[method] / bandwidth,
+                                stream_work / replicas,
+                            ) + tail_work / replicas + case.switch_s
+                        else:
+                            tail_work = components.residual_s if components else \
+                                case.kv_transfer.initial_completion_s
+                            stream_work = route_bytes[method] \
+                                / service.kv_ingest_bytes_per_s
+                            migration_work = stream_work + tail_work
+                            duration = max(
+                                route_bytes[method] / bandwidth,
+                                stream_work / replicas,
+                            ) + tail_work / replicas + case.switch_s
+                        if service.coupling:
+                            migration_work += case.switch_s
+                            if not service.route_overlap:
+                                migration_work += replicas * route_bytes[method] / bandwidth
+                    if method == "kv_transfer":
+                        try:
                             _kv_schedule(scenario, profile, session, case,
                                          pool.route, links)
-                        if q.migration is None:
+                        except ValueError:
+                            duration_cache[duration_key] = None
+                            continue
+                    if q.migration is None:
+                        try:
                             duration *= q.loaded[method].worst(
                                 rho, _mode_boundary_rho(q, mode),
                                 session.context_tokens, bandwidth,
                             )
-                        duration_cache[duration_key] = duration, migration_work
-                    except ValueError:
-                        duration_cache[duration_key] = None
+                        except ValueError:
+                            duration_cache[duration_key] = None
+                            continue
+                    duration_cache[duration_key] = duration, migration_work
                 timed = duration_cache[duration_key]
                 if timed is None:
                     continue

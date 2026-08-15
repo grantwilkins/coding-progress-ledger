@@ -38,6 +38,9 @@ Plausible wrong implementations:
 - Charge migration work during shortfall minimization or omit the session dual.
 - Run Phase II at an infeasible requested target instead of maximum attainable gain.
 - Reuse candidate physics across pools with different types, routes, or source loads.
+- Drop Replay inside regional timing support when its base rate curve is narrower.
+- Hide an internal timing error by treating it as an unsupported candidate.
+- Enforce regional timing support for Replay execution but not KV execution.
 - Double-count the session dual while repairing a tolerated reduced-cost violation.
 - Omit the Phase-I shortfall dual cap or stop before the global gap closes.
 - Merge pool variables that share physics or misalign SoA resource templates.
@@ -2105,6 +2108,84 @@ def test_physical_destination_timing_keeps_route_time_unscaled(tmp_path):
     assert kv == pytest.approx(1 + 2)
 
 
+@pytest.mark.parametrize(("context", "rate"), ((9, 100), (10, 200)))
+def test_fluid_replay_uses_regional_support_across_base_curve_boundary(
+        tmp_path, context, rate):
+    profile = model(
+        tmp_path, switch=0, tp=1,
+        replay_rate={"1": [[10, 200], [20, 100]]}, replay_completion=2,
+    )
+    session = replace(
+        problem().sessions[0], context_tokens=context, log_bytes=100,
+        expected_growth_tokens_per_s=0,
+    )
+    scenario = replace(problem(), sessions=(session,))
+    service = FluidMigrationService(
+        2, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
+    components = MigrationComponents(
+        (5, 25), (50, 200), "hand", .5, kv_ingest_bytes_per_s=100,
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    arch = replace(
+        arch, types=(replace(arch.types[0], migration={
+            "replay": components, "kv_transfer": components,
+        }),),
+    )
+
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+    by_method = {candidate.method: candidate for candidate in table.candidates}
+    replay_work = .5 * (context / rate + 2)
+
+    assert set(by_method) == {"replay", "kv_transfer"}
+    assert by_method["replay"].migration_work_s == pytest.approx(replay_work)
+    assert by_method["replay"].duration_s == pytest.approx(
+        max(1, .5 * context / rate) + 1,
+    )
+    assert _destination_duration(
+        session, "replay", profile.case(), ("wan",), {"wan": 100}, 0,
+        components,
+    ) == pytest.approx(1 + replay_work)
+
+
+def test_unexpected_fluid_replay_timing_error_is_not_silently_dropped(
+        tmp_path, monkeypatch):
+    profile = model(tmp_path, switch=0, tp=1)
+    scenario = replace(problem(), sessions=(problem().sessions[0],))
+    service = FluidMigrationService(
+        1, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
+    components = MigrationComponents(
+        (1, 1000), (50, 200), "hand", kv_ingest_bytes_per_s=100,
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), methods=("replay",), fluid=service,
+    )
+    arch = replace(
+        arch, types=(replace(arch.types[0], migration={
+            "replay": components, "kv_transfer": components,
+        }),),
+    )
+
+    def broken_rate(*_args):
+        raise ValueError("internal replay model error")
+
+    monkeypatch.setattr(type(profile.case().replay), "conservative_rate", broken_rate)
+
+    with pytest.raises(ValueError, match="internal replay model error"):
+        candidate_table(
+            scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+        )
+
+
 def test_physical_destination_timing_rejects_unmeasured_extrapolation(tmp_path):
     profile = model(tmp_path, switch=0, tp=1)
     session = replace(problem().sessions[0], context_tokens=10, log_bytes=100,
@@ -2122,6 +2203,66 @@ def test_physical_destination_timing_rejects_unmeasured_extrapolation(tmp_path):
         replace(components, allow_extrapolation=True),
     )
     assert extrapolated > 0
+
+
+def test_fluid_candidate_respects_regional_extrapolation_flag(tmp_path):
+    profile = model(tmp_path, switch=0, tp=1)
+    scenario = replace(problem(), sessions=(problem().sessions[0],))
+    service = FluidMigrationService(
+        1, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
+    components = MigrationComponents(
+        (20, 30), (50, 200), "hand", kv_ingest_bytes_per_s=100,
+    )
+
+    def candidates(allow):
+        value = replace(components, allow_extrapolation=allow)
+        arch = architecture(
+            normal=1, emergency=1, stable=1, baselines=((0, 0),),
+            routes=(("wan",),), methods=("replay",), fluid=service,
+        )
+        arch = replace(arch, types=(replace(arch.types[0], migration={
+            "replay": value, "kv_transfer": value,
+        }),))
+        return candidate_table(
+            scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+        ).candidates
+
+    assert not candidates(False)
+    assert [candidate.method for candidate in candidates(True)] == ["replay"]
+
+
+@pytest.mark.parametrize("method", ("replay", "kv_transfer"))
+def test_fluid_execution_respects_regional_extrapolation_flag(tmp_path, method):
+    profile = model(tmp_path, switch=0, tp=1)
+    scenario = replace(problem(), sessions=(problem().sessions[0],))
+    service = FluidMigrationService(
+        1, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
+    components = MigrationComponents(
+        (20, 30), (50, 200), "hand", kv_ingest_bytes_per_s=100,
+    )
+
+    def architecture_for(allow):
+        value = replace(components, allow_extrapolation=allow)
+        arch = architecture(
+            normal=1, emergency=1, stable=1, baselines=((0, 0),),
+            routes=(("wan",),), fluid=service,
+        )
+        return replace(arch, types=(replace(arch.types[0], migration={
+            "replay": value, "kv_transfer": value,
+        }),))
+
+    move = PlannedMove(
+        "a", "t0", method, 0, ("wan",), destination_pool="p0",
+    )
+    with pytest.raises(ValueError, match="outside calibrated context range"):
+        execute(scenario, profile, (move,), destination=architecture_for(False))
+    assert execute(
+        scenario, profile, (move,), destination=architecture_for(True),
+    ).sessions[0].committed_s is not None
 
 
 def test_kv_destination_timing_uses_ingest_floor(tmp_path):

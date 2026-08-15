@@ -68,6 +68,13 @@ class RateCurve:
             raise ValueError(f"context {context_tokens} outside [{x[0]}, {x[-1]}]")
         return float(np.interp(context_tokens, x, y))
 
+    def conservative_rate(self, context_tokens: float, concurrency: int) -> float:
+        if concurrency not in self.by_concurrency:
+            raise ValueError(f"unsupported concurrency {concurrency}")
+        x, y = self.by_concurrency[concurrency]
+        return self.rate(context_tokens, concurrency) \
+            if x[0] <= context_tokens <= x[-1] else float(min(y))
+
 
 @dataclass(frozen=True)
 class PowerCurve:

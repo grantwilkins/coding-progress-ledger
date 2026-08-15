@@ -157,7 +157,7 @@ def main():
     write_plot(summary, args.out)
     metadata = {
         "schema": "queue-haul-workload-power-frontier-v1",
-        "claim": "modeled paired workload/calibration sensitivity",
+        "claim": "modeled power-attainment sensitivity over paired draws",
         "samples": args.samples, "factor_states": len(adaptation.ORDER),
         "pooled_cases": args.samples * len(adaptation.ORDER),
         "sessions_per_pack": args.sessions, "seed": args.seed,
@@ -177,6 +177,8 @@ def main():
             "each workload draw and global constraint state receives equal weight",
             "the frontier remains modeled rather than hardware-measured",
             "destination compute pressure affects service headroom but not migration timing",
+            "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
+            "the mixed Queue-Haul policy is Replay-dominant under these resources, so this frontier does not evidence Replay/KV method adaptation",
         ],
     }
     args.out.with_name(f"{args.out.name}_metadata.json").write_text(

@@ -302,6 +302,7 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         scenario, profile, architecture, "normal", ExpectedPower(scenario, profile),
     )
     fractional_opportunity, _ = phase_one_capacity_duals(table)
+    dominance = method_dominance(table, len(architecture.pools))
     counts = {method: sum(move.method == method for move in result.moves)
               for method in ("replay", "kv_transfer")}
     counts["not_moved"] = len(sessions) - len(result.moves)
@@ -331,6 +332,7 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         "feasible": result.feasible, "power_shortfall_w": result.power_shortfall_w,
         "planned_shed_w": result.initial_source_power_w - result.planned_source_power_w,
         "predicted_migration_makespan_s": result.predicted_migration_makespan_s,
+        **dominance,
         **{f"{action}_count": counts[action] for action in ACTIONS},
         **{action: counts[action] / len(sessions) for action in ACTIONS},
         "route_utilization": max_usage("route:"),
@@ -340,6 +342,43 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         "binding_resources": ";".join(result.binding_resources),
         "failure": result.failure_reason or "",
     }
+
+
+def method_dominance(table, pools):
+    """Classify eligible Replay/KV choices by gain, work, and resources."""
+    choices = {(candidate.session, candidate.pool, candidate.method): i
+               for i, candidate in enumerate(table.candidates)}
+    if len(choices) != len(table.candidates):
+        raise RuntimeError("duplicate migration candidate")
+    columns = table.resources.toarray()
+    result = {name: 0 for name in (
+        "candidate_matched_pairs", "candidate_replay_only", "candidate_kv_only",
+        "candidate_neither", "candidate_replay_dominates",
+        "candidate_kv_dominates", "candidate_equivalent",
+        "candidate_incomparable",
+    )}
+
+    def dominates(first, second):
+        a, b = table.candidates[first], table.candidates[second]
+        return a.gain_w + 1e-9 >= b.gain_w \
+            and a.migration_work_s <= b.migration_work_s + 1e-9 \
+            and np.all(columns[:, first] <= columns[:, second] + 1e-9)
+
+    for session, pool in product(range(len(table.sessions)), range(pools)):
+        replay = choices.get((session, pool, "replay"))
+        kv = choices.get((session, pool, "kv_transfer"))
+        if replay is None or kv is None:
+            name = "candidate_neither" if replay is None and kv is None else \
+                "candidate_replay_only" if replay is not None else "candidate_kv_only"
+            result[name] += 1
+            continue
+        result["candidate_matched_pairs"] += 1
+        replay_wins, kv_wins = dominates(replay, kv), dominates(kv, replay)
+        name = "candidate_equivalent" if replay_wins and kv_wins else \
+            "candidate_replay_dominates" if replay_wins else \
+            "candidate_kv_dominates" if kv_wins else "candidate_incomparable"
+        result[name] += 1
+    return result
 
 
 def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3,
@@ -619,13 +658,23 @@ def main():
     write_csv(args.out / "factor_checks.csv", checks)
     plot(rows, args.out / "action_mix")
     timing_evidence = json.loads(TIMING_SUMMARY.read_text())
+    timing_loads = sorted({float(row["destination_prefill_load"])
+                           for row in read_csv(TIMING)})
+    selected = {action: int(sum(row[f"{action}_count"] for row in rows))
+                for action in ACTIONS}
+    dominance = {name: int(sum(row[name] for row in rows)) for name in (
+        "candidate_matched_pairs", "candidate_replay_only", "candidate_kv_only",
+        "candidate_neither", "candidate_replay_dominates",
+        "candidate_kv_dominates", "candidate_equivalent",
+        "candidate_incomparable",
+    )}
     regressions = np.asarray([
         row["planner_shortfall_change_w"] for row in checks
         if row["planner_shortfall_worsened_on_release"]
     ])
     metadata = {
         "schema": "queue-haul-workload-adaptation-v1",
-        "claim": "conservative measurement-calibrated workload sensitivity",
+        "claim": "modeled migration-volume and target-attainment sensitivity",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
@@ -637,6 +686,18 @@ def main():
         ])),
         "route_compute_overlap": False,
         "migration_horizon_s": MIGRATION_HORIZON_S,
+        "regional_timing_destination_prefill_loads": timing_loads,
+        "selected_session_totals": selected,
+        "candidate_method_dominance": dominance,
+        "candidate_method_dominance_definition": {
+            "dominates": "weakly greater gain, weakly lower migration work, "
+                         "and no greater normalized LP resource coefficient",
+            "slot_partition": ["candidate_matched_pairs", "candidate_replay_only",
+                               "candidate_kv_only", "candidate_neither"],
+            "matched_pair_partition": ["candidate_replay_dominates",
+                                       "candidate_kv_dominates",
+                                       "candidate_equivalent", "candidate_incomparable"],
+        },
         "factor_levels": LEVELS, "workload": workload,
         "target_met_rate": {
             label: float(np.mean([row["target_met"] for row in rows
@@ -688,6 +749,11 @@ def main():
             "route plus shared destination work is a conservative no-overlap envelope",
             "timing audits are grouped retrospective checks, not untouched validation sets",
             "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
+            "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
+            "regional timing was measured only at zero destination prefill load; transient migration-service interference is not modeled",
+            "the destination envelope combines measured timing with synthetic HBM and service-pressure levels",
+            "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
+            "this run selects no KV transfer and Replay dominates every matched method pair, so the bars are a Replay-versus-not-moved null result rather than method-adaptation evidence",
             "each constraint state is planned independently; rounded-LP release regressions are reported",
             "fractional opportunity monotonicity does not prove integer packability",
             "controlled-40 timing draws above natural bandwidth are projected down; the rate is recorded",

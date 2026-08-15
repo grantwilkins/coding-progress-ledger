@@ -847,6 +847,10 @@ and a conservative route-plus-shared-migration-work envelope; background
 inference consumes shared prefill/decode destination-compute headroom but does
 not assert an unmeasured load-dependent migration slowdown. Every enabled
 factor is applied to both destinations, using region-specific route rates.
+Within the measured regional 1,536--32,256-token migration support, Replay uses
+the base rate curve where available and its conservative minimum rate outside
+that narrower curve; candidate duration and shared migration work use the same
+rule.
 Stacked boundaries are the median Replay and median total-moved shares, while
 black intervals show their 5--95% ranges. Target misses and one-factor-release
 checks remain in the output tables.
@@ -866,6 +870,17 @@ timing holdout passes its recorded gate; grouped local and width-8 timing audits
 remain retrospective, and the no-overlap envelope intentionally overpredicts
 many width-8 makespans rather than extrapolating the KV-heavy mixed evidence to
 Replay-majority plans.
+
+The corrected default run is an honest null result: every selected migration is
+Replay, and Replay dominates KV for every matched session--destination candidate
+under the declared resources. HBM does not distinguish the methods because both
+leave the same resident KV state; bandwidth favors Replay's smaller payload, and
+the available regional timing was measured only at zero destination prefill
+load. The figure therefore supports constraint-dependent migration volume and
+target attainment, not Replay/KV action adaptation. A method-adaptation claim
+requires matched Replay/KV measurements under controlled destination load;
+adding an unmeasured Replay quota or transient-service penalty would only be a
+model sensitivity.
 
 `workload_power_frontier.py` carries 100 deterministic paired draws through the
 same seven-policy requested-shed frontier as the designed-case plot. The sweep

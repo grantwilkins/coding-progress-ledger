@@ -1,18 +1,43 @@
 {
   "bandwidth_projection_region_rate": 0.115,
-  "claim": "conservative measurement-calibrated workload sensitivity",
+  "candidate_method_dominance": {
+    "candidate_equivalent": 0,
+    "candidate_incomparable": 0,
+    "candidate_kv_dominates": 0,
+    "candidate_kv_only": 0,
+    "candidate_matched_pairs": 444320,
+    "candidate_neither": 3680,
+    "candidate_replay_dominates": 444320,
+    "candidate_replay_only": 0
+  },
+  "candidate_method_dominance_definition": {
+    "dominates": "weakly greater gain, weakly lower migration work, and no greater normalized LP resource coefficient",
+    "matched_pair_partition": [
+      "candidate_replay_dominates",
+      "candidate_kv_dominates",
+      "candidate_equivalent",
+      "candidate_incomparable"
+    ],
+    "slot_partition": [
+      "candidate_matched_pairs",
+      "candidate_replay_only",
+      "candidate_kv_only",
+      "candidate_neither"
+    ]
+  },
+  "claim": "modeled migration-volume and target-attainment sensitivity",
   "cross_method_coupling": 1,
   "factor_activation_rate": {
-    "bandwidth-dest_compute-hbm/bandwidth": 0.265,
+    "bandwidth-dest_compute-hbm/bandwidth": 0.031,
     "bandwidth-dest_compute-hbm/dest_compute": 1.0,
-    "bandwidth-dest_compute-hbm/hbm": 0.42,
-    "bandwidth-dest_compute/bandwidth": 0.483,
+    "bandwidth-dest_compute-hbm/hbm": 0.533,
+    "bandwidth-dest_compute/bandwidth": 0.397,
     "bandwidth-dest_compute/dest_compute": 1.0,
-    "bandwidth-hbm/bandwidth": 0.875,
+    "bandwidth-hbm/bandwidth": 0.486,
     "bandwidth-hbm/hbm": 1.0,
     "bandwidth/bandwidth": 1.0,
     "dest_compute-hbm/dest_compute": 1.0,
-    "dest_compute-hbm/hbm": 0.445,
+    "dest_compute-hbm/hbm": 0.533,
     "dest_compute/dest_compute": 1.0,
     "hbm/hbm": 1.0
   },
@@ -49,6 +74,11 @@
     "route plus shared destination work is a conservative no-overlap envelope",
     "timing audits are grouped retrospective checks, not untouched validation sets",
     "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
+    "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
+    "regional timing was measured only at zero destination prefill load; transient migration-service interference is not modeled",
+    "the destination envelope combines measured timing with synthetic HBM and service-pressure levels",
+    "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
+    "this run selects no KV transfer and Replay dominates every matched method pair, so the bars are a Replay-versus-not-moved null result rather than method-adaptation evidence",
     "each constraint state is planned independently; rounded-LP release regressions are reported",
     "fractional opportunity monotonicity does not prove integer packability",
     "controlled-40 timing draws above natural bandwidth are projected down; the rate is recorded"
@@ -57,14 +87,17 @@
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 292,
-    "shortfall_regression_max_w": 18.525070148034004,
-    "shortfall_regression_median_w": 2.259066222210407,
-    "shortfall_regression_p90_w": 10.684898497186282,
-    "shortfall_regression_rate": 0.024333333333333332,
-    "target_loss_count": 101,
-    "target_loss_rate": 0.008416666666666666
+    "shortfall_regression_count": 157,
+    "shortfall_regression_max_w": 14.816838700375499,
+    "shortfall_regression_median_w": 3.050747649752296,
+    "shortfall_regression_p90_w": 8.673150725442241,
+    "shortfall_regression_rate": 0.013083333333333334,
+    "target_loss_count": 79,
+    "target_loss_rate": 0.006583333333333333
   },
+  "regional_timing_destination_prefill_loads": [
+    0.0
+  ],
   "regional_timing_validation": {
     "held_out": {
       "kv_transfer": {
@@ -92,6 +125,11 @@
   "samples": 1000,
   "schema": "queue-haul-workload-adaptation-v1",
   "seed": 1001,
+  "selected_session_totals": {
+    "kv_transfer": 0,
+    "not_moved": 68159,
+    "replay": 155841
+  },
   "sessions_per_pack": 28,
   "source_load": 0.4,
   "surface_validation": {
@@ -130,14 +168,14 @@
   },
   "target_fraction": 0.6666666666666666,
   "target_met_rate": {
-    "All bound": 0.339,
+    "All bound": 0.389,
     "Bandwidth": 0.989,
-    "Bandwidth + compute": 0.339,
-    "Dest. compute": 0.353,
-    "HBM": 0.983,
-    "HBM + bandwidth": 0.982,
-    "HBM + compute": 0.349,
-    "None bound": 0.991
+    "Bandwidth + compute": 0.392,
+    "Dest. compute": 0.393,
+    "HBM": 0.986,
+    "HBM + bandwidth": 0.985,
+    "HBM + compute": 0.389,
+    "None bound": 0.992
   },
   "unique_timing_draws": 1000,
   "workload": {
