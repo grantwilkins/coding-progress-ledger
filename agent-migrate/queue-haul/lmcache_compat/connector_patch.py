@@ -213,6 +213,18 @@ def kv_major_attention_view(spec, kv_cache):
     return viewed
 
 
+def restore_page_major_attention(kv_cache):
+    """Undo a zero-copy ``(K/V, pages, ...)`` transpose when possible."""
+    import torch
+
+    if not (isinstance(kv_cache, torch.Tensor)
+            and kv_cache.ndim == 5 and kv_cache.shape[0] == 2
+            and kv_cache.shape[1] != 2):
+        raise ValueError("expected a K/V-major five-dimensional attention tensor")
+    page_major = kv_cache.permute(1, 0, 2, 3, 4)
+    return page_major if page_major.is_contiguous() else None
+
+
 def patch_kv_major_attention_groups() -> None:
     """Support vLLM's ``(K/V, pages, block, heads, dim)`` Qwen layout."""
     import torch
@@ -228,6 +240,9 @@ def patch_kv_major_attention_groups() -> None:
                 and kv_cache.ndim == 5 and kv_cache.shape[0] == 2
                 and kv_cache.shape[1] != 2):
             return original_apply(self, spec, kv_cache)
+        page_major = restore_page_major_attention(kv_cache)
+        if page_major is not None:
+            return original_apply(self, spec, page_major)
         return kv_major_attention_view(spec, kv_cache)
 
     cls.apply = apply

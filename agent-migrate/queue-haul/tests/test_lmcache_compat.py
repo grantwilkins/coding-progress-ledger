@@ -12,6 +12,7 @@ from lmcache_compat.connector_patch import (
     independent_transaction,
     kv_major_attention_view,
     patch_on_import,
+    restore_page_major_attention,
 )
 
 
@@ -124,3 +125,22 @@ def test_qwen_kv_major_attention_is_reviewed_without_copy():
     assert viewed[:, 0].is_contiguous() and viewed[:, 1].is_contiguous()
     assert torch.equal(viewed[1, 0, 0], kernel[0, 49, 0])
     assert torch.equal(viewed[1, 1, -1], kernel[1, 97, -1])
+
+
+def test_qwen_transposed_page_major_attention_is_restored_without_copy():
+    page_major = torch.arange(
+        98 * 2 * 16 * 4 * 256, dtype=torch.bfloat16,
+    ).reshape(98, 2, 16, 4, 256)
+    kv_major = page_major.permute(1, 0, 2, 3, 4)
+
+    assert kv_major.shape == (2, 98, 16, 4, 256)
+    assert kv_major.stride() == (16384, 32768, 1024, 256, 1)
+    assert not kv_major.is_contiguous()
+    assert not kv_major[0].is_contiguous()
+
+    restored = restore_page_major_attention(kv_major)
+
+    assert restored is not None and restored.is_contiguous()
+    assert restored.shape == page_major.shape
+    assert restored.untyped_storage().data_ptr() == kv_major.untyped_storage().data_ptr()
+    assert torch.equal(restored, page_major)
