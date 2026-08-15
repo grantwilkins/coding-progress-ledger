@@ -6,7 +6,14 @@ import matplotlib
 FIGSIZE = (8, 5)
 WIDE_FIGSIZE = (8, 4)
 COMPACT_FIGSIZE = (5, 4)
+COLUMN_FIGSIZE = (4, 3)
+HALF_COLUMN_FIGSIZE = (1.65, 1.75)
 FONT_SIZE = 15
+COLUMN_FONT_SIZE = 11
+COLUMN_LEGEND_FONT_SIZE = 9
+HALF_COLUMN_FONT_SIZE = 7.5
+HALF_COLUMN_LEGEND_FONT_SIZE = 6.5
+HALF_COLUMN_ANNOTATION_FONT_SIZE = 7
 LARGE_FONT_SIZE = 17
 LEGEND_FONT_SIZE = ANNOTATION_FONT_SIZE = 11
 LARGE_LEGEND_FONT_SIZE = 12
@@ -23,6 +30,7 @@ POLICY_NAMES = dict(zip(POLICIES, (
     "True Greedy", "KV Migrate Only", "Replay Context Only",
     "Queue-Haul Power Blind", "Queue-Haul Deadline Blind",
 )))
+SHORT_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "Queue-Haul"}
 POLICY_COLORS = dict(zip(POLICIES, (
     "#0072B2", "#E69F00", "#F0E442", "#D55E00",
     "#56B4E9", "#CC79A7", "#009E73", "#000000",
@@ -40,7 +48,7 @@ ACTION_NAMES = {
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",
     "germany_replay": "Replay → Germany",
     "germany_kv_transfer": "KV transfer → Germany",
-    "not_moved": "Remains at source",
+    "not_moved": "Not moved",
 }
 ACTION_COLORS = {
     "replay": "#E98300", "kv_transfer": "#006CB8",
@@ -54,21 +62,22 @@ TIMING_ACTION_NAMES = {"replay": ACTION_NAMES["replay"],
 TIMING_ACTION_COLORS = {"replay": ACTION_COLORS["replay"],
                         "kv_transfer": ACTION_COLORS["kv_transfer"],
                         "mixed": "#009E73"}
-POWER_FAMILY_NAMES = {
-    "idle": "Idle", "prefill": "Prefill", "decode": "Decode",
-    "agentic": "Agentic", "campaign": "Campaign mix",
-}
-POWER_FAMILY_COLORS = {
-    "idle": "#777777", "prefill": "#E98300", "decode": "#006CB8",
-    "agentic": "#009E73", "campaign": "#CC79A7",
-}
-POWER_FAMILY_MARKERS = dict(zip(
-    POWER_FAMILY_NAMES, ("o", "^", "s", "D", "P")))
+POWER_FAMILY_NAMES = {"idle": "Idle", "sessions": "Sessions"}
+POWER_FAMILY_COLORS = {"idle": "#777777", "sessions": "#006CB8"}
+POWER_FAMILY_MARKERS = {"idle": "o", "sessions": "s"}
 ACTION_HATCHES = {
+    "replay": "..", "kv_transfer": "xx",
     "east_replay": "..", "east_kv_transfer": "xx",
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
-    "not_moved": "",
+    "not_moved": "--",
 }
+MODELS = ("openai/gpt-oss-20b", "Qwen/Qwen3.8-27B",
+          "google/gemma-4-26B-A4B-it")
+MODEL_NAMES = dict(zip(MODELS, ("GPT-OSS-20B", "Qwen3.8-27B",
+                                "Gemma-4-26B-A4B")))
+MODEL_COLORS = dict(zip(MODELS, ("#0072B2", "#D55E00", "#009E73")))
+MODEL_LINESTYLES = dict(zip(MODELS, ("-", "--", ":")))
+MODEL_MARKERS = dict(zip(MODELS, ("o", "s", "^")))
 REPAIR_NAMES = {
     "unchanged": "No repair needed",
     "applied": "Repair applied",
@@ -128,10 +137,18 @@ def apply():
     })
 
 
-def policy_style(policy):
+def half_column(axis):
+    axis.tick_params(which="major", labelsize=HALF_COLUMN_FONT_SIZE,
+                     length=2, pad=1)
+    axis.tick_params(which="minor", length=1)
+    axis.xaxis.label.set_size(HALF_COLUMN_FONT_SIZE)
+    axis.yaxis.label.set_size(HALF_COLUMN_FONT_SIZE)
+
+
+def policy_style(policy, names=POLICY_NAMES):
     return {
         "color": POLICY_COLORS[policy],
         "linestyle": POLICY_LINESTYLES[policy],
         "linewidth": LINE_WIDTH,
-        "label": POLICY_NAMES[policy],
+        "label": names[policy],
     }

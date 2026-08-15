@@ -326,6 +326,8 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                 tuple(sorted(pool.fluid_migration.source_power_w.items())),
                 tuple(sorted(pool.fluid_migration.destination_power_w.items())),
                 pool.fluid_migration.provenance,
+                pool.fluid_migration.coupling,
+                pool.fluid_migration.route_overlap,
             ),
             tuple(sorted((pool.migration_headroom or {}).items())),
         )
@@ -379,6 +381,9 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                     None if pool.fluid_migration is None else (
                         pool.fluid_migration.replay_speedup,
                         pool.fluid_migration.kv_ingest_bytes_per_s,
+                        pool.fluid_migration.coupling,
+                        pool.fluid_migration.route_overlap,
+                        len(pool.replicas),
                     ),
                 )
                 if duration_key not in duration_cache:
@@ -396,30 +401,34 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                         )
                         migration_work = duration
                         if pool.fluid_migration:
+                            service = pool.fluid_migration
+                            replicas = len(pool.replicas)
                             if method == "replay":
                                 stream_work = migration_tokens / case.replay.rate(
                                     migration_tokens, 1,
-                                )
+                                ) / service.replay_speedup
                                 tail_work = case.replay_completion_s * (
                                     1 + _changes(session, migration_horizon)
-                                )
+                                ) / service.replay_speedup
                                 migration_work = stream_work + tail_work
-                                capacity = len(pool.replicas) \
-                                    * pool.fluid_migration.replay_speedup
                                 duration = max(
                                     route_bytes[method] / bandwidth,
-                                    stream_work / capacity,
-                                ) + tail_work / capacity + case.switch_s
+                                    stream_work / replicas,
+                                ) + tail_work / replicas + case.switch_s
                             else:
-                                migration_work = route_bytes[method]
+                                tail_work = components.residual_s if components else \
+                                    case.kv_transfer.initial_completion_s
+                                stream_work = route_bytes[method] \
+                                    / service.kv_ingest_bytes_per_s
+                                migration_work = stream_work + tail_work
                                 duration = max(
                                     route_bytes[method] / bandwidth,
-                                    migration_work / (
-                                        len(pool.replicas)
-                                        * pool.fluid_migration.kv_ingest_bytes_per_s
-                                    ),
-                                ) + (components.residual_s if components else
-                                     case.kv_transfer.initial_completion_s)
+                                    stream_work / replicas,
+                                ) + tail_work / replicas + case.switch_s
+                            if service.coupling:
+                                migration_work += case.switch_s
+                                if not service.route_overlap:
+                                    migration_work += replicas * route_bytes[method] / bandwidth
                         if method == "kv_transfer":
                             _kv_schedule(scenario, profile, session, case,
                                          pool.route, links)
@@ -483,14 +492,11 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
             f"kv:{pool.pool_id}", "blocks")
         for method in pool.methods:
             service = pool.fluid_migration
-            capacity = len(pool.replicas) * migration_horizon * (
-                service.replay_speedup if service and method == "replay" else
-                service.kv_ingest_bytes_per_s if service else 1
-            ) * (pool.migration_headroom or {}).get(method, 1)
+            capacity = len(pool.replicas) * migration_horizon \
+                * (pool.migration_headroom or {}).get(method, 1)
             add(("migration", p, method), capacity,
                 f"migration:{pool.pool_id}:{method}",
-                "serial-replay-s" if service and method == "replay" else
-                "bytes" if service else "replica-s")
+                "replica-s")
 
     options = sorted([
         (p, method) for p, pool in enumerate(architecture.pools)
@@ -530,6 +536,11 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                 emit(("debt", p, facet), debt)
         emit(("kv", p), unit[3])
         emit(("migration", p, method), unit[4])
+        service = pool.fluid_migration
+        if service and service.coupling:
+            other = "kv_transfer" if method == "replay" else "replay"
+            if other in pool.methods:
+                emit(("migration", p, other), service.coupling * unit[4])
         templates.append(tuple(entries))
 
     option_for = {option: i for i, option in enumerate(options)}
@@ -1160,7 +1171,7 @@ def _lp(table: CandidateTable, target: float, stats=None):
     if not table.candidates:
         return set()
     started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
-    n, x = len(table.candidates), cp.Variable(len(table.candidates), nonneg=True)
+    x = cp.Variable(len(table.candidates), nonneg=True)
     gains = np.array([c.gain_w for c in table.candidates])
     work = np.array([c.migration_work_s for c in table.candidates])
     base = [table.incidence @ x <= 1, table.resources @ x <= 1, x <= 1]
@@ -1510,11 +1521,12 @@ def _lazy_completion(oracle, candidates, values, target):
     candidates, usage = list(candidates), np.zeros(len(oracle.specs))
     selected, sessions = set(), set()
     gain = 0.0
-    semantic = lambda candidate: (
-        oracle.sessions[candidate.session].session_id,
-        oracle.pools[candidate.pool].pool_id,
-        "0" if candidate.method == "replay" else "1",
-    )
+    def semantic(candidate):
+        return (
+            oracle.sessions[candidate.session].session_id,
+            oracle.pools[candidate.pool].pool_id,
+            "0" if candidate.method == "replay" else "1",
+        )
     identities = {
         (candidate.session, candidate.pool, candidate.method): i
         for i, candidate in enumerate(candidates)
@@ -2385,7 +2397,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
                     if solver == "lp_column_generation_persistent" else
                     _lp_column_generation(table, target)
                     if solver == "lp_column_generation" else
-                    _lp_highs(table, target) if solver == "lp_highs" else
+                    _lp_highs(table, target)
+                    if solver in {"lp_highs", "lp_power_blind"} else
                     _lp(table, target) if solver.startswith("lp") else
                     _greedy(table, target))
     repairs, repair_s = 0, 0.0

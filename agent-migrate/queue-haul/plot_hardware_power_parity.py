@@ -30,6 +30,7 @@ METHODS = (
     "queue_haul", "greedy", "isolated_fastest", "kv_only", "replay_only",
     "queue_haul_power_blind", "queue_haul_deadline_blind",
 )
+PLOT_METHODS = ("queue_haul", "greedy")
 CONTEMPORANEOUS_METHODS = set(METHODS) - {"kv_only", "replay_only"}
 MARKERS = dict(zip(METHODS, "os^vPDX"))
 NS = 10**9
@@ -186,17 +187,18 @@ def write_csv(rows: list[dict], out: Path) -> None:
         writer.writerows(rows)
 
 
-def write_plot(rows: list[dict], scale: float, out: Path) -> None:
-    values = [row[key] for row in rows
+def write_plot(rows: list[dict], _scale: float, out: Path) -> None:
+    plotted = [row for row in rows if row["method"] in PLOT_METHODS]
+    values = [row[key] for row in plotted
               for key in ("predicted_percent", "measured_percent")]
     lower, upper = min(-5, min(values)), max(105, max(values))
     padding = .03 * (upper - lower)
     limits = lower - padding, upper + padding
     fig, axis = plt.subplots(figsize=plot_style.FIGSIZE)
     axis.plot(limits, limits, color="black", linestyle="--", linewidth=1.5,
-              label="Prediction = measurement", zorder=1)
-    for method in METHODS:
-        selected = [row for row in rows if row["method"] == method]
+              zorder=1)
+    for method in PLOT_METHODS:
+        selected = [row for row in plotted if row["method"] == method]
         axis.scatter(
             [row["predicted_percent"] for row in selected],
             [row["measured_percent"] for row in selected],
@@ -206,20 +208,19 @@ def write_plot(rows: list[dict], scale: float, out: Path) -> None:
         )
     axis.text(.03, .95, "Overshed", transform=axis.transAxes, va="top")
     axis.text(.97, .05, "Undershed", transform=axis.transAxes, ha="right")
-    axis.set(xlabel="Planner-predicted shed (% of max request)",
-             ylabel="Measured shed (% of max request)",
+    axis.set(xlabel="Predicted Shed (% of max)",
+             ylabel="Measured Shed (% of max)",
              xlim=limits, ylim=limits)
     axis.set_aspect("equal", adjustable="box")
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, fontsize=9,
-               loc="center left", bbox_to_anchor=(.66, .54))
-    fig.text(.98, .02, f"Maximum request = {scale:.1f} W; {len(rows)} episodes",
-             ha="right", fontsize=9)
-    fig.subplots_adjust(left=.13, right=.65, bottom=.15, top=.97)
+    axis.legend(handles, labels, frameon=False, loc="center left",
+                bbox_to_anchor=(1.02, .5), borderaxespad=0)
+    fig.tight_layout(rect=(0, 0, .65, 1))
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
-        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
+        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
+                    bbox_inches="tight")
     plt.close(fig)
     write_csv(rows, out.with_suffix(".csv"))
 

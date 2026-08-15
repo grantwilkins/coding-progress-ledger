@@ -1,0 +1,78 @@
+{
+  "claim": "modeled paired workload/calibration sensitivity",
+  "factor_levels": {
+    "bandwidth": [
+      "natural",
+      "controlled_40"
+    ],
+    "dest_compute": [
+      0.25,
+      0.95
+    ],
+    "hbm": [
+      0.0,
+      0.9
+    ]
+  },
+  "factor_states": 8,
+  "inputs": {
+    "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
+    "outputs/destination-v7-20260722/content-free-manifest.json": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
+    "outputs/timing-power-validation-20260814/migrations.csv": "04eec612a2082a528d8d94acec50a4f002065af988d44e39200b5023bbf19107",
+    "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe",
+    "outputs/timing-power-validation-20260814/timing-summary.json": "0f45a8d659aacf5d4af8bb04873795d3c9de092d1f2df15d969c8f469a8d9b1e"
+  },
+  "limitations": [
+    "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
+    "each workload draw and global constraint state receives equal weight",
+    "the frontier remains modeled rather than hardware-measured",
+    "destination compute pressure affects service headroom but not migration timing"
+  ],
+  "normalization": "safely attained watts / draw-specific removable watts",
+  "policies": [
+    "queue_haul_lp",
+    "queue_haul_greedy",
+    "independent_fastest",
+    "replay_only",
+    "kv_only",
+    "power_blind",
+    "deadline_blind"
+  ],
+  "pooled_cases": 800,
+  "regions": [
+    "east",
+    "germany"
+  ],
+  "requested_fractions": [
+    0.0,
+    0.125,
+    0.25,
+    0.375,
+    0.5,
+    0.625,
+    0.6666666666666666,
+    0.75,
+    0.875,
+    1.0
+  ],
+  "samples": 100,
+  "schema": "queue-haul-workload-power-frontier-v1",
+  "seed": 1001,
+  "sessions_per_pack": 28,
+  "solvers": {
+    "deadline_blind": "lp_work_first",
+    "independent_fastest": "isolated_fastest",
+    "kv_only": "kv_only",
+    "power_blind": "lp_power_blind",
+    "queue_haul_greedy": "greedy",
+    "queue_haul_lp": "lp_highs",
+    "replay_only": "replay_only"
+  },
+  "workload": {
+    "excluded_states": 162,
+    "manifest_templates": 72,
+    "supported_states": 3023,
+    "supported_templates": 63,
+    "unselected_states": 1633
+  }
+}

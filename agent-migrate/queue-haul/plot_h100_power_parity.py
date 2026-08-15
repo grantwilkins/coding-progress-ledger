@@ -45,7 +45,7 @@ def measured_rows(run_root: Path, fit: dict, cohort: str) -> list[dict]:
 
 
 def load(run_root: Path, history_roots: tuple[Path, ...] | list[Path] = ()) \
-        -> tuple[list[dict], dict]:
+        -> list[dict]:
     result = json.loads((run_root / "fit.json").read_text())
     if result["schema"] != "queue-haul-rational-power-fit-v1":
         raise ValueError("power parity requires the rational H100 fit")
@@ -61,66 +61,47 @@ def load(run_root: Path, history_roots: tuple[Path, ...] | list[Path] = ()) \
                 primary_gpu["name"], primary_gpu["power_limit_w"]):
             raise ValueError("retrospective power hardware is incompatible")
         cells += measured_rows(root, fit, "retrospective")
-    return cells, result
+    return cells
 
 
-def write(rows: list[dict], result: dict, out: Path) -> None:
+def write(rows: list[dict], out: Path) -> None:
     values = [row[key] for row in rows
               for key in ("predicted_power_w", "measured_power_w")]
     margin = .04 * (max(values) - min(values))
     limits = min(values) - margin, max(values) + margin
-    fig, axis = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    fig, axis = plt.subplots(figsize=plot_style.HALF_COLUMN_FIGSIZE)
     axis.plot(limits, limits, color="black", linestyle="--", linewidth=1.5,
-              label="Prediction = measurement")
+              label="Ideal")
     for family in plot_style.POWER_FAMILY_NAMES:
-        history = [row for row in rows
-                   if row["family"] == family and row["cohort"] == "retrospective"]
-        current = [row for row in rows
-                   if row["family"] == family and row["cohort"] == "fit_campaign"]
-        if history:
-            axis.scatter([row["predicted_power_w"] for row in history],
-                         [row["measured_power_w"] for row in history],
+        selected = [row for row in rows if (
+            "idle" if row["family"] == "idle" else "sessions") == family]
+        if selected:
+            axis.scatter([row["predicted_power_w"] for row in selected],
+                         [row["measured_power_w"] for row in selected],
                          color=plot_style.POWER_FAMILY_COLORS[family],
                          marker=plot_style.POWER_FAMILY_MARKERS[family],
-                         s=14, alpha=.22)
-        if current:
-            axis.scatter([row["predicted_power_w"] for row in current],
-                         [row["measured_power_w"] for row in current],
-                         color=plot_style.POWER_FAMILY_COLORS[family],
-                         marker=plot_style.POWER_FAMILY_MARKERS[family],
-                         s=30, alpha=.58,
+                         s=12, alpha=.58,
                          label=plot_style.POWER_FAMILY_NAMES[family])
-    held = [row for row in rows
-            if row["stage"] == "confirmation" and row["cohort"] == "fit_campaign"]
-    axis.scatter([row["predicted_power_w"] for row in held],
-                 [row["measured_power_w"] for row in held], facecolors="none",
-                 edgecolors="black", s=58, linewidth=.8,
-                 label="Unseen confirmation")
-    if any(row["cohort"] == "retrospective" for row in rows):
-        axis.scatter([], [], color="#777777", s=14, alpha=.35,
-                     label="Prior H100 device")
-    validation = result["validation"]
-    history = [row for row in rows if row["cohort"] == "retrospective"]
-    history_text = ""
-    if history:
-        mean = statistics.fmean(row["measured_power_w"] for row in history)
-        residual = [row["measured_power_w"] - row["predicted_power_w"]
-                    for row in history]
-        total = sum((row["measured_power_w"] - mean) ** 2 for row in history)
-        history_text = (f"\nPrior GPU MAE {statistics.fmean(map(abs, residual)):.2f} W"
-                        f"\nPrior GPU $R^2$ {1 - sum(x*x for x in residual) / total:.3f}")
-    axis.set(xlabel="Predicted GPU power (W)", ylabel="Measured GPU power (W)",
-             xlim=limits, ylim=limits,
-             title=f"H100 GPU power parity (n={len(rows)})")
+    mean = statistics.fmean(row["measured_power_w"] for row in rows)
+    residuals = [row["measured_power_w"] - row["predicted_power_w"]
+                 for row in rows]
+    r2 = 1 - sum(x*x for x in residuals) / sum(
+        (row["measured_power_w"] - mean) ** 2 for row in rows)
+    axis.set(xlabel="Predicted GPU\npower (W)", ylabel="Measured GPU power (W)",
+             xlim=limits, ylim=limits)
     axis.text(.98, .03,
-              f"Holdout MAE {validation['holdout_mae_w']:.2f} W\n"
-              f"Holdout $R^2$ {validation['holdout_r2']:.3f}{history_text}",
+              f"MAE {statistics.fmean(map(abs, residuals)):.2f} W\n"
+              f"$R^2$ {r2:.3f}",
               ha="right", va="bottom", transform=axis.transAxes,
-              fontsize=plot_style.ANNOTATION_FONT_SIZE)
+              fontsize=plot_style.HALF_COLUMN_ANNOTATION_FONT_SIZE)
     axis.set_aspect("equal", adjustable="box")
-    axis.grid(alpha=.2)
-    axis.legend(frameon=False, fontsize=8, loc="upper left")
-    fig.tight_layout()
+    axis.grid(alpha=.2, linewidth=.4)
+    plot_style.half_column(axis)
+    axis.legend(frameon=False, fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE,
+                loc="lower center", bbox_to_anchor=(.5, 1.01), ncol=2,
+                columnspacing=.2, handlelength=1, handletextpad=.25,
+                labelspacing=.2, borderaxespad=0)
+    fig.tight_layout(pad=.3)
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
@@ -137,8 +118,7 @@ def main() -> None:
     parser.add_argument("--history-run-root", type=Path, action="append", default=[])
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    rows, result = load(args.run_root, args.history_run_root)
-    write(rows, result, args.out)
+    write(load(args.run_root, args.history_run_root), args.out)
 
 
 if __name__ == "__main__":

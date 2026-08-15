@@ -34,7 +34,22 @@ does not provide an accepted shared-load capacity boundary, so simulator
 service headroom remains a sensitivity. That boundary is not required for the
 dedicated two-A100 migration claim.
 
-The default model input is `profiles/gpt_oss_20b_h100_tp1.json`. Its 2026-08-11
+`service_holdout_analysis.py` reproduces the prefill/decode staircase audit,
+leaky context-bundle retrospective diagnostic, and matched-work
+request-simulation falsification. It keeps pooled-token ITL separate from
+per-request decode duration and reports why those traces do not yet support a
+TTFT/ITL or decode-hold admission guarantee. Supplying `--powertrace-root`
+adds the raw disaggregated GPT-OSS empirical sensitivity reference; it is
+explicitly not used as a Queue-Haul latency model.
+
+```bash
+uv run python service_holdout_analysis.py \
+  --powertrace-root ~/powertrace-sim \
+  --out outputs/service-holdout-20260814/summary.json
+```
+
+The audit's primary profile is the A100 staircase profile; its default H100
+comparison input is `profiles/gpt_oss_20b_h100_tp1.json`. The latter's 2026-08-11
 H100 NVL measurements give `F=11415.78` prefill tok/s, `G=451.32` decode tok/s,
 1,205,376 production KV-cache tokens, and a concave GPU-power envelope reaching 168.39 W
 and measured through offered load `ell=12.566`. Admission remains bounded at
@@ -49,9 +64,10 @@ tokens or counter/window violations. Its frozen rational model is
 have 2.37 W MAE and 4.34 W p90 absolute error; the fit remains explicitly
 `holdout_failed` because its `R^2=0.942` misses the declared 0.95 gate. The
 pooled parity view also applies that frozen fit to 38 valid cells from the prior
-physical H100. That external-device cohort has 5.17 W MAE and `R^2=0.840`, so
-device transfer is visibly weaker than the unseen same-device result.
-Interrupted and offered-work-attributed sweeps are excluded.
+physical H100. It plots all 149 points while folding every non-idle workload
+composition into one "Sessions" series and reports their aggregate 3.56 W MAE
+and `R^2=0.919`. Interrupted and
+offered-work-attributed sweeps are excluded.
 
 ```bash
 uv run python queue-haul/plot_h100_power_parity.py \
@@ -59,6 +75,12 @@ uv run python queue-haul/plot_h100_power_parity.py \
   --history-run-root /datadrive/queue-haul-power/h100-realized-20260814-004 \
   --out queue-haul/outputs/h100_power_model_parity
 ```
+
+The H100 full-migration parity view pools all 295 historical queue critical
+paths and reports 1.42 s MAE and `R^2=0.954`. Its fixed 1--200 s log axes retain
+the two observations above 100 seconds while labeling decades from `10^0`
+through `10^2`. This view and the H100 power parity view use native 1.65 x
+1.75 inch canvases for side-by-side placement within one USENIX column.
 
 The completed 72-scenario H100 hardware-gap campaign has no failed or missing
 runs. It scales the constrained East KV reserve to 96% of the measured
@@ -704,7 +726,36 @@ removable power before equal-weight pooling; raw overshed remains visible above
 the diagonal. Lines are medians and ribbons are the interquartile spread across
 designed cases, not repeated-run confidence intervals. Deadline-blind plans
 against 90 seconds but receives credit only for shed attained by the common
-30-second cutoff.
+30-second cutoff. The x-axis ends at 80%, just beyond the nonzero intersection
+of Queue-Haul LP's median frontier with requested-equals-attained parity; the
+y-axis retains the full 0--100% removable-power range.
+
+The companion attainment-time ECDF uses the same twelve cases at the common
+67% stress point. Each event is the first modeled target crossing plus the
+profile's power-window delay; misses retain missing CDF mass. The 30-second
+line is the common evaluation deadline, while the 90-second horizon exposes
+late deadline-blind attainment:
+
+```bash
+uv run python queue-haul/plot_pooled_attainment_cdf.py \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out queue-haul/outputs/east-germany-pooled-shed-frontier-20260810/pooled_attainment_cdf
+```
+
+The H100 counterpart pools the five completed hardware-gap states using the
+measured H100 profile. Its star is the median of 15 matched Queue-Haul robust
+hardware runs at the common 41.4% request; the curves remain modeled 30-second
+frontiers rather than interpolated hardware measurements:
+
+```bash
+QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json uv run python \
+  queue-haul/plot_pooled_shed_frontier.py \
+  --plan queue-haul/outputs/east-germany-hardware-gap-h100-20260812/plan.json \
+  --hardware-results queue-haul/outputs/east-germany-hardware-gap-h100-20260812/results.csv \
+  --out queue-haul/outputs/east-germany-pooled-shed-frontier-h100-20260812/pooled_shed_frontier
+```
 
 ```bash
 uv run python queue-haul/plot_pooled_shed_frontier.py \
@@ -720,6 +771,17 @@ shed by requested shed within each episode before pooling the three repeats, so
 values above 100% explicitly show target overshoot rather than extra physical
 efficiency. Deadline-blind is omitted because its recorded shed is eventual,
 not shed attained by the deadline.
+
+The matched A100 migration-timing parity view compares the pre-run modeled
+episode makespan with the measured hardware migration duration for Queue-Haul
+LP and Queue-Haul Greedy across the nine separation conditions/repeats:
+
+```bash
+uv run python queue-haul/plot_migration_timing_parity.py \
+  --predictions queue-haul/outputs/east-germany-separation-20260809/simulation/separation_predictions.csv \
+  --measurements queue-haul/outputs/east-germany-separation-hardware-20260809/results.csv \
+  --out queue-haul/outputs/east-germany-migration-timing-parity-20260813/migration_timing_parity
+```
 
 ```bash
 uv run python queue-haul/plot_hardware_target_attainment.py \
@@ -743,9 +805,10 @@ uv run python queue-haul/plot_pooled_resource_pressure.py \
 ```
 
 The action-adaptation views use the same equal-case sweep. The primary chart
-shows Queue-Haul's selected-action composition across six succinct bound-
-constraint states at a common 67% target. Every 100%-stacked bar uses the same
-28-session pack; absolute selected-session counts are intentionally omitted.
+shows Queue-Haul's total replay/KV composition under all eight combinations of
+HBM, bandwidth, and prefill constraints at a common 67% target. Gray reports
+sessions left at the source, so every 100%-stacked bar accounts for the same
+28-session pack; destination identities are intentionally omitted.
 
 ```bash
 uv run python queue-haul/plot_pooled_action_adaptation.py \
@@ -754,6 +817,67 @@ uv run python queue-haul/plot_pooled_action_adaptation.py \
   --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
   --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
   --out-dir queue-haul/outputs/east-germany-action-adaptation-20260811
+```
+
+`bootstrap_action_adaptation.py` repeats those eight matched cases under 1,000
+paired calibration draws. It stratifies timing by destination, method,
+bandwidth, and context and samples each fitted phase-power tuple jointly. This
+is a modeled calibration-sensitivity distribution for the fixed 28-session
+pack, not 8,000 independent hardware observations. The stacked bars show joint-
+bootstrap mean shares; black whiskers mark the 5--95% Replay and total-moved
+boundaries, with a three-facet interval companion for the full composition.
+
+```bash
+uv run python queue-haul/bootstrap_action_adaptation.py \
+  --plan queue-haul/outputs/east-germany-constraint-20260808/plan.json \
+  --plan queue-haul/outputs/east-germany-separation-20260809/plan.json \
+  --plan queue-haul/outputs/east-germany-hardware-gap-20260809/plan.json \
+  --out-dir queue-haul/outputs/east-germany-action-adaptation-20260811
+```
+
+`workload_adaptation_campaign.py` adds workload-shape sensitivity without
+claiming new hardware observations. Each of 1,000 paired draws resamples
+conversation templates and then one whole supported state tuple per template,
+normalizes the 28-session source pack to the
+campaign's 0.4 load, refits the balanced regional timing cells, and samples one
+joint phase-power bootstrap tuple. All eight HBM/bandwidth/destination-compute
+states share
+that draw. The planner uses measured East US 2 and Germany West Central routes
+and a conservative route-plus-shared-migration-work envelope; background
+inference consumes shared prefill/decode destination-compute headroom but does
+not assert an unmeasured load-dependent migration slowdown. Every enabled
+factor is applied to both destinations, using region-specific route rates.
+Stacked boundaries are the median Replay and median total-moved shares, while
+black intervals show their 5--95% ranges. Target misses and one-factor-release
+checks remain in the output tables.
+The eight states are independent branches. Their fractional LP opportunity
+sets must expand on every release; any rounded-planner regressions are reported
+rather than repaired with a counterfactual plan. Noisy bootstrap route draws
+are minimally projected to preserve natural bandwidth at or above the measured
+40%-route condition, and the projection rate is recorded.
+
+```bash
+uv run python queue-haul/workload_adaptation_campaign.py
+```
+
+The resulting 1,000 draws are a modeled calibration/workload sensitivity, not
+a confidence interval or 1,000 independent workloads. The regional single-move
+timing holdout passes its recorded gate; grouped local and width-8 timing audits
+remain retrospective, and the no-overlap envelope intentionally overpredicts
+many width-8 makespans rather than extrapolating the KV-heavy mixed evidence to
+Replay-majority plans.
+
+`workload_power_frontier.py` carries 100 deterministic paired draws through the
+same seven-policy requested-shed frontier as the designed-case plot. The sweep
+reaches 100%, while the paper view retains the common 0--80% x-axis.
+Each workload-by-constraint state receives equal weight, and attained watts are
+normalized by that draw's removable power before pooling. The main CSV retains
+the normalized median/IQR; the companion `_power.csv` reports 5th, median, and
+95th percentile watts. These are modeled sensitivity ranges, not confidence
+intervals or new hardware observations.
+
+```bash
+uv run python queue-haul/workload_power_frontier.py
 ```
 
 The time-to-binding view uses the same two-thirds stress point. It estimates
@@ -887,6 +1011,10 @@ same observations for fitting and parity, so it is not held-out evidence. Its
 shed regression has a 0.997 through-origin slope, effectively zero aggregate
 bias, and 8.66 W RMSE; grouped five-fold episode cross-validation retains a
 0.999 slope, 0.11 W bias, and 8.78 W RMSE. The CSV preserves all policy repeats.
+The parity x-axis reports shed from the fitted
+`P0 + delta_p * z / (1 + z)` model with `z = a*f + b*g`.
+The publication plot shows Queue-Haul LP and Queue-Haul Greedy; its CSV retains
+all seven measured policy arms.
 
 Reduction runs automatically and can also be repeated without hardware:
 
@@ -1071,7 +1199,9 @@ appends an explicitly marked independently-fastest tail so runtime width remains
 the episode size. Failed episodes remain in denominators. Reduction writes
 timing CDFs, including a 30-second full-target attainment CDF whose event time
 includes the trailing five-second power window; missing mass is deadline
-failure. Power attainment is trailing-five-second average modeled source-power
+failure. The same 30-second cohort also produces standalone bandwidth plots for
+episode attainment and Queue-Haul's deadline-admitted replay/KV action mix.
+Power attainment is trailing-five-second average modeled source-power
 shed divided by the 100% source-power target. MP
 runs require bounded RESP quiescence between scenarios so late cache writes
 cannot cross scenario boundaries. Run from a clean committed checkout with two
@@ -1373,8 +1503,54 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 - `migration_profiler.py` and `migration_profile_fit.py`: replay/KV handoff.
 - `destination_campaign.py` and `destination_runner.py`: targeted destination
   service and loaded-migration evidence.
+- `service_headroom_campaign.py`: exact-stack A100/H100 incumbent-latency curves
+  against Queue-Haul's normalized destination service load.
 - `service_surface_runner.py` and `service_profile_reduce.py`: isolated and
   mixed service profiles.
+
+Prepare the frozen cell matrix, follow its per-hardware run order, reduce one
+exact-stack normalization per hardware, then run and reduce the discovery cells:
+
+```bash
+uv run python service_headroom_campaign.py prepare --out runs/service-headroom/plan.json
+uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/plan.json --cell-id CELL --out /datadrive/service-headroom
+uv run python service_headroom_campaign.py reduce-calibration --plan runs/service-headroom/plan.json --hardware a100 --runs /datadrive/service-headroom --out /datadrive/service-headroom/a100-normalization.json
+uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/plan.json --cell-id CELL --normalization /datadrive/service-headroom/a100-normalization.json --out /datadrive/service-headroom
+uv run python service_headroom_campaign.py reduce --plan runs/service-headroom/plan.json --hardware a100 --runs /datadrive/service-headroom --ttft-target-s 1 --tpot-target-s .1 --out /datadrive/service-headroom/a100-scout.json
+```
+
+The discovery result cannot update P1/P2. Generate and execute its unseen
+confirmation plan, then reduce it:
+
+```bash
+uv run python service_headroom_campaign.py prepare-confirmation --plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --hardware a100 --out runs/service-headroom/a100-confirmation.json
+uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/a100-confirmation.json --cell-id CELL --normalization /datadrive/service-headroom/a100-normalization.json --out /datadrive/service-headroom-confirmation
+uv run python service_headroom_campaign.py reduce-confirmation --plan runs/service-headroom/a100-confirmation.json --core-plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --runs /datadrive/service-headroom-confirmation --out /datadrive/service-headroom/a100-confirmed.json
+```
+
+Only a confirmation result accepted by `supported_bound()` supplies a service
+limit; that loader rechecks the exact core plan, scout, confirmation plan, and
+all held-out decisions. It returns a total normalized-load cap, so P1/P2 use
+`b_f + b_g + sum_i(w_i,f + w_i,g) <= rho_safe`; available added headroom is
+`rho_safe - (b_f + b_g)`.
+The paper figure is P90, matching the DistServe-style comparison; P99 remains
+null unless a cell has at least 1,000 incumbent completions. TTFT and TPOT
+targets are declared evaluation inputs; raw P90 curves, joint
+offered-request attainment, physical stability, and censoring remain in the
+outputs. The harness preserves exact token IDs/events, labeled Prometheus
+scrapes, queue/KV/power series, partial failures, cache proof, and complete
+runtime identity, including the exact vLLM, LMCache, and Redis commands. It
+enforces the frozen randomized cell order and hashes an unchanged image once
+per stage. The balanced confirmation workload is derived from each hardware's
+normalization and must have a 40--60% prefill share. Live KV capacity and the
+planned block-rounded parked stock are bound into the normalization, checked
+against pre-arrival occupancy, and reproduced in confirmation. Use
+`QH_LMCACHE_MODE=mp` and submit A100 and H100 separately.
+Retry an invalid measurement immediately before starting the next frozen cell;
+a later retry violates the audited order and stops the stage. A valid service
+failure is never retried away.
+See `DATA_TO_COLLECT.md` for the 54-cell discovery and 18-cell confirmation
+matrix per hardware and the claim boundary.
 
 The verified 2026-07-23 destination bundle is retained under
 `outputs/destination-v7-20260722/`. Do not treat its service rows as an accepted
@@ -1388,3 +1564,36 @@ audit and retained evidence.
 - Add semantic tests for every source change.
 - Run `uv run pytest` after every change.
 - Commit each completed task separately with a descriptive message.
+
+## Model-architecture campaign
+
+`model_architecture_campaign.py` reuses the migration profiler and base planner
+for the pinned GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B checkpoints. It
+keeps BF16 KV, TP1, 32K context, eight sessions, 90% GPU memory, and exact token
+shapes fixed across A100 and H100 arms. Use the native vLLM 0.22/LMCache 0.5.1
+stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`.
+
+```bash
+uv run python model_architecture_campaign.py prepare --out-dir runs/model-architecture/plans
+uv run python model_architecture_campaign.py run-profile --plan PLAN.json --run-root RUN-smoke --smoke-only
+uv run python model_architecture_campaign.py run-profile --plan PLAN.json --run-root RUN-full
+uv run python model_architecture_campaign.py freeze-profile --base-profile BASE.json --run-root RUN-full --smoke-root RUN-smoke --geometry kv_geometry.csv --out PROFILE.json
+```
+
+Run the smoke command for all six arms before any full run. `BASE.json` must be
+the model/hardware arm's measured service and power profile. The geometry CSV
+has one row per context, repeat, and runtime-reported cache group with columns
+`context_tokens,repeat,group,resident_bytes,capacity_bytes,transfer_bytes`.
+Profile freezing requires all five contexts and three repeats, checks group
+totals against measured LMCache payloads, and rejects held-out median/P90 timing
+error above 10%/15%, P90 absolute error above one second, or any false-feasible
+19/30-second deadline.
+
+Pass six `--arm MODEL HARDWARE PROFILE GATE` arguments to `screen`. It writes
+the paired fixed-arrival and 40%-utilization-matched analysis, cache-only and
+compute-only counterfactuals, the canonical action-mix figure, and six live
+plans totaling 36 runs. Screening proceeds only with an in-grid crossover and
+either a confidence-separated 10-point action-share change or a feasibility
+flip. Execute each live plan with `run-profile`, then pass the six
+`--run MODEL HARDWARE ROOT` arguments to `validate-live`. Interpret accepted
+differences as architecture/deployment behavior, not a causal sparsity effect.

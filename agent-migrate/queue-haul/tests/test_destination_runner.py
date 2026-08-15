@@ -12,6 +12,13 @@ Plausible wrong implementations:
 - Omit the cache-block contract from the generated compatibility identity.
 - Treat an SLO boundary as infeasible or a just-outside value as feasible.
 - Declare a growing destination queue stable.
+- Timestamp metadata chunks as generated tokens or include [DONE] in TPOT.
+- Count a multi-token SSE chunk as a failed request instead of unobservable TBT.
+- Drop partial token evidence when an absolute request deadline expires.
+- Compare wall-clock arrivals with monotonic queue samples.
+- Destroy labeled Prometheus histogram buckets during raw collection.
+- Lose sampled queue rows when the engine exits during overload.
+- Ignore growing active-decode occupancy when the waiting queue is flat.
 """
 
 import pytest
@@ -29,7 +36,8 @@ import destination_runner as runner
 def request(ttft=.1, tpot=.01, error=""):
     return {"status": 200, "error": error, "output_tokens": 2,
             "planned_output_tokens": 2, "ttft_s": ttft, "mean_tpot_s": tpot,
-            "input_tokens": 10}
+            "input_tokens": 10, "done": True, "finish_reason": "length",
+            "recorded_output_tokens": 2, "exact_token_timestamps": True}
 
 
 def metrics(slope=0):
@@ -62,6 +70,90 @@ def test_session_forced_tokens_use_the_observed_safe_range(monkeypatch):
     runner.Session("s", 4, 2, 3, 201088, 0).prompt(0)
 
     assert vocabularies[-1] == ("s:0:output", 200000)
+
+
+def test_token_timing_excludes_metadata_and_done_delay():
+    row = runner.completion_row(
+        200, 100_000_000, 900_000_000,
+        {"prompt_tokens": 4, "completion_tokens": 2},
+        [{"monotonic_ns": 200_000_000, "token_ids": [7]},
+         {"monotonic_ns": 250_000_000, "token_ids": [8]}],
+        True, "request", "length",
+    )
+
+    assert row["ttft_s"] == pytest.approx(.1)
+    assert row["mean_tpot_s"] == pytest.approx(.05)
+    assert row["token_itls_s"] == pytest.approx([.05])
+    assert runner.exact_completion({**row, "planned_output_tokens": 2})
+    assert runner.completion_payload("m", [1], 2, 7)["return_token_ids"] is True
+
+
+def test_multi_token_stream_chunk_is_not_literal_tbt():
+    row = runner.completion_row(
+        200, 0, 3, {"completion_tokens": 2},
+        [{"monotonic_ns": 1, "token_ids": [7, 8]}], True, finish_reason="length",
+    )
+
+    row["planned_output_tokens"] = 2
+    assert runner.service_completion(row)
+    assert not runner.exact_token_timing(row) and not runner.exact_completion(row)
+    assert row["mean_tpot_s"] is None
+
+
+def test_timeout_keeps_partial_token_evidence(monkeypatch):
+    item = json.dumps({"choices": [{"token_ids": [7]}],
+                       "usage": {"completion_tokens": 1}}).encode()
+
+    class Response:
+        status = 200
+
+        def __init__(self):
+            self.first = True
+
+        def readline(self):
+            if self.first:
+                self.first = False
+                return b"data: " + item + b"\n"
+            raise TimeoutError("absolute deadline")
+
+    class Connection:
+        def __init__(self, *_args, **_kwargs):
+            self.sock = self
+
+        def request(self, *_args, **_kwargs): pass
+        def getresponse(self): return Response()
+        def settimeout(self, _timeout): pass
+        def close(self): pass
+
+    monkeypatch.setattr(runner.http.client, "HTTPConnection", Connection)
+
+    row = runner._completion("h", 1, "m", [1], 2, 7, .01)
+
+    assert row["recorded_output_tokens"] == 1
+    assert row["token_ids"] == [7]
+    assert "deadline" in row["error"]
+
+
+def test_raw_metric_record_preserves_labels_and_buckets():
+    text = 'vllm:inter_token_latency_seconds_bucket{model_name="m",le="0.1"} 7\n'
+    assert runner.metric_record(text, 1, 2, 3) == {
+        "scrape_start_ns": 1, "monotonic_ns": 2, "wall_ns": 3,
+        "prometheus_text": text,
+    }
+
+
+def test_sampler_writes_partial_rows_before_reporting_failure(tmp_path):
+    sampler = runner.MetricsSampler("h", 1, tmp_path / "engine.csv")
+    sampler.rows = [{"monotonic_ns": 1, "wall_ns": 2,
+                     "vllm:num_requests_waiting": 3}]
+    sampler.error = RuntimeError("engine exited")
+    sampler.thread = SimpleNamespace(join=lambda _timeout: None,
+                                     is_alive=lambda: False)
+
+    with pytest.raises(RuntimeError, match="sampler failed"):
+        sampler.close()
+
+    assert (tmp_path / "engine.csv").read_text().splitlines()[-1].endswith(",3")
 
 
 def test_prewarm_rejects_status_200_without_token_work(monkeypatch):
@@ -120,6 +212,15 @@ def test_slo_boundary_is_inclusive_and_queue_growth_is_not_stable():
 def test_queue_drift_requires_real_samples():
     with pytest.raises(ValueError, match="sampled"):
         runner.queue_drift_upper(metrics()[:1])
+
+
+def test_queue_drift_can_include_active_decode_hold():
+    rows = [{"monotonic_ns": i * 10**9,
+             "vllm:num_requests_waiting": 0,
+             "vllm:num_requests_running": i} for i in range(100)]
+
+    assert runner.queue_drift_upper(rows) == pytest.approx(0)
+    assert runner.queue_drift_upper(rows, include_running=True) > 0
 
 
 def test_client_side_backlog_is_not_classified_stable():
@@ -791,6 +892,20 @@ def test_deterministic_trace_can_outlive_its_measurement_window(tmp_path):
     )
     assert load.schedule_horizon_s == 210
     assert load.summary()["offered_rho"] == pytest.approx(4 / 75)
+
+
+def test_deterministic_trace_passes_intended_monotonic_arrival(tmp_path):
+    seen = []
+    load = runner.DestinationLoad(
+        "h", 1, "m", [runner.Session("s", 4, 2, 3, 100, 0)], .1, 10, 5,
+        tmp_path, 0, rps=1, max_inflight=1, arrival_schedule=(0,),
+        warmup_s=.1, measurement_s=.1,
+    )
+    load.request = lambda *_args: seen.append(_args[5]) or {"status": 200}
+
+    load._run_open()
+
+    assert seen == [int(load.epoch * 1e9)]
 
 def test_close_is_safe_when_start_failed_before_the_thread_ran(tmp_path):
     """A prewarm that raises must not mask itself with a join error."""

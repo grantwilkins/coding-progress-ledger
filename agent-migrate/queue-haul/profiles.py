@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import numpy as np
 
 PROFILE_SCHEMA = "queue-haul-model-profile-v4"
 PHASE_PROFILE_SCHEMA = "queue-haul-model-profile-v5"
+HYBRID_PROFILE_SCHEMA = "queue-haul-model-profile-v6"
 WORKLOAD_SCHEMA = "queue-haul-workload-profile-v2"
 SOURCE_SECTIONS = ("power", "service", "capacity", "replay", "kv_transfer", "transitions")
 ACTION_POWER = {"replay", "kv_transfer", "replay_on_request", "catch_up", "sleep", "off"}
@@ -201,6 +203,51 @@ class ActionPower:
 
 
 @dataclass(frozen=True)
+class KVGeometry:
+    groups: tuple[str, ...]
+    capacity_bytes: tuple[float, ...]
+    contexts: np.ndarray
+    resident_bytes: np.ndarray
+
+    @classmethod
+    def parse(cls, raw: dict) -> "KVGeometry":
+        groups = tuple(map(str, raw["groups"]))
+        capacity = tuple(map(float, raw["capacity_bytes"]))
+        points = np.asarray(raw["resident_bytes"], float)
+        if not groups or len(set(groups)) != len(groups) \
+                or len(capacity) != len(groups) or min(capacity) <= 0 \
+                or points.ndim != 2 or points.shape[0] < 2 \
+                or points.shape[1] != len(groups) + 1 \
+                or points[0, 0] <= 0 or np.any(np.diff(points[:, 0]) <= 0) \
+                or np.any(points[:, 1:] < 0) \
+                or np.any(np.diff(points[:, 1:], axis=0) < 0) \
+                or np.any(points[:, 1:] > np.asarray(capacity)):
+            raise ValueError("invalid heterogeneous KV geometry")
+        return cls(groups, capacity, points[:, 0], points[:, 1:])
+
+    def bytes_at(self, context_tokens: float) -> np.ndarray:
+        if context_tokens == 0:
+            return np.zeros(len(self.groups))
+        if not self.contexts[0] <= context_tokens <= self.contexts[-1]:
+            raise ValueError(f"context {context_tokens} outside measured KV geometry")
+        return np.asarray([
+            np.interp(context_tokens, self.contexts, self.resident_bytes[:, i])
+            for i in range(len(self.groups))
+        ])
+
+    def pressure(self, context_tokens: float) -> float:
+        return float(max(self.bytes_at(context_tokens) / self.capacity_bytes,
+                         default=0))
+
+    def utilization(self, contexts) -> np.ndarray:
+        return sum((self.bytes_at(context) for context in contexts),
+                   start=np.zeros(len(self.groups))) / self.capacity_bytes
+
+    def fits(self, contexts) -> bool:
+        return bool(np.all(self.utilization(contexts) <= 1 + 1e-12))
+
+
+@dataclass(frozen=True)
 class KVTransfer:
     """Transport-agnostic sealed-block movement and endpoint timing."""
 
@@ -211,6 +258,7 @@ class KVTransfer:
     initial_completion_s: float
     catch_up_fixed_s: float
     tail_replay_tps: float
+    bytes_by_context: tuple[tuple[int, int], ...] = ()
 
     @classmethod
     def parse(cls, raw: dict) -> "KVTransfer":
@@ -219,12 +267,18 @@ class KVTransfer:
             float(raw["setup_s"]), float(raw["destination_bytes_per_s"]),
             float(raw["initial_completion_s"]), float(raw["catch_up_fixed_s"]),
             float(raw["tail_replay_tps"]),
+            tuple(tuple(map(int, point)) for point in raw.get("bytes_by_context", ())),
         )
+        curve = np.asarray(value.bytes_by_context, float)
         if value.block_tokens < 1 or value.block_bytes < 1 \
                 or value.block_bytes % value.block_tokens \
                 or min(value.setup_s, value.initial_completion_s,
                        value.catch_up_fixed_s) < 0 \
-                or min(value.destination_bytes_per_s, value.tail_replay_tps) <= 0:
+                or min(value.destination_bytes_per_s, value.tail_replay_tps) <= 0 \
+                or value.bytes_by_context and (
+                    curve.ndim != 2 or curve.shape[0] < 2 or curve.shape[1] != 2
+                    or curve[0, 0] <= 0 or np.any(np.diff(curve[:, 0]) <= 0)
+                    or np.any(np.diff(curve[:, 1]) <= 0)):
             raise ValueError("invalid KV transfer parameters")
         return value
 
@@ -232,7 +286,19 @@ class KVTransfer:
         return max(0, int(tokens)) // self.block_tokens
 
     def sealed_bytes(self, tokens: int) -> int:
+        if self.bytes_by_context and tokens:
+            curve = np.asarray(self.bytes_by_context)
+            if not curve[0, 0] <= tokens <= curve[-1, 0]:
+                raise ValueError(f"context {tokens} outside measured KV transfer curve")
+            return math.ceil(np.interp(tokens, curve[:, 0], curve[:, 1]))
         return self.sealed_blocks(tokens) * self.block_bytes
+
+    def scalar_residual(self) -> float:
+        if not self.bytes_by_context:
+            return 0.0
+        x, y = np.asarray(self.bytes_by_context, float).T
+        scale = x @ y / (x @ x)
+        return float(max(abs(y - scale * x) / y))
 
     def tail_tokens(self, tokens: int) -> int:
         return max(0, int(tokens)) % self.block_tokens
@@ -312,11 +378,13 @@ class ModelProfile:
     max_destination_kv_streams: int
     sources: dict[str, Source]
     cases: dict[str, ProfileCase]
+    kv_geometry: KVGeometry | None = None
 
     @classmethod
     def load(cls, path: str | Path) -> "ModelProfile":
         raw = json.loads(Path(path).read_text())
-        if raw.get("schema") not in {PROFILE_SCHEMA, PHASE_PROFILE_SCHEMA}:
+        if raw.get("schema") not in {
+                PROFILE_SCHEMA, PHASE_PROFILE_SCHEMA, HYBRID_PROFILE_SCHEMA}:
             raise ValueError(f"expected schema {PROFILE_SCHEMA!r}")
         sources = {k: Source.parse(v) for k, v in raw["sources"].items()}
         missing = set(SOURCE_SECTIONS) - set(sources)
@@ -333,6 +401,7 @@ class ModelProfile:
             float(raw.get("max_power_load", raw["max_ell"])),
             int(raw["kv_capacity_tokens"]), int(raw["max_destination_replays"]),
             int(raw["max_destination_kv_streams"]), sources, cases,
+            KVGeometry.parse(raw["kv_geometry"]) if "kv_geometry" in raw else None,
         )
         if value.status not in {"fitted", "validated", "estimated"}:
             raise ValueError(f"unknown profile status {value.status!r}")
@@ -344,6 +413,8 @@ class ModelProfile:
             raise ValueError("invalid profile identity or limits")
         if min(value.max_destination_replays, value.max_destination_kv_streams) < 1:
             raise ValueError("destination concurrency limits must be positive")
+        if raw["schema"] == HYBRID_PROFILE_SCHEMA and value.kv_geometry is None:
+            raise ValueError("v6 profiles require heterogeneous KV geometry")
         for case in cases.values():
             if case.phase_power is None and value.max_power_load > case.power_curve.ell[-1]:
                 raise ValueError("max_power_load exceeds the calibrated power curve")
@@ -358,6 +429,16 @@ class ModelProfile:
             return self.cases[case_id]
         except KeyError as exc:
             raise ValueError(f"unknown profile case {case_id!r}") from exc
+
+    def kv_admission_tokens(self, context_tokens: int) -> int:
+        if context_tokens < 0:
+            raise ValueError("resident context must be nonnegative")
+        if self.kv_geometry is None:
+            return context_tokens
+        return math.ceil(
+            self.kv_geometry.pressure(context_tokens) * self.kv_capacity_tokens
+            - 1e-12
+        )
 
 
 @dataclass(frozen=True)

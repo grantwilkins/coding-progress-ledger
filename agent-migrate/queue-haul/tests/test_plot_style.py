@@ -7,6 +7,7 @@ Plausible wrong implementations:
 - Reuse a line style or retain the old per-session-fastest name.
 - Silently style an unknown policy or fail to apply the documented font sizes.
 - Reuse an action hatch so grayscale action segments become ambiguous.
+- Change a model's identity between architecture-campaign panels.
 """
 
 import matplotlib
@@ -58,8 +59,14 @@ def test_power_validation_methods_have_unique_markers():
 
 
 def test_power_families_have_shared_names_colors_and_markers():
-    assert set(plot_style.POWER_FAMILY_NAMES) == {
-        "idle", "prefill", "decode", "agentic", "campaign"}
+    assert set(plot_style.POWER_FAMILY_NAMES) == {"idle", "sessions"}
     assert set(plot_style.POWER_FAMILY_NAMES) == set(plot_style.POWER_FAMILY_COLORS) \
         == set(plot_style.POWER_FAMILY_MARKERS)
-    assert len(set(plot_style.POWER_FAMILY_MARKERS.values())) == 5
+    assert len(set(plot_style.POWER_FAMILY_MARKERS.values())) == 2
+
+
+def test_model_architectures_have_one_canonical_visual_identity():
+    assert set(plot_style.MODELS) == set(plot_style.MODEL_NAMES) \
+        == set(plot_style.MODEL_COLORS) == set(plot_style.MODEL_LINESTYLES) \
+        == set(plot_style.MODEL_MARKERS)
+    assert len(set(plot_style.MODEL_COLORS.values())) == len(plot_style.MODELS)

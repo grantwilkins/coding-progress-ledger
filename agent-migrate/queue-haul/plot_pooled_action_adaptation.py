@@ -36,11 +36,14 @@ CASE_NAMES = {
     "constraint/quota-30": "Germany replay quota",
 }
 ACTION_MIX_CASES = (
-    ("hardware_gap/free-bandwidth", "HBM + prefill"),
-    ("hardware_gap/free-kv", "Bandwidth + prefill"),
-    ("hardware_gap/free-service", "Bandwidth + HBM"),
-    ("hardware_gap/all-bind", "All bound"),
-    ("hardware_gap/all-release", "None bound"),
+    ("constraints/hbm", "HBM"),
+    ("constraints/bandwidth", "Bandwidth"),
+    ("constraints/prefill", "Prefill"),
+    ("constraints/hbm-bandwidth", "HBM + bandwidth"),
+    ("constraints/hbm-prefill", "HBM + prefill"),
+    ("constraints/bandwidth-prefill", "Bandwidth + prefill"),
+    ("constraints/all", "All bound"),
+    ("constraints/none", "None bound"),
 )
 plot_style.apply()
 
@@ -72,8 +75,69 @@ def pooled_composition(rows):
     return output
 
 
-def controlled_action_mixes(rows, fraction=2 / 3):
-    by_case = {row["case_id"]: row for row in at_fraction(rows, fraction)}
+def constraint_scenarios(bound, released):
+    def make(case, constraints):
+        scenario = {**released, "condition_id": case,
+                    "planning_state": case}
+        scenario["background"] = {
+            "east": bound["background"]["east"] if "hbm" in constraints
+            else released["background"]["east"],
+            "germany": bound["background"]["germany"] if "prefill" in constraints
+            else released["background"]["germany"],
+        }
+        scenario["kv_capacity_fraction"] = {
+            "east": bound["kv_capacity_fraction"]["east"]
+            if "hbm" in constraints
+            else released["kv_capacity_fraction"]["east"],
+            "germany": released["kv_capacity_fraction"]["germany"],
+        }
+        source = bound if "bandwidth" in constraints else released
+        scenario.update(bandwidth=source["bandwidth"],
+                        bandwidth_mbps=source["bandwidth_mbps"])
+        return scenario
+
+    names = (case.removeprefix("constraints/") for case, _ in ACTION_MIX_CASES)
+    return {f"constraints/{name}": make(name, set(name.split("-"))
+            if name not in {"all", "none"} else
+            {"hbm", "bandwidth", "prefill"} if name == "all" else set())
+            for name in names}
+
+
+def solve_case(scenario, manifest, profile, fraction):
+    problem, architecture, routes, _, _ = campaign._scenario_problem(
+        scenario, manifest, profile)
+    initial = campaign.source_power(problem, profile)
+    minimum = campaign.source_power(
+        problem, profile,
+        (session.session_id for session in problem.sessions))
+    actual = replace(problem, power_limit_w=initial - fraction *
+                     (initial - minimum))
+    result = campaign.solve(
+        actual, profile, routes, "lp_work_first",
+        seed=scenario["planner_seed"], destination=architecture,
+        admission_mode="normal")
+    return problem, result
+
+
+def constraint_combination_actions(plan_paths, fraction=2 / 3):
+    profile = campaign.ModelProfile.load(campaign.MODEL_PATH)
+    cases = {case: (scenario, manifest)
+             for case, scenario, manifest in pooled_cases(plan_paths)}
+    bound, manifest = cases["hardware_gap/all-bind"]
+    released, released_manifest = cases["hardware_gap/all-release"]
+    if manifest != released_manifest:
+        raise RuntimeError("constraint combinations require one matched pack")
+    rows = []
+    for case, scenario in constraint_scenarios(bound, released).items():
+        problem, result = solve_case(scenario, manifest, profile, fraction)
+        rows.append({"case_id": case, "sessions": len(problem.sessions),
+                     "selected_sessions": len(result.moves),
+                     **campaign._constraint_action_counts(result.moves)})
+    return rows
+
+
+def controlled_action_mixes(rows):
+    by_case = {row["case_id"]: row for row in rows}
     output = []
     for case, label in ACTION_MIX_CASES:
         row = by_case[case]
@@ -81,7 +145,14 @@ def controlled_action_mixes(rows, fraction=2 / 3):
         if int(row["sessions"]) != 28 or selected <= 0 \
                 or sum(int(row[action]) for action in ACTIONS) != selected:
             raise RuntimeError("action mix requires an accounted 28-session pack")
-        mix = {action: int(row[action]) / selected for action in ACTIONS}
+        mix = {
+            "replay": (int(row["east_replay"])
+                       + int(row["germany_replay"])) / int(row["sessions"]),
+            "kv_transfer": (int(row["east_kv_transfer"])
+                            + int(row["germany_kv_transfer"]))
+            / int(row["sessions"]),
+            "not_moved": 1 - selected / int(row["sessions"]),
+        }
         if not np.isclose(sum(mix.values()), 1):
             raise RuntimeError("selected-action mix does not sum to one")
         output.append({"bound_constraint": label, **mix})
@@ -98,24 +169,18 @@ def _save(fig, path, tight=True):
 def _controlled_action_mix(rows, out):
     import matplotlib.pyplot as plt
 
-    labels = {
-        "east_replay": "Replay → eastus-2",
-        "east_kv_transfer": "KV → eastus-2",
-        "germany_replay": "Replay → germany-west-central",
-        "germany_kv_transfer": "KV → germany-west-central",
-    }
     fig, axis = plt.subplots(figsize=ACTION_MIX_FIGSIZE)
     left = np.zeros(len(rows))
-    for action in ACTIONS:
+    for action in ("replay", "kv_transfer", "not_moved"):
         values = np.asarray([row[action] for row in rows]) * 100
         axis.barh(range(len(rows)), values, left=left,
                   color=plot_style.ACTION_COLORS[action],
                   hatch=plot_style.ACTION_HATCHES[action], edgecolor="white",
-                  linewidth=1.2, label=labels[action])
+                  linewidth=1.2, label=plot_style.ACTION_NAMES[action])
         left += values
     axis.set(yticks=range(len(rows)),
              yticklabels=[row["bound_constraint"] for row in rows],
-             xlim=(0, 100), xlabel="Selected-action share (%)")
+             xlim=(0, 100), xlabel="Source-session share (%)")
     axis.invert_yaxis()
     axis.grid(axis="x", alpha=.2)
     axis.tick_params(labelsize=ACTION_MIX_TICK_SIZE)
@@ -300,17 +365,7 @@ def episode_actions(plan_paths, fraction=2 / 3):
     for case, scenario, manifest in pooled_cases(plan_paths):
         if case not in wanted:
             continue
-        problem, architecture, routes, _, _ = campaign._scenario_problem(
-            scenario, manifest, profile)
-        initial = campaign.source_power(problem, profile)
-        minimum = campaign.source_power(
-            problem, profile, (session.session_id for session in problem.sessions))
-        actual = replace(problem, power_limit_w=initial - fraction *
-                         (initial - minimum))
-        result = campaign.solve(
-            actual, profile, routes, "lp_work_first",
-            seed=scenario["planner_seed"], destination=architecture,
-            admission_mode="normal")
+        problem, result = solve_case(scenario, manifest, profile, fraction)
         contexts = {session.session_id: session.context_tokens
                     for session in problem.sessions}
         rows.extend({
@@ -365,7 +420,7 @@ def main():
         rows = list(csv.DictReader(handle))
     selected = at_fraction(rows)
     composition = pooled_composition(rows)
-    mixes = controlled_action_mixes(rows)
+    mixes = controlled_action_mixes(constraint_combination_actions(args.plan))
     episodes = episode_actions(args.plan)
     write_csv(composition, args.out_dir / "pooled_demand_composition.csv")
     write_csv(episodes, args.out_dir / "matched_episode_actions.csv")

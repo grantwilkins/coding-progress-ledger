@@ -135,6 +135,10 @@ def _resident_tokens(session: SimSession, horizon: float = 0.0) -> int:
         if session.state == "active" else 0
 
 
+def _kv_tokens(profile: ModelProfile, session: SimSession, horizon: float = 0.0) -> int:
+    return profile.kv_admission_tokens(_resident_tokens(session, horizon))
+
+
 def _changes(session: SimSession, horizon: float) -> bool:
     return horizon > 0 and session.expected_growth_tokens_per_s > 0
 
@@ -383,7 +387,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         if session.source_instance in destination_ids
     )
     destination_tokens = sum(
-        _resident_tokens(session, horizon) for session in scenario.sessions
+        _kv_tokens(profile, session, horizon) for session in scenario.sessions
         if session.source_instance in destination_ids
     )
     add_resource(
@@ -393,7 +397,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         - destination_load,
     )
     add_resource(
-        ((method * n + j, _resident_tokens(session, horizon))
+        ((method * n + j, _kv_tokens(profile, session, horizon))
          for j, session in enumerate(sessions) for method in range(2)),
         len(destinations) * profile.kv_capacity_tokens - destination_tokens,
     )
@@ -644,9 +648,9 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
     for session in scenario.sessions:
         if session.source_instance in load:
             load[session.source_instance] += _ell(session, case)
-            tokens[session.source_instance] += _resident_tokens(
-                session, scenario.deadline_s - scenario.controller_delay_s
-            )
+            tokens[session.source_instance] += _kv_tokens(
+                profile, session,
+                scenario.deadline_s - scenario.controller_delay_s)
     size = len(destinations[0].gpu_nodes)
     capacity = InstanceCapacity(
         [load[i.instance_id] for i in destinations],
@@ -658,7 +662,7 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
         session, ell = sessions[j], _ell(sessions[j], case)
         horizon = scenario.deadline_s - scenario.controller_delay_s
         destination = destinations[capacity.place(
-            ell, _resident_tokens(session, horizon)
+            ell, _kv_tokens(profile, session, horizon)
         )].instance_id
         path = _route(routes, session.source_instance, destination)
         rate, quiesce = None, None

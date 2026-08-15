@@ -1,12 +1,22 @@
-"""Direct source-power parity must use raw, settled trace windows."""
+"""
+Claim:
+Power parity compares settled measured shed with phase-aware predicted shed
+using one common normalization.
+
+Plausible wrong implementations:
+- Plot the legacy utilization-only prediction.
+- Normalize prediction and measurement with different maxima.
+- Label the phase-aware prediction as the planner's old power estimate.
+"""
 
 import csv
 
 import matplotlib.pyplot as plt
 import pytest
 
+import plot_style
 from plot_hardware_power_parity import (
-    METHODS, normalize, predicted_shed, settled_pre_available,
+    METHODS, PLOT_METHODS, normalize, predicted_shed, settled_pre_available,
     source_power_shed, write_plot,
 )
 
@@ -80,6 +90,9 @@ def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
          "predicted_shed_w": 10, "measured_shed_w": repeat}
         for method in METHODS for repeat in (8, 12)
     ])
+    saves = []
+    monkeypatch.setattr(plt.Figure, "savefig",
+                        lambda _, path, **kwargs: saves.append((path, kwargs)))
     monkeypatch.setattr(plt, "close", lambda _: None)
 
     write_plot(rows, scale, tmp_path / "parity")
@@ -87,6 +100,19 @@ def test_plot_preserves_all_methods_repeats_and_parity(tmp_path, monkeypatch):
     axis = plt.gcf().axes[0]
     assert axis.lines[0].get_xdata().tolist() == axis.lines[0].get_ydata().tolist()
     assert axis.get_xlim() == axis.get_ylim()
-    assert len(axis.collections) == len(METHODS)
+    assert axis.get_xlabel() == "Predicted Shed (% of max)"
+    assert axis.get_ylabel() == "Measured Shed (% of max)"
+    assert len(axis.collections) == len(PLOT_METHODS)
     assert all(len(collection.get_offsets()) == 2 for collection in axis.collections)
+    assert {collection.get_label() for collection in axis.collections} == \
+        {"Queue-Haul LP", "Queue-Haul Greedy"}
+    legend = axis.get_legend()
+    assert {text.get_text() for text in legend.texts} == \
+        {"Queue-Haul LP", "Queue-Haul Greedy"}
+    assert {text.get_fontsize() for text in legend.texts} == \
+        {plot_style.LEGEND_FONT_SIZE}
+    assert not plt.gcf().texts
+    assert legend.get_bbox_to_anchor()._bbox.x0 == pytest.approx(1.02)
+    assert [path.suffix for path, _ in saves] == [".png", ".pdf"]
+    assert all(kwargs["bbox_inches"] == "tight" for _, kwargs in saves)
     assert {text.get_text() for text in axis.texts} >= {"Overshed", "Undershed"}

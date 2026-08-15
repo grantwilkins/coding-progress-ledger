@@ -491,7 +491,8 @@ class ExecutionSimulator:
         active = set()
         for session in self.sessions.values():
             if session.state == "active":
-                resident[session.source_instance] += session.context_tokens
+                resident[session.source_instance] += self.profile.kv_admission_tokens(
+                    session.context_tokens)
                 active.add(session.session_id)
         if any(tokens > self.profile.kv_capacity_tokens for tokens in resident.values()):
             raise ValueError("serving instance exceeds resident KV capacity")
@@ -499,8 +500,9 @@ class ExecutionSimulator:
         for move in self.moves:
             session = self.sessions[move.session_id]
             if session.state == "active":
-                resident[session.source_instance] -= session.context_tokens
-                resident[move.destination_instance] += session.context_tokens
+                tokens = self.profile.kv_admission_tokens(session.context_tokens)
+                resident[session.source_instance] -= tokens
+                resident[move.destination_instance] += tokens
         if any(tokens > self.profile.kv_capacity_tokens for tokens in resident.values()):
             raise ValueError("serving instance exceeds resident KV capacity")
 
@@ -739,7 +741,8 @@ class ExecutionSimulator:
             self._event("replay_done", session_id, detail=state.move.destination_instance)
         if phase == "wake":
             destination = state.move.destination_instance
-            self.resident_tokens[destination] += self.context[session_id]
+            self.resident_tokens[destination] += self.profile.kv_admission_tokens(
+                self.context[session_id])
             self.resident_sessions.add(session_id)
             self._check_resident(destination)
             state.wake_ready = self.time
@@ -813,8 +816,9 @@ class ExecutionSimulator:
         state.committed = self.time
         source = self.sessions[session_id].source_instance
         if session_id in self.resident_sessions:
-            self.resident_tokens[source] -= self.context[session_id]
-            self.resident_tokens[state.move.destination_instance] += self.context[session_id]
+            tokens = self.profile.kv_admission_tokens(self.context[session_id])
+            self.resident_tokens[source] -= tokens
+            self.resident_tokens[state.move.destination_instance] += tokens
             self._check_resident(state.move.destination_instance)
         self.power_model.move(session_id, state.move.destination_instance)
         self.quiescing.discard(session_id)
@@ -893,6 +897,7 @@ class ExecutionSimulator:
     def _request_done(self, session_id: str, request_index: int):
         request = self.sessions[session_id].requests[request_index]
         added = request.prompt_tokens + request.output_tokens
+        previous = self.profile.kv_admission_tokens(self.context[session_id])
         self.context[session_id] += added
         if session_id in self.move_index and session_id not in self.quiescing:
             index = self.move_index[session_id]
@@ -901,7 +906,8 @@ class ExecutionSimulator:
                 self._append_available(index, str(request_index))
         if session_id in self.resident_sessions:
             instance = self.active_request_instance[session_id]
-            self.resident_tokens[instance] += added
+            self.resident_tokens[instance] += (
+                self.profile.kv_admission_tokens(self.context[session_id]) - previous)
             self._check_resident(instance)
         self.active_request_end[session_id] = self.time
         instance = self.active_request_instance.pop(session_id)
@@ -1114,20 +1120,23 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
     pools = {pool.pool_id: pool for pool in destination.pools}
     if any(move.destination_pool not in pools for move in moves):
         raise ValueError("fluid moves require a destination pool")
-    paths = {move.path for move in moves}
-    if len(paths) > 1:
-        raise ValueError("fluid execution currently requires one shared site route")
+    paths = tuple(set(move.path for move in moves))
+    if any(set(paths[i]) & set(paths[j]) for i in range(len(paths))
+           for j in range(i + 1, len(paths))):
+        raise ValueError("fluid execution requires identical or disjoint routes")
     sessions = {session.session_id: session for session in scenario.sessions}
     case, start = profile.case(case_id), scenario.controller_delay_s
-    path = next(iter(paths), ())
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
-    bandwidth = min((links[link] for link in path), default=np.inf)
     route_bytes = np.array([
         sessions[move.session_id].log_bytes if move.method == "replay" else
         case.kv_transfer.sealed_bytes(sessions[move.session_id].context_tokens)
         for move in moves
     ], float)
-    network_done = np.full(len(moves), start + route_bytes.sum() / bandwidth)
+    network_done = np.empty(len(moves))
+    for path in paths:
+        members = [i for i, move in enumerate(moves) if move.path == path]
+        bandwidth = min((links[link] for link in path), default=np.inf)
+        network_done[members] = start + route_bytes[members].sum() / bandwidth
     commits = np.empty(len(moves))
     for pool_id, pool in pools.items():
         service = pool.fluid_migration
@@ -1137,6 +1146,28 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
         if service is None:
             raise ValueError("fluid execution cannot mix legacy destination pools")
         replay = [i for i in members if moves[i].method == "replay"]
+        kv = [i for i in members if moves[i].method == "kv_transfer"]
+        if service.coupling:
+            replay_work = sum(
+                sessions[moves[i].session_id].context_tokens / case.replay.rate(
+                    sessions[moves[i].session_id].context_tokens, 1,
+                ) + case.replay_completion_s for i in replay
+            ) / service.replay_speedup
+            q = destination.type_by_id[pool.type_id]
+            residual = q.migration["kv_transfer"].residual_s \
+                if q.migration else case.kv_transfer.initial_completion_s
+            kv_work = sum(route_bytes[i] / service.kv_ingest_bytes_per_s
+                          + residual for i in kv)
+            work = max(
+                replay_work + service.coupling * kv_work,
+                service.coupling * replay_work + kv_work,
+            ) / len(pool.replicas)
+            switches = len(members) * case.switch_s / len(pool.replicas)
+            done = (max(network_done[members[0]], start + work)
+                    if service.route_overlap else network_done[members[0]] + work)
+            done += switches
+            commits[members] = done
+            continue
         if replay:
             work = np.array([
                 sessions[moves[i].session_id].context_tokens / case.replay.rate(
@@ -1152,7 +1183,6 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
                 np.full(len(replay), case.replay_completion_s), capacity, streamed,
             )
             commits[replay] = done + case.switch_s
-        kv = [i for i in members if moves[i].method == "kv_transfer"]
         if kv:
             ingested = np.full(len(kv), max(
                 network_done[kv[0]], start + route_bytes[kv].sum() / (

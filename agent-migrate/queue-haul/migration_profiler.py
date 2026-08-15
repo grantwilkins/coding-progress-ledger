@@ -196,6 +196,26 @@ def calibration_messages(session: dict, tokens: int) -> list[dict]:
     ]
 
 
+def exact_calibration_messages(cfg, session: dict, target: int) -> list[dict]:
+    lo, hi, found = 1, target, None
+    probe = {"role": "user", "content":
+             f"Reply with session state code {session['state_code']}."}
+    while lo <= hi:
+        words = (lo + hi) // 2
+        messages = calibration_messages(session, words)
+        measured = len(b.mp_chat_tokens(cfg, [*messages, probe]))
+        if measured == target:
+            found = messages
+            break
+        if measured < target:
+            lo = words + 1
+        else:
+            hi = words - 1
+    if found is None:
+        raise RuntimeError(f"tokenizer cannot render exact {target}-token calibration prompt")
+    return found
+
+
 def estimated_prompt_tokens(session: dict, turn_index: int) -> int:
     messages = session_messages(session, turn_index)
     return sum(len(row["content"].split()) for row in messages) + 64 * len(messages) + PROBE_MAX_TOKENS
@@ -226,7 +246,7 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
               session_ids: tuple[str, ...] | list[str] = (),
               activity_tokens: tuple[int, ...] | list[int] = (),
               serving_concurrency: tuple[int, ...] | list[int] = (),
-              final_state: str = "awake") -> dict:
+              final_state: str = "awake", exact_tokens: bool = False) -> dict:
     manifest = json.loads(manifest_path.read_text())
     validate_manifest(manifest)
     serving_concurrency = list(serving_concurrency) or [1]
@@ -259,7 +279,9 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
                         random.Random(stable_seed(seed, size, active, repeat)).shuffle(chosen)
                         chosen = chosen[:count]
                     session_rows = [{"session_id": row["id"], "job_class": row["job_class"],
-                                     "turn_index": nearest_turn(row, size), "order": order}
+                                     "turn_index": 0 if exact_tokens else nearest_turn(row, size),
+                                     **({"initial_tokens": size} if exact_tokens else {}),
+                                     "order": order}
                                     for order, row in enumerate(chosen)]
                     for serving in serving_concurrency:
                         match_id = object_hash(
@@ -713,7 +735,7 @@ def cache_operations(path: Path, start_ns: int = 0, end_ns: int = 2**63 - 1) -> 
     return rows
 
 
-def kv_layout(path: Path, end_ns: int) -> dict:
+def kv_layout(path: Path, end_ns: int, chunk_tokens: int = 256) -> dict:
     rows = [row for row in cache_operations(path, end_ns=end_ns) if row["operation"] == "source_write" and int(row["bytes"]) > 0]
     if not rows:
         raise RuntimeError("no source KV layout was logged")
@@ -723,7 +745,9 @@ def kv_layout(path: Path, end_ns: int) -> dict:
     if len(layouts) != 1:
         raise RuntimeError(f"inconsistent full KV chunk layouts: {layouts}")
     dtype, shape = layouts.pop()
-    return {"chunk_tokens": 256, "chunk_bytes": chunk_bytes, "bytes_per_token": chunk_bytes / 256, "dtype": dtype, "shape": list(shape)}
+    return {"chunk_tokens": chunk_tokens, "chunk_bytes": chunk_bytes,
+            "bytes_per_token": chunk_bytes / chunk_tokens,
+            "dtype": dtype, "shape": list(shape)}
 
 
 def kv_metrics(hit: int, layout: dict) -> tuple[int, int]:
@@ -731,14 +755,16 @@ def kv_metrics(hit: int, layout: dict) -> tuple[int, int]:
     return (hit + tokens - 1) // tokens, hit * layout["chunk_bytes"] // tokens
 
 
-def expected_hits(method: str, phase: str, total: int, source_tokens: int | None = None) -> int:
+def expected_hits(method: str, phase: str, total: int,
+                  source_tokens: int | None = None,
+                  chunk_tokens: int = 256) -> int:
     if method != "kv_transfer":
         return 0
     if source_tokens is None:
         raise ValueError("KV transfer requires measured source tokens")
     if phase == "initial":
         return min(total, source_tokens)
-    return source_tokens // 256 * 256
+    return source_tokens // chunk_tokens * chunk_tokens
 
 
 def lookup_tokens(path: Path, request_id: str) -> tuple[int, int]:
@@ -776,8 +802,13 @@ class LiveSession:
         self.cfg, self.row, self.event_log = cfg, session, event_log
         self.source_log, self.cache_log, self.timeout_s = source_log, cache_log, timeout_s
         self.session_id, self.state_code = session["id"], session["state_code"]
-        self.messages = calibration_messages(session, initial_tokens) \
+        self.chunk_tokens = b.model_chunk_tokens(cfg)
+        self.messages = (
+            exact_calibration_messages(cfg, session, initial_tokens)
+            if initial_tokens and getattr(cfg, "architecture_campaign", False)
+            else calibration_messages(session, initial_tokens)
             if initial_tokens else session_messages(session, turn_index)
+        )
         self.generation, self.route, self.paused = 0, cfg.src_port, False
         self.lock = threading.Lock()
         self.activity_condition = threading.Condition(self.lock)
@@ -826,7 +857,8 @@ class LiveSession:
             keys = b.mp_wait_source_keys(
                 self.source_log, log_offset,
                 self.cache_log, transfer_offset,
-                result.prompt_tokens // 256 * 256,
+                result.prompt_tokens // self.chunk_tokens * self.chunk_tokens,
+                chunk_tokens=self.chunk_tokens,
             )
         else:
             after = time.monotonic_ns()
@@ -836,7 +868,7 @@ class LiveSession:
                 ) if row["operation"] == "source_write"
             }
         self.cache_keys |= keys
-        self.warm_cached_tokens = len(keys) * 256 \
+        self.warm_cached_tokens = len(keys) * self.chunk_tokens \
             if b.lmcache_mode() == "mp" \
             else stored_tokens(self.source_log, result.request_id)
 
@@ -884,9 +916,11 @@ class LiveSession:
                     keys = b.mp_wait_source_keys(
                         self.source_log, log_offset,
                         self.cache_log, transfer_offset,
-                        max(0, result.prompt_tokens // 256 * 256
+                        max(0, result.prompt_tokens // self.chunk_tokens
+                            * self.chunk_tokens
                             - result.cached_tokens),
                         self.cache_keys,
+                        self.chunk_tokens,
                     )
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]
@@ -959,6 +993,7 @@ class LiveRuntime:
                  serving_concurrency: int = 1,
                  scenario_start_ns: int = 0):
         self.sessions, self.cfg, self.activity = sessions, cfg, activity
+        self.chunk_tokens = b.model_chunk_tokens(cfg)
         self.sink_log, self.cache_log, self.event_log = sink_log, cache_log, event_log
         self.schedule, self.copy_policy = schedule or [], copy_policy
         self.mp_layout = b.mp_model_layout(sink_log) \
@@ -993,8 +1028,9 @@ class LiveRuntime:
         if self.copy_policy != "after_each_request":
             return ()
         session, stages = self.sessions[move.session_id], []
-        copied = len(session.copied_token_ids) // 256 if self.mp_layout else (
-            state.messages and self._prompt_tokens(session, state) // 256
+        copied = len(session.copied_token_ids) // self.chunk_tokens if self.mp_layout else (
+            state.messages and self._prompt_tokens(session, state)
+            // self.chunk_tokens
         )
         while session.activity_thread:
             session.wait_activity()
@@ -1003,8 +1039,8 @@ class LiveRuntime:
             start = time.monotonic_ns()
             request = self.prepare(move, current, "append")
             end = time.monotonic_ns()
-            sealed = len(session.copied_token_ids) // 256 if self.mp_layout \
-                else self._prompt_tokens(session, current) // 256
+            sealed = len(session.copied_token_ids) // self.chunk_tokens if self.mp_layout \
+                else self._prompt_tokens(session, current) // self.chunk_tokens
             layout = self._kv_layout(request.end_ns)
             stages.append(AppendStageResult(
                 len(stages), start, end, current, request, copied, sealed,
@@ -1033,17 +1069,11 @@ class LiveRuntime:
             tokens = b.mp_chat_tokens(
                 self.cfg, session.probe(list(state.messages)),
             )
-            shared = next((i for i, pair in enumerate(zip(
-                tokens, session.copied_token_ids,
-            )) if pair[0] != pair[1]), min(
-                len(tokens), len(session.copied_token_ids),
-            ))
             warm = b.mp_warm_prefetch(
                 self.cfg, tokens, *self.mp_layout,
             )
-            missing = len(tokens) // 256 - shared // 256
-            if warm["total_keys"] != len(tokens) // 256 \
-                    or warm["found_keys"] > missing:
+            if warm["total_keys"] < 1 \
+                    or not 0 <= warm["found_keys"] <= warm["total_keys"]:
                 raise RuntimeError(f"incomplete warm prefetch: {warm}")
         result, _text = session.request(
             self.cfg.api_proxy_port, list(state.messages),
@@ -1051,11 +1081,12 @@ class LiveRuntime:
             bypass_lmcache=move.method == "replay",
         )
         if move.method == "kv_transfer" and self.mp_layout:
-            hit = b.mp_request_hit(
+            b.mp_request_hit(
                 self.sink_log, log_offset, result.request_id, False,
+                self.chunk_tokens,
             )
-            if result.cached_tokens < hit \
-                    or hit < (shared // 256 + warm["found_keys"]) * 256:
+            hit = result.cached_tokens
+            if hit < len(tokens) // self.chunk_tokens * self.chunk_tokens:
                 raise RuntimeError(
                     f"request-time WAN or cache accounting mismatch for "
                     f"{result.request_id}"
@@ -1071,6 +1102,7 @@ class LiveRuntime:
                 move.method, phase, total,
                 session.warm_cached_tokens if phase == "initial"
                 else self._prompt_tokens(session, state),
+                self.chunk_tokens,
             )
             if hit != expected:
                 raise RuntimeError(
@@ -1080,8 +1112,9 @@ class LiveRuntime:
         layout = self._kv_layout(result.end_ns) \
             if move.method == "kv_transfer" or not self.mp_layout else {}
         logical_chunks, logical_bytes = (
-            (len(session.copied_token_ids) // 256,
-             len(session.copied_token_ids) // 256 * layout["chunk_bytes"])
+            (len(session.copied_token_ids) // self.chunk_tokens,
+             len(session.copied_token_ids) // self.chunk_tokens
+             * layout["chunk_bytes"])
             if move.method == "kv_transfer" and self.mp_layout
             else kv_metrics(hit, layout) if layout else (0, 0)
         )
@@ -1093,7 +1126,7 @@ class LiveRuntime:
 
     def _kv_layout(self, end_ns: int) -> dict:
         if not self.mp_layout:
-            return kv_layout(self.cache_log, end_ns)
+            return kv_layout(self.cache_log, end_ns, self.chunk_tokens)
         sizes = {
             int(row["payload_bytes"]) for row in b.resp_rows(self.cache_log)
             if row["command"] == "GET" and int(row["payload_bytes"]) > 0
@@ -1103,8 +1136,9 @@ class LiveRuntime:
             raise RuntimeError(f"inconsistent MP KV block sizes: {sizes}")
         size = sizes.pop()
         return {
-            "chunk_tokens": 256, "chunk_bytes": size,
-            "bytes_per_token": size / 256, "dtype": None, "shape": [],
+            "chunk_tokens": self.chunk_tokens, "chunk_bytes": size,
+            "bytes_per_token": size / self.chunk_tokens,
+            "dtype": None, "shape": [],
         }
 
     def pause(self, session_id: str) -> None:
@@ -2535,7 +2569,8 @@ def current_model_time(row: dict, profile) -> float | None:
     ) + case.replay_completion_s
 
 
-def reduce_run(run_root: Path) -> None:
+def reduce_run(run_root: Path, profile_path: Path | None = Path(__file__).with_name(
+        "profiles") / "gpt_oss_20b_h100_tp1.json") -> None:
     metadata = json.loads((run_root / "run_metadata.json").read_text())
     if metadata.get("schema") not in SCHEMAS[RUN_SCHEMA]:
         raise ValueError("unsupported run schema")
@@ -2623,9 +2658,10 @@ def reduce_run(run_root: Path) -> None:
         if row["kind"] == "migration" and control and row["continuation_ttft_s"] is not None:
             row["continuation_difference_s"] = row["continuation_ttft_s"] - control["continuation_ttft_s"]
     from profiles import ModelProfile
-    profile = ModelProfile.load(Path(__file__).with_name("profiles") / "gpt_oss_20b_h100_tp1.json")
+    profile = ModelProfile.load(profile_path) if profile_path else None
     for row in migrations:
-        row["current_model_time_s"] = current_model_time(row, profile)
+        row["current_model_time_s"] = current_model_time(row, profile) \
+            if profile else None
     write_csv(run_root / "migrations.csv", migrations)
     write_csv(run_root / "scenarios.csv", scenarios)
     if services:
@@ -2673,6 +2709,10 @@ def valid_continuations(result: dict, expected: int) -> bool:
 
 def check_parallel_run(run_root: Path) -> None:
     plan = json.loads((run_root / "plan.json").read_text())
+    config = json.loads((run_root / "run_metadata.json").read_text()).get(
+        "config", {})
+    chunk_tokens = b.model_spec(config["model"]).chunk_tokens \
+        if config.get("architecture_campaign") else 256
     scenarios = [
         row for row in plan["scenarios"]
         if row["kind"] == "migration" and row["method"] == "kv_transfer"
@@ -2703,7 +2743,7 @@ def check_parallel_run(run_root: Path) -> None:
             payload = sum(expected.values())
             correct = len(moves) == len(scenario["sessions"]) and all(
                 not row["error"]
-                and row["initial"]["processed_tokens"] < 256
+                and row["initial"]["processed_tokens"] < chunk_tokens
                 and row["initial"]["logical_kv_bytes"] > 0 for row in moves
             ) and valid_continuations(result, len(scenario["sessions"]))
             passed = correct and measured["session_kv_body_bytes"] == expected

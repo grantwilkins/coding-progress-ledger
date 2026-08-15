@@ -60,9 +60,14 @@ uv pip install --python .venv/bin/python \
   --find-links https://github.com/LMCache/LMCache/releases/expanded_assets/v0.5.1-cu129 \
   --index-strategy unsafe-best-match
 
-.venv/bin/hf download openai/gpt-oss-20b \
-  --revision 6cee5e81ee83917806bbde320786a8fb61efebee \
-  --exclude 'original/*' --exclude 'metal/*'
+while read -r model revision; do
+  .venv/bin/hf download "$model" --revision "$revision" \
+    --exclude 'original/*' --exclude 'metal/*'
+done <<'MODELS'
+openai/gpt-oss-20b 6cee5e81ee83917806bbde320786a8fb61efebee
+Qwen/Qwen3.8-27B 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+google/gemma-4-26B-A4B-it 4d7ae4984b7db7de8f8457170b3f1a419ee76d52
+MODELS
 
 .venv/bin/python - <<'PY'
 from importlib.metadata import version
@@ -75,11 +80,15 @@ from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector
 assert version("vllm") == "0.22.0", version("vllm")
 assert version("lmcache") == "0.5.1", version("lmcache")
 assert torch.version.cuda == "12.9", torch.version.cuda
-snapshot = Path("/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee")
-assert snapshot.is_dir(), snapshot
-assert len(list(snapshot.glob("model-*.safetensors"))) == 3, snapshot
-assert all((snapshot / name).is_file() for name in
-           ("config.json", "model.safetensors.index.json", "tokenizer.json"))
+models = {
+    "openai/gpt-oss-20b": "6cee5e81ee83917806bbde320786a8fb61efebee",
+    "Qwen/Qwen3.8-27B": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "google/gemma-4-26B-A4B-it": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
+}
+for model, revision in models.items():
+    snapshot = Path("/datadrive/hub") / f"models--{model.replace('/', '--')}" / "snapshots" / revision
+    assert all((snapshot / name).is_file() for name in
+               ("config.json", "model.safetensors.index.json", "tokenizer.json")), snapshot
 PY
 valkey-server --version
 

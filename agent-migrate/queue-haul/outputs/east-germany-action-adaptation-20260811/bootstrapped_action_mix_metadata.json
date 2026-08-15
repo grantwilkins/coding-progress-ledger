@@ -1,0 +1,25 @@
+{
+  "claim": "modeled calibration-sensitivity distribution",
+  "joint_rows": 8000,
+  "joint_target_met_rate": {
+    "All bound": 0.243,
+    "Bandwidth": 1.0,
+    "Bandwidth + prefill": 0.982,
+    "HBM": 0.994,
+    "HBM + bandwidth": 0.999,
+    "HBM + prefill": 0.255,
+    "None bound": 0.979,
+    "Prefill": 0.782
+  },
+  "limitations": [
+    "fixed 28-session pack; not independent workload observations",
+    "timing telemetry covers concurrency one and zero destination prefill load",
+    "constraint combinations are modeled hybrids, not eight hardware runs",
+    "phase-power calibration is fitted sensitivity evidence, not promotion-ready"
+  ],
+  "power_bootstrap_near_zero_prefill_fraction": 0.14,
+  "power_model": "ell = 0.0001783544319906395 f + 0.009287706208604906 g",
+  "samples_per_case": 1000,
+  "schema": "queue-haul-action-calibration-bootstrap-v1",
+  "seed": 1
+}

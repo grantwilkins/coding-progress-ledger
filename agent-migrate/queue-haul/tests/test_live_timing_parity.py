@@ -1,4 +1,16 @@
-"""The timing parity plot pools only unseen live replay and KV predictions."""
+"""
+Claim:
+Timing parity plots preserve every queue-level critical-path observation, and
+the full-migration view reports pooled MAE and R² in seconds on fixed log axes
+whose labeled decades span 10⁰ through 10².
+
+Plausible wrong implementations:
+- Compute errors after taking logarithms instead of in seconds.
+- Report one action subset instead of the pooled queue observations.
+- Derive limits from the sample and omit the 10⁰ decade.
+- Retain queue-makespan labels or a title instead of full-migration labels.
+- Keep a large canvas whose text becomes unreadable at half-column placement.
+"""
 
 import csv
 from itertools import product
@@ -73,5 +85,30 @@ def test_history_uses_frozen_replay_and_regional_kv_model(tmp_path, monkeypatch)
     queues = queue_rows(rows)
     assert queues == [{"scenario_id": "mixed", "action": "mixed",
                        "predicted_s": 4, "measured_s": 5}]
-    write_queue(queues, tmp_path / "queue")
+
+
+def test_queue_parity_uses_full_migration_axes_and_pooled_second_metrics(
+        tmp_path, monkeypatch):
+    rows = [
+        {"action": "replay", "predicted_s": 1, "measured_s": 1},
+        {"action": "replay", "predicted_s": 2, "measured_s": 3},
+        {"action": "kv_transfer", "predicted_s": 3, "measured_s": 3},
+        {"action": "mixed", "predicted_s": 4, "measured_s": 5},
+    ]
+    monkeypatch.setattr(plt, "close", lambda _: None)
+
+    write_queue(rows, tmp_path / "queue")
+
+    axis = plt.gcf().axes[0]
+    assert not axis.get_title()
+    assert axis.figure.get_size_inches().tolist() == [1.65, 1.75]
+    assert axis.xaxis.label.get_fontsize() >= 7.5
+    assert min(text.get_fontsize() for text in axis.legend_.texts) >= 6.5
+    assert axis.get_xlabel().replace("\n", " ") == "Predicted Full Migration (s)"
+    assert axis.get_ylabel() == "Measured Full Migration (s)"
+    assert axis.get_xscale() == axis.get_yscale() == "log"
+    assert axis.get_xlim() == axis.get_ylim() == (1, 200)
+    assert [tick for tick in axis.get_xticks() if 1 <= tick <= 200] == [1, 10, 100]
+    assert axis.lines[0].get_xdata().tolist() == [1, 200]
+    assert axis.texts[0].get_text() == "MAE 0.50 s\n$R^2$ 0.750"
     assert (tmp_path / "queue.png").stat().st_size

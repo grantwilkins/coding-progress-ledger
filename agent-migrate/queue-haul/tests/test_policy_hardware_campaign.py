@@ -16,6 +16,10 @@ Plausible wrong implementations:
 - Drop failed full-target episodes or forget the trailing power window.
 - Clip full-target completions at the deadline instead of extending the CDF.
 - Mix 19-second plans into the 30-second attainment curve.
+- Average bandwidth cells instead of retaining every episode in its cell.
+- Count the independently-fastest, deadline-infeasible tail as selected actions.
+- Relabel a 0-1 attainment fraction as percent without scaling it by 100.
+- Keep column panels oversized, clipped, or with external/LP-suffixed legends.
 - Retain bespoke colors or the default size in the full-attainment CDF.
 - Put the full-attainment legend outside the axes or across a plotted line.
 - Plot destination-only prefill instead of migration-to-first-token latency.
@@ -50,6 +54,7 @@ from policy_hardware_campaign import (
     CDF_COLORS,
     CDF_LABELS,
     CDF_LINESTYLES,
+    bandwidth_summary,
     completion_curve,
     deadline_attainment,
     disruption_points,
@@ -637,6 +642,97 @@ def test_full_power_attainment_includes_late_events_and_power_window():
     assert y.tolist() == [0, .25, .5, .75]
 
 
+def test_bandwidth_summary_preserves_episode_denominators_and_admitted_actions(
+        tmp_path, monkeypatch):
+    """Bandwidth success is per episode; action shares exclude fallback tails.
+
+    Plausible mistakes are dropping failed episodes, omitting the power window,
+    including the 19-second cohort, or counting unadmitted fallback moves.
+    """
+    scenarios, summaries = [], []
+
+    def add(policy, bandwidth, name, commit, moves=(), deadline=30):
+        scenarios.append({
+            "scenario_id": name, "policy": policy,
+            "bandwidth_mbps": bandwidth, "moves": list(moves),
+        })
+        summaries.append({
+            "scenario_id": name, "policy": policy,
+            "required_deadline_s": str(deadline), "commit_100_s": commit,
+        })
+
+    replay = {"method": "replay", "deadline_admitted": True}
+    kv = {"method": "kv_transfer", "deadline_admitted": True}
+    replay_tail = {**replay, "deadline_admitted": False}
+    kv_tail = {**kv, "deadline_admitted": False}
+    add("queue_haul", 1000, "q1", "25", (replay, kv_tail))
+    add("queue_haul", 1000, "q2", "25.1", (kv, replay_tail))
+    add("replay_only", 1000, "r1", "", ())
+    add("replay_only", 1000, "r2", "24", ())
+    add("kv_only", 1000, "k1", "1", ())
+    add("kv_only", 1000, "k2", "2", ())
+    add("queue_haul", 5000, "q3", "", (replay, replay, kv))
+    add("replay_only", 5000, "r3", "25", ())
+    add("kv_only", 5000, "k3", "26", ())
+    add("queue_haul", 1000, "q19", "1", (kv,), deadline=19)
+
+    attainment, actions = bandwidth_summary(summaries, scenarios, 5)
+    values = {
+        (row["policy"], row["bandwidth_gbps"]): (
+            row["episodes_meeting_deadline"], row["episodes"],
+            row["attainment_fraction"],
+        ) for row in attainment
+    }
+    assert values == {
+        ("queue_haul", 1): (1, 2, .5),
+        ("replay_only", 1): (1, 2, .5),
+        ("kv_only", 1): (2, 2, 1),
+        ("queue_haul", 5): (0, 1, 0),
+        ("replay_only", 5): (1, 1, 1),
+        ("kv_only", 5): (0, 1, 0),
+    }
+    assert actions == [
+        {
+            "deadline_s": 30, "bandwidth_gbps": 1,
+            "selected_actions": 2, "replay_actions": 1,
+            "kv_transfer_actions": 1, "replay_share": .5,
+            "kv_transfer_share": .5,
+        },
+        {
+            "deadline_s": 30, "bandwidth_gbps": 5,
+            "selected_actions": 3, "replay_actions": 2,
+            "kv_transfer_actions": 1, "replay_share": pytest.approx(2 / 3),
+            "kv_transfer_share": pytest.approx(1 / 3),
+        },
+    ]
+    figures, subplots = [], campaign.plt.subplots
+
+    def capture(*args, **kwargs):
+        result = subplots(*args, **kwargs)
+        figures.append(result[0])
+        return result
+
+    monkeypatch.setattr(campaign.plt, "subplots", capture)
+    campaign.plot_bandwidth_summary(summaries, scenarios, 5, tmp_path)
+    attainment_ax, action_ax = [figure.axes[0] for figure in figures]
+    assert [tuple(figure.get_size_inches()) for figure in figures] \
+        == [(4, 3), (4, 3)]
+    assert attainment_ax.get_ylabel() == "Percent Deadline Met (%)"
+    assert attainment_ax.lines[0].get_ydata().tolist() == [50, 0]
+    assert [text.get_text() for text in attainment_ax.get_legend().texts] \
+        == ["Queue-Haul", "Replay Context Only", "KV Migrate Only"]
+    assert action_ax.get_ylabel() == "Queue-Haul Action Share"
+    assert max(max(line.get_ydata()) for line in action_ax.lines) <= 1
+    assert [ax.get_legend()._loc for ax in (attainment_ax, action_ax)] == [3, 4]
+    assert [ax.xaxis.label.get_fontsize() for ax in (attainment_ax, action_ax)] \
+        == [11, 11]
+    for name in ("attainment", "action_mix"):
+        base = tmp_path / f"policy_hardware_30s_{name}_by_bandwidth"
+        assert base.with_suffix(".csv").exists()
+        assert base.with_suffix(".pdf").exists()
+        assert base.with_suffix(".png").exists()
+
+
 def test_full_power_attainment_uses_all_cases_and_requested_layout(
         tmp_path, monkeypatch):
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
@@ -844,7 +940,7 @@ def test_plot_reduced_adds_pooled_campaign_to_every_graph(tmp_path,
         "plot_max_session_ttft", "plot_destination_ttft_by_bandwidth",
         "plot_power_shed", "plot_hardware_pareto", "plot_disruption",
         "plot_migration_time_per_watt", "plot_max_session_ttft_per_watt",
-        "plot_full_power_attainment",
+        "plot_full_power_attainment", "plot_bandwidth_summary",
     )
     for name in names:
         monkeypatch.setattr(campaign, name, capture(name))
@@ -860,6 +956,10 @@ def test_plot_reduced_adds_pooled_campaign_to_every_graph(tmp_path,
         == expected
     assert {row["policy"] for row in
             calls["plot_destination_ttft_by_bandwidth"][0][2]} == expected
+    assert {row["policy"] for row in
+            calls["plot_bandwidth_summary"][0][0]} == expected
+    assert {row["policy"] for row in
+            calls["plot_bandwidth_summary"][0][1]} == expected
     assert {args[3] for args in calls["plot"]} == {"pooled", "same"}
 
 

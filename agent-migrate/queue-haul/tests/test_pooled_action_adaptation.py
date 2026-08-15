@@ -1,15 +1,16 @@
 """
 Claim:
-Action views select one Queue-Haul plan per case. Controlled bars report the
-composition of selected actions from matched 28-session packs.
+Action views select one Queue-Haul plan per case. Controlled bars account for
+every source session as replay, KV transfer, or not moved in matched 28-session
+packs under every combination of HBM, bandwidth, and prefill bottlenecks.
 
 Plausible wrong implementations:
 - Pool raw action counts, overweighting cases with more sessions.
-- Normalize by selected sessions and hide changes in how many sessions move.
-- Swap an action column or omit sessions that remain at the source.
+- Swap a regional action column or fail to combine both regions.
 - Mix policies or duplicate a designed case at a requested-shed coordinate.
-- Normalize controlled bars by all source sessions instead of selected actions.
+- Normalize by selected actions and hide changes in how many sessions move.
 - Include unaccounted selected sessions or a mismatched pack.
+- Omit a constraint combination or bind the wrong subset.
 """
 
 import pytest
@@ -17,7 +18,7 @@ import pytest
 from plot_pooled_action_adaptation import (
     ACTION_MIX_CASES, ACTION_MIX_FIGSIZE, ACTION_MIX_LABEL_SIZE,
     ACTION_MIX_LEGEND_SIZE, ACTION_MIX_TICK_SIZE, at_fraction,
-    controlled_action_mixes, pooled_composition,
+    constraint_scenarios, controlled_action_mixes, pooled_composition,
 )
 
 
@@ -53,15 +54,14 @@ def test_fraction_selection_rejects_duplicate_case_and_other_policy():
         at_fraction([chosen, chosen], .5)
 
 
-def test_controlled_mix_normalizes_selected_actions_without_n(monkeypatch):
+def test_controlled_mix_accounts_for_every_source_session(monkeypatch):
     monkeypatch.setattr("plot_pooled_action_adaptation.ACTION_MIX_CASES",
-                        (("case", "Bandwidth bound"),))
+                        (("case", "Bandwidth"),))
     rows = [row("case", 28, (3, 1, 7, 4), fraction=2 / 3)]
 
     assert controlled_action_mixes(rows) == [{
-        "bound_constraint": "Bandwidth bound",
-        "east_replay": .2, "east_kv_transfer": 1 / 15,
-        "germany_replay": 7 / 15, "germany_kv_transfer": 4 / 15,
+        "bound_constraint": "Bandwidth",
+        "replay": 10 / 28, "kv_transfer": 5 / 28, "not_moved": 13 / 28,
     }]
 
     rows[0]["selected_sessions"] = 16
@@ -69,17 +69,44 @@ def test_controlled_mix_normalizes_selected_actions_without_n(monkeypatch):
         controlled_action_mixes(rows)
 
 
-def test_memory_constraint_is_labeled_hbm():
-    labels = {case: label for case, label in ACTION_MIX_CASES}
-    assert labels["hardware_gap/free-bandwidth"] == "HBM + prefill"
-    assert labels["hardware_gap/free-service"] == "Bandwidth + HBM"
+def test_constraint_scenarios_bind_each_requested_subset():
+    released = {
+        "background": {"east": [.25, 0], "germany": [.25, 0]},
+        "kv_capacity_fraction": {"east": 1, "germany": 1},
+        "bandwidth": "natural", "bandwidth_mbps": {"east": 2, "germany": 8},
+    }
+    bound = {
+        **released,
+        "background": {"east": [.25, .9], "germany": [.75, 0]},
+        "kv_capacity_fraction": {"east": .1, "germany": 1},
+        "bandwidth": "controlled", "bandwidth_mbps": {"east": 1, "germany": 3},
+    }
+
+    cases = constraint_scenarios(bound, released)
+    assert cases["constraints/hbm"]["background"] == {
+        "east": [.25, .9], "germany": [.25, 0]}
+    assert cases["constraints/hbm"]["bandwidth"] == "natural"
+    assert cases["constraints/hbm"]["kv_capacity_fraction"]["east"] == .1
+    assert cases["constraints/bandwidth"]["background"] == released["background"]
+    assert cases["constraints/bandwidth"]["bandwidth"] == "controlled"
+    assert cases["constraints/bandwidth"]["kv_capacity_fraction"]["east"] == 1
+    assert cases["constraints/prefill"]["background"] == {
+        "east": [.25, 0], "germany": [.75, 0]}
+    assert cases["constraints/prefill"]["kv_capacity_fraction"]["east"] == 1
+    assert cases["constraints/hbm-bandwidth"]["bandwidth"] == "controlled"
+    assert cases["constraints/hbm-bandwidth"]["background"]["germany"] == [.25, 0]
+    assert cases["constraints/hbm-prefill"]["bandwidth"] == "natural"
+    assert cases["constraints/bandwidth-prefill"]["kv_capacity_fraction"]["east"] == 1
+    assert cases["constraints/all"]["background"] == bound["background"]
+    assert cases["constraints/all"]["bandwidth"] == "controlled"
+    assert cases["constraints/none"]["background"] == released["background"]
 
 
-def test_action_mix_uses_five_resource_states_with_bound_extremes_adjacent():
-    assert len(ACTION_MIX_CASES) == 5
+def test_action_mix_uses_all_eight_constraint_combinations():
+    assert len(ACTION_MIX_CASES) == 8
     assert ACTION_MIX_CASES[-2:] == (
-        ("hardware_gap/all-bind", "All bound"),
-        ("hardware_gap/all-release", "None bound"),
+        ("constraints/all", "All bound"),
+        ("constraints/none", "None bound"),
     )
     assert all(case != "constraint/quota-30" for case, _ in ACTION_MIX_CASES)
     assert ACTION_MIX_FIGSIZE == (5.5, 3)

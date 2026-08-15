@@ -24,6 +24,7 @@ Plausible wrong implementations:
 - Divide debt by total capacity instead of post-migration spare capacity.
 - Mark positive debt feasible when post-migration service has no recovery spare.
 - Lose physical units or pool/facet identity in normalized planner rows.
+- Compare Replay seconds with KV bytes in the work-first objective.
 - Treat unused early capacity as if it could serve transition work arriving late.
 - Credit node shutdown during session selection instead of only after planning.
 - Rank sessions only by initial marginal power and miss a feasible source prefix.
@@ -83,7 +84,7 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           validate_destination_execution)
 from power_model import ExpectedPower
 from simulate import (PlannedMove, PowerNode, ServingInstance, SessionExecution,
-                      SimSession, execute)
+                      SimSession, NetworkLink, execute)
 from test_execution_simulator import model
 from test_planner import PATHS, problem
 
@@ -123,13 +124,13 @@ def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_pa
         replace(problem().sessions[1], expected_f=45),
     ))
     profile, seen = model(tmp_path, tp=1), []
-    original = pool_planner._lp
+    original = pool_planner._lp_highs
 
     def capture(table, target):
         seen.append([candidate.gain_w for candidate in table.candidates])
         return original(table, target)
 
-    monkeypatch.setattr(pool_planner, "_lp", capture)
+    monkeypatch.setattr(pool_planner, "_lp_highs", capture)
     plan(scenario, profile, PATHS, "lp_power_blind", destination=architecture())
 
     expected = ExpectedPower(scenario, profile).drain_gain(("a", "b")) / 2
@@ -298,6 +299,7 @@ def test_highs_lp_matches_target_problem_and_max_gain_fallback():
 
     assert _lp_highs(table, 3) == {1, 2}
     assert _lp_highs(table, 4) == {1, 2}
+
 
 @pytest.mark.parametrize("status, values", [
     ("failed", np.zeros(3)),
@@ -499,9 +501,9 @@ def test_lazy_column_master_matches_complete_persistent_lp(target):
     restricted, selected = _lp_column_generation_lazy(_table_oracle(table), target, lazy)
     reference = _lp_column_generation_persistent(table, target, persistent)
 
-    semantic = lambda source, indices: {
-        (source.candidates[i].session, source.candidates[i].method) for i in indices
-    }
+    def semantic(source, indices):
+        return {(source.candidates[i].session, source.candidates[i].method)
+                for i in indices}
     assert semantic(restricted, selected) == semantic(table, reference)
     assert lazy["phase1_shortfall"] == pytest.approx(
         persistent["phase1_shortfall"], abs=1e-7,
@@ -807,7 +809,7 @@ def test_repair_reports_the_revised_maximum_for_an_impossible_target(tmp_path):
     assert result.attainable_watts == pytest.approx(20)
 
 
-def test_fluid_pool_charges_serial_replay_work_to_replica_speedup(tmp_path):
+def test_fluid_pool_converts_method_work_to_replica_seconds(tmp_path):
     service = FluidMigrationService(
         4, 100, {"replay": 1, "kv_transfer": 1},
         {"replay": 1, "kv_transfer": 1}, "hand",
@@ -832,15 +834,20 @@ def test_fluid_pool_charges_serial_replay_work_to_replica_speedup(tmp_path):
     wan_row = table.resource_names.index("route:wan")
     replay = [i for i, candidate in enumerate(table.candidates)
               if candidate.method == "replay"]
+    kv = [i for i, candidate in enumerate(table.candidates)
+          if candidate.method == "kv_transfer"]
 
-    assert table.resource_capacities[row] == pytest.approx(2 * 4 * 9)
-    assert table.resource_capacities[kv_row] == pytest.approx(2 * 100 * 9)
+    assert table.resource_capacities[row] == pytest.approx(2 * 9)
+    assert table.resource_capacities[kv_row] == pytest.approx(2 * 9)
     assert table.resource_capacities[wan_row] == pytest.approx(100 * 9)
     assert table.resource_capacities[kv_row] == pytest.approx(
         2 * single_table.resource_capacities[
             single_table.resource_names.index("migration:p0:kv_transfer")
         ]
     )
+    assert all(table.candidates[i].migration_work_s == pytest.approx(
+        table.candidates[i].route_bytes / service.kv_ingest_bytes_per_s
+    ) for i in kv)
     assert table.resource_capacities[wan_row] == pytest.approx(
         single_table.resource_capacities[
             single_table.resource_names.index("route:wan")
@@ -850,6 +857,154 @@ def test_fluid_pool_charges_serial_replay_work_to_replica_speedup(tmp_path):
         sum(table.candidates[i].migration_work_s for i in replay)
         / table.resource_capacities[row]
     )
+
+
+def test_fluid_coupling_is_a_dimensionally_common_linear_envelope(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand", .5,
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+    replay = next(i for i, candidate in enumerate(table.candidates)
+                  if candidate.session == 0 and candidate.method == "replay")
+    kv = next(i for i, candidate in enumerate(table.candidates)
+              if candidate.session == 1 and candidate.method == "kv_transfer")
+    rows = [table.resource_names.index(f"migration:p0:{method}")
+            for method in ("replay", "kv_transfer")]
+    used = np.asarray(table.resources[rows][:, [replay, kv]].sum(1)).ravel()
+    r, k = (table.candidates[index].migration_work_s for index in (replay, kv))
+
+    assert used * np.asarray(table.resource_capacities)[rows] == pytest.approx(
+        (r + .5 * k, .5 * r + k)
+    )
+
+
+def test_fluid_serial_route_charges_route_and_switch_to_shared_work(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    scenario, profile = problem(), model(tmp_path, switch=.25, tp=1)
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+    selected = [next(i for i, candidate in enumerate(table.candidates)
+                     if candidate.session == session and candidate.method == method)
+                for session, method in ((0, "replay"), (1, "kv_transfer"))]
+    row = table.resource_names.index("migration:p0:replay")
+    used = float(table.resources[row, selected].sum()) \
+        * table.resource_capacities[row]
+    compute = sum(
+        table.candidates[index].migration_work_s
+        - table.candidates[index].route_bytes / 100 - .25
+        for index in selected
+    )
+
+    assert used == pytest.approx(
+        compute + sum(table.candidates[index].route_bytes / 100 + .25
+                      for index in selected)
+    )
+
+
+def test_fluid_execution_uses_the_planner_coupling_envelope(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand", .5,
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+    selected = [next(candidate for candidate in table.candidates
+                     if candidate.session == session and candidate.method == method)
+                for session, method in ((0, "replay"), (1, "kv_transfer"))]
+    moves = tuple(PlannedMove(
+        table.sessions[candidate.session].session_id, "t0", candidate.method,
+        order, ("wan",), destination_pool="p0",
+    ) for order, candidate in enumerate(selected))
+    r, k = (candidate.migration_work_s for candidate in selected)
+    network = sum(candidate.route_bytes for candidate in selected) / 100
+
+    result = execute(scenario, profile, moves, destination=arch)
+
+    assert result.migration_makespan_s == pytest.approx(
+        max(network, r + .5 * k, .5 * r + k)
+    )
+
+
+def test_fluid_execution_serializes_route_and_switch_with_shared_work(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    scenario, profile = problem(), model(tmp_path, switch=.25, tp=1)
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+    selected = [next(candidate for candidate in table.candidates
+                     if candidate.session == session and candidate.method == method)
+                for session, method in ((0, "replay"), (1, "kv_transfer"))]
+    moves = tuple(PlannedMove(
+        table.sessions[candidate.session].session_id, "t0", candidate.method,
+        order, ("wan",), destination_pool="p0",
+    ) for order, candidate in enumerate(selected))
+
+    result = execute(scenario, profile, moves, destination=arch)
+
+    assert result.migration_makespan_s == pytest.approx(
+        sum(candidate.migration_work_s for candidate in selected)
+    )
+
+
+def test_fluid_execution_runs_disjoint_destination_routes_in_parallel(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0), (0, 0)),
+        routes=(("wan",), ("wan2",)), fluid=service,
+    )
+    scenario = replace(problem(), links=(NetworkLink("wan", 100),
+                                         NetworkLink("wan2", 50)))
+    profile = model(tmp_path, switch=0, tp=1)
+    moves = (
+        PlannedMove("a", "t0", "replay", 0, ("wan",), destination_pool="p0"),
+        PlannedMove("b", "t1", "replay", 1, ("wan2",), destination_pool="p1"),
+    )
+
+    result = execute(scenario, profile, moves, destination=arch)
+
+    assert result.migration_makespan_s == pytest.approx(2.025)
+
+
+def test_fluid_serial_route_rejects_cross_pool_link_sharing():
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
+    )
+
+    with pytest.raises(ValueError, match="destination architecture"):
+        architecture(normal=1, emergency=1, stable=1, fluid=service)
 
 
 def test_migration_headroom_scales_only_its_pool_method_window(tmp_path):
@@ -1065,9 +1220,8 @@ def test_fluid_resource_boundaries_conserve_replay_and_mixed_wan():
         ("migration:p:replay", "migration:p:kv_transfer", "route:wan"),
         (80, 40, 100), ("serial-replay-s", "bytes", "bytes"), 10,
     )
-    usage = lambda selected: np.asarray(
-        table.resources[:, selected].sum(1)
-    ).ravel()
+    def usage(selected):
+        return np.asarray(table.resources[:, selected].sum(1)).ravel()
 
     assert usage([0, 1, 2]) == pytest.approx((1, 1, 1))
     assert np.any(usage([0, 1, 2, 3]) > 1)
@@ -1539,6 +1693,26 @@ def test_equivalent_pools_share_candidate_physics_not_capacity_rows(tmp_path, mo
             normal=1, emergency=1, stable=1, baselines=((0, 0), (.1, 0)),
         ), "normal", power,
     ).pool_groups) == 2
+    service = FluidMigrationService(
+        1, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand", 1,
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1,
+        routes=(("wan",), ("wan2",)), fluid=service,
+    )
+    arch = replace(arch, pools=(arch.pools[0], replace(
+        arch.pools[1], fluid_migration=replace(service, route_overlap=False),
+    )))
+    scenario = replace(scenario, links=scenario.links + (NetworkLink("wan2", 100),))
+    assert len(_candidate_oracle(
+        scenario, profile, arch, "normal", power,
+    ).pool_groups) == 2
+    table = candidate_table(scenario, profile, arch, "normal", power)
+    work = {candidate.pool: candidate.migration_work_s
+            for candidate in table.candidates
+            if candidate.session == 0 and candidate.method == "replay"}
+    assert work[1] > work[0]
 
 
 def test_streamed_candidates_and_columns_equal_exhaustive_table(tmp_path):
@@ -1687,10 +1861,11 @@ def test_native_column_master_matches_python_lazy_solver(tmp_path):
         target, native_stats,
     )
 
-    totals = lambda table, selected: (
-        sum(table.candidates[i].gain_w for i in selected),
-        sum(table.candidates[i].migration_work_s for i in selected),
-    )
+    def totals(table, selected):
+        return (
+            sum(table.candidates[i].gain_w for i in selected),
+            sum(table.candidates[i].migration_work_s for i in selected),
+        )
     assert totals(native_table, native_selected) == pytest.approx(
         totals(python_table, python_selected),
     )
