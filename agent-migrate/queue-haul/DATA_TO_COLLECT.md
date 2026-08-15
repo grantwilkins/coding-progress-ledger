@@ -310,7 +310,10 @@ warmup, 240-second measurement window, absolute 180-second request deadline,
 predeclared asynchronous client task is available per offered request under a
 frozen 4,096-task ceiling. One unbounded aiohttp connector drives the exact
 open-loop schedule without tying queued responses to an OS-thread pool; the
-plan pins the client runtime version. Stability uses
+plan pins the client runtime version and disables cyclic GC only while the
+trace is active so response-object collection cannot pause request release.
+Reference counting remains active, and cyclic GC is restored after the trace.
+Stability uses
 running plus waiting plus client-pending requests only inside the measurement
 window; it cannot be rescued by warmup or post-window drain. The measurement
 hard-fails a scrape gap over one second. A send slip over 50 ms,

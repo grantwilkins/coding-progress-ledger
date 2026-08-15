@@ -177,6 +177,7 @@ def test_async_trace_releases_many_queued_requests_without_thread_backpressure(
     ))
 
     assert error is None
+    assert campaign.gc.isenabled()
     assert len(rows) == len(starts) == 256
     assert min(start - scheduled for scheduled, start in starts) >= 0
     assert max(start - scheduled for scheduled, start in starts) / 1e9 < .05

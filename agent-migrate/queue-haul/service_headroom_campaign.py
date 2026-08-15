@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import gc
 import hashlib
 import json
 import math
@@ -101,7 +102,9 @@ def make_plan() -> dict:
         "request_timeout_s": 180, "max_send_lateness_s": .05,
         "max_client_tasks": 4096,
         "client": {"scheduler": "asyncio-aiohttp-open-loop",
-                   "aiohttp_version": aiohttp.__version__},
+                   "aiohttp_version": aiohttp.__version__,
+                   "launch_lead_s": 2.0,
+                   "cyclic_gc_during_trace": False},
         "max_metric_gap_s": 1,
         "kv_match_tolerance": .02,
         "residency_control_max_relative_degradation": .15,
@@ -420,22 +423,34 @@ async def issue_async_trace(host: str, port: int, prepared_trace: list[dict],
                             epoch_ns: int,
                             timeout_s: float) -> tuple[list[dict], Exception | None]:
     """Drive an open-loop trace with event-loop tasks, including queued requests."""
-    connector = aiohttp.TCPConnector(limit=0, force_close=True)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        async def one(item: dict) -> dict:
-            scheduled_ns = epoch_ns + int(item["offset_s"] * 1e9)
-            await asyncio.sleep(max(0, (scheduled_ns - time.monotonic_ns()) / 1e9))
-            result = await async_completion(
-                session, host, port, item["prepared"], scheduled_ns, timeout_s,
-            )
-            return {**result, "population": item["population"],
-                    "offset_s": item["offset_s"]}
+    gc_was_enabled = gc.isenabled()
+    gc.collect()
+    gc.disable()
+    try:
+        connector = aiohttp.TCPConnector(limit=0, force_close=True)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async def one(item: dict) -> dict:
+                scheduled_ns = epoch_ns + int(item["offset_s"] * 1e9)
+                await asyncio.sleep(max(
+                    0, (scheduled_ns - time.monotonic_ns()) / 1e9,
+                ))
+                result = await async_completion(
+                    session, host, port, item["prepared"], scheduled_ns, timeout_s,
+                )
+                return {**result, "population": item["population"],
+                        "offset_s": item["offset_s"]}
 
-        settled = await asyncio.gather(*(one(item) for item in prepared_trace),
-                                       return_exceptions=True)
-        rows = [item for item in settled if isinstance(item, dict)]
-        error = next((item for item in settled if isinstance(item, Exception)), None)
-        return rows, error
+            settled = await asyncio.gather(
+                *(one(item) for item in prepared_trace), return_exceptions=True,
+            )
+            rows = [item for item in settled if isinstance(item, dict)]
+            error = next((item for item in settled
+                          if isinstance(item, Exception)), None)
+            return rows, error
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+            gc.collect()
 
 
 def offered_rho(plan: dict, rows: list[dict]) -> float:
@@ -878,7 +893,7 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
             try:
                 wait_sampler(sampler)
                 preloaded_kv_usage = sampler.rows[-1]["vllm:gpu_cache_usage_perc"]
-                lead_ns = int(.5e9)
+                lead_ns = int(plan["client"]["launch_lead_s"] * 1e9)
                 epoch = time.monotonic_ns() + lead_ns
                 wall = time.time_ns() + lead_ns
                 requests, error = asyncio.run(issue_async_trace(
@@ -909,6 +924,8 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
             "planned_parked_prefix_tokens": planned_parked_tokens,
             "client_scheduler": plan["client"]["scheduler"],
             "client_runtime_version": plan["client"]["aiohttp_version"],
+            "client_cyclic_gc_during_trace":
+            plan["client"]["cyclic_gc_during_trace"],
             "client_task_count": client_tasks,
             "engine_exited": engine_exited, "engine_failure_kind": failure_kind,
             "added_prefill_share": (None if cell["direction"] == "baseline" else
