@@ -269,14 +269,21 @@ def validate_model_runtime(cfg: Config) -> None:
         raise ValueError("architecture campaign requires QH_LMCACHE_MODE=mp")
 
 
+def effective_kv_cache_dtype(server_info: dict) -> str:
+    config = server_info.get("vllm_config", {})
+    cache_dtype = str(config.get("cache_config", {}).get("cache_dtype"))
+    if cache_dtype.lower() == "auto":
+        return str(config.get("model_config", {}).get("dtype"))
+    return cache_dtype
+
+
 def validate_model_runtime_log(cfg: Config, text: str,
                                server_info: dict | None = None) -> None:
     if not (cfg.architecture_campaign or cfg.capacity_discovery):
         return
     if cfg.capacity_discovery:
-        cache_dtype = ((server_info or {}).get("vllm_config", {})
-                       .get("cache_config", {}).get("cache_dtype"))
-        if str(cache_dtype).lower() not in {"bfloat16", "torch.bfloat16"}:
+        effective_dtype = effective_kv_cache_dtype(server_info or {})
+        if effective_dtype.lower() not in {"bfloat16", "torch.bfloat16"}:
             raise RuntimeError(
                 "capacity discovery did not read back resolved BF16 KV cache")
     elif not re.search(

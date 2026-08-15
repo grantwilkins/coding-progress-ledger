@@ -119,16 +119,19 @@ def test_capacity_log_uses_resolved_server_kv_dtype(monkeypatch):
         capacity_discovery=True,
     )
     log = "Setting attention block size to 784 tokens"
-    info = {"vllm_config": {"cache_config": {
-        "cache_dtype": "torch.bfloat16",
-    }}}
+    info = {"vllm_config": {
+        "cache_config": {"cache_dtype": "auto"},
+        "model_config": {"dtype": "torch.bfloat16"},
+    }}
 
     testbed.validate_model_runtime_log(cfg, log, info)
+    assert testbed.effective_kv_cache_dtype(info) == "torch.bfloat16"
     with pytest.raises(RuntimeError, match="resolved BF16"):
         testbed.validate_model_runtime_log(
-            cfg, log, {"vllm_config": {"cache_config": {
-                "cache_dtype": "fp8_e4m3",
-            }}})
+            cfg, log, {"vllm_config": {
+                "cache_config": {"cache_dtype": "auto"},
+                "model_config": {"dtype": "torch.float16"},
+            }})
 
 
 def test_capacity_and_architecture_modes_are_mutually_exclusive(monkeypatch):

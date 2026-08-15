@@ -369,12 +369,18 @@ def runtime_geometry(cfg: testbed.Config, stack, root: Path) -> dict:
     cache_log = testbed.read_text(root / "stack" / "lmcache-sink.log")
     cache_config = stack.server_info.get("vllm_config", {}).get(
         "cache_config", {})
-    resolved_dtype = cache_config.get("cache_dtype")
+    model_config = stack.server_info.get("vllm_config", {}).get(
+        "model_config", {})
+    requested_dtype = cache_config.get("cache_dtype")
+    model_dtype = model_config.get("dtype")
+    effective_dtype = testbed.effective_kv_cache_dtype(stack.server_info)
     return {
         "kv_capacity_tokens": stack.kv_capacity_tokens,
         "available_kv_cache_gib": stack.available_kv_gib,
-        "resolved_kv_cache_dtype": resolved_dtype,
-        "kv_cache_dtype_proof": str(resolved_dtype).lower() in {
+        "requested_kv_cache_dtype": requested_dtype,
+        "model_dtype": model_dtype,
+        "effective_kv_cache_dtype": effective_dtype,
+        "kv_cache_dtype_proof": effective_dtype.lower() in {
             "bfloat16", "torch.bfloat16"},
         "qwen_unified_block_tokens": (
             sorted(set(map(int, re.findall(
