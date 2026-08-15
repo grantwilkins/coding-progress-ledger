@@ -728,7 +728,7 @@ def queue_drift_upper(rows: list[dict], requests=(), block_s: float = 30,
              for q in requests)) for r in rows]
     points = [p for p in points if p[0] >= points[-1][0] / 3]
     slopes = []
-    for block in range(max(1, math.ceil((points[-1][0] - points[0][0]) / block_s))):
+    for block in range(math.floor((points[-1][0] - points[0][0]) / block_s)):
         selected = [p for p in points if block * block_s <= p[0] - points[0][0] < (block + 1) * block_s]
         if len(selected) >= 2 and np.ptp([p[0] for p in selected]) > 0:
             slopes.append(float(np.polyfit(*zip(*selected), 1)[0]))

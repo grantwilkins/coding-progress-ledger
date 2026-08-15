@@ -267,6 +267,8 @@ failure. P99 is reportable only with at least 1,000 incumbent requests in a
 cell; otherwise it is null.
 Horizontal latency targets are evaluation inputs, not values inferred from the
 curve.
+Bootstrap queue slopes from complete 30-second blocks only; discard the
+incomplete trailing fragment.
 
 Use one 4K controlled continuation pack so phase attribution is unambiguous.
 Incumbent requests use 3,840 cached +256 appended prompt tokens and 128 output

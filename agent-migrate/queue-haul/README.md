@@ -1556,6 +1556,8 @@ H100 separately.
 Retry an invalid measurement immediately before starting the next frozen cell;
 a later retry violates the audited order and stops the stage. A valid service
 failure is never retried away.
+Queue stability bootstraps complete 30-second blocks and excludes the trailing
+fragment, preventing measurement-window phase from reversing a load boundary.
 See `DATA_TO_COLLECT.md` for the 54-cell discovery and 18-cell confirmation
 matrix per hardware and the claim boundary.
 

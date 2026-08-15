@@ -238,6 +238,13 @@ def test_queue_drift_can_include_active_decode_hold():
     assert runner.queue_drift_upper(rows, include_running=True) > 0
 
 
+def test_queue_drift_discards_an_incomplete_trailing_block():
+    rows = [{"monotonic_ns": i * 10**9,
+             "vllm:num_requests_waiting": max(0, i - 59)} for i in range(71)]
+
+    assert runner.queue_drift_upper(rows) == pytest.approx(0)
+
+
 def test_client_side_backlog_is_not_classified_stable():
     requests = [{**request(), "scheduled_ns": i * 10**9, "start_ns": 2 * i * 10**9}
                 for i in range(1, 100)]
