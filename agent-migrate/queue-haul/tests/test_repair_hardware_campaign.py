@@ -26,6 +26,19 @@ def test_ttft_uses_request_start_and_first_content_token():
     assert campaign._ttft_s({"start_ns": 1, "first_byte_ns": None}) is None
 
 
+def test_bandwidth_impairment_applies_only_to_kv_transfer():
+    bandwidth_nodes = ("germany",)
+
+    assert campaign._impairment_score(
+        "germany", "kv_transfer", bandwidth_nodes, ()) == 1
+    assert campaign._impairment_score(
+        "germany", "replay", bandwidth_nodes, ()) == 0
+    assert campaign._impairment_score(
+        "east", "kv_transfer", bandwidth_nodes, ()) == 0
+    assert campaign._impairment_score(
+        "germany", "replay", (), ("germany",)) == 1
+
+
 def test_hardware_plan_has_calibration_gate_and_exact_repair_grid(tmp_path):
     out = tmp_path / "bundle"
     plan = campaign.prepare(

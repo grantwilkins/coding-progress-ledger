@@ -78,6 +78,14 @@ def _ttft_s(request: dict) -> float | None:
     return max(0.0, (int(first_byte_ns) - int(start_ns)) / 1e9)
 
 
+def _impairment_score(destination: str, method: str,
+                      bandwidth_nodes: tuple[str, ...],
+                      prefill_nodes: tuple[str, ...]) -> int:
+    """Count only controls that can slow this concrete action."""
+    return int(destination in bandwidth_nodes and method == "kv_transfer") \
+        + int(destination in prefill_nodes and method == "replay")
+
+
 def _portable(path: Path) -> str:
     try:
         return str(path.resolve().relative_to(ROOT.parent))
@@ -670,6 +678,11 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         result = network.solve(
             problem, profile, routes, "lp_work_first", destination=architecture,
             admission_mode="normal")
+        live_initial_moves = [asdict(move) for move in result.moves]
+        snapshot_warnings = {
+            node: bool(snapshot.get("warning"))
+            for node, snapshot in snapshots.items()
+        }
         if episode.get("frozen_initial_moves"):
             result = replace(result, moves=tuple(PlannedMove(
                 **{**move, "path": tuple(move["path"])})
@@ -688,6 +701,40 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         table = pool_planner.candidate_table(
             problem, profile, architecture, "normal", ExpectedPower(problem, profile))
         candidates = _candidate_map(table, architecture)
+        missing_frozen_candidates = sorted(
+            move.session_id for move in result.moves
+            if (move.session_id, move.method, move.destination_pool)
+            not in candidates)
+        pool_planner.validate_destination_execution(
+            problem, architecture, result.moves)
+        initial_power = ExpectedPower(
+            replace(problem, final_state="awake", assumed_shutdown_s=None),
+            profile)
+        frozen_shed_w = initial_power.drain_gain(frozenset(
+            move.session_id for move in result.moves))
+        live_plan_validation = {
+            "passed": bool(
+                result.admission_mode == "normal"
+                and result.failure_reason is None
+                and result.power_shortfall_w <= 1e-8
+                and not any(snapshot_warnings.values())
+                and not missing_frozen_candidates
+                and frozen_shed_w >= float(target) - 1e-8),
+            "live_solver_feasible": result.failure_reason is None,
+            "live_solver_admission_mode": result.admission_mode,
+            "live_solver_power_shortfall_w": result.power_shortfall_w,
+            "live_solver_moves_sha256": profiler.object_hash(live_initial_moves),
+            "frozen_moves_sha256": profiler.object_hash(initial_moves),
+            "live_solver_matches_frozen": live_initial_moves == initial_moves,
+            "snapshot_warnings": snapshot_warnings,
+            "missing_frozen_candidates": missing_frozen_candidates,
+            "frozen_shed_w": frozen_shed_w,
+            "requested_shed_w": float(target),
+        }
+        if not live_plan_validation["passed"]:
+            raise RuntimeError(
+                "frozen initial plan failed live architecture validation: "
+                f"{live_plan_validation}")
         durations = {move.session_id: candidates[
             (move.session_id, move.method, move.destination_pool)].duration_s
             for move in result.moves}
@@ -750,15 +797,19 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
                 raise RuntimeError("episode completed before its repair trigger")
             time.sleep(.05)
         event_s = (time.monotonic_ns() - started_ns) / 1e9
+        fault_apply_started_s = (time.monotonic_ns() - started_ns) / 1e9
         bandwidth_nodes = _affected(episode["bandwidth_state"])
         cut_rates = {node: plan["network_contract"]["paths"][node]["natural_mbps"]
                      * CUT_SCALE for node in bandwidth_nodes}
         bandwidth_ack = network.set_live_bandwidth(stack, cut_rates)
+        bandwidth_ack_s = (time.monotonic_ns() - started_ns) / 1e9
         prefill_nodes = _affected(episode["prefill_state"])
         gateway_rates = {node: (rates[0] * CUT_SCALE
                                 if node in prefill_nodes else None)
                          for node in ("east", "germany")}
         prefill_ack = network.set_live_prefill(stack, gateway_rates)
+        prefill_ack_s = (time.monotonic_ns() - started_ns) / 1e9
+        fault_applied_s = prefill_ack_s
         changed_problem, changed_architecture, _, changed_target = network.joint_problem(
             scenario, snapshots, profile, demand)
         if abs(changed_target - target) > 1e-8:
@@ -834,10 +885,9 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         controller.observe(ObservationBatch(
             1, event_s, route_rates=route_rates,
             prefill_capacities=capacities))
-        detection_delay_s = max(0.0, episode.get(
-            "detection_at_s", event_s + 1.0) - episode.get(
-                "fault_at_s", event_s))
-        detection_deadline = time.monotonic() + detection_delay_s
+        detection_deadline = (
+            started_ns / 1e9
+            + episode.get("detection_at_s", fault_applied_s + 1.0))
         while time.monotonic() < detection_deadline:
             collect()
             if plan["apply_policy"] == CONTROL_POLICY:
@@ -881,28 +931,30 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
         if isinstance(decision, ProposedDiff):
             changed = {row.session_id for row in decision.changes}
             forbidden = changed & active_sessions
-            def impairment(destination, method):
-                return int(destination in bandwidth_nodes) \
-                    + int(destination in prefill_nodes and method == "replay")
             before = {move.session_id: (
                 move.destination_instance, move.method)
                       for move in result.moves}
             reduced_impaired = sum(
                 row.session_id in before
                 and row.assignment is not None
-                and impairment(*before[row.session_id])
-                > impairment(
-                    row.assignment.destination, row.assignment.method)
+                and _impairment_score(
+                    *before[row.session_id], bandwidth_nodes, prefill_nodes)
+                > _impairment_score(
+                    row.assignment.destination, row.assignment.method,
+                    bandwidth_nodes, prefill_nodes)
                 for row in decision.changes)
             increased_impaired = sum(
                 row.assignment is not None
-                and (impairment(*before[row.session_id])
-                     if row.session_id in before else 0) < impairment(
-                    row.assignment.destination, row.assignment.method)
+                and (_impairment_score(
+                    *before[row.session_id], bandwidth_nodes, prefill_nodes)
+                     if row.session_id in before else 0) < _impairment_score(
+                    row.assignment.destination, row.assignment.method,
+                    bandwidth_nodes, prefill_nodes)
                 for row in decision.changes)
             removed_from_impaired = sum(
                 row.session_id in before
-                and impairment(*before[row.session_id]) > 0
+                and _impairment_score(
+                    *before[row.session_id], bandwidth_nodes, prefill_nodes) > 0
                 and row.assignment is None for row in decision.changes)
             unsafe_kv = sorted(
                 row.session_id for row in decision.changes
@@ -1004,12 +1056,17 @@ def _run_episode(stack, plan, parent, manifest, profile, timing, episode,
             "schema": RESULT_SCHEMA, "status": "complete",
             "episode_id": episode["episode_id"],
             "event_s": event_s, "decision_s": decision_s,
+            "fault_apply_started_s": fault_apply_started_s,
+            "bandwidth_ack_s": bandwidth_ack_s,
+            "prefill_ack_s": prefill_ack_s,
+            "fault_applied_s": fault_applied_s,
             "proposal_s": proposal_s, "apply_s": apply_s,
             "solver_timings": solver_timings,
             "bandwidth_control": cut_rates,
             "bandwidth_control_ack": bandwidth_ack,
             "prefill_control": gateway_rates,
             "prefill_control_ack": prefill_ack,
+            "live_plan_validation": live_plan_validation,
             "shadow_guard": shadow_guard,
             "repair_outcome": (
                 "disabled" if plan["apply_policy"] == CONTROL_POLICY else

@@ -18,6 +18,8 @@ import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
+from cvxpy.error import SolverError
+
 import migration_profiler as profiler
 import network_campaign as network
 import pool_planner
@@ -43,8 +45,8 @@ DEFAULT_BASE_PLAN = ROOT / "outputs/repair-scheduled-hardware-20260814/plan.json
 DEFAULT_TIMING = Path(
     "/datadrive/queue-haul-repair-20260814-r3/calibration/summary.json")
 DEFAULT_OUT = ROOT / "outputs/repair-stress-multiaxis-hardware-20260814"
-SWEEP_SCHEMA = "queue-haul-repair-stress-multiaxis-preflight-v2"
-PLAN_SCHEMA = "queue-haul-repair-stress-multiaxis-hardware-plan-v2"
+SWEEP_SCHEMA = "queue-haul-repair-stress-multiaxis-preflight-v3"
+PLAN_SCHEMA = "queue-haul-repair-stress-multiaxis-hardware-plan-v3"
 TARGET_FRACTIONS = (0.50, 0.55, 0.60, 0.65, 0.70)
 FAULT_AT_S = 1.0
 DETECTION_AT_S = 2.0
@@ -52,7 +54,7 @@ POWER_DEADLINE_S = 30.0
 MIGRATION_CUTOFF_S = 25.0
 OBSERVATION_HORIZON_S = 120.0
 STABLE_LATEST_S = 15.0
-REPAIR_LATEST_S = 22.0
+REPAIR_LATEST_S = 20.0
 CONTROL_MIN_TARGET_S = 30.0
 CONTROL_MIN_SHORTFALL_FRACTION = 0.05
 CONTROL_MIN_SHORTFALL_W = 1.5
@@ -63,7 +65,11 @@ MIN_IMPAIRED_PENDING_SESSIONS = 2
 HARDWARE_REPEATS = 3
 HARDWARE_WORKLOADS_PER_AXIS = 2
 HOST_RETRY_S = 30.0
-CONTEXT_SEEDS = tuple(range(256))
+EVENT_TIMING_TOLERANCE_S = 0.25
+DETECTION_TIMING_TOLERANCE_S = 0.50
+MIN_COMMON_TTFT_SESSIONS = 1
+CONTEXT_SEEDS = tuple(range(512))
+BANDWIDTH_EXTENSION_SEEDS = tuple(range(512, 1024))
 CONTEXT_SUPPORT = (14_042, 30_785, 31_547)
 HEALTHY_EAST_LOAD = 0.50
 MOVE_CONCURRENCY = 4
@@ -212,7 +218,8 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
                      healthy_east_load: float,
                      move_concurrency: int,
                      context_seed: int = 8,
-                     fault_axis: str = "joint") -> dict:
+                     fault_axis: str = "joint",
+                     sweep_phase: str = "common_workload_multiaxis") -> dict:
     if fault_axis not in FAULT_AXES:
         raise ValueError(f"unknown repair stress fault axis: {fault_axis}")
     bandwidth_state, prefill_state = FAULT_AXES[fault_axis]
@@ -331,14 +338,23 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
         2, DETECTION_AT_S, attempts=updates, route_rates=route_rates,
         prefill_capacities=capacities))
     repair_result = None
+    repair_solver_error = None
     for _ in range(2):
         if not isinstance(decision, RepairRequest):
             break
-        repair_result = pool_planner.repair_destination(
-            changed_problem, profile, changed_architecture, decision, "normal")
+        try:
+            repair_result = pool_planner.repair_destination(
+                changed_problem, profile, changed_architecture, decision,
+                "normal")
+        except SolverError as error:
+            repair_solver_error = f"{type(error).__name__}: {error}"
+            break
         decision = controller.complete_repair(repair_result, DETECTION_AT_S)
     observed_attempts = dict(controller.attempts)
-    if isinstance(decision, ProposedDiff):
+    if repair_solver_error is not None:
+        outcome = "solver_error"
+        repair_moves = repair_sim._remaining_moves(observed_attempts)
+    elif isinstance(decision, ProposedDiff):
         outcome, repair_moves = "applied", decision.moves
     elif isinstance(decision, RevisedMaximum):
         outcome = "revised_maximum"
@@ -431,7 +447,7 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
         "healthy_east_load": healthy_east_load,
         "move_concurrency": move_concurrency,
         "context_seed": context_seed,
-        "sweep_phase": "common_workload_multiaxis",
+        "sweep_phase": sweep_phase,
         "requested_shed_w": float(target),
         "fault_at_s": FAULT_AT_S,
         "detection_at_s": DETECTION_AT_S,
@@ -439,6 +455,7 @@ def _simulate_target(parent: dict, plan: dict, timing: dict,
         "migration_cutoff_s": MIGRATION_CUTOFF_S,
         "observation_horizon_s": OBSERVATION_HORIZON_S,
         "outcome": outcome,
+        "repair_solver_error": repair_solver_error,
         "stable_target_s": stable["target_s"],
         "repair_target_s": repaired["target_s"],
         "repair_cutoff_shed_w": repaired["cutoff_shed_w"],
@@ -486,6 +503,12 @@ def preflight(base_plan_path: Path, timing_path: Path, out: Path) -> dict:
         HEALTHY_EAST_LOAD, MOVE_CONCURRENCY, context_seed, fault_axis)
         for context_seed in CONTEXT_SEEDS for target in TARGET_FRACTIONS
         for fault_axis in FAULT_AXES]
+    cells.extend(_simulate_target(
+        parent, plan, timing, manifest, profile, target,
+        HEALTHY_EAST_LOAD, MOVE_CONCURRENCY, context_seed, "bandwidth",
+        "prospective_bandwidth_extension")
+        for context_seed in BANDWIDTH_EXTENSION_SEEDS
+        for target in TARGET_FRACTIONS)
     qualifiers = [row for row in cells if row["qualifies"]]
     common_workloads = []
     for context_seed in CONTEXT_SEEDS:
@@ -528,7 +551,9 @@ def preflight(base_plan_path: Path, timing_path: Path, out: Path) -> dict:
         "schema": SWEEP_SCHEMA,
         "semantics": (
             "prospective common-workload sweep across bandwidth-only, "
-            "prefill-only, and joint fixed early faults"),
+            "prefill-only, and joint fixed early faults, plus a disjoint "
+            "prospective bandwidth-only extension to obtain two distinct "
+            "high-margin cases without weakening qualification"),
         "base_plan": {"path": str(base_plan_path),
                       "sha256": profiler.file_hash(base_plan_path)},
         "timing": {"path": str(timing_path),
@@ -545,6 +570,7 @@ def preflight(base_plan_path: Path, timing_path: Path, out: Path) -> dict:
         "healthy_east_load": HEALTHY_EAST_LOAD,
         "move_concurrency": MOVE_CONCURRENCY,
         "context_seeds": list(CONTEXT_SEEDS),
+        "bandwidth_extension_seeds": list(BANDWIDTH_EXTENSION_SEEDS),
         "context_support": list(CONTEXT_SUPPORT),
         "qualification": {
             "stable_latest_s": STABLE_LATEST_S,
@@ -597,7 +623,9 @@ def _selected_cells(preflight_bundle: dict) -> dict[str, list[dict]]:
             len(rows) != HARDWARE_WORKLOADS_PER_AXIS
             or any(not row.get("qualifies")
                    or row["fault_axis"] != fault_axis
-                   or row["sweep_phase"] != "common_workload_multiaxis"
+                   or row["sweep_phase"] not in {
+                       "common_workload_multiaxis",
+                       "prospective_bandwidth_extension"}
                    for row in rows)
             for fault_axis, rows in selected.items()):
         raise ValueError("stress preflight did not select every fault axis")
@@ -661,6 +689,12 @@ def make_hardware_plan(base_plan_path: Path, preflight_path: Path) -> dict:
             "three randomized repair/control pairs for each of two stress "
             "workloads per fault axis; each pair freezes one workload and "
             "initial plan; control dispatches continuously during detection"),
+        "inference_scope": (
+            "prospectively selected axis-specific case studies; not an "
+            "estimate of repair success frequency over arbitrary workloads"),
+        "prefill_fault_semantics": (
+            "synthetic aggregate replay-completion cap imposed by the live "
+            "gateway; not a calibrated change to GPU prefill service rate"),
         "base_plan": {"path": str(base_plan_path.resolve()),
                       "sha256": profiler.file_hash(base_plan_path)},
         "preflight": {"path": str(preflight_path.resolve()),
@@ -747,8 +781,106 @@ def _p90(values: list[float]) -> float | None:
             if values else None)
 
 
+def _close(left: float | None, right: float | None,
+           tolerance: float = 1e-6) -> bool:
+    return left is not None and right is not None \
+        and abs(float(left) - float(right)) <= tolerance
+
+
+def _fault_verification(plan: dict, episode: dict, result: dict,
+                        natural_prefill_tokens_per_s: float) -> dict:
+    """Verify that the intended fault was acknowledged on the declared axis."""
+    bandwidth_nodes = hardware._affected(episode["bandwidth_state"])
+    expected_bandwidth_mbps = {
+        node: plan["network_contract"]["paths"][node]["natural_mbps"]
+        * episode["cut_scale"] for node in bandwidth_nodes
+    }
+    expected_route_bps = {
+        node: value * 1_000_000 / 8
+        for node, value in expected_bandwidth_mbps.items()
+    }
+    bandwidth_ack = result.get("bandwidth_control_ack") or {}
+    bandwidth_requested = result.get("bandwidth_control") or {}
+    bandwidth_verified = (
+        set(bandwidth_requested) == set(expected_bandwidth_mbps)
+        and all(_close(bandwidth_requested.get(node), value)
+                for node, value in expected_bandwidth_mbps.items())
+        and bandwidth_ack.get("ok") is True
+        and bandwidth_ack.get("aggregate_bps") is None
+        and set(bandwidth_ack.get("route_bps", {})) == set(expected_route_bps)
+        and all(_close(bandwidth_ack.get("route_bps", {}).get(node), value)
+                for node, value in expected_route_bps.items())
+    )
+    prefill_nodes = hardware._affected(episode["prefill_state"])
+    expected_prefill = {
+        node: (natural_prefill_tokens_per_s * episode["cut_scale"]
+               if node in prefill_nodes else None)
+        for node in ("east", "germany")
+    }
+    prefill_requested = result.get("prefill_control") or {}
+    prefill_ack = result.get("prefill_control_ack") or {}
+    prefill_verified = set(prefill_requested) == set(expected_prefill) \
+        and set(prefill_ack) == set(expected_prefill)
+    for node, expected in expected_prefill.items():
+        requested = prefill_requested.get(node)
+        acknowledged = prefill_ack.get(node) or {}
+        prefill_verified = prefill_verified \
+            and acknowledged.get("ok") is True \
+            and ((_close(requested, expected)
+                  and _close(acknowledged.get("tokens_per_s"), expected))
+                 if expected is not None else
+                 requested is None
+                 and acknowledged.get("tokens_per_s") is None)
+    event_s = result.get("event_s")
+    decision_s = result.get("decision_s")
+    apply_started_s = result.get("fault_apply_started_s")
+    bandwidth_ack_s = result.get("bandwidth_ack_s")
+    prefill_ack_s = result.get("prefill_ack_s")
+    applied_s = result.get("fault_applied_s")
+    event_timing_verified = event_s is not None \
+        and episode["fault_at_s"] <= event_s \
+        <= episode["fault_at_s"] + EVENT_TIMING_TOLERANCE_S
+    detection_timing_verified = decision_s is not None \
+        and abs(decision_s - episode["detection_at_s"]) \
+        <= DETECTION_TIMING_TOLERANCE_S
+    control_order_verified = all(value is not None for value in (
+        event_s, apply_started_s, bandwidth_ack_s, prefill_ack_s, applied_s,
+        decision_s)) and (
+        event_s <= apply_started_s <= bandwidth_ack_s <= prefill_ack_s
+        and _close(applied_s, prefill_ack_s)
+        and applied_s <= decision_s)
+    return {
+        "bandwidth_verified": bandwidth_verified,
+        "prefill_verified": prefill_verified,
+        "event_timing_verified": event_timing_verified,
+        "detection_timing_verified": detection_timing_verified,
+        "control_order_verified": control_order_verified,
+        "passed": bandwidth_verified and prefill_verified
+        and event_timing_verified and detection_timing_verified
+        and control_order_verified,
+    }
+
+
+def _quarantine_incomplete_episode(root: Path) -> Path | None:
+    """Preserve an interrupted attempt and free its canonical restart path."""
+    if not root.exists():
+        return None
+    quarantine = root.with_name(
+        f"{root.name}.incomplete-{time.time_ns()}")
+    root.rename(quarantine)
+    return quarantine
+
+
+def _completed_episode_count(plan: dict, run_root: Path) -> int:
+    return sum((run_root / "episodes" / row["episode_id"] / "result.json")
+               .is_file() for row in plan["episodes"])
+
+
 def reduce_hardware(plan: dict, run_root: Path) -> dict:
     validate_hardware_plan(plan)
+    profile = ModelProfile.load(_resolve(plan["model_profile"]["path"]))
+    natural_prefill_tokens_per_s = profile.case().prefill.rate(
+        network.SINK_LOAD_PREFILL_TOKENS, 1)
     results = []
     for episode in plan["episodes"]:
         path = run_root / "episodes" / episode["episode_id"] / "result.json"
@@ -757,6 +889,8 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
     episode_rows = []
     ttft_rows = []
     for row in results:
+        fault_verification = _fault_verification(
+            plan, row, row, natural_prefill_tokens_per_s)
         shortfall = max(0.0, (
             row["requested_shed_w"] - row["cutoff_shed_w"]
         ) / row["requested_shed_w"])
@@ -764,6 +898,8 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
             "episode_id": row["episode_id"], "pair": row["pair"],
             "fault_axis": row["fault_axis"], "repeat": row["repeat"],
             "policy": row["policy"], "event_s": row["event_s"],
+            "fault_applied_s": row.get("fault_applied_s"),
+            "fault_verified": fault_verification["passed"],
             "decision_s": row["decision_s"], "proposal_s": row["proposal_s"],
             "apply_s": row["apply_s"], "repair_outcome": row["repair_outcome"],
             "redirected_sessions": row["redirected_sessions"],
@@ -804,6 +940,8 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
         by_policy = {row["policy"]: row for row in pair_results}
         repair = by_policy.get(hardware.APPLY_POLICY)
         control = by_policy.get(hardware.CONTROL_POLICY)
+        repair_ttft = {}
+        control_ttft = {}
         if repair and control:
             repair_ttft = {row["session_id"]: row["ttft_s"]
                            for row in repair["requests"]}
@@ -832,6 +970,13 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
             "initial_plan_matched": bool(repair and control and
                 repair["initial_moves_sha256"] == control["initial_moves_sha256"]
                 == repair["expected_initial_moves_sha256"]),
+            "live_plans_validated": bool(repair and control and all(
+                row.get("live_plan_validation", {}).get("passed")
+                for row in (repair, control))),
+            "faults_verified": bool(repair and control and all(
+                _fault_verification(
+                    plan, row, row, natural_prefill_tokens_per_s)["passed"]
+                for row in (repair, control))),
             "repair_applied": bool(repair and repair["repair_outcome"] == "applied"),
             "repair_target_by_cutoff": bool(
                 repair and repair["target_met_by_cutoff"]),
@@ -861,12 +1006,19 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
                 request["request"].get("status_code") == 200
                 and request.get("ttft_s") is not None
                 for row in (repair, control) for request in row["requests"])),
+            "common_ttft_sessions": len(
+                repair_ttft.keys() & control_ttft.keys()),
+            "common_ttft_min_arm_coverage": (
+                len(repair_ttft.keys() & control_ttft.keys())
+                / min(len(repair_ttft), len(control_ttft))
+                if repair_ttft and control_ttft else 0.0),
         })
     if common_rows:
         profiler.write_csv(run_root / "common_session_ttft.csv", common_rows)
     for check in pair_checks:
         check["passed"] = (
             check["complete"] and check["initial_plan_matched"]
+            and check["live_plans_validated"] and check["faults_verified"]
             and check["repair_applied"] and check["repair_target_by_cutoff"]
             and check["control_missed_cutoff"]
             and check["control_shortfall_fraction"] is not None
@@ -886,14 +1038,17 @@ def reduce_hardware(plan: dict, run_root: Path) -> dict:
             and check["causal_redirected_sessions"] is not None
             and check["causal_redirected_sessions"]
             >= MIN_REDIRECTED_SESSIONS
-            and check["actual_timestamps_recorded"] and check["http_and_ttft"])
+            and check["actual_timestamps_recorded"] and check["http_and_ttft"]
+            and check["common_ttft_sessions"] >= MIN_COMMON_TTFT_SESSIONS)
     ttfts = [row["ttft_s"] for row in ttft_rows]
     common_deltas = [row["control_minus_repair_ttft_s"] for row in common_rows]
     summary = {
-        "schema": "queue-haul-repair-stress-multiaxis-hardware-validation-v2",
+        "schema": "queue-haul-repair-stress-multiaxis-hardware-validation-v3",
         "semantics": (
             "primary endpoint is completion-credited modeled shed by the "
-            "25-second migration cutoff; raw A100 traces are diagnostic"),
+            "25-second migration cutoff; raw A100 traces are diagnostic; "
+            "axis-specific selected case studies do not estimate population "
+            "repair success; prefill faults are synthetic gateway completion caps"),
         "expected_episodes": (2 * HARDWARE_REPEATS * len(FAULT_AXES)
                               * HARDWARE_WORKLOADS_PER_AXIS),
         "completed_episodes": len(results),
@@ -957,13 +1112,16 @@ def run_hardware(plan_path: Path, key: Path, run_root: Path) -> dict:
             and json.loads(existing_plan_path.read_text()) != plan:
         raise RuntimeError("stress run root belongs to a different plan")
     profiler.write_json(run_root / "plan.json", plan)
+    completed_before_start = _completed_episode_count(plan, run_root)
     host_attempt = 0
     while True:
         host_attempt += 1
         profiler.write_json(run_root / "status.json", {
             "schema": "queue-haul-repair-stress-status-v1",
             "phase": "host_preflight", "attempt": host_attempt,
-            "completed": 0, "expected": len(plan["episodes"]),
+            "completed": completed_before_start,
+            "expected": len(plan["episodes"]),
+            "restart_safe": True,
         })
         try:
             host_reports = network.host_check(cluster, key)
@@ -971,7 +1129,9 @@ def run_hardware(plan_path: Path, key: Path, run_root: Path) -> dict:
             profiler.write_json(run_root / "status.json", {
                 "schema": "queue-haul-repair-stress-status-v1",
                 "phase": "waiting_for_hosts", "attempt": host_attempt,
-                "completed": 0, "expected": len(plan["episodes"]),
+                "completed": completed_before_start,
+                "expected": len(plan["episodes"]),
+                "restart_safe": True,
                 "retry_in_s": HOST_RETRY_S,
                 "error": f"{type(error).__name__}: {error}",
             })
@@ -979,23 +1139,37 @@ def run_hardware(plan_path: Path, key: Path, run_root: Path) -> dict:
             continue
         profiler.write_json(run_root / "host_reports.json", host_reports)
         break
-    stack_root = run_root / f"stack-{profiler.object_hash(str(run_root))[:16]}"
-    stack = network.start_cluster(
-        cluster, key, plan["network_contract"], "natural", stack_root,
-        power_interval_s=.1)
-    completed = 0
+    stack_root = run_root / (
+        f"stack-{profiler.object_hash(str(run_root))[:16]}-{time.time_ns()}")
+    stack = None
+    completed = completed_before_start
     try:
+        stack = network.start_cluster(
+            cluster, key, plan["network_contract"], "natural", stack_root,
+            power_interval_s=.1)
         for episode in plan["episodes"]:
             result_path = (run_root / "episodes" / episode["episode_id"]
                            / "result.json")
             if result_path.is_file():
-                result = json.loads(result_path.read_text())
+                try:
+                    result = json.loads(result_path.read_text())
+                    if result.get("status") != "complete":
+                        raise ValueError("episode result is not complete")
+                except (json.JSONDecodeError, ValueError):
+                    _quarantine_incomplete_episode(result_path.parent)
+                    result_path = (run_root / "episodes" / episode["episode_id"]
+                                   / "result.json")
+                    result = None
             else:
+                result = None
+                if result_path.parent.exists():
+                    _quarantine_incomplete_episode(result_path.parent)
+            if result is None:
                 episode_plan = {**plan, "apply_policy": episode["policy"]}
                 result = hardware._run_episode(
                     stack, episode_plan, parent, manifest, profile, timing,
                     episode, result_path.parent)
-            completed += 1
+            completed = _completed_episode_count(plan, run_root)
             profiler.write_json(run_root / "status.json", {
                 "schema": "queue-haul-repair-stress-status-v1",
                 "phase": "episodes", "completed": completed,
@@ -1016,7 +1190,8 @@ def run_hardware(plan_path: Path, key: Path, run_root: Path) -> dict:
         })
         raise
     finally:
-        network.stop_cluster(stack)
+        if stack is not None:
+            network.stop_cluster(stack)
     summary = reduce_hardware(plan, run_root)
     profiler.write_json(run_root / "status.json", {
         "schema": "queue-haul-repair-stress-status-v1",
