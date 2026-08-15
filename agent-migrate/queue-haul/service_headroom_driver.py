@@ -134,6 +134,35 @@ def execute(root: Path, hardware: str, ttft_target_s: float,
     })
 
 
+def execute_confirmation(root: Path, hardware: str, plan_path: Path,
+                         core_path: Path, scout_path: Path,
+                         normalization: Path, retry_delay_s: float,
+                         max_attempts: int) -> None:
+    plan = campaign.read_plan(plan_path)
+    core = campaign.read_plan(core_path)
+    scout = json.loads(scout_path.read_text())
+    if plan.get("hardware") != hardware:
+        raise ValueError("confirmation hardware differs from the requested arm")
+    campaign.validate_confirmation_source(plan, core, scout)
+    status = root / "confirmation-status.json"
+    runs = root / "confirmation"
+    run_cells(plan, plan_path, plan["run_order"], runs, normalization,
+              status, "confirmation", retry_delay_s, max_attempts)
+    confirmed_path = root / f"{hardware}-confirmed.json"
+    invoke("reduce-confirmation", "--plan", plan_path,
+           "--core-plan", core_path, "--scout", scout_path,
+           "--runs", runs, "--out", confirmed_path)
+    confirmed = json.loads(confirmed_path.read_text())
+    write_json(status, {
+        "state": "complete", "stage": "confirmation",
+        "planner_usable": confirmed["planner_usable"],
+        "supported_bound": confirmed["supported_bound"],
+        "completed_cells": len(plan["run_order"]),
+        "updated_wall_ns": time.time_ns(),
+        "plan_sha256": campaign.digest(plan),
+    })
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-root", type=Path, required=True)
@@ -143,15 +172,30 @@ def parse_args(argv=None):
     parser.add_argument("--retry-delay-s", type=float, default=30)
     parser.add_argument("--max-attempts", type=int, default=3,
                         help="Invalid-cell attempts before the service restarts; 0 retries forever")
+    parser.add_argument("--confirmation-plan", type=Path)
+    parser.add_argument("--core-plan", type=Path)
+    parser.add_argument("--scout", type=Path)
+    parser.add_argument("--normalization", type=Path)
     args = parser.parse_args(argv)
     if min(args.ttft_target_s, args.tpot_target_s) <= 0 \
             or args.retry_delay_s < 0 or args.max_attempts < 0:
         parser.error("targets must be positive and retry controls nonnegative")
+    supplied = [args.confirmation_plan, args.core_plan, args.scout,
+                args.normalization]
+    if any(supplied) and not all(supplied):
+        parser.error("confirmation requires plan, core plan, scout, and normalization")
     return args
 
 
 def main(argv=None) -> None:
     args = parse_args(argv)
+    if args.confirmation_plan:
+        execute_confirmation(
+            args.run_root, args.hardware, args.confirmation_plan,
+            args.core_plan, args.scout, args.normalization,
+            args.retry_delay_s, args.max_attempts,
+        )
+        return
     execute(args.run_root, args.hardware, args.ttft_target_s,
             args.tpot_target_s, args.retry_delay_s, args.max_attempts)
 
