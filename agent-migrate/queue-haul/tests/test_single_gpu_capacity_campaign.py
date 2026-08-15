@@ -44,6 +44,10 @@ def test_capacity_commands_preserve_model_geometry(monkeypatch, model):
         assert "--max-num-batched-tokens 1567" in vllm
         assert "--chunk-size 784" in cache
         assert "--separate-object-groups" in cache
+    if model == "google/gemma-4-26B-A4B-it":
+        assert "--limit-mm-per-prompt" in vllm
+        assert '"image":0,"audio":0' in vllm
+        assert "image=0,audio=0" not in vllm
 
 
 def test_summary_keeps_launch_failure_as_discovery_outcome():
