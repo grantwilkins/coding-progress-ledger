@@ -333,7 +333,8 @@ cached; under-hit and append-hot cells are invalid because their actual prefill
 work no longer equals the x coordinate. Fixed parked stock is checked by a
 second exact-token cache-hit census immediately after prewarm and before
 offered arrivals; this includes inactive prefix-cache blocks that vLLM 0.22
-omits from its active-KV gauge.
+omits from its active-KV gauge and excludes each terminal partial/full block,
+which vLLM does not make reusable until later tokens exist.
 The engine-reported live KV-token capacity is bound into the normalization;
 resident-minus-control occupancy must equal the planned block-rounded parked
 tokens divided by that capacity within two percentage points, and confirmation

@@ -46,7 +46,7 @@ RATES = {"prefill_tps": 4000, "decode_tps": 1000,
          "kv_capacity_tokens": 1_000_000,
          "balanced_shape": {"prefix_tokens": 3584, "append_tokens": 512,
                             "output_tokens": 128},
-         "planned_parked_prefix_tokens": 77_312}
+         "planned_parked_prefix_tokens": 76_928}
 IDENTITY = {"serving_class": "exact"}
 IDENTITY_SHA = campaign.digest(IDENTITY)
 
@@ -61,7 +61,7 @@ def evidence(plan: dict, cell: dict, **values) -> dict:
             "normalization_sha256": "normalization", "status": "complete",
             "preloaded_kv_usage": .1, "initial_kv_usage": .2,
             "kv_capacity_tokens": 1_000_000,
-            "planned_parked_prefix_tokens": 77_312,
+            "planned_parked_prefix_tokens": 76_928,
             "started_wall_ns": order.index(cell["cell_id"]) + 1,
             "incumbent_exact": 1,
             "incumbent_exact_completion_rate": 1,
@@ -257,7 +257,7 @@ def test_normalization_is_bound_to_its_discovery_plan(tmp_path):
              "kv_capacity_tokens": 1_000_000,
              "balanced_shape": {"prefix_tokens": 3584, "append_tokens": 512,
                                 "output_tokens": 128},
-             "planned_parked_prefix_tokens": 77_312}
+             "planned_parked_prefix_tokens": 76_928}
     rates["sha256"] = campaign.digest(rates)
     path = tmp_path / "rates.json"
     path.write_text(json.dumps(rates))
@@ -344,10 +344,10 @@ def test_prewarm_proves_private_uncached_prefixes():
 def test_residency_census_requires_every_block_rounded_cache_hit():
     sessions = [SimpleNamespace(prefix_tokens=3840),
                 SimpleNamespace(prefix_tokens=977)]
-    rows = [complete({"prompt_tokens": 3840}),
+    rows = [{**complete({"prompt_tokens": 3840}), "cached_tokens": 3824},
             {**complete({"prompt_tokens": 977}), "cached_tokens": 976}]
 
-    assert campaign.resident_tokens(rows, sessions) == 4816
+    assert campaign.resident_tokens(rows, sessions) == 4800
     with pytest.raises(RuntimeError, match="residency"):
         campaign.resident_tokens(
             [rows[0], {**rows[1], "cached_tokens": 960}], sessions)
@@ -525,7 +525,7 @@ def test_boundary_requires_every_restart_and_takes_the_weaker_direction(tmp_path
     assert result["selection_ready"] and not result["planner_usable"]
     assert result["residency_control"]["pass"]
     assert result["residency_control"]["expected_preloaded_kv_usage_delta"] \
-        == pytest.approx(77_312 / 1_000_000)
+        == pytest.approx(76_928 / 1_000_000)
     assert result["residency_control"]["measurement_start_kv_range"] == [
         campaign.BASE_RHO, max(campaign.LOADS),
     ]

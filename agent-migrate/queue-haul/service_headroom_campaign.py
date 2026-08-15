@@ -267,7 +267,7 @@ def shape_for(name: str, rates: dict) -> Shape:
 
 def parked_prefix_tokens(rates: dict) -> int:
     return SESSIONS_PER_SHAPE * sum(
-        shape_for(name, rates).prefix_tokens
+        (shape_for(name, rates).prefix_tokens - 1) // 16 * 16
         for name in ("prefill_heavy", "decode_heavy", "balanced"))
 
 
@@ -388,7 +388,7 @@ def resident_tokens(rows: list[dict], sessions_: list[serving.Session]) -> int:
     if len(rows) != len(sessions_) or any(
             not serving.service_completion(row)
             or row.get("prompt_tokens") != session.prefix_tokens
-            or row.get("cached_tokens") != session.prefix_tokens // 16 * 16
+            or row.get("cached_tokens") != (session.prefix_tokens - 1) // 16 * 16
             for row, session in zip(rows, sessions_)):
         raise RuntimeError("private-prefix residency contract failed")
     return sum(row["cached_tokens"] for row in rows)
