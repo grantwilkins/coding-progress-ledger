@@ -223,6 +223,13 @@ def completion_payload(model: str, prompt: list[int], output_tokens: int,
     return payload
 
 
+def completion_body(model: str, prompt: list[int], output_tokens: int,
+                    forced: int, bypass_lmcache: bool = False) -> str:
+    return json.dumps(completion_payload(
+        model, prompt, output_tokens, forced, bypass_lmcache,
+    ))
+
+
 def completion_row(status: int, start_ns: int, end_ns: int, usage: dict,
                    events: list[dict], done: bool, request_id: str = "",
                    finish_reason: str | None = None, error: str = "") -> dict:
@@ -250,10 +257,9 @@ def completion_row(status: int, start_ns: int, end_ns: int, usage: dict,
 
 
 def _completion(host: str, port: int, model: str, prompt: list[int], output_tokens: int,
-                forced: int, timeout_s: float, bypass_lmcache: bool = False) -> dict:
-    body = json.dumps(completion_payload(
-        model, prompt, output_tokens, forced, bypass_lmcache,
-    ))
+                forced: int, timeout_s: float, bypass_lmcache: bool = False,
+                body: str | None = None) -> dict:
+    body = body or completion_body(model, prompt, output_tokens, forced, bypass_lmcache)
     start, usage, events, done = time.monotonic_ns(), {}, [], False
     deadline = start + int(timeout_s * 1e9)
     request_id, finish_reason, status = "", None, 0
@@ -358,10 +364,11 @@ def issue_chat(host: str, port: int, model: str, session: Session, index: int,
 def issue(host: str, port: int, model: str, session: Session, index: int,
           scheduled_ns: int, timeout_s: float,
           bypass_lmcache: bool = False,
-          prepared: tuple[list[int], int] | None = None) -> dict:
+          prepared: tuple[list[int], int] | None = None,
+          body: str | None = None) -> dict:
     prompt, forced = session.prompt(index) if prepared is None else prepared
     row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s,
-                      bypass_lmcache)
+                      bypass_lmcache, body)
     row.update({"request_index": index, "session_id": session.session_id,
                 "scheduled_ns": scheduled_ns, "input_tokens": session.append_tokens,
                 "prefix_tokens": session.prefix_tokens,
