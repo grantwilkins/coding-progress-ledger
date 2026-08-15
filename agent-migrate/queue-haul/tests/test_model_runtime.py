@@ -110,6 +110,27 @@ def test_capacity_discovery_uses_full_single_gpu_scheduler(monkeypatch):
         testbed.validate_model_runtime(replace(cfg, max_num_seqs=8))
 
 
+def test_capacity_log_uses_resolved_server_kv_dtype(monkeypatch):
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    spec = testbed.model_spec("Qwen/Qwen3.8-27B")
+    cfg = testbed.Config(
+        model="Qwen/Qwen3.8-27B", max_model_len=32768,
+        max_num_seqs=256, max_num_batched_tokens=spec.batched_tokens,
+        capacity_discovery=True,
+    )
+    log = "Setting attention block size to 784 tokens"
+    info = {"vllm_config": {"cache_config": {
+        "cache_dtype": "torch.bfloat16",
+    }}}
+
+    testbed.validate_model_runtime_log(cfg, log, info)
+    with pytest.raises(RuntimeError, match="resolved BF16"):
+        testbed.validate_model_runtime_log(
+            cfg, log, {"vllm_config": {"cache_config": {
+                "cache_dtype": "fp8_e4m3",
+            }}})
+
+
 def test_capacity_and_architecture_modes_are_mutually_exclusive(monkeypatch):
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
     cfg = replace(testbed.model_campaign_config("openai/gpt-oss-20b"),

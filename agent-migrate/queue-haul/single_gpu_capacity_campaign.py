@@ -40,6 +40,10 @@ MAX_NUM_SEQS = 256
 REQUEST_TIMEOUT_S = 1800.0
 
 
+class RuntimeContractError(RuntimeError):
+    """A formal runtime proof failed; never reinterpret this as capacity."""
+
+
 def digest(value) -> str:
     return profiler.object_hash(value)
 
@@ -228,6 +232,12 @@ def failure_kind(text: str) -> str:
     return "service_error"
 
 
+def recordable_outcome(exc: Exception, engine_ready: bool, kind: str) -> bool:
+    if isinstance(exc, RuntimeContractError) or kind == "infrastructure":
+        return False
+    return engine_ready or kind in {"oom", "context_rejected"}
+
+
 @contextmanager
 def engine_stack(cfg: testbed.Config, root: Path, identity: dict,
                  commands: dict) -> Iterator[SimpleNamespace]:
@@ -251,11 +261,14 @@ def engine_stack(cfg: testbed.Config, root: Path, identity: dict,
         testbed.wait_health_process(cfg.host, cfg.sink_port,
                                     testbed.health_timeout(), engine,
                                     root / "sink.log")
-        log_text = testbed.read_text(root / "sink.log")
-        testbed.validate_model_runtime_log(cfg, log_text)
         server_info = http_json(cfg.host, cfg.sink_port,
                                 "/server_info?config_format=json")
         write_json(root / "server-info.json", server_info)
+        log_text = testbed.read_text(root / "sink.log")
+        try:
+            testbed.validate_model_runtime_log(cfg, log_text, server_info)
+        except RuntimeError as exc:
+            raise RuntimeContractError(str(exc)) from exc
         yield SimpleNamespace(
             port=cfg.sink_port, engine=engine, log=root / "sink.log",
             kv_capacity_tokens=headroom.vllm_kv_capacity(root / "sink.log"),
@@ -354,12 +367,15 @@ def run_burst(plan: dict, cell: dict, cfg: testbed.Config, stack,
 def runtime_geometry(cfg: testbed.Config, stack, root: Path) -> dict:
     log = testbed.read_text(stack.log)
     cache_log = testbed.read_text(root / "stack" / "lmcache-sink.log")
+    cache_config = stack.server_info.get("vllm_config", {}).get(
+        "cache_config", {})
+    resolved_dtype = cache_config.get("cache_dtype")
     return {
         "kv_capacity_tokens": stack.kv_capacity_tokens,
         "available_kv_cache_gib": stack.available_kv_gib,
-        "kv_cache_dtype_proof": bool(re.search(
-            r"(?:bfloat16|bf16).{0,80}kv.?cache|kv.?cache.{0,80}(?:bfloat16|bf16)",
-            log, re.IGNORECASE)),
+        "resolved_kv_cache_dtype": resolved_dtype,
+        "kv_cache_dtype_proof": str(resolved_dtype).lower() in {
+            "bfloat16", "torch.bfloat16"},
         "qwen_unified_block_tokens": (
             sorted(set(map(int, re.findall(
                 r"attention block size to (\d+) tokens", log, re.IGNORECASE))))
@@ -435,8 +451,7 @@ def run_cell(plan: dict, cell: dict, root: Path) -> dict:
         kind = failure_kind(f"{type(exc).__name__}: {exc}\n{text}")
         # Launch OOM/context rejection and an in-service failure are capacity
         # outcomes.  A semantic/runtime mismatch before readiness is not.
-        if kind == "infrastructure" or (
-                not engine_ready and kind not in {"oom", "context_rejected"}):
+        if not recordable_outcome(exc, engine_ready, kind):
             raise
         outcome_error = {
             "phase": "service" if engine_ready else "launch",

@@ -62,6 +62,16 @@ def test_summary_keeps_launch_failure_as_discovery_outcome():
     assert row["max_completed_burst_width"] == 0
 
 
+def test_runtime_contract_failure_is_not_a_capacity_kind():
+    error = capacity.RuntimeContractError("BF16 proof failed")
+
+    assert not capacity.recordable_outcome(error, False, "context_rejected")
+    assert not capacity.recordable_outcome(error, True, "service_error")
+    assert capacity.recordable_outcome(RuntimeError("OOM"), False, "oom")
+    assert capacity.recordable_outcome(
+        RuntimeError("request timed out"), True, "service_error")
+
+
 def test_summary_distinguishes_completed_burst_and_true_concurrency():
     result = {
         "model": "openai/gpt-oss-20b", "revision": "rev",
