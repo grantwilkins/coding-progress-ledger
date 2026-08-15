@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import json
 import math
@@ -17,6 +18,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
+import aiohttp
 import numpy as np
 
 import destination_runner as serving
@@ -97,7 +99,9 @@ def make_plan() -> dict:
         "base_rho": BASE_RHO, "loads": list(LOADS), "blocks": BLOCKS,
         "warmup_s": 60, "measurement_s": 240, "drain_s": 180,
         "request_timeout_s": 180, "max_send_lateness_s": .05,
-        "max_client_workers": 4096,
+        "max_client_tasks": 4096,
+        "client": {"scheduler": "asyncio-aiohttp-open-loop",
+                   "aiohttp_version": aiohttp.__version__},
         "max_metric_gap_s": 1,
         "kv_match_tolerance": .02,
         "residency_control_max_relative_degradation": .15,
@@ -187,10 +191,10 @@ def make_confirmation_plan(core: dict, scout: dict, hardware: str) -> dict:
     common = {key: core[key] for key in (
         "image_sha256", "model", "context_tokens", "base_rho", "loads", "blocks",
         "warmup_s", "measurement_s", "drain_s", "request_timeout_s",
-        "max_send_lateness_s", "max_client_workers", "max_metric_gap_s",
+        "max_send_lateness_s", "max_client_tasks", "max_metric_gap_s",
         "kv_match_tolerance",
         "residency_control_max_relative_degradation",
-        "p99_min_incumbent_requests", "stack", "shapes",
+        "p99_min_incumbent_requests", "client", "stack", "shapes",
     )}
     plan = {"schema": CONFIRM_SCHEMA, **common, "hardware": hardware,
             "source_plan_sha256": digest(core),
@@ -217,9 +221,9 @@ def validate_confirmation_plan(plan: dict) -> None:
     common = ("image_sha256", "model", "context_tokens", "base_rho", "loads",
               "blocks", "warmup_s", "measurement_s", "drain_s",
               "request_timeout_s", "max_send_lateness_s", "kv_match_tolerance",
-              "max_metric_gap_s", "max_client_workers",
+              "max_metric_gap_s", "max_client_tasks",
               "residency_control_max_relative_degradation",
-              "p99_min_incumbent_requests", "stack", "shapes")
+              "p99_min_incumbent_requests", "client", "stack", "shapes")
     selection = plan.get("selection", {})
     directions = [selection.get(name, {}) for name in
                   ("prefill_heavy", "decode_heavy")]
@@ -356,11 +360,82 @@ def measurement_rows(plan: dict, rows: list[dict]) -> list[dict]:
     return [row for row in rows if lo <= row["offset_s"] < hi]
 
 
-def client_worker_count(plan: dict, trace: list[dict]) -> int:
-    workers = len(trace)
-    if workers <= 0 or workers > plan["max_client_workers"]:
-        raise RuntimeError("offered trace exceeds the frozen client worker ceiling")
-    return workers
+def client_task_count(plan: dict, trace: list[dict]) -> int:
+    tasks = len(trace)
+    if tasks <= 0 or tasks > plan["max_client_tasks"]:
+        raise RuntimeError("offered trace exceeds the frozen client task ceiling")
+    return tasks
+
+
+async def async_completion(session: aiohttp.ClientSession, host: str, port: int,
+                           prepared: dict, scheduled_ns: int,
+                           timeout_s: float) -> dict:
+    """Issue one exact-timing completion without occupying an OS thread."""
+    start, usage, events, done = time.monotonic_ns(), {}, [], False
+    request_id, finish_reason, status, error = "", None, 0, ""
+    try:
+        async with session.post(
+                f"http://{host}:{port}/v1/completions",
+                data=prepared["body"],
+                headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=timeout_s)) as response:
+            status = response.status
+            if status != 200:
+                error = await response.text(errors="ignore")
+            else:
+                async for line in response.content:
+                    if not line.strip().startswith(b"data:"):
+                        continue
+                    now, data = time.monotonic_ns(), line.strip()[5:].strip()
+                    if data == b"[DONE]":
+                        done = True
+                        break
+                    item = json.loads(data)
+                    request_id = request_id or item.get("id", "")
+                    usage = item.get("usage") or usage
+                    for choice in item.get("choices") or ():
+                        if choice.get("token_ids"):
+                            events.append({"monotonic_ns": now,
+                                           "token_ids": list(choice["token_ids"])})
+                        finish_reason = choice.get("finish_reason") or finish_reason
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
+        error = f"{type(exc).__name__}: {exc}"
+    row = serving.completion_row(
+        status, start, time.monotonic_ns(), usage, events, done,
+        request_id, finish_reason, error,
+    )
+    session_, index = prepared["session"], prepared["index"]
+    row.update({"request_index": index, "session_id": session_.session_id,
+                "scheduled_ns": scheduled_ns,
+                "input_tokens": session_.append_tokens,
+                "prefix_tokens": session_.prefix_tokens,
+                "planned_prompt_tokens": len(prepared["prompt"]),
+                "planned_output_tokens": session_.output_tokens,
+                "send_lateness_s": (start - scheduled_ns) / 1e9,
+                "prompt_sha256": prepared["prompt_sha256"]})
+    return row
+
+
+async def issue_async_trace(host: str, port: int, prepared_trace: list[dict],
+                            epoch_ns: int,
+                            timeout_s: float) -> tuple[list[dict], Exception | None]:
+    """Drive an open-loop trace with event-loop tasks, including queued requests."""
+    connector = aiohttp.TCPConnector(limit=0, force_close=True)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async def one(item: dict) -> dict:
+            scheduled_ns = epoch_ns + int(item["offset_s"] * 1e9)
+            await asyncio.sleep(max(0, (scheduled_ns - time.monotonic_ns()) / 1e9))
+            result = await async_completion(
+                session, host, port, item["prepared"], scheduled_ns, timeout_s,
+            )
+            return {**result, "population": item["population"],
+                    "offset_s": item["offset_s"]}
+
+        settled = await asyncio.gather(*(one(item) for item in prepared_trace),
+                                       return_exceptions=True)
+        rows = [item for item in settled if isinstance(item, dict)]
+        error = next((item for item in settled if isinstance(item, Exception)), None)
+        return rows, error
 
 
 def offered_rho(plan: dict, rows: list[dict]) -> float:
@@ -769,11 +844,11 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
     validate_stage_inputs(plan, rates, identity)
     trace = offered_trace(plan, rates, cell["direction"], cell["target_rho"],
                           cell["block"])
-    client_workers = client_worker_count(plan, trace)
+    client_tasks = client_task_count(plan, trace)
     root.mkdir(parents=True, exist_ok=True)
     (root / "offered.json").write_text(json.dumps(trace, indent=2) + "\n")
     pool = sessions(cell["block"], rates)
-    requests, futures, error = [], [], None
+    requests, error = [], None
     started_wall_ns = time.time_ns()
     epoch = wall = 0
     preloaded_kv_usage = None
@@ -793,6 +868,9 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
                                    plan["request_timeout_s"], True)
             (root / "prewarm.json").write_text(json.dumps(warm, indent=2) + "\n")
             validate_prewarm(warm, warm_sessions)
+            prepared_trace = [{**row, "prepared": serving.prepare_issue(
+                pool[row["session_id"]], row["request_index"], cfg.model, True,
+            )} for row in trace]
             sampler = serving.MetricsSampler(cfg.host, stack.port, root / "engine.csv")
             power = profiler.PowerSampler(root / "power.csv")
             sampler.start()
@@ -800,29 +878,18 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
             try:
                 wait_sampler(sampler)
                 preloaded_kv_usage = sampler.rows[-1]["vllm:gpu_cache_usage_perc"]
-                epoch, wall = time.monotonic_ns(), time.time_ns()
-                def issue(row):
-                    result = serving.issue(
-                        cfg.host, stack.port, cfg.model, pool[row["session_id"]],
-                        row["request_index"], epoch + int(row["offset_s"] * 1e9),
-                        plan["request_timeout_s"], True,
-                    )
-                    return {**result, "population": row["population"],
-                            "offset_s": row["offset_s"]}
-                with ThreadPoolExecutor(max_workers=client_workers) as executor:
-                    for row in trace:
-                        scheduled = epoch / 1e9 + row["offset_s"]
-                        time.sleep(max(0, scheduled - time.monotonic()))
-                        futures.append(executor.submit(issue, row))
-                requests, error = settle_futures(futures)
+                lead_ns = int(.5e9)
+                epoch = time.monotonic_ns() + lead_ns
+                wall = time.time_ns() + lead_ns
+                requests, error = asyncio.run(issue_async_trace(
+                    cfg.host, stack.port, prepared_trace, epoch,
+                    plan["request_timeout_s"],
+                ))
                 if error is None:
                     drained = drain(sampler, plan["drain_s"])
             except Exception as exc:
                 error = error or exc
             finally:
-                if futures and not requests:
-                    requests, future_error = settle_futures(futures)
-                    error = error or future_error
                 try:
                     engine_exited = close_samplers(sampler, power, stack.engine)
                 except Exception as exc:
@@ -840,7 +907,9 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
             "preloaded_kv_usage": preloaded_kv_usage,
             "kv_capacity_tokens": kv_capacity_tokens,
             "planned_parked_prefix_tokens": planned_parked_tokens,
-            "client_max_workers": client_workers,
+            "client_scheduler": plan["client"]["scheduler"],
+            "client_runtime_version": plan["client"]["aiohttp_version"],
+            "client_task_count": client_tasks,
             "engine_exited": engine_exited, "engine_failure_kind": failure_kind,
             "added_prefill_share": (None if cell["direction"] == "baseline" else
                                      phase_share(shape_for(cell["direction"], rates),

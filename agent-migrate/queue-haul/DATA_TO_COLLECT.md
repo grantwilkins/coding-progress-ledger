@@ -307,9 +307,10 @@ dimension automatically.
 Every cell uses a fresh process, cache reset, private-prefix prewarm, 60-second
 warmup, 240-second measurement window, absolute 180-second request deadline,
 180-second drain limit, and a smooth uniform open-loop schedule. One
-predeclared client worker is available per offered request under a frozen
-4,096-worker ceiling, so client executor backpressure cannot change the arrival
-trace at an overloaded point. Stability uses
+predeclared asynchronous client task is available per offered request under a
+frozen 4,096-task ceiling. One unbounded aiohttp connector drives the exact
+open-loop schedule without tying queued responses to an OS-thread pool; the
+plan pins the client runtime version. Stability uses
 running plus waiting plus client-pending requests only inside the measurement
 window; it cannot be rescued by warmup or post-window drain. The measurement
 hard-fails a scrape gap over one second. A send slip over 50 ms,

@@ -148,15 +148,38 @@ def test_phase_directions_must_remain_distinct():
     assert .4 <= campaign.phase_share(campaign.balanced_shape(h100), h100) <= .6
 
 
-def test_offered_trace_has_one_worker_per_request_without_client_backpressure():
+def test_offered_trace_has_one_task_per_request_without_client_backpressure():
     plan = campaign.make_plan()
     trace = campaign.offered_trace(plan, RATES, "prefill_heavy", 1.10, 0)
 
-    assert campaign.client_worker_count(plan, trace) == len(trace)
-    with pytest.raises(RuntimeError, match="client worker ceiling"):
-        campaign.client_worker_count(
-            {**plan, "max_client_workers": len(trace) - 1}, trace,
+    assert campaign.client_task_count(plan, trace) == len(trace)
+    with pytest.raises(RuntimeError, match="client task ceiling"):
+        campaign.client_task_count(
+            {**plan, "max_client_tasks": len(trace) - 1}, trace,
         )
+
+
+def test_async_trace_releases_many_queued_requests_without_thread_backpressure(
+        monkeypatch):
+    starts = []
+
+    async def issue(_session, _host, _port, _prepared, scheduled_ns, _timeout):
+        start = campaign.time.monotonic_ns()
+        starts.append((scheduled_ns, start))
+        return {"scheduled_ns": scheduled_ns, "start_ns": start}
+
+    monkeypatch.setattr(campaign, "async_completion", issue)
+    trace = [{"offset_s": .02, "population": "incumbent",
+              "prepared": {"index": index}} for index in range(256)]
+    epoch = campaign.time.monotonic_ns() + int(.02e9)
+    (rows, error) = campaign.asyncio.run(campaign.issue_async_trace(
+        "127.0.0.1", 1, trace, epoch, 1,
+    ))
+
+    assert error is None
+    assert len(rows) == len(starts) == 256
+    assert min(start - scheduled for scheduled, start in starts) >= 0
+    assert max(start - scheduled for scheduled, start in starts) / 1e9 < .05
 
 
 def test_runtime_contract_changes_with_every_semantic_stack_input(monkeypatch):
