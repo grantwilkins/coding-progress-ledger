@@ -2,12 +2,12 @@
   "bandwidth_projection_region_rate": 0.115,
   "candidate_method_dominance": {
     "candidate_equivalent": 0,
-    "candidate_incomparable": 0,
+    "candidate_incomparable": 11104,
     "candidate_kv_dominates": 0,
     "candidate_kv_only": 0,
-    "candidate_matched_pairs": 444320,
-    "candidate_neither": 3680,
-    "candidate_replay_dominates": 444320,
+    "candidate_matched_pairs": 444312,
+    "candidate_neither": 3688,
+    "candidate_replay_dominates": 433208,
     "candidate_replay_only": 0
   },
   "candidate_method_dominance_definition": {
@@ -25,21 +25,21 @@
       "candidate_neither"
     ]
   },
-  "claim": "modeled migration-volume and target-attainment sensitivity",
+  "claim": "modeled migration-volume and target-attainment lower-bound sensitivity using a measured relative-load factor",
   "cross_method_coupling": 1,
   "factor_activation_rate": {
-    "bandwidth-dest_compute-hbm/bandwidth": 0.031,
+    "bandwidth-dest_compute-hbm/bandwidth": 0.569,
     "bandwidth-dest_compute-hbm/dest_compute": 1.0,
-    "bandwidth-dest_compute-hbm/hbm": 0.533,
-    "bandwidth-dest_compute/bandwidth": 0.397,
+    "bandwidth-dest_compute-hbm/hbm": 0.414,
+    "bandwidth-dest_compute/bandwidth": 0.617,
     "bandwidth-dest_compute/dest_compute": 1.0,
-    "bandwidth-hbm/bandwidth": 0.486,
+    "bandwidth-hbm/bandwidth": 0.778,
     "bandwidth-hbm/hbm": 1.0,
     "bandwidth/bandwidth": 1.0,
     "dest_compute-hbm/dest_compute": 1.0,
-    "dest_compute-hbm/hbm": 0.533,
+    "dest_compute-hbm/hbm": 0.386,
     "dest_compute/dest_compute": 1.0,
-    "hbm/hbm": 1.0
+    "hbm/hbm": 0.998
   },
   "factor_levels": {
     "bandwidth": [
@@ -60,6 +60,7 @@
     "outputs/coding-run/migrations.csv": "a3bfa6beb5f622d0d9f3f8e22cc1f362b44428d2817feaec3cbd8bc7281359af",
     "outputs/coding-run/scenarios.csv": "f6d8e8676c7ec0a2d491b41c8f629f4e65118ac08b39ff861bf571ab882c359c",
     "outputs/destination-v7-20260722/content-free-manifest.json": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
+    "outputs/loaded-service-model-20260815/model.json": "bfc46e12992e3387d40c044f864a0e78f21d31210a1d930974daa2527b51bdac",
     "outputs/policy-hardware-width8-frontier-20260730/migration_stages.csv": "e5a9f6a128ea7358353d92d02120d69bba6c4591b4fb2306624ecade233fb531",
     "outputs/policy-hardware-width8-frontier-20260730/scenarios.csv": "222cfddfda665a6cf1ea2e521cb25ba23bf7930ad0727a0c99b044b43a8dc2b8",
     "outputs/timing-power-validation-20260814/migrations.csv": "04eec612a2082a528d8d94acec50a4f002065af988d44e39200b5023bbf19107",
@@ -70,30 +71,143 @@
     "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
     "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
     "each sampled pack is normalized to the pooled campaign's 0.4 source load",
-    "destination compute pressure consumes shared prefill/decode service headroom; load-dependent migration slowdown is not modeled",
+    "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
+    "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
     "route plus shared destination work is a conservative no-overlap envelope",
     "timing audits are grouped retrospective checks, not untouched validation sets",
     "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
     "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
-    "regional timing was measured only at zero destination prefill load; transient migration-service interference is not modeled",
+    "the relative load factor was measured on a fixed width-eight pack; transport to regional concurrency-one timing and other contexts is a sensitivity",
+    "all uses outside the 2,048-14,336-token fit pack or 1-10-Gbit/s validation routes are counted, with a support-restricted workload sensitivity",
+    "the support-restricted workload resamples a narrower state population and is not a within-pack counterfactual",
+    "the action ensemble fixes the loaded-service slope at its central fit rather than propagating its bootstrap",
+    "the relative-factor check does not directly validate the deployed regional concurrency-one loaded model",
+    "the load campaign identifies prefill-heavy normalized load, not a separate decode-load coefficient",
+    "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
     "the destination envelope combines measured timing with synthetic HBM and service-pressure levels",
     "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
-    "this run selects no KV transfer and Replay dominates every matched method pair, so the bars are a Replay-versus-not-moved null result rather than method-adaptation evidence",
     "each constraint state is planned independently; rounded-LP release regressions are reported",
     "fractional opportunity monotonicity does not prove integer packability",
     "controlled-40 timing draws above natural bandwidth are projected down; the rate is recorded"
   ],
+  "loaded_factor_transport": {
+    "bandwidth": {
+      "candidates": {
+        "above": 0,
+        "below": 222156,
+        "denominator": 888624,
+        "outside": 222156,
+        "outside_rate": 0.25
+      },
+      "pools": {
+        "above": 0,
+        "below": 4000,
+        "denominator": 16000,
+        "outside": 4000,
+        "outside_rate": 0.25
+      },
+      "selected": {
+        "above": 0,
+        "below": 33391,
+        "denominator": 150737,
+        "outside": 33391,
+        "outside_rate": 0.22151827354929446
+      }
+    },
+    "context": {
+      "candidates": {
+        "above": 338752,
+        "below": 78016,
+        "denominator": 888624,
+        "outside": 416768,
+        "outside_rate": 0.4690037631214102
+      },
+      "selected": {
+        "above": 32070,
+        "below": 18658,
+        "denominator": 150737,
+        "outside": 50728,
+        "outside_rate": 0.3365331670392803
+      },
+      "sessions": {
+        "above": 10787,
+        "below": 2438,
+        "denominator": 28000,
+        "outside": 13225,
+        "outside_rate": 0.47232142857142856
+      }
+    },
+    "selected_by_method": {
+      "kv_transfer": {
+        "bandwidth_outside": 0,
+        "bandwidth_outside_rate": 0.0,
+        "context_outside": 3670,
+        "context_outside_rate": 0.48137460650577124,
+        "denominator": 7624
+      },
+      "replay": {
+        "bandwidth_outside": 33391,
+        "bandwidth_outside_rate": 0.23331912544632563,
+        "context_outside": 47058,
+        "context_outside_rate": 0.32881708859432757,
+        "denominator": 143113
+      }
+    }
+  },
+  "loaded_service_model": {
+    "bootstrap_samples": 1000,
+    "bootstrap_seed": 1,
+    "equation": "endpoint_work(rho)=endpoint_work(0)*exp(beta_method*rho)",
+    "fit_context_tokens": [
+      2048,
+      14336
+    ],
+    "selected_commit_log_slope_per_rho": {
+      "kv_transfer": 0.0,
+      "replay": 0.2849634259872738
+    },
+    "slowdown_at_rho_0_95": {
+      "kv_transfer": 1.0,
+      "replay": 1.3109017441094115
+    },
+    "training_bandwidth_mbps": [
+      10000,
+      10000
+    ],
+    "validation_bandwidth_mbps": [
+      1000,
+      10000
+    ],
+    "width8_relative_factor_validation": {
+      "kv_transfer": {
+        "episodes": 220,
+        "false_feasible_25s": 0,
+        "false_infeasible_25s": 0,
+        "median_absolute_percentage_error": 0.028279343045033052,
+        "p90_absolute_error_s": 0.5384131217591783,
+        "p90_absolute_percentage_error": 0.11902462297834371
+      },
+      "replay": {
+        "episodes": 220,
+        "false_feasible_25s": 0,
+        "false_infeasible_25s": 0,
+        "median_absolute_percentage_error": 0.012270921736503543,
+        "p90_absolute_error_s": 0.1589513355972773,
+        "p90_absolute_percentage_error": 0.022747063365469618
+      }
+    }
+  },
   "migration_horizon_s": 25,
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 157,
-    "shortfall_regression_max_w": 14.816838700375499,
-    "shortfall_regression_median_w": 3.050747649752296,
-    "shortfall_regression_p90_w": 8.673150725442241,
-    "shortfall_regression_rate": 0.013083333333333334,
-    "target_loss_count": 79,
-    "target_loss_rate": 0.006583333333333333
+    "shortfall_regression_count": 224,
+    "shortfall_regression_max_w": 17.471889950165334,
+    "shortfall_regression_median_w": 3.6240906890320375,
+    "shortfall_regression_p90_w": 10.856253569885213,
+    "shortfall_regression_rate": 0.018666666666666668,
+    "target_loss_count": 84,
+    "target_loss_rate": 0.007
   },
   "regional_timing_destination_prefill_loads": [
     0.0
@@ -126,12 +240,110 @@
   "schema": "queue-haul-workload-adaptation-v1",
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 0,
-    "not_moved": 68159,
-    "replay": 155841
+    "kv_transfer": 7624,
+    "not_moved": 73263,
+    "replay": 143113
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
+  "support_restricted_workload_sensitivity": {
+    "comparison": "2,048-14,336-token workload resample with paired timing and power draws; not a within-pack counterfactual",
+    "loaded_factor_transport": {
+      "bandwidth": {
+        "candidates": {
+          "above": 0,
+          "below": 223568,
+          "denominator": 894272,
+          "outside": 223568,
+          "outside_rate": 0.25
+        },
+        "pools": {
+          "above": 0,
+          "below": 4000,
+          "denominator": 16000,
+          "outside": 4000,
+          "outside_rate": 0.25
+        },
+        "selected": {
+          "above": 0,
+          "below": 35475,
+          "denominator": 183158,
+          "outside": 35475,
+          "outside_rate": 0.1936852335142336
+        }
+      },
+      "context": {
+        "candidates": {
+          "above": 0,
+          "below": 0,
+          "denominator": 894272,
+          "outside": 0,
+          "outside_rate": 0.0
+        },
+        "selected": {
+          "above": 0,
+          "below": 0,
+          "denominator": 183158,
+          "outside": 0,
+          "outside_rate": 0.0
+        },
+        "sessions": {
+          "above": 0,
+          "below": 0,
+          "denominator": 28000,
+          "outside": 0,
+          "outside_rate": 0.0
+        }
+      },
+      "selected_by_method": {
+        "kv_transfer": {
+          "bandwidth_outside": 0,
+          "bandwidth_outside_rate": 0.0,
+          "context_outside": 0,
+          "context_outside_rate": 0.0,
+          "denominator": 7567
+        },
+        "replay": {
+          "bandwidth_outside": 35475,
+          "bandwidth_outside_rate": 0.20203199480611192,
+          "context_outside": 0,
+          "context_outside_rate": 0.0,
+          "denominator": 175591
+        }
+      }
+    },
+    "selected_session_totals": {
+      "kv_transfer": 7567,
+      "not_moved": 40842,
+      "replay": 175591
+    },
+    "target_met_rate": {
+      "All bound": 0.656,
+      "Bandwidth": 1.0,
+      "Bandwidth + compute": 0.654,
+      "Dest. compute": 0.677,
+      "HBM": 0.993,
+      "HBM + bandwidth": 0.993,
+      "HBM + compute": 0.669,
+      "None bound": 1.0
+    },
+    "workload": {
+      "excluded_states": 162,
+      "loaded_factor_context_only": true,
+      "loaded_factor_context_tokens": [
+        2048,
+        14336
+      ],
+      "loaded_factor_in_context_states": 1327,
+      "loaded_factor_in_context_templates": 62,
+      "loaded_factor_outside_context_states": 1694,
+      "manifest_templates": 72,
+      "phase_direction_excluded_states": 2,
+      "supported_states": 3021,
+      "supported_templates": 63,
+      "unselected_states": 1633
+    }
+  },
   "surface_validation": {
     "coding-c1-c4/development": {
       "false_feasible_at_25s": 5,
@@ -168,20 +380,29 @@
   },
   "target_fraction": 0.6666666666666666,
   "target_met_rate": {
-    "All bound": 0.389,
+    "All bound": 0.382,
     "Bandwidth": 0.989,
-    "Bandwidth + compute": 0.392,
-    "Dest. compute": 0.393,
-    "HBM": 0.986,
-    "HBM + bandwidth": 0.985,
-    "HBM + compute": 0.389,
-    "None bound": 0.992
+    "Bandwidth + compute": 0.377,
+    "Dest. compute": 0.381,
+    "HBM": 0.988,
+    "HBM + bandwidth": 0.986,
+    "HBM + compute": 0.38,
+    "None bound": 0.994
   },
   "unique_timing_draws": 1000,
   "workload": {
     "excluded_states": 162,
+    "loaded_factor_context_only": false,
+    "loaded_factor_context_tokens": [
+      2048,
+      14336
+    ],
+    "loaded_factor_in_context_states": 1327,
+    "loaded_factor_in_context_templates": 62,
+    "loaded_factor_outside_context_states": 1694,
     "manifest_templates": 72,
-    "supported_states": 3023,
+    "phase_direction_excluded_states": 2,
+    "supported_states": 3021,
     "supported_templates": 63,
     "unselected_states": 1633
   }

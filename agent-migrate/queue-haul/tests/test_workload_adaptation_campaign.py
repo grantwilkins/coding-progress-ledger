@@ -17,6 +17,7 @@ Plausible wrong implementations:
 - Make a state depend on whether a tighter counterfactual was solved first.
 - Apply a constrained factor to only one destination or retain a prefill-only label.
 - Drop a migration method from contexts covered by the regional timing model.
+- Apply the measured load factor to route bytes, HBM, or the idle timing anchor.
 """
 
 import numpy as np
@@ -46,7 +47,7 @@ def test_factorial_is_exact_and_uses_only_declared_levels():
 
 def test_template_sampling_is_reproducible_and_keeps_whole_shapes():
     profile = ModelProfile.load(campaign.PROFILE)
-    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    templates, workload = campaign.load_templates(campaign.MANIFEST, profile)
 
     first = campaign.sample_pack(templates, 28, 7)
     second = campaign.sample_pack(templates, 28, 7)
@@ -57,6 +58,12 @@ def test_template_sampling_is_reproducible_and_keeps_whole_shapes():
              for shapes in templates.values() for shape in shapes}
     assert all((session.context_tokens, session.expected_f, session.expected_g,
                 session.log_bytes) in valid for session in first)
+    phase = profile.case().phase_power
+    assert workload["phase_direction_excluded_states"] == 2
+    assert all(phase.contains(
+        1e-3 * shape.prompt_tokens / max(shape.prompt_tokens, shape.output_tokens),
+        1e-3 * shape.output_tokens / max(shape.prompt_tokens, shape.output_tokens),
+    ) for shapes in templates.values() for shape in shapes)
 
 
 def test_pack_normalization_preserves_shape_and_sets_common_source_load():
@@ -91,6 +98,45 @@ def test_one_paired_draw_conserves_sessions_and_target():
     assert len(checks) == 12
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
+
+
+def test_loaded_factor_transport_is_counted_and_in_context_run_is_paired():
+    rows, _ = campaign.simulate(samples=1, seed=3)
+    robust, workload = campaign.simulate(
+        samples=1, seed=3, loaded_context_only=True,
+    )
+
+    assert [(row["timing_fit_sha256"], row["power_bootstrap_index"])
+            for row in rows] == [
+                (row["timing_fit_sha256"], row["power_bootstrap_index"])
+                for row in robust]
+    assert workload["loaded_factor_context_only"]
+    assert workload["loaded_factor_outside_context_states"] > 0
+    assert all(row["loaded_context_below_session_count"] == 0
+               and row["loaded_context_above_session_count"] == 0
+               and row["loaded_context_below_candidate_count"] == 0
+               and row["loaded_context_above_candidate_count"] == 0
+               and row["loaded_context_below_selected_count"] == 0
+               and row["loaded_context_above_selected_count"] == 0
+               for row in robust)
+    summary = campaign.transport_summary(robust)
+    assert summary["context"]["sessions"]["denominator"] == 28
+    assert not summary["context"]["sessions"]["outside"]
+    assert not summary["context"]["candidates"]["outside"]
+    assert not summary["context"]["selected"]["outside"]
+
+
+def test_bandwidth_transport_counts_the_sub_gigabit_east_route():
+    rows, _ = campaign.simulate(samples=1, seed=3)
+    by_case = {row["case_id"]: row for row in rows}
+
+    assert by_case["none"]["loaded_bandwidth_below_pool_count"] == 0
+    assert by_case["bandwidth"]["loaded_bandwidth_below_pool_count"] == 1
+    assert by_case["bandwidth"]["loaded_bandwidth_below_candidate_count"] == 56
+    assert not any(row["loaded_bandwidth_above_pool_count"] for row in rows)
+    summary = campaign.transport_summary(rows)
+    assert summary["bandwidth"]["pools"]["denominator"] == 16
+    assert summary["bandwidth"]["pools"]["outside"] == 4
 
 
 def test_case_results_do_not_depend_on_factorial_traversal():
@@ -196,6 +242,30 @@ def test_central_surface_uses_regional_timing_and_routes():
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
     assert summary["migration_gate_passed"]
     assert all(row["coverage"] == 1 for row in summary["held_out"].values())
+
+
+def test_destination_load_scales_replay_endpoint_but_not_kv_or_idle_anchor():
+    fits = campaign.central_timing_fits()
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(
+        profile, campaign.sample_pack(templates, 28, 4),
+    )
+
+    scenario, architecture, _, _ = campaign.build_problem(
+        profile, pack, frozenset(), 2 / 3, fits,
+    )
+    model = campaign.loaded_service_model()
+    assert model["slowdown_at_rho_0"]["replay"] == 1
+    assert model["slowdown_at_rho_0"]["kv_transfer"] == 1
+    bandwidths = {link.link_id: link.bytes_per_s for link in scenario.links}
+    for pool in architecture.pools:
+        loaded = architecture.type_by_id[pool.type_id].loaded
+        context = 8192
+        bandwidth = min(bandwidths[link] for link in pool.route)
+        assert loaded["replay"].worst(.95, .95, context, bandwidth) \
+            > loaded["replay"].worst(.25, .25, context, bandwidth) > 1
+        assert loaded["kv_transfer"].worst(.95, .95, context, bandwidth) == 1
 
 
 def test_supported_pack_has_replay_and_kv_candidates_for_every_session():

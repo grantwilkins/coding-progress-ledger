@@ -10,6 +10,7 @@ from itertools import product
 import json
 import math
 from pathlib import Path
+from functools import lru_cache
 
 import matplotlib
 
@@ -23,10 +24,12 @@ from bootstrap_action_adaptation import (
 )
 from destination import (
     DestinationArchitecture, DestinationPool, DestinationReplica,
-    FluidMigrationService, MigrationComponents, dedicated_sink_architecture,
+    FluidMigrationService, LoadedCoefficients, MigrationComponents,
+    dedicated_sink_architecture,
 )
 from planner import plan, source_power
 import plot_style
+from loaded_service_model import validate_model as validate_loaded_service_model
 from pool_planner import candidate_table, phase_one_capacity_duals
 from power_model import ExpectedPower
 from profiles import ModelProfile
@@ -44,6 +47,7 @@ WIDTH8_TIMING = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
 TIMING = ROOT / "outputs/timing-power-validation-20260814/migrations.csv"
 TIMING_SUMMARY = ROOT / "outputs/timing-power-validation-20260814/timing-summary.json"
 TIMING_PARENT = ROOT / "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json"
+LOADED_SERVICE = ROOT / "outputs/loaded-service-model-20260815/model.json"
 OUT = ROOT / "outputs/workload-action-adaptation-20260814"
 BASE_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 WIDTH8_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
@@ -102,7 +106,10 @@ def load_templates(path: Path, profile: ModelProfile):
     decode = case.decode.by_concurrency[1][0]
     x = (max(1536, prefill[0], decode[0]),
          min(32256, prefill[-1], decode[-1]))
-    templates, excluded, unselected = {}, 0, 0
+    phase = case.phase_power
+    if phase is None:
+        raise ValueError("workload adaptation requires phase-power support")
+    templates, excluded, phase_excluded, unselected = {}, 0, 0, 0
     for row in raw["traces"]:
         if row["session_id"] not in family:
             unselected += 1
@@ -115,13 +122,23 @@ def load_templates(path: Path, profile: ModelProfile):
             row["session_id"], family[row["session_id"]], context,
             int(row["newly_append_tokens"]), int(row["output_tokens"]),
         )
+        phase_rate = max(shape.prompt_tokens, shape.output_tokens)
+        if phase_rate <= 0:
+            raise ValueError("workload state has no phase work")
+        scale = 1e-3 / phase_rate
+        if not phase.contains(scale * shape.prompt_tokens,
+                              scale * shape.output_tokens):
+            phase_excluded += 1
+            continue
         templates.setdefault(shape.template_id, []).append(shape)
     if not templates:
         raise ValueError("no workload templates inside timing support")
     return {key: tuple(value) for key, value in templates.items()}, {
         "manifest_templates": len(family), "supported_templates": len(templates),
         "supported_states": sum(map(len, templates.values())),
-        "excluded_states": excluded, "unselected_states": unselected,
+        "excluded_states": excluded,
+        "phase_direction_excluded_states": phase_excluded,
+        "unselected_states": unselected,
     }
 
 
@@ -154,6 +171,15 @@ def normalize_pack(profile, sessions, load=SOURCE_LOAD):
 
 def state_values(constraints):
     return {factor: LEVELS[factor][factor in constraints] for factor in FACTORS}
+
+
+@lru_cache(maxsize=1)
+def loaded_service_model(path=LOADED_SERVICE):
+    value = json.loads(Path(path).read_text())
+    value = validate_loaded_service_model(value)
+    if value["bootstrap_samples"] != 1000 or value["bootstrap_seed"] != 1:
+        raise ValueError("loaded-service artifact is not the canonical fit")
+    return value
 
 
 def central_timing_fits():
@@ -262,7 +288,17 @@ def build_problem(profile, sessions, constraints, target_fraction, fits):
             value.get("compute_completion_factor", 1), value.get("residual_s", 0),
             value.get("kv_ingest_bytes_per_s"),
         ) for method, value in raw.items()}
-        dtype = replace(q, type_id=f"{q.type_id}/{region}", migration=migration)
+        load = loaded_service_model()
+        loaded = {method: LoadedCoefficients(
+            tuple(load["rho_grid"]), tuple(load["slowdown"][method]),
+            migration[method].context_range,
+            migration[method].bandwidth_range_bytes_per_s,
+            f"{LOADED_SERVICE.relative_to(ROOT)}; normalized A100 load sensitivity",
+        ) for method in ("replay", "kv_transfer")}
+        dtype = replace(
+            q, type_id=f"{q.type_id}/{region}", migration=migration,
+            loaded=loaded,
+        )
         service = FluidMigrationService(
             1 / fits[region]["replay_compute_completion_factor"],
             fits[region]["kv_ingest_lower_bound_bytes_per_s"],
@@ -332,6 +368,7 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         "feasible": result.feasible, "power_shortfall_w": result.power_shortfall_w,
         "planned_shed_w": result.initial_source_power_w - result.planned_source_power_w,
         "predicted_migration_makespan_s": result.predicted_migration_makespan_s,
+        **loaded_transport_counts(scenario, architecture, table, result.moves),
         **dominance,
         **{f"{action}_count": counts[action] for action in ACTIONS},
         **{action: counts[action] / len(sessions) for action in ACTIONS},
@@ -342,6 +379,59 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         "binding_resources": ";".join(result.binding_resources),
         "failure": result.failure_reason or "",
     }
+
+
+def loaded_transport_counts(scenario, architecture, table, moves):
+    """Count uses outside the fixed-pack load-factor evidence."""
+    low, high = loaded_service_model()["fit_context_tokens"]
+    min_bw, max_bw = (value * 125_000 for value in
+                      loaded_service_model()["validation_bandwidth_mbps"])
+    links = {link.link_id: link.bytes_per_s for link in scenario.links}
+    sessions = {session.session_id: session for session in table.sessions}
+
+    def bandwidth(path):
+        return min(links[link] for link in path)
+
+    def context_counts(items):
+        values = [item.context_tokens for item in items]
+        return sum(value < low for value in values), sum(value > high for value in values)
+
+    def bandwidth_counts(paths):
+        values = [bandwidth(path) for path in paths]
+        return sum(value < min_bw for value in values), sum(value > max_bw for value in values)
+
+    candidate_sessions = [table.sessions[item.session] for item in table.candidates]
+    selected_sessions = [sessions[move.session_id] for move in moves]
+    result = {
+        "loaded_candidate_count": len(table.candidates),
+        "loaded_pool_count": len(architecture.pools),
+        "loaded_selected_count": len(moves),
+    }
+    for scope, items in (("session", table.sessions),
+                         ("candidate", candidate_sessions),
+                         ("selected", selected_sessions)):
+        below, above = context_counts(items)
+        result[f"loaded_context_below_{scope}_count"] = below
+        result[f"loaded_context_above_{scope}_count"] = above
+    for scope, paths in (("pool", [pool.route for pool in architecture.pools]),
+                         ("candidate", [item.path for item in table.candidates]),
+                         ("selected", [move.path for move in moves])):
+        below, above = bandwidth_counts(paths)
+        result[f"loaded_bandwidth_below_{scope}_count"] = below
+        result[f"loaded_bandwidth_above_{scope}_count"] = above
+    for method in ("replay", "kv_transfer"):
+        selected = [move for move in moves if move.method == method]
+        below_context, above_context = context_counts(
+            [sessions[move.session_id] for move in selected])
+        below_bandwidth, above_bandwidth = bandwidth_counts(
+            [move.path for move in selected])
+        result.update({
+            f"loaded_context_below_{method}_selected_count": below_context,
+            f"loaded_context_above_{method}_selected_count": above_context,
+            f"loaded_bandwidth_below_{method}_selected_count": below_bandwidth,
+            f"loaded_bandwidth_above_{method}_selected_count": above_bandwidth,
+        })
+    return result
 
 
 def method_dominance(table, pools):
@@ -382,11 +472,29 @@ def method_dominance(table, pools):
 
 
 def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3,
-             profile_path=PROFILE, manifest_path=MANIFEST):
+             profile_path=PROFILE, manifest_path=MANIFEST,
+             loaded_context_only=False):
     if samples < 1 or sessions < 1 or not 0 < target_fraction <= 1:
         raise ValueError("invalid workload-adaptation simulation controls")
     profile = ModelProfile.load(profile_path)
     templates, workload = load_templates(manifest_path, profile)
+    low, high = loaded_service_model()["fit_context_tokens"]
+    original_states = sum(map(len, templates.values()))
+    fit_templates = {key: selected for key, values in templates.items()
+                     if (selected := tuple(value for value in values
+                                           if low <= value.context_tokens <= high))}
+    if loaded_context_only:
+        templates = fit_templates
+        if not templates:
+            raise ValueError("no workload templates inside loaded-factor context support")
+    workload.update({
+        "loaded_factor_context_only": loaded_context_only,
+        "loaded_factor_context_tokens": [low, high],
+        "loaded_factor_in_context_templates": len(fit_templates),
+        "loaded_factor_in_context_states": sum(map(len, fit_templates.values())),
+        "loaded_factor_outside_context_states":
+            original_states - sum(map(len, fit_templates.values())),
+    })
     timing_rows, parent = read_csv(TIMING), json.loads(TIMING_PARENT.read_text())
     central_timing_fits()
     rng, rows = np.random.default_rng(seed), []
@@ -413,6 +521,57 @@ def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3
            for replicate in range(samples)):
         raise RuntimeError("factorial states do not share one timing draw")
     return rows, workload
+
+
+def transport_summary(rows):
+    first_case = factorial_cases()[0][0]
+    pack_rows = [row for row in rows if row["case_id"] == first_case]
+
+    def summarize_scope(selected, denominator, prefix, scope):
+        total = sum(row[denominator] for row in selected)
+        return {
+            "denominator": total,
+            **{side: sum(row[f"loaded_{prefix}_{side}_{scope}_count"]
+                         for row in selected)
+               for side in ("below", "above")},
+        }
+
+    context = {
+        "sessions": summarize_scope(pack_rows, "sessions", "context", "session"),
+        "candidates": summarize_scope(rows, "loaded_candidate_count", "context",
+                                      "candidate"),
+        "selected": summarize_scope(rows, "loaded_selected_count", "context",
+                                    "selected"),
+    }
+    bandwidth = {
+        "pools": summarize_scope(rows, "loaded_pool_count", "bandwidth", "pool"),
+        "candidates": summarize_scope(rows, "loaded_candidate_count", "bandwidth",
+                                      "candidate"),
+        "selected": summarize_scope(rows, "loaded_selected_count", "bandwidth",
+                                    "selected"),
+    }
+    for values in (*context.values(), *bandwidth.values()):
+        values["outside"] = values["below"] + values["above"]
+        values["outside_rate"] = values["outside"] / values["denominator"] \
+            if values["denominator"] else 0.0
+    selected_by_method = {}
+    for method in ("replay", "kv_transfer"):
+        denominator = sum(row[f"{method}_count"] for row in rows)
+        selected_by_method[method] = {
+            "denominator": denominator,
+            "context_outside": sum(
+                row[f"loaded_context_{side}_{method}_selected_count"]
+                for row in rows for side in ("below", "above")),
+            "bandwidth_outside": sum(
+                row[f"loaded_bandwidth_{side}_{method}_selected_count"]
+                for row in rows for side in ("below", "above")),
+        }
+        for axis in ("context", "bandwidth"):
+            selected_by_method[method][f"{axis}_outside_rate"] = \
+                selected_by_method[method][f"{axis}_outside"] / denominator \
+                if denominator else 0.0
+    return {"context": context, "bandwidth": bandwidth,
+            "selected_by_method": selected_by_method}
 
 
 def factor_checks(rows):
@@ -639,8 +798,19 @@ def main():
     rows, workload = simulate(
         args.samples, args.seed, args.sessions, args.target,
     )
+    in_context_rows, in_context_workload = simulate(
+        args.samples, args.seed, args.sessions, args.target,
+        loaded_context_only=True,
+    )
+    if any((row["replicate"], row["case_id"], row["timing_fit_sha256"],
+            row["power_bootstrap_index"]) !=
+           (robust["replicate"], robust["case_id"], robust["timing_fit_sha256"],
+            robust["power_bootstrap_index"])
+           for row, robust in zip(rows, in_context_rows)):
+        raise RuntimeError("in-context robustness is not calibration-paired")
     summary, validation, checks = (summarize(rows), validate_surface(),
                                    factor_checks(rows))
+    in_context_checks = factor_checks(in_context_rows)
     activation = {(case, factor): np.mean([
         row["active"] for row in checks
         if row["case_id"] == case and row["factor"] == factor
@@ -649,15 +819,22 @@ def main():
                if len(constraints) == 1}
     if any(row["fractional_opportunity_worsened_on_release"] for row in checks):
         raise RuntimeError("constraint release reduced the fractional opportunity set")
+    if any(row["fractional_opportunity_worsened_on_release"]
+           for row in in_context_checks):
+        raise RuntimeError("in-context constraint release reduced the opportunity set")
     if any(rate < .9 for (case, _), rate in activation.items()
            if case in singles) or any(rate == 0 for rate in activation.values()):
         raise RuntimeError("labeled constraints failed activation gates")
     write_csv(args.out / "action_mix.csv", rows)
     write_csv(args.out / "action_mix_summary.csv", summary)
+    write_csv(args.out / "action_mix_support_restricted.csv", in_context_rows)
+    write_csv(args.out / "action_mix_support_restricted_summary.csv",
+              summarize(in_context_rows))
     write_csv(args.out / "surface_validation.csv", validation)
     write_csv(args.out / "factor_checks.csv", checks)
     plot(rows, args.out / "action_mix")
     timing_evidence = json.loads(TIMING_SUMMARY.read_text())
+    loaded_evidence = loaded_service_model()
     timing_loads = sorted({float(row["destination_prefill_load"])
                            for row in read_csv(TIMING)})
     selected = {action: int(sum(row[f"{action}_count"] for row in rows))
@@ -674,7 +851,7 @@ def main():
     ])
     metadata = {
         "schema": "queue-haul-workload-adaptation-v1",
-        "claim": "modeled migration-volume and target-attainment sensitivity",
+        "claim": "modeled migration-volume and target-attainment lower-bound sensitivity using a measured relative-load factor",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
@@ -709,6 +886,36 @@ def main():
             "migration_gate_passed": timing_evidence["migration_gate_passed"],
             "held_out": timing_evidence["held_out"],
         },
+        "loaded_service_model": {
+            "equation": loaded_evidence["equation"],
+            "selected_commit_log_slope_per_rho": loaded_evidence[
+                "selected_commit_log_slope_per_rho"],
+            "slowdown_at_rho_0_95": loaded_evidence["slowdown_at_rho_0_95"],
+            "fit_context_tokens": loaded_evidence["fit_context_tokens"],
+            "training_bandwidth_mbps": loaded_evidence[
+                "training_bandwidth_mbps"],
+            "validation_bandwidth_mbps": loaded_evidence[
+                "validation_bandwidth_mbps"],
+            "bootstrap_samples": loaded_evidence["bootstrap_samples"],
+            "bootstrap_seed": loaded_evidence["bootstrap_seed"],
+            "width8_relative_factor_validation": loaded_evidence[
+                "width8_relative_factor_validation"],
+        },
+        "loaded_factor_transport": transport_summary(rows),
+        "support_restricted_workload_sensitivity": {
+            "comparison": "2,048-14,336-token workload resample with paired timing and power draws; not a within-pack counterfactual",
+            "workload": in_context_workload,
+            "selected_session_totals": {
+                action: int(sum(row[f"{action}_count"] for row in in_context_rows))
+                for action in ACTIONS
+            },
+            "target_met_rate": {
+                label: float(np.mean([row["target_met"] for row in in_context_rows
+                                      if row["case_id"] == case_id]))
+                for case_id, label, _ in factorial_cases()
+            },
+            "loaded_factor_transport": transport_summary(in_context_rows),
+        },
         "factor_activation_rate": {f"{case}/{factor}": float(rate)
                                    for (case, factor), rate in sorted(activation.items())},
         "planner_release_audit": {
@@ -737,6 +944,7 @@ def main():
         },
         "inputs": {str(path.relative_to(ROOT)): file_hash(path) for path in (
             PROFILE, MANIFEST, TIMING, TIMING_SUMMARY, TIMING_PARENT,
+            LOADED_SERVICE,
             LOCAL_TIMING / "scenarios.csv",
             LOCAL_TIMING / "migrations.csv", WIDTH8_TIMING / "scenarios.csv",
             WIDTH8_TIMING / "migration_stages.csv",
@@ -745,15 +953,21 @@ def main():
             "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
             "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
             "each sampled pack is normalized to the pooled campaign's 0.4 source load",
-            "destination compute pressure consumes shared prefill/decode service headroom; load-dependent migration slowdown is not modeled",
+            "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
+            "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
             "route plus shared destination work is a conservative no-overlap envelope",
             "timing audits are grouped retrospective checks, not untouched validation sets",
             "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
             "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
-            "regional timing was measured only at zero destination prefill load; transient migration-service interference is not modeled",
+            "the relative load factor was measured on a fixed width-eight pack; transport to regional concurrency-one timing and other contexts is a sensitivity",
+            "all uses outside the 2,048-14,336-token fit pack or 1-10-Gbit/s validation routes are counted, with a support-restricted workload sensitivity",
+            "the support-restricted workload resamples a narrower state population and is not a within-pack counterfactual",
+            "the action ensemble fixes the loaded-service slope at its central fit rather than propagating its bootstrap",
+            "the relative-factor check does not directly validate the deployed regional concurrency-one loaded model",
+            "the load campaign identifies prefill-heavy normalized load, not a separate decode-load coefficient",
+            "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
             "the destination envelope combines measured timing with synthetic HBM and service-pressure levels",
             "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
-            "this run selects no KV transfer and Replay dominates every matched method pair, so the bars are a Replay-versus-not-moved null result rather than method-adaptation evidence",
             "each constraint state is planned independently; rounded-LP release regressions are reported",
             "fractional opportunity monotonicity does not prove integer packability",
             "controlled-40 timing draws above natural bandwidth are projected down; the rate is recorded",

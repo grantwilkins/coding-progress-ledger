@@ -232,18 +232,28 @@ class DestinationArchitecture:
 
     def __post_init__(self):
         type_ids = [q.type_id for q in self.types]
+        types = {q.type_id: q for q in self.types}
         pool_ids = [p.pool_id for p in self.pools]
         replicas = [r.replica_id for p in self.pools for r in p.replicas]
         serial = [i for i, pool in enumerate(self.pools)
                   if pool.fluid_migration is not None
                   and not pool.fluid_migration.route_overlap]
+        loaded_debt = any(
+            pool.fluid_migration is not None
+            and pool.event_flex_fraction is not None
+            and any(value.baseline_factor != 1
+                    or any(factor != 1 for factor in value.slowdown)
+                    for value in types[pool.type_id].loaded.values())
+            for pool in self.pools if pool.type_id in types
+        )
         if self.schema != DESTINATION_SCHEMA or not self.types or not self.pools \
                 or len(set(type_ids)) != len(type_ids) or len(set(pool_ids)) != len(pool_ids) \
                 or len(set(replicas)) != len(replicas) \
                 or not set(p.type_id for p in self.pools) <= set(type_ids) \
                 or self.residency_horizon_s is not None and self.residency_horizon_s < 0 \
                 or any(set(self.pools[i].route) & set(pool.route)
-                       for i in serial for j, pool in enumerate(self.pools) if i != j):
+                       for i in serial for j, pool in enumerate(self.pools) if i != j) \
+                or loaded_debt:
             raise ValueError("invalid destination architecture")
 
     @classmethod

@@ -844,8 +844,11 @@ joint phase-power bootstrap tuple. All eight HBM/bandwidth/destination-compute
 states share
 that draw. The planner uses measured East US 2 and Germany West Central routes
 and a conservative route-plus-shared-migration-work envelope; background
-inference consumes shared prefill/decode destination-compute headroom but does
-not assert an unmeasured load-dependent migration slowdown. Every enabled
+inference consumes shared prefill/decode destination-compute headroom. Replay
+endpoint work is multiplied by the measured relative factor
+`exp(0.284963 * rho)` at the incumbent normalized destination load; KV is
+load-neutral centrally because its paired bootstrap spans zero. The regional
+concurrency-one fit remains the exact rho=0 anchor. Every enabled
 factor is applied to both destinations, using region-specific route rates.
 Within the measured regional 1,536--32,256-token migration support, Replay uses
 the base rate curve where available and its conservative minimum rate outside
@@ -869,18 +872,26 @@ a confidence interval or 1,000 independent workloads. The regional single-move
 timing holdout passes its recorded gate; grouped local and width-8 timing audits
 remain retrospective, and the no-overlap envelope intentionally overpredicts
 many width-8 makespans rather than extrapolating the KV-heavy mixed evidence to
-Replay-majority plans.
+Replay-majority plans. Two otherwise timing-supported trace states are excluded
+because their prefill/decode direction lies outside the phase-power calibration
+cone; the output records that exclusion and retains a post-plan hull hard gate.
 
-The corrected default run is an honest null result: every selected migration is
-Replay, and Replay dominates KV for every matched session--destination candidate
-under the declared resources. HBM does not distinguish the methods because both
-leave the same resident KV state; bandwidth favors Replay's smaller payload, and
-the available regional timing was measured only at zero destination prefill
-load. The figure therefore supports constraint-dependent migration volume and
-target attainment, not Replay/KV action adaptation. A method-adaptation claim
-requires matched Replay/KV measurements under controlled destination load;
-adding an unmeasured Replay quota or transient-service penalty would only be a
-model sensitivity.
+`loaded_service_model.py` fits that factor from 160 equal-cell-weighted,
+fixed-width forced-action A100 episodes. A 440-episode, 1--10-Gbit/s check
+validates the relative width-8 factor, not the deployed regional loaded model.
+At rho=.95, Replay endpoint work is 1.311x its idle value. The fitted width-8
+intercept is diagnostic and is never applied to regional timing. The loaded
+pack covers 2,048--14,336 tokens and is prefill-heavy, so context and load-shape
+transport remain explicit sensitivities. The output counts every selected,
+candidate, and sampled use outside that context range or the validated bandwidth
+range. A support-restricted table resamples only 2,048--14,336-token states with
+the same timing and power draws; because it changes the workload population, it
+is not a within-pack counterfactual. The action ensemble fixes the load slope at
+its central fit rather than propagating its bootstrap. Resume TTFT is retained
+as a diagnostic but is not a planner resource: its adverse 1-Gbit/s cells fail
+the prediction gate. The existing service-debt machinery remains disabled until
+a completed headroom campaign identifies an SLO budget. HBM remains
+method-independent because either method leaves the same resident KV state.
 
 `workload_power_frontier.py` carries 100 deterministic paired draws through the
 same seven-policy requested-shed frontier as the designed-case plot. The sweep

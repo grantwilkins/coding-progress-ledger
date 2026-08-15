@@ -1,0 +1,172 @@
+{
+  "schema": "queue-haul-loaded-service-v1",
+  "equation": "endpoint_work(rho)=endpoint_work(0)*exp(beta_method*rho)",
+  "selected_commit_log_slope_per_rho": {
+    "replay": 0.2849634259872738,
+    "kv_transfer": 0.0
+  },
+  "fitted_commit_log_slope_per_rho": {
+    "replay": 0.2849634259872738,
+    "kv_transfer": 0.04242173178630663
+  },
+  "width8_intercept_diagnostic": {
+    "replay": 0.5378776908618247,
+    "kv_transfer": 0.1394683857915135
+  },
+  "resume_log_slope_per_rho_diagnostic": {
+    "replay": 0.1910709124327365,
+    "kv_transfer": 0.12038032484436684
+  },
+  "slowdown_at_rho_0": {
+    "replay": 1.0,
+    "kv_transfer": 1.0
+  },
+  "slowdown_at_rho_0_95": {
+    "replay": 1.3109017441094115,
+    "kv_transfer": 1.0
+  },
+  "rho_grid": [
+    0,
+    0.25,
+    0.5,
+    0.65,
+    0.75,
+    0.8,
+    0.85,
+    0.875,
+    0.9,
+    0.925,
+    0.95,
+    0.975
+  ],
+  "slowdown": {
+    "replay": [
+      1.0,
+      1.073839836024188,
+      1.1531319934324549,
+      1.2034906712873188,
+      1.2382790707417524,
+      1.256048573905465,
+      1.2740730722880633,
+      1.2831820861509926,
+      1.2923562251118144,
+      1.3015959547838694,
+      1.3109017441094115,
+      1.3202740653834073
+    ],
+    "kv_transfer": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "fit_context_tokens": [
+    2048,
+    14336
+  ],
+  "training_bandwidth_mbps": [
+    10000,
+    10000
+  ],
+  "validation_bandwidth_mbps": [
+    1000,
+    10000
+  ],
+  "bootstrap": {
+    "replay": {
+      "p05": 0.2731733852299215,
+      "median": 0.28364394582513097,
+      "p95": 0.30146662595483964,
+      "positive_fraction": 1.0
+    },
+    "kv_transfer": {
+      "p05": -0.07701772657180239,
+      "median": 0.06273101819280713,
+      "p95": 0.18593975813984565,
+      "positive_fraction": 0.775
+    }
+  },
+  "bootstrap_samples": 1000,
+  "bootstrap_seed": 1,
+  "width8_relative_factor_validation": {
+    "replay": {
+      "episodes": 220,
+      "median_absolute_percentage_error": 0.012270921736503543,
+      "p90_absolute_percentage_error": 0.022747063365469618,
+      "p90_absolute_error_s": 0.1589513355972773,
+      "false_feasible_25s": 0,
+      "false_infeasible_25s": 0
+    },
+    "kv_transfer": {
+      "episodes": 220,
+      "median_absolute_percentage_error": 0.028279343045033052,
+      "p90_absolute_percentage_error": 0.11902462297834371,
+      "p90_absolute_error_s": 0.5384131217591783,
+      "false_feasible_25s": 0,
+      "false_infeasible_25s": 0
+    }
+  },
+  "resume_validation_diagnostic": {
+    "replay": {
+      "episodes": 220,
+      "median_absolute_percentage_error": 0.19660316806990064,
+      "p90_absolute_percentage_error": 0.6957349953551485,
+      "p90_absolute_error_s": 23.078532661532606,
+      "false_feasible_25s": 40,
+      "false_infeasible_25s": 0
+    },
+    "kv_transfer": {
+      "episodes": 220,
+      "median_absolute_percentage_error": 0.032511974965196304,
+      "p90_absolute_percentage_error": 0.09575864043635586,
+      "p90_absolute_error_s": 0.5402013836259972,
+      "false_feasible_25s": 0,
+      "false_infeasible_25s": 0
+    }
+  },
+  "physics": {
+    "route_bytes": {
+      "replay": 131072,
+      "kv_transfer": 3221225472
+    },
+    "endpoint_work_s": {
+      "replay": 9.744926253798646,
+      "kv_transfer": 8.843509756
+    },
+    "switch_s": 0.000730752
+  },
+  "limitations": [
+    "the width-eight intercept is diagnostic and is not transported to regional concurrency-one timing",
+    "the load shape is prefill-heavy; no separate decode-load coefficient is identified",
+    "KV load slope is zero centrally because its paired bootstrap spans zero",
+    "the fitted KV intercept uses a serial-tail diagnostic equation and is not deployed",
+    "loaded context transport outside the fixed 2,048-14,336-token pack is a sensitivity",
+    "resume TTFT is diagnostic and is not charged as migration resource work"
+  ],
+  "provenance": {
+    "training_episodes": 160,
+    "validation_episodes": 440,
+    "profile": "profiles/gpt_oss_20b_a100_tp1_crossover.json",
+    "profile_sha256": "99ec3d2e3099f01103e7a0609a9d99beabfe7ec86eeb372d65f5829090658ab8",
+    "input_sha256": {
+      "outputs/capacity-load-publication-20260807/live_plan.json": "fee09c5b5cea411410614ed91957938ec8396d07c29b55ff5c473a3728900ee5",
+      "outputs/capacity-full-drain-block0-20260807/live_plan.json": "6c4950b16b84d4a0d9d281f26f1d4feda8ef8f61ffbd173d47439d41f3525b78",
+      "outputs/capacity-full-drain-block1-20260807/live_plan.json": "1ae8ea08d8025fd2e25652bb8e18903edae1ec6e533552e013b0d70a3d34950f",
+      "outputs/capacity-full-drain-10000-20260807/live_plan.json": "f671e513fb8b6e6e6315a5c5c5698a6e36561bca29390340b08725e3a89783af",
+      "outputs/capacity-load-publication-20260807/live_capacity.csv": "e120cfc676257a91434a74027b964f95123258d51896f81e004dcbd1192a782e",
+      "outputs/capacity-full-drain-block0-20260807/full_drain_capacity.csv": "c88078152a29234a79754f9a32a3064d4f23caa75b5bbc7986606657b54751b8",
+      "outputs/capacity-full-drain-block1-20260807/full_drain_capacity.csv": "72ac562967fa6732941516e01751fc8cf66fc43d822aef67531289887b5a1212",
+      "outputs/capacity-full-drain-10000-20260807/full_drain_capacity.csv": "6bce8b28ef7845986b95d67fef641371b47d6951d562c76bd35c6772d54882f2"
+    },
+    "validation_split": "full-drain blocks 0-1 plus standalone 10G repeats 4-9"
+  }
+}

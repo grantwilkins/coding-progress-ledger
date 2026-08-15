@@ -407,6 +407,7 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                         )
                     )
                     migration_work = duration
+                    transition = None
                     if pool.fluid_migration:
                         service = pool.fluid_migration
                         replicas = len(pool.replicas)
@@ -417,6 +418,16 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                             tail_work = case.replay_completion_s * (
                                 1 + _changes(session, migration_horizon)
                             ) / service.replay_speedup
+                            transition = (stream_work + tail_work, 0)
+                            try:
+                                factor = q.loaded[method].worst(
+                                    rho, rho, migration_tokens, bandwidth,
+                                )
+                            except ValueError:
+                                duration_cache[duration_key] = None
+                                continue
+                            stream_work *= factor
+                            tail_work *= factor
                             migration_work = stream_work + tail_work
                             duration = max(
                                 route_bytes[method] / bandwidth,
@@ -427,6 +438,15 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                                 case.kv_transfer.initial_completion_s
                             stream_work = route_bytes[method] \
                                 / service.kv_ingest_bytes_per_s
+                            try:
+                                factor = q.loaded[method].worst(
+                                    rho, rho, migration_tokens, bandwidth,
+                                )
+                            except ValueError:
+                                duration_cache[duration_key] = None
+                                continue
+                            stream_work *= factor
+                            tail_work *= factor
                             migration_work = stream_work + tail_work
                             duration = max(
                                 route_bytes[method] / bandwidth,
@@ -452,14 +472,14 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                         except ValueError:
                             duration_cache[duration_key] = None
                             continue
-                    duration_cache[duration_key] = duration, migration_work
+                    duration_cache[duration_key] = duration, migration_work, transition
                 timed = duration_cache[duration_key]
                 if timed is None:
                     continue
-                duration, migration_work = timed
+                duration, migration_work, transition = timed
                 if duration > migration_horizon and not include_infeasible:
                     continue
-                transition = (
+                transition = transition or (
                     (max(0, duration - route_bytes[method] / bandwidth), 0)
                     if method == "replay" else (0, 0)
                 )

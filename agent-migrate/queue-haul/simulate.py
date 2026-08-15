@@ -1127,6 +1127,11 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
     sessions = {session.session_id: session for session in scenario.sessions}
     case, start = profile.case(case_id), scenario.controller_delay_s
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
+    from pool_planner import _baseline, _pool_rho
+    horizon = destination.residency_horizon_s
+    if horizon is None:
+        horizon = scenario.deadline_s - start - profile.power_window_s
+    baseline, _ = _baseline(scenario, destination, horizon)
     route_bytes = np.array([
         sessions[move.session_id].log_bytes if move.method == "replay" else
         case.kv_transfer.sealed_bytes(sessions[move.session_id].context_tokens)
@@ -1148,6 +1153,7 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
         replay = [i for i in members if moves[i].method == "replay"]
         kv = [i for i in members if moves[i].method == "kv_transfer"]
         q = destination.type_by_id[pool.type_id]
+        rho = _pool_rho(q, pool, baseline)
         for i in members:
             if q.migration is None:
                 continue
@@ -1168,15 +1174,25 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
             return case.replay.rate(tokens, 1) if q.migration is None else \
                 case.replay.conservative_rate(tokens, 1)
 
+        def factor(i):
+            session = sessions[moves[i].session_id]
+            bandwidth = min(links[link] for link in moves[i].path)
+            return q.loaded[moves[i].method].worst(
+                rho, rho, session.context_tokens, bandwidth,
+            )
+
         if service.coupling:
             replay_work = sum(
-                sessions[moves[i].session_id].context_tokens / replay_rate(i)
-                + case.replay_completion_s for i in replay
+                factor(i) * (
+                    sessions[moves[i].session_id].context_tokens / replay_rate(i)
+                    + case.replay_completion_s
+                ) for i in replay
             ) / service.replay_speedup
             residual = q.migration["kv_transfer"].residual_s \
                 if q.migration else case.kv_transfer.initial_completion_s
-            kv_work = sum(route_bytes[i] / service.kv_ingest_bytes_per_s
-                          + residual for i in kv)
+            kv_work = sum(factor(i) * (
+                route_bytes[i] / service.kv_ingest_bytes_per_s + residual
+            ) for i in kv)
             work = max(
                 replay_work + service.coupling * kv_work,
                 service.coupling * replay_work + kv_work,
@@ -1189,7 +1205,8 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
             continue
         if replay:
             work = np.array([
-                sessions[moves[i].session_id].context_tokens / replay_rate(i)
+                factor(i) * sessions[moves[i].session_id].context_tokens
+                / replay_rate(i)
                 for i in replay
             ])
             capacity = len(pool.replicas) * service.replay_speedup
@@ -1197,18 +1214,20 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
                 network_done[replay[0]], start + work.sum() / capacity,
             ))
             done = fluid_service_completion(
-                np.full(len(replay), case.replay_completion_s), capacity, streamed,
+                np.array([factor(i) * case.replay_completion_s for i in replay]),
+                capacity, streamed,
             )
             commits[replay] = done + case.switch_s
         if kv:
+            factors = np.array([factor(i) for i in kv])
             ingested = np.full(len(kv), max(
-                network_done[kv[0]], start + route_bytes[kv].sum() / (
-                    len(pool.replicas) * service.kv_ingest_bytes_per_s
-                ),
+                network_done[kv[0]], start + np.sum(
+                    factors * route_bytes[kv]
+                ) / (len(pool.replicas) * service.kv_ingest_bytes_per_s),
             ))
             residual = q.migration["kv_transfer"].residual_s \
                 if q.migration else case.kv_transfer.initial_completion_s
-            commits[kv] = ingested + residual + case.switch_s
+            commits[kv] = ingested + factors * residual + case.switch_s
 
     power_model = ExpectedPower(scenario, profile, case_id)
     power = [(0.0, power_model.power(True), power_model.power(False))]
