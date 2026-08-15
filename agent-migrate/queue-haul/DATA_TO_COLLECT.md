@@ -316,7 +316,11 @@ trace is active so response-object collection cannot pause request release.
 Reference counting remains active, and cyclic GC is restored after the trace.
 Stability uses
 running plus waiting plus client-pending requests only inside the measurement
-window; it cannot be rescued by warmup or post-window drain. The measurement
+window; it cannot be rescued by warmup or post-window drain. Fit those requests
+over the final two thirds of the observed window and report both the slope and
+its fitted accumulated-request change. At most one fitted accumulated request
+is no material growth. Preserve the legacy 30-second block-bootstrap upper
+bound as diagnostic-only metadata. The measurement
 hard-fails a scrape gap over one second. A send slip over 50 ms,
 parser/configuration/cache-proof error, exact token-timing coverage below 99%, GPU
 preemption/Xid, or missing live-engine sampler invalidates the measurement.
@@ -335,15 +339,19 @@ normalization hash. The runtime identity includes and rechecks the canonical
 vLLM, LMCache, and Redis launch commands, including environment-dependent GPU
 and KV roles. The image is hashed once per unchanged stage artifact, and each
 reducer reconstructs the observed wall-clock cell order and requires it to equal
-the frozen randomized order. Any cross-cell mismatch hard-fails reduction. Successful
+the frozen randomized order. Any cross-cell service-identity mismatch hard-fails
+reduction. An analysis-only collector change between discovery and confirmation
+is allowed only when the model, hardware, runtime versions, scheduler, and
+semantic launch commands are unchanged; record both full identities and commit
+SHAs. Successful
 measurement requests must report exactly the block-rounded private prefix as
 cached; under-hit and append-hot cells are invalid because their actual prefill
-work no longer equals the x coordinate. Fixed parked stock is checked from the
-telemetry sample immediately after prewarm and before offered arrivals.
-The engine-reported live KV-token capacity is bound into the normalization;
-resident-minus-control occupancy must equal the planned block-rounded parked
-tokens divided by that capacity within two percentage points, and confirmation
-must reproduce the discovery preload.
+work no longer equals the x coordinate. Fixed prefix conditioning is checked
+from exact successful uncached prewarm prompt tokens: resident minus control
+must equal the planned block-rounded prefix tokens exactly, and confirmation
+must reproduce the resident prewarm count. The engine-reported live KV-token
+capacity remains bound into the normalization. The immediate active-KV gauge
+is diagnostic only because it does not measure reclaimable APC cache blocks.
 Measurement-start KV includes load-dependent active decodes, so it is retained
 as an outcome and is not used to match cells.
 

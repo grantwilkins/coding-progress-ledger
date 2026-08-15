@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
 import gc
 import hashlib
 import json
@@ -40,6 +41,7 @@ CONTEXT = 4096
 SESSIONS_PER_SHAPE = 8
 BALANCED_OUTPUT_TOKENS = 128
 BALANCED_SHARE_RANGE = (.4, .6)
+MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS = 1.0
 
 
 @dataclass(frozen=True)
@@ -207,10 +209,12 @@ def make_confirmation_plan(core: dict, scout: dict, hardware: str) -> dict:
             "source_scout_sha256": digest(scout), "targets": scout["targets"],
             "runtime_identity": scout["runtime_identity"],
             "runtime_identity_sha256": scout["runtime_identity_sha256"],
+            "service_runtime_identity_sha256": service_runtime_identity_sha(
+                scout["runtime_identity"]),
             "normalization_sha256": scout["normalization_sha256"],
             "source_residency_control_pass": scout["residency_control"]["pass"],
-            "expected_resident_preloaded_kv_usage":
-            scout["residency_control"]["resident_preloaded_kv_median"],
+            "expected_resident_prewarmed_prefix_tokens":
+            scout["residency_control"]["resident_prewarmed_prefix_tokens"],
             "kv_capacity_tokens": scout["residency_control"]["kv_capacity_tokens"],
             "planned_parked_prefix_tokens":
             scout["residency_control"]["planned_parked_prefix_tokens"],
@@ -248,7 +252,9 @@ def validate_confirmation_plan(plan: dict) -> None:
                 key=lambda value: digest(["confirm-order", value])) \
             or plan.get("runtime_identity_sha256") \
             != identity_sha(plan.get("runtime_identity", {})) \
-            or not 0 <= plan.get("expected_resident_preloaded_kv_usage", -1) <= 1 \
+            or plan.get("service_runtime_identity_sha256") \
+            != service_runtime_identity_sha(plan.get("runtime_identity", {})) \
+            or plan.get("expected_resident_prewarmed_prefix_tokens", 0) <= 0 \
             or min(plan.get("kv_capacity_tokens", 0),
                    plan.get("planned_parked_prefix_tokens", 0)) <= 0:
         raise ValueError("service-headroom confirmation plan is invalid")
@@ -545,6 +551,38 @@ def in_system(row: dict, requests: list[dict]) -> float:
                  + row["vllm:num_requests_waiting"] + pending)
 
 
+def late_window_queue_growth(metrics: list[dict], loads: list[float]) -> dict:
+    """Fit queue growth over the final two thirds of the observed window.
+
+    Reporting fitted accumulated requests makes the materiality threshold
+    independent of whether telemetry lands on the nominal window endpoints.
+    """
+    if len(metrics) != len(loads) or len(metrics) < 2:
+        return {"late_window_queue_slope_requests_per_s": math.inf,
+                "late_window_queue_window_s": 0.0,
+                "late_window_queue_accumulation_requests": math.inf}
+    first_ns, last_ns = (int(metrics[0]["monotonic_ns"]),
+                         int(metrics[-1]["monotonic_ns"]))
+    cutoff_ns = first_ns + (last_ns - first_ns) // 3
+    points = [((int(row["monotonic_ns"]) - first_ns) / 1e9, load)
+              for row, load in zip(metrics, loads)
+              if int(row["monotonic_ns"]) >= cutoff_ns]
+    if len(points) < 2:
+        return {"late_window_queue_slope_requests_per_s": math.inf,
+                "late_window_queue_window_s": 0.0,
+                "late_window_queue_accumulation_requests": math.inf}
+    times, values = zip(*points)
+    mean_time, mean_value = statistics.mean(times), statistics.mean(values)
+    denominator = sum((value - mean_time) ** 2 for value in times)
+    slope = (sum((x - mean_time) * (y - mean_value)
+                 for x, y in points) / denominator
+             if denominator else math.inf)
+    duration = times[-1] - times[0]
+    return {"late_window_queue_slope_requests_per_s": slope,
+            "late_window_queue_window_s": duration,
+            "late_window_queue_accumulation_requests": slope * duration}
+
+
 def summarize(plan: dict, offered: list[dict], requests: list[dict],
               metrics: list[dict], drained: bool) -> dict:
     planned = measurement_rows(plan, offered)
@@ -582,6 +620,7 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
             and hi - window_metrics[-1]["monotonic_ns"] <= tolerance \
             and max(gaps_ns) <= tolerance
     loads = [in_system(row, observed) for row in window_metrics]
+    queue_growth = late_window_queue_growth(window_metrics, loads)
     timing_coverage = len(timed) / len(good) if good else 0
     p99 = min(len(good), len(timed)) >= plan["p99_min_incumbent_requests"]
     return {
@@ -610,6 +649,9 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
         >= plan["min_exact_timing_coverage"],
         "cache_mismatch_count": len(cache_mismatches(observed)),
         "queue_drift_upper_requests_per_s": drift,
+        **queue_growth,
+        "queue_accumulation_tolerance_requests":
+        MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS,
         "initial_in_system_requests": loads[0] if loads else None,
         "late_window_p90_in_system_requests": quantile(loads[len(loads) * 2 // 3:], .9),
         "initial_kv_usage": window_metrics[0]["vllm:gpu_cache_usage_perc"]
@@ -619,7 +661,9 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
         "telemetry_window_complete": telemetry_complete,
         "drained": drained,
         "stable": bool(all_good and drained and telemetry_complete
-                       and drift <= 1 / plan["measurement_s"]),
+                       and queue_growth[
+                           "late_window_queue_accumulation_requests"]
+                       <= MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS),
         "max_send_lateness_s": max(row["send_lateness_s"] for row in observed),
     }
 
@@ -694,6 +738,18 @@ def identity_sha(identity: dict) -> str:
     return checksum or digest(identity)
 
 
+def service_runtime_identity_sha(identity: dict) -> str:
+    """Hash serving semantics while retaining collector SHA separately.
+
+    Analysis-only fixes may change the campaign's git commit between discovery
+    and confirmation.  The model, hardware, runtime, scheduler, and exact
+    launch commands must still be byte-for-byte equivalent.
+    """
+    identity_sha(identity)
+    return digest({key: value for key, value in identity.items()
+                   if key not in {"git_sha", "sha256"}})
+
+
 def validate_resume(result: dict, plan: dict, cell: dict, identity: dict,
                     normalization_sha256: str | None) -> None:
     if result.get("schema") != plan["schema"] \
@@ -737,6 +793,44 @@ def load_results(plan: dict, hardware: str, root: Path, kind: str) -> list[dict]
             raise RuntimeError(f"missing result: {cell['cell_id']}")
         rows.append(json.loads(path.read_text()))
     return validate_result_rows(plan, hardware, kind, rows)
+
+
+def read_engine_metrics(path: Path) -> list[dict]:
+    with path.open(newline="") as handle:
+        return [{"monotonic_ns": int(row["monotonic_ns"]),
+                 "vllm:num_requests_running":
+                 float(row["vllm:num_requests_running"]),
+                 "vllm:num_requests_waiting":
+                 float(row["vllm:num_requests_waiting"]),
+                 "vllm:gpu_cache_usage_perc":
+                 float(row["vllm:gpu_cache_usage_perc"])}
+                for row in csv.DictReader(handle)]
+
+
+def reanalyze_result(plan: dict, root: Path, row: dict) -> dict:
+    """Recompute reducer-owned fields from immutable raw traces.
+
+    This supports analysis corrections without rewriting acquisition results.
+    The original bootstrap diagnostic is recomputed and retained.
+    """
+    derived = {"prewarmed_prefix_tokens",
+               "late_window_queue_slope_requests_per_s",
+               "late_window_queue_window_s",
+               "late_window_queue_accumulation_requests",
+               "queue_accumulation_tolerance_requests"}
+    if derived <= row.keys():
+        return dict(row)
+    cell = root / row["cell_id"]
+    offered = json.loads((cell / "offered.json").read_text())
+    requests = json.loads((cell / "requests.json").read_text())
+    metrics = read_engine_metrics(cell / "engine.csv")
+    summary = summarize(plan, offered, requests, metrics, bool(row["drained"]))
+    prewarm = json.loads((cell / "prewarm.json").read_text())
+    prewarmed = sum(int(value["prompt_tokens"]) for value in prewarm)
+    if not prewarm or any(int(value.get("cached_tokens", -1)) != 0
+                          for value in prewarm):
+        raise RuntimeError(f"invalid prewarm evidence: {row['cell_id']}")
+    return {**row, **summary, "prewarmed_prefix_tokens": prewarmed}
 
 
 def validate_run_order(plan: dict, hardware: str, stage: str,
@@ -871,16 +965,20 @@ def submit_synchronized(executor: ThreadPoolExecutor, items: list,
 
 
 def validate_stage_inputs(plan: dict, rates: dict, identity: dict) -> None:
-    if rates["runtime_identity_sha256"] != identity_sha(identity) \
-            or rates.get("kv_capacity_tokens", 0) <= 0 \
+    if rates.get("kv_capacity_tokens", 0) <= 0 \
             or rates.get("balanced_shape") != asdict(balanced_shape(rates)) \
             or rates.get("planned_parked_prefix_tokens") \
             != parked_prefix_tokens(rates):
         raise RuntimeError("normalization and headroom runtime identities differ")
-    if plan["schema"] == CONFIRM_SCHEMA and (
-            plan["runtime_identity_sha256"] != identity_sha(identity)
-            or plan["normalization_sha256"] != rates["sha256"]):
-        raise RuntimeError("confirmation differs from discovery runtime or normalization")
+    if plan["schema"] == SCHEMA:
+        if rates["runtime_identity_sha256"] != identity_sha(identity):
+            raise RuntimeError("normalization and headroom runtime identities differ")
+        return
+    expected = plan["service_runtime_identity_sha256"]
+    if service_runtime_identity_sha(rates["runtime_identity"]) != expected \
+            or service_runtime_identity_sha(identity) != expected \
+            or plan["normalization_sha256"] != rates["sha256"]:
+        raise RuntimeError("confirmation differs from discovery service runtime or normalization")
 
 
 def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
@@ -897,6 +995,7 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
     started_wall_ns = time.time_ns()
     epoch = wall = 0
     preloaded_kv_usage = None
+    prewarmed_prefix_tokens = None
     kv_capacity_tokens = None
     planned_parked_tokens = rates["planned_parked_prefix_tokens"]
     drained, engine_exited, failure_kind = False, False, None
@@ -913,6 +1012,7 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
                                    plan["request_timeout_s"], True)
             (root / "prewarm.json").write_text(json.dumps(warm, indent=2) + "\n")
             validate_prewarm(warm, warm_sessions)
+            prewarmed_prefix_tokens = sum(int(row["prompt_tokens"]) for row in warm)
             prepared_trace = [{**row, "prepared": serving.prepare_issue(
                 pool[row["session_id"]], row["request_index"], cfg.model, True,
             )} for row in trace]
@@ -951,6 +1051,7 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
             "started_wall_ns": started_wall_ns,
             "epoch_monotonic_ns": epoch, "epoch_wall_ns": wall,
             "preloaded_kv_usage": preloaded_kv_usage,
+            "prewarmed_prefix_tokens": prewarmed_prefix_tokens,
             "kv_capacity_tokens": kv_capacity_tokens,
             "planned_parked_prefix_tokens": planned_parked_tokens,
             "client_scheduler": plan["client"]["scheduler"],
@@ -1149,13 +1250,17 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     if any(row["incumbent_completed"] and not row["tpot_reportable"]
            for row in rows + controls):
         raise RuntimeError("headroom reduction lacks exact TPOT measurements")
-    resident_kv = [row["preloaded_kv_usage"] for row in rows]
-    control_kv = [row["preloaded_kv_usage"] for row in controls]
+    resident_prewarmed = [row["prewarmed_prefix_tokens"] for row in rows]
+    control_prewarmed = [row["prewarmed_prefix_tokens"] for row in controls]
+    resident_kv = [row["preloaded_kv_usage"] for row in rows
+                   if row["preloaded_kv_usage"] is not None]
+    control_kv = [row["preloaded_kv_usage"] for row in controls
+                  if row["preloaded_kv_usage"] is not None]
     measurement_kv = [row["initial_kv_usage"] for row in rows]
-    if any(value is None for value in resident_kv + control_kv):
-        raise RuntimeError("headroom reduction lacks preloaded KV telemetry")
-    if max(resident_kv) - min(resident_kv) > plan["kv_match_tolerance"]:
-        raise RuntimeError("resident KV stock changed across the headroom curve")
+    if min(resident_prewarmed + control_prewarmed, default=0) <= 0 \
+            or len(set(resident_prewarmed)) != 1 \
+            or len(set(control_prewarmed)) != 1:
+        raise RuntimeError("headroom reduction lacks exact prewarm-token evidence")
     capacities = {row["kv_capacity_tokens"] for row in rows + controls}
     parked = {row["planned_parked_prefix_tokens"] for row in rows + controls}
     if len(capacities) != 1 or len(parked) != 1:
@@ -1196,10 +1301,10 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     } if healthy_controls and healthy_resident_base else {
         "p90_ttft_s": None, "p90_mean_tpot_s": None,
     }
-    stock_delta = statistics.median(resident_kv) - statistics.median(control_kv)
-    expected_stock_delta = planned_parked / capacity
-    stock_match = abs(stock_delta - expected_stock_delta) \
-        <= plan["kv_match_tolerance"]
+    stock_delta = int(statistics.median(resident_prewarmed)
+                      - statistics.median(control_prewarmed))
+    expected_stock_delta = planned_parked
+    stock_match = stock_delta == expected_stock_delta
     residency_pass = healthy_controls and healthy_resident_base \
         and stock_match \
         and max(ratios.values()) \
@@ -1211,6 +1316,12 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     return {"schema": SCHEMA, "stage": "scout", "hardware": hardware,
             "plan_sha256": digest(plan), "planner_usable": False,
             "targets": targets,
+            "queue_stability_contract": {
+                "estimator": "least_squares_final_two_thirds",
+                "maximum_fitted_accumulation_requests":
+                MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS,
+                "legacy_block_bootstrap": "diagnostic_only",
+            },
             "runtime_identity": rows[0]["runtime_identity"],
             "runtime_identity_sha256": rows[0]["runtime_identity_sha256"],
             "normalization_sha256": rows[0]["normalization_sha256"],
@@ -1222,13 +1333,18 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
                 "healthy_controls": healthy_controls,
                 "healthy_resident_baseline": healthy_resident_base,
                 "stock_match": stock_match,
-                "preloaded_kv_usage_delta": stock_delta,
-                "expected_preloaded_kv_usage_delta": expected_stock_delta,
+                "prewarmed_prefix_tokens_delta": stock_delta,
+                "expected_prewarmed_prefix_tokens_delta": expected_stock_delta,
                 "kv_capacity_tokens": capacity,
                 "planned_parked_prefix_tokens": planned_parked,
                 "relative_degradation": ratios,
-                "resident_preloaded_kv_median": statistics.median(resident_kv),
-                "control_preloaded_kv_median": statistics.median(control_kv),
+                "resident_prewarmed_prefix_tokens":
+                int(statistics.median(resident_prewarmed)),
+                "control_prewarmed_prefix_tokens":
+                int(statistics.median(control_prewarmed)),
+                "active_kv_gauge_delta_diagnostic":
+                (statistics.median(resident_kv) - statistics.median(control_kv)
+                 if resident_kv and control_kv else None),
                 "measurement_start_kv_range": ([min(observed_kv), max(observed_kv)]
                                                if (observed_kv := [value for value
                                                    in measurement_kv if value is not None])
@@ -1258,8 +1374,10 @@ def validate_scout_evidence(plan: dict, scout: dict, hardware: str) -> None:
 
 def reduce_headroom(plan: dict, hardware: str, root: Path,
                     ttft_target_s: float, tpot_target_s: float) -> dict:
-    rows = load_results(plan, hardware, root, "headroom")
-    controls = load_results(plan, hardware, root, "residency_control")
+    rows = [reanalyze_result(plan, root, row) for row in
+            load_results(plan, hardware, root, "headroom")]
+    controls = [reanalyze_result(plan, root, row) for row in
+                load_results(plan, hardware, root, "residency_control")]
     for row in rows:
         requests = json.loads((root / row["cell_id"] / "requests.json").read_text())
         row["joint_slo_attainment"] = joint_attainment(
@@ -1289,15 +1407,17 @@ def validate_confirmation_source(plan: dict, core: dict, scout: dict) -> None:
 
 def reduce_confirmation(plan: dict, root: Path, core: dict, scout: dict) -> dict:
     validate_confirmation_source(plan, core, scout)
-    rows = load_results(plan, plan["hardware"], root, "confirmation")
+    rows = [reanalyze_result(plan, root, row) for row in
+            load_results(plan, plan["hardware"], root, "confirmation")]
     if any(row["status"] != "complete" or row["incumbent_completed"]
            and not row["tpot_reportable"] for row in rows):
         raise RuntimeError("confirmation contains invalid or incomplete measurements")
-    if {row["runtime_identity_sha256"] for row in rows} \
-            != {plan["runtime_identity_sha256"]} \
+    if len({row["runtime_identity_sha256"] for row in rows}) != 1 \
+            or {service_runtime_identity_sha(row["runtime_identity"])
+                for row in rows} != {plan["service_runtime_identity_sha256"]} \
             or {row["normalization_sha256"] for row in rows} \
             != {plan["normalization_sha256"]}:
-        raise RuntimeError("confirmation runtime differs from discovery")
+        raise RuntimeError("confirmation service runtime differs from discovery")
     for row in rows:
         requests = json.loads((root / row["cell_id"] / "requests.json").read_text())
         row["joint_slo_attainment"] = joint_attainment(
@@ -1313,18 +1433,18 @@ def build_confirmation(plan: dict, rows: list[dict]) -> dict:
     if any(row["status"] != "complete" or row["incumbent_completed"]
            and not row["tpot_reportable"] for row in rows):
         raise RuntimeError("confirmation contains invalid or incomplete measurements")
-    if {row["runtime_identity_sha256"] for row in rows} \
-            != {plan["runtime_identity_sha256"]} \
+    if len({row["runtime_identity_sha256"] for row in rows}) != 1 \
+            or {service_runtime_identity_sha(row["runtime_identity"])
+                for row in rows} != {plan["service_runtime_identity_sha256"]} \
             or {row["normalization_sha256"] for row in rows} \
             != {plan["normalization_sha256"]}:
-        raise RuntimeError("confirmation runtime differs from discovery")
+        raise RuntimeError("confirmation service runtime differs from discovery")
     if any(row["kv_capacity_tokens"] != plan["kv_capacity_tokens"]
            or row["planned_parked_prefix_tokens"]
            != plan["planned_parked_prefix_tokens"]
-           or abs(row["preloaded_kv_usage"]
-                  - plan["expected_resident_preloaded_kv_usage"])
-           > plan["kv_match_tolerance"] for row in rows):
-        raise RuntimeError("confirmation parked KV stock differs from discovery")
+           or row["prewarmed_prefix_tokens"]
+           != plan["expected_resident_prewarmed_prefix_tokens"] for row in rows):
+        raise RuntimeError("confirmation prewarm stock differs from discovery")
     checks = {}
     baseline = all(row_feasible(row, plan["targets"]) for row in rows
                    if row["role"] == "baseline")
@@ -1344,8 +1464,13 @@ def build_confirmation(plan: dict, rows: list[dict]) -> dict:
             "source_plan_sha256": plan["source_plan_sha256"],
             "source_scout_sha256": plan["source_scout_sha256"],
             "targets": plan["targets"], "checks": checks,
-            "runtime_identity": plan["runtime_identity"],
-            "runtime_identity_sha256": plan["runtime_identity_sha256"],
+            "source_runtime_identity": plan["runtime_identity"],
+            "source_runtime_identity_sha256": plan["runtime_identity_sha256"],
+            "confirmation_runtime_identity": rows[0]["runtime_identity"],
+            "confirmation_runtime_identity_sha256":
+            rows[0]["runtime_identity_sha256"],
+            "service_runtime_identity_sha256":
+            plan["service_runtime_identity_sha256"],
             "normalization_sha256": plan["normalization_sha256"],
             "planner_usable": usable,
             "supported_bound": plan["selection"]["supported_candidate"] if usable else None,

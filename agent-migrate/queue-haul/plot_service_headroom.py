@@ -113,7 +113,8 @@ def plot(rows: list[dict], scout: dict, confirmed: dict | None,
     handles.append(Line2D([], [], color="#555555", linestyle=":",
                           label="Evaluation target"))
     handles.append(Line2D([], [], color="#555555", marker="x",
-                          linestyle="none", label="Physically infeasible"))
+                          linestyle="none",
+                          label="Unstable, undrained, or failed"))
     if confirmed and confirmed.get("planner_usable"):
         handles.append(Line2D([], [], color="#777777", linestyle="-.",
                               label=r"Confirmed $\rho_{safe}$"))

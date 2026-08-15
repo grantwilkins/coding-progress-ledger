@@ -60,6 +60,12 @@ def evidence(plan: dict, cell: dict, **values) -> dict:
             "runtime_identity_sha256": IDENTITY_SHA,
             "normalization_sha256": "normalization", "status": "complete",
             "preloaded_kv_usage": .1, "initial_kv_usage": .2,
+            "prewarmed_prefix_tokens": (108_032 if
+                cell.get("resident_state", True) else 30_720),
+            "late_window_queue_slope_requests_per_s": 0,
+            "late_window_queue_window_s": 160,
+            "late_window_queue_accumulation_requests": 0,
+            "queue_accumulation_tolerance_requests": 1,
             "kv_capacity_tokens": 1_000_000,
             "planned_parked_prefix_tokens": 77_312,
             "started_wall_ns": order.index(cell["cell_id"]) + 1,
@@ -336,6 +342,25 @@ def test_summary_uses_measurement_window_and_active_decode_for_stability():
     assert not result["stable"]
 
 
+def test_queue_growth_is_expressed_as_requests_over_the_observed_late_window():
+    metrics = [{"monotonic_ns": second * 10**9}
+               for second in range(0, 241, 40)]
+    small = campaign.late_window_queue_growth(
+        metrics, [0, 0, 0, .2, .4, .6, .8],
+    )
+    large = campaign.late_window_queue_growth(
+        metrics, [0, 0, 0, 1, 2, 3, 4],
+    )
+
+    assert small["late_window_queue_window_s"] == 160
+    assert small["late_window_queue_accumulation_requests"] == pytest.approx(.8)
+    assert large["late_window_queue_accumulation_requests"] == pytest.approx(4)
+    assert small["late_window_queue_accumulation_requests"] \
+        <= campaign.MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS
+    assert large["late_window_queue_accumulation_requests"] \
+        > campaign.MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS
+
+
 def test_cache_contract_requires_only_the_block_rounded_private_prefix():
     valid = complete({})
     under_hit = {**valid, "cached_tokens": 3824}
@@ -569,8 +594,10 @@ def test_boundary_requires_every_restart_and_takes_the_weaker_direction(tmp_path
     assert result["scout_conservative_bound"] == .50
     assert result["selection_ready"] and not result["planner_usable"]
     assert result["residency_control"]["pass"]
-    assert result["residency_control"]["expected_preloaded_kv_usage_delta"] \
-        == pytest.approx(77_312 / 1_000_000)
+    assert result["residency_control"][
+        "expected_prewarmed_prefix_tokens_delta"] == 77_312
+    assert result["residency_control"]["active_kv_gauge_delta_diagnostic"] \
+        == pytest.approx(.08)
     assert result["residency_control"]["measurement_start_kv_range"] == [
         campaign.BASE_RHO, max(campaign.LOADS),
     ]
@@ -604,7 +631,8 @@ def test_unhealthy_residency_control_withholds_confirmation(tmp_path):
 
 def test_missing_parked_stock_withholds_confirmation():
     _plan, core, scout = confirmation_artifacts()
-    controls = [{**row, "preloaded_kv_usage": .1} for row in scout["controls"]]
+    controls = [{**row, "prewarmed_prefix_tokens": 108_032}
+                for row in scout["controls"]]
 
     result = campaign.build_scout(
         core, "a100", scout["rows"], controls, scout["targets"],
@@ -670,12 +698,17 @@ def test_confirmation_is_three_new_blocks_for_brackets_and_balanced_shape():
 def test_confirmation_reuses_the_discovery_runtime_and_normalization():
     plan = confirmation_plan()
     rates = {**RATES, "runtime_identity_sha256": IDENTITY_SHA,
+             "runtime_identity": IDENTITY,
              "sha256": "normalization"}
 
-    campaign.validate_stage_inputs(plan, rates, IDENTITY)
+    campaign.validate_stage_inputs(plan, rates, {**IDENTITY, "git_sha": "new"})
     with pytest.raises(RuntimeError, match="confirmation"):
         campaign.validate_stage_inputs(plan, {**rates, "sha256": "different"},
                                        IDENTITY)
+    with pytest.raises(RuntimeError, match="confirmation"):
+        campaign.validate_stage_inputs(
+            plan, rates, {**IDENTITY, "serving_class": "changed"},
+        )
 
 
 def test_only_confirmation_can_emit_a_planner_usable_bound(tmp_path):
@@ -760,8 +793,12 @@ def test_supported_bound_loader_rejects_an_edited_result():
               "source_scout_sha256": campaign.digest(scout),
               "targets": plan["targets"], "planner_usable": True,
               "supported_bound": .50,
-              "runtime_identity": IDENTITY,
-              "runtime_identity_sha256": IDENTITY_SHA,
+              "source_runtime_identity": IDENTITY,
+              "source_runtime_identity_sha256": IDENTITY_SHA,
+              "confirmation_runtime_identity": IDENTITY,
+              "confirmation_runtime_identity_sha256": IDENTITY_SHA,
+              "service_runtime_identity_sha256":
+              campaign.service_runtime_identity_sha(IDENTITY),
               "normalization_sha256": "normalization",
               "checks": {name: True for name in (
                   "prefill_heavy:baseline", "prefill_heavy:last_pass",

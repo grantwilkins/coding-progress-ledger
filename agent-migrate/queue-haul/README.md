@@ -1546,15 +1546,25 @@ prevent periodic scheduler stalls. It restores GC afterward and invalidates
 any cell whose launch schedule slips by more than 50 ms or whose exact token
 timing coverage falls below 99%. TPOT quantiles use only exact streams, report
 that coverage, and treat an ambiguous stream as a joint-SLO miss. It
+fits total in-system requests over the final two thirds of the measurement
+window and calls growth material only above one fitted accumulated request;
+the older block-bootstrap upper bound remains a diagnostic field and does not
+decide feasibility. It
 enforces the frozen randomized cell order and hashes an unchanged image once
 per stage. The balanced confirmation workload is derived from each hardware's
 normalization and must have a 40--60% prefill share. Live KV capacity and the
-planned block-rounded parked stock are bound into the normalization, checked
-against pre-arrival occupancy, and reproduced in confirmation. Use the exact
+planned block-rounded prefix stock are bound into the normalization. Exact
+successful uncached prewarm tokens must differ from the incumbent-only control
+by that planned stock, and confirmation must reproduce the full prewarm count;
+the vLLM active-KV gauge is retained only as a diagnostic because it does not
+measure reclaimable APC blocks. Use the exact
 vLLM 0.22/LMCache 0.5.1 MP stack provisioned by `setup.sh`
 (`QH_RUNTIME=native`, `QH_LMCACHE_MODE=mp`) or the checksum-pinned Apptainer
 equivalent. The selected runtime mode, versions, and semantic commands become
-part of the cross-cell identity. Submit A100 and H100 separately.
+part of the cross-cell service identity. Discovery and confirmation may use
+different collector commits only when that service identity is unchanged;
+both complete runtime identities and collector SHAs remain in the evidence.
+Submit A100 and H100 separately.
 Retry an invalid measurement immediately before starting the next frozen cell;
 a later retry violates the audited order and stops the stage. A valid service
 failure is never retried away.
