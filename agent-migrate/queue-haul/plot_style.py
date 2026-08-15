@@ -65,6 +65,20 @@ TIMING_ACTION_COLORS = {"replay": ACTION_COLORS["replay"],
 POWER_FAMILY_NAMES = {"idle": "Idle", "sessions": "Sessions"}
 POWER_FAMILY_COLORS = {"idle": "#777777", "sessions": "#006CB8"}
 POWER_FAMILY_MARKERS = {"idle": "o", "sessions": "s"}
+SERVICE_LOADS = ("prefill_heavy", "decode_heavy")
+SERVICE_LOAD_NAMES = {
+    "prefill_heavy": "Prefill-heavy added load",
+    "decode_heavy": "Decode-heavy added load",
+}
+SERVICE_LOAD_COLORS = {
+    "prefill_heavy": "#D55E00",
+    "decode_heavy": "#0072B2",
+}
+SERVICE_LOAD_LINESTYLES = {
+    "prefill_heavy": "--",
+    "decode_heavy": "-",
+}
+SERVICE_LOAD_MARKERS = {"prefill_heavy": "o", "decode_heavy": "s"}
 ACTION_HATCHES = {
     "replay": "..", "kv_transfer": "xx",
     "east_replay": "..", "east_kv_transfer": "xx",

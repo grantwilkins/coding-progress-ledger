@@ -148,7 +148,9 @@ def test_phase_directions_must_remain_distinct():
     assert .4 <= campaign.phase_share(campaign.balanced_shape(h100), h100) <= .6
 
 
-def test_runtime_contract_changes_with_every_semantic_stack_input():
+def test_runtime_contract_changes_with_every_semantic_stack_input(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "apptainer")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
     plan = campaign.make_plan()
     cfg = SimpleNamespace(model=plan["model"], max_model_len=32768,
                           max_num_seqs=256, max_num_batched_tokens=8192)
@@ -186,6 +188,19 @@ def test_runtime_contract_changes_with_every_semantic_stack_input():
         "commit", {**commands, "vllm": ["mkdir", "/tmp/qh-sink-456"]},
     )
     assert pid_command["sha256"] == next_pid["sha256"]
+
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    native = campaign.runtime_contract(
+        plan, cfg, [], gpu, ("0.22.0", "0.5.1"), None, "commit", commands,
+    )
+    assert native["runtime_mode"] == "native"
+    assert native["image_sha256"] is None
+    assert native["sha256"] != first["sha256"]
+    with pytest.raises(RuntimeError, match="serving stack"):
+        campaign.runtime_contract(
+            plan, cfg, [], gpu, ("0.22.0", "0.5.1"), plan["image_sha256"],
+            "commit", commands,
+        )
 
 
 def test_image_hash_cache_reuses_only_an_unchanged_file(tmp_path, monkeypatch):

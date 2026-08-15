@@ -108,7 +108,10 @@ def make_plan() -> dict:
             "gpu_memory_utilization": .75, "chunked_prefill": True,
             "prefix_caching": True, "enforce_eager": True,
             "disable_hybrid_kv_cache_manager": True,
-            "runtime_versions": list(testbed.MP_RUNTIME_VERSIONS),
+            "runtime_versions": {
+                "apptainer": list(testbed.MP_RUNTIME_VERSIONS),
+                "native": list(testbed.NATIVE_RUNTIME_VERSIONS),
+            },
         },
         "shapes": {**{name: asdict(shape) for name, shape in SHAPES.items()},
                    "balanced": {"context_tokens": CONTEXT,
@@ -284,12 +287,13 @@ def validate_rates(rates: dict) -> None:
 
 
 def runtime_contract(plan: dict, cfg: testbed.Config, extra: list[str], gpu: dict,
-                     versions: tuple[str, str], image_sha256: str,
+                     versions: tuple[str, str], image_sha256: str | None,
                      git_sha: str, commands: dict[str, list[str]]) -> dict:
     if extra:
         raise RuntimeError("formal cells forbid extra vLLM arguments")
     commands = semantic_commands(commands)
     stack = plan["stack"]
+    mode = testbed.runtime_mode()
     actual = {"tensor_parallel_size": 1,
               "max_model_len": cfg.max_model_len,
               "max_num_seqs": cfg.max_num_seqs,
@@ -298,13 +302,17 @@ def runtime_contract(plan: dict, cfg: testbed.Config, extra: list[str], gpu: dic
               "gpu_memory_utilization": .75, "chunked_prefill": True,
               "prefix_caching": True, "enforce_eager": True,
               "disable_hybrid_kv_cache_manager": True,
-              "runtime_versions": list(versions)}
+              "runtime_versions": stack["runtime_versions"]}
     if cfg.model != plan["model"] or actual != stack \
             or set(commands) != {"vllm", "cache", "redis"} \
-            or image_sha256 != plan["image_sha256"]:
+            or mode not in stack["runtime_versions"] \
+            or list(versions) != stack["runtime_versions"][mode] \
+            or (mode == "apptainer" and image_sha256 != plan["image_sha256"]) \
+            or (mode == "native" and image_sha256 is not None):
         raise RuntimeError("serving stack differs from the frozen plan")
     identity = {"model": cfg.model, "model_revision": testbed.MODEL_REVISION,
-                "image_sha256": image_sha256, "git_sha": git_sha,
+                "runtime_mode": mode, "image_sha256": image_sha256,
+                "git_sha": git_sha,
                 "gpu": gpu, "scheduler": actual, "commands": commands}
     return {**identity, "sha256": digest(identity)}
 
@@ -537,11 +545,12 @@ def cached_image_hash(path: Path, cache: Path) -> str:
 
 
 def collect_runtime_identity(plan: dict, cfg: testbed.Config, hardware: str,
-                             extra: list[str], image_sha256: str) -> dict:
-    if testbed.runtime_mode() != "apptainer" or testbed.lmcache_mode() != "mp" \
-            or not testbed.prefix_caching():
-        raise RuntimeError("service-headroom requires the pinned MP Apptainer stack")
-    git_sha, _dirty = profiler.git_state(False)
+                             extra: list[str], image_sha256: str | None) -> dict:
+    if testbed.lmcache_mode() != "mp" or not testbed.prefix_caching():
+        raise RuntimeError("service-headroom requires the pinned MP stack")
+    git_sha, dirty = profiler.git_state(False)
+    if dirty:
+        raise RuntimeError("service-headroom requires a clean launch commit")
     return runtime_contract(plan, cfg, extra, hardware_snapshot(hardware),
                             testbed.runtime_versions(cfg),
                             image_sha256, git_sha,
@@ -1010,7 +1019,9 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     direction_results = {}
     for direction in ("prefill_heavy", "decode_heavy"):
         slo_labels = [all(
-            row["stable"] and row["p90_ttft_s"] <= targets["p90_ttft_s"]
+            row["stable"] and row["p90_ttft_s"] is not None
+            and row["p90_mean_tpot_s"] is not None
+            and row["p90_ttft_s"] <= targets["p90_ttft_s"]
             and row["p90_mean_tpot_s"] <= targets["p90_mean_tpot_s"]
             for row in rows if row["target_rho"] == rho
             and (rho == BASE_RHO or row["direction"] == direction)) for rho in LOADS]
@@ -1114,7 +1125,9 @@ def reduce_headroom(plan: dict, hardware: str, root: Path,
 
 
 def row_feasible(row: dict, targets: dict) -> bool:
-    return bool(row["stable"] and row["p90_ttft_s"] <= targets["p90_ttft_s"]
+    return bool(row["stable"] and row["p90_ttft_s"] is not None
+                and row["p90_mean_tpot_s"] is not None
+                and row["p90_ttft_s"] <= targets["p90_ttft_s"]
                 and row["p90_mean_tpot_s"] <= targets["p90_mean_tpot_s"])
 
 
@@ -1290,7 +1303,7 @@ def main(argv=None) -> None:
             plan, cfg, cell["hardware"], extra,
             cached_image_hash(
                 cfg.sandbox, args.out / f".{cell['hardware']}-image-sha256.json",
-            ),
+            ) if testbed.runtime_mode() == "apptainer" else None,
         )
         source_plan_sha = digest(plan) if plan["schema"] == SCHEMA \
             else plan["source_plan_sha256"]

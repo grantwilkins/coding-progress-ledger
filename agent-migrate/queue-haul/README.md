@@ -1544,8 +1544,11 @@ enforces the frozen randomized cell order and hashes an unchanged image once
 per stage. The balanced confirmation workload is derived from each hardware's
 normalization and must have a 40--60% prefill share. Live KV capacity and the
 planned block-rounded parked stock are bound into the normalization, checked
-against pre-arrival occupancy, and reproduced in confirmation. Use
-`QH_LMCACHE_MODE=mp` and submit A100 and H100 separately.
+against pre-arrival occupancy, and reproduced in confirmation. Use the exact
+vLLM 0.22/LMCache 0.5.1 MP stack provisioned by `setup.sh`
+(`QH_RUNTIME=native`, `QH_LMCACHE_MODE=mp`) or the checksum-pinned Apptainer
+equivalent. The selected runtime mode, versions, and semantic commands become
+part of the cross-cell identity. Submit A100 and H100 separately.
 Retry an invalid measurement immediately before starting the next frozen cell;
 a later retry violates the audited order and stops the stage. A valid service
 failure is never retried away.

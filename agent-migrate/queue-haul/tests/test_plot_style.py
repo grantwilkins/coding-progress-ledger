@@ -65,6 +65,15 @@ def test_power_families_have_shared_names_colors_and_markers():
     assert len(set(plot_style.POWER_FAMILY_MARKERS.values())) == 2
 
 
+def test_service_load_directions_have_shared_visual_identities():
+    assert set(plot_style.SERVICE_LOADS) == set(plot_style.SERVICE_LOAD_NAMES) \
+        == set(plot_style.SERVICE_LOAD_COLORS) \
+        == set(plot_style.SERVICE_LOAD_LINESTYLES) \
+        == set(plot_style.SERVICE_LOAD_MARKERS)
+    assert len(set(plot_style.SERVICE_LOAD_COLORS.values())) == 2
+    assert len(set(plot_style.SERVICE_LOAD_MARKERS.values())) == 2
+
+
 def test_model_architectures_have_one_canonical_visual_identity():
     assert set(plot_style.MODELS) == set(plot_style.MODEL_NAMES) \
         == set(plot_style.MODEL_COLORS) == set(plot_style.MODEL_LINESTYLES) \
