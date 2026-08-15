@@ -97,6 +97,7 @@ def make_plan() -> dict:
         "base_rho": BASE_RHO, "loads": list(LOADS), "blocks": BLOCKS,
         "warmup_s": 60, "measurement_s": 240, "drain_s": 180,
         "request_timeout_s": 180, "max_send_lateness_s": .05,
+        "max_client_workers": 4096,
         "max_metric_gap_s": 1,
         "kv_match_tolerance": .02,
         "residency_control_max_relative_degradation": .15,
@@ -186,7 +187,8 @@ def make_confirmation_plan(core: dict, scout: dict, hardware: str) -> dict:
     common = {key: core[key] for key in (
         "image_sha256", "model", "context_tokens", "base_rho", "loads", "blocks",
         "warmup_s", "measurement_s", "drain_s", "request_timeout_s",
-        "max_send_lateness_s", "max_metric_gap_s", "kv_match_tolerance",
+        "max_send_lateness_s", "max_client_workers", "max_metric_gap_s",
+        "kv_match_tolerance",
         "residency_control_max_relative_degradation",
         "p99_min_incumbent_requests", "stack", "shapes",
     )}
@@ -215,7 +217,7 @@ def validate_confirmation_plan(plan: dict) -> None:
     common = ("image_sha256", "model", "context_tokens", "base_rho", "loads",
               "blocks", "warmup_s", "measurement_s", "drain_s",
               "request_timeout_s", "max_send_lateness_s", "kv_match_tolerance",
-              "max_metric_gap_s",
+              "max_metric_gap_s", "max_client_workers",
               "residency_control_max_relative_degradation",
               "p99_min_incumbent_requests", "stack", "shapes")
     selection = plan.get("selection", {})
@@ -352,6 +354,13 @@ def offered_trace(plan: dict, rates: dict, direction: str,
 def measurement_rows(plan: dict, rows: list[dict]) -> list[dict]:
     lo, hi = plan["warmup_s"], plan["warmup_s"] + plan["measurement_s"]
     return [row for row in rows if lo <= row["offset_s"] < hi]
+
+
+def client_worker_count(plan: dict, trace: list[dict]) -> int:
+    workers = len(trace)
+    if workers <= 0 or workers > plan["max_client_workers"]:
+        raise RuntimeError("offered trace exceeds the frozen client worker ceiling")
+    return workers
 
 
 def offered_rho(plan: dict, rows: list[dict]) -> float:
@@ -760,6 +769,7 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
     validate_stage_inputs(plan, rates, identity)
     trace = offered_trace(plan, rates, cell["direction"], cell["target_rho"],
                           cell["block"])
+    client_workers = client_worker_count(plan, trace)
     root.mkdir(parents=True, exist_ok=True)
     (root / "offered.json").write_text(json.dumps(trace, indent=2) + "\n")
     pool = sessions(cell["block"], rates)
@@ -799,7 +809,7 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
                     )
                     return {**result, "population": row["population"],
                             "offset_s": row["offset_s"]}
-                with ThreadPoolExecutor(max_workers=512) as executor:
+                with ThreadPoolExecutor(max_workers=client_workers) as executor:
                     for row in trace:
                         scheduled = epoch / 1e9 + row["offset_s"]
                         time.sleep(max(0, scheduled - time.monotonic()))
@@ -830,6 +840,7 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
             "preloaded_kv_usage": preloaded_kv_usage,
             "kv_capacity_tokens": kv_capacity_tokens,
             "planned_parked_prefix_tokens": planned_parked_tokens,
+            "client_max_workers": client_workers,
             "engine_exited": engine_exited, "engine_failure_kind": failure_kind,
             "added_prefill_share": (None if cell["direction"] == "baseline" else
                                      phase_share(shape_for(cell["direction"], rates),

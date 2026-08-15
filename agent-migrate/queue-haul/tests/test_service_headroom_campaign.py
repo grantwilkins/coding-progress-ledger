@@ -148,6 +148,17 @@ def test_phase_directions_must_remain_distinct():
     assert .4 <= campaign.phase_share(campaign.balanced_shape(h100), h100) <= .6
 
 
+def test_offered_trace_has_one_worker_per_request_without_client_backpressure():
+    plan = campaign.make_plan()
+    trace = campaign.offered_trace(plan, RATES, "prefill_heavy", 1.10, 0)
+
+    assert campaign.client_worker_count(plan, trace) == len(trace)
+    with pytest.raises(RuntimeError, match="client worker ceiling"):
+        campaign.client_worker_count(
+            {**plan, "max_client_workers": len(trace) - 1}, trace,
+        )
+
+
 def test_runtime_contract_changes_with_every_semantic_stack_input(monkeypatch):
     monkeypatch.setenv("QH_RUNTIME", "apptainer")
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
