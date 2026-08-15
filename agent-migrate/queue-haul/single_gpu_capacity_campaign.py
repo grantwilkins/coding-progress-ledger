@@ -38,7 +38,6 @@ OUTPUT_TOKENS = 32
 MAX_MODEL_LEN = 32768
 MAX_NUM_SEQS = 256
 REQUEST_TIMEOUT_S = 1800.0
-PORT_OFFSET = 5000
 
 
 def digest(value) -> str:
@@ -144,17 +143,7 @@ def model_config(model: str) -> testbed.Config:
     spec = testbed.model_spec(model)
     base = testbed.Config(model=model)
     return replace(
-        base, src_port=base.src_port + PORT_OFFSET,
-        sink_port=base.sink_port + PORT_OFFSET,
-        lmc_port=base.lmc_port + PORT_OFFSET,
-        kv_proxy_port=base.kv_proxy_port + PORT_OFFSET,
-        api_proxy_port=base.api_proxy_port + PORT_OFFSET,
-        smoke_port=base.smoke_port + PORT_OFFSET,
-        src_lmc_port=base.src_lmc_port + PORT_OFFSET,
-        sink_lmc_port=base.sink_lmc_port + PORT_OFFSET,
-        src_lmc_http_port=base.src_lmc_http_port + PORT_OFFSET,
-        sink_lmc_http_port=base.sink_lmc_http_port + PORT_OFFSET,
-        max_model_len=MAX_MODEL_LEN, max_num_seqs=MAX_NUM_SEQS,
+        base, max_model_len=MAX_MODEL_LEN, max_num_seqs=MAX_NUM_SEQS,
         max_num_batched_tokens=spec.batched_tokens,
         capacity_discovery=True,
     )

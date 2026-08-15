@@ -25,7 +25,8 @@ def test_capacity_commands_preserve_model_geometry(monkeypatch, model):
     monkeypatch.setenv("QH_RUNTIME", "native")
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
     cfg = capacity.model_config(model)
-    vllm = testbed.shell(testbed.vllm_cmd(cfg, "sink", [], gpu_index=0))
+    vllm_command = testbed.vllm_cmd(cfg, "sink", [], gpu_index=0)
+    vllm = testbed.shell(vllm_command)
     cache = testbed.shell(testbed.mp_server_cmd(
         cfg, "sink", l2_port=cfg.lmc_port))
 
@@ -37,6 +38,8 @@ def test_capacity_commands_preserve_model_geometry(monkeypatch, model):
     assert "--dtype bfloat16" in vllm
     assert "--gpu-memory-utilization 0.9" in vllm
     assert "--disable-hybrid-kv-cache-manager" not in vllm
+    assert f'"lmcache.mp.port":{cfg.sink_lmc_port}' in vllm_command[-1]
+    assert f"--port {cfg.sink_lmc_port}" in cache
     if model == "Qwen/Qwen3.8-27B":
         assert "--max-num-batched-tokens 1567" in vllm
         assert "--chunk-size 784" in cache
