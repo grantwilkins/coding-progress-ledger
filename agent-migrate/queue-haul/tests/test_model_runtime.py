@@ -90,6 +90,34 @@ def test_campaign_log_must_prove_bf16_and_qwen_unified_block():
             qwen, good.replace("bfloat16", "float8_e4m3fn"))
 
 
+def test_capacity_discovery_uses_full_single_gpu_scheduler(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    spec = testbed.model_spec("Qwen/Qwen3.8-27B")
+    cfg = testbed.Config(
+        model="Qwen/Qwen3.8-27B", max_model_len=32768,
+        max_num_seqs=256, max_num_batched_tokens=spec.batched_tokens,
+        capacity_discovery=True,
+    )
+
+    testbed.validate_model_runtime(cfg)
+    command = testbed.shell(testbed.vllm_cmd(cfg, "sink", [], gpu_index=0))
+    assert "--max-num-seqs 256" in command
+    assert "--dtype bfloat16" in command
+    assert "--disable-hybrid-kv-cache-manager" not in command
+
+    with pytest.raises(ValueError, match="runtime geometry"):
+        testbed.validate_model_runtime(replace(cfg, max_num_seqs=8))
+
+
+def test_capacity_and_architecture_modes_are_mutually_exclusive(monkeypatch):
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    cfg = replace(testbed.model_campaign_config("openai/gpt-oss-20b"),
+                  capacity_discovery=True)
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        testbed.validate_model_runtime(cfg)
+
+
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):
     with pytest.raises(ValueError, match="unsupported model"):
         testbed.model_path(testbed.Config(model="example/unknown", hf_home=tmp_path))

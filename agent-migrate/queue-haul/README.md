@@ -1614,6 +1614,36 @@ audit and retained evidence.
 
 ## Model-architecture campaign
 
+`single_gpu_capacity_campaign.py` is the non-gating A100 precursor. It discovers
+how much of each pinned checkpoint can actually be served on one physical GPU;
+it does not require the requested width or context to pass. Each of the three
+models gets a fresh engine at five contexts. Synchronized geometric bursts
+from 1 through 256 requests distinguish the largest eventually completed burst
+from the maximum number vLLM reports running simultaneously. Launch rejection,
+OOM, queue saturation, timeout, or a service crash is retained as the capacity
+outcome rather than retried away. Only infrastructure and runtime-contract
+failures are retryable.
+
+The runtime is one A100, BF16 KV, TP1, 32K `max_model_len`, 256
+`max_num_seqs`, 90% memory, chunked prefill, APC, eager execution, and the
+hybrid KV manager. Qwen contexts are multiples of its measured 784-token
+unified block and its LMCache server uses separate object groups. Results are
+descriptive limits, not admission gates.
+
+```bash
+uv run python single_gpu_capacity_campaign.py prepare --seed 1 --out runs/single-gpu-capacity-a100/plan.json
+CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python single_gpu_capacity_campaign.py run --plan runs/single-gpu-capacity-a100/plan.json --run-root /datadrive/single-gpu-capacity-a100
+uv run python single_gpu_capacity_campaign.py reduce --plan runs/single-gpu-capacity-a100/plan.json --run-root /datadrive/single-gpu-capacity-a100 --out outputs/single-gpu-capacity-a100/summary.json
+uv run python plot_single_gpu_capacity.py outputs/single-gpu-capacity-a100/summary.json outputs/single-gpu-capacity-a100/single-gpu-capacity.pdf
+```
+
+The raw evidence includes exact token events, complete request responses,
+Prometheus scrapes, queue/running/KV traces, power samples, server info, launch
+logs, runtime-reported KV-token capacity, available KV GiB, and the complete
+hashed runtime command identity. An open marker in the reduced plot means the
+geometric width sweep ended right-censored at 256; an `x` means that
+model/context did not launch.
+
 `model_architecture_campaign.py` reuses the migration profiler and base planner
 for the pinned GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B checkpoints. It
 keeps BF16 KV, TP1, 32K context, eight sessions, 90% GPU memory, and exact token

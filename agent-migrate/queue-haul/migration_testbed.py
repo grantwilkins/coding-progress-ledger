@@ -170,6 +170,7 @@ class Config:
     max_num_seqs: int = 256
     max_num_batched_tokens: int = 8192
     architecture_campaign: bool = False
+    capacity_discovery: bool = False
 
 
 @dataclass(frozen=True)
@@ -241,10 +242,21 @@ def model_campaign_config(model: str) -> Config:
 
 def model_chunk_tokens(cfg: Config) -> int:
     return model_spec(cfg.model).chunk_tokens \
-        if getattr(cfg, "architecture_campaign", False) else 256
+        if (getattr(cfg, "architecture_campaign", False)
+            or getattr(cfg, "capacity_discovery", False)) else 256
 
 
 def validate_model_runtime(cfg: Config) -> None:
+    if cfg.architecture_campaign and cfg.capacity_discovery:
+        raise ValueError("model runtime modes are mutually exclusive")
+    if cfg.capacity_discovery:
+        spec = model_spec(cfg.model)
+        if cfg.max_model_len != 32768 or cfg.max_num_seqs != 256 \
+                or cfg.max_num_batched_tokens != spec.batched_tokens:
+            raise ValueError("capacity-discovery runtime geometry changed")
+        if lmcache_mode() != "mp":
+            raise ValueError("capacity discovery requires QH_LMCACHE_MODE=mp")
+        return
     if not cfg.architecture_campaign:
         if cfg.model != MODEL:
             raise ValueError("additional models require architecture_campaign")
@@ -258,7 +270,7 @@ def validate_model_runtime(cfg: Config) -> None:
 
 
 def validate_model_runtime_log(cfg: Config, text: str) -> None:
-    if not cfg.architecture_campaign:
+    if not (cfg.architecture_campaign or cfg.capacity_discovery):
         return
     if not re.search(r"(?:bfloat16|bf16).{0,80}kv.?cache|kv.?cache.{0,80}(?:bfloat16|bf16)",
                      text, re.IGNORECASE):
@@ -422,7 +434,8 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
         "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(),
         "--eviction-policy", "LRU",
         "--chunk-size", model_chunk_tokens(cfg),
-        *(["--separate-object-groups"] if cfg.architecture_campaign
+        *(["--separate-object-groups"] if (
+            cfg.architecture_campaign or cfg.capacity_discovery)
           and spec.separate_object_groups else []),
         "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
@@ -474,7 +487,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         "--max-num-batched-tokens",
         cfg.max_num_batched_tokens,
         *(["--dtype", "bfloat16", *spec.vllm_args]
-          if cfg.architecture_campaign else []),
+          if (cfg.architecture_campaign or cfg.capacity_discovery) else []),
         "--kv-cache-dtype",
         "auto",
         "--block-size",
@@ -485,8 +498,10 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         *(["--enable-sleep-mode"] if role == "source" and (
             sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
         ) else []),
-        *(["--gpu-memory-utilization", 0.9 if cfg.architecture_campaign else 0.75,
-           *([] if cfg.architecture_campaign else ["--disable-hybrid-kv-cache-manager"]),
+        *(["--gpu-memory-utilization", 0.9 if (
+            cfg.architecture_campaign or cfg.capacity_discovery) else 0.75,
+           *([] if (cfg.architecture_campaign or cfg.capacity_discovery)
+             else ["--disable-hybrid-kv-cache-manager"]),
            "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         "--kv-transfer-config",
         kv_config(engine_id, kv_role, kv_port, rpc_port),

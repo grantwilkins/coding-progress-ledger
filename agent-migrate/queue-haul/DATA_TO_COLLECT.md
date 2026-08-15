@@ -442,6 +442,25 @@ an invalid measurement. Record any unmet runtime sample target rather than
 extending only unfavorable cells. A valid run must achieve the scheduled load
 within 1% without client-side completion backpressure.
 
+### Non-gating single-A100 capacity discovery
+
+Before treating a model/context width as a comparable architecture point, run
+`single_gpu_capacity_campaign.py` on one visible A100. Use fresh processes for
+the Cartesian product of the three pinned checkpoints and five contexts, BF16
+KV, TP1, `max_model_len=32768`, `max_num_seqs=256`, and synchronized widths
+`1,2,4,8,16,32,64,128,256`. Qwen prompt contexts must be exact multiples of
+its measured 784-token unified attention block. Preserve the model-specific
+LMCache chunking and separate object groups.
+
+This stage has no performance gate. Report launchability, launch/OOM/service
+failure, the largest completely served burst, maximum observed running and
+waiting requests, first saturated and failed width, and whether the sweep is
+right-censored. vLLM may eventually complete a burst much larger than its
+physical simultaneous-running capacity, so those two quantities must never be
+collapsed. Retry only instrumentation, host, or runtime-contract failures;
+valid OOM, context rejection, timeout, incomplete output, or engine exit is the
+limit being discovered.
+
 ### Paired necessity design
 
 At one middle context, construct the full `2 x 2` scheduled-traffic factorial:
