@@ -104,6 +104,7 @@ def make_plan() -> dict:
         "client": {"scheduler": "asyncio-aiohttp-open-loop",
                    "aiohttp_version": aiohttp.__version__,
                    "launch_lead_s": 2.0,
+                   "event_loop_shards": 32,
                    "cyclic_gc_during_trace": False},
         "max_metric_gap_s": 1,
         "kv_match_tolerance": .02,
@@ -419,34 +420,56 @@ async def async_completion(session: aiohttp.ClientSession, host: str, port: int,
     return row
 
 
-async def issue_async_trace(host: str, port: int, prepared_trace: list[dict],
+async def issue_async_shard(host: str, port: int, prepared_trace: list[dict],
                             epoch_ns: int,
                             timeout_s: float) -> tuple[list[dict], Exception | None]:
-    """Drive an open-loop trace with event-loop tasks, including queued requests."""
+    connector = aiohttp.TCPConnector(limit=0, force_close=True)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async def one(item: dict) -> dict:
+            scheduled_ns = epoch_ns + int(item["offset_s"] * 1e9)
+            await asyncio.sleep(max(
+                0, (scheduled_ns - time.monotonic_ns()) / 1e9,
+            ))
+            result = await async_completion(
+                session, host, port, item["prepared"], scheduled_ns, timeout_s,
+            )
+            return {**result, "population": item["population"],
+                    "offset_s": item["offset_s"]}
+
+        settled = await asyncio.gather(
+            *(one(item) for item in prepared_trace), return_exceptions=True,
+        )
+        rows = [item for item in settled if isinstance(item, dict)]
+        error = next((item for item in settled
+                      if isinstance(item, Exception)), None)
+        return rows, error
+
+
+def issue_async_trace(host: str, port: int, prepared_trace: list[dict],
+                      epoch_ns: int, timeout_s: float,
+                      shards: int) -> tuple[list[dict], Exception | None]:
+    """Drive one open-loop trace across independent streaming event loops."""
+    if not 1 <= shards <= len(prepared_trace):
+        raise ValueError("invalid client event-loop shard count")
+    partitions = [prepared_trace[index::shards] for index in range(shards)]
     gc_was_enabled = gc.isenabled()
     gc.collect()
     gc.disable()
+    rows, error = [], None
     try:
-        connector = aiohttp.TCPConnector(limit=0, force_close=True)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            async def one(item: dict) -> dict:
-                scheduled_ns = epoch_ns + int(item["offset_s"] * 1e9)
-                await asyncio.sleep(max(
-                    0, (scheduled_ns - time.monotonic_ns()) / 1e9,
-                ))
-                result = await async_completion(
-                    session, host, port, item["prepared"], scheduled_ns, timeout_s,
-                )
-                return {**result, "population": item["population"],
-                        "offset_s": item["offset_s"]}
-
-            settled = await asyncio.gather(
-                *(one(item) for item in prepared_trace), return_exceptions=True,
-            )
-            rows = [item for item in settled if isinstance(item, dict)]
-            error = next((item for item in settled
-                          if isinstance(item, Exception)), None)
-            return rows, error
+        with ThreadPoolExecutor(max_workers=shards) as executor:
+            futures = [executor.submit(
+                asyncio.run,
+                issue_async_shard(host, port, partition, epoch_ns, timeout_s),
+            ) for partition in partitions]
+            for future in futures:
+                try:
+                    shard_rows, shard_error = future.result()
+                    rows.extend(shard_rows)
+                    error = error or shard_error
+                except Exception as exc:
+                    error = error or exc
+        return sorted(rows, key=lambda row: row["scheduled_ns"]), error
     finally:
         if gc_was_enabled:
             gc.enable()
@@ -896,10 +919,11 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
                 lead_ns = int(plan["client"]["launch_lead_s"] * 1e9)
                 epoch = time.monotonic_ns() + lead_ns
                 wall = time.time_ns() + lead_ns
-                requests, error = asyncio.run(issue_async_trace(
+                requests, error = issue_async_trace(
                     cfg.host, stack.port, prepared_trace, epoch,
                     plan["request_timeout_s"],
-                ))
+                    plan["client"]["event_loop_shards"],
+                )
                 if error is None:
                     drained = drain(sampler, plan["drain_s"])
             except Exception as exc:
@@ -924,6 +948,7 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
             "planned_parked_prefix_tokens": planned_parked_tokens,
             "client_scheduler": plan["client"]["scheduler"],
             "client_runtime_version": plan["client"]["aiohttp_version"],
+            "client_event_loop_shards": plan["client"]["event_loop_shards"],
             "client_cyclic_gc_during_trace":
             plan["client"]["cyclic_gc_during_trace"],
             "client_task_count": client_tasks,

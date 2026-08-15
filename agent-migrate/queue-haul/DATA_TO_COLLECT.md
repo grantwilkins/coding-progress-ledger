@@ -309,8 +309,9 @@ warmup, 240-second measurement window, absolute 180-second request deadline,
 180-second drain limit, and a smooth uniform open-loop schedule. One
 predeclared asynchronous client task is available per offered request under a
 frozen 4,096-task ceiling. One unbounded aiohttp connector drives the exact
-open-loop schedule without tying queued responses to an OS-thread pool; the
-plan pins the client runtime version and disables cyclic GC only while the
+open-loop schedule in each of 32 fixed event-loop shards, so queued responses
+neither consume one OS thread apiece nor starve token-stream parsing. The plan
+pins the client runtime and shard count and disables cyclic GC only while the
 trace is active so response-object collection cannot pause request release.
 Reference counting remains active, and cyclic GC is restored after the trace.
 Stability uses

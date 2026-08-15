@@ -1540,10 +1540,10 @@ offered-request attainment, physical stability, and censoring remain in the
 outputs. The harness preserves exact token IDs/events, labeled Prometheus
 scrapes, queue/KV/power series, partial failures, cache proof, and complete
 runtime identity, including the exact vLLM, LMCache, and Redis commands. It
-uses one asynchronous task per offered request, pins the aiohttp version, and
-disables cyclic GC during the trace to prevent periodic scheduler stalls. It
-restores GC afterward and invalidates any cell whose launch schedule slips by
-more than 50 ms. It
+uses one asynchronous task per offered request across 32 fixed event-loop
+shards, pins the aiohttp version, and disables cyclic GC during the trace to
+prevent periodic scheduler stalls. It restores GC afterward and invalidates
+any cell whose launch schedule slips by more than 50 ms. It
 enforces the frozen randomized cell order and hashes an unchanged image once
 per stage. The balanced confirmation workload is derived from each hardware's
 normalization and must have a 40--60% prefill share. Live KV capacity and the

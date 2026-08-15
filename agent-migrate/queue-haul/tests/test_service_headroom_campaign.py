@@ -172,9 +172,9 @@ def test_async_trace_releases_many_queued_requests_without_thread_backpressure(
     trace = [{"offset_s": .02, "population": "incumbent",
               "prepared": {"index": index}} for index in range(256)]
     epoch = campaign.time.monotonic_ns() + int(.02e9)
-    (rows, error) = campaign.asyncio.run(campaign.issue_async_trace(
-        "127.0.0.1", 1, trace, epoch, 1,
-    ))
+    rows, error = campaign.issue_async_trace(
+        "127.0.0.1", 1, trace, epoch, 1, 8,
+    )
 
     assert error is None
     assert campaign.gc.isenabled()
