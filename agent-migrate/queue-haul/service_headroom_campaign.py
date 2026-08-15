@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
 import json
 import math
 import re
 import statistics
 import subprocess
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -108,7 +110,10 @@ def make_plan() -> dict:
             "gpu_memory_utilization": .75, "chunked_prefill": True,
             "prefix_caching": True, "enforce_eager": True,
             "disable_hybrid_kv_cache_manager": True,
-            "runtime_versions": list(testbed.MP_RUNTIME_VERSIONS),
+            "runtime_versions": {
+                "apptainer": list(testbed.MP_RUNTIME_VERSIONS),
+                "native": list(testbed.NATIVE_RUNTIME_VERSIONS),
+            },
         },
         "shapes": {**{name: asdict(shape) for name, shape in SHAPES.items()},
                    "balanced": {"context_tokens": CONTEXT,
@@ -284,7 +289,7 @@ def validate_rates(rates: dict) -> None:
 
 
 def runtime_contract(plan: dict, cfg: testbed.Config, extra: list[str], gpu: dict,
-                     versions: tuple[str, str], image_sha256: str,
+                     versions: tuple[str, str], runtime: dict,
                      git_sha: str, commands: dict[str, list[str]]) -> dict:
     if extra:
         raise RuntimeError("formal cells forbid extra vLLM arguments")
@@ -297,14 +302,24 @@ def runtime_contract(plan: dict, cfg: testbed.Config, extra: list[str], gpu: dic
               "kv_cache_dtype": "auto", "block_size": 16,
               "gpu_memory_utilization": .75, "chunked_prefill": True,
               "prefix_caching": True, "enforce_eager": True,
-              "disable_hybrid_kv_cache_manager": True,
-              "runtime_versions": list(versions)}
-    if cfg.model != plan["model"] or actual != stack \
+              "disable_hybrid_kv_cache_manager": True}
+    expected = {key: value for key, value in stack.items()
+                if key != "runtime_versions"}
+    mode = runtime.get("mode")
+    environment = runtime.get("environment")
+    valid_runtime = mode == "apptainer" \
+        and runtime.get("image_sha256") == plan["image_sha256"] \
+        or mode == "native" and environment is not None \
+        and runtime.get("environment_sha256") == digest(environment)
+    if cfg.model != plan["model"] \
             or set(commands) != {"vllm", "cache", "redis"} \
-            or image_sha256 != plan["image_sha256"]:
+            or actual != expected \
+            or list(versions) != stack["runtime_versions"].get(mode) \
+            or not valid_runtime:
         raise RuntimeError("serving stack differs from the frozen plan")
     identity = {"model": cfg.model, "model_revision": testbed.MODEL_REVISION,
-                "image_sha256": image_sha256, "git_sha": git_sha,
+                "runtime": runtime, "runtime_versions": list(versions),
+                "git_sha": git_sha,
                 "gpu": gpu, "scheduler": actual, "commands": commands}
     return {**identity, "sha256": digest(identity)}
 
@@ -536,15 +551,30 @@ def cached_image_hash(path: Path, cache: Path) -> str:
     return sha256
 
 
+def runtime_provenance(cfg: testbed.Config, cache: Path) -> dict:
+    mode = testbed.runtime_mode()
+    if mode == "apptainer":
+        return {"mode": mode,
+                "image_sha256": cached_image_hash(cfg.sandbox, cache)}
+    packages = sorted(
+        (distribution.metadata["Name"].lower(), distribution.version,
+         hashlib.sha256((distribution.read_text("RECORD")
+                         or distribution.read_text("METADATA") or "").encode()).hexdigest())
+        for distribution in importlib.metadata.distributions()
+    )
+    environment = {"python": sys.version, "packages": packages}
+    return {"mode": mode, "environment": environment,
+            "environment_sha256": digest(environment)}
+
+
 def collect_runtime_identity(plan: dict, cfg: testbed.Config, hardware: str,
-                             extra: list[str], image_sha256: str) -> dict:
-    if testbed.runtime_mode() != "apptainer" or testbed.lmcache_mode() != "mp" \
-            or not testbed.prefix_caching():
-        raise RuntimeError("service-headroom requires the pinned MP Apptainer stack")
+                             extra: list[str], runtime: dict) -> dict:
+    if testbed.lmcache_mode() != "mp" or not testbed.prefix_caching():
+        raise RuntimeError("service-headroom requires the pinned MP stack")
     git_sha, _dirty = profiler.git_state(False)
     return runtime_contract(plan, cfg, extra, hardware_snapshot(hardware),
                             testbed.runtime_versions(cfg),
-                            image_sha256, git_sha,
+                            runtime, git_sha,
                             stack_commands(cfg, extra))
 
 
@@ -1288,8 +1318,8 @@ def main(argv=None) -> None:
             else args.extra_vllm_args
         identity = collect_runtime_identity(
             plan, cfg, cell["hardware"], extra,
-            cached_image_hash(
-                cfg.sandbox, args.out / f".{cell['hardware']}-image-sha256.json",
+            runtime_provenance(
+                cfg, args.out / f".{cell['hardware']}-image-sha256.json",
             ),
         )
         source_plan_sha = digest(plan) if plan["schema"] == SCHEMA \

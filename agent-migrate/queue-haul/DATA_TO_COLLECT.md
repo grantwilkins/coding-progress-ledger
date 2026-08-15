@@ -319,11 +319,13 @@ rerun only immediately in place, before any later cell in the frozen order;
 otherwise stop the stage. Complete service failures may not be rerun.
 
 Every calibration, discovery, and confirmation result carries the exact model
-revision, image-byte hash, vLLM/LMCache versions, semantic scheduler command,
+revision, Apptainer image-byte hash or native environment manifest,
+vLLM/LMCache versions, semantic scheduler command,
 GPU SKU/UUID/memory/power/application clocks, commit, plan hash, and
 normalization hash. The runtime identity includes and rechecks the canonical
 vLLM, LMCache, and Redis launch commands, including environment-dependent GPU
-and KV roles. The image is hashed once per unchanged stage artifact, and each
+and KV roles. An image is hashed once per unchanged stage artifact; a native
+run records the Python version and installed-distribution RECORD hashes. Each
 reducer reconstructs the observed wall-clock cell order and requires it to equal
 the frozen randomized order. Any cross-cell mismatch hard-fails reduction. Successful
 measurement requests must report exactly the block-rounded private prefix as

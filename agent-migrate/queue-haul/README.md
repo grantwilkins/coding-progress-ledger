@@ -1509,7 +1509,11 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
   mixed service profiles.
 
 Prepare the frozen cell matrix, follow its per-hardware run order, reduce one
-exact-stack normalization per hardware, then run and reduce the discovery cells:
+exact-stack normalization per hardware, then run and reduce the discovery cells.
+Use `QH_LMCACHE_MODE=mp`; add `QH_RUNTIME=native` for the native vLLM
+0.22.0/LMCache 0.5.1 environment instead of the pinned MP Apptainer image.
+Native runs bind the Python version and installed-distribution RECORD hashes
+into the runtime identity:
 
 ```bash
 uv run python service_headroom_campaign.py prepare --out runs/service-headroom/plan.json
@@ -1541,11 +1545,11 @@ outputs. The harness preserves exact token IDs/events, labeled Prometheus
 scrapes, queue/KV/power series, partial failures, cache proof, and complete
 runtime identity, including the exact vLLM, LMCache, and Redis commands. It
 enforces the frozen randomized cell order and hashes an unchanged image once
-per stage. The balanced confirmation workload is derived from each hardware's
+per stage, or records the native environment manifest. The balanced confirmation workload is derived from each hardware's
 normalization and must have a 40--60% prefill share. Live KV capacity and the
 planned block-rounded parked stock are bound into the normalization, checked
-against pre-arrival occupancy, and reproduced in confirmation. Use
-`QH_LMCACHE_MODE=mp` and submit A100 and H100 separately.
+against pre-arrival occupancy, and reproduced in confirmation. Submit A100 and
+H100 separately.
 Retry an invalid measurement immediately before starting the next frozen cell;
 a later retry violates the audited order and stops the stage. A valid service
 failure is never retried away.

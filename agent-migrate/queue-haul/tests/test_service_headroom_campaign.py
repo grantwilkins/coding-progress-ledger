@@ -158,34 +158,49 @@ def test_runtime_contract_changes_with_every_semantic_stack_input():
            "memory_clock_mhz": 1593}
     commands = {"vllm": ["vllm", "serve"], "cache": ["lmcache", "server"],
                 "redis": ["redis-server"]}
+    runtime = {"mode": "apptainer", "image_sha256": plan["image_sha256"]}
     first = campaign.runtime_contract(plan, cfg, [], gpu, ("0.22.0+cu129", "0.5.1"),
-                                      plan["image_sha256"], "commit", commands)
+                                      runtime, "commit", commands)
     changed = SimpleNamespace(**{**vars(cfg), "max_num_batched_tokens": 4096})
 
     with pytest.raises(RuntimeError, match="serving stack"):
         campaign.runtime_contract(plan, changed, [], gpu,
                                   ("0.22.0+cu129", "0.5.1"),
-                                  plan["image_sha256"], "commit", commands)
+                                  runtime, "commit", commands)
     with pytest.raises(RuntimeError, match="extra vLLM"):
         campaign.runtime_contract(plan, cfg, ["--foo"], gpu,
                                   ("0.22.0+cu129", "0.5.1"),
-                                  plan["image_sha256"], "commit", commands)
+                                  runtime, "commit", commands)
     changed_command = campaign.runtime_contract(
-        plan, cfg, [], gpu, ("0.22.0+cu129", "0.5.1"), plan["image_sha256"],
+        plan, cfg, [], gpu, ("0.22.0+cu129", "0.5.1"), runtime,
         "commit", {**commands, "vllm": ["vllm", "serve", "--changed"]},
     )
     assert first["sha256"] == campaign.digest({key: value for key, value in first.items()
                                                 if key != "sha256"})
     assert changed_command["sha256"] != first["sha256"]
     pid_command = campaign.runtime_contract(
-        plan, cfg, [], gpu, ("0.22.0+cu129", "0.5.1"), plan["image_sha256"],
+        plan, cfg, [], gpu, ("0.22.0+cu129", "0.5.1"), runtime,
         "commit", {**commands, "vllm": ["mkdir", "/tmp/qh-sink-123"]},
     )
     next_pid = campaign.runtime_contract(
-        plan, cfg, [], gpu, ("0.22.0+cu129", "0.5.1"), plan["image_sha256"],
+        plan, cfg, [], gpu, ("0.22.0+cu129", "0.5.1"), runtime,
         "commit", {**commands, "vllm": ["mkdir", "/tmp/qh-sink-456"]},
     )
     assert pid_command["sha256"] == next_pid["sha256"]
+
+    environment = {"python": "3.12", "packages": []}
+    native_runtime = {"mode": "native", "environment": environment,
+                      "environment_sha256": campaign.digest(environment)}
+    native = campaign.runtime_contract(
+        plan, cfg, [], gpu, ("0.22.0", "0.5.1"),
+        native_runtime, "commit", commands,
+    )
+    assert native["runtime"]["mode"] == "native"
+    with pytest.raises(RuntimeError, match="serving stack"):
+        campaign.runtime_contract(
+            plan, cfg, [], gpu, ("0.22.0+cu129", "0.5.1"),
+            native_runtime, "commit", commands,
+        )
 
 
 def test_image_hash_cache_reuses_only_an_unchanged_file(tmp_path, monkeypatch):
@@ -200,6 +215,24 @@ def test_image_hash_cache_reuses_only_an_unchanged_file(tmp_path, monkeypatch):
     image.write_bytes(b"changed")
     assert campaign.cached_image_hash(image, cache) == "2" * 64
     assert len(calls) == 2
+
+
+def test_native_runtime_provenance_does_not_require_an_image(tmp_path, monkeypatch):
+    distribution = SimpleNamespace(
+        metadata={"Name": "vllm"}, version="0.22.0",
+        read_text=lambda name: "record" if name == "RECORD" else None,
+    )
+    monkeypatch.setattr(campaign.testbed, "runtime_mode", lambda: "native")
+    monkeypatch.setattr(campaign.importlib.metadata, "distributions",
+                        lambda: [distribution])
+
+    result = campaign.runtime_provenance(
+        SimpleNamespace(sandbox=tmp_path / "missing.sif"), tmp_path / "cache.json",
+    )
+
+    assert result["mode"] == "native"
+    assert result["environment"]["packages"][0][:2] == ("vllm", "0.22.0")
+    assert result["environment_sha256"] == campaign.digest(result["environment"])
 
 
 def test_resume_requires_the_same_plan_runtime_and_normalization():
