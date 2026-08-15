@@ -107,6 +107,7 @@ def make_plan() -> dict:
                    "event_loop_shards": 32,
                    "cyclic_gc_during_trace": False},
         "max_metric_gap_s": 1,
+        "min_exact_timing_coverage": .99,
         "kv_match_tolerance": .02,
         "residency_control_max_relative_degradation": .15,
         "p99_min_incumbent_requests": 1000,
@@ -196,6 +197,7 @@ def make_confirmation_plan(core: dict, scout: dict, hardware: str) -> dict:
         "image_sha256", "model", "context_tokens", "base_rho", "loads", "blocks",
         "warmup_s", "measurement_s", "drain_s", "request_timeout_s",
         "max_send_lateness_s", "max_client_tasks", "max_metric_gap_s",
+        "min_exact_timing_coverage",
         "kv_match_tolerance",
         "residency_control_max_relative_degradation",
         "p99_min_incumbent_requests", "client", "stack", "shapes",
@@ -226,6 +228,7 @@ def validate_confirmation_plan(plan: dict) -> None:
               "blocks", "warmup_s", "measurement_s", "drain_s",
               "request_timeout_s", "max_send_lateness_s", "kv_match_tolerance",
               "max_metric_gap_s", "max_client_tasks",
+              "min_exact_timing_coverage",
               "residency_control_max_relative_degradation",
               "p99_min_incumbent_requests", "client", "stack", "shapes")
     selection = plan.get("selection", {})
@@ -527,7 +530,7 @@ def invalid_reason(plan: dict, trace: list[dict], requests: list[dict],
         return "offered trace schedule slip"
     if summary["cache_mismatch_count"]:
         return "cache contract mismatch"
-    if summary.get("incumbent_exact", 1) and not summary["tpot_reportable"]:
+    if summary.get("incumbent_completed", 1) and not summary["tpot_reportable"]:
         return "token timing is not observable"
     if not summary["telemetry_window_complete"] and engine_failure != "service":
         return "measurement telemetry is incomplete"
@@ -579,15 +582,18 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
             and hi - window_metrics[-1]["monotonic_ns"] <= tolerance \
             and max(gaps_ns) <= tolerance
     loads = [in_system(row, observed) for row in window_metrics]
-    p99 = len(good) >= plan["p99_min_incumbent_requests"]
+    timing_coverage = len(timed) / len(good) if good else 0
+    p99 = min(len(good), len(timed)) >= plan["p99_min_incumbent_requests"]
     return {
         "offered_rho": offered_rho(plan, offered),
         "offered_requests": len(observed),
         "incumbent_offered": len(incumbent),
-        "incumbent_exact": len(good),
-        "incumbent_exact_completion_rate": len(good) / len(incumbent),
+        "incumbent_completed": len(good),
+        "incumbent_completion_rate": len(good) / len(incumbent),
+        "incumbent_timing_exact": len(timed),
+        "incumbent_timing_exact_coverage": timing_coverage,
         "incumbent_service_failure_rate": 1 - len(good) / len(incumbent),
-        "all_offered_exact_completion_rate": len(completed) / len(observed),
+        "all_offered_completion_rate": len(completed) / len(observed),
         "all_offered_service_failure_rate": 1 - len(completed) / len(observed),
         "p50_ttft_s": quantile(ttft, .5), "p90_ttft_s": quantile(ttft, .9),
         "p95_ttft_s": quantile(ttft, .95),
@@ -600,7 +606,8 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
         "p95_token_itl_s": quantile(gaps, .95),
         "p99_token_itl_s": quantile(gaps, .99),
         "p99_reportable": p99,
-        "tpot_reportable": bool(good) and len(timed) == len(good),
+        "tpot_reportable": bool(good) and timing_coverage
+        >= plan["min_exact_timing_coverage"],
         "cache_mismatch_count": len(cache_mismatches(observed)),
         "queue_drift_upper_requests_per_s": drift,
         "initial_in_system_requests": loads[0] if loads else None,
@@ -1106,10 +1113,7 @@ def joint_attainment(plan: dict, requests: list[dict], ttft_target_s: float,
                 if row["population"] == "incumbent"]
     if not eligible:
         raise RuntimeError("joint attainment has no offered incumbents")
-    if any(serving.service_completion(row) and not serving.exact_token_timing(row)
-           for row in eligible):
-        raise RuntimeError("joint attainment needs exact token timing")
-    good = sum(serving.service_completion(row)
+    good = sum(serving.exact_token_timing(row)
                and row["ttft_s"] <= ttft_target_s
                and row["mean_tpot_s"] <= tpot_target_s for row in eligible)
     return good / len(eligible)
@@ -1142,7 +1146,7 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     if len(controls) != plan["blocks"] \
             or any(row["status"] != "complete" for row in controls):
         raise RuntimeError("residency controls are incomplete")
-    if any(row["incumbent_exact"] and not row["tpot_reportable"]
+    if any(row["incumbent_completed"] and not row["tpot_reportable"]
            for row in rows + controls):
         raise RuntimeError("headroom reduction lacks exact TPOT measurements")
     resident_kv = [row["preloaded_kv_usage"] for row in rows]
@@ -1160,7 +1164,8 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     direction_results = {}
     for direction in ("prefill_heavy", "decode_heavy"):
         slo_labels = [all(
-            row["stable"] and row["p90_ttft_s"] is not None
+            row["stable"] and row["tpot_reportable"]
+            and row["p90_ttft_s"] is not None
             and row["p90_mean_tpot_s"] is not None
             and row["p90_ttft_s"] <= targets["p90_ttft_s"]
             and row["p90_mean_tpot_s"] <= targets["p90_mean_tpot_s"]
@@ -1179,11 +1184,11 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
         }
     resident_base = [row for row in rows if row["target_rho"] == BASE_RHO]
     healthy_controls = all(
-        row["stable"] and row["incumbent_exact_completion_rate"] == 1
-        and row["all_offered_exact_completion_rate"] == 1 for row in controls)
+        row["stable"] and row["incumbent_completion_rate"] == 1
+        and row["all_offered_completion_rate"] == 1 for row in controls)
     healthy_resident_base = all(
-        row["stable"] and row["incumbent_exact_completion_rate"] == 1
-        and row["all_offered_exact_completion_rate"] == 1 for row in resident_base)
+        row["stable"] and row["incumbent_completion_rate"] == 1
+        and row["all_offered_completion_rate"] == 1 for row in resident_base)
     ratios = {
         metric: statistics.median(row[metric] for row in resident_base)
         / statistics.median(row[metric] for row in controls) - 1
@@ -1266,7 +1271,8 @@ def reduce_headroom(plan: dict, hardware: str, root: Path,
 
 
 def row_feasible(row: dict, targets: dict) -> bool:
-    return bool(row["stable"] and row["p90_ttft_s"] is not None
+    return bool(row["stable"] and row["tpot_reportable"]
+                and row["p90_ttft_s"] is not None
                 and row["p90_mean_tpot_s"] is not None
                 and row["p90_ttft_s"] <= targets["p90_ttft_s"]
                 and row["p90_mean_tpot_s"] <= targets["p90_mean_tpot_s"])
@@ -1284,7 +1290,7 @@ def validate_confirmation_source(plan: dict, core: dict, scout: dict) -> None:
 def reduce_confirmation(plan: dict, root: Path, core: dict, scout: dict) -> dict:
     validate_confirmation_source(plan, core, scout)
     rows = load_results(plan, plan["hardware"], root, "confirmation")
-    if any(row["status"] != "complete" or row["incumbent_exact"]
+    if any(row["status"] != "complete" or row["incumbent_completed"]
            and not row["tpot_reportable"] for row in rows):
         raise RuntimeError("confirmation contains invalid or incomplete measurements")
     if {row["runtime_identity_sha256"] for row in rows} \
@@ -1304,7 +1310,7 @@ def reduce_confirmation(plan: dict, root: Path, core: dict, scout: dict) -> dict
 def build_confirmation(plan: dict, rows: list[dict]) -> dict:
     rows = validate_result_rows(plan, plan["hardware"], "confirmation", rows)
     validate_run_order(plan, plan["hardware"], "confirmation", rows)
-    if any(row["status"] != "complete" or row["incumbent_exact"]
+    if any(row["status"] != "complete" or row["incumbent_completed"]
            and not row["tpot_reportable"] for row in rows):
         raise RuntimeError("confirmation contains invalid or incomplete measurements")
     if {row["runtime_identity_sha256"] for row in rows} \

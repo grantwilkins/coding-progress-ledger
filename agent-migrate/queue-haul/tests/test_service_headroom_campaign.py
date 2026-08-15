@@ -63,9 +63,11 @@ def evidence(plan: dict, cell: dict, **values) -> dict:
             "kv_capacity_tokens": 1_000_000,
             "planned_parked_prefix_tokens": 77_312,
             "started_wall_ns": order.index(cell["cell_id"]) + 1,
-            "incumbent_exact": 1,
-            "incumbent_exact_completion_rate": 1,
-            "all_offered_exact_completion_rate": 1,
+            "incumbent_completed": 1,
+            "incumbent_completion_rate": 1,
+            "incumbent_timing_exact": 1,
+            "incumbent_timing_exact_coverage": 1,
+            "all_offered_completion_rate": 1,
             **cell, **values}
 
 
@@ -131,7 +133,7 @@ def test_summary_uses_incumbents_and_keeps_failures_in_denominator():
 
     result = campaign.summarize(plan, offered, requests, metrics, True)
 
-    assert result["incumbent_exact_completion_rate"] == .75
+    assert result["incumbent_completion_rate"] == .75
     assert result["incumbent_service_failure_rate"] == .25
     assert result["all_offered_service_failure_rate"] == .25
     assert result["p90_ttft_s"] == pytest.approx(.2)
@@ -301,7 +303,7 @@ def test_service_failure_with_truncated_queue_telemetry_remains_in_denominator()
         "vllm:gpu_cache_usage_perc": .1,
     }], False)
 
-    assert result["incumbent_exact_completion_rate"] == 0
+    assert result["incumbent_completion_rate"] == 0
     assert math.isinf(result["queue_drift_upper_requests_per_s"])
     assert not result["stable"]
 
@@ -413,8 +415,44 @@ def test_completion_rate_is_separate_from_token_timing_observability():
 
     result = campaign.summarize(plan, offered, [request], metrics, True)
 
-    assert result["incumbent_exact_completion_rate"] == 1
+    assert result["incumbent_completion_rate"] == 1
+    assert result["incumbent_timing_exact_coverage"] == 0
     assert not result["tpot_reportable"]
+
+
+def test_tpot_reports_at_ninety_nine_percent_exact_timing_coverage():
+    plan = campaign.make_plan()
+    offered = campaign.measurement_rows(
+        plan, campaign.offered_trace(plan, RATES, "prefill_heavy", .25, 0),
+    )[:100]
+    epoch = 10**12
+    requests = [complete({
+        "scheduled_ns": epoch + int(row["offset_s"] * 1e9),
+        "offset_s": row["offset_s"], "population": "incumbent",
+    }) for row in offered]
+    requests[-1].update({"exact_token_timestamps": False,
+                         "mean_tpot_s": None, "token_itls_s": []})
+    metrics = [{"monotonic_ns": epoch + int(second * .5e9),
+                "vllm:num_requests_waiting": 0,
+                "vllm:num_requests_running": 0,
+                "vllm:gpu_cache_usage_perc": .1}
+               for second in range(120, 601)]
+
+    result = campaign.summarize(plan, offered, requests, metrics, True)
+
+    assert result["incumbent_timing_exact"] == 99
+    assert result["incumbent_timing_exact_coverage"] == .99
+    assert result["tpot_reportable"]
+
+
+def test_joint_attainment_counts_ambiguous_token_timing_as_a_miss():
+    exact = complete({"population": "incumbent", "offset_s": 61})
+    ambiguous = {**exact, "exact_token_timestamps": False,
+                 "mean_tpot_s": None, "token_itls_s": []}
+
+    assert campaign.joint_attainment(
+        campaign.make_plan(), [exact, ambiguous], 1, .1,
+    ) == .5
 
 
 def test_dense_measurement_telemetry_can_establish_stability():
@@ -508,9 +546,11 @@ def test_boundary_requires_every_restart_and_takes_the_weaker_direction(tmp_path
             plan, cell, stable=stable,
             p90_ttft_s=None if collapse else .2,
             p90_mean_tpot_s=None if collapse else .02,
-            tpot_reportable=not collapse, incumbent_exact=0 if collapse else 1,
-            incumbent_exact_completion_rate=0 if collapse else 1,
-            all_offered_exact_completion_rate=0 if collapse else 1,
+            tpot_reportable=not collapse, incumbent_completed=0 if collapse else 1,
+            incumbent_completion_rate=0 if collapse else 1,
+            incumbent_timing_exact=0 if collapse else 1,
+            incumbent_timing_exact_coverage=0 if collapse else 1,
+            all_offered_completion_rate=0 if collapse else 1,
             preloaded_kv_usage=.1 if cell["kind"] == "headroom" else .02,
             initial_kv_usage=None if collapse else cell.get("target_rho", 0),
         )))
@@ -546,8 +586,8 @@ def test_unhealthy_residency_control_withholds_confirmation(tmp_path):
         control_failure = cell["kind"] == "residency_control" and cell["block"] == 0
         (path / "result.json").write_text(json.dumps(evidence(
             plan, cell, stable=not control_failure,
-            incumbent_exact_completion_rate=.99 if control_failure else 1,
-            all_offered_exact_completion_rate=.99 if control_failure else 1,
+            incumbent_completion_rate=.99 if control_failure else 1,
+            all_offered_completion_rate=.99 if control_failure else 1,
             p90_ttft_s=.2, p90_mean_tpot_s=.02, tpot_reportable=True,
             preloaded_kv_usage=.1 if cell["kind"] == "headroom" else .02,
         )))
@@ -649,7 +689,7 @@ def test_only_confirmation_can_emit_a_planner_usable_bound(tmp_path):
             plan, cell, stable=feasible,
             p90_ttft_s=None if collapse else .2,
             p90_mean_tpot_s=None if collapse else .02,
-            tpot_reportable=not collapse, incumbent_exact=0 if collapse else 1,
+            tpot_reportable=not collapse, incumbent_completed=0 if collapse else 1,
         )))
         request = complete({"population": "incumbent", "offset_s": 61})
         if collapse:

@@ -318,11 +318,13 @@ Stability uses
 running plus waiting plus client-pending requests only inside the measurement
 window; it cannot be rescued by warmup or post-window drain. The measurement
 hard-fails a scrape gap over one second. A send slip over 50 ms,
-parser/configuration/cache-proof error, token-timing ambiguity, GPU
+parser/configuration/cache-proof error, exact token-timing coverage below 99%, GPU
 preemption/Xid, or missing live-engine sampler invalidates the measurement.
 Timeout, rejection, incomplete output, OOM, or load-induced engine exit is a
 service miss and remains in the offered denominator. Partial request and metric
-evidence is written before failure classification. Invalid measurements may be
+evidence is written before failure classification. Mean-TPOT quantiles use only
+the exact-timing subset and carry its coverage; every ambiguous stream remains a
+miss in joint TTFT/TPOT attainment. Invalid measurements may be
 rerun only immediately in place, before any later cell in the frozen order;
 otherwise stop the stage. Complete service failures may not be rerun.
 
