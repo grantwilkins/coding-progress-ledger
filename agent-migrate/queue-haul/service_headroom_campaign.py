@@ -384,6 +384,16 @@ def validate_prewarm(rows: list[dict], sessions_: list[serving.Session]) -> None
         raise RuntimeError("private-prefix prewarm contract failed")
 
 
+def resident_tokens(rows: list[dict], sessions_: list[serving.Session]) -> int:
+    if len(rows) != len(sessions_) or any(
+            not serving.service_completion(row)
+            or row.get("prompt_tokens") != session.prefix_tokens
+            or row.get("cached_tokens") != session.prefix_tokens // 16 * 16
+            for row, session in zip(rows, sessions_)):
+        raise RuntimeError("private-prefix residency contract failed")
+    return sum(row["cached_tokens"] for row in rows)
+
+
 def engine_failure_kind(log: Path, exited: bool) -> str | None:
     if not exited:
         return None
@@ -794,13 +804,18 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
                                    plan["request_timeout_s"], True)
             (root / "prewarm.json").write_text(json.dumps(warm, indent=2) + "\n")
             validate_prewarm(warm, warm_sessions)
+            resident = serving.prewarm(cfg.host, stack.port, cfg.model, warm_sessions,
+                                       plan["request_timeout_s"], True)
+            (root / "residency.json").write_text(
+                json.dumps(resident, indent=2) + "\n")
+            preloaded_kv_usage = resident_tokens(resident, warm_sessions) \
+                / kv_capacity_tokens
             sampler = serving.MetricsSampler(cfg.host, stack.port, root / "engine.csv")
             power = profiler.PowerSampler(root / "power.csv")
             sampler.start()
             power.start()
             try:
                 wait_sampler(sampler)
-                preloaded_kv_usage = sampler.rows[-1]["vllm:gpu_cache_usage_perc"]
                 epoch, wall = time.monotonic_ns(), time.time_ns()
                 def issue(row):
                     result = serving.issue(

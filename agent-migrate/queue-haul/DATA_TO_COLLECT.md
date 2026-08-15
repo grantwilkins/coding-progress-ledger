@@ -330,8 +330,10 @@ reducer reconstructs the observed wall-clock cell order and requires it to equal
 the frozen randomized order. Any cross-cell mismatch hard-fails reduction. Successful
 measurement requests must report exactly the block-rounded private prefix as
 cached; under-hit and append-hot cells are invalid because their actual prefill
-work no longer equals the x coordinate. Fixed parked stock is checked from the
-telemetry sample immediately after prewarm and before offered arrivals.
+work no longer equals the x coordinate. Fixed parked stock is checked by a
+second exact-token cache-hit census immediately after prewarm and before
+offered arrivals; this includes inactive prefix-cache blocks that vLLM 0.22
+omits from its active-KV gauge.
 The engine-reported live KV-token capacity is bound into the normalization;
 resident-minus-control occupancy must equal the planned block-rounded parked
 tokens divided by that capacity within two percentage points, and confirmation

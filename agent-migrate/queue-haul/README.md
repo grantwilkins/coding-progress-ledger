@@ -1550,7 +1550,8 @@ enforces the frozen randomized cell order and hashes an unchanged image once
 per stage, or records the native environment manifest. The balanced confirmation workload is derived from each hardware's
 normalization and must have a 40--60% prefill share. Live KV capacity and the
 planned block-rounded parked stock are bound into the normalization, checked
-against pre-arrival occupancy, and reproduced in confirmation. Submit A100 and
+by an exact-token pre-arrival cache-hit census against live capacity, and
+reproduced in confirmation. Submit A100 and
 H100 separately.
 Retry an invalid measurement immediately before starting the next frozen cell;
 a later retry violates the audited order and stops the stage. A valid service

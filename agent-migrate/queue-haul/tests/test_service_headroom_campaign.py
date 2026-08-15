@@ -341,6 +341,18 @@ def test_prewarm_proves_private_uncached_prefixes():
         campaign.validate_prewarm(rows, sessions)
 
 
+def test_residency_census_requires_every_block_rounded_cache_hit():
+    sessions = [SimpleNamespace(prefix_tokens=3840),
+                SimpleNamespace(prefix_tokens=977)]
+    rows = [complete({"prompt_tokens": 3840}),
+            {**complete({"prompt_tokens": 977}), "cached_tokens": 976}]
+
+    assert campaign.resident_tokens(rows, sessions) == 4816
+    with pytest.raises(RuntimeError, match="residency"):
+        campaign.resident_tokens(
+            [rows[0], {**rows[1], "cached_tokens": 960}], sessions)
+
+
 def test_engine_exit_classification_keeps_oom_but_rejects_xid(tmp_path):
     log = tmp_path / "sink.log"
     log.write_text("CUDA out of memory")
