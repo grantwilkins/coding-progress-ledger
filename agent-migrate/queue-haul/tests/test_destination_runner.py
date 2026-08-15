@@ -156,6 +156,23 @@ def test_sampler_writes_partial_rows_before_reporting_failure(tmp_path):
     assert (tmp_path / "engine.csv").read_text().splitlines()[-1].endswith(",3")
 
 
+def test_sampler_preserves_metrics_that_appear_after_first_scrape(tmp_path):
+    sampler = runner.MetricsSampler("h", 1, tmp_path / "engine.csv")
+    sampler.rows = [
+        {"monotonic_ns": 1, "vllm:num_requests_running": 0},
+        {"monotonic_ns": 2, "vllm:num_requests_running": 1,
+         "vllm:num_requests_waiting_by_reason": 3},
+    ]
+    sampler.thread = SimpleNamespace(join=lambda _timeout: None,
+                                     is_alive=lambda: False)
+
+    sampler.close()
+
+    lines = (tmp_path / "engine.csv").read_text().splitlines()
+    assert "vllm:num_requests_waiting_by_reason" in lines[0]
+    assert lines[-1].endswith(",3")
+
+
 def test_prewarm_rejects_status_200_without_token_work(monkeypatch):
     monkeypatch.setattr(runner, "_completion", lambda *_: {
         "status": 200, "error": "", "prompt_tokens": 0, "output_tokens": 0,

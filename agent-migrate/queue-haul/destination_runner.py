@@ -203,8 +203,10 @@ class MetricsSampler:
     def close(self):
         self.stop.set(); self.thread.join(10)
         if self.rows:
+            fieldnames = list(dict.fromkeys(
+                key for row in self.rows for key in row))
             with self.path.open("w", newline="") as handle:
-                writer = csv.DictWriter(handle, fieldnames=list(self.rows[0]))
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
                 writer.writeheader(); writer.writerows(self.rows)
         if self.thread.is_alive() or self.error or not self.rows:
             raise RuntimeError("destination metrics sampler failed") from self.error
