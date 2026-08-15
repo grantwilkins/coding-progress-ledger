@@ -168,6 +168,71 @@ def patch_mp_connector() -> None:
     LMCacheMPConnector._qh_bypass_patched = True
 
 
+def kv_major_attention_view(spec, kv_cache):
+    """Re-view a K/V-major paged tensor at its logical block size."""
+    import torch
+
+    if not (isinstance(kv_cache, torch.Tensor)
+            and kv_cache.ndim == 5 and kv_cache.shape[0] == 2
+            and kv_cache.shape[1] != 2):
+        raise ValueError("expected a K/V-major five-dimensional attention tensor")
+    logical_block_size = spec.block_size
+    kernel_pages = kv_cache.shape[1]
+    kernel_block_size = kv_cache.shape[2]
+    if logical_block_size % kernel_block_size:
+        raise ValueError(
+            f"logical block size {logical_block_size} is not a multiple "
+            f"of kernel block size {kernel_block_size}")
+    ratio = logical_block_size // kernel_block_size
+    if kernel_pages % ratio:
+        raise ValueError(
+            f"kernel page count {kernel_pages} is not a multiple of the "
+            f"logical/kernel block ratio {ratio}")
+    kernel_page_bytes = (2 * kv_cache[0, 0].numel()
+                         * kv_cache.element_size())
+    if kernel_page_bytes * ratio != spec.page_size_bytes:
+        raise ValueError(
+            f"{ratio} K/V-major kernel pages "
+            f"({kernel_page_bytes * ratio} bytes) do not tile the "
+            f"logical page ({spec.page_size_bytes} bytes)")
+    if not kv_cache.is_contiguous():
+        raise ValueError(
+            "K/V-major attention KV tensor must be contiguous to re-view "
+            "as logical pages")
+    logical_pages = kernel_pages // ratio
+    shape = (logical_pages, 2, logical_block_size,
+             kv_cache.shape[3], kv_cache.shape[4])
+    strides = (ratio * kv_cache.stride(1), kv_cache.stride(0),
+               kv_cache.stride(2), kv_cache.stride(3),
+               kv_cache.stride(4))
+    viewed = kv_cache.as_strided(shape, strides)
+    if not viewed[:, 0].is_contiguous() or not viewed[:, 1].is_contiguous():
+        raise ValueError("K/V-major logical K and V views are not contiguous")
+    return viewed
+
+
+def patch_kv_major_attention_groups() -> None:
+    """Support vLLM's ``(K/V, pages, block, heads, dim)`` Qwen layout."""
+    import torch
+    from lmcache.integration.vllm import kv_cache_group_edits as edits
+
+    cls = edits._SubpagedAttentionViewEdit
+    if getattr(cls, "_qh_kv_major_patched", False):
+        return
+    original_apply = cls.apply
+
+    def apply(self, spec, kv_cache):
+        if not (isinstance(kv_cache, torch.Tensor)
+                and kv_cache.ndim == 5 and kv_cache.shape[0] == 2
+                and kv_cache.shape[1] != 2):
+            return original_apply(self, spec, kv_cache)
+        return kv_major_attention_view(spec, kv_cache)
+
+    cls.apply = apply
+    cls._qh_kv_major_patched = True
+
+
 if os.environ.get("QH_LMCACHE_MODE") == "mp":
+    patch_kv_major_attention_groups()
     patch_mp_connector()
     from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector

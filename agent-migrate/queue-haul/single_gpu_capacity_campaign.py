@@ -218,6 +218,11 @@ def available_kv_gib(log: Path) -> float | None:
 
 def failure_kind(text: str) -> str:
     lower = text.lower()
+    if any(marker in lower for marker in (
+            "expected a (num_blocks, 2, block_size",
+            "kv cache group", "did not prove", "runtime geometry changed",
+            "vllm serve: error: argument")):
+        return "runtime_contract"
     if any(marker in lower for marker in ("nvrm: xid", "gpu has fallen off",
                                           "preempted", "telemetry sampler",
                                           "metrics sampler", "power sampler",
@@ -227,13 +232,14 @@ def failure_kind(text: str) -> str:
     if re.search(r"out of memory|\boom\b|not enough memory|free memory on device",
                  text, re.IGNORECASE):
         return "oom"
-    if "maximum model length" in lower or "max_model_len" in lower:
+    if "maximum model length" in lower:
         return "context_rejected"
     return "service_error"
 
 
 def recordable_outcome(exc: Exception, engine_ready: bool, kind: str) -> bool:
-    if isinstance(exc, RuntimeContractError) or kind == "infrastructure":
+    if isinstance(exc, RuntimeContractError) \
+            or kind in {"infrastructure", "runtime_contract"}:
         return False
     return engine_ready or kind in {"oom", "context_rejected"}
 

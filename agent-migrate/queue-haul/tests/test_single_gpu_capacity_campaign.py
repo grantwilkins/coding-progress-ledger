@@ -74,6 +74,11 @@ def test_runtime_contract_failure_is_not_a_capacity_kind():
     assert capacity.recordable_outcome(RuntimeError("OOM"), False, "oom")
     assert capacity.recordable_outcome(
         RuntimeError("request timed out"), True, "service_error")
+    assert capacity.failure_kind(
+        "expected a (num_blocks, 2, block_size, num_heads, head_size) "
+        "attention KV tensor") == "runtime_contract"
+    assert capacity.failure_kind(
+        "ordinary log max_model_len=32768") == "service_error"
 
 
 def test_summary_distinguishes_completed_burst_and_true_concurrency():

@@ -3,8 +3,16 @@ from __future__ import annotations
 import asyncio
 import builtins
 import threading
+from types import SimpleNamespace
 
-from lmcache_compat.connector_patch import bypass_lmcache, independent_transaction, patch_on_import
+import torch
+
+from lmcache_compat.connector_patch import (
+    bypass_lmcache,
+    independent_transaction,
+    kv_major_attention_view,
+    patch_on_import,
+)
 
 
 class FragmentedSocket:
@@ -96,3 +104,20 @@ def test_independent_transactions_use_parallel_connections(monkeypatch):
         ]), 1)
 
     assert asyncio.run(run()) == [b"YES", b"YES"]
+
+
+def test_qwen_kv_major_attention_is_reviewed_without_copy():
+    kernel = torch.arange(2 * 98 * 16 * 2 * 4, dtype=torch.bfloat16).reshape(
+        2, 98, 16, 2, 4)
+    spec = SimpleNamespace(
+        block_size=784,
+        page_size_bytes=2 * 784 * 2 * 4 * kernel.element_size(),
+    )
+
+    viewed = kv_major_attention_view(spec, kernel)
+
+    assert viewed.shape == (2, 2, 784, 2, 4)
+    assert viewed.untyped_storage().data_ptr() == kernel.untyped_storage().data_ptr()
+    assert viewed[:, 0].is_contiguous() and viewed[:, 1].is_contiguous()
+    assert torch.equal(viewed[1, 0, 0], kernel[0, 49, 0])
+    assert torch.equal(viewed[1, 1, -1], kernel[1, 97, -1])

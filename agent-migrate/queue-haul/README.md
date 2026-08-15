@@ -1627,8 +1627,11 @@ failures are retryable.
 The runtime is one A100, BF16 KV, TP1, 32K `max_model_len`, 256
 `max_num_seqs`, 90% memory, chunked prefill, APC, eager execution, and the
 hybrid KV manager. Qwen contexts are multiples of its measured 784-token
-unified block and its LMCache server uses separate object groups. Results are
-descriptive limits, not admission gates.
+unified block and its LMCache server uses separate object groups. The pinned
+vLLM 0.22 Qwen cache is K/V-major; `connector_patch.py` re-views that tensor at
+784-token logical-page granularity without copying and requires each K and V
+view to remain contiguous. The live launch must prove that group geometry.
+Results are descriptive limits, not admission gates.
 
 ```bash
 uv run python single_gpu_capacity_campaign.py prepare --seed 1 --out runs/single-gpu-capacity-a100/plan.json

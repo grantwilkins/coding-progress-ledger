@@ -450,7 +450,10 @@ the Cartesian product of the three pinned checkpoints and five contexts, BF16
 KV, TP1, `max_model_len=32768`, `max_num_seqs=256`, and synchronized widths
 `1,2,4,8,16,32,64,128,256`. Qwen prompt contexts must be exact multiples of
 its measured 784-token unified attention block. Preserve the model-specific
-LMCache chunking and separate object groups.
+LMCache chunking and separate object groups. For vLLM 0.22's Qwen K/V-major
+attention tensor, require the zero-copy 784-token logical-page view, contiguous
+per-K and per-V slices, and the live group-edit log; a tensor-layout mismatch is
+a runtime-contract failure, never a launch-capacity outcome.
 
 This stage has no performance gate. Report launchability, launch/OOM/service
 failure, the largest completely served burst, maximum observed running and
