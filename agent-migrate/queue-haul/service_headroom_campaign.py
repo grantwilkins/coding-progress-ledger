@@ -490,6 +490,21 @@ def offered_rho(plan: dict, rows: list[dict]) -> float:
                for row in measurement_rows(plan, rows)) / plan["measurement_s"]
 
 
+def offered_phase_rho(plan: dict, rows: list[dict]) -> dict[str, float]:
+    """Return the two measured-work coordinates behind additive ``rho``.
+
+    These are offered prefill/decode GPU-seconds per measurement second under
+    the frozen isolated-rate normalization.  They are not utilization.
+    """
+    measured = measurement_rows(plan, rows)
+    return {
+        "offered_prefill_rho": sum(row["prefill_work_s"] for row in measured)
+        / plan["measurement_s"],
+        "offered_decode_rho": sum(row["decode_work_s"] for row in measured)
+        / plan["measurement_s"],
+    }
+
+
 def quantile(values: list[float], q: float) -> float | None:
     return float(np.quantile(values, q)) if values else None
 
@@ -1477,13 +1492,22 @@ def build_confirmation(plan: dict, rows: list[dict]) -> dict:
             "rows": rows}
 
 
-def supported_bound(result: dict, plan: dict, core: dict, scout: dict) -> float:
+def validate_confirmation_evidence(result: dict, plan: dict, core: dict,
+                                   scout: dict) -> dict:
+    """Authenticate confirmation evidence without promoting a failed bound."""
     validate_confirmation_source(plan, core, scout)
     try:
         expected = build_confirmation(plan, result["rows"])
     except (KeyError, RuntimeError, TypeError, ValueError) as exc:
         raise RuntimeError("confirmation result is not eligible for planner use") from exc
-    if result != expected or not expected["planner_usable"]:
+    if result != expected:
+        raise RuntimeError("confirmation result is not eligible for planner use")
+    return expected
+
+
+def supported_bound(result: dict, plan: dict, core: dict, scout: dict) -> float:
+    expected = validate_confirmation_evidence(result, plan, core, scout)
+    if not expected["planner_usable"]:
         raise RuntimeError("confirmation result is not eligible for planner use")
     return float(result["supported_bound"])
 

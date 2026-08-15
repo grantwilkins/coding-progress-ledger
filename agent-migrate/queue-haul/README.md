@@ -1504,7 +1504,7 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 - `destination_campaign.py` and `destination_runner.py`: targeted destination
   service and loaded-migration evidence.
 - `service_headroom_campaign.py`: exact-stack A100/H100 incumbent-latency curves
-  against Queue-Haul's normalized destination service load.
+  against Queue-Haul's offered normalized prefill/decode service work.
 - `service_surface_runner.py` and `service_profile_reduce.py`: isolated and
   mixed service profiles.
 
@@ -1526,6 +1526,7 @@ confirmation plan, then reduce it:
 uv run python service_headroom_campaign.py prepare-confirmation --plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --hardware a100 --out runs/service-headroom/a100-confirmation.json
 uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/a100-confirmation.json --cell-id CELL --normalization /datadrive/service-headroom/a100-normalization.json --out /datadrive/service-headroom-confirmation
 uv run python service_headroom_campaign.py reduce-confirmation --plan runs/service-headroom/a100-confirmation.json --core-plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --runs /datadrive/service-headroom-confirmation --out /datadrive/service-headroom/a100-confirmed.json
+uv run python plot_service_headroom.py --plan runs/service-headroom/plan.json --normalization /datadrive/service-headroom/a100-normalization.json --scout /datadrive/service-headroom/a100-scout.json --confirmation-plan runs/service-headroom/a100-confirmation.json --confirmed /datadrive/service-headroom/a100-confirmed.json --out outputs/service-headroom-a100/service-headroom
 ```
 
 Only a confirmation result accepted by `supported_bound()` supplies a service
@@ -1533,6 +1534,8 @@ limit; that loader rechecks the exact core plan, scout, confirmation plan, and
 all held-out decisions. It returns a total normalized-load cap, so P1/P2 use
 `b_f + b_g + sum_i(w_i,f + w_i,g) <= rho_safe`; available added headroom is
 `rho_safe - (b_f + b_g)`.
+`validate_confirmation_evidence()` separately authenticates rejected held-out
+evidence for analysis and plotting; it never supplies a planner bound.
 The paper figure is P90, matching the DistServe-style comparison; P99 remains
 null unless a cell has at least 1,000 incumbent completions. TTFT and TPOT
 targets are declared evaluation inputs; raw P90 curves, joint
@@ -1570,6 +1573,31 @@ a later retry violates the audited order and stops the stage. A valid service
 failure is never retried away.
 See `DATA_TO_COLLECT.md` for the 54-cell discovery and 18-cell confirmation
 matrix per hardware and the claim boundary.
+
+The completed A100 run is in `outputs/service-headroom-a100-20260815/`. All 54
+discovery cells and all 18 unseen confirmation cells completed in frozen order;
+the confirmation service had zero restarts, invalid cells, or cache mismatches.
+The isolated normalization was 16,758.93 prefill tok/s and 3,597.59 decode
+tok/s. Discovery selected `rho=0.70` as the candidate and `rho=0.85` as the
+first fail for both directional slices. Held out, however, every `rho=0.70`
+mix passed only two of three blocks under the one-fitted-request stability
+contract. Prefill-heavy `rho=0.85` failed TPOT in all three blocks; decode-heavy
+`rho=0.85` passed one of three blocks and failed stability in two. The balanced
+`rho=0.70` check also passed only two of three. The reducer therefore correctly
+reports `planner_usable=false` and no supported scalar bound.
+
+Interpret `rho` only as offered normalized phase work,
+`rho_f + rho_d`, computed from exact offered tokens and isolated phase rates;
+it is not measured GPU utilization and is not composition-invariant. The
+committed phase CSV reconstructs both coordinates for every aggregate point.
+At total `rho` near 0.70, held-out prefill-heavy, balanced, and decode-heavy P90
+TTFT/mean-TPOT medians are respectively 234.7/59.7 ms, 152.9/42.7 ms, and
+131.7/37.2 ms. This composition dependence and the rejected scalar promotion
+motivate a follow-up conservative feasible region over `(rho_f,rho_d)`. On a
+disaggregated destination that may reduce to separate phase limits; on a
+colocated GPU it must retain the measured interference frontier. The present
+three sampled rays are descriptive evidence, not a fitted two-dimensional
+admission surface.
 
 The verified 2026-07-23 destination bundle is retained under
 `outputs/destination-v7-20260722/`. Do not treat its service rows as an accepted

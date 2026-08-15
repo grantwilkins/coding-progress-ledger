@@ -246,12 +246,19 @@ This is a measured calibration of the existing service constraint, not a new
 serving simulator. Hold a deterministic incumbent stream fixed at
 `rho_b=0.25`, preload the same fixed, predeclared pre-arrival parked stock in
 every main cell, and add Queue-Haul work until total scheduled load reaches
-`rho={0.25,0.50,0.70,0.85,0.95,1.10}`. The x coordinate is recomputed from all
+`rho={0.25,0.50,0.70,0.85,0.95,1.10}`. This scalar is offered normalized phase
+work, not measured GPU utilization. The x coordinate is recomputed from all
 offered work during the frozen measurement window:
 
 ```text
 rho = sum_r(append_r / R_P(4096) + output_r / R_D(4096)) / window_s.
 ```
+
+Preserve the two components before summation:
+`rho_f=sum_r append_r/R_P/window_s` and
+`rho_d=sum_r output_r/R_D/window_s`. A scalar may be promoted only as a
+conservative envelope across tested mixtures; composition-dependent latency or
+stability must remain visible in `(rho_f,rho_d)` space.
 
 No migration bytes move during this curve: it isolates the steady-state
 serving effect after sessions are placed. Existing replay/KV experiments remain
@@ -373,6 +380,18 @@ not a maximum hardware-occupancy claim, universal latency equation, or fleet
 reliability guarantee. The confirmed value is a total-load cap:
 `b_f + b_g + sum_i(w_i,f + w_i,g) <= rho_safe`. Available added headroom is
 `rho_safe - (b_f + b_g)`, never `rho_safe` itself.
+
+The 2026-08-15 A100 execution completed 54/54 discovery and 18/18 held-out cells
+without a collection retry, but did not confirm a scalar cap. At the selected
+`rho=0.70`, prefill-heavy, balanced, and decode-heavy each passed only two of
+three unseen blocks. Prefill-heavy `rho=0.85` failed the 100-ms P90 mean-TPOT
+target in all three blocks, while decode-heavy `rho=0.85` was queue-stable in
+one block and unstable in two despite repeatable latency. Consequently the
+frozen reducer reports no planner-usable value. Retain these curves as
+composition-sensitivity evidence. A planner-grade follow-up must sample a
+preregistered two-dimensional `(rho_f,rho_d)` lattice, confirm a conservative
+interior monotone hull, and use separate phase limits for genuinely
+disaggregated pools rather than relabeling the rejected scalar boundary.
 
 ## Prefill/decode holding follow-up (optional model promotion)
 

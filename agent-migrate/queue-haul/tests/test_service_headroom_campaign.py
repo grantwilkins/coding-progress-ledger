@@ -114,6 +114,12 @@ def test_incumbent_trace_is_paired_and_offered_work_is_context_normalized():
     assert incumbent(baseline) == incumbent(loaded)
     assert campaign.offered_rho(plan, baseline) == pytest.approx(.25, rel=.01)
     assert campaign.offered_rho(plan, loaded) == pytest.approx(.95, rel=.01)
+    phases = campaign.offered_phase_rho(plan, loaded)
+    assert phases["offered_prefill_rho"] > 0
+    assert phases["offered_decode_rho"] > 0
+    assert sum(phases.values()) == pytest.approx(
+        campaign.offered_rho(plan, loaded), abs=1e-12,
+    )
     assert campaign.phase_share(campaign.SHAPES["prefill_heavy"], RATES) > .9
     assert campaign.phase_share(campaign.SHAPES["decode_heavy"], RATES) < .05
     campaign.validate_rates(RATES)
@@ -752,6 +758,11 @@ def test_confirmation_disagreement_withholds_the_bound(tmp_path):
     result = campaign.reduce_confirmation(plan, tmp_path, core, scout)
 
     assert not result["planner_usable"] and result["supported_bound"] is None
+    assert campaign.validate_confirmation_evidence(
+        result, plan, core, scout,
+    ) == result
+    with pytest.raises(RuntimeError, match="not eligible for planner use"):
+        campaign.supported_bound(result, plan, core, scout)
 
 
 def test_confirmation_reduction_requires_the_bound_source_scout(tmp_path):
