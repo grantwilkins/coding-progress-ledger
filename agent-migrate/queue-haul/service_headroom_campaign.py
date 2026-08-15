@@ -740,6 +740,18 @@ def settle_futures(futures) -> tuple[list[dict], Exception | None]:
     return rows, error
 
 
+def synchronized_submit(executor, items, fn):
+    items = list(items)
+    ready, gate = threading.Barrier(len(items) + 1), threading.Event()
+    def run(item):
+        ready.wait()
+        gate.wait()
+        return fn(item)
+    futures = [executor.submit(run, item) for item in items]
+    ready.wait()
+    return futures, gate
+
+
 def validate_stage_inputs(plan: dict, rates: dict, identity: dict) -> None:
     if rates["runtime_identity_sha256"] != identity_sha(identity) \
             or rates.get("kv_capacity_tokens", 0) <= 0 \
@@ -878,16 +890,16 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
             power.start()
             try:
                 wait_sampler(sampler)
-                gate = threading.Event()
                 def issue(item):
-                    gate.wait()
                     time.sleep(max(0, epoch / 1e9 - time.monotonic()))
                     return serving.issue(
                         cfg.host, stack.port, cfg.model, item[1], item[0], epoch,
                         plan["request_timeout_s"], True,
                     )
                 with ThreadPoolExecutor(max_workers=cell["concurrency"]) as executor:
-                    futures = [executor.submit(issue, item) for item in enumerate(group)]
+                    futures, gate = synchronized_submit(
+                        executor, enumerate(group), issue,
+                    )
                     epoch = time.monotonic_ns() + 100_000_000
                     gate.set()
                 requests, error = settle_futures(futures)

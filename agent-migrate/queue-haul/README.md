@@ -1541,7 +1541,8 @@ The paper figure is P90, matching the DistServe-style comparison; P99 remains
 null unless a cell has at least 1,000 incumbent completions. TTFT and TPOT
 targets are declared evaluation inputs; raw P90 curves, joint
 offered-request attainment, physical stability, and censoring remain in the
-outputs. The harness preserves exact token IDs/events, labeled Prometheus
+outputs. Calibration releases its common request epoch only after every worker
+is ready. The harness preserves exact token IDs/events, labeled Prometheus
 scrapes, queue/KV/power series, partial failures, cache proof, and complete
 runtime identity, including the exact vLLM, LMCache, and Redis commands. It
 enforces the frozen randomized cell order and hashes an unchanged image once

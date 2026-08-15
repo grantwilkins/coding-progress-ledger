@@ -34,7 +34,7 @@ from __future__ import annotations
 import json
 import math
 import copy
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
@@ -571,6 +571,18 @@ def test_reducer_rejects_a_stale_or_mislabeled_cell(tmp_path):
 
     with pytest.raises(RuntimeError, match="identity"):
         campaign.reduce_calibration(plan, "a100", tmp_path)
+
+
+def test_calibration_workers_are_ready_before_release():
+    called = []
+    with ThreadPoolExecutor(max_workers=128) as executor:
+        futures, gate = campaign.synchronized_submit(
+            executor, range(128), called.append,
+        )
+        assert not called
+        gate.set()
+    assert [future.result() for future in futures] == [None] * 128
+    assert sorted(called) == list(range(128))
 
 
 def confirmation_artifacts() -> tuple[dict, dict, dict]:
