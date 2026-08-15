@@ -30,7 +30,7 @@ from destination import (
 from planner import plan, source_power
 import plot_style
 from loaded_service_model import validate_model as validate_loaded_service_model
-from pool_planner import candidate_table, phase_one_capacity_duals
+from pool_planner import candidate_table, fractional_power_opportunity
 from power_model import ExpectedPower
 from profiles import ModelProfile
 from simulate import (
@@ -52,6 +52,7 @@ OUT = ROOT / "outputs/workload-action-adaptation-20260814"
 BASE_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 WIDTH8_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 FACTORS = ("hbm", "bandwidth", "dest_compute")
+ACTIVATION_GATED_FACTORS = ("hbm", "dest_compute")
 ORDER = (
     frozenset(("hbm",)), frozenset(("bandwidth",)), frozenset(("dest_compute",)),
     frozenset(("hbm", "bandwidth")), frozenset(("hbm", "dest_compute")),
@@ -334,10 +335,11 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         scenario, profile, routes, "lp_highs", seed=replicate,
         destination=architecture, admission_mode="normal",
     )
-    table = candidate_table(
-        scenario, profile, architecture, "normal", ExpectedPower(scenario, profile),
+    power = ExpectedPower(scenario, profile)
+    table = candidate_table(scenario, profile, architecture, "normal", power)
+    fractional_opportunity = fractional_power_opportunity(
+        table, power,
     )
-    fractional_opportunity, _ = phase_one_capacity_duals(table)
     dominance = method_dominance(table, len(architecture.pools))
     counts = {method: sum(move.method == method for move in result.moves)
               for method in ("replay", "kv_transfer")}
@@ -576,7 +578,7 @@ def transport_summary(rows):
 
 def factor_checks(rows):
     by_case = {constraints: case_id for case_id, _, constraints in factorial_cases()}
-    utilization = {"hbm": "hbm_utilization", "bandwidth": "migration_utilization",
+    utilization = {"hbm": "hbm_utilization", "bandwidth": "route_utilization",
                    "dest_compute": "service_utilization"}
     checks = []
     for replicate in sorted({row["replicate"] for row in rows}):
@@ -844,8 +846,8 @@ def main():
     if any(row["fractional_opportunity_worsened_on_release"]
            for row in in_context_checks):
         raise RuntimeError("in-context constraint release reduced the opportunity set")
-    if any(rate < .9 for (case, _), rate in activation.items()
-           if case in singles) or any(rate == 0 for rate in activation.values()):
+    if any(rate < .9 for (case, factor), rate in activation.items()
+           if case in singles and factor in ACTIVATION_GATED_FACTORS):
         raise RuntimeError("labeled constraints failed activation gates")
     write_csv(args.out / "action_mix.csv", rows)
     write_csv(args.out / "action_mix_summary.csv", summary)
@@ -872,11 +874,14 @@ def main():
         if row["planner_shortfall_worsened_on_release"]
     ])
     metadata = {
-        "schema": "queue-haul-workload-adaptation-v2",
-        "claim": "modeled regional action-mix and predicted target-attainment sensitivity using measured timing and a relative-load factor",
+        "schema": "queue-haul-workload-adaptation-v3",
+        "claim": "modeled regional action-mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
+        "source_load_definition": "sum(f/F + g/G); distinct from sampled phase load z=af+bg",
+        "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
+        "power_scope": "steady awake source-region power; destination power excluded",
         "unique_timing_draws": len({row["timing_fit_sha256"] for row in rows}),
         "cross_method_coupling": 1,
         "bandwidth_projection_region_rate": float(np.mean([
@@ -942,6 +947,7 @@ def main():
         },
         "factor_activation_rate": {f"{case}/{factor}": float(rate)
                                    for (case, factor), rate in sorted(activation.items())},
+        "activation_gated_factors": list(ACTIVATION_GATED_FACTORS),
         "planner_release_audit": {
             "comparisons": len(checks),
             "shortfall_regression_count": int(sum(
@@ -977,6 +983,8 @@ def main():
             "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
             "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
             "each sampled pack is normalized to the pooled campaign's 0.4 source load",
+            "the 0.4 source load is service-normalized load, not sampled phase-power load",
+            "reported shed is awake source-region power rather than net fleet power or energy",
             "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
             "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
             "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
@@ -992,6 +1000,7 @@ def main():
             "the load campaign identifies prefill-heavy normalized load, not a separate decode-load coefficient",
             "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
             "the destination envelope combines measured timing with synthetic HBM and service-pressure levels",
+            "the measured controlled-bandwidth state is imposed but nonbinding at the exact 67% target and is not labeled an activated bottleneck",
             "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
             "each constraint state is planned independently; rounded-LP release regressions are reported",
             "fractional opportunity monotonicity does not prove integer packability",

@@ -1,5 +1,5 @@
 {
-  "claim": "modeled regional predicted power-attainment sensitivity using measured timing and a relative-load factor",
+  "claim": "modeled regional predicted source-power attainment with exact nonlinear one-source power targets",
   "factor_levels": {
     "bandwidth": [
       "natural",
@@ -31,6 +31,7 @@
     "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
     "each workload draw and global constraint state receives equal weight",
     "the frontier remains modeled rather than hardware-measured",
+    "reported shed is awake source-region power rather than net fleet power or energy",
     "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
     "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
     "the relative load factor is transported from a fixed width-eight pack to regional concurrency-one timing as a sensitivity",
@@ -50,6 +51,8 @@
     "deadline_blind"
   ],
   "pooled_cases": 800,
+  "power_scope": "steady awake source-region power; destination power excluded",
+  "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
   "regions": [
     "east",
     "germany"
@@ -67,7 +70,7 @@
     1.0
   ],
   "samples": 100,
-  "schema": "queue-haul-workload-power-frontier-v2",
+  "schema": "queue-haul-workload-power-frontier-v3",
   "seed": 1001,
   "sessions_per_pack": 28,
   "solvers": {
@@ -79,6 +82,7 @@
     "queue_haul_lp": "lp_highs",
     "replay_only": "replay_only"
   },
+  "source_load_definition": "sum(f/F + g/G)=0.4; distinct from sampled phase load z=af+bg",
   "surface_validation": {
     "coding-c1-c4/development": {
       "false_feasible_at_25s": 19,

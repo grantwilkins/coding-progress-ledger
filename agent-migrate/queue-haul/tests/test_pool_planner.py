@@ -28,6 +28,9 @@ Plausible wrong implementations:
 - Treat unused early capacity as if it could serve transition work arriving late.
 - Credit node shutdown during session selection instead of only after planning.
 - Rank sessions only by initial marginal power and miss a feasible source prefix.
+- Sum initial marginal watts instead of inverting the nonlinear one-source phase curve.
+- Apply one additive phase-load target across multiple source instances.
+- Correct the LP power target but leave fixed-action baselines on marginal watts.
 - Assign every Lagrangian prefix member to the same cheap pool and fail concrete packing.
 - Serialize replay and KV work despite having separate measured aggregate caps.
 - Relax aggregate method constraints but retain cross-method serialization in packing.
@@ -86,9 +89,11 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           _source_removed_gain,
                           _recover_lagrangian, _service_trace, candidate_table,
                           destination_service_execution, exact_replica_assignment,
-                          phase_one_capacity_duals, service_debt,
+                          fractional_power_opportunity, phase_one_capacity_duals,
+                          service_debt,
                           validate_destination_execution)
 from power_model import ExpectedPower
+from profiles import PhasePower
 from simulate import (PlannedMove, PowerNode, ServingInstance, SessionExecution,
                       SimSession, NetworkLink, execute)
 from test_execution_simulator import model
@@ -96,6 +101,74 @@ from test_planner import PATHS, problem
 
 
 FP = CompatibilityFingerprint("m", "t", "log", "kv")
+
+
+def _phase_target_case(tmp_path, split_sources=False):
+    profile = model(tmp_path, tp=1)
+    phase = PhasePower(
+        10, 90, 1, 1, ((0, 0), (3, 0), (0, 3)), 0, 1, (), "0" * 64,
+    )
+    profile = replace(
+        profile, cases={"central": replace(profile.case(), phase_power=phase)},
+        max_power_load=3,
+    )
+    base = problem()
+    sessions = (
+        replace(base.sessions[0], session_id="large-a", expected_f=1, expected_g=0),
+        replace(base.sessions[1], session_id="large-b",
+                source_instance="s1" if split_sources else "s0",
+                expected_f=1, expected_g=0),
+        replace(base.sessions[0], session_id="small", expected_f=.1, expected_g=0),
+    )
+    scenario = replace(base, sessions=sessions)
+    initial = source_power(scenario, profile)
+    return profile, replace(scenario, power_limit_w=initial - 30), initial
+
+
+@pytest.mark.parametrize("solver", (
+    "lp_highs", "greedy", "isolated_fastest", "replay_only", "kv_only",
+))
+def test_phase_power_target_uses_exact_removed_load_for_all_power_aware_policies(
+        tmp_path, solver):
+    profile, scenario, initial = _phase_target_case(tmp_path)
+
+    result = plan(
+        scenario, profile, PATHS, solver, destination=architecture(),
+        admission_mode="normal",
+    )
+
+    # P(2.1)-P(.1)=52.79 W, while either one-session removal sheds <16 W.
+    assert {move.session_id for move in result.moves} == {"large-a", "large-b"}
+    assert initial - result.planned_source_power_w >= 30
+
+
+def test_phase_power_target_rejects_multiple_source_instances(tmp_path):
+    profile, scenario, _ = _phase_target_case(tmp_path, split_sources=True)
+
+    with pytest.raises(ValueError, match="one source instance"):
+        plan(
+            scenario, profile, PATHS, "lp_highs", destination=architecture(),
+            admission_mode="normal",
+        )
+
+
+def test_fractional_phase_opportunity_reports_joint_nonlinear_watts(tmp_path):
+    profile, scenario, _ = _phase_target_case(tmp_path)
+    power = ExpectedPower(scenario, profile)
+    sessions = scenario.sessions
+    candidates = tuple(
+        Candidate(i, "replay", 0, power.marginal(session.session_id),
+                  1, 1, (), 0, (0, 0), 0)
+        for i, session in enumerate(sessions)
+    )
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(len(sessions))),
+        csr_matrix((0, len(sessions))), (), (), (), 9,
+    )
+    expected = power.drain_gain(session.session_id for session in sessions)
+
+    assert sum(candidate.gain_w for candidate in candidates) < expected
+    assert fractional_power_opportunity(table, power) == pytest.approx(expected)
 
 
 def test_public_solver_surface_hard_fails_retired_greedies(tmp_path):

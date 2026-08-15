@@ -157,8 +157,8 @@ def main():
     ))
     write_plot(summary, args.out)
     metadata = {
-        "schema": "queue-haul-workload-power-frontier-v2",
-        "claim": "modeled regional predicted power-attainment sensitivity using measured timing and a relative-load factor",
+        "schema": "queue-haul-workload-power-frontier-v3",
+        "claim": "modeled regional predicted source-power attainment with exact nonlinear one-source power targets",
         "samples": args.samples, "factor_states": len(adaptation.ORDER),
         "pooled_cases": args.samples * len(adaptation.ORDER),
         "sessions_per_pack": args.sessions, "seed": args.seed,
@@ -166,6 +166,9 @@ def main():
         "policies": list(SOLVERS), "solvers": SOLVERS, "workload": workload,
         "factor_levels": adaptation.LEVELS, "regions": list(adaptation.REGIONS),
         "normalization": "safely attained watts / draw-specific removable watts",
+        "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
+        "power_scope": "steady awake source-region power; destination power excluded",
+        "source_load_definition": "sum(f/F + g/G)=0.4; distinct from sampled phase load z=af+bg",
         "surface_validation": adaptation.validation_summary(validation),
         "inputs": {
             str(path.relative_to(adaptation.ROOT)): adaptation.file_hash(path)
@@ -183,6 +186,7 @@ def main():
             "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
             "each workload draw and global constraint state receives equal weight",
             "the frontier remains modeled rather than hardware-measured",
+            "reported shed is awake source-region power rather than net fleet power or energy",
             "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
             "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
             "the relative load factor is transported from a fixed width-eight pack to regional concurrency-one timing as a sensitivity",

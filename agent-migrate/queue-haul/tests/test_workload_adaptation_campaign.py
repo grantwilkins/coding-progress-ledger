@@ -100,6 +100,13 @@ def test_one_paired_draw_conserves_sessions_and_target():
     ) for row in rows)
     checks = campaign.factor_checks(rows)
     assert len(checks) == 12
+    bandwidth = next(row for row in checks
+                     if row["case_id"] == "bandwidth"
+                     and row["factor"] == "bandwidth")
+    assert bandwidth["utilization"] == next(
+        row["route_utilization"] for row in rows
+        if row["case_id"] == "bandwidth"
+    )
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
 
@@ -182,7 +189,7 @@ def test_opportunity_and_rounded_release_outcomes_are_distinct():
             "power_shortfall_w": 1.0 if not constraints else 0.0,
             "target_met": bool(constraints),
             "fractional_lp_opportunity_w": 10 - len(constraints),
-            "hbm_utilization": 0, "migration_utilization": 0,
+            "hbm_utilization": 0, "route_utilization": 0,
             "service_utilization": 0,
         })
 

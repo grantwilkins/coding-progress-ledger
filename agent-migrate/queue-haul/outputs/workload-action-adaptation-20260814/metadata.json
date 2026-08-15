@@ -1,4 +1,8 @@
 {
+  "activation_gated_factors": [
+    "hbm",
+    "dest_compute"
+  ],
   "bandwidth_projection_region_rate": 0.115,
   "candidate_method_dominance": {
     "candidate_equivalent": 0,
@@ -25,19 +29,19 @@
       "candidate_neither"
     ]
   },
-  "claim": "modeled regional action-mix and predicted target-attainment sensitivity using measured timing and a relative-load factor",
+  "claim": "modeled regional action-mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
   "cross_method_coupling": 1,
   "factor_activation_rate": {
-    "bandwidth-dest_compute-hbm/bandwidth": 0.347,
+    "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 1.0,
-    "bandwidth-dest_compute-hbm/hbm": 0.472,
-    "bandwidth-dest_compute/bandwidth": 0.553,
+    "bandwidth-dest_compute-hbm/hbm": 0.241,
+    "bandwidth-dest_compute/bandwidth": 0.0,
     "bandwidth-dest_compute/dest_compute": 1.0,
-    "bandwidth-hbm/bandwidth": 0.397,
+    "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 0.999,
-    "bandwidth/bandwidth": 0.992,
+    "bandwidth/bandwidth": 0.002,
     "dest_compute-hbm/dest_compute": 1.0,
-    "dest_compute-hbm/hbm": 0.472,
+    "dest_compute-hbm/hbm": 0.241,
     "dest_compute/dest_compute": 1.0,
     "hbm/hbm": 0.999
   },
@@ -71,6 +75,8 @@
     "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
     "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
     "each sampled pack is normalized to the pooled campaign's 0.4 source load",
+    "the 0.4 source load is service-normalized load, not sampled phase-power load",
+    "reported shed is awake source-region power rather than net fleet power or energy",
     "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
     "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
     "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
@@ -86,6 +92,7 @@
     "the load campaign identifies prefill-heavy normalized load, not a separate decode-load coefficient",
     "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
     "the destination envelope combines measured timing with synthetic HBM and service-pressure levels",
+    "the measured controlled-bandwidth state is imposed but nonbinding at the exact 67% target and is not labeled an activated bottleneck",
     "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
     "each constraint state is planned independently; rounded-LP release regressions are reported",
     "fractional opportunity monotonicity does not prove integer packability",
@@ -109,10 +116,10 @@
       },
       "selected": {
         "above": 0,
-        "below": 32005,
-        "denominator": 153214,
-        "outside": 32005,
-        "outside_rate": 0.20889083243045675
+        "below": 7949,
+        "denominator": 81936,
+        "outside": 7949,
+        "outside_rate": 0.09701474321421598
       }
     },
     "context": {
@@ -124,11 +131,11 @@
         "outside_rate": 0.4690037631214102
       },
       "selected": {
-        "above": 34346,
-        "below": 18690,
-        "denominator": 153214,
-        "outside": 53036,
-        "outside_rate": 0.34615635646873
+        "above": 8292,
+        "below": 16626,
+        "denominator": 81936,
+        "outside": 24918,
+        "outside_rate": 0.3041154071470416
       },
       "sessions": {
         "above": 10787,
@@ -142,16 +149,16 @@
       "kv_transfer": {
         "bandwidth_outside": 0,
         "bandwidth_outside_rate": 0.0,
-        "context_outside": 26630,
-        "context_outside_rate": 0.48167709727598307,
-        "denominator": 55286
+        "context_outside": 11742,
+        "context_outside_rate": 0.3192322331575227,
+        "denominator": 36782
       },
       "replay": {
-        "bandwidth_outside": 32005,
-        "bandwidth_outside_rate": 0.32682174658933094,
-        "context_outside": 26406,
-        "context_outside_rate": 0.26964708765623724,
-        "denominator": 97928
+        "bandwidth_outside": 7949,
+        "bandwidth_outside_rate": 0.17604198963546971,
+        "context_outside": 13176,
+        "context_outside_rate": 0.29180139079594275,
+        "denominator": 45154
       }
     }
   },
@@ -202,14 +209,16 @@
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 188,
+    "shortfall_regression_count": 66,
     "shortfall_regression_max_w": 15.23620976452311,
-    "shortfall_regression_median_w": 3.0049134982664683,
-    "shortfall_regression_p90_w": 7.971582043230725,
-    "shortfall_regression_rate": 0.015666666666666666,
-    "target_loss_count": 106,
-    "target_loss_rate": 0.008833333333333334
+    "shortfall_regression_median_w": 3.973182658115334,
+    "shortfall_regression_p90_w": 7.694663249083703,
+    "shortfall_regression_rate": 0.0055,
+    "target_loss_count": 0,
+    "target_loss_rate": 0.0
   },
+  "power_scope": "steady awake source-region power; destination power excluded",
+  "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
   "regional_timing_destination_prefill_loads": [
     0.0
   ],
@@ -239,15 +248,16 @@
   "route_compute_overlap": true,
   "route_endpoint_composition": "max(route time, fully shared Replay/KV endpoint work)",
   "samples": 1000,
-  "schema": "queue-haul-workload-adaptation-v2",
+  "schema": "queue-haul-workload-adaptation-v3",
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 55286,
-    "not_moved": 70786,
-    "replay": 97928
+    "kv_transfer": 36782,
+    "not_moved": 142064,
+    "replay": 45154
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
+  "source_load_definition": "sum(f/F + g/G); distinct from sampled phase load z=af+bg",
   "support_restricted_workload_sensitivity": {
     "comparison": "2,048-14,336-token workload resample with paired timing and power draws; not a within-pack counterfactual",
     "loaded_factor_transport": {
@@ -268,10 +278,10 @@
         },
         "selected": {
           "above": 0,
-          "below": 33967,
-          "denominator": 184489,
-          "outside": 33967,
-          "outside_rate": 0.1841139580137569
+          "below": 4447,
+          "denominator": 66852,
+          "outside": 4447,
+          "outside_rate": 0.0665200741937414
         }
       },
       "context": {
@@ -285,7 +295,7 @@
         "selected": {
           "above": 0,
           "below": 0,
-          "denominator": 184489,
+          "denominator": 66852,
           "outside": 0,
           "outside_rate": 0.0
         },
@@ -303,31 +313,31 @@
           "bandwidth_outside_rate": 0.0,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 52924
+          "denominator": 35347
         },
         "replay": {
-          "bandwidth_outside": 33967,
-          "bandwidth_outside_rate": 0.2581765667160719,
+          "bandwidth_outside": 4447,
+          "bandwidth_outside_rate": 0.1411521980637994,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 131565
+          "denominator": 31505
         }
       }
     },
     "selected_session_totals": {
-      "kv_transfer": 52924,
-      "not_moved": 39511,
-      "replay": 131565
+      "kv_transfer": 35347,
+      "not_moved": 157148,
+      "replay": 31505
     },
     "target_met_rate": {
-      "All bound": 0.668,
-      "Bandwidth": 0.996,
-      "Bandwidth + compute": 0.67,
-      "Dest. compute": 0.67,
-      "HBM": 0.994,
-      "HBM + bandwidth": 0.994,
-      "HBM + compute": 0.668,
-      "None bound": 0.996
+      "All bound": 0.814,
+      "Bandwidth": 1.0,
+      "Bandwidth + compute": 0.814,
+      "Dest. compute": 0.814,
+      "HBM": 1.0,
+      "HBM + bandwidth": 1.0,
+      "HBM + compute": 0.814,
+      "None bound": 1.0
     },
     "workload": {
       "excluded_states": 162,
@@ -462,14 +472,14 @@
   },
   "target_fraction": 0.6666666666666666,
   "target_met_rate": {
-    "All bound": 0.362,
-    "Bandwidth": 0.974,
-    "Bandwidth + compute": 0.364,
-    "Dest. compute": 0.364,
-    "HBM": 0.987,
-    "HBM + bandwidth": 0.987,
-    "HBM + compute": 0.362,
-    "None bound": 0.974
+    "All bound": 0.521,
+    "Bandwidth": 0.996,
+    "Bandwidth + compute": 0.523,
+    "Dest. compute": 0.523,
+    "HBM": 0.996,
+    "HBM + bandwidth": 0.996,
+    "HBM + compute": 0.521,
+    "None bound": 0.996
   },
   "unique_timing_draws": 1000,
   "workload": {

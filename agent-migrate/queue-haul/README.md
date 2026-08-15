@@ -1494,6 +1494,17 @@ with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
 weight using `plot-reduced --out <packing-results> --pooled-with
 <frontier-results>`; this pooling also applies to the maximum-session,
 maximum-session-per-watt, and existing per-watt CDFs.
+`workload_adaptation_campaign.py` resamples the measured coding templates and
+paired timing/power calibrations across the eight HBM, bandwidth, and
+destination-compute states. Its phase-aware planner is scoped to one awake
+source: it converts requested watts exactly into additive removed phase load,
+hard-fails multiple-source phase topologies, and verifies nonlinear source
+watts after packing. The fixed 0.4 workload normalization is service load
+`sum(f/F + g/G)`, not sampled phase load `af + bg`. The action and
+`workload_power_frontier.py` outputs report steady source-region power only;
+destination power and net fleet energy are outside their claim. The measured
+controlled-bandwidth state is retained as a null intervention at the exact
+67% target; only HBM and destination compute are required to activate alone.
 `simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
 10K-session idle snapshots: three trace seeds for each workload and five
 trace-derived context anchors. It compares Queue-Haul, static and Lagrangian
