@@ -2,12 +2,12 @@
   "bandwidth_projection_region_rate": 0.115,
   "candidate_method_dominance": {
     "candidate_equivalent": 0,
-    "candidate_incomparable": 11104,
+    "candidate_incomparable": 125216,
     "candidate_kv_dominates": 0,
     "candidate_kv_only": 0,
     "candidate_matched_pairs": 444312,
     "candidate_neither": 3688,
-    "candidate_replay_dominates": 433208,
+    "candidate_replay_dominates": 319096,
     "candidate_replay_only": 0
   },
   "candidate_method_dominance_definition": {
@@ -25,21 +25,21 @@
       "candidate_neither"
     ]
   },
-  "claim": "modeled migration-volume and target-attainment lower-bound sensitivity using a measured relative-load factor",
+  "claim": "modeled regional action-mix and predicted target-attainment sensitivity using measured timing and a relative-load factor",
   "cross_method_coupling": 1,
   "factor_activation_rate": {
-    "bandwidth-dest_compute-hbm/bandwidth": 0.569,
+    "bandwidth-dest_compute-hbm/bandwidth": 0.347,
     "bandwidth-dest_compute-hbm/dest_compute": 1.0,
-    "bandwidth-dest_compute-hbm/hbm": 0.414,
-    "bandwidth-dest_compute/bandwidth": 0.617,
+    "bandwidth-dest_compute-hbm/hbm": 0.472,
+    "bandwidth-dest_compute/bandwidth": 0.553,
     "bandwidth-dest_compute/dest_compute": 1.0,
-    "bandwidth-hbm/bandwidth": 0.778,
-    "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 1.0,
+    "bandwidth-hbm/bandwidth": 0.397,
+    "bandwidth-hbm/hbm": 0.999,
+    "bandwidth/bandwidth": 0.992,
     "dest_compute-hbm/dest_compute": 1.0,
-    "dest_compute-hbm/hbm": 0.386,
+    "dest_compute-hbm/hbm": 0.472,
     "dest_compute/dest_compute": 1.0,
-    "hbm/hbm": 0.998
+    "hbm/hbm": 0.999
   },
   "factor_levels": {
     "bandwidth": [
@@ -73,7 +73,8 @@
     "each sampled pack is normalized to the pooled campaign's 0.4 source load",
     "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
     "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
-    "route plus shared destination work is a conservative no-overlap envelope",
+    "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
+    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases",
     "timing audits are grouped retrospective checks, not untouched validation sets",
     "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
     "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
@@ -108,10 +109,10 @@
       },
       "selected": {
         "above": 0,
-        "below": 33391,
-        "denominator": 150737,
-        "outside": 33391,
-        "outside_rate": 0.22151827354929446
+        "below": 32005,
+        "denominator": 153214,
+        "outside": 32005,
+        "outside_rate": 0.20889083243045675
       }
     },
     "context": {
@@ -123,11 +124,11 @@
         "outside_rate": 0.4690037631214102
       },
       "selected": {
-        "above": 32070,
-        "below": 18658,
-        "denominator": 150737,
-        "outside": 50728,
-        "outside_rate": 0.3365331670392803
+        "above": 34346,
+        "below": 18690,
+        "denominator": 153214,
+        "outside": 53036,
+        "outside_rate": 0.34615635646873
       },
       "sessions": {
         "above": 10787,
@@ -141,16 +142,16 @@
       "kv_transfer": {
         "bandwidth_outside": 0,
         "bandwidth_outside_rate": 0.0,
-        "context_outside": 3670,
-        "context_outside_rate": 0.48137460650577124,
-        "denominator": 7624
+        "context_outside": 26630,
+        "context_outside_rate": 0.48167709727598307,
+        "denominator": 55286
       },
       "replay": {
-        "bandwidth_outside": 33391,
-        "bandwidth_outside_rate": 0.23331912544632563,
-        "context_outside": 47058,
-        "context_outside_rate": 0.32881708859432757,
-        "denominator": 143113
+        "bandwidth_outside": 32005,
+        "bandwidth_outside_rate": 0.32682174658933094,
+        "context_outside": 26406,
+        "context_outside_rate": 0.26964708765623724,
+        "denominator": 97928
       }
     }
   },
@@ -201,13 +202,13 @@
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 224,
-    "shortfall_regression_max_w": 17.471889950165334,
-    "shortfall_regression_median_w": 3.6240906890320375,
-    "shortfall_regression_p90_w": 10.856253569885213,
-    "shortfall_regression_rate": 0.018666666666666668,
-    "target_loss_count": 84,
-    "target_loss_rate": 0.007
+    "shortfall_regression_count": 188,
+    "shortfall_regression_max_w": 15.23620976452311,
+    "shortfall_regression_median_w": 3.0049134982664683,
+    "shortfall_regression_p90_w": 7.971582043230725,
+    "shortfall_regression_rate": 0.015666666666666666,
+    "target_loss_count": 106,
+    "target_loss_rate": 0.008833333333333334
   },
   "regional_timing_destination_prefill_loads": [
     0.0
@@ -235,14 +236,15 @@
     },
     "migration_gate_passed": true
   },
-  "route_compute_overlap": false,
+  "route_compute_overlap": true,
+  "route_endpoint_composition": "max(route time, fully shared Replay/KV endpoint work)",
   "samples": 1000,
-  "schema": "queue-haul-workload-adaptation-v1",
+  "schema": "queue-haul-workload-adaptation-v2",
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 7624,
-    "not_moved": 73263,
-    "replay": 143113
+    "kv_transfer": 55286,
+    "not_moved": 70786,
+    "replay": 97928
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
@@ -266,10 +268,10 @@
         },
         "selected": {
           "above": 0,
-          "below": 35475,
-          "denominator": 183158,
-          "outside": 35475,
-          "outside_rate": 0.1936852335142336
+          "below": 33967,
+          "denominator": 184489,
+          "outside": 33967,
+          "outside_rate": 0.1841139580137569
         }
       },
       "context": {
@@ -283,7 +285,7 @@
         "selected": {
           "above": 0,
           "below": 0,
-          "denominator": 183158,
+          "denominator": 184489,
           "outside": 0,
           "outside_rate": 0.0
         },
@@ -301,31 +303,31 @@
           "bandwidth_outside_rate": 0.0,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 7567
+          "denominator": 52924
         },
         "replay": {
-          "bandwidth_outside": 35475,
-          "bandwidth_outside_rate": 0.20203199480611192,
+          "bandwidth_outside": 33967,
+          "bandwidth_outside_rate": 0.2581765667160719,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 175591
+          "denominator": 131565
         }
       }
     },
     "selected_session_totals": {
-      "kv_transfer": 7567,
-      "not_moved": 40842,
-      "replay": 175591
+      "kv_transfer": 52924,
+      "not_moved": 39511,
+      "replay": 131565
     },
     "target_met_rate": {
-      "All bound": 0.656,
-      "Bandwidth": 1.0,
-      "Bandwidth + compute": 0.654,
-      "Dest. compute": 0.677,
-      "HBM": 0.993,
-      "HBM + bandwidth": 0.993,
-      "HBM + compute": 0.669,
-      "None bound": 1.0
+      "All bound": 0.668,
+      "Bandwidth": 0.996,
+      "Bandwidth + compute": 0.67,
+      "Dest. compute": 0.67,
+      "HBM": 0.994,
+      "HBM + bandwidth": 0.994,
+      "HBM + compute": 0.668,
+      "None bound": 0.996
     },
     "workload": {
       "excluded_states": 162,
@@ -346,48 +348,128 @@
   },
   "surface_validation": {
     "coding-c1-c4/development": {
-      "false_feasible_at_25s": 5,
-      "false_infeasible_at_25s": 1,
-      "median_predicted_over_measured": 1.0179210633199347,
-      "p90_absolute_relative_error": 0.46565521570665375,
+      "false_feasible_at_25s": 19,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.872177917467015,
+      "p90_absolute_relative_error": 0.42923939993387067,
       "scenarios": 96,
-      "underprediction_rate": 0.46875
+      "underprediction_rate": 0.7708333333333334
+    },
+    "coding-c1-c4/development/kv_transfer": {
+      "false_feasible_at_25s": 14,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.9109777718834491,
+      "p90_absolute_relative_error": 0.5628782021214593,
+      "scenarios": 48,
+      "underprediction_rate": 0.8125
+    },
+    "coding-c1-c4/development/replay": {
+      "false_feasible_at_25s": 5,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.7981070163695221,
+      "p90_absolute_relative_error": 0.42622753776595484,
+      "scenarios": 48,
+      "underprediction_rate": 0.7291666666666666
     },
     "coding-c1-c4/grouped-audit": {
-      "false_feasible_at_25s": 1,
-      "false_infeasible_at_25s": 2,
-      "median_predicted_over_measured": 0.9833209192383423,
-      "p90_absolute_relative_error": 0.42225706649023426,
+      "false_feasible_at_25s": 5,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.8859485281396715,
+      "p90_absolute_relative_error": 0.4232865104092367,
       "scenarios": 66,
-      "underprediction_rate": 0.5606060606060606
+      "underprediction_rate": 0.7272727272727273
+    },
+    "coding-c1-c4/grouped-audit/kv_transfer": {
+      "false_feasible_at_25s": 4,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.8642808630503208,
+      "p90_absolute_relative_error": 0.42453296454934847,
+      "scenarios": 33,
+      "underprediction_rate": 0.8181818181818182
+    },
+    "coding-c1-c4/grouped-audit/replay": {
+      "false_feasible_at_25s": 1,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.942285091552295,
+      "p90_absolute_relative_error": 0.39010918034922876,
+      "scenarios": 33,
+      "underprediction_rate": 0.6363636363636364
     },
     "width8/development": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 100,
-      "median_predicted_over_measured": 1.8359805238649998,
-      "p90_absolute_relative_error": 1.294635352490699,
+      "false_infeasible_at_25s": 2,
+      "median_predicted_over_measured": 1.1162476020523169,
+      "p90_absolute_relative_error": 0.6444812323198056,
       "scenarios": 208,
-      "underprediction_rate": 0.1778846153846154
+      "underprediction_rate": 0.38461538461538464
+    },
+    "width8/development/kv_transfer": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.9824064137365617,
+      "p90_absolute_relative_error": 0.4239861590570746,
+      "scenarios": 56,
+      "underprediction_rate": 0.5
+    },
+    "width8/development/mixed": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 1.328307247112302,
+      "p90_absolute_relative_error": 0.7827685629702292,
+      "scenarios": 100,
+      "underprediction_rate": 0.15
+    },
+    "width8/development/replay": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 2,
+      "median_predicted_over_measured": 0.9830643603183712,
+      "p90_absolute_relative_error": 0.1562407373160577,
+      "scenarios": 52,
+      "underprediction_rate": 0.7115384615384616
     },
     "width8/grouped-audit": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 33,
-      "median_predicted_over_measured": 1.7825266119916228,
-      "p90_absolute_relative_error": 1.35683233864098,
+      "false_infeasible_at_25s": 1,
+      "median_predicted_over_measured": 1.1302760726762007,
+      "p90_absolute_relative_error": 0.7069079558187432,
       "scenarios": 80,
-      "underprediction_rate": 0.125
+      "underprediction_rate": 0.3375
+    },
+    "width8/grouped-audit/kv_transfer": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 1.0459792786518525,
+      "p90_absolute_relative_error": 0.3824603486284667,
+      "scenarios": 20,
+      "underprediction_rate": 0.5
+    },
+    "width8/grouped-audit/mixed": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 1.2797168246556816,
+      "p90_absolute_relative_error": 0.8586826773084703,
+      "scenarios": 40,
+      "underprediction_rate": 0.175
+    },
+    "width8/grouped-audit/replay": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 1,
+      "median_predicted_over_measured": 0.9993428284597472,
+      "p90_absolute_relative_error": 0.17073219904112594,
+      "scenarios": 20,
+      "underprediction_rate": 0.5
     }
   },
   "target_fraction": 0.6666666666666666,
   "target_met_rate": {
-    "All bound": 0.382,
-    "Bandwidth": 0.989,
-    "Bandwidth + compute": 0.377,
-    "Dest. compute": 0.381,
-    "HBM": 0.988,
-    "HBM + bandwidth": 0.986,
-    "HBM + compute": 0.38,
-    "None bound": 0.994
+    "All bound": 0.362,
+    "Bandwidth": 0.974,
+    "Bandwidth + compute": 0.364,
+    "Dest. compute": 0.364,
+    "HBM": 0.987,
+    "HBM + bandwidth": 0.987,
+    "HBM + compute": 0.362,
+    "None bound": 0.974
   },
   "unique_timing_draws": 1000,
   "workload": {

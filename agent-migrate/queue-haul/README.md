@@ -842,8 +842,10 @@ normalizes the 28-session source pack to the
 campaign's 0.4 load, refits the balanced regional timing cells, and samples one
 joint phase-power bootstrap tuple. All eight HBM/bandwidth/destination-compute
 states share
-that draw. The planner uses measured East US 2 and Germany West Central routes
-and a conservative route-plus-shared-migration-work envelope; background
+that draw. The planner uses measured East US 2 and Germany West Central
+effective pipeline rates. Network transfer overlaps destination migration work,
+while Replay and KV endpoint work share one conservative capacity envelope;
+background
 inference consumes shared prefill/decode destination-compute headroom. Replay
 endpoint work is multiplied by the measured relative factor
 `exp(0.284963 * rho)` at the incumbent normalized destination load; KV is
@@ -870,9 +872,14 @@ uv run python queue-haul/workload_adaptation_campaign.py
 The resulting 1,000 draws are a modeled calibration/workload sensitivity, not
 a confidence interval or 1,000 independent workloads. The regional single-move
 timing holdout passes its recorded gate; grouped local and width-8 timing audits
-remain retrospective, and the no-overlap envelope intentionally overpredicts
-many width-8 makespans rather than extrapolating the KV-heavy mixed evidence to
-Replay-majority plans. Two otherwise timing-supported trace states are excluded
+remain retrospective. Route and endpoint work use the pipeline overlap already
+present in the calibrated effective rate; cross-method endpoint work remains
+fully shared rather than fitting partial overlap from KV-heavy mixed evidence.
+The width-8 audit has zero false-feasible cases at the 25-second migration
+horizon. The separate local c1--c4 audit has 24/162 false-feasible cases,
+including 5/66 in its grouped split, so the bars are a regional modeled action-
+mix sensitivity rather than a generic hardware deadline guarantee.
+Two otherwise timing-supported trace states are excluded
 because their prefill/decode direction lies outside the phase-power calibration
 cone; the output records that exclusion and retains a post-plan hull hard gate.
 

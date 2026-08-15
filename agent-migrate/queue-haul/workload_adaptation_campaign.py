@@ -303,8 +303,8 @@ def build_problem(profile, sessions, constraints, target_fraction, fits):
             1 / fits[region]["replay_compute_completion_factor"],
             fits[region]["kv_ingest_lower_bound_bytes_per_s"],
             source_action, sink_action,
-            "regional-c1 timing; conservative shared-work envelope",
-            1, False,
+            "regional-c1 timing; pipelined route and shared endpoint work",
+            1, True,
         )
         resident = math.floor(
             values["hbm"] * q.kv_capacity_tokens / q.kv_block_tokens
@@ -630,8 +630,10 @@ def summarize(rows):
 
 
 def _surface_row(source, split, scenario, replay_s, kv_s, route_s, coupling):
-    predicted = route_s + max(
-        replay_s + coupling * kv_s, coupling * replay_s + kv_s,
+    predicted = max(
+        route_s,
+        replay_s + coupling * kv_s,
+        coupling * replay_s + kv_s,
     )
     measured = float(scenario.migration_s)
     return {
@@ -707,13 +709,19 @@ def validate_surface():
         ))
     if any(row["predicted_s"] <= 0 or row["measured_s"] <= 0 for row in rows):
         raise RuntimeError("timing validation contains a nonpositive span")
+    if any(row["source"] == "width8" and row["false_feasible"] for row in rows):
+        raise RuntimeError("pipeline model is false-feasible on width-8 evidence")
     return rows
 
 
 def validation_summary(rows):
     output = {}
-    for key in sorted({(row["source"], row["split"]) for row in rows}):
-        selected = [row for row in rows if (row["source"], row["split"]) == key]
+    groups = {(row["source"], row["split"]) for row in rows} | {
+        (row["source"], row["split"], row["method"]) for row in rows
+    }
+    for key in sorted(groups):
+        selected = [row for row in rows if tuple(row[name] for name in (
+            "source", "split", "method")[:len(key)]) == key]
         ratio = np.asarray([row["predicted_over_measured"] for row in selected])
         output["/".join(key)] = {
             "scenarios": len(selected), "median_predicted_over_measured": float(np.median(ratio)),
@@ -725,6 +733,20 @@ def validation_summary(rows):
                                                 for row in selected)),
         }
     return output
+
+
+def surface_scope_limitation(rows):
+    local = [row for row in rows if row["source"] == "coding-c1-c4"]
+    grouped = [row for row in local if row["split"] == "grouped-audit"]
+    width8 = [row for row in rows if row["source"] == "width8"]
+    return (
+        "route overlap is a regional modeled sensitivity, not a generic "
+        f"deadline guarantee: {sum(row['false_feasible'] for row in local)}/"
+        f"{len(local)} local c1-c4 cases and "
+        f"{sum(row['false_feasible'] for row in grouped)}/{len(grouped)} grouped "
+        f"audit cases are false-feasible at 25 s, versus "
+        f"{sum(row['false_feasible'] for row in width8)}/{len(width8)} width-8 cases"
+    )
 
 
 def write_csv(path, rows):
@@ -850,8 +872,8 @@ def main():
         if row["planner_shortfall_worsened_on_release"]
     ])
     metadata = {
-        "schema": "queue-haul-workload-adaptation-v1",
-        "claim": "modeled migration-volume and target-attainment lower-bound sensitivity using a measured relative-load factor",
+        "schema": "queue-haul-workload-adaptation-v2",
+        "claim": "modeled regional action-mix and predicted target-attainment sensitivity using measured timing and a relative-load factor",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
@@ -861,7 +883,9 @@ def main():
             row["bandwidth_projection_regions"] / len(REGIONS)
             for row in rows[::len(ORDER)]
         ])),
-        "route_compute_overlap": False,
+        "route_compute_overlap": True,
+        "route_endpoint_composition":
+            "max(route time, fully shared Replay/KV endpoint work)",
         "migration_horizon_s": MIGRATION_HORIZON_S,
         "regional_timing_destination_prefill_loads": timing_loads,
         "selected_session_totals": selected,
@@ -955,7 +979,8 @@ def main():
             "each sampled pack is normalized to the pooled campaign's 0.4 source load",
             "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
             "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
-            "route plus shared destination work is a conservative no-overlap envelope",
+            "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
+            surface_scope_limitation(validation),
             "timing audits are grouped retrospective checks, not untouched validation sets",
             "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
             "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",

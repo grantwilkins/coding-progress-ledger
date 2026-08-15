@@ -18,9 +18,13 @@ Plausible wrong implementations:
 - Apply a constrained factor to only one destination or retain a prefill-only label.
 - Drop a migration method from contexts covered by the regional timing model.
 - Apply the measured load factor to route bytes, HBM, or the idle timing anchor.
+- Serialize route and endpoint work after fitting an end-to-end pipeline rate.
 """
 
+from types import SimpleNamespace
+
 import numpy as np
+import pytest
 
 import workload_adaptation_campaign as campaign
 from pool_planner import candidate_table
@@ -220,6 +224,49 @@ def test_surface_validation_uses_grouped_splits_and_migration_horizon():
     ) for row in rows)
 
 
+def test_surface_validation_overlaps_route_with_shared_endpoint_work():
+    scenario = SimpleNamespace(
+        migration_s=10, scenario_id="hand", session_set="hand",
+        method="mixed", bandwidth_mbps=1000, concurrency=2,
+    )
+
+    route_bound = campaign._surface_row(
+        "hand", "hand", scenario, replay_s=4, kv_s=3,
+        route_s=10, coupling=1,
+    )
+    endpoint_bound = campaign._surface_row(
+        "hand", "hand", scenario, replay_s=4, kv_s=3,
+        route_s=5, coupling=1,
+    )
+
+    assert route_bound["predicted_s"] == 10
+    assert endpoint_bound["predicted_s"] == 7
+
+
+def test_surface_validation_rejects_width8_false_feasibility(monkeypatch):
+    original = campaign._surface_row
+
+    def unsafe(*args, **kwargs):
+        row = original(*args, **kwargs)
+        if row["source"] == "width8":
+            row["false_feasible"] = True
+        return row
+
+    monkeypatch.setattr(campaign, "_surface_row", unsafe)
+    with pytest.raises(RuntimeError, match="false-feasible on width-8"):
+        campaign.validate_surface()
+
+
+def test_surface_summary_exposes_method_specific_error():
+    rows = campaign.validate_surface()
+    summary = campaign.validation_summary(rows)
+
+    assert "width8/development" in summary
+    assert "width8/development/kv_transfer" in summary
+    assert "width8/development/mixed" in summary
+    assert "width8/development/replay" in summary
+
+
 def test_central_surface_uses_regional_timing_and_routes():
     fits = campaign.central_timing_fits()
     profile = ModelProfile.load(campaign.PROFILE)
@@ -236,7 +283,7 @@ def test_central_surface_uses_regional_timing_and_routes():
         fits[region]["effective_pipeline_mbps"]["natural"] * 125_000
         for region in campaign.REGIONS
     }
-    assert all(not service.route_overlap for service in services.values())
+    assert all(service.route_overlap for service in services.values())
     assert services["pool/east"].kv_ingest_bytes_per_s == \
         fits["east"]["kv_ingest_lower_bound_bytes_per_s"]
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
@@ -286,13 +333,15 @@ def test_supported_pack_has_replay_and_kv_candidates_for_every_session():
     for method in ("replay", "kv_transfer"):
         assert {(candidate.session, candidate.pool) for candidate in table.candidates
                 if candidate.method == method} == slots
-    assert campaign.method_dominance(table, len(architecture.pools)) == {
-        "candidate_matched_pairs": len(slots),
-        "candidate_replay_only": 0, "candidate_kv_only": 0,
-        "candidate_neither": 0, "candidate_replay_dominates": len(slots),
-        "candidate_kv_dominates": 0, "candidate_equivalent": 0,
-        "candidate_incomparable": 0,
-    }
+    dominance = campaign.method_dominance(table, len(architecture.pools))
+    assert dominance["candidate_matched_pairs"] == len(slots)
+    assert not any(dominance[name] for name in (
+        "candidate_replay_only", "candidate_kv_only", "candidate_neither",
+    ))
+    assert sum(dominance[name] for name in (
+        "candidate_replay_dominates", "candidate_kv_dominates",
+        "candidate_equivalent", "candidate_incomparable",
+    )) == len(slots)
 
 
 def test_factor_levels_apply_to_both_destinations():

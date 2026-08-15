@@ -147,6 +147,7 @@ def main():
     parser.add_argument("--sessions", type=int, default=28)
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
+    validation = adaptation.validate_surface()
     rows, workload = sweep(args.samples, args.points, args.seed, args.sessions)
     summary = pooled_summary(rows)
     write_csv(rows, args.out.with_name(f"{args.out.name}_cases.csv"))
@@ -156,8 +157,8 @@ def main():
     ))
     write_plot(summary, args.out)
     metadata = {
-        "schema": "queue-haul-workload-power-frontier-v1",
-        "claim": "modeled conservative power-attainment sensitivity using a measured relative-load factor",
+        "schema": "queue-haul-workload-power-frontier-v2",
+        "claim": "modeled regional predicted power-attainment sensitivity using measured timing and a relative-load factor",
         "samples": args.samples, "factor_states": len(adaptation.ORDER),
         "pooled_cases": args.samples * len(adaptation.ORDER),
         "sessions_per_pack": args.sessions, "seed": args.seed,
@@ -165,12 +166,17 @@ def main():
         "policies": list(SOLVERS), "solvers": SOLVERS, "workload": workload,
         "factor_levels": adaptation.LEVELS, "regions": list(adaptation.REGIONS),
         "normalization": "safely attained watts / draw-specific removable watts",
+        "surface_validation": adaptation.validation_summary(validation),
         "inputs": {
             str(path.relative_to(adaptation.ROOT)): adaptation.file_hash(path)
             for path in (
                 adaptation.PROFILE, adaptation.MANIFEST, adaptation.TIMING,
                 adaptation.TIMING_SUMMARY, adaptation.TIMING_PARENT,
                 adaptation.LOADED_SERVICE,
+                adaptation.LOCAL_TIMING / "scenarios.csv",
+                adaptation.LOCAL_TIMING / "migrations.csv",
+                adaptation.WIDTH8_TIMING / "scenarios.csv",
+                adaptation.WIDTH8_TIMING / "migration_stages.csv",
             )
         },
         "limitations": [
@@ -182,7 +188,8 @@ def main():
             "the relative load factor is transported from a fixed width-eight pack to regional concurrency-one timing as a sensitivity",
             "the loaded-service slope is fixed at its central fit rather than sampled from its bootstrap",
             "bandwidth-bound East routes fall below the load factor's 1-Gbit/s validation floor",
-            "route and shared endpoint work are serialized as a conservative attainment lower-bound sensitivity",
+            "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
+            adaptation.surface_scope_limitation(validation),
         ],
     }
     args.out.with_name(f"{args.out.name}_metadata.json").write_text(
