@@ -702,3 +702,22 @@ def test_supported_bound_loader_rejects_an_edited_result():
     with pytest.raises(RuntimeError, match="confirmation result"):
         campaign.supported_bound({**result, "supported_bound": .70},
                                  plan, core, scout)
+
+
+def test_synchronized_submit_queues_every_worker_before_release():
+    seen = []
+
+    def issue(item, epoch):
+        seen.append((item, epoch, campaign.time.monotonic_ns()))
+        return item
+
+    with campaign.ThreadPoolExecutor(max_workers=32) as executor:
+        futures, epoch = campaign.submit_synchronized(
+            executor, list(range(32)), issue, lead_s=.02,
+        )
+    rows, error = campaign.settle_futures(futures)
+
+    assert error is None and sorted(rows) == list(range(32))
+    assert {row[1] for row in seen} == {epoch}
+    assert min(row[2] for row in seen) >= epoch
+    assert (max(row[2] for row in seen) - epoch) / 1e9 < .05

@@ -719,6 +719,28 @@ def settle_futures(futures) -> tuple[list[dict], Exception | None]:
     return rows, error
 
 
+def submit_synchronized(executor: ThreadPoolExecutor, items: list,
+                        issue, lead_s: float = .1):
+    """Queue every worker before releasing a synchronized request burst."""
+    if not items or executor._max_workers < len(items) or lead_s <= 0:
+        raise ValueError("synchronized burst needs one ready worker per item")
+    ready = threading.Barrier(len(items) + 1)
+    release = threading.Event()
+    epoch = 0
+
+    def invoke(item):
+        ready.wait()
+        release.wait()
+        time.sleep(max(0, epoch / 1e9 - time.monotonic()))
+        return issue(item, epoch)
+
+    futures = [executor.submit(invoke, item) for item in items]
+    ready.wait()
+    epoch = time.monotonic_ns() + int(lead_s * 1e9)
+    release.set()
+    return futures, epoch
+
+
 def validate_stage_inputs(plan: dict, rates: dict, identity: dict) -> None:
     if rates["runtime_identity_sha256"] != identity_sha(identity) \
             or rates.get("kv_capacity_tokens", 0) <= 0 \
@@ -857,18 +879,15 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
             power.start()
             try:
                 wait_sampler(sampler)
-                gate = threading.Event()
-                def issue(item):
-                    gate.wait()
-                    time.sleep(max(0, epoch / 1e9 - time.monotonic()))
-                    return serving.issue(
-                        cfg.host, stack.port, cfg.model, item[1], item[0], epoch,
+                prepared = [serving.prepare_issue(item, index)
+                            for index, item in enumerate(group)]
+                def issue(item, scheduled_ns):
+                    return serving.issue_prepared(
+                        cfg.host, stack.port, cfg.model, item, scheduled_ns,
                         plan["request_timeout_s"], True,
                     )
                 with ThreadPoolExecutor(max_workers=cell["concurrency"]) as executor:
-                    futures = [executor.submit(issue, item) for item in enumerate(group)]
-                    epoch = time.monotonic_ns() + 100_000_000
-                    gate.set()
+                    futures, epoch = submit_synchronized(executor, prepared, issue)
                 requests, error = settle_futures(futures)
                 if error is None:
                     drained = drain(sampler, plan["drain_s"])

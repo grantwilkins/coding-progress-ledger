@@ -358,8 +358,29 @@ def issue_chat(host: str, port: int, model: str, session: Session, index: int,
 def issue(host: str, port: int, model: str, session: Session, index: int,
           scheduled_ns: int, timeout_s: float,
           bypass_lmcache: bool = False) -> dict:
+    return issue_prepared(
+        host, port, model, prepare_issue(session, index), scheduled_ns,
+        timeout_s, bypass_lmcache,
+    )
+
+
+def prepare_issue(session: Session, index: int) -> dict:
     prompt, forced = session.prompt(index)
-    row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s,
+    return {
+        "session": session, "index": index, "prompt": prompt, "forced": forced,
+        "prompt_sha256": hashlib.sha256(
+            bytes(np.asarray(prompt, dtype=np.uint32)),
+        ).hexdigest(),
+    }
+
+
+def issue_prepared(host: str, port: int, model: str, prepared: dict,
+                   scheduled_ns: int, timeout_s: float,
+                   bypass_lmcache: bool = False) -> dict:
+    session, index, prompt = (prepared["session"], prepared["index"],
+                              prepared["prompt"])
+    row = _completion(host, port, model, prompt, session.output_tokens,
+                      prepared["forced"], timeout_s,
                       bypass_lmcache)
     row.update({"request_index": index, "session_id": session.session_id,
                 "scheduled_ns": scheduled_ns, "input_tokens": session.append_tokens,
@@ -367,7 +388,7 @@ def issue(host: str, port: int, model: str, session: Session, index: int,
                 "planned_prompt_tokens": len(prompt),
                 "planned_output_tokens": session.output_tokens,
                 "send_lateness_s": (row["start_ns"] - scheduled_ns) / 1e9,
-                "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
+                "prompt_sha256": prepared["prompt_sha256"]})
     return row
 
 

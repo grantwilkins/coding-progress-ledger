@@ -927,3 +927,19 @@ def test_prewarm_uses_its_own_shorter_timeout(tmp_path, monkeypatch):
     load.start()
     load.stop.set(); load.thread.join(5)
     assert seen == [300]
+
+
+def test_prepared_issue_moves_prompt_work_before_dispatch(monkeypatch):
+    session = runner.Session("prepared", 16, 8, 2, 123, 1)
+    prepared = runner.prepare_issue(session, 7)
+    monkeypatch.setattr(runner, "_completion", lambda *_args, **_kwargs: {
+        "start_ns": 1_010_000_000,
+    })
+
+    row = runner.issue_prepared("host", 1, "model", prepared,
+                                1_000_000_000, 1)
+
+    assert row["session_id"] == "prepared"
+    assert row["request_index"] == 7
+    assert row["send_lateness_s"] == .01
+    assert row["prompt_sha256"] == prepared["prompt_sha256"]
