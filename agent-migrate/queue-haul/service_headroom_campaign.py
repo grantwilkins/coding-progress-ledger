@@ -879,7 +879,7 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
             power.start()
             try:
                 wait_sampler(sampler)
-                prepared = [serving.prepare_issue(item, index)
+                prepared = [serving.prepare_issue(item, index, cfg.model, True)
                             for index, item in enumerate(group)]
                 def issue(item, scheduled_ns):
                     return serving.issue_prepared(

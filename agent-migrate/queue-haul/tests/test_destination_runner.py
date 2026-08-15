@@ -931,10 +931,12 @@ def test_prewarm_uses_its_own_shorter_timeout(tmp_path, monkeypatch):
 
 def test_prepared_issue_moves_prompt_work_before_dispatch(monkeypatch):
     session = runner.Session("prepared", 16, 8, 2, 123, 1)
-    prepared = runner.prepare_issue(session, 7)
-    monkeypatch.setattr(runner, "_completion", lambda *_args, **_kwargs: {
-        "start_ns": 1_010_000_000,
-    })
+    prepared = runner.prepare_issue(session, 7, "model", True)
+    calls = []
+    def completion(*_args, **kwargs):
+        calls.append(kwargs)
+        return {"start_ns": 1_010_000_000}
+    monkeypatch.setattr(runner, "_completion", completion)
 
     row = runner.issue_prepared("host", 1, "model", prepared,
                                 1_000_000_000, 1)
@@ -943,3 +945,5 @@ def test_prepared_issue_moves_prompt_work_before_dispatch(monkeypatch):
     assert row["request_index"] == 7
     assert row["send_lateness_s"] == .01
     assert row["prompt_sha256"] == prepared["prompt_sha256"]
+    assert prepared["body"]
+    assert calls[0]["prepared_body"] == prepared["body"]

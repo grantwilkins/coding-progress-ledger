@@ -250,10 +250,10 @@ def completion_row(status: int, start_ns: int, end_ns: int, usage: dict,
 
 
 def _completion(host: str, port: int, model: str, prompt: list[int], output_tokens: int,
-                forced: int, timeout_s: float, bypass_lmcache: bool = False) -> dict:
-    body = json.dumps(completion_payload(
-        model, prompt, output_tokens, forced, bypass_lmcache,
-    ))
+                forced: int, timeout_s: float, bypass_lmcache: bool = False,
+                *, prepared_body: str | None = None) -> dict:
+    body = prepared_body or json.dumps(completion_payload(
+        model, prompt, output_tokens, forced, bypass_lmcache))
     start, usage, events, done = time.monotonic_ns(), {}, [], False
     deadline = start + int(timeout_s * 1e9)
     request_id, finish_reason, status = "", None, 0
@@ -359,19 +359,26 @@ def issue(host: str, port: int, model: str, session: Session, index: int,
           scheduled_ns: int, timeout_s: float,
           bypass_lmcache: bool = False) -> dict:
     return issue_prepared(
-        host, port, model, prepare_issue(session, index), scheduled_ns,
+        host, port, model,
+        prepare_issue(session, index, model, bypass_lmcache), scheduled_ns,
         timeout_s, bypass_lmcache,
     )
 
 
-def prepare_issue(session: Session, index: int) -> dict:
+def prepare_issue(session: Session, index: int, model: str | None = None,
+                  bypass_lmcache: bool = False) -> dict:
     prompt, forced = session.prompt(index)
-    return {
+    prepared = {
         "session": session, "index": index, "prompt": prompt, "forced": forced,
         "prompt_sha256": hashlib.sha256(
             bytes(np.asarray(prompt, dtype=np.uint32)),
         ).hexdigest(),
     }
+    if model is not None:
+        prepared["body"] = json.dumps(completion_payload(
+            model, prompt, session.output_tokens, forced, bypass_lmcache,
+        ))
+    return prepared
 
 
 def issue_prepared(host: str, port: int, model: str, prepared: dict,
@@ -381,7 +388,7 @@ def issue_prepared(host: str, port: int, model: str, prepared: dict,
                               prepared["prompt"])
     row = _completion(host, port, model, prompt, session.output_tokens,
                       prepared["forced"], timeout_s,
-                      bypass_lmcache)
+                      bypass_lmcache, prepared_body=prepared.get("body"))
     row.update({"request_index": index, "session_id": session.session_id,
                 "scheduled_ns": scheduled_ns, "input_tokens": session.append_tokens,
                 "prefix_tokens": session.prefix_tokens,
