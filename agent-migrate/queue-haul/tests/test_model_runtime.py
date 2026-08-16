@@ -55,7 +55,9 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
 
     gemma_vllm = testbed.shell(testbed.vllm_cmd(
         configs["google/gemma-4-26B-A4B-it"], "source"))
-    assert "--limit-mm-per-prompt image=0,audio=0" in gemma_vllm
+    assert "--limit-mm-per-prompt" in gemma_vllm
+    assert testbed.model_spec("google/gemma-4-26B-A4B-it").vllm_args[-1] \
+        == '{"image":0,"audio":0}'
 
     for cfg in configs.values():
         command = testbed.shell(testbed.vllm_cmd(cfg, "source"))

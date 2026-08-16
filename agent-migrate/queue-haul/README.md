@@ -1526,6 +1526,7 @@ uv run python service_headroom_campaign.py reduce --plan runs/service-headroom/p
 The same one-GPU campaign supports the pinned Qwen3.8-27B and
 Gemma-4-26B-A4B checkpoints. Pass the identical model to `prepare` and every
 `run-cell`; Qwen additionally requires `--max-num-batched-tokens 1567`.
+Gemma's text-only launch passes its disabled image/audio limits as JSON.
 Non-GPT cells hard-check BF16 attention KV, record recurrent-state dtypes,
 check model-specific arguments, and enforce Qwen's
 784-token unified/cache-group alignment. Their normalization records the
