@@ -8,6 +8,7 @@ import torch
 
 from lmcache_compat.connector_patch import (
     bypass_lmcache,
+    gemma4_layer_configs,
     independent_transaction,
     kv_first_attention_block_view,
     patch_attention_kv_layout,
@@ -15,6 +16,20 @@ from lmcache_compat.connector_patch import (
     register_verified_kv_caches,
     verify_kv_cache_dtypes,
 )
+
+
+def gemma_layers(change=None):
+    types = ["full_attention" if (index + 1) % 6 == 0
+             else "sliding_attention" for index in range(30)]
+    layers = [type("Layer", (), {
+        "layer_types": types,
+        "head_dim": 512 if kind == "full_attention" else 256,
+        "num_key_value_heads": 2 if kind == "full_attention" else 8,
+        "num_attention_heads": 16,
+    })() for kind in types]
+    if change:
+        setattr(layers[change[0]], change[1], change[2])
+    return type("Config", (), {"per_layer_config": layers})()
 
 
 class FragmentedSocket:
@@ -165,6 +180,24 @@ def test_dtype_registration_marker_follows_successful_registration_only():
             caches, logger,
         )
     assert not events
+
+
+def test_gemma4_geometry_uses_only_exact_per_layer_configs():
+    layers = gemma4_layer_configs(gemma_layers())
+
+    assert len(layers) == 30
+    assert [(layers[index].head_dim, layers[index].num_key_value_heads)
+            for index in (0, 5)] == [(256, 8), (512, 2)]
+
+
+@pytest.mark.parametrize("change", [
+    (0, "head_dim", 512),
+    (5, "num_key_value_heads", 8),
+    (29, "num_attention_heads", 8),
+])
+def test_gemma4_geometry_rejects_any_layer_drift(change):
+    with pytest.raises(RuntimeError, match="per-layer KV geometry"):
+        gemma4_layer_configs(gemma_layers(change))
 
 
 

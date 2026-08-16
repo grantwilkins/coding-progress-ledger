@@ -74,6 +74,65 @@ def register_verified_kv_caches(register, kv_caches, logger):
     return result
 
 
+def gemma4_layer_configs(config):
+    layers = tuple(getattr(config, "per_layer_config", ()))
+    expected = tuple(
+        ("full_attention", 512, 2, 16) if (index + 1) % 6 == 0
+        else ("sliding_attention", 256, 8, 16)
+        for index in range(30)
+    )
+    observed = tuple(
+        (layer.layer_types[index], layer.head_dim,
+         layer.num_key_value_heads, layer.num_attention_heads)
+        for index, layer in enumerate(layers)
+    )
+    if observed != expected:
+        raise RuntimeError(f"unexpected Gemma4 per-layer KV geometry: {observed}")
+    return layers
+
+
+def patch_gemma4_decoder() -> None:
+    from vllm.model_executor.models.gemma4 import Gemma4DecoderLayer
+    from vllm.model_executor.models.utils import extract_layer_index
+
+    if getattr(Gemma4DecoderLayer, "_qh_heterogeneous_patched", False):
+        return
+    original_init = Gemma4DecoderLayer.__init__
+
+    def initialize(self, config, cache_config=None, quant_config=None, prefix=""):
+        layers = gemma4_layer_configs(config)
+        return original_init(self, layers[extract_layer_index(prefix)], cache_config,
+                             quant_config, prefix)
+
+    Gemma4DecoderLayer.__init__ = initialize
+    Gemma4DecoderLayer._qh_heterogeneous_patched = True
+
+
+def patch_gemma4_config(logger) -> None:
+    from vllm.transformers_utils.model_arch_config_convertor import (
+        Gemma4ModelArchConfigConvertor,
+    )
+
+    if getattr(Gemma4ModelArchConfigConvertor, "_qh_heterogeneous_patched", False):
+        return
+    def geometry(self):
+        layers = gemma4_layer_configs(self.hf_text_config)
+        if not getattr(self, "_qh_geometry_logged", False):
+            logger.info("QH_GEMMA4_GEOMETRY_VERIFIED "
+                        "sliding=25x(head_dim=256,kv_heads=8) "
+                        "full=5x(head_dim=512,kv_heads=2)")
+            self._qh_geometry_logged = True
+        return layers
+
+    Gemma4ModelArchConfigConvertor.get_head_size = \
+        lambda self: max(layer.head_dim for layer in geometry(self))
+    Gemma4ModelArchConfigConvertor.get_total_num_kv_heads = \
+        lambda self: max(layer.num_key_value_heads for layer in geometry(self))
+    Gemma4ModelArchConfigConvertor.get_total_num_attention_heads = \
+        lambda self: max(layer.num_attention_heads for layer in geometry(self))
+    Gemma4ModelArchConfigConvertor._qh_heterogeneous_patched = True
+
+
 def patch_attention_kv_layout() -> None:
     from lmcache.integration.vllm.kv_cache_group_edits import (
         _SubpagedAttentionViewEdit,
@@ -229,6 +288,9 @@ def patch_adapter() -> None:
 def patch_mp_connector() -> None:
     from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector, logger
 
+    if os.environ.get("QH_MODEL") == "google/gemma-4-26B-A4B-it":
+        patch_gemma4_config(logger)
+        patch_gemma4_decoder()
     patch_attention_kv_layout()
     if getattr(LMCacheMPConnector, "_qh_bypass_patched", False):
         return

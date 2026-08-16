@@ -1526,7 +1526,11 @@ uv run python service_headroom_campaign.py reduce --plan runs/service-headroom/p
 The same one-GPU campaign supports the pinned Qwen3.8-27B and
 Gemma-4-26B-A4B checkpoints. Pass the identical model to `prepare` and every
 `run-cell`; Qwen additionally requires `--max-num-batched-tokens 1567`.
-Gemma's text-only launch passes its disabled image/audio limits as JSON.
+Gemma's text-only launch passes its disabled image/audio limits as JSON. A
+repo-local vLLM compatibility hook consumes only its 30 concrete layer configs,
+hard-checks 25 sliding `(head_dim=256, kv_heads=8)` and five full
+`(head_dim=512, kv_heads=2)` layers, and records that proof in the runtime log;
+it neither enables ambiguous global attribute access nor homogenizes the model.
 Non-GPT cells hard-check BF16 attention KV, record recurrent-state dtypes,
 check model-specific arguments, and enforce Qwen's
 784-token unified/cache-group alignment. Their normalization records the

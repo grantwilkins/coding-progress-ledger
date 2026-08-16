@@ -284,6 +284,11 @@ def validate_model_runtime_log(cfg: Config, text: str) -> None:
         ))
     if not proved_bf16:
         raise RuntimeError("architecture campaign did not prove BF16 KV cache")
+    if cfg.model == "google/gemma-4-26B-A4B-it" and text.count(
+            "QH_GEMMA4_GEOMETRY_VERIFIED "
+            "sliding=25x(head_dim=256,kv_heads=8) "
+            "full=5x(head_dim=512,kv_heads=2)") != 1:
+        raise RuntimeError("Gemma campaign did not prove its per-layer KV geometry")
     expected = model_spec(cfg.model).unified_block_tokens
     if expected is not None and set(map(int, re.findall(
             r"attention block size to (\d+) tokens", text, re.IGNORECASE))) != {expected}:
@@ -350,6 +355,7 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "HF_HOME": str(cfg.hf_home),
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
+        "QH_MODEL": cfg.model,
         "LMCACHE_REMOTE_URL": remote_url,
         "LMCACHE_REMOTE_SERDE": "naive",
         "LMCACHE_LMCACHE_INSTANCE_ID": f"stage1b_{role}",
@@ -567,8 +573,10 @@ def gpu_count() -> int:
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
     if lmcache_mode() == "mp":
-        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; from lmcache.integration.vllm.kv_cache_group_edits import _SubpagedAttentionViewEdit; assert LMCacheMPConnector._qh_bypass_patched and LMCacheMPConnector._qh_kv_dtype_registration_patched and _SubpagedAttentionViewEdit._qh_kv_first_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
+        gemma = cfg.model == "google/gemma-4-26B-A4B-it"
+        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; from lmcache.integration.vllm.kv_cache_group_edits import _SubpagedAttentionViewEdit; assert LMCacheMPConnector._qh_bypass_patched and LMCacheMPConnector._qh_kv_dtype_registration_patched and _SubpagedAttentionViewEdit._qh_kv_first_patched; " + ("from vllm.model_executor.models.gemma4 import Gemma4DecoderLayer; from vllm.transformers_utils.model_arch_config_convertor import Gemma4ModelArchConfigConvertor; assert Gemma4DecoderLayer._qh_heterogeneous_patched and Gemma4ModelArchConfigConvertor._qh_heterogeneous_patched; " if gemma else "") + "print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
         script = "\n".join([
+            f"export QH_MODEL={shlex.quote(cfg.model)}",
             f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}",
             shell(["python", "-c", check]),
         ])

@@ -108,6 +108,19 @@ def test_campaign_log_must_prove_bf16_and_qwen_unified_block():
             qwen, direct.replace("torch.bfloat16+torch.float32:24", "bad"))
 
 
+def test_gemma_log_must_prove_exact_heterogeneous_geometry():
+    cfg = testbed.model_campaign_config("google/gemma-4-26B-A4B-it")
+    good = (
+        "Using bfloat16 data type to store kv cache\n"
+        "QH_GEMMA4_GEOMETRY_VERIFIED sliding=25x(head_dim=256,kv_heads=8) "
+        "full=5x(head_dim=512,kv_heads=2)\n"
+    )
+
+    testbed.validate_model_runtime_log(cfg, good)
+    with pytest.raises(RuntimeError, match="per-layer KV geometry"):
+        testbed.validate_model_runtime_log(cfg, good.replace("25x", "24x"))
+
+
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):
     with pytest.raises(ValueError, match="unsupported model"):
         testbed.model_path(testbed.Config(model="example/unknown", hf_home=tmp_path))
