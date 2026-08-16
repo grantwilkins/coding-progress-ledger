@@ -14,26 +14,27 @@ def bypass_lmcache(request) -> bool:
                 (direct or extra.get("kv_transfer_params") or {}).get("qh_bypass_lmcache"))
 
 
-def kv_first_attention_page_view(spec, kv_cache):
-    if kv_cache.ndim != 5 or kv_cache.shape[0] != 2:
-        raise ValueError(f"expected K/V-first attention KV, got {tuple(kv_cache.shape)}")
-    logical, kernel = spec.block_size, kv_cache.shape[2]
-    if logical % kernel:
-        raise ValueError(f"logical block size {logical} is not a multiple of {kernel}")
-    ratio = logical // kernel
-    pages = kv_cache.shape[1]
-    if pages % ratio:
-        raise ValueError(f"kernel page count {pages} is not a multiple of {ratio}")
-    page_bytes = kv_cache.shape[0] * kv_cache.shape[2:].numel() \
-        * kv_cache.element_size()
-    if page_bytes * ratio != spec.page_size_bytes:
-        raise ValueError("kernel pages do not tile the logical attention page")
-    if not kv_cache.is_contiguous():
-        raise ValueError("K/V-first attention KV must be contiguous")
-    elements = spec.page_size_bytes // kv_cache.element_size()
-    if elements % (2 * logical):
-        raise ValueError("logical attention page does not factor by block size")
-    return kv_cache.view(2, pages // ratio, logical, 1, elements // (2 * logical))
+def kv_first_attention_block_view(kv_cache):
+    shape = tuple(kv_cache.shape)
+    if kv_cache.ndim != 5 or shape[0] != 2 or shape[2] != 16 \
+            or any(size <= 0 for size in shape):
+        raise ValueError(f"expected K/V-first attention KV [2, NB, 16, NH, HS], got {shape}")
+    _, blocks, kernel, heads, head_size = shape
+    inner = heads * head_size
+    hidden = kernel * inner
+    expected = (hidden, 2 * hidden, inner, head_size, 1)
+    if tuple(kv_cache.stride()) != expected:
+        raise ValueError(f"expected vLLM K/V-first stride {expected}, got {kv_cache.stride()}")
+    offset = kv_cache.storage_offset()
+    storage_bytes = kv_cache.untyped_storage().nbytes()
+    if storage_bytes % kv_cache.element_size() \
+            or offset < 0 or offset + 2 * blocks * hidden > storage_bytes // kv_cache.element_size():
+        raise ValueError("K/V-first attention KV exceeds its backing storage")
+    return kv_cache.as_strided(
+        (blocks, 2, kernel, heads, head_size),
+        (2 * hidden, hidden, inner, head_size, 1),
+        offset,
+    )
 
 
 def patch_attention_kv_layout() -> None:
@@ -47,7 +48,7 @@ def patch_attention_kv_layout() -> None:
 
     def apply(self, spec, kv_cache):
         if getattr(kv_cache, "ndim", 0) == 5 and kv_cache.shape[0] == 2:
-            return kv_first_attention_page_view(spec, kv_cache)
+            return original(self, spec, kv_first_attention_block_view(kv_cache))
         return original(self, spec, kv_cache)
 
     _SubpagedAttentionViewEdit.apply = apply

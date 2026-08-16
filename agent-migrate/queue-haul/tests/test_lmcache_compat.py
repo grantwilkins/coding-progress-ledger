@@ -3,15 +3,14 @@ from __future__ import annotations
 import asyncio
 import builtins
 import threading
-from types import SimpleNamespace
-
 import pytest
 import torch
 
 from lmcache_compat.connector_patch import (
     bypass_lmcache,
     independent_transaction,
-    kv_first_attention_page_view,
+    kv_first_attention_block_view,
+    patch_attention_kv_layout,
     patch_on_import,
 )
 
@@ -53,22 +52,64 @@ def test_replay_bypass_is_explicit():
     assert bypass_lmcache(mp_request)
 
 
-def test_kv_first_attention_pages_merge_without_copy_or_group_flattening():
-    cache = torch.arange(2 * 6 * 2 * 2, dtype=torch.float32).view(2, 6, 2, 1, 2)
-    spec = SimpleNamespace(block_size=4, page_size_bytes=64)
+def test_kv_first_attention_view_restores_block_major_bytes_without_copy():
+    backing = torch.arange(3 + 4 * 2 * 16 * 2 * 3, dtype=torch.float32)
+    block_major = torch.as_strided(backing, (4, 2, 16, 2, 3),
+                                   (192, 96, 6, 3, 1), 3)
+    cache = block_major.as_strided((2, 4, 16, 2, 3),
+                                   (96, 192, 6, 3, 1), 3)
 
-    edited = kv_first_attention_page_view(spec, cache)
+    edited = kv_first_attention_block_view(cache)
 
-    assert edited.shape == (2, 3, 4, 1, 2)
+    assert edited.shape == (4, 2, 16, 2, 3)
+    assert edited.stride() == (192, 96, 6, 3, 1)
+    assert edited.storage_offset() == cache.storage_offset() == 3
     assert edited.data_ptr() == cache.data_ptr()
-    assert torch.equal(edited[0, 1].flatten(), cache[0, 2:4].flatten())
-    assert torch.equal(edited[1, 2].flatten(), cache[1, 4:6].flatten())
-    with pytest.raises(ValueError, match="tile"):
-        kv_first_attention_page_view(
-            SimpleNamespace(block_size=4, page_size_bytes=128), cache,
-        )
-    with pytest.raises(ValueError, match="contiguous"):
-        kv_first_attention_page_view(spec, torch.empty(2, 6, 4, 1, 2)[:, :, ::2])
+    assert torch.equal(edited, block_major)
+    assert edited[2, 1, 7, 1, 2] == cache[1, 2, 7, 1, 2]
+
+
+@pytest.mark.parametrize("cache,error", [
+    (torch.empty(2, 4, 8, 2, 3), r"\[2, NB, 16, NH, HS\]"),
+    (torch.empty(1, 4, 16, 2, 3), r"\[2, NB, 16, NH, HS\]"),
+    (torch.empty(2, 4, 16, 2), r"\[2, NB, 16, NH, HS\]"),
+    (torch.empty(2, 0, 16, 2, 3), r"\[2, NB, 16, NH, HS\]"),
+    (torch.empty(2, 4, 16, 2, 3), "stride"),
+])
+def test_kv_first_attention_view_rejects_non_vllm_layout(cache, error):
+    with pytest.raises(ValueError, match=error):
+        kv_first_attention_block_view(cache)
+
+
+def test_kv_first_patch_delegates_block_major_view(monkeypatch):
+    from lmcache.integration.vllm.kv_cache_group_edits import (
+        _SubpagedAttentionViewEdit,
+    )
+
+    seen = []
+    monkeypatch.delattr(_SubpagedAttentionViewEdit, "_qh_kv_first_patched",
+                        raising=False)
+    monkeypatch.setattr(_SubpagedAttentionViewEdit, "apply",
+                        lambda _self, spec, cache: seen.append((spec, cache)))
+    patch_attention_kv_layout()
+    block_major = torch.arange(4 * 2 * 16 * 2 * 3).reshape(4, 2, 16, 2, 3)
+    cache = block_major.as_strided((2, 4, 16, 2, 3),
+                                   (96, 192, 6, 3, 1))
+    spec = object()
+
+    assert _SubpagedAttentionViewEdit().apply(spec, cache) is None
+    assert seen[0][0] is spec
+    assert seen[0][1].data_ptr() == cache.data_ptr()
+    assert torch.equal(seen[0][1], block_major)
+
+
+def test_kv_first_attention_view_rejects_truncated_storage():
+    cache = torch.empty(4, 2, 16, 2, 3).as_strided(
+        (2, 4, 16, 2, 3), (96, 192, 6, 3, 1),
+    )
+    cache.untyped_storage().resize_(cache.untyped_storage().nbytes() - 4)
+    with pytest.raises(ValueError, match="backing storage"):
+        kv_first_attention_block_view(cache)
 
 
 
