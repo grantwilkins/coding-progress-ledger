@@ -110,6 +110,7 @@ def make_plan() -> dict:
             "gpu_memory_utilization": .75, "chunked_prefill": True,
             "prefix_caching": True, "enforce_eager": True,
             "disable_hybrid_kv_cache_manager": True,
+            "async_scheduling": False, "stream_interval": 1,
             "runtime_versions": {
                 "apptainer": list(testbed.MP_RUNTIME_VERSIONS),
                 "native": list(testbed.NATIVE_RUNTIME_VERSIONS),
@@ -302,7 +303,8 @@ def runtime_contract(plan: dict, cfg: testbed.Config, extra: list[str], gpu: dic
               "kv_cache_dtype": "auto", "block_size": 16,
               "gpu_memory_utilization": .75, "chunked_prefill": True,
               "prefix_caching": True, "enforce_eager": True,
-              "disable_hybrid_kv_cache_manager": True}
+              "disable_hybrid_kv_cache_manager": True,
+              "async_scheduling": False, "stream_interval": 1}
     expected = {key: value for key, value in stack.items()
                 if key != "runtime_versions"}
     mode = runtime.get("mode")
@@ -541,7 +543,8 @@ def stack_commands(cfg: testbed.Config, extra: list[str]) -> dict[str, list[str]
                 cfg, "sink", l2_port=cfg.lmc_port,
             ))),
             "vllm": list(map(str, testbed.vllm_cmd(
-                cfg, "sink", extra, gpu_index=0,
+                cfg, "sink", ["--no-async-scheduling", "--stream-interval", 1,
+                              *extra], gpu_index=0,
             )))}
 
 

@@ -263,7 +263,9 @@ point infeasible rather than adding a third line. Preserve p50/p90/p95/p99,
 every returned token ID and SSE timestamp, and full Prometheus histograms. A
 multi-token SSE event is an exact completion but does not expose literal token
 gaps, so it invalidates TPOT/ITL measurement rather than counting as a service
-failure. P99 is reportable only with at least 1,000 incumbent requests in a
+failure. Freeze vLLM asynchronous scheduling off and its stream interval at one
+to make literal per-token SSE events part of the measured serving stack. P99 is
+reportable only with at least 1,000 incumbent requests in a
 cell; otherwise it is null.
 Horizontal latency targets are evaluation inputs, not values inferred from the
 curve.

@@ -1546,7 +1546,9 @@ waits for every worker before releasing its common request epoch. The harness pr
 IDs/events, labeled Prometheus
 scrapes, queue/KV/power series, partial failures, cache proof, and complete
 runtime identity, including the exact vLLM, LMCache, and Redis commands. It
-enforces the frozen randomized cell order and hashes an unchanged image once
+disables vLLM asynchronous scheduling and fixes its stream interval to one so
+each returned token has a literal SSE timestamp. It enforces the frozen
+randomized cell order and hashes an unchanged image once
 per stage, or records the native environment manifest. The balanced confirmation workload is derived from each hardware's
 normalization and must have a 40--60% prefill share. Live KV capacity and the
 planned block-rounded parked stock are bound into the normalization, checked

@@ -203,6 +203,18 @@ def test_runtime_contract_changes_with_every_semantic_stack_input():
         )
 
 
+def test_formal_stack_streams_one_token_per_event(monkeypatch):
+    monkeypatch.setattr(campaign.testbed, "redis_cmd", lambda _cfg: ["redis"])
+    monkeypatch.setattr(campaign.testbed, "mp_server_cmd",
+                        lambda *_args, **_kwargs: ["cache"])
+    monkeypatch.setattr(campaign.testbed, "vllm_cmd",
+                        lambda _cfg, _role, extra, **_kwargs: extra)
+
+    assert campaign.stack_commands(SimpleNamespace(lmc_port=1), [])["vllm"] == [
+        "--no-async-scheduling", "--stream-interval", "1",
+    ]
+
+
 def test_image_hash_cache_reuses_only_an_unchanged_file(tmp_path, monkeypatch):
     image, cache = tmp_path / "stack.sif", tmp_path / "image-hash.json"
     image.write_bytes(b"a")
