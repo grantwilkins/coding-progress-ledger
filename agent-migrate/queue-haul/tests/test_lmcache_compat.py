@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import builtins
 import threading
+from types import SimpleNamespace
 import pytest
 import torch
 
@@ -12,6 +13,7 @@ from lmcache_compat.connector_patch import (
     independent_transaction,
     kv_first_attention_block_view,
     patch_attention_kv_layout,
+    patch_gemma4_config,
     patch_on_import,
     register_verified_kv_caches,
     verify_kv_cache_dtypes,
@@ -188,6 +190,32 @@ def test_gemma4_geometry_uses_only_exact_per_layer_configs():
     assert len(layers) == 30
     assert [(layers[index].head_dim, layers[index].num_key_value_heads)
             for index in (0, 5)] == [(256, 8), (512, 2)]
+
+
+def test_gemma4_config_uses_validated_layers_for_summary_and_backend():
+    events = []
+    logger = SimpleNamespace(info=lambda message, *args:
+                             events.append(message % args))
+    patch_gemma4_config(logger)
+    from vllm.model_executor.models.config import Gemma4Config
+    from vllm.transformers_utils.model_arch_config_convertor import (
+        Gemma4ModelArchConfigConvertor,
+    )
+    converter = object.__new__(Gemma4ModelArchConfigConvertor)
+    converter.hf_text_config = gemma_layers()
+    config = SimpleNamespace(
+        model_config=SimpleNamespace(hf_text_config=gemma_layers()),
+        attention_config=SimpleNamespace(backend=None),
+    )
+
+    assert converter.get_head_size() == 512
+    assert converter.get_total_num_kv_heads() == 8
+    assert converter.get_total_num_attention_heads() == 16
+    Gemma4Config.verify_and_update_config(config)
+    assert config.attention_config.backend.name == "TRITON_ATTN"
+    assert events.count("QH_GEMMA4_GEOMETRY_VERIFIED "
+                        "sliding=25x(head_dim=256,kv_heads=8) "
+                        "full=5x(head_dim=512,kv_heads=2)") == 1
 
 
 @pytest.mark.parametrize("change", [

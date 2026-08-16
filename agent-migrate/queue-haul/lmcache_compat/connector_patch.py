@@ -109,6 +109,7 @@ def patch_gemma4_decoder() -> None:
 
 
 def patch_gemma4_config(logger) -> None:
+    from vllm.model_executor.models.config import Gemma4Config
     from vllm.transformers_utils.model_arch_config_convertor import (
         Gemma4ModelArchConfigConvertor,
     )
@@ -124,13 +125,22 @@ def patch_gemma4_config(logger) -> None:
             self._qh_geometry_logged = True
         return layers
 
+    def verify(vllm_config):
+        gemma4_layer_configs(vllm_config.model_config.hf_text_config)
+        if vllm_config.attention_config.backend is None:
+            from vllm.v1.attention.backends.registry import AttentionBackendEnum
+            vllm_config.attention_config.backend = AttentionBackendEnum.TRITON_ATTN
+            logger.info("Gemma4 exact heterogeneous geometry requires TRITON_ATTN")
+
     Gemma4ModelArchConfigConvertor.get_head_size = \
         lambda self: max(layer.head_dim for layer in geometry(self))
     Gemma4ModelArchConfigConvertor.get_total_num_kv_heads = \
         lambda self: max(layer.num_key_value_heads for layer in geometry(self))
     Gemma4ModelArchConfigConvertor.get_total_num_attention_heads = \
         lambda self: max(layer.num_attention_heads for layer in geometry(self))
+    Gemma4Config.verify_and_update_config = staticmethod(verify)
     Gemma4ModelArchConfigConvertor._qh_heterogeneous_patched = True
+    Gemma4Config._qh_heterogeneous_patched = True
 
 
 def patch_attention_kv_layout() -> None:

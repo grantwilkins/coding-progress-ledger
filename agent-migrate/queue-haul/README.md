@@ -1530,7 +1530,8 @@ Gemma's text-only launch passes its disabled image/audio limits as JSON. A
 repo-local vLLM compatibility hook consumes only its 30 concrete layer configs,
 hard-checks 25 sliding `(head_dim=256, kv_heads=8)` and five full
 `(head_dim=512, kv_heads=2)` layers, and records that proof in the runtime log;
-it neither enables ambiguous global attribute access nor homogenizes the model.
+it neither enables ambiguous global attribute access nor homogenizes the model,
+and uses that exact proof for vLLM's required unified Triton backend selection.
 Non-GPT cells hard-check BF16 attention KV, record recurrent-state dtypes,
 check model-specific arguments, and enforce Qwen's
 784-token unified/cache-group alignment. Their normalization records the
