@@ -50,19 +50,17 @@ frontier. No value from this directory may update planner admission through
 
 ## Figures and tables
 
-- `service-headroom.pdf` / `.png`: discovery P90 TTFT versus measured offered
-  prefill work `rho_p` along the prefill sweep (`rho_d=0.19--0.23`), and P90
-  per-request mean TPOT versus measured offered decode work `rho_d` along the
-  decode sweep (`rho_p=0.08--0.10`). It contains only the two discovery median
-  lines and dotted SLOs. TTFT is logarithmic so the measured 24-second overload
-  point does not hide the subsecond curve. These are two measured conditional
-  slices, not a two-dimensional response surface or estimates of independent
-  partial effects. Held-out values and restart-block ranges remain in the CSVs.
+- `service-headroom.pdf` / `.png`: discovery P90 TTFT and mean TPOT, normalized
+  by their respective SLOs, versus added total offered work above the measured
+  baseline. Each metric is the pointwise maximum directional median across the
+  prefill- and decode-heavy runs, so pooling cannot average away a violation.
+  Crosses mark SLO misses: TPOT first misses at total `rho=0.85`, while TTFT
+  first misses at `rho=1.10`. The log scale retains the 24-second overload.
 - `service-headroom-phase.pdf` / `.png`: sampled prefill/decode work rays, with
   held-out points shown as open markers and any all-repeat evidence miss marked
   with an x. It is not a fitted frontier.
 - `service-headroom-sustainability.pdf` / `.png`: compatibility copy of the
-  same two simple measured slices; it adds no admission marker or extra metric.
+  same conservative SLO envelope; it adds no admission marker.
 - `service-headroom.csv`: discovery medians, ranges, phase coordinates, and
   repeat-level feasibility counts.
 - `service-headroom-heldout.csv`: the same reduction for unseen confirmation.
@@ -73,8 +71,10 @@ frontier. No value from this directory may update planner admission through
   `confirmed.json`, and `confirmation-status.json`: immutable campaign inputs
   and reduced evidence.
 
-All figure writers call `plot_style.apply()` and use the registered service
-mix identities.
+The pooled curve is descriptive across the two measured directions, not a
+composition-invariant latency model. The phase figure and CSV retain the
+underlying mix dependence. All figure writers call `plot_style.apply()` and
+use registered service identities.
 
 ## Provenance
 
@@ -97,5 +97,3 @@ mix identities.
   `7ae339b33943fe457faf1b7497b5f27ccf45b77ac0a529b912b53eaa667ae808`.
 - Cross-commit service runtime identity:
   `e3cb11186d494bcb719b92552dfe0530f1f995da64205cc1761ec169a7380fe6`.
-
-Focused service-headroom semantic, plotting, and driver tests: 42 passed.

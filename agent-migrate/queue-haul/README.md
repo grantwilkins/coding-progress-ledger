@@ -1645,12 +1645,12 @@ reports `planner_usable=false` and no supported scalar bound.
 Interpret `rho` only as offered normalized phase work,
 `rho_p + rho_d`, computed from exact offered tokens and isolated phase rates;
 it is not measured GPU utilization and is not composition-invariant. The main
-figure therefore plots TTFT against `rho_p` along the measured prefill sweep
-(`rho_d=0.19--0.23`) and TPOT against `rho_d` along the measured decode sweep
-(`rho_p=0.08--0.10`). It shows only the two median lines and their dotted SLOs;
-the held-out and restart-block details remain in the committed CSVs. These are
-two conditional slices, not a two-dimensional surface or estimates of
-independent partial effects.
+figure puts TTFT/SLO and TPOT/SLO on one log-scale axis against added total
+work. At each load and for each metric separately, it takes the larger median
+of the prefill- and decode-heavy runs; this conservative envelope exposes the
+prefill-heavy TPOT miss at `rho=0.85` instead of averaging it away. Crosses mark
+SLO violations. The phase figure and committed CSVs retain composition and
+restart-block detail, so the envelope is not a two-dimensional response model.
 At total `rho` near 0.70, held-out prefill-heavy, balanced, and decode-heavy P90
 TTFT/mean-TPOT medians are respectively 234.7/59.7 ms, 152.9/42.7 ms, and
 131.7/37.2 ms. This composition dependence proves that total work is not a

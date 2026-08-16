@@ -143,48 +143,67 @@ def write_csv(rows: list[dict], path: Path) -> None:
         writer.writerows(rows)
 
 
+def pool_slo_envelope(rows: list[dict], targets: dict) -> list[dict]:
+    """Take the worst directional median for each metric and work level."""
+    baseline = statistics.median(
+        row["measured_rho_median"] for row in rows
+        if row["target_rho"] == campaign.BASE_RHO
+    )
+    pooled = []
+    for rho in sorted({row["target_rho"] for row in rows}):
+        block = [row for row in rows if row["target_rho"] == rho]
+        if len(block) != len(plot_style.SERVICE_LOADS) or {
+                row["direction"] for row in block
+        } != set(plot_style.SERVICE_LOADS):
+            raise RuntimeError("each work level must contain every load direction")
+        pooled.append({
+            "target_rho": rho,
+            "added_rho": statistics.median(
+                row["measured_rho_median"] for row in block) - baseline,
+            **{
+                f"{metric}_slo_ratio": max(
+                    row[f"{metric}_median"] for row in block
+                ) / targets[metric]
+                for metric in plot_style.SERVICE_LATENCY_METRICS
+            },
+        })
+    return pooled
+
+
 def plot(rows: list[dict], scout: dict, out: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    panels = (
-        ("p90_ttft_s", "offered_prefill_rho_median", "prefill_heavy",
-         "P90 TTFT (s)", r"Prefill work, $\rho_p$ (GPU-s/s)"),
-        ("p90_mean_tpot_s", "offered_decode_rho_median",
-         "decode_heavy", "P90 mean TPOT (s)",
-         r"Decode work, $\rho_d$ (GPU-s/s)"),
-    )
-    figure, axes = plt.subplots(
-        2, 1, sharex=False,
-        figsize=(plot_style.COMPACT_FIGSIZE[0], 4.9),
-    )
-    for axis, (metric, x_field, direction, ylabel, xlabel) in zip(axes, panels):
-        selected = [row for row in rows if row["direction"] == direction
-                    and row[f"{metric}_median"] is not None
-                    and row.get(x_field) is not None]
-        x = [row[x_field] for row in selected]
-        y = [row[f"{metric}_median"] for row in selected]
+    curve = pool_slo_envelope(rows, scout["targets"])
+    figure, axis = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    violations = []
+    for metric in plot_style.SERVICE_LATENCY_METRICS:
+        x = [row["added_rho"] for row in curve]
+        y = [row[f"{metric}_slo_ratio"] for row in curve]
         axis.plot(
-            x, y, color=plot_style.SERVICE_MIX_COLORS[direction],
-            linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
-            marker=plot_style.SERVICE_MIX_MARKERS[direction], markersize=5,
-            linewidth=1.8,
+            x, y, color=plot_style.SERVICE_LATENCY_COLORS[metric],
+            linestyle=plot_style.SERVICE_LATENCY_LINESTYLES[metric],
+            marker=plot_style.SERVICE_LATENCY_MARKERS[metric], markersize=5,
+            linewidth=1.8, label=plot_style.SERVICE_LATENCY_NAMES[metric],
         )
-        target = scout["targets"][metric]
-        axis.axhline(target, color="#555555", linestyle=":", linewidth=1.5)
-        axis.text(.98, target, "SLO", color="#555555", ha="right",
-                  va="bottom", fontsize=plot_style.COLUMN_FONT_SIZE,
-                  transform=axis.get_yaxis_transform())
-        if metric == "p90_ttft_s":
-            axis.set_yscale("log")
-        axis.set_title(plot_style.SERVICE_MIX_NAMES[direction], loc="left",
-                       color=plot_style.SERVICE_MIX_COLORS[direction],
-                       fontsize=plot_style.COLUMN_FONT_SIZE)
-        axis.set_ylabel(ylabel, fontsize=plot_style.COLUMN_FONT_SIZE)
-        axis.set_xlabel(xlabel, fontsize=plot_style.COLUMN_FONT_SIZE)
-        axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
-        axis.grid(alpha=.2)
+        violations.extend((x_value, y_value) for x_value, y_value in zip(x, y)
+                          if y_value > 1)
+    axis.axhline(1, color="#555555", linestyle=":", linewidth=1.5,
+                 label="SLO")
+    if violations:
+        axis.scatter(*zip(*violations), marker="x", color="#222222", s=45,
+                     linewidths=1.4, zorder=4, label="SLO violation")
+    axis.set_yscale("log")
+    axis.set_title("Worst observed added-load mix", loc="left",
+                   fontsize=plot_style.COLUMN_FONT_SIZE)
+    axis.set_ylabel("P90 latency / SLO",
+                    fontsize=plot_style.COLUMN_FONT_SIZE)
+    axis.set_xlabel(r"Added normalized work, $\Delta\rho$ (GPU-s/s)",
+                    fontsize=plot_style.COLUMN_FONT_SIZE)
+    axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
+    axis.grid(alpha=.2)
+    axis.legend(frameon=False, fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE)
     figure.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("pdf", "png"):

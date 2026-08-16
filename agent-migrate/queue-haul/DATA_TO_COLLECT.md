@@ -264,9 +264,12 @@ No migration bytes move during this curve: it isolates the steady-state
 serving effect after sessions are placed. Existing replay/KV experiments remain
 the evidence for the distinct transfer transient.
 
-Plot only incumbent request performance. The top panel is p90 TTFT; the bottom
-is p90 per-request mean TPOT. Queue drain/stability and service failures mark a
-point infeasible rather than adding a third line. Preserve p50/p90/p95/p99,
+Plot only incumbent request performance. Put p90 TTFT/SLO and p90 per-request
+mean TPOT/SLO on one log-scale axis against added total work. At each load,
+take the worse directional median separately for each metric and mark SLO
+misses, so pooling cannot hide a one-direction violation. Preserve composition
+in the phase plot. Queue drain/stability and service failures mark a point
+infeasible rather than adding a third line. Preserve p50/p90/p95/p99,
 every returned token ID and SSE timestamp, and full Prometheus histograms. A
 multi-token SSE event is an exact completion but does not expose literal token
 gaps, so it invalidates TPOT/ITL measurement rather than counting as a service
