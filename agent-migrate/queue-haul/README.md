@@ -1611,6 +1611,8 @@ stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`. The shipped connector
 retains Qwen's separate attention/Mamba groups. It accepts only vLLM's exact
 `[2, NB, 16, NH, HS]` hybrid-attention shape and stride, restores the underlying
 block-major view without a copy, and lets LMCache form 784-token logical pages.
+Startup succeeds only after every registered attention and Mamba tensor is
+directly verified as BF16 and recorded by `QH_KV_CACHE_DTYPE_VERIFIED`.
 
 ```bash
 uv run python model_architecture_campaign.py prepare --out-dir runs/model-architecture/plans

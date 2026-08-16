@@ -12,6 +12,8 @@ from lmcache_compat.connector_patch import (
     kv_first_attention_block_view,
     patch_attention_kv_layout,
     patch_on_import,
+    register_verified_bf16_kv_caches,
+    verify_bf16_kv_caches,
 )
 
 
@@ -110,6 +112,45 @@ def test_kv_first_attention_view_rejects_truncated_storage():
     cache.untyped_storage().resize_(cache.untyped_storage().nbytes() - 4)
     with pytest.raises(ValueError, match="backing storage"):
         kv_first_attention_block_view(cache)
+
+
+def test_bf16_proof_checks_attention_and_every_mamba_tensor():
+    caches = {
+        "attention": torch.empty(2, dtype=torch.bfloat16),
+        "mamba": [torch.empty(3, dtype=torch.bfloat16),
+                  torch.empty(4, dtype=torch.bfloat16)],
+    }
+    assert verify_bf16_kv_caches(caches) == (2, 3)
+    caches["mamba"][1] = torch.empty(4, dtype=torch.float16)
+    with pytest.raises(RuntimeError, match=r"mamba\[1\].*not torch.bfloat16"):
+        verify_bf16_kv_caches(caches)
+
+
+@pytest.mark.parametrize("caches", [{}, {"mamba": []}, {"mamba": (object(),)}])
+def test_bf16_proof_rejects_missing_or_unknown_tensor_groups(caches):
+    with pytest.raises(RuntimeError):
+        verify_bf16_kv_caches(caches)
+
+
+def test_bf16_registration_marker_follows_successful_registration_only():
+    events = []
+    logger = type("Logger", (), {"info": lambda _self, message, *args:
+                  events.append(message % args)})()
+    caches = {"attention": torch.empty(1, dtype=torch.bfloat16)}
+
+    assert register_verified_bf16_kv_caches(
+        lambda values: events.append("registered") or values,
+        caches, logger,
+    ) is caches
+    assert events == ["registered", "QH_KV_CACHE_DTYPE_VERIFIED "
+                      "dtype=torch.bfloat16 entries=1 tensors=1"]
+    events.clear()
+    with pytest.raises(RuntimeError):
+        register_verified_bf16_kv_caches(
+            lambda _values: (_ for _ in ()).throw(RuntimeError("register failed")),
+            caches, logger,
+        )
+    assert not events
 
 
 

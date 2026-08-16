@@ -37,6 +37,32 @@ def kv_first_attention_block_view(kv_cache):
     )
 
 
+def verify_bf16_kv_caches(kv_caches):
+    import torch
+
+    if not kv_caches:
+        raise RuntimeError("no KV caches were registered")
+    tensors = 0
+    for name, cache in kv_caches.items():
+        values = [cache] if isinstance(cache, torch.Tensor) else cache
+        if not isinstance(values, list) or not values:
+            raise RuntimeError(f"KV cache {name} has an unsupported tensor group")
+        for index, tensor in enumerate(values):
+            if not isinstance(tensor, torch.Tensor) or tensor.dtype != torch.bfloat16:
+                dtype = getattr(tensor, "dtype", type(tensor).__name__)
+                raise RuntimeError(f"KV cache {name}[{index}] is {dtype}, not torch.bfloat16")
+            tensors += 1
+    return len(kv_caches), tensors
+
+
+def register_verified_bf16_kv_caches(register, kv_caches, logger):
+    entries, tensors = verify_bf16_kv_caches(kv_caches)
+    result = register(kv_caches)
+    logger.info("QH_KV_CACHE_DTYPE_VERIFIED dtype=torch.bfloat16 entries=%d tensors=%d",
+                entries, tensors)
+    return result
+
+
 def patch_attention_kv_layout() -> None:
     from lmcache.integration.vllm.kv_cache_group_edits import (
         _SubpagedAttentionViewEdit,
@@ -196,6 +222,7 @@ def patch_mp_connector() -> None:
     if getattr(LMCacheMPConnector, "_qh_bypass_patched", False):
         return
     original_lookup = LMCacheMPConnector.get_num_new_matched_tokens
+    original_register = LMCacheMPConnector.register_kv_caches
 
     def lookup(self, request, num_computed_tokens):
         if not bypass_lmcache(request):
@@ -206,8 +233,15 @@ def patch_mp_connector() -> None:
                     request.request_id, request.num_tokens)
         return 0, False
 
+    def register(self, kv_caches):
+        return register_verified_bf16_kv_caches(
+            lambda caches: original_register(self, caches), kv_caches, logger,
+        )
+
     LMCacheMPConnector.get_num_new_matched_tokens = lookup
+    LMCacheMPConnector.register_kv_caches = register
     LMCacheMPConnector._qh_bypass_patched = True
+    LMCacheMPConnector._qh_bf16_registration_patched = True
 
 
 if os.environ.get("QH_LMCACHE_MODE") == "mp":

@@ -89,6 +89,18 @@ def test_campaign_log_must_prove_bf16_and_qwen_unified_block():
         testbed.validate_model_runtime_log(
             qwen, good.replace("bfloat16", "float8_e4m3fn"))
 
+    direct = """
+    QH_KV_CACHE_DTYPE_VERIFIED dtype=torch.bfloat16 entries=36 tensors=48
+    Setting attention block size to 784 tokens
+    """
+    testbed.validate_model_runtime_log(qwen, direct)
+    with pytest.raises(RuntimeError, match="BF16"):
+        testbed.validate_model_runtime_log(
+            qwen, direct.replace("torch.bfloat16", "torch.float16"))
+    with pytest.raises(RuntimeError, match="BF16"):
+        testbed.validate_model_runtime_log(
+            qwen, direct.replace("entries=36", "entries=0"))
+
 
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):
     with pytest.raises(ValueError, match="unsupported model"):
