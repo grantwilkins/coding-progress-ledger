@@ -906,12 +906,13 @@ method-independent because either method leaves the same resident KV state.
 `workload_power_frontier.py` carries 100 deterministic paired Queue-Haul draws
 through all eight constraint states. Its main figure uses the monotone envelope
 at the 100% endpoint to recover each draw's maximum safely attained plan, then
-plots the fraction of draws capable
-of meeting each source-power request under None, HBM, destination-compute, and
-all-bound states. This avoids the uninformative identity obtained when every
+plots the fraction of draws capable of meeting each source-power request. Four
+curves explicitly pair None/Bandwidth, HBM/HBM+Bandwidth,
+destination-compute/Bandwidth+Compute, and HBM+Compute/All-Bound states. This
+avoids the uninformative identity obtained when every
 target-aware policy is plotted against the target it is trying to meet. The
-measured bandwidth state is omitted from the main legend only after every
-paired Queue-Haul frontier point is exactly equal to its released counterpart;
+measured bandwidth states share curves only after every paired Queue-Haul
+frontier point is exactly equal to its released counterpart;
 all eight factorial states remain in the raw CSV. Watts
 are normalized by each draw's removable source power. The companion
 `_power.csv` retains 5th, median, and 95th percentile watts. These are modeled

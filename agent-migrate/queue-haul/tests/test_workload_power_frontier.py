@@ -13,6 +13,7 @@ Plausible wrong implementations:
 - Plot target-following policies against their own target instead of the
   distribution of maximum safely attainable power.
 - Collapse bandwidth states without proving they are paired null effects.
+- Omit or duplicate a factorial state when labeling bandwidth-null curve pairs.
 """
 
 import numpy as np
@@ -20,9 +21,17 @@ import pytest
 
 import workload_adaptation_campaign as adaptation
 from workload_power_frontier import (
-    SOLVERS, assert_bandwidth_null, capacity_summary, power_summary, request_grid,
-    sweep,
+    DISPLAY_GROUPS, SOLVERS, assert_bandwidth_null, capacity_summary,
+    power_summary, request_grid, sweep,
 )
+
+
+def test_display_groups_partition_all_eight_factorial_states():
+    grouped = sum(DISPLAY_GROUPS.values(), ())
+    expected = tuple(case_id for case_id, _, _ in adaptation.factorial_cases())
+
+    assert len(grouped) == len(set(grouped)) == 8
+    assert set(grouped) == set(expected)
 
 
 def test_capacity_summary_uses_one_maximum_per_paired_draw():
@@ -31,7 +40,7 @@ def test_capacity_summary_uses_one_maximum_per_paired_draw():
         "policy": "queue_haul_lp", "requested_fraction": 1,
         "safely_attained_fraction": capacity,
     } for state in ("none", "hbm", "dest_compute",
-                    "bandwidth-dest_compute-hbm")
+                    "dest_compute-hbm")
             for replicate, capacity in enumerate((.25, .75))]
 
     summary = capacity_summary(rows, grid=(0, .5, 1))

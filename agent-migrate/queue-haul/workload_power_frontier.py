@@ -24,10 +24,13 @@ DEFAULT_SAMPLES = 100
 DEFAULT_POINTS = 9
 MAX_REQUEST = 1.0
 SOLVERS = {"queue_haul_lp": "lp_highs"}
-DISPLAY_STATES = {
-    "none": "none", "hbm": "hbm", "dest_compute": "dest_compute",
-    "all": "bandwidth-dest_compute-hbm",
+DISPLAY_GROUPS = {
+    "none": ("none", "bandwidth"),
+    "hbm": ("hbm", "bandwidth-hbm"),
+    "dest_compute": ("dest_compute", "bandwidth-dest_compute"),
+    "all": ("dest_compute-hbm", "bandwidth-dest_compute-hbm"),
 }
+DISPLAY_STATES = {state: pair[0] for state, pair in DISPLAY_GROUPS.items()}
 BANDWIDTH_NULL_PAIRS = (
     ("none", "bandwidth"), ("hbm", "bandwidth-hbm"),
     ("dest_compute", "bandwidth-dest_compute"),
@@ -207,7 +210,7 @@ def write_capacity_plot(summary, out):
             where="post",
             color=plot_style.RESOURCE_STATE_COLORS[state],
             linestyle=plot_style.RESOURCE_STATE_LINESTYLES[state],
-            label=plot_style.RESOURCE_STATE_NAMES[state],
+            label=plot_style.RESOURCE_STATE_NAMES[state].replace(" / ", " /\n"),
         )
     axis.set(xlim=(0, 1), ylim=(0, 1),
              xlabel="Requested Source-Power Fraction",
@@ -219,8 +222,8 @@ def write_capacity_plot(summary, out):
     axis.yaxis.label.set_size(12)
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, fontsize=10, ncol=1,
-               loc="center left", bbox_to_anchor=(.94, .5))
+    fig.legend(handles, labels, frameon=False, fontsize=9, ncol=1,
+               loc="center left", bbox_to_anchor=(.93, .5))
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
@@ -257,8 +260,8 @@ def main():
         "factor_levels": adaptation.LEVELS, "regions": list(adaptation.REGIONS),
         "normalization": "safely attained watts / draw-specific removable watts",
         "figure_metric": "fraction of paired draws whose maximum safely attained Queue-Haul source-power fraction meets each request",
-        "plotted_constraint_states": DISPLAY_STATES,
-        "bandwidth_null": "each measured-bandwidth state is exactly paired-equal to its released counterpart before being collapsed from the main figure",
+        "plotted_constraint_states": DISPLAY_GROUPS,
+        "bandwidth_null": "each measured-bandwidth state is exactly paired-equal to its released counterpart before sharing one explicitly paired curve label",
         "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
         "power_scope": "steady awake source-region power; destination power excluded",
         "source_load_definition": "sum(f/F + g/G)=0.4; distinct from sampled phase load z=af+bg",
@@ -279,7 +282,7 @@ def main():
             "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
             "each workload draw and global constraint state receives equal weight",
             "the main figure and raw tables show Queue-Haul capacity across all eight constraint states",
-            "measured bandwidth is a paired null effect in this workload ensemble and is omitted from the main legend after an exact equality gate",
+            "measured bandwidth is a paired null effect in this workload ensemble; all eight states appear in four paired legend entries after an exact equality gate",
             "the frontier remains modeled rather than hardware-measured",
             "reported shed is awake source-region power rather than net fleet power or energy",
             "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",

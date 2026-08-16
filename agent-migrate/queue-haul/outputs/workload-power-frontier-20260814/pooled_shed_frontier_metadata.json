@@ -1,5 +1,5 @@
 {
-  "bandwidth_null": "each measured-bandwidth state is exactly paired-equal to its released counterpart before being collapsed from the main figure",
+  "bandwidth_null": "each measured-bandwidth state is exactly paired-equal to its released counterpart before sharing one explicitly paired curve label",
   "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
   "factor_levels": {
     "bandwidth": [
@@ -33,7 +33,7 @@
     "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
     "each workload draw and global constraint state receives equal weight",
     "the main figure and raw tables show Queue-Haul capacity across all eight constraint states",
-    "measured bandwidth is a paired null effect in this workload ensemble and is omitted from the main legend after an exact equality gate",
+    "measured bandwidth is a paired null effect in this workload ensemble; all eight states appear in four paired legend entries after an exact equality gate",
     "the frontier remains modeled rather than hardware-measured",
     "reported shed is awake source-region power rather than net fleet power or energy",
     "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
@@ -46,10 +46,22 @@
   ],
   "normalization": "safely attained watts / draw-specific removable watts",
   "plotted_constraint_states": {
-    "all": "bandwidth-dest_compute-hbm",
-    "dest_compute": "dest_compute",
-    "hbm": "hbm",
-    "none": "none"
+    "all": [
+      "dest_compute-hbm",
+      "bandwidth-dest_compute-hbm"
+    ],
+    "dest_compute": [
+      "dest_compute",
+      "bandwidth-dest_compute"
+    ],
+    "hbm": [
+      "hbm",
+      "bandwidth-hbm"
+    ],
+    "none": [
+      "none",
+      "bandwidth"
+    ]
   },
   "policies": [
     "queue_haul_lp"

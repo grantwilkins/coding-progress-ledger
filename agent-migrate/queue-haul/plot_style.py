@@ -107,8 +107,9 @@ ACTION_HATCHES = {
     "not_moved": "--",
 }
 RESOURCE_STATE_NAMES = {
-    "none": "None bound", "hbm": "HBM",
-    "dest_compute": "Dest. compute", "all": "All bound",
+    "none": "None / bandwidth", "hbm": "HBM / HBM + bandwidth",
+    "dest_compute": "Dest. compute / bandwidth + compute",
+    "all": "HBM + compute / all bound",
 }
 RESOURCE_STATE_COLORS = {
     "none": POLICY_COLORS["queue_haul"], "hbm": POLICY_COLORS["greedy"],
