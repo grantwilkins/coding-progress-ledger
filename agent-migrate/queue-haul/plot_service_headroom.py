@@ -143,68 +143,89 @@ def write_csv(rows: list[dict], path: Path) -> None:
         writer.writerows(rows)
 
 
-def pool_slo_envelope(rows: list[dict], targets: dict) -> list[dict]:
-    """Take the worst directional median for each metric and work level."""
-    baseline = statistics.median(
-        row["measured_rho_median"] for row in rows
-        if row["target_rho"] == campaign.BASE_RHO
+def workload_panels(rows: list[dict], targets: dict) -> list[dict]:
+    """Return raw latency slices along the prefill-heavy workload ray."""
+    trajectory = sorted(
+        (row for row in rows if row["direction"] == "prefill_heavy"),
+        key=lambda row: row["target_rho"],
     )
-    pooled = []
-    for rho in sorted({row["target_rho"] for row in rows}):
-        block = [row for row in rows if row["target_rho"] == rho]
-        if len(block) != len(plot_style.SERVICE_LOADS) or {
-                row["direction"] for row in block
-        } != set(plot_style.SERVICE_LOADS):
-            raise RuntimeError("each work level must contain every load direction")
-        pooled.append({
-            "target_rho": rho,
-            "added_rho": statistics.median(
-                row["measured_rho_median"] for row in block) - baseline,
-            **{
-                f"{metric}_slo_ratio": max(
-                    row[f"{metric}_median"] for row in block
-                ) / targets[metric]
-                for metric in plot_style.SERVICE_LATENCY_METRICS
-            },
+    panels = []
+    for metric, x_field, ylabel, xlabel in (
+        ("p90_ttft_s", "offered_prefill_rho_median", "P90 TTFT (s)",
+         r"Prefill work, $\rho_p$ (GPU-s/s)"),
+        ("p90_mean_tpot_s", "offered_decode_rho_median",
+         "P90 mean TPOT (s)", r"Decode work, $\rho_d$ (GPU-s/s)"),
+    ):
+        misses = [row for row in trajectory
+                  if row[f"{metric}_median"] > targets[metric]]
+        if not misses:
+            raise RuntimeError(f"{metric} has no measured SLO violation")
+        panels.append({
+            "metric": metric, "ylabel": ylabel, "xlabel": xlabel,
+            "x": [row[x_field] for row in trajectory],
+            "y": [row[f"{metric}_median"] for row in trajectory],
+            "first_miss": misses[0], "x_field": x_field,
         })
-    return pooled
+    return panels
 
 
 def plot(rows: list[dict], scout: dict, out: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
 
-    curve = pool_slo_envelope(rows, scout["targets"])
-    figure, axis = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
-    violations = []
-    for metric in plot_style.SERVICE_LATENCY_METRICS:
-        x = [row["added_rho"] for row in curve]
-        y = [row[f"{metric}_slo_ratio"] for row in curve]
+    direction = "prefill_heavy"
+    panels = workload_panels(rows, scout["targets"])
+    figure, axes = plt.subplots(
+        2, 1, figsize=(plot_style.COMPACT_FIGSIZE[0], 5.2),
+    )
+    for axis, panel in zip(axes, panels):
+        metric = panel["metric"]
         axis.plot(
-            x, y, color=plot_style.SERVICE_LATENCY_COLORS[metric],
-            linestyle=plot_style.SERVICE_LATENCY_LINESTYLES[metric],
-            marker=plot_style.SERVICE_LATENCY_MARKERS[metric], markersize=5,
-            linewidth=1.8, label=plot_style.SERVICE_LATENCY_NAMES[metric],
+            panel["x"], panel["y"],
+            color=plot_style.SERVICE_MIX_COLORS[direction],
+            linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
+            marker=plot_style.SERVICE_MIX_MARKERS[direction], markersize=5,
+            linewidth=1.8,
         )
-        violations.extend((x_value, y_value) for x_value, y_value in zip(x, y)
-                          if y_value > 1)
-    axis.axhline(1, color="#555555", linestyle=":", linewidth=1.5,
-                 label="SLO")
-    if violations:
-        axis.scatter(*zip(*violations), marker="x", color="#222222", s=45,
-                     linewidths=1.4, zorder=4, label="SLO violation")
-    axis.set_yscale("log")
-    axis.set_title("Worst observed added-load mix", loc="left",
-                   fontsize=plot_style.COLUMN_FONT_SIZE)
-    axis.set_ylabel("P90 latency / SLO",
-                    fontsize=plot_style.COLUMN_FONT_SIZE)
-    axis.set_xlabel(r"Added normalized work, $\Delta\rho$ (GPU-s/s)",
-                    fontsize=plot_style.COLUMN_FONT_SIZE)
-    axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
-    axis.grid(alpha=.2)
-    axis.legend(frameon=False, fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE)
-    figure.tight_layout()
+        target = scout["targets"][metric]
+        axis.axhline(target, color="#222222", linestyle="--", linewidth=1.4)
+        if metric == "p90_ttft_s":
+            axis.set_yscale("log")
+        miss = panel["first_miss"]
+        miss_x = miss[panel["x_field"]]
+        axis.scatter(miss_x, miss[f"{metric}_median"], marker="x",
+                     color="#222222", s=48, linewidths=1.4, zorder=4)
+        axis.vlines(
+            miss_x, axis.get_ylim()[0], target,
+            color=plot_style.SERVICE_MIX_COLORS[direction],
+            linestyle="--", linewidth=1.2,
+        )
+        offset, alignment = ((-5, 15), "right") \
+            if metric == "p90_ttft_s" else ((5, 15), "left")
+        axis.annotate(
+            rf"$\rho={miss['target_rho']:.2f}$",
+            xy=(miss_x, 0), xycoords=("data", "axes fraction"),
+            xytext=offset, textcoords="offset points", ha=alignment,
+            fontsize=plot_style.COLUMN_FONT_SIZE,
+            arrowprops={"arrowstyle": "->", "color": "#222222", "lw": .8},
+        )
+        axis.set_ylabel(panel["ylabel"], fontsize=plot_style.COLUMN_FONT_SIZE)
+        axis.set_xlabel(panel["xlabel"], fontsize=plot_style.COLUMN_FONT_SIZE)
+        axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
+        axis.grid(alpha=.2)
+    figure.legend(handles=(
+        Line2D([], [], color=plot_style.SERVICE_MIX_COLORS[direction],
+               linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
+               marker=plot_style.SERVICE_MIX_MARKERS[direction],
+               label=plot_style.SERVICE_MIX_NAMES[direction]),
+        Line2D([], [], color="#222222", linestyle="--", label="SLO"),
+        Line2D([], [], color="#222222", marker="x", linestyle="none",
+               label="First measured violation"),
+    ), frameon=False, fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE, ncol=2,
+        loc="upper center", bbox_to_anchor=(.5, .995))
+    figure.tight_layout(rect=(0, 0, 1, .88))
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("pdf", "png"):
         figure.savefig(out.with_suffix(f".{suffix}"),

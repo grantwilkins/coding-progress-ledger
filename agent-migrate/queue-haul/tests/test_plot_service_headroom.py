@@ -1,16 +1,15 @@
 """
 Claim:
-The headline curve reports, at each measured total-work level, the worst
-directional median for each latency metric divided by that metric's own SLO.
+The headline figure follows one prefill-heavy workload ray: raw TTFT is plotted
+against prefill work and raw TPOT against decode work, with the first measured
+SLO violation identified by the total-work parameter rho.
 
 Plausible wrong implementations:
-- Average directions and hide a TPOT violation in one workload mix.
-- Use one direction's values for both TTFT and TPOT.
-- Divide TPOT by the TTFT target or subtract the nominal baseline.
-- Pool rows across different total-work levels.
+- Plot the decode-heavy ray, which does not exhibit the measured TPOT miss.
+- Put total rho on both x axes or swap the prefill/decode coordinates.
+- Normalize latency by the SLO instead of preserving raw seconds.
+- Mark a later violating sample instead of the first measured miss.
 """
-
-import pytest
 
 import plot_service_headroom as plotter
 
@@ -41,36 +40,44 @@ def test_aggregate_keeps_raw_block_range():
     assert not decode["physically_feasible"]
 
 
-def test_pool_slo_envelope_keeps_opposite_direction_violations():
+def test_workload_panels_keep_raw_phase_coordinates_and_first_miss():
     rows = [
         {"direction": "prefill_heavy", "target_rho": .25,
-         "measured_rho_median": .20, "p90_ttft_s_median": .1,
-         "p90_mean_tpot_s_median": .02},
-        {"direction": "decode_heavy", "target_rho": .25,
-         "measured_rho_median": .26, "p90_ttft_s_median": .2,
-         "p90_mean_tpot_s_median": .03},
+         "offered_prefill_rho_median": .1,
+         "offered_decode_rho_median": .2,
+         "p90_ttft_s_median": .2, "p90_mean_tpot_s_median": .02},
         {"direction": "prefill_heavy", "target_rho": .5,
-         "measured_rho_median": .54, "p90_ttft_s_median": .8,
+         "offered_prefill_rho_median": .4,
+         "offered_decode_rho_median": .3,
+         "p90_ttft_s_median": .8,
          "p90_mean_tpot_s_median": .12},
-        {"direction": "decode_heavy", "target_rho": .5,
-         "measured_rho_median": .56, "p90_ttft_s_median": 1.2,
-         "p90_mean_tpot_s_median": .04},
+        {"direction": "prefill_heavy", "target_rho": .75,
+         "offered_prefill_rho_median": .6,
+         "offered_decode_rho_median": .35,
+         "p90_ttft_s_median": 1.2, "p90_mean_tpot_s_median": .2},
+        {"direction": "decode_heavy", "target_rho": .25,
+         "offered_prefill_rho_median": 9,
+         "offered_decode_rho_median": 8,
+         "p90_ttft_s_median": 7, "p90_mean_tpot_s_median": 6},
     ]
 
-    pooled = plotter.pool_slo_envelope(
+    ttft, tpot = plotter.workload_panels(
         rows, {"p90_ttft_s": 1, "p90_mean_tpot_s": .1})
 
-    assert pooled[0]["added_rho"] == 0
-    assert pooled[1]["added_rho"] == pytest.approx(.32)
-    assert pooled[1]["p90_ttft_s_slo_ratio"] == 1.2
-    assert pooled[1]["p90_mean_tpot_s_slo_ratio"] == 1.2
+    assert ttft["x"] == [.1, .4, .6]
+    assert ttft["y"] == [.2, .8, 1.2]
+    assert ttft["first_miss"]["target_rho"] == .75
+    assert tpot["x"] == [.2, .3, .35]
+    assert tpot["y"] == [.02, .12, .2]
+    assert tpot["first_miss"]["target_rho"] == .5
 
 
-def test_main_plot_renders_pooled_slo_curve(tmp_path):
+def test_main_plot_renders_raw_phase_slices(tmp_path):
     rows = [{
         "direction": direction, "target_rho": rho,
-        "measured_rho_median": rho,
-        "p90_ttft_s_median": .4,
+        "offered_prefill_rho_median": rho,
+        "offered_decode_rho_median": rho / 2,
+        "p90_ttft_s_median": .4 if rho == .25 else 1.2,
         "p90_mean_tpot_s_median": .04 if rho == .25 else .12,
     } for rho in (.25, .5)
         for direction in ("prefill_heavy", "decode_heavy")]

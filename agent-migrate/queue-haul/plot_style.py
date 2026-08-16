@@ -100,15 +100,6 @@ SERVICE_EVIDENCE_STAGE_NAMES = {
     "discovery": "Discovery",
     "held_out": "Held-out confirmation",
 }
-SERVICE_LATENCY_METRICS = ("p90_ttft_s", "p90_mean_tpot_s")
-SERVICE_LATENCY_NAMES = {
-    "p90_ttft_s": "P90 TTFT",
-    "p90_mean_tpot_s": "P90 mean TPOT",
-}
-SERVICE_LATENCY_COLORS = dict(zip(SERVICE_LATENCY_METRICS,
-                                  ("#D55E00", "#0072B2")))
-SERVICE_LATENCY_LINESTYLES = dict(zip(SERVICE_LATENCY_METRICS, ("--", "-")))
-SERVICE_LATENCY_MARKERS = dict(zip(SERVICE_LATENCY_METRICS, ("o", "s")))
 ACTION_HATCHES = {
     "replay": "..", "kv_transfer": "xx",
     "east_replay": "..", "east_kv_transfer": "xx",

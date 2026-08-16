@@ -50,17 +50,17 @@ frontier. No value from this directory may update planner admission through
 
 ## Figures and tables
 
-- `service-headroom.pdf` / `.png`: discovery P90 TTFT and mean TPOT, normalized
-  by their respective SLOs, versus added total offered work above the measured
-  baseline. Each metric is the pointwise maximum directional median across the
-  prefill- and decode-heavy runs, so pooling cannot average away a violation.
-  Crosses mark SLO misses: TPOT first misses at total `rho=0.85`, while TTFT
-  first misses at `rho=1.10`. The log scale retains the 24-second overload.
+- `service-headroom.pdf` / `.png`: the prefill-heavy discovery trajectory in
+  two raw-latency panels. P90 TTFT is plotted against measured prefill work
+  `rho_p`; P90 mean TPOT is plotted against measured decode work `rho_d`.
+  Total `rho` parameterizes both curves. Crosses and vertical projections mark
+  the first measured SLO misses: TPOT at `rho=0.85` and TTFT at `rho=1.10`.
+  TTFT remains logarithmic so the 24-second overload does not hide lower loads.
 - `service-headroom-phase.pdf` / `.png`: sampled prefill/decode work rays, with
   held-out points shown as open markers and any all-repeat evidence miss marked
   with an x. It is not a fitted frontier.
 - `service-headroom-sustainability.pdf` / `.png`: compatibility copy of the
-  same conservative SLO envelope; it adds no admission marker.
+  same raw prefill-heavy trajectory; it adds no admission marker.
 - `service-headroom.csv`: discovery medians, ranges, phase coordinates, and
   repeat-level feasibility counts.
 - `service-headroom-heldout.csv`: the same reduction for unseen confirmation.
@@ -71,8 +71,8 @@ frontier. No value from this directory may update planner admission through
   `confirmed.json`, and `confirmation-status.json`: immutable campaign inputs
   and reduced evidence.
 
-The pooled curve is descriptive across the two measured directions, not a
-composition-invariant latency model. The phase figure and CSV retain the
+The headline curve is one measured workload ray, not a composition-invariant
+latency model. The phase figure and CSV retain the other direction and the
 underlying mix dependence. All figure writers call `plot_style.apply()` and
 use registered service identities.
 
