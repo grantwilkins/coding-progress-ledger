@@ -109,6 +109,7 @@ def patch_gemma4_decoder() -> None:
 
 
 def patch_gemma4_config(logger) -> None:
+    from vllm.config.model import ModelConfig
     from vllm.model_executor.models.config import Gemma4Config
     from vllm.transformers_utils.model_arch_config_convertor import (
         Gemma4ModelArchConfigConvertor,
@@ -116,6 +117,7 @@ def patch_gemma4_config(logger) -> None:
 
     if getattr(Gemma4ModelArchConfigConvertor, "_qh_heterogeneous_patched", False):
         return
+    original_backend = ModelConfig._get_transformers_backend_cls
     def geometry(self):
         layers = gemma4_layer_configs(self.hf_text_config)
         if not getattr(self, "_qh_geometry_logged", False):
@@ -132,6 +134,18 @@ def patch_gemma4_config(logger) -> None:
             vllm_config.attention_config.backend = AttentionBackendEnum.TRITON_ATTN
             logger.info("Gemma4 exact heterogeneous geometry requires TRITON_ATTN")
 
+    def transformers_backend(self):
+        root, text = self.hf_config, self.hf_text_config
+        if getattr(root, "model_type", None) != "gemma4":
+            return original_backend(self)
+        gemma4_layer_configs(text)
+        if getattr(root, "text_config", None) is not text \
+                or getattr(text, "model_type", None) != "gemma4_text" \
+                or self.architectures != ["Gemma4ForConditionalGeneration"] \
+                or self.runner not in {"auto", "generate"}:
+            raise RuntimeError("unexpected Gemma4 multimodal model structure")
+        return f"TransformersMultiModal{'MoE' if self.is_moe else ''}ForCausalLM"
+
     Gemma4ModelArchConfigConvertor.get_head_size = \
         lambda self: max(layer.head_dim for layer in geometry(self))
     Gemma4ModelArchConfigConvertor.get_total_num_kv_heads = \
@@ -139,8 +153,10 @@ def patch_gemma4_config(logger) -> None:
     Gemma4ModelArchConfigConvertor.get_total_num_attention_heads = \
         lambda self: max(layer.num_attention_heads for layer in geometry(self))
     Gemma4Config.verify_and_update_config = staticmethod(verify)
+    ModelConfig._get_transformers_backend_cls = transformers_backend
     Gemma4ModelArchConfigConvertor._qh_heterogeneous_patched = True
     Gemma4Config._qh_heterogeneous_patched = True
+    ModelConfig._qh_gemma4_backend_patched = True
 
 
 def patch_attention_kv_layout() -> None:

@@ -197,6 +197,7 @@ def test_gemma4_config_uses_validated_layers_for_summary_and_backend():
     logger = SimpleNamespace(info=lambda message, *args:
                              events.append(message % args))
     patch_gemma4_config(logger)
+    from vllm.config.model import ModelConfig
     from vllm.model_executor.models.config import Gemma4Config
     from vllm.transformers_utils.model_arch_config_convertor import (
         Gemma4ModelArchConfigConvertor,
@@ -207,12 +208,25 @@ def test_gemma4_config_uses_validated_layers_for_summary_and_backend():
         model_config=SimpleNamespace(hf_text_config=gemma_layers()),
         attention_config=SimpleNamespace(backend=None),
     )
+    text = gemma_layers()
+    text.model_type = "gemma4_text"
+    root = SimpleNamespace(model_type="gemma4", text_config=text)
+    model = SimpleNamespace(
+        hf_config=root, hf_text_config=text,
+        architectures=["Gemma4ForConditionalGeneration"],
+        runner="auto", is_moe=True,
+    )
 
     assert converter.get_head_size() == 512
     assert converter.get_total_num_kv_heads() == 8
     assert converter.get_total_num_attention_heads() == 16
     Gemma4Config.verify_and_update_config(config)
     assert config.attention_config.backend.name == "TRITON_ATTN"
+    assert ModelConfig._get_transformers_backend_cls(model) \
+        == "TransformersMultiModalMoEForCausalLM"
+    model.hf_config = SimpleNamespace(model_type="gemma4", text_config=object())
+    with pytest.raises(RuntimeError, match="multimodal model structure"):
+        ModelConfig._get_transformers_backend_cls(model)
     assert events.count("QH_GEMMA4_GEOMETRY_VERIFIED "
                         "sliding=25x(head_dim=256,kv_heads=8) "
                         "full=5x(head_dim=512,kv_heads=2)") == 1
