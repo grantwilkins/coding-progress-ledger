@@ -1,5 +1,6 @@
 {
-  "claim": "modeled regional predicted source-power attainment with exact nonlinear one-source power targets",
+  "bandwidth_null": "each measured-bandwidth state is exactly paired-equal to its released counterpart before being collapsed from the main figure",
+  "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
   "factor_levels": {
     "bandwidth": [
       "natural",
@@ -15,6 +16,7 @@
     ]
   },
   "factor_states": 8,
+  "figure_metric": "fraction of paired draws whose maximum safely attained Queue-Haul source-power fraction meets each request",
   "inputs": {
     "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
     "outputs/coding-run/migrations.csv": "a3bfa6beb5f622d0d9f3f8e22cc1f362b44428d2817feaec3cbd8bc7281359af",
@@ -30,6 +32,8 @@
   "limitations": [
     "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
     "each workload draw and global constraint state receives equal weight",
+    "the main figure and raw tables show Queue-Haul capacity across all eight constraint states",
+    "measured bandwidth is a paired null effect in this workload ensemble and is omitted from the main legend after an exact equality gate",
     "the frontier remains modeled rather than hardware-measured",
     "reported shed is awake source-region power rather than net fleet power or energy",
     "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
@@ -41,14 +45,14 @@
     "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases"
   ],
   "normalization": "safely attained watts / draw-specific removable watts",
+  "plotted_constraint_states": {
+    "all": "bandwidth-dest_compute-hbm",
+    "dest_compute": "dest_compute",
+    "hbm": "hbm",
+    "none": "none"
+  },
   "policies": [
-    "queue_haul_lp",
-    "queue_haul_greedy",
-    "independent_fastest",
-    "replay_only",
-    "kv_only",
-    "power_blind",
-    "deadline_blind"
+    "queue_haul_lp"
   ],
   "pooled_cases": 800,
   "power_scope": "steady awake source-region power; destination power excluded",
@@ -70,17 +74,11 @@
     1.0
   ],
   "samples": 100,
-  "schema": "queue-haul-workload-power-frontier-v3",
+  "schema": "queue-haul-workload-power-frontier-v4",
   "seed": 1001,
   "sessions_per_pack": 28,
   "solvers": {
-    "deadline_blind": "lp_work_first",
-    "independent_fastest": "isolated_fastest",
-    "kv_only": "kv_only",
-    "power_blind": "lp_power_blind",
-    "queue_haul_greedy": "greedy",
-    "queue_haul_lp": "lp_highs",
-    "replay_only": "replay_only"
+    "queue_haul_lp": "lp_highs"
   },
   "source_load_definition": "sum(f/F + g/G)=0.4; distinct from sampled phase load z=af+bg",
   "surface_validation": {

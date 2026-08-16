@@ -29,7 +29,7 @@
       "candidate_neither"
     ]
   },
-  "claim": "modeled regional action-mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
+  "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
   "cross_method_coupling": 1,
   "factor_activation_rate": {
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
@@ -76,6 +76,7 @@
     "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
     "each sampled pack is normalized to the pooled campaign's 0.4 source load",
     "the 0.4 source load is service-normalized load, not sampled phase-power load",
+    "phase-load action shares are additive optimizer weights, not a per-action attribution of nonlinear watts",
     "reported shed is awake source-region power rather than net fleet power or energy",
     "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
     "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
@@ -205,6 +206,11 @@
       }
     }
   },
+  "mean_phase_load_share": {
+    "kv_transfer": 0.3723517853030895,
+    "not_moved": 0.20276670108204348,
+    "replay": 0.4248815136148669
+  },
   "migration_horizon_s": 25,
   "planner_release_audit": {
     "comparisons": 12000,
@@ -248,7 +254,7 @@
   "route_compute_overlap": true,
   "route_endpoint_composition": "max(route time, fully shared Replay/KV endpoint work)",
   "samples": 1000,
-  "schema": "queue-haul-workload-adaptation-v3",
+  "schema": "queue-haul-workload-adaptation-v4",
   "seed": 1001,
   "selected_session_totals": {
     "kv_transfer": 36782,

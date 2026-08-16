@@ -19,6 +19,8 @@ Plausible wrong implementations:
 - Drop a migration method from contexts covered by the regional timing model.
 - Apply the measured load factor to route bytes, HBM, or the idle timing anchor.
 - Serialize route and endpoint work after fitting an end-to-end pipeline rate.
+- Summarize a power-targeted action mix by session count instead of phase load.
+- Lose phase-load conservation when assigning selected sessions to actions.
 """
 
 from types import SimpleNamespace
@@ -95,6 +97,9 @@ def test_one_paired_draw_conserves_sessions_and_target():
                for row in rows)
     assert all(np.isclose(sum(row[action] for action in campaign.ACTIONS), 1)
                for row in rows)
+    assert all(np.isclose(sum(row[f"{action}_phase_load"]
+                              for action in campaign.ACTIONS), 1)
+               for row in rows)
     assert all(row["target_met"] == (
         row["feasible"] and row["power_shortfall_w"] <= campaign.POWER_TOLERANCE_W
     ) for row in rows)
@@ -109,6 +114,17 @@ def test_one_paired_draw_conserves_sessions_and_target():
     )
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
+
+
+def test_phase_load_action_mix_uses_power_weights_not_session_counts():
+    sessions = tuple(SimpleNamespace(session_id=value) for value in "abc")
+    moves = (SimpleNamespace(session_id="a", method="replay"),
+             SimpleNamespace(session_id="b", method="kv_transfer"))
+    power = SimpleNamespace(ell={"a": 1, "b": 3, "c": 6})
+
+    assert campaign.phase_load_shares(sessions, moves, power) == {
+        "replay": .1, "kv_transfer": .3, "not_moved": .6,
+    }
 
 
 def test_loaded_factor_transport_is_counted_and_in_context_run_is_paired():
@@ -405,8 +421,8 @@ def test_bootstrap_preserves_bandwidth_release_order():
 
 def test_action_mix_figure_is_exactly_five_and_a_half_by_three(tmp_path):
     rows = [{
-        "case_id": case_id, "replay": .4, "kv_transfer": .3,
-        "not_moved": .3,
+        "case_id": case_id, "replay_phase_load": .4,
+        "kv_transfer_phase_load": .3, "not_moved_phase_load": .3,
     } for case_id, _, _ in campaign.factorial_cases()]
 
     campaign.plot(rows, tmp_path / "mix")

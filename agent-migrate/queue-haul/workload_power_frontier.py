@@ -12,9 +12,9 @@ import numpy as np
 from planner import plan, source_power
 import plot_style
 from plot_hardware_shed_frontier import (
-    POLICIES, evaluated_source_power, planning_problem, plateau_attainment,
+    evaluated_source_power, planning_problem, plateau_attainment,
 )
-from plot_pooled_shed_frontier import pooled_summary, write_csv, write_plot
+from plot_pooled_shed_frontier import write_csv
 from profiles import ModelProfile
 import workload_adaptation_campaign as adaptation
 
@@ -23,7 +23,16 @@ OUT = adaptation.ROOT / "outputs/workload-power-frontier-20260814/pooled_shed_fr
 DEFAULT_SAMPLES = 100
 DEFAULT_POINTS = 9
 MAX_REQUEST = 1.0
-SOLVERS = {**POLICIES, "queue_haul_lp": "lp_highs"}
+SOLVERS = {"queue_haul_lp": "lp_highs"}
+DISPLAY_STATES = {
+    "none": "none", "hbm": "hbm", "dest_compute": "dest_compute",
+    "all": "bandwidth-dest_compute-hbm",
+}
+BANDWIDTH_NULL_PAIRS = (
+    ("none", "bandwidth"), ("hbm", "bandwidth-hbm"),
+    ("dest_compute", "bandwidth-dest_compute"),
+    ("dest_compute-hbm", "bandwidth-dest_compute-hbm"),
+)
 plot_style.apply()
 
 
@@ -114,7 +123,7 @@ def sweep(samples=DEFAULT_SAMPLES, points=DEFAULT_POINTS,
 def power_summary(rows):
     cases = {row["case_id"] for row in rows}
     summary = []
-    for policy in POLICIES:
+    for policy in SOLVERS:
         for fraction in sorted({row["requested_fraction"] for row in rows
                                 if row["policy"] == policy}):
             selected = [row for row in rows if row["policy"] == policy
@@ -139,6 +148,86 @@ def power_summary(rows):
     return summary
 
 
+def assert_bandwidth_null(rows):
+    selected = [row for row in rows if row["policy"] == "queue_haul_lp"]
+    for baseline, constrained in BANDWIDTH_NULL_PAIRS:
+        paired = []
+        for state in (baseline, constrained):
+            values = {(row["replicate"], row["requested_fraction"]):
+                      row["safely_attained_fraction"] for row in selected
+                      if row["factor_case_id"] == state}
+            if len(values) != sum(row["factor_case_id"] == state
+                                  for row in selected):
+                raise RuntimeError("duplicate paired frontier point")
+            paired.append(values)
+        if paired[0].keys() != paired[1].keys() or any(
+                not np.isclose(paired[0][key], paired[1][key], rtol=0, atol=1e-12)
+                for key in paired[0]):
+            raise RuntimeError("bandwidth state is not null and cannot be collapsed")
+
+
+def capacity_summary(rows, grid=np.linspace(0, 1, 101)):
+    if not len(grid) or grid[0] != 0 or grid[-1] != 1 \
+            or any(right <= left for left, right in zip(grid, grid[1:])):
+        raise ValueError("capacity grid must increase from zero to one")
+    selected = [row for row in rows if row["policy"] == "queue_haul_lp"]
+    maximum_request = max(row["requested_fraction"] for row in selected)
+    output = []
+    for state, factor_case in DISPLAY_STATES.items():
+        candidates = [row for row in selected
+                      if row["factor_case_id"] == factor_case
+                      and row["requested_fraction"] == maximum_request]
+        capacities = {row["replicate"]: row["safely_attained_fraction"]
+                      for row in candidates}
+        if len(candidates) != len(capacities) or not capacities:
+            raise RuntimeError("capacity summary requires one maximum per paired draw")
+        values = np.asarray(tuple(capacities.values()))
+        output.extend({
+            "constraint_state": state,
+            "bound_constraint": plot_style.RESOURCE_STATE_NAMES[state],
+            "requested_fraction": float(request),
+            "attainment_rate": float(np.mean(values >= request - 1e-9)),
+            "cases": len(values),
+        } for request in grid)
+    return output
+
+
+def write_capacity_plot(summary, out):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import PercentFormatter
+
+    fig, axis = plt.subplots(figsize=(4, 3))
+    for state in DISPLAY_STATES:
+        selected = [row for row in summary if row["constraint_state"] == state]
+        axis.step(
+            [row["requested_fraction"] for row in selected],
+            [row["attainment_rate"] for row in selected],
+            where="post",
+            color=plot_style.RESOURCE_STATE_COLORS[state],
+            linestyle=plot_style.RESOURCE_STATE_LINESTYLES[state],
+            label=plot_style.RESOURCE_STATE_NAMES[state],
+        )
+    axis.set(xlim=(0, 1), ylim=(0, 1),
+             xlabel="Requested Source-Power Fraction",
+             ylabel="Cases Meeting Target")
+    axis.xaxis.set_major_formatter(PercentFormatter(1))
+    axis.yaxis.set_major_formatter(PercentFormatter(1))
+    axis.tick_params(labelsize=11)
+    axis.xaxis.label.set_size(12)
+    axis.yaxis.label.set_size(12)
+    axis.grid(alpha=.2)
+    handles, labels = axis.get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, fontsize=10, ncol=1,
+               loc="center left", bbox_to_anchor=(.94, .5))
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
+                    bbox_inches="tight")
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--samples", type=int, default=DEFAULT_SAMPLES)
@@ -149,16 +238,17 @@ def main():
     args = parser.parse_args()
     validation = adaptation.validate_surface()
     rows, workload = sweep(args.samples, args.points, args.seed, args.sessions)
-    summary = pooled_summary(rows)
+    assert_bandwidth_null(rows)
+    summary = capacity_summary(rows)
     write_csv(rows, args.out.with_name(f"{args.out.name}_cases.csv"))
     write_csv(summary, args.out.with_suffix(".csv"))
     write_csv(power_summary(rows), args.out.with_name(
         f"{args.out.name}_power.csv"
     ))
-    write_plot(summary, args.out)
+    write_capacity_plot(summary, args.out)
     metadata = {
-        "schema": "queue-haul-workload-power-frontier-v3",
-        "claim": "modeled regional predicted source-power attainment with exact nonlinear one-source power targets",
+        "schema": "queue-haul-workload-power-frontier-v4",
+        "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
         "samples": args.samples, "factor_states": len(adaptation.ORDER),
         "pooled_cases": args.samples * len(adaptation.ORDER),
         "sessions_per_pack": args.sessions, "seed": args.seed,
@@ -166,6 +256,9 @@ def main():
         "policies": list(SOLVERS), "solvers": SOLVERS, "workload": workload,
         "factor_levels": adaptation.LEVELS, "regions": list(adaptation.REGIONS),
         "normalization": "safely attained watts / draw-specific removable watts",
+        "figure_metric": "fraction of paired draws whose maximum safely attained Queue-Haul source-power fraction meets each request",
+        "plotted_constraint_states": DISPLAY_STATES,
+        "bandwidth_null": "each measured-bandwidth state is exactly paired-equal to its released counterpart before being collapsed from the main figure",
         "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
         "power_scope": "steady awake source-region power; destination power excluded",
         "source_load_definition": "sum(f/F + g/G)=0.4; distinct from sampled phase load z=af+bg",
@@ -185,6 +278,8 @@ def main():
         "limitations": [
             "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
             "each workload draw and global constraint state receives equal weight",
+            "the main figure and raw tables show Queue-Haul capacity across all eight constraint states",
+            "measured bandwidth is a paired null effect in this workload ensemble and is omitted from the main legend after an exact equality gate",
             "the frontier remains modeled rather than hardware-measured",
             "reported shed is awake source-region power rather than net fleet power or energy",
             "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",

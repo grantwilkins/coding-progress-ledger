@@ -106,6 +106,17 @@ ACTION_HATCHES = {
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "--",
 }
+RESOURCE_STATE_NAMES = {
+    "none": "None bound", "hbm": "HBM",
+    "dest_compute": "Dest. compute", "all": "All bound",
+}
+RESOURCE_STATE_COLORS = {
+    "none": POLICY_COLORS["queue_haul"], "hbm": POLICY_COLORS["greedy"],
+    "dest_compute": POLICY_COLORS["queue_haul_power_blind"], "all": "#000000",
+}
+RESOURCE_STATE_LINESTYLES = {
+    "none": "-", "hbm": "--", "dest_compute": "-.", "all": ":",
+}
 MODELS = ("openai/gpt-oss-20b", "Qwen/Qwen3.8-27B",
           "google/gemma-4-26B-A4B-it")
 MODEL_NAMES = dict(zip(MODELS, ("GPT-OSS-20B", "Qwen3.8-27B",

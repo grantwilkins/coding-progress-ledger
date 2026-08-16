@@ -856,9 +856,12 @@ Within the measured regional 1,536--32,256-token migration support, Replay uses
 the base rate curve where available and its conservative minimum rate outside
 that narrower curve; candidate duration and shared migration work use the same
 rule.
-Stacked boundaries are the median Replay and median total-moved shares, while
-black intervals show their 5--95% ranges. Target misses and one-factor-release
-checks remain in the output tables.
+Stacked boundaries are the median Replay and median total-moved shares of
+modeled source phase load, the additive quantity used by the exact nonlinear
+power target. Black intervals show their 5--95% ranges. Raw session counts and
+count shares remain in the CSV; plotting counts would overstate inactivity
+because a small number of sampled sessions can carry most of the phase load.
+Target misses and one-factor-release checks remain in the output tables.
 The eight states are independent branches. Their fractional LP opportunity
 sets must expand on every release; any rounded-planner regressions are reported
 rather than repaired with a counterfactual plan. Noisy bootstrap route draws
@@ -900,14 +903,19 @@ the prediction gate. The existing service-debt machinery remains disabled until
 a completed headroom campaign identifies an SLO budget. HBM remains
 method-independent because either method leaves the same resident KV state.
 
-`workload_power_frontier.py` carries 100 deterministic paired draws through the
-same seven-policy requested-shed frontier as the designed-case plot. The sweep
-reaches 100%, while the paper view retains the common 0--80% x-axis.
-Each workload-by-constraint state receives equal weight, and attained watts are
-normalized by that draw's removable power before pooling. The main CSV retains
-the normalized median/IQR; the companion `_power.csv` reports 5th, median, and
-95th percentile watts. These are modeled sensitivity ranges, not confidence
-intervals or new hardware observations.
+`workload_power_frontier.py` carries 100 deterministic paired Queue-Haul draws
+through all eight constraint states. Its main figure uses the monotone envelope
+at the 100% endpoint to recover each draw's maximum safely attained plan, then
+plots the fraction of draws capable
+of meeting each source-power request under None, HBM, destination-compute, and
+all-bound states. This avoids the uninformative identity obtained when every
+target-aware policy is plotted against the target it is trying to meet. The
+measured bandwidth state is omitted from the main legend only after every
+paired Queue-Haul frontier point is exactly equal to its released counterpart;
+all eight factorial states remain in the raw CSV. Watts
+are normalized by each draw's removable source power. The companion
+`_power.csv` retains 5th, median, and 95th percentile watts. These are modeled
+sensitivity ranges, not confidence intervals or new hardware observations.
 
 ```bash
 uv run python queue-haul/workload_power_frontier.py

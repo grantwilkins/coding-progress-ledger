@@ -1,6 +1,6 @@
 """
 Claim:
-The workload frontier pairs every request and policy within each sampled
+The workload frontier pairs every Queue-Haul request within each sampled
 workload/calibration draw, credits only safe shed by 30 seconds, normalizes by
 that draw's removable power, and weights each draw-by-factor case once.
 
@@ -10,14 +10,53 @@ Plausible wrong implementations:
 - Credit an unsafe higher-request plan instead of retaining the last safe plan.
 - Overweight a case because it contributes extra rows or policies.
 - Use a different Queue-Haul draw or solver at the shared two-thirds point.
+- Plot target-following policies against their own target instead of the
+  distribution of maximum safely attainable power.
+- Collapse bandwidth states without proving they are paired null effects.
 """
 
 import numpy as np
 import pytest
 
-from plot_hardware_shed_frontier import POLICIES
 import workload_adaptation_campaign as adaptation
-from workload_power_frontier import power_summary, request_grid, sweep
+from workload_power_frontier import (
+    SOLVERS, assert_bandwidth_null, capacity_summary, power_summary, request_grid,
+    sweep,
+)
+
+
+def test_capacity_summary_uses_one_maximum_per_paired_draw():
+    rows = [{
+        "replicate": replicate, "factor_case_id": state,
+        "policy": "queue_haul_lp", "requested_fraction": 1,
+        "safely_attained_fraction": capacity,
+    } for state in ("none", "hbm", "dest_compute",
+                    "bandwidth-dest_compute-hbm")
+            for replicate, capacity in enumerate((.25, .75))]
+
+    summary = capacity_summary(rows, grid=(0, .5, 1))
+    none = [row for row in summary if row["constraint_state"] == "none"]
+
+    assert [row["attainment_rate"] for row in none] == [1, .5, 0]
+    assert all(row["cases"] == 2 for row in summary)
+    with pytest.raises(RuntimeError, match="one maximum"):
+        capacity_summary([*rows, rows[0]], grid=(0, .5, 1))
+
+
+def test_bandwidth_null_must_hold_for_every_paired_frontier_point():
+    pairs = (("none", "bandwidth"), ("hbm", "bandwidth-hbm"),
+             ("dest_compute", "bandwidth-dest_compute"),
+             ("dest_compute-hbm", "bandwidth-dest_compute-hbm"))
+    rows = [{
+        "replicate": 0, "factor_case_id": state,
+        "policy": "queue_haul_lp", "requested_fraction": fraction,
+        "safely_attained_fraction": fraction / 2,
+    } for pair in pairs for state in pair for fraction in (0, 1)]
+
+    assert_bandwidth_null(rows)
+    rows[-1]["safely_attained_fraction"] = .6
+    with pytest.raises(RuntimeError, match="bandwidth state is not null"):
+        assert_bandwidth_null(rows)
 
 
 def test_power_summary_weights_cases_once_and_keeps_watts():
@@ -42,7 +81,7 @@ def test_sampled_frontier_is_paired_normalized_and_monotone():
     action_rows, _ = adaptation.simulate(samples=1, seed=3)
     fractions = request_grid(2)
 
-    assert len(rows) == 8 * len(POLICIES) * len(fractions)
+    assert len(rows) == 8 * len(SOLVERS) * len(fractions)
     assert len({row["power_bootstrap_index"] for row in rows}) == 1
     assert len({row["timing_fit_sha256"] for row in rows}) == 1
     assert len({row["maximum_removable_w"] for row in rows}) == 1
@@ -55,7 +94,7 @@ def test_sampled_frontier_is_paired_normalized_and_monotone():
         row["safely_attained_shed_w"] / row["maximum_removable_w"],
     ) for row in rows)
     for case in {row["case_id"] for row in rows}:
-        for policy in POLICIES:
+        for policy in SOLVERS:
             attained = [row["safely_attained_shed_w"] for row in rows
                         if row["case_id"] == case and row["policy"] == policy]
             assert all(right >= left for left, right in zip(attained, attained[1:]))

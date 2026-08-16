@@ -346,6 +346,7 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
     counts["not_moved"] = len(sessions) - len(result.moves)
     if min(counts.values()) < 0 or sum(counts.values()) != len(sessions):
         raise RuntimeError("action counts do not conserve sessions")
+    phase_shares = phase_load_shares(sessions, result.moves, power)
     usage = {row.name: row.utilization for row in result.resource_uses}
     def max_usage(prefix):
         return max((value for name, value in usage.items()
@@ -374,6 +375,7 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         **dominance,
         **{f"{action}_count": counts[action] for action in ACTIONS},
         **{action: counts[action] / len(sessions) for action in ACTIONS},
+        **{f"{action}_phase_load": phase_shares[action] for action in ACTIONS},
         "route_utilization": max_usage("route:"),
         "service_utilization": max_usage("service:"),
         "hbm_utilization": max_usage("kv:"),
@@ -381,6 +383,25 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         "binding_resources": ";".join(result.binding_resources),
         "failure": result.failure_reason or "",
     }
+
+
+def phase_load_shares(sessions, moves, power):
+    selected = {move.session_id: move.method for move in moves}
+    if len(selected) != len(moves) or not set(selected) <= {
+            session.session_id for session in sessions}:
+        raise RuntimeError("invalid selected-session action accounting")
+    total = sum(power.ell[session.session_id] for session in sessions)
+    if total <= 0:
+        raise RuntimeError("action mix requires positive source phase load")
+    shares = {
+        method: sum(power.ell[session_id] for session_id, action in selected.items()
+                    if action == method) / total
+        for method in ("replay", "kv_transfer")
+    }
+    shares["not_moved"] = 1 - sum(shares.values())
+    if min(shares.values()) < -1e-12 or not np.isclose(sum(shares.values()), 1):
+        raise RuntimeError("action phase-load shares do not conserve source load")
+    return shares
 
 
 def loaded_transport_counts(scenario, architecture, table, moves):
@@ -621,11 +642,12 @@ def summarize(rows):
     for case_id, label, _ in factorial_cases():
         selected = [row for row in rows if row["case_id"] == case_id]
         for action in ACTIONS:
-            values = np.asarray([row[action] for row in selected])
+            values = np.asarray([row[f"{action}_phase_load"] for row in selected])
             q = np.quantile(values, (.05, .5, .95))
             result.append({
                 "case_id": case_id, "bound_constraint": label, "action": action,
                 "mean": values.mean(), "p05": q[0], "median": q[1], "p95": q[2],
+                "session_share_mean": np.mean([row[action] for row in selected]),
                 "target_met_rate": np.mean([row["target_met"] for row in selected]),
             })
     return result
@@ -765,9 +787,10 @@ def plot(rows, path):
     fig, axis = plt.subplots(figsize=(5.5, 3))
     groups = [[row for row in rows if row["case_id"] == case_id]
               for case_id, _, _ in factorial_cases()]
-    replay = np.asarray([np.median([row["replay"] for row in group])
+    replay = np.asarray([np.median([row["replay_phase_load"] for row in group])
                          for group in groups])
-    moved = np.asarray([np.median([row["replay"] + row["kv_transfer"]
+    moved = np.asarray([np.median([row["replay_phase_load"]
+                                  + row["kv_transfer_phase_load"]
                                   for row in group]) for group in groups])
     values_by_action = (replay, moved - replay, 1 - moved)
     left = np.zeros(8)
@@ -780,15 +803,16 @@ def plot(rows, path):
         )
         left += values
     for y, group in enumerate(groups):
-        for values in ([row["replay"] for row in group],
-                       [row["replay"] + row["kv_transfer"] for row in group]):
+        for values in ([row["replay_phase_load"] for row in group],
+                       [row["replay_phase_load"] + row["kv_transfer_phase_load"]
+                        for row in group]):
             low, middle, high = 100 * np.quantile(values, (.05, .5, .95))
             axis.hlines(y, low, high, color="#333333", linewidth=1, zorder=4)
             axis.plot(middle, y, marker="|", color="#333333", markersize=7,
                       zorder=5)
     axis.set(
         yticks=range(8), yticklabels=[label for _, label, _ in factorial_cases()],
-        xlim=(0, 100), xlabel="Source-session share (%)",
+        xlim=(0, 100), xlabel="Modeled source phase-load share (%)",
     )
     axis.invert_yaxis()
     axis.grid(axis="x", alpha=.2)
@@ -874,8 +898,8 @@ def main():
         if row["planner_shortfall_worsened_on_release"]
     ])
     metadata = {
-        "schema": "queue-haul-workload-adaptation-v3",
-        "claim": "modeled regional action-mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
+        "schema": "queue-haul-workload-adaptation-v4",
+        "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
@@ -894,6 +918,10 @@ def main():
         "migration_horizon_s": MIGRATION_HORIZON_S,
         "regional_timing_destination_prefill_loads": timing_loads,
         "selected_session_totals": selected,
+        "mean_phase_load_share": {
+            action: float(np.mean([row[f"{action}_phase_load"] for row in rows]))
+            for action in ACTIONS
+        },
         "candidate_method_dominance": dominance,
         "candidate_method_dominance_definition": {
             "dominates": "weakly greater gain, weakly lower migration work, "
@@ -984,6 +1012,7 @@ def main():
             "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
             "each sampled pack is normalized to the pooled campaign's 0.4 source load",
             "the 0.4 source load is service-normalized load, not sampled phase-power load",
+            "phase-load action shares are additive optimizer weights, not a per-action attribution of nonlinear watts",
             "reported shed is awake source-region power rather than net fleet power or energy",
             "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
             "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
