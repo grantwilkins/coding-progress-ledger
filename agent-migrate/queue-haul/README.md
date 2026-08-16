@@ -1599,6 +1599,40 @@ colocated GPU it must retain the measured interference frontier. The present
 three sampled rays are descriptive evidence, not a fitted two-dimensional
 admission surface.
 
+`service_admission_transition_campaign.py` is the deliberately small live
+follow-up. It does not fit an admission surface or exercise an end-to-end
+Queue-Haul migration. It freezes three discrete normalized phase-work recipes
+`(w_F,w_D)` in GPU-s/s: prefill-heavy `(0.3078,0.1919)`, balanced
+`(0.1996,0.3003)`, and decode-heavy `(0.08163,0.41806)`. Their sums are near
+0.50 by construction; that scalar is neither utilization nor an admission
+limit. Each of three fresh restart blocks per recipe begins with 60 seconds of
+incumbent-only traffic,
+cold-materializes eight added session prefixes during a fixed 30-second
+window, and then offers both cohorts for 240 seconds. A recipe passes only if
+all three blocks preserve the frozen 1-second TTFT and 100-ms TPOT rules for
+both incumbents and the added cohort, exactly complete and cache every request,
+retain complete telemetry, and meet the strict queue-stability contract.
+Admission failure is a measured failure, not a retryable invalid cell. Invalid
+instrumentation attempts are retained in immutable per-attempt directories.
+The result certifies only the three tested recipes for the 240-second declared
+horizon; `planner_usable` remains false and no interpolation is allowed.
+
+```bash
+uv run python service_admission_transition_campaign.py prepare \
+  --source-plan outputs/service-headroom-a100-20260815/plan.json \
+  --normalization outputs/service-headroom-a100-20260815/normalization.json \
+  --scout outputs/service-headroom-a100-20260815/scout.json \
+  --confirmation-plan outputs/service-headroom-a100-20260815/confirmation-plan.json \
+  --confirmed outputs/service-headroom-a100-20260815/confirmed.json \
+  --out outputs/service-admission-transition-a100-20260816/plan.json
+QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python \
+  service_admission_transition_campaign.py run \
+  --plan outputs/service-admission-transition-a100-20260816/plan.json \
+  --normalization outputs/service-headroom-a100-20260815/normalization.json \
+  --run-root /datadrive/qh-service-admission-transition-a100-20260816-r1 \
+  --summary outputs/service-admission-transition-a100-20260816/summary.json
+```
+
 The verified 2026-07-23 destination bundle is retained under
 `outputs/destination-v7-20260722/`. Do not treat its service rows as an accepted
 capacity profile. See `FINDINGS.md` and `DATA_TO_COLLECT.md` for the forensic

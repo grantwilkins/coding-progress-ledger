@@ -25,3 +25,21 @@ def test_aggregate_keeps_raw_block_range():
     assert prefill["p90_ttft_s_maximum"] == .3
     assert prefill["physically_feasible"]
     assert not decode["physically_feasible"]
+
+
+def test_main_plot_accepts_heldout_repeat_ranges(tmp_path):
+    row = {
+        "direction": "prefill_heavy", "measured_rho_median": .85,
+        "p90_ttft_s_median": .4, "p90_ttft_s_minimum": .3,
+        "p90_ttft_s_maximum": .5, "p90_mean_tpot_s_median": .105,
+        "p90_mean_tpot_s_minimum": .102,
+        "p90_mean_tpot_s_maximum": .108,
+        "physically_feasible": True, "evidence_feasible": False,
+    }
+    scout = {"targets": {"p90_ttft_s": 1, "p90_mean_tpot_s": .1}}
+    out = tmp_path / "service-headroom"
+
+    plotter.plot([], [row], scout, {"planner_usable": False}, out)
+
+    assert out.with_suffix(".pdf").is_file()
+    assert out.with_suffix(".png").is_file()

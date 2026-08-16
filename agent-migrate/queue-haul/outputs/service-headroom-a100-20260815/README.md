@@ -51,8 +51,11 @@ frontier. No value from this directory may update planner admission through
 ## Figures and tables
 
 - `service-headroom.pdf` / `.png`: discovery P90 TTFT and P90 per-request mean
-  TPOT versus offered normalized phase work. TTFT is logarithmic so the measured
-  24-second overload point does not hide the subsecond curve.
+  TPOT versus offered normalized phase work for the two extreme mixes, with
+  held-out restart-block min--max ranges shown as open markers. TTFT is
+  logarithmic so the measured 24-second overload point does not hide the
+  subsecond curve. The balanced held-out treatment is reported in the tables;
+  it is omitted from this panel because it has no discovery curve.
 - `service-headroom-phase.pdf` / `.png`: sampled prefill/decode work rays, with
   held-out points shown as open markers and any all-repeat evidence miss marked
   with an x. It is not a fitted frontier.

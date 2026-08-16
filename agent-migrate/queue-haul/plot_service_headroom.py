@@ -100,17 +100,19 @@ def write_csv(rows: list[dict], path: Path) -> None:
         writer.writerows(rows)
 
 
-def plot(rows: list[dict], scout: dict, confirmed: dict | None,
-         out: Path) -> None:
+def plot(rows: list[dict], heldout: list[dict], scout: dict,
+         confirmed: dict | None, out: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
 
-    metrics = (("p90_ttft_s", "P90 TTFT (s, log scale)"),
+    metrics = (("p90_ttft_s", "P90 TTFT (s)"),
                ("p90_mean_tpot_s", "P90 mean TPOT (s)"))
-    figure, axes = plt.subplots(2, 1, sharex=True,
-                                figsize=plot_style.COMPACT_FIGSIZE)
+    figure, axes = plt.subplots(
+        2, 1, sharex=True,
+        figsize=(plot_style.COMPACT_FIGSIZE[0], 4.6),
+    )
     for axis, (metric, ylabel) in zip(axes, metrics):
         for direction in plot_style.SERVICE_LOADS:
             selected = [row for row in rows if row["direction"] == direction
@@ -141,6 +143,38 @@ def plot(rows: list[dict], scout: dict, confirmed: dict | None,
                              [y[index] for index in infeasible], marker="x",
                              color=plot_style.SERVICE_LOAD_COLORS[direction],
                              s=45, linewidths=1.5)
+            confirmation = [
+                row for row in heldout if row["direction"] == direction
+                and row[f"{metric}_median"] is not None
+            ]
+            if confirmation:
+                heldout_x = [row["measured_rho_median"] for row in confirmation]
+                heldout_y = [row[f"{metric}_median"] for row in confirmation]
+                heldout_lower = [
+                    row[f"{metric}_median"] - row[f"{metric}_minimum"]
+                    for row in confirmation
+                ]
+                heldout_upper = [
+                    row[f"{metric}_maximum"] - row[f"{metric}_median"]
+                    for row in confirmation
+                ]
+                axis.errorbar(
+                    heldout_x, heldout_y,
+                    yerr=(heldout_lower, heldout_upper),
+                    color=plot_style.SERVICE_LOAD_COLORS[direction],
+                    marker=plot_style.SERVICE_LOAD_MARKERS[direction],
+                    markerfacecolor="white", markeredgewidth=1.5,
+                    linestyle="none", capsize=3, markersize=7, zorder=4,
+                )
+                misses = [index for index, row in enumerate(confirmation)
+                          if not row["evidence_feasible"]]
+                if misses:
+                    axis.scatter(
+                        [heldout_x[index] for index in misses],
+                        [heldout_y[index] for index in misses],
+                        marker="x", color="#222222", s=32,
+                        linewidths=1.2, zorder=5,
+                    )
         target = scout["targets"][metric]
         axis.axhline(target, color="#555555", linestyle=":", linewidth=1.5)
         if confirmed and confirmed.get("planner_usable"):
@@ -164,12 +198,18 @@ def plot(rows: list[dict], scout: dict, confirmed: dict | None,
                           label="Evaluation target"))
     handles.append(Line2D([], [], color="#555555", marker="x",
                           linestyle="none",
-                          label="Any repeat unstable, undrained, or failed"))
+                          label="Any repeat missed evaluation contract"))
+    handles.append(Line2D(
+        [], [], color="#555555", marker="o", markerfacecolor="white",
+        linestyle="none",
+        label=f"{plot_style.SERVICE_EVIDENCE_STAGE_NAMES['held_out']} range",
+    ))
     if confirmed and confirmed.get("planner_usable"):
         handles.append(Line2D([], [], color="#777777", linestyle="-.",
                               label=r"Confirmed $\rho_{safe}$"))
-    axes[0].legend(handles=handles, frameon=False, fontsize=8)
-    figure.tight_layout()
+    figure.legend(handles=handles, frameon=False, fontsize=7, ncol=2,
+                  loc="upper center", bbox_to_anchor=(.5, .995))
+    figure.tight_layout(rect=(0, 0, 1, .87))
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("pdf", "png"):
         figure.savefig(out.with_suffix(f".{suffix}"),
@@ -275,7 +315,7 @@ def main(argv=None) -> None:
         )
     rows = aggregate(scout, plan, rates)
     write_csv(rows, args.out.with_suffix(".csv"))
-    plot(rows, scout, confirmed, args.out)
+    heldout = []
     if confirmed and confirmation_plan:
         heldout = aggregate_confirmation(confirmed, confirmation_plan, rates)
         write_csv(heldout, args.out.with_name(
@@ -285,6 +325,7 @@ def main(argv=None) -> None:
             f"{args.out.name}-phase").with_suffix(".csv"))
         plot_phase_surface(rows, heldout, args.out.with_name(
             f"{args.out.name}-phase"))
+    plot(rows, heldout, scout, confirmed, args.out)
 
 
 if __name__ == "__main__":
