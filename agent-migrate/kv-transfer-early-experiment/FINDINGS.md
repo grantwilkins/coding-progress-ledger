@@ -24,13 +24,10 @@ Above the crossover bandwidth, ship KV. Below it, replay.
 |---|---:|---:|---:|---:|---:|
 | DeepSeek-V4-Pro | 3 | 0.99 GB | 1.34 s | 74.8k tok/s | 5.94 Gbps |
 | Gemma-4-26B-A4B | 1 | 1.23 GB | 0.59 s | 170.9k tok/s | 16.87 Gbps |
-| Qwen3-Next-80B-A3B | 1 | 2.46 GB | 0.57 s | 175.0k tok/s | 34.41 Gbps |
 | gpt-oss-20b | 1 | 2.46 GB | 0.62 s | 162.3k tok/s | 31.94 Gbps |
-| Qwen3.5-397B-A17B | 1 | 3.07 GB | 2.11 s | 47.3k tok/s | 11.62 Gbps |
 | Qwen3.8-27B | 1 | 6.55 GB | 2.66 s | 37.6k tok/s | 19.72 Gbps |
 | Kimi-K2.6 | 2 | 7.03 GB | 3.41 s | 29.3k tok/s | 16.49 Gbps |
 | GLM-5 | 2 | 8.99 GB | 1.63 s | 61.3k tok/s | 44.08 Gbps |
-| Qwen3-235B-A22B | 1 | 19.25 GB | 7.15 s | 14.0k tok/s | 21.55 Gbps |
 
 ## Takeaways
 

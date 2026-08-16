@@ -1,13 +1,13 @@
 """
 Claim:
-migration_ratio computes the nine-model H100/BF16 replay-to-KV-transfer ratio.
+migration_ratio computes the six-model H100/BF16 replay-to-KV-transfer ratio.
 Prefill is 2*A*T plus 2*H_q*(d_qk+d_v) times the causal (query, key) pairs
 implied by each layer group's compression m, top-k cap k, and sliding window w.
 Dense: T^2/(2m) per layer. Once the compressed pool outgrows k (T > k*m) each
 query is capped at k entries, so the group goes linear in T.
 
 Plausible wrong implementations:
-- omitting a requested model from the catalogue rendered by the figure
+- retaining a model explicitly excluded from the rendered catalogue
 - treating hybrid local or linear-attention layers as full quadratic attention
 - using query-head counts instead of KV-head counts for migration bytes
 - applying Gemma's 512-wide global heads to its 256-wide local layers
@@ -22,17 +22,14 @@ import math
 
 import migration_ratio as mr
 
-# Attention groups represented by the cost model; hybrid Qwen omits fixed state.
+# Attention groups represented by the cost model; Qwen3.8 omits fixed state.
 EXPECTED_LAYERS = {
     "DeepSeek V4 Pro": 61,
     "Gemma 4 26B-A4B": 30,
-    "Qwen3 Next 80B": 12,
     "gpt-oss-20b": 24,
-    "Qwen3.5 397B": 15,
     "Qwen3.8 27B": 16,
     "Kimi K2.6": 61,
     "GLM 5": 78,
-    "Qwen3 235B": 94,
 }
 
 
@@ -40,7 +37,7 @@ def attn_flops(model, tokens):
     return mr.prefill_flops(model, tokens) - 2.0 * model.active_b * 1e9 * tokens
 
 
-def test_catalogue_includes_the_three_requested_models():
+def test_catalogue_matches_the_requested_six_models():
     assert [model.label for model in mr.MODELS] == list(EXPECTED_LAYERS)
 
 
@@ -118,11 +115,11 @@ def test_new_models_count_only_live_bf16_migration_state():
 
 
 def test_dsa_model_replay_grows_linearly_but_dense_model_does_not():
-    glm, qwen = mr.model("GLM 5"), mr.model("Qwen3 235B")
+    glm, dense = mr.model("GLM 5"), mr.model("Kimi K2.6")
     assert math.isclose(
         mr.t_replay(glm, 1_000_000) / mr.t_replay(glm, 100_000), 10, rel_tol=0.02
     )
-    assert mr.t_replay(qwen, 1_000_000) / mr.t_replay(qwen, 100_000) > 50
+    assert mr.t_replay(dense, 1_000_000) / mr.t_replay(dense, 100_000) > 50
 
 
 def test_instance_size_follows_the_weight_footprint():
@@ -132,13 +129,10 @@ def test_instance_size_follows_the_weight_footprint():
     assert got == {
         "DeepSeek V4 Pro": 3,
         "Gemma 4 26B-A4B": 1,
-        "Qwen3 Next 80B": 1,
         "gpt-oss-20b": 1,
-        "Qwen3.5 397B": 1,
         "Qwen3.8 27B": 1,
         "Kimi K2.6": 2,
         "GLM 5": 2,
-        "Qwen3 235B": 1,
     }
 
 
