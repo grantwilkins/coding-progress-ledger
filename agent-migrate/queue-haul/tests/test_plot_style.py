@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Silently style an unknown policy or fail to apply the documented font sizes.
 - Reuse an action hatch so grayscale action segments become ambiguous.
 - Change a model's identity between architecture-campaign panels.
+- Leave Bandwidth visually conflated with None bound in the pooled frontier.
 """
 
 import matplotlib
@@ -89,3 +90,13 @@ def test_service_directions_have_one_canonical_visual_identity():
         plot_style.SERVICE_DIRECTION_MARKERS)
     assert len(set(plot_style.SERVICE_DIRECTION_MARKERS.values())) \
         == len(plot_style.SERVICE_DIRECTIONS)
+
+
+def test_displayed_resource_states_have_distinct_canonical_colors():
+    states = ("hbm", "bandwidth", "dest_compute",
+              "bandwidth-dest_compute-hbm", "none")
+    colors = [matplotlib.colors.to_hex(plot_style.RESOURCE_STATE_COLORS[state])
+              for state in states]
+
+    assert plot_style.RESOURCE_STATE_COLORS["bandwidth"] == "#CC79A7"
+    assert len(set(colors)) == len(states)

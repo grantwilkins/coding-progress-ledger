@@ -116,7 +116,7 @@ RESOURCE_STATE_NAMES = {
 }
 RESOURCE_STATE_COLORS = {
     "none": POLICY_COLORS["queue_haul"],
-    "bandwidth": POLICY_COLORS["queue_haul"],
+    "bandwidth": "#CC79A7",
     "hbm": POLICY_COLORS["greedy"],
     "bandwidth-hbm": POLICY_COLORS["greedy"],
     "dest_compute": POLICY_COLORS["queue_haul_power_blind"],
