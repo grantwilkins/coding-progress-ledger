@@ -2,6 +2,8 @@
 Claim:
 Destination profiles convert context-conditioned demand and admit only within nested,
 measured compatibility and migration domains.
+A profile-conditioned RPS boundary converts exactly into the existing service-work
+coordinates and rejects demand outside its measured destination, context, or ray.
 
 Plausible wrong implementations:
 - Use a single service rate for every context length.
@@ -15,6 +17,8 @@ Plausible wrong implementations:
 - Reject a measured sub-unit replay capacity factor or accept a nonpositive factor.
 - Apply a replay headroom fraction to another method or accept an invalid fraction.
 - Accept an ambiguous non-Boolean route-overlap contract.
+- Confuse total RPS with added RPS when forming baseline and safe service work.
+- Apply a profile-conditioned RPS limit to another request shape or destination.
 """
 
 from dataclasses import replace
@@ -24,7 +28,7 @@ import pytest
 from destination import (CompatibilityFingerprint, ContextRate, DestinationPool,
                          DestinationReplica, DestinationType, FluidMigrationService,
                          LoadedCoefficients,
-                         MigrationComponents)
+                         MigrationComponents, ProfileRateLimit)
 
 
 def test_fluid_replay_factor_accepts_slowdown_but_requires_positive_capacity():
@@ -86,6 +90,33 @@ def test_workload_direction_uses_normalized_service_work():
     assert q.work(100, 50, 10).tolist() == [1, 1]
     with pytest.raises(ValueError, match="workload direction"):
         q.work(50, 50, 10)
+
+
+def test_profile_rps_limit_converts_total_and_added_work_exactly():
+    limit = ProfileRateLimit("q", 10, 50, 25, 1, 3)
+
+    assert limit.conversion(destination_type()) == {
+        "normal": (1.0, 1.0),
+        "service_work_per_request": (.5, .5),
+        "baseline_work": (.5, .5),
+        "safe_service_bound": 3.0,
+        "safe_added_rps": 2,
+    }
+
+
+def test_profile_rps_limit_checks_boundary_and_measured_ray():
+    q = destination_type()
+    limit = ProfileRateLimit("q", 10, 50, 25, 1, 3)
+
+    assert limit.check(q, 150, 75, 10) == 3
+    with pytest.raises(ValueError, match="exceeds"):
+        limit.check(q, 151, 75.5, 10)
+    with pytest.raises(ValueError, match="RPS ray"):
+        limit.check(q, 150, 70, 10)
+    with pytest.raises(ValueError, match="RPS class"):
+        limit.check(q, 150, 75, 11)
+    with pytest.raises(ValueError, match="destination type"):
+        limit.check(replace(q, type_id="other"), 150, 75, 10)
 
 
 @pytest.mark.parametrize("bounds", [

@@ -1671,6 +1671,15 @@ both trajectories. Crosses and vertical projections mark the first measured
 misses, TPOT at `rho=0.85` and TTFT at `rho=1.10`. The phase figure and
 committed CSVs retain the other composition and restart-block detail, so this
 single ray is not a two-dimensional response model.
+
+New fixed-profile RPS sweeps can remain conventional at the paper boundary.
+`destination.ProfileRateLimit` converts a measured total-RPS limit into the
+existing `(1,1)` service facet, including baseline and added headroom, and
+checks the exact destination type, context, and prefill/decode ray. The helper
+is opt-in: it changes no destination schema, planner default, power model, or
+historical result. A different request class requires a different measured
+limit rather than extrapolation through the helper.
+
 At total `rho` near 0.70, held-out prefill-heavy, balanced, and decode-heavy P90
 TTFT/mean-TPOT medians are respectively 234.7/59.7 ms, 152.9/42.7 ms, and
 131.7/37.2 ms. This composition dependence proves that total work is not a

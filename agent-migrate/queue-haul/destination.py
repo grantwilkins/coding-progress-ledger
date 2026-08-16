@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -155,6 +156,60 @@ class DestinationType:
         if not lo <= fraction <= hi:
             raise ValueError("workload direction outside measured range")
         return work
+
+
+@dataclass(frozen=True)
+class ProfileRateLimit:
+    """Opt-in conversion of one measured profile-RPS boundary."""
+
+    destination_type_id: str
+    context_tokens: int
+    input_tokens: int
+    output_tokens: int
+    baseline_rps: float
+    safe_total_rps: float
+
+    def __post_init__(self):
+        rates = (self.baseline_rps, self.safe_total_rps)
+        if not self.destination_type_id \
+                or min(self.context_tokens, self.input_tokens,
+                       self.output_tokens) <= 0 \
+                or not all(map(math.isfinite, rates)) \
+                or not 0 <= self.baseline_rps <= self.safe_total_rps:
+            raise ValueError("invalid profile RPS limit")
+
+    def _request_work(self, destination_type: DestinationType) -> np.ndarray:
+        if destination_type.type_id != self.destination_type_id:
+            raise ValueError("profile RPS limit has a different destination type")
+        return destination_type.work(
+            self.input_tokens, self.output_tokens, self.context_tokens,
+        )
+
+    def conversion(self, destination_type: DestinationType) -> dict:
+        work = self._request_work(destination_type)
+        added_rps = self.safe_total_rps - self.baseline_rps
+        return {
+            "normal": (1.0, 1.0),
+            "service_work_per_request": tuple(work),
+            "baseline_work": tuple(self.baseline_rps * work),
+            "safe_service_bound": float(self.safe_total_rps * work.sum()),
+            "safe_added_rps": added_rps,
+        }
+
+    def check(self, destination_type: DestinationType, expected_f: float,
+              expected_g: float, context_tokens: int) -> float:
+        self._request_work(destination_type)
+        if context_tokens != self.context_tokens or min(expected_f, expected_g) < 0:
+            raise ValueError("demand is outside the measured profile RPS class")
+        rates = (expected_f / self.input_tokens,
+                 expected_g / self.output_tokens)
+        if not math.isclose(*rates, rel_tol=1e-9, abs_tol=1e-12):
+            raise ValueError("demand is outside the measured profile RPS ray")
+        rate = sum(rates) / 2
+        if rate > self.safe_total_rps and not math.isclose(
+                rate, self.safe_total_rps, rel_tol=1e-9, abs_tol=1e-12):
+            raise ValueError("demand exceeds the measured profile RPS limit")
+        return rate
 
 
 @dataclass(frozen=True)

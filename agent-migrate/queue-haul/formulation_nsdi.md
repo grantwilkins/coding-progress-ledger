@@ -200,6 +200,11 @@ the row, admission is unverified and fails closed. Queue-Haul already encodes
 this specialization with the service-facet normal `(1,1)`; KV, route,
 migration, and power constraints remain separate.
 
+For a fixed profile, the implementation's opt-in `ProfileRateLimit` converts
+the measured RPS boundary to this row and rejects a different destination,
+context, or phase-work ray. It adds no solver variable or default constraint,
+so prior profiles and results are unchanged.
+
 Live KV is rounded for each session:
 
 \[
