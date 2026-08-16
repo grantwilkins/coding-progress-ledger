@@ -1,7 +1,8 @@
 """
 Claim:
-Each architecture-campaign checkpoint uses its pinned snapshot and validated
-hybrid-cache geometry on the same BF16, TP1, 32K, eight-session runtime.
+Each architecture-campaign checkpoint uses its pinned snapshot, BF16 attention
+KV, recorded recurrent-state dtypes, and validated hybrid-cache geometry on the
+same TP1, 32K, eight-session runtime.
 
 Plausible wrong implementations:
 - Reuse the GPT-OSS revision for Qwen or Gemma.
@@ -90,16 +91,19 @@ def test_campaign_log_must_prove_bf16_and_qwen_unified_block():
             qwen, good.replace("bfloat16", "float8_e4m3fn"))
 
     direct = """
-    QH_KV_CACHE_DTYPE_VERIFIED dtype=torch.bfloat16 entries=36 tensors=48
+    QH_KV_CACHE_DTYPES_VERIFIED attention=torch.bfloat16:24 recurrent=torch.bfloat16+torch.float32:24 [3m(connector_patch.py:1)[0m
     Setting attention block size to 784 tokens
     """
     testbed.validate_model_runtime_log(qwen, direct)
     with pytest.raises(RuntimeError, match="BF16"):
         testbed.validate_model_runtime_log(
-            qwen, direct.replace("torch.bfloat16", "torch.float16"))
+            qwen, direct.replace("attention=torch.bfloat16", "attention=torch.float16"))
     with pytest.raises(RuntimeError, match="BF16"):
         testbed.validate_model_runtime_log(
-            qwen, direct.replace("entries=36", "entries=0"))
+            qwen, direct.replace("bfloat16:24 recurrent", "bfloat16:0 recurrent"))
+    with pytest.raises(RuntimeError, match="BF16"):
+        testbed.validate_model_runtime_log(
+            qwen, direct.replace("torch.bfloat16+torch.float32:24", "bad"))
 
 
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):

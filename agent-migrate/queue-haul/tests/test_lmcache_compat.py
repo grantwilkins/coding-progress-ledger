@@ -12,8 +12,8 @@ from lmcache_compat.connector_patch import (
     kv_first_attention_block_view,
     patch_attention_kv_layout,
     patch_on_import,
-    register_verified_bf16_kv_caches,
-    verify_bf16_kv_caches,
+    register_verified_kv_caches,
+    verify_kv_cache_dtypes,
 )
 
 
@@ -114,39 +114,53 @@ def test_kv_first_attention_view_rejects_truncated_storage():
         kv_first_attention_block_view(cache)
 
 
-def test_bf16_proof_checks_attention_and_every_mamba_tensor():
+def test_dtype_proof_requires_bf16_attention_and_records_recurrent_signature():
     caches = {
         "attention": torch.empty(2, dtype=torch.bfloat16),
         "mamba": [torch.empty(3, dtype=torch.bfloat16),
-                  torch.empty(4, dtype=torch.bfloat16)],
+                  torch.empty(4, dtype=torch.float32)],
+        "mamba_2": [torch.empty(3, dtype=torch.bfloat16),
+                    torch.empty(4, dtype=torch.float32)],
     }
-    assert verify_bf16_kv_caches(caches) == (2, 3)
-    caches["mamba"][1] = torch.empty(4, dtype=torch.float16)
-    with pytest.raises(RuntimeError, match=r"mamba\[1\].*not torch.bfloat16"):
-        verify_bf16_kv_caches(caches)
+    assert verify_kv_cache_dtypes(caches) == (
+        1, "torch.bfloat16+torch.float32:2",
+    )
+    caches["attention"] = torch.empty(2, dtype=torch.float16)
+    with pytest.raises(RuntimeError, match="attention.*not torch.bfloat16"):
+        verify_kv_cache_dtypes(caches)
 
 
-@pytest.mark.parametrize("caches", [{}, {"mamba": []}, {"mamba": (object(),)}])
-def test_bf16_proof_rejects_missing_or_unknown_tensor_groups(caches):
+@pytest.mark.parametrize("caches", [
+    {},
+    {"mamba": []},
+    {"mamba": (object(),)},
+    {"mamba": [torch.empty(1, dtype=torch.int32)]},
+])
+def test_dtype_proof_rejects_missing_or_unknown_tensor_groups(caches):
     with pytest.raises(RuntimeError):
-        verify_bf16_kv_caches(caches)
+        verify_kv_cache_dtypes(caches)
 
 
-def test_bf16_registration_marker_follows_successful_registration_only():
+def test_dtype_registration_marker_follows_successful_registration_only():
     events = []
     logger = type("Logger", (), {"info": lambda _self, message, *args:
                   events.append(message % args)})()
-    caches = {"attention": torch.empty(1, dtype=torch.bfloat16)}
+    caches = {
+        "attention": torch.empty(1, dtype=torch.bfloat16),
+        "mamba": [torch.empty(1, dtype=torch.bfloat16),
+                  torch.empty(1, dtype=torch.float32)],
+    }
 
-    assert register_verified_bf16_kv_caches(
+    assert register_verified_kv_caches(
         lambda values: events.append("registered") or values,
         caches, logger,
     ) is caches
-    assert events == ["registered", "QH_KV_CACHE_DTYPE_VERIFIED "
-                      "dtype=torch.bfloat16 entries=1 tensors=1"]
+    assert events == ["registered", "QH_KV_CACHE_DTYPES_VERIFIED "
+                      "attention=torch.bfloat16:1 "
+                      "recurrent=torch.bfloat16+torch.float32:1"]
     events.clear()
     with pytest.raises(RuntimeError):
-        register_verified_bf16_kv_caches(
+        register_verified_kv_caches(
             lambda _values: (_ for _ in ()).throw(RuntimeError("register failed")),
             caches, logger,
         )

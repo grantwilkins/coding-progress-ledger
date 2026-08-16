@@ -263,14 +263,19 @@ def validate_model_runtime(cfg: Config) -> None:
 def validate_model_runtime_log(cfg: Config, text: str) -> None:
     if not (cfg.architecture_campaign or cfg.service_campaign):
         return
-    marker = "QH_KV_CACHE_DTYPE_VERIFIED"
+    marker = "QH_KV_CACHE_DTYPES_VERIFIED"
     direct = re.findall(
-        rf"{marker} dtype=(\S+) entries=(\d+) tensors=(\d+)(?:\s|$)", text,
+        rf"{marker} attention=torch.bfloat16:(\d+) recurrent=(\S+)(?:\s|$)",
+        text,
     )
     if marker in text:
+        recurrent = r"torch\.[a-z0-9_]+(?:\+torch\.[a-z0-9_]+)*:[1-9]\d*"
         proved_bf16 = text.count(marker) == len(direct) and all(
-            dtype == "torch.bfloat16" and 0 < int(entries) <= int(tensors)
-            for dtype, entries, tensors in direct
+            int(attention) > 0 and (signatures == "none" or all(
+                re.fullmatch(recurrent, signature)
+                for signature in signatures.split(",")
+            ))
+            for attention, signatures in direct
         )
     else:
         proved_bf16 = bool(re.search(
@@ -562,7 +567,7 @@ def gpu_count() -> int:
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
     if lmcache_mode() == "mp":
-        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; from lmcache.integration.vllm.kv_cache_group_edits import _SubpagedAttentionViewEdit; assert LMCacheMPConnector._qh_bypass_patched and LMCacheMPConnector._qh_bf16_registration_patched and _SubpagedAttentionViewEdit._qh_kv_first_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
+        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; from lmcache.integration.vllm.kv_cache_group_edits import _SubpagedAttentionViewEdit; assert LMCacheMPConnector._qh_bypass_patched and LMCacheMPConnector._qh_kv_dtype_registration_patched and _SubpagedAttentionViewEdit._qh_kv_first_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
         script = "\n".join([
             f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}",
             shell(["python", "-c", check]),

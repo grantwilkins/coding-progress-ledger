@@ -1526,7 +1526,8 @@ uv run python service_headroom_campaign.py reduce --plan runs/service-headroom/p
 The same one-GPU campaign supports the pinned Qwen3.8-27B and
 Gemma-4-26B-A4B checkpoints. Pass the identical model to `prepare` and every
 `run-cell`; Qwen additionally requires `--max-num-batched-tokens 1567`.
-Non-GPT cells hard-check BF16 KV, model-specific arguments, and Qwen's
+Non-GPT cells hard-check BF16 attention KV, record recurrent-state dtypes,
+check model-specific arguments, and enforce Qwen's
 784-token unified/cache-group alignment. Their normalization records the
 model-specific cache chunk used to compute resident stock:
 
@@ -1605,14 +1606,16 @@ audit and retained evidence.
 
 `model_architecture_campaign.py` reuses the migration profiler and base planner
 for the pinned GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B checkpoints. It
-keeps BF16 KV, TP1, 32K context, eight sessions, 90% GPU memory, and exact token
-shapes fixed across A100 and H100 arms. Use the native vLLM 0.22/LMCache 0.5.1
+keeps BF16 attention KV, TP1, 32K context, eight sessions, 90% GPU memory, and
+exact token shapes fixed across A100 and H100 arms. Use the native vLLM
+0.22/LMCache 0.5.1
 stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`. The shipped connector
 retains Qwen's separate attention/Mamba groups. It accepts only vLLM's exact
 `[2, NB, 16, NH, HS]` hybrid-attention shape and stride, restores the underlying
 block-major view without a copy, and lets LMCache form 784-token logical pages.
-Startup succeeds only after every registered attention and Mamba tensor is
-directly verified as BF16 and recorded by `QH_KV_CACHE_DTYPE_VERIFIED`.
+Startup succeeds only after every registered attention tensor is directly
+verified as BF16 and each floating recurrent-state list's actual dtype sequence
+and count are recorded by `QH_KV_CACHE_DTYPES_VERIFIED`.
 
 ```bash
 uv run python model_architecture_campaign.py prepare --out-dir runs/model-architecture/plans

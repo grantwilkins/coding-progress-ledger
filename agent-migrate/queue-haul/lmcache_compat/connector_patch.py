@@ -37,29 +37,40 @@ def kv_first_attention_block_view(kv_cache):
     )
 
 
-def verify_bf16_kv_caches(kv_caches):
+def verify_kv_cache_dtypes(kv_caches):
     import torch
 
     if not kv_caches:
         raise RuntimeError("no KV caches were registered")
-    tensors = 0
+    attention, recurrent = 0, {}
     for name, cache in kv_caches.items():
-        values = [cache] if isinstance(cache, torch.Tensor) else cache
-        if not isinstance(values, list) or not values:
+        if isinstance(cache, torch.Tensor):
+            if cache.dtype != torch.bfloat16:
+                raise RuntimeError(f"attention KV cache {name} is {cache.dtype}, not torch.bfloat16")
+            attention += 1
+            continue
+        if not isinstance(cache, list) or not cache:
             raise RuntimeError(f"KV cache {name} has an unsupported tensor group")
-        for index, tensor in enumerate(values):
-            if not isinstance(tensor, torch.Tensor) or tensor.dtype != torch.bfloat16:
+        dtypes = []
+        for index, tensor in enumerate(cache):
+            if not isinstance(tensor, torch.Tensor) or not tensor.is_floating_point():
                 dtype = getattr(tensor, "dtype", type(tensor).__name__)
-                raise RuntimeError(f"KV cache {name}[{index}] is {dtype}, not torch.bfloat16")
-            tensors += 1
-    return len(kv_caches), tensors
+                raise RuntimeError(f"recurrent KV cache {name}[{index}] is unsupported: {dtype}")
+            dtypes.append(str(tensor.dtype))
+        signature = "+".join(dtypes)
+        recurrent[signature] = recurrent.get(signature, 0) + 1
+    if not attention:
+        raise RuntimeError("no attention KV caches were registered")
+    return attention, ",".join(
+        f"{signature}:{count}" for signature, count in sorted(recurrent.items())
+    ) or "none"
 
 
-def register_verified_bf16_kv_caches(register, kv_caches, logger):
-    entries, tensors = verify_bf16_kv_caches(kv_caches)
+def register_verified_kv_caches(register, kv_caches, logger):
+    attention, recurrent = verify_kv_cache_dtypes(kv_caches)
     result = register(kv_caches)
-    logger.info("QH_KV_CACHE_DTYPE_VERIFIED dtype=torch.bfloat16 entries=%d tensors=%d",
-                entries, tensors)
+    logger.info("QH_KV_CACHE_DTYPES_VERIFIED attention=torch.bfloat16:%d recurrent=%s",
+                attention, recurrent)
     return result
 
 
@@ -234,14 +245,14 @@ def patch_mp_connector() -> None:
         return 0, False
 
     def register(self, kv_caches):
-        return register_verified_bf16_kv_caches(
+        return register_verified_kv_caches(
             lambda caches: original_register(self, caches), kv_caches, logger,
         )
 
     LMCacheMPConnector.get_num_new_matched_tokens = lookup
     LMCacheMPConnector.register_kv_caches = register
     LMCacheMPConnector._qh_bypass_patched = True
-    LMCacheMPConnector._qh_bf16_registration_patched = True
+    LMCacheMPConnector._qh_kv_dtype_registration_patched = True
 
 
 if os.environ.get("QH_LMCACHE_MODE") == "mp":
