@@ -71,6 +71,10 @@ LEVELS = {"hbm": (0.0, .98), "bandwidth": ("natural", "controlled_40"),
 MIN_ACTION_RESPONSE_RATE = .1
 REGIONS = ("east", "germany")
 ACTIONS = ("replay", "kv_transfer", "not_moved")
+ACTION_BOXPLOT_CASES = (
+    "hbm", "bandwidth", "dest_compute", "bandwidth-dest_compute-hbm", "none",
+)
+ACTION_BOXPLOT_QUANTILES = (.05, .25, .5, .75, .95)
 POWER_TOLERANCE_W = 1e-6
 MIGRATION_HORIZON_S = 25
 SOURCE_LOAD = .4
@@ -786,8 +790,6 @@ def write_csv(path, rows):
 
 
 def plot(rows, path):
-    from matplotlib.lines import Line2D
-
     fig, axis = plt.subplots(figsize=(5.5, 3))
     groups = [[row for row in rows if row["case_id"] == case_id]
               for case_id, _, _ in factorial_cases()]
@@ -806,14 +808,6 @@ def plot(rows, path):
             label=plot_style.ACTION_NAMES[action],
         )
         left += values
-    for y, group in enumerate(groups):
-        for values in ([row["replay_phase_load"] for row in group],
-                       [row["replay_phase_load"] + row["kv_transfer_phase_load"]
-                        for row in group]):
-            low, middle, high = 100 * np.quantile(values, (.05, .5, .95))
-            axis.hlines(y, low, high, color="#333333", linewidth=1, zorder=4)
-            axis.plot(middle, y, marker="|", color="#333333", markersize=7,
-                      zorder=5)
     axis.set(
         yticks=range(8), yticklabels=[label for _, label, _ in factorial_cases()],
         xlim=(0, 100), xlabel="Modeled source phase-load share (%)",
@@ -823,13 +817,91 @@ def plot(rows, path):
     axis.tick_params(labelsize=11)
     axis.xaxis.label.set_size(12)
     handles, labels = axis.get_legend_handles_labels()
-    handles.append(Line2D((0,), (0,), color="#333333", marker="|", linewidth=1))
-    labels.append("5-95% boundary")
     fig.legend(
         handles, labels, frameon=False, ncol=2, loc="lower center",
         bbox_to_anchor=(.58, .01), fontsize=10, handlelength=1.8,
     )
     fig.subplots_adjust(left=.34, right=.98, bottom=.36, top=.98)
+    for suffix in ("png", "pdf"):
+        fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
+    plt.close(fig)
+
+
+def action_boxplot_statistics(rows):
+    output = []
+    labels = {case_id: label for case_id, label, _ in factorial_cases()}
+    for case_id in ACTION_BOXPLOT_CASES:
+        selected = [row for row in rows if row["case_id"] == case_id]
+        if not selected:
+            raise RuntimeError(f"boxplot case has no draws: {case_id}")
+        for action in ACTIONS:
+            values = np.asarray([
+                100 * row[f"{action}_count"] / row["sessions"]
+                for row in selected
+            ])
+            if not np.isfinite(values).all():
+                raise RuntimeError("boxplot session share is not finite")
+            quantiles = np.quantile(values, ACTION_BOXPLOT_QUANTILES)
+            output.append({
+                "case_id": case_id, "bound_constraint": labels[case_id],
+                "action": action,
+                **{name: float(value) for name, value in zip(
+                    ("p05", "p25", "median", "p75", "p95"), quantiles,
+                )},
+            })
+    return output
+
+
+def plot_action_boxplot(rows, path):
+    from matplotlib.patches import Patch
+    from matplotlib.ticker import PercentFormatter
+
+    statistics = action_boxplot_statistics(rows)
+    positions = np.arange(len(ACTION_BOXPLOT_CASES))
+    fig, axis = plt.subplots(figsize=(5.5, 3))
+    for action, offset in zip(ACTIONS, (-.24, 0, .24)):
+        selected = [row for row in statistics if row["action"] == action]
+        artists = axis.bxp([
+            {
+                "label": row["bound_constraint"], "whislo": row["p05"],
+                "q1": row["p25"], "med": row["median"], "q3": row["p75"],
+                "whishi": row["p95"], "fliers": (),
+            } for row in selected
+        ], positions=positions + offset, widths=.2, patch_artist=True,
+           showfliers=False, manage_ticks=False,
+           boxprops={"facecolor": plot_style.ACTION_COLORS[action],
+                     "edgecolor": "white", "linewidth": 1.2,
+                     "hatch": plot_style.ACTION_HATCHES[action]},
+           medianprops={"color": "#222222", "linewidth": 1.3},
+           whiskerprops={"color": "#444444", "linewidth": 1},
+           capprops={"color": "#444444", "linewidth": 1})
+        if len(artists["boxes"]) != len(ACTION_BOXPLOT_CASES):
+            raise RuntimeError("boxplot omitted a constraint case")
+    labels = {case_id: label for case_id, label, _ in factorial_cases()}
+    tick_labels = [labels[case].replace("Dest. compute", "Dest.\ncompute")
+                   .replace("All bound", "All\nbound")
+                   .replace("None bound", "None\nbound")
+                   for case in ACTION_BOXPLOT_CASES]
+    axis.set(
+        xticks=positions, xticklabels=tick_labels, xlim=(-.55, 4.55),
+        ylim=(0, 100), yticks=(0, 25, 50, 75, 100), ylabel="Sessions (%)",
+    )
+    axis.yaxis.set_major_formatter(PercentFormatter(100))
+    axis.grid(axis="y", alpha=.2)
+    axis.tick_params(labelsize=10)
+    axis.yaxis.label.set_size(12)
+    axis.text(
+        1, 1.02, "Box: 25-75%; whiskers: 5-95%", transform=axis.transAxes,
+        ha="right", va="bottom", fontsize=9,
+    )
+    fig.legend(
+        [Patch(facecolor=plot_style.ACTION_COLORS[action], edgecolor="white",
+               hatch=plot_style.ACTION_HATCHES[action]) for action in ACTIONS],
+        [plot_style.ACTION_NAMES[action] for action in ACTIONS],
+        frameon=False, ncol=3, loc="lower center", bbox_to_anchor=(.56, .01),
+        fontsize=10, handlelength=1.8,
+    )
+    fig.subplots_adjust(left=.15, right=.98, bottom=.34, top=.88)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
@@ -894,6 +966,7 @@ def main():
     write_csv(args.out / "surface_validation.csv", validation)
     write_csv(args.out / "factor_checks.csv", checks)
     plot(rows, args.out / "action_mix")
+    plot_action_boxplot(rows, args.out / "action_mix_boxplot")
     timing_evidence = json.loads(TIMING_SUMMARY.read_text())
     loaded_evidence = loaded_service_model()
     timing_loads = sorted({float(row["destination_prefill_load"])
@@ -911,12 +984,15 @@ def main():
         if row["planner_shortfall_worsened_on_release"]
     ])
     metadata = {
-        "schema": "queue-haul-workload-adaptation-v5",
+        "schema": "queue-haul-workload-adaptation-v6",
         "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
         "source_load_definition": "sum(f/F + g/G); distinct from sampled phase load z=af+bg",
+        "action_boxplot_cases": list(ACTION_BOXPLOT_CASES),
+        "action_boxplot_metric": "per-draw percentage of source sessions assigned to each action",
+        "action_boxplot_quantiles": list(ACTION_BOXPLOT_QUANTILES),
         "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
         "power_scope": "steady awake source-region power; destination power excluded",
         "unique_timing_draws": len({row["timing_fit_sha256"] for row in rows}),

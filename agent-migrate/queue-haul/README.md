@@ -863,9 +863,12 @@ that narrower curve; candidate duration and shared migration work use the same
 timing components but retain distinct objective and capacity roles.
 Stacked boundaries are the median Replay and median total-moved shares of
 modeled source phase load, the additive quantity used by the exact nonlinear
-power target. Black intervals show their 5--95% ranges. Raw session counts and
-count shares remain in the CSV; plotting counts would overstate inactivity
-because a small number of sampled sessions can carry most of the phase load.
+power target. The separate `action_mix_boxplot.pdf` shows session-count
+variation for HBM, bandwidth, destination compute, all bound, and none bound:
+each x-position has Replay, KV-transfer, and not-moved boxes spanning the
+25th--75th percentiles, median lines, and 5th--95th-percentile whiskers. Raw
+session counts and count shares remain in the CSV; they intentionally differ
+from phase-load weighting because a few sessions can carry most of the load.
 Target misses and one-factor-release checks remain in the output tables.
 The eight states are independent branches. Their fractional LP opportunity
 sets must expand on every release; any rounded-planner regressions are reported

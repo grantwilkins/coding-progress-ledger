@@ -24,6 +24,10 @@ Plausible wrong implementations:
 - Label a single-factor state despite no material paired action response.
 - Summarize a power-targeted action mix by session count instead of phase load.
 - Lose phase-load conservation when assigning selected sessions to actions.
+- Use phase-load shares rather than session shares in the companion boxplot.
+- Include intermediate joint cases instead of the three independent bottlenecks,
+  all bound, and none bound.
+- Use default Tukey whiskers instead of the declared 5th and 95th percentiles.
 """
 
 from types import SimpleNamespace
@@ -128,6 +132,30 @@ def test_phase_load_action_mix_uses_power_weights_not_session_counts():
     assert campaign.phase_load_shares(sessions, moves, power) == {
         "replay": .1, "kv_transfer": .3, "not_moved": .6,
     }
+
+
+def test_action_boxplot_uses_session_shares_for_only_five_declared_cases():
+    rows = []
+    for case_id in campaign.ACTION_BOXPLOT_CASES:
+        for replicate, (replay, kv) in enumerate(zip(
+                (0, 10, 20, 30, 40), (0, 0, 10, 10, 20))):
+            rows.append({
+                "case_id": case_id, "replicate": replicate, "sessions": 100,
+                "replay_count": replay, "kv_transfer_count": kv,
+                "not_moved_count": 100 - replay - kv,
+                "replay_phase_load": .99, "kv_transfer_phase_load": .005,
+                "not_moved_phase_load": .005,
+            })
+
+    summary = campaign.action_boxplot_statistics(rows)
+    replay = next(row for row in summary
+                  if row["case_id"] == "hbm" and row["action"] == "replay")
+
+    assert len(summary) == 5 * 3
+    assert tuple(dict.fromkeys(row["case_id"] for row in summary)) \
+        == campaign.ACTION_BOXPLOT_CASES
+    assert (replay["p05"], replay["p25"], replay["median"], replay["p75"],
+            replay["p95"]) == pytest.approx((2, 10, 20, 30, 38))
 
 
 def test_loaded_factor_transport_is_counted_and_in_context_run_is_paired():
