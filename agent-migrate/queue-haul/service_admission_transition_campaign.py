@@ -637,8 +637,12 @@ def reduce(plan: dict, rates: dict, root: Path) -> dict:
         rows, key=lambda row: row["started_wall_ns"])]
     if observed_order != plan["run_order"]:
         raise RuntimeError("transition execution order differs from the frozen plan")
-    if len({row["runtime_identity_sha256"] for row in rows}) != 1:
-        raise RuntimeError("transition cells mix runtime identities")
+    service_identities = {
+        headroom.service_runtime_identity_sha(row["runtime_identity"])
+        for row in rows
+    }
+    if service_identities != {plan["service_runtime_identity_sha256"]}:
+        raise RuntimeError("transition cells mix serving identities")
     mix_checks = {
         direction: all(decision["pass"] for decision in decisions
                        if decision["direction"] == direction)
@@ -648,6 +652,11 @@ def reduce(plan: dict, rates: dict, root: Path) -> dict:
         "schema": SCHEMA, "stage": "transition_confirmation",
         "plan_sha256": headroom.digest(plan),
         "normalization_sha256": rates["sha256"],
+        "service_runtime_identity_sha256":
+        plan["service_runtime_identity_sha256"],
+        "collector_git_shas": sorted({
+            row["runtime_identity"]["git_sha"] for row in rows
+        }),
         "evidence_status": "three_discrete_transition_recipes",
         "planner_usable": False, "supported_envelope": None,
         "targets": plan["targets"], "mix_checks": mix_checks,

@@ -191,3 +191,20 @@ def test_driver_status_preserves_preflight_error(tmp_path, monkeypatch):
     status = json.loads((tmp_path / "runs/status.json").read_text())
     assert status["state"] == "failed"
     assert status["last_error"] == "RuntimeError: runtime identity mismatch"
+
+
+def test_service_identity_excludes_analysis_only_git_revision():
+    identity_a = {
+        "model": "m", "git_sha": "a" * 40,
+        "scheduler": {"max_num_seqs": 1},
+        "commands": {"vllm": ["serve"]},
+    }
+    identity_a["sha256"] = headroom.digest(identity_a)
+    identity_b = {**identity_a, "git_sha": "b" * 40}
+    identity_b["sha256"] = headroom.digest(
+        {key: value for key, value in identity_b.items() if key != "sha256"}
+    )
+
+    assert headroom.identity_sha(identity_a) != headroom.identity_sha(identity_b)
+    assert headroom.service_runtime_identity_sha(identity_a) \
+        == headroom.service_runtime_identity_sha(identity_b)
