@@ -30,6 +30,8 @@ def test_aggregate_keeps_raw_block_range():
 def test_main_plot_accepts_heldout_repeat_ranges(tmp_path):
     row = {
         "direction": "prefill_heavy", "measured_rho_median": .85,
+        "offered_prefill_rho_median": .63,
+        "offered_decode_rho_median": .22,
         "p90_ttft_s_median": .4, "p90_ttft_s_minimum": .3,
         "p90_ttft_s_maximum": .5, "p90_mean_tpot_s_median": .105,
         "p90_mean_tpot_s_minimum": .102,
