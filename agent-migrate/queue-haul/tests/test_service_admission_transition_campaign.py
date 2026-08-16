@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 import service_admission_transition_campaign as campaign
 import service_headroom_campaign as headroom
 
@@ -169,3 +171,23 @@ def test_invalid_attempt_directory_is_preserved_when_next_attempt_is_selected(tm
 
     assert campaign.selected_attempt(cell_root, plan, cell) == complete
     assert json.loads((invalid / "requests.json").read_text()) == [{"kept": True}]
+
+
+def test_driver_status_preserves_preflight_error(tmp_path, monkeypatch):
+    plan = campaign.make_plan(*source_inputs())
+    rates = source_inputs()[1]
+    monkeypatch.setattr(
+        campaign, "run_cell",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("runtime identity mismatch")),
+    )
+
+    with pytest.raises(RuntimeError, match="runtime identity mismatch"):
+        campaign.run_all(
+            plan, rates, object(), tmp_path / "runs", tmp_path / "summary.json",
+            [], 0, 1,
+        )
+
+    status = json.loads((tmp_path / "runs/status.json").read_text())
+    assert status["state"] == "failed"
+    assert status["last_error"] == "RuntimeError: runtime identity mismatch"

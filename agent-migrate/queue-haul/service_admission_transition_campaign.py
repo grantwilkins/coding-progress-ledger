@@ -7,6 +7,7 @@ import json
 import re
 import statistics
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -723,15 +724,27 @@ def run_all(plan: dict, rates: dict, cfg: testbed.Config, root: Path,
                 run_cell(plan, rates, cell, cfg, attempt_root, extra)
                 select_attempt(cell_root, plan, cell, attempt_root)
                 break
-            except RuntimeError:
+            except RuntimeError as exc:
+                traceback.print_exc()
                 if max_attempts and attempts >= max_attempts:
                     write_json(status_path, {
                         "state": "failed", "cell_id": cell_id,
                         "completed_cells": completed, "attempt": attempts,
+                        "last_error": f"{type(exc).__name__}: {exc}",
                         "updated_wall_ns": time.time_ns(),
                         "plan_sha256": headroom.digest(plan),
                     })
                     raise
+                write_json(status_path, {
+                    "state": "retrying", "cell_id": cell_id,
+                    "cell_index": index + 1,
+                    "cell_count": len(plan["run_order"]),
+                    "completed_cells": completed, "attempt": attempts,
+                    "last_error": f"{type(exc).__name__}: {exc}",
+                    "retry_delay_s": retry_delay_s,
+                    "updated_wall_ns": time.time_ns(),
+                    "plan_sha256": headroom.digest(plan),
+                })
                 time.sleep(retry_delay_s)
         completed += 1
     result = reduce(plan, rates, root)
