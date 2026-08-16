@@ -25,7 +25,8 @@ def plot(summary: dict, output: Path) -> None:
                              sharex=True, sharey=True)
     fields = (
         ("max_peak_running_requests", "Maximum simultaneous\nrunning requests"),
-        ("max_completed_burst_width", "Largest completed\nsynchronized burst"),
+        ("max_completed_burst_width",
+         "Largest tested completed burst\n(lower bound)"),
     )
     for axis, (field, title) in zip(axes, fields):
         for model in plot_style.MODELS:
@@ -43,8 +44,11 @@ def plot(summary: dict, output: Path) -> None:
                     marker=plot_style.MODEL_MARKERS[model],
                     label=plot_style.MODEL_NAMES[model],
                 )
-                right_censored = [row for row in launched
-                                  if row["right_censored"]]
+                right_censored = [
+                    row for row in launched
+                    if field == "max_completed_burst_width"
+                    and row["right_censored"]
+                ]
                 if right_censored:
                     axis.scatter(
                         [row["context_tokens"] / 1000 for row in right_censored],

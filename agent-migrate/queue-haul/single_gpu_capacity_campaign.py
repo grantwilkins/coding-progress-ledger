@@ -550,8 +550,12 @@ def cell_summary(result: dict) -> dict:
     probes = result["probes"]
     completed = [row for row in probes if row["all_completed"]]
     saturated = [row for row in probes if row["saturated"]]
+    first_saturated = min(saturated, key=lambda row: row["width"],
+                          default=None)
     failed = [row for row in probes if not row["all_completed"]
               or row["engine_exited"] or row["request_error"]]
+    kv_usage = [row["peak_kv_usage"] for row in probes
+                if row.get("peak_kv_usage") is not None]
     geometry = result.get("runtime_geometry") or {}
     return {
         "model": result["model"], "revision": result["revision"],
@@ -568,13 +572,27 @@ def cell_summary(result: dict) -> dict:
         "max_peak_running_requests": max((row["peak_running_requests"]
                                           for row in probes), default=0),
         "max_peak_waiting_requests": max((row["peak_waiting_requests"]
-                                          for row in probes), default=0),
-        "first_saturated_width": min((row["width"] for row in saturated),
-                                     default=None),
+                                           for row in probes), default=0),
+        "max_peak_kv_usage": max(kv_usage, default=None),
+        "first_saturated_width": (first_saturated["width"]
+                                  if first_saturated else None),
+        "first_saturated_peak_kv_usage": (
+            first_saturated.get("peak_kv_usage") if first_saturated else None),
+        "first_saturated_p90_ttft_s": (
+            first_saturated.get("p90_ttft_s") if first_saturated else None),
+        "first_saturated_p90_mean_tpot_s": (
+            first_saturated.get("p90_mean_tpot_s")
+            if first_saturated else None),
+        "first_saturated_exact_timing": (
+            first_saturated.get("exact_timing") if first_saturated else None),
+        "first_saturated_completed": (
+            first_saturated.get("completed") if first_saturated else None),
         "first_failed_width": min((row["width"] for row in failed), default=None),
         "largest_width_attempted": max((row["width"] for row in probes), default=0),
-        "right_censored": bool(probes and probes[-1]["width"] == max(WIDTHS)
-                               and probes[-1]["all_completed"]),
+        # A successful last probe is a lower bound, whether the geometric
+        # sweep ended at 256 or stopped after repeating a running-capacity
+        # plateau.  No larger completion boundary was observed.
+        "right_censored": bool(probes and probes[-1]["all_completed"]),
         "probes": len(probes),
     }
 

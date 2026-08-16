@@ -92,10 +92,14 @@ def test_summary_distinguishes_completed_burst_and_true_concurrency():
         "probes": [
             {"width": 8, "all_completed": True, "saturated": False,
              "engine_exited": False, "request_error": None,
-             "peak_running_requests": 8, "peak_waiting_requests": 0},
+             "peak_running_requests": 8, "peak_waiting_requests": 0,
+             "peak_kv_usage": .4},
             {"width": 16, "all_completed": True, "saturated": True,
              "engine_exited": False, "request_error": None,
-             "peak_running_requests": 9, "peak_waiting_requests": 7},
+             "peak_running_requests": 9, "peak_waiting_requests": 7,
+             "peak_kv_usage": .8, "p90_ttft_s": 2.5,
+             "p90_mean_tpot_s": .04, "exact_timing": 15,
+             "completed": 16},
         ],
     }
 
@@ -104,6 +108,13 @@ def test_summary_distinguishes_completed_burst_and_true_concurrency():
     assert row["max_completed_burst_width"] == 16
     assert row["max_peak_running_requests"] == 9
     assert row["first_saturated_width"] == 16
+    assert row["max_peak_kv_usage"] == .8
+    assert row["first_saturated_peak_kv_usage"] == .8
+    assert row["first_saturated_p90_ttft_s"] == 2.5
+    assert row["first_saturated_p90_mean_tpot_s"] == .04
+    assert row["first_saturated_exact_timing"] == 15
+    assert row["first_saturated_completed"] == 16
+    assert row["right_censored"] is True
 
 
 def test_reduce_has_no_performance_gate(tmp_path):

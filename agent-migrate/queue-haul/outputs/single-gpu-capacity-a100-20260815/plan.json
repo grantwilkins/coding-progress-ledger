@@ -1,0 +1,197 @@
+{
+  "campaign": "single_gpu_capacity_discovery",
+  "cells": [
+    {
+      "cell_id": "a100-openai-gpt-oss-20b-ctx4096",
+      "context_tokens": 4096,
+      "hardware": "a100",
+      "model": "openai/gpt-oss-20b",
+      "revision": "6cee5e81ee83917806bbde320786a8fb61efebee"
+    },
+    {
+      "cell_id": "a100-openai-gpt-oss-20b-ctx8192",
+      "context_tokens": 8192,
+      "hardware": "a100",
+      "model": "openai/gpt-oss-20b",
+      "revision": "6cee5e81ee83917806bbde320786a8fb61efebee"
+    },
+    {
+      "cell_id": "a100-openai-gpt-oss-20b-ctx16384",
+      "context_tokens": 16384,
+      "hardware": "a100",
+      "model": "openai/gpt-oss-20b",
+      "revision": "6cee5e81ee83917806bbde320786a8fb61efebee"
+    },
+    {
+      "cell_id": "a100-openai-gpt-oss-20b-ctx24576",
+      "context_tokens": 24576,
+      "hardware": "a100",
+      "model": "openai/gpt-oss-20b",
+      "revision": "6cee5e81ee83917806bbde320786a8fb61efebee"
+    },
+    {
+      "cell_id": "a100-openai-gpt-oss-20b-ctx32256",
+      "context_tokens": 32256,
+      "hardware": "a100",
+      "model": "openai/gpt-oss-20b",
+      "revision": "6cee5e81ee83917806bbde320786a8fb61efebee"
+    },
+    {
+      "cell_id": "a100-qwen-qwen3-8-27b-ctx3920",
+      "context_tokens": 3920,
+      "hardware": "a100",
+      "model": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+    },
+    {
+      "cell_id": "a100-qwen-qwen3-8-27b-ctx7840",
+      "context_tokens": 7840,
+      "hardware": "a100",
+      "model": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+    },
+    {
+      "cell_id": "a100-qwen-qwen3-8-27b-ctx15680",
+      "context_tokens": 15680,
+      "hardware": "a100",
+      "model": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+    },
+    {
+      "cell_id": "a100-qwen-qwen3-8-27b-ctx24304",
+      "context_tokens": 24304,
+      "hardware": "a100",
+      "model": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+    },
+    {
+      "cell_id": "a100-qwen-qwen3-8-27b-ctx32144",
+      "context_tokens": 32144,
+      "hardware": "a100",
+      "model": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+    },
+    {
+      "cell_id": "a100-google-gemma-4-26b-a4b-it-ctx4096",
+      "context_tokens": 4096,
+      "hardware": "a100",
+      "model": "google/gemma-4-26B-A4B-it",
+      "revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
+    },
+    {
+      "cell_id": "a100-google-gemma-4-26b-a4b-it-ctx8192",
+      "context_tokens": 8192,
+      "hardware": "a100",
+      "model": "google/gemma-4-26B-A4B-it",
+      "revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
+    },
+    {
+      "cell_id": "a100-google-gemma-4-26b-a4b-it-ctx16384",
+      "context_tokens": 16384,
+      "hardware": "a100",
+      "model": "google/gemma-4-26B-A4B-it",
+      "revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
+    },
+    {
+      "cell_id": "a100-google-gemma-4-26b-a4b-it-ctx24576",
+      "context_tokens": 24576,
+      "hardware": "a100",
+      "model": "google/gemma-4-26B-A4B-it",
+      "revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
+    },
+    {
+      "cell_id": "a100-google-gemma-4-26b-a4b-it-ctx32256",
+      "context_tokens": 32256,
+      "hardware": "a100",
+      "model": "google/gemma-4-26B-A4B-it",
+      "revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
+    }
+  ],
+  "contexts": {
+    "Qwen/Qwen3.8-27B": [
+      3920,
+      7840,
+      15680,
+      24304,
+      32144
+    ],
+    "google/gemma-4-26B-A4B-it": [
+      4096,
+      8192,
+      16384,
+      24576,
+      32256
+    ],
+    "openai/gpt-oss-20b": [
+      4096,
+      8192,
+      16384,
+      24576,
+      32256
+    ]
+  },
+  "hardware": "a100",
+  "model_revisions": {
+    "Qwen/Qwen3.8-27B": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "google/gemma-4-26B-A4B-it": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
+    "openai/gpt-oss-20b": "6cee5e81ee83917806bbde320786a8fb61efebee"
+  },
+  "models": [
+    "openai/gpt-oss-20b",
+    "Qwen/Qwen3.8-27B",
+    "google/gemma-4-26B-A4B-it"
+  ],
+  "output_tokens": 32,
+  "request_timeout_s": 1800.0,
+  "run_order": [
+    "a100-openai-gpt-oss-20b-ctx4096",
+    "a100-google-gemma-4-26b-a4b-it-ctx32256",
+    "a100-openai-gpt-oss-20b-ctx32256",
+    "a100-qwen-qwen3-8-27b-ctx7840",
+    "a100-google-gemma-4-26b-a4b-it-ctx24576",
+    "a100-qwen-qwen3-8-27b-ctx24304",
+    "a100-google-gemma-4-26b-a4b-it-ctx16384",
+    "a100-google-gemma-4-26b-a4b-it-ctx8192",
+    "a100-qwen-qwen3-8-27b-ctx32144",
+    "a100-openai-gpt-oss-20b-ctx24576",
+    "a100-qwen-qwen3-8-27b-ctx3920",
+    "a100-qwen-qwen3-8-27b-ctx15680",
+    "a100-google-gemma-4-26b-a4b-it-ctx4096",
+    "a100-openai-gpt-oss-20b-ctx8192",
+    "a100-openai-gpt-oss-20b-ctx16384"
+  ],
+  "runtime": {
+    "chunked_prefill": true,
+    "dtype": "bfloat16",
+    "enforce_eager": true,
+    "gpu_count": 1,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "auto",
+    "lmcache_mode": "mp",
+    "max_model_len": 32768,
+    "max_num_seqs": 256,
+    "prefix_caching": true,
+    "tensor_parallel_size": 1
+  },
+  "schema": "queue-haul-single-gpu-capacity-v1",
+  "seed": 18,
+  "semantics": {
+    "adaptive_stop": "two consecutive saturated bursts with no peak-running growth",
+    "campaign_gate": false,
+    "fresh_engine_per_model_context": true,
+    "launch_oom_is_outcome": true,
+    "synchronized_bursts": true,
+    "unique_private_token_ids": true
+  },
+  "widths": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    128,
+    256
+  ]
+}

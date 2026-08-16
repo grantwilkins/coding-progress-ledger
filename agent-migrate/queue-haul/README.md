@@ -1628,9 +1628,10 @@ The runtime is one A100, BF16 KV, TP1, 32K `max_model_len`, 256
 `max_num_seqs`, 90% memory, chunked prefill, APC, eager execution, and the
 hybrid KV manager. Qwen contexts are multiples of its measured 784-token
 unified block and its LMCache server uses separate object groups. The pinned
-vLLM 0.22 Qwen cache is K/V-major; `connector_patch.py` re-views that tensor at
-784-token logical-page granularity without copying and requires each K and V
-view to remain contiguous. The live launch must prove that group geometry.
+vLLM 0.22 Qwen cache is exposed as a K/V-major transpose of a contiguous
+page-major allocation; `connector_patch.py` restores that page-major view
+without copying and delegates its 784-token logical-page re-view to LMCache.
+The live launch must prove that group geometry.
 Results are descriptive limits, not admission gates.
 
 ```bash
@@ -1644,8 +1645,23 @@ The raw evidence includes exact token events, complete request responses,
 Prometheus scrapes, queue/running/KV traces, power samples, server info, launch
 logs, runtime-reported KV-token capacity, available KV GiB, and the complete
 hashed runtime command identity. An open marker in the reduced plot means the
-geometric width sweep ended right-censored at 256; an `x` means that
-model/context did not launch.
+last tested synchronized burst completed and is therefore a right-censored
+lower bound, whether the geometric sweep ended at 256 or stopped after a
+repeated running-capacity plateau. An `x` means that model/context did not
+launch.
+
+The completed A100 run is under
+`outputs/single-gpu-capacity-a100-20260815/`. All 15 model/context cells
+launched on their first attempt, all tested bursts completed and drained, and
+the persistent service exited successfully without a restart. Maximum observed
+simultaneous running requests across increasing contexts were
+`65/33/17/12/10` for both GPT-OSS and Gemma, but only `8/5/3/2/2` for Qwen.
+This equality does not make GPT-OSS and Gemma equivalent: runtime KV capacity
+was 1,952,597 tokens for GPT-OSS versus 286,068 for Gemma, and first-saturation
+KV usage was 11--13% versus 45--89%. Qwen exposed 285,354 KV tokens, proved its
+784-token hybrid alignment, and saturated at 16--20% KV usage. Treat service
+flow, KV capacity, prefill, decode, and power as separate measured constraints;
+the observed request plateau is not a scalar utilization bound.
 
 `model_architecture_campaign.py` reuses the migration profiler and base planner
 for the pinned GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B checkpoints. It
