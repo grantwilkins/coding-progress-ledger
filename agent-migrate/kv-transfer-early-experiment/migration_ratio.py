@@ -43,6 +43,9 @@ CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
 CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
 CONTEXT_RATIO_YLIM = (1e-3, 1e2)
 RATIO_YLIM = (1e-3, 1e2)
+KV_REGION_COLOR = "#B1040E"
+CONTEXT_REGION_COLOR = "#008566"
+REGION_ALPHA = 0.06
 
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
@@ -147,7 +150,7 @@ MODELS = [
         qk_dim=512,
         v_dim=512,
         kv_bytes=dsv4_kv,
-        color="#d62728",
+        color="#111111",
         ls="-",
     ),
     Model(
@@ -159,7 +162,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=gemma4_kv,
-        color="#8c564b",
+        color="#004488",
         ls=(0, (7, 2, 1, 2)),
     ),
     Model(
@@ -171,7 +174,7 @@ MODELS = [
         qk_dim=64,
         v_dim=64,
         kv_bytes=gpt_oss_kv,
-        color="#17becf",
+        color="#5B2C83",
         ls=(0, (2, 1, 2, 3)),
     ),
     Model(
@@ -183,7 +186,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=gqa_kv(16, 4, 256),
-        color="#bcbd22",
+        color="#9A5B00",
         ls=(0, (8, 2)),
     ),
     Model(
@@ -195,7 +198,7 @@ MODELS = [
         qk_dim=192,
         v_dim=128,
         kv_bytes=mla_kv(61, 512, 64),
-        color="#ff7f0e",
+        color="#006699",
         ls=(0, (3, 1, 1, 1, 1, 1)),
     ),
     Model(
@@ -207,7 +210,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=mla_kv(78, 512, 64),
-        color="#e377c2",
+        color="#8C2F64",
         ls=(0, (9, 3)),
     ),
 ]
@@ -279,12 +282,22 @@ def shade_regions(ax, x, kv_at, ctx_at):
     figure to land in the whitespace the curves leave open.
     """
     lo, hi = ax.get_ylim()
-    ax.fill_between(x, 1.0, hi, alpha=0.06, color="#B1040E", zorder=0)
-    ax.fill_between(x, lo, 1.0, alpha=0.06, color="#008566", zorder=0)
+    ax.fill_between(x, 1.0, hi, alpha=REGION_ALPHA, color=KV_REGION_COLOR, zorder=0)
+    ax.fill_between(
+        x, lo, 1.0, alpha=REGION_ALPHA, color=CONTEXT_REGION_COLOR, zorder=0
+    )
     ax.set_ylim(lo, hi)
     tr = ax.get_yaxis_transform()  # x in axes fraction, y in data
-    ax.text(*kv_at, "Transfer KV cache", color="#B1040E", style="italic", transform=tr)
-    ax.text(*ctx_at, "Transfer context", color="#008566", style="italic", transform=tr)
+    ax.text(
+        *kv_at, "Transfer KV cache", color=KV_REGION_COLOR, style="italic", transform=tr
+    )
+    ax.text(
+        *ctx_at,
+        "Transfer context",
+        color=CONTEXT_REGION_COLOR,
+        style="italic",
+        transform=tr,
+    )
 
 
 def plot_context_ratio(label: str = CONTEXT_MODEL, stem: str = CONTEXT_STEM):
