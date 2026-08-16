@@ -1537,8 +1537,13 @@ its copied inner text-only configs by matching exact layer geometry and stable
 model dimensions, avoiding heterogeneous-config value equality.
 Non-GPT cells hard-check BF16 attention KV, record recurrent-state dtypes,
 check model-specific arguments, and enforce Qwen's
-784-token unified/cache-group alignment. Their normalization records the
-model-specific cache chunk used to compute resident stock:
+784-token unified/cache-group alignment. Normalization records LMCache transfer
+chunks separately from the measured APC hit quantum used for cache-hit and
+resident-stock checks: GPT-OSS 16, Qwen 784, and Gemma 32 tokens. Qwen and
+Gemma decode calibration uses the bounded 4/8/16 ladder: isolated H100 n16
+diagnostics completed 16/16 with exact 3,920- and 4,064-token hits respectively,
+while Qwen n64 timed out and mixed hits with misses. Partial, undrained, or
+cache-miss-contaminated calibration cells are invalid, never normalizers.
 
 ```bash
 uv run python service_headroom_campaign.py prepare --model Qwen/Qwen3.8-27B --out runs/service-headroom/qwen-plan.json

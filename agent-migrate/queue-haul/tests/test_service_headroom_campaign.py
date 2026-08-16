@@ -59,6 +59,8 @@ def evidence(plan: dict, cell: dict, **values) -> dict:
             "runtime_identity": IDENTITY,
             "runtime_identity_sha256": IDENTITY_SHA,
             "normalization_sha256": "normalization", "status": "complete",
+            "service_completion": True, "drained": True,
+            "cache_mismatch_count": 0,
             "preloaded_kv_usage": .1, "initial_kv_usage": .2,
             "kv_capacity_tokens": 1_000_000,
             "planned_parked_prefix_tokens": 76_928,
@@ -107,6 +109,10 @@ def test_hybrid_model_service_plan_pins_runtime_and_cache_geometry(monkeypatch):
     assert plan["stack"]["max_num_batched_tokens"] == 1567
     assert plan["stack"]["gpu_memory_utilization"] == .9
     assert not plan["stack"]["disable_hybrid_kv_cache_manager"]
+    assert plan["cache_hit_quantum_tokens"] == 784
+    assert {row["concurrency"] for row in plan["cells"]
+            if row["kind"] == "calibration" and row["phase"] == "decode"} \
+        == {4, 8, 16}
     campaign.validate_plan(json.loads(json.dumps(plan)))
     campaign.testbed.validate_model_runtime(cfg)
     vllm = " ".join(map(str, campaign.testbed.vllm_cmd(cfg, "sink")))
@@ -121,9 +127,23 @@ def test_hybrid_model_service_plan_pins_runtime_and_cache_geometry(monkeypatch):
     campaign.testbed.validate_model_runtime_log(
         cfg, "KV cache dtype bfloat16; attention block size to 784 tokens",
     )
-    rates = {**RATES, "cache_chunk_tokens": 784}
+    rates = {**RATES, "cache_chunk_tokens": 784,
+             "cache_hit_quantum_tokens": 784}
     assert campaign.parked_prefix_tokens(rates) % 784 == 0
     assert campaign.parked_prefix_tokens(rates) != campaign.parked_prefix_tokens(RATES)
+
+    gemma = campaign.make_plan("google/gemma-4-26B-A4B-it")
+    assert gemma["cache_hit_quantum_tokens"] == 32
+    assert {row["concurrency"] for row in gemma["cells"]
+            if row["kind"] == "calibration" and row["phase"] == "decode"} \
+        == {4, 8, 16}
+    assert campaign.testbed.model_spec(gemma["model"]).chunk_tokens == 256
+
+    gpt = campaign.make_plan()
+    assert "cache_hit_quantum_tokens" not in gpt
+    assert {row["concurrency"] for row in gpt["cells"]
+            if row["kind"] == "calibration" and row["phase"] == "decode"} \
+        == {16, 64, 128}
 
 
 def test_incumbent_trace_is_paired_and_offered_work_is_context_normalized():
@@ -375,6 +395,13 @@ def test_cache_contract_requires_only_the_block_rounded_private_prefix():
     assert campaign.cache_mismatches([under_hit]) == [under_hit]
     assert campaign.cache_mismatches([append_hot]) == [append_hot]
 
+    qwen = {**valid, "prefix_tokens": 4095, "cached_tokens": 3920}
+    gemma = {**valid, "prefix_tokens": 4095, "cached_tokens": 4064}
+    assert campaign.cache_mismatches([qwen], 784) == []
+    assert campaign.cache_mismatches([gemma], 32) == []
+    assert campaign.cache_mismatches(
+        [{**qwen, "cached_tokens": 4080}], 784)
+
 
 def test_prewarm_proves_private_uncached_prefixes():
     sessions = [SimpleNamespace(session_id="a", prefix_tokens=3840),
@@ -503,6 +530,24 @@ def test_calibration_reducer_takes_block_peaks_then_median(tmp_path):
     assert result["edge_censored"]
     assert result["balanced_shape"]["append_tokens"] > 0
     assert result["planned_parked_prefix_tokens"] > 0
+
+
+def test_calibration_reducer_rejects_partial_or_cache_miss_cells(tmp_path):
+    plan = campaign.make_plan("Qwen/Qwen3.8-27B")
+    cells = [row for row in plan["cells"] if row["hardware"] == "a100"
+             and row["kind"] == "calibration"]
+    for index, row in enumerate(cells):
+        path = tmp_path / row["cell_id"]
+        path.mkdir()
+        values = {"tokens_per_s": 100}
+        if index == 0:
+            values.update(service_completion=False, cache_mismatch_count=1)
+        (path / "result.json").write_text(json.dumps(evidence(
+            plan, row, **values,
+        )))
+
+    with pytest.raises(RuntimeError, match="invalid measurements"):
+        campaign.reduce_calibration(plan, "a100", tmp_path)
 
 
 def test_calibration_reducer_rejects_mixed_runtime_identity(tmp_path):
@@ -646,8 +691,8 @@ def test_calibration_workers_are_ready_before_release():
     assert sorted(called) == list(range(128))
 
 
-def confirmation_artifacts() -> tuple[dict, dict, dict]:
-    core = campaign.make_plan()
+def confirmation_artifacts(model=campaign.testbed.MODEL) -> tuple[dict, dict, dict]:
+    core = campaign.make_plan(model)
     rows, controls = [], []
     for cell in core["cells"]:
         if cell["hardware"] != "a100" or cell["kind"] == "calibration":
@@ -682,6 +727,10 @@ def test_confirmation_is_three_new_blocks_for_brackets_and_balanced_shape():
     campaign.validate_plan(json.loads(json.dumps(plan)))
     assert campaign.offered_trace(plan, RATES, "balanced", .50, 3)
 
+    specialized, _, _ = confirmation_artifacts("Qwen/Qwen3.8-27B")
+    assert specialized["cache_hit_quantum_tokens"] == 784
+    campaign.validate_plan(json.loads(json.dumps(specialized)))
+
 
 def test_confirmation_reuses_the_discovery_runtime_and_normalization():
     plan = confirmation_plan()
@@ -692,6 +741,15 @@ def test_confirmation_reuses_the_discovery_runtime_and_normalization():
     with pytest.raises(RuntimeError, match="confirmation"):
         campaign.validate_stage_inputs(plan, {**rates, "sha256": "different"},
                                        IDENTITY)
+
+    qwen = campaign.make_plan("Qwen/Qwen3.8-27B")
+    qwen_rates = {**rates, "cache_hit_quantum_tokens": 784}
+    qwen_rates["planned_parked_prefix_tokens"] = \
+        campaign.parked_prefix_tokens(qwen_rates)
+    campaign.validate_stage_inputs(qwen, qwen_rates, IDENTITY)
+    with pytest.raises(RuntimeError, match="runtime identities"):
+        campaign.validate_stage_inputs(
+            qwen, {**qwen_rates, "cache_hit_quantum_tokens": 32}, IDENTITY)
 
 
 def test_only_confirmation_can_emit_a_planner_usable_bound(tmp_path):

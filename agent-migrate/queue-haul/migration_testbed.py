@@ -135,16 +135,18 @@ class ModelSpec:
     vllm_args: tuple[str, ...] = ()
     unified_block_tokens: int | None = None
     separate_object_groups: bool = False
+    cache_hit_quantum_tokens: int = 16
 
 
 MODEL_SPECS = {
     MODEL: ModelSpec(MODEL_REVISION),
     "Qwen/Qwen3.8-27B": ModelSpec(
         "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0", 1567, 784,
-        ("--language-model-only", "--mamba-cache-mode", "align"), 784, True),
+        ("--language-model-only", "--mamba-cache-mode", "align"), 784, True, 784),
     "google/gemma-4-26B-A4B-it": ModelSpec(
         "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
-        vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}')),
+        vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}'),
+        cache_hit_quantum_tokens=32),
 }
 
 

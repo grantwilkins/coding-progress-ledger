@@ -33,6 +33,7 @@ HARDWARE = {"a100": "NVIDIA A100", "h100": "NVIDIA H100"}
 LOADS = (.25, .50, .70, .85, .95, 1.10)
 PREFILL_CONCURRENCY = (1, 4, 16)
 DECODE_CONCURRENCY = (16, 64, 128)
+SPECIALIZED_DECODE_CONCURRENCY = (4, 8, 16)
 BLOCKS = 3
 BASE_RHO = .25
 CONTEXT = 4096
@@ -70,7 +71,8 @@ def make_plan(model: str = testbed.MODEL) -> dict:
          "concurrency": concurrency, "block": block}
         for hardware in HARDWARE for block in range(BLOCKS)
         for phase, levels in (("prefill", PREFILL_CONCURRENCY),
-                              ("decode", DECODE_CONCURRENCY))
+                              ("decode", SPECIALIZED_DECODE_CONCURRENCY
+                               if specialized else DECODE_CONCURRENCY))
         for concurrency in levels
     ]
     headroom = [
@@ -98,6 +100,8 @@ def make_plan(model: str = testbed.MODEL) -> dict:
     return {
         "schema": SCHEMA, "image_sha256": IMAGE_SHA256,
         "model": model, "context_tokens": CONTEXT,
+        **({"cache_hit_quantum_tokens": spec.cache_hit_quantum_tokens}
+           if specialized else {}),
         "base_rho": BASE_RHO, "loads": list(LOADS), "blocks": BLOCKS,
         "warmup_s": 60, "measurement_s": 240, "drain_s": 180,
         "request_timeout_s": 180, "max_send_lateness_s": .05,
@@ -196,6 +200,8 @@ def make_confirmation_plan(core: dict, scout: dict, hardware: str) -> dict:
         "residency_control_max_relative_degradation",
         "p99_min_incumbent_requests", "stack", "shapes",
     )}
+    if "cache_hit_quantum_tokens" in core:
+        common["cache_hit_quantum_tokens"] = core["cache_hit_quantum_tokens"]
     plan = {"schema": CONFIRM_SCHEMA, **common, "hardware": hardware,
             "source_plan_sha256": digest(core),
             "source_scout_sha256": digest(scout), "targets": scout["targets"],
@@ -224,6 +230,8 @@ def validate_confirmation_plan(plan: dict) -> None:
               "max_metric_gap_s",
               "residency_control_max_relative_degradation",
               "p99_min_incumbent_requests", "stack", "shapes")
+    if "cache_hit_quantum_tokens" in core:
+        common += ("cache_hit_quantum_tokens",)
     selection = plan.get("selection", {})
     directions = [selection.get(name, {}) for name in
                   ("prefill_heavy", "decode_heavy")]
@@ -270,7 +278,7 @@ def shape_for(name: str, rates: dict) -> Shape:
 
 
 def parked_prefix_tokens(rates: dict) -> int:
-    chunk = rates.get("cache_chunk_tokens", 16)
+    chunk = rates.get("cache_hit_quantum_tokens", 16)
     return SESSIONS_PER_SHAPE * sum(
         (shape_for(name, rates).prefix_tokens - 1) // chunk * chunk
         for name in ("prefill_heavy", "decode_heavy", "balanced"))
@@ -281,7 +289,8 @@ def validate_rates(rates: dict) -> None:
         balanced = phase_share(balanced_shape(rates), rates)
     except (KeyError, ValueError, ZeroDivisionError) as exc:
         raise ValueError("normalization does not separate the phase directions") from exc
-    if min(rates["prefill_tps"], rates["decode_tps"]) <= 0 \
+    if min(rates["prefill_tps"], rates["decode_tps"],
+           rates.get("cache_hit_quantum_tokens", 16)) <= 0 \
             or phase_share(SHAPES["prefill_heavy"], rates) < .7 \
             or phase_share(SHAPES["decode_heavy"], rates) > .2 \
             or not BALANCED_SHARE_RANGE[0] <= balanced <= BALANCED_SHARE_RANGE[1]:
@@ -384,9 +393,10 @@ def quantile(values: list[float], q: float) -> float | None:
     return float(np.quantile(values, q)) if values else None
 
 
-def cache_mismatches(rows: list[dict]) -> list[dict]:
+def cache_mismatches(rows: list[dict], quantum: int = 16) -> list[dict]:
     return [row for row in rows if serving.service_completion(row)
-            and row.get("cached_tokens") != row.get("prefix_tokens", 0) // 16 * 16]
+            and row.get("cached_tokens")
+            != row.get("prefix_tokens", 0) // quantum * quantum]
 
 
 def validate_prewarm(rows: list[dict], sessions_: list[serving.Session]) -> None:
@@ -398,11 +408,13 @@ def validate_prewarm(rows: list[dict], sessions_: list[serving.Session]) -> None
         raise RuntimeError("private-prefix prewarm contract failed")
 
 
-def resident_tokens(rows: list[dict], sessions_: list[serving.Session]) -> int:
+def resident_tokens(rows: list[dict], sessions_: list[serving.Session],
+                    quantum: int = 16) -> int:
     if len(rows) != len(sessions_) or any(
             not serving.service_completion(row)
             or row.get("prompt_tokens") != session.prefix_tokens
-            or row.get("cached_tokens") != (session.prefix_tokens - 1) // 16 * 16
+            or row.get("cached_tokens")
+            != (session.prefix_tokens - 1) // quantum * quantum
             for row, session in zip(rows, sessions_)):
         raise RuntimeError("private-prefix residency contract failed")
     return sum(row["cached_tokens"] for row in rows)
@@ -513,7 +525,8 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
         "p99_token_itl_s": quantile(gaps, .99),
         "p99_reportable": p99,
         "tpot_reportable": bool(good) and len(timed) == len(good),
-        "cache_mismatch_count": len(cache_mismatches(observed)),
+        "cache_mismatch_count": len(cache_mismatches(
+            observed, plan.get("cache_hit_quantum_tokens", 16))),
         "queue_drift_upper_requests_per_s": drift,
         "initial_in_system_requests": loads[0] if loads else None,
         "late_window_p90_in_system_requests": quantile(loads[len(loads) * 2 // 3:], .9),
@@ -785,6 +798,8 @@ def validate_stage_inputs(plan: dict, rates: dict, identity: dict) -> None:
     if rates["runtime_identity_sha256"] != identity_sha(identity) \
             or rates.get("kv_capacity_tokens", 0) <= 0 \
             or rates.get("balanced_shape") != asdict(balanced_shape(rates)) \
+            or rates.get("cache_hit_quantum_tokens", 16) \
+            != plan.get("cache_hit_quantum_tokens", 16) \
             or rates.get("planned_parked_prefix_tokens") \
             != parked_prefix_tokens(rates):
         raise RuntimeError("normalization and headroom runtime identities differ")
@@ -827,7 +842,9 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
                                        plan["request_timeout_s"], True)
             (root / "residency.json").write_text(
                 json.dumps(resident, indent=2) + "\n")
-            preloaded_kv_usage = resident_tokens(resident, warm_sessions) \
+            preloaded_kv_usage = resident_tokens(
+                resident, warm_sessions,
+                plan.get("cache_hit_quantum_tokens", 16)) \
                 / kv_capacity_tokens
             sampler = serving.MetricsSampler(cfg.host, stack.port, root / "engine.csv")
             power = profiler.PowerSampler(root / "power.csv")
@@ -963,14 +980,15 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
         serving.service_completion(row) for row in requests)
     schedule_valid = bool(requests) and max(row["send_lateness_s"] for row in requests) \
         <= plan["max_send_lateness_s"]
-    cache_valid = not cache_mismatches(requests)
+    quantum = plan.get("cache_hit_quantum_tokens", 16)
+    cache_valid = not cache_mismatches(requests, quantum)
     duration = (max(row["last_token_ns"] for row in requests)
                 - min(row["start_ns"] for row in requests)) / 1e9 if complete else None
     tokens = sum(row["planned_prompt_tokens"] - row["cached_tokens"]
                  if cell["phase"] == "prefill"
                  else row["planned_output_tokens"] for row in requests)
-    invalid = error or failure_kind == "infrastructure" or not schedule_valid \
-        or not cache_valid
+    invalid = error or failure_kind == "infrastructure" or not complete \
+        or not drained or not schedule_valid or not cache_valid
     result = {"schema": plan["schema"], "plan_sha256": digest(plan),
               "runtime_identity": identity,
               "runtime_identity_sha256": identity_sha(identity),
@@ -980,7 +998,7 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
               "status": "invalid" if invalid else "complete", **cell,
               "service_completion": complete, "drained": drained,
               "engine_exited": engine_exited, "engine_failure_kind": failure_kind,
-              "cache_mismatch_count": len(cache_mismatches(requests)),
+              "cache_mismatch_count": len(cache_mismatches(requests, quantum)),
               "measurement_error": f"{type(error).__name__}: {error}" if error else None,
               "max_send_lateness_s": max((row["send_lateness_s"]
                                            for row in requests), default=None),
@@ -995,7 +1013,9 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
 def reduce_calibration(plan: dict, hardware: str, root: Path) -> dict:
     rows = load_results(plan, hardware, root, "calibration")
     validate_run_order(plan, hardware, "calibration", rows)
-    if any(row["status"] != "complete" for row in rows):
+    if any(row["status"] != "complete" or not row.get("service_completion")
+           or not row.get("drained") or row.get("cache_mismatch_count")
+           or row.get("tokens_per_s") is None for row in rows):
         raise RuntimeError("calibration contains invalid measurements")
     capacities = {row["kv_capacity_tokens"] for row in rows}
     if len(capacities) != 1 or next(iter(capacities)) <= 0:
@@ -1009,6 +1029,7 @@ def reduce_calibration(plan: dict, hardware: str, root: Path) -> dict:
              "kv_capacity_tokens": next(iter(capacities))}
     if plan["model"] != testbed.MODEL:
         rates["cache_chunk_tokens"] = testbed.model_spec(plan["model"]).chunk_tokens
+        rates["cache_hit_quantum_tokens"] = plan["cache_hit_quantum_tokens"]
     edge_censored = False
     for phase in ("prefill", "decode"):
         peaks, peak_concurrency = [], []
