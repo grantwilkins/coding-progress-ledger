@@ -523,20 +523,22 @@ table before candidates are built.
 
 ## LP
 
-The default LP minimizes migration work while meeting requested conservative
+The default LP minimizes predicted action duration while meeting requested conservative
 power reduction \(\Delta P\):
 
 \[
 \begin{aligned}
-\operatorname{minimize}\quad &\sum_c m_cx_c\\
+\operatorname{minimize}\quad &\sum_c t_cx_c\\
 \operatorname{subject\ to}\quad
 &\sum_c w_cx_c\ge\Delta P,\\
 &Ax\le\mathbf1,\quad Ux\le\mathbf1,\quad 0\le x\le1.
 \end{aligned}
 \]
 
+Endpoint replica-seconds remain in \(U\) as a physical capacity coefficient;
+they are not reused as the objective when route and endpoint stages overlap.
 If the target is infeasible, a separate solve maximizes conservative power
-shed. The pool-aware path then minimizes work at that maximum. The result is
+shed. The pool-aware path then minimizes duration at that maximum. The result is
 valid best effort with `failure_reason="target_unmet"` and an explicit watt
 shortfall, not successful curtailment. The `lp_peak_first` and `lp_work_first`
 variants retain alternative objective orders on the legacy path only; the pool

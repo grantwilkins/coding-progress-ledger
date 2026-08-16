@@ -25,6 +25,8 @@ Plausible wrong implementations:
 - Mark positive debt feasible when post-migration service has no recovery spare.
 - Lose physical units or pool/facet identity in normalized planner rows.
 - Compare Replay seconds with KV bytes in the work-first objective.
+- Reuse endpoint replica-seconds as the objective after route overlap, making
+  route bandwidth invisible even when predicted action duration changes.
 - Treat unused early capacity as if it could serve transition work arriving late.
 - Credit node shutdown during session selection instead of only after planning.
 - Rank sessions only by initial marginal power and miss a feasible source prefix.
@@ -78,6 +80,7 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           _candidate_oracle,
                           _greedy, _greedy_lagrangian,
                           _lagrangian_source_prefix,
+                          _lp,
                           _lp_column_generation, _lp_column_generation_lazy,
                           _lp_column_generation_native,
                           _lp_column_generation_persistent,
@@ -380,6 +383,23 @@ def test_highs_lp_matches_target_problem_and_max_gain_fallback():
     assert _lp_highs(table, 4) == {1, 2}
 
 
+@pytest.mark.parametrize("solve", (_lp, _lp_highs, _lp_column_generation))
+def test_lp_objective_uses_duration_not_endpoint_capacity_work(solve):
+    candidates = (
+        Candidate(0, "replay", 0, 1, 2, 3, (), 0, (0, 0), 0),
+        Candidate(0, "kv_transfer", 0, 1, 1, 10, (), 0, (0, 0), 0),
+    )
+    table = CandidateTable(
+        (), candidates, csr_matrix(np.ones((1, 2))),
+        csr_matrix(np.array(((.2, .1),))), ("endpoint",), (10,),
+        ("replica-s",), 10,
+    )
+
+    assert solve(table, 1) == {0}
+    assert candidates[0].migration_work_s > candidates[1].migration_work_s
+    assert candidates[0].objective_cost_s < candidates[1].objective_cost_s
+
+
 @pytest.mark.parametrize("status, values", [
     ("failed", np.zeros(3)),
     (pool_planner.cp.OPTIMAL, None),
@@ -450,7 +470,7 @@ def test_column_pricing_uses_session_dual_to_avoid_duplicate_equivalent_choices(
 
 def test_column_phase_one_ignores_migration_work():
     candidates = (
-        Candidate(0, "replay", 0, 1, 100, 1, (), 0, (0, 0), 0),
+        Candidate(0, "replay", 0, 1, 100, 100, (), 0, (0, 0), 0),
         Candidate(0, "kv_transfer", 0, 1, 1, 1, (), 0, (0, 0), 0),
     )
     table = CandidateTable(
@@ -663,7 +683,7 @@ def test_randomized_persistent_master_matches_complete_lp(seed):
         ("fraction", "fraction"), 10,
     )
     gains = np.array([c.gain_w for c in candidates])
-    work = np.array([c.migration_work_s for c in candidates]) / 10
+    work = np.array([c.objective_cost_s for c in candidates]) / 10
     common = csr_matrix(np.vstack((incidence.toarray(), resources.toarray())))
     maximum = linprog(-gains, A_ub=common, b_ub=np.ones(common.shape[0]),
                       bounds=(0, None), method="highs-ipm")
@@ -1576,7 +1596,7 @@ def test_lagrangian_recovery_caps_one_watt_overshoot_before_work(tmp_path):
     power = ExpectedPower(scenario, profile)
     candidates = (
         Candidate(0, "replay", 0, 2, 1, 1, ("wan",), 1, (0, 0), 0),
-        Candidate(1, "replay", 0, 1, .75, 1, ("wan",), 1, (0, 0), 0),
+        Candidate(1, "replay", 0, 1, .75, .75, ("wan",), 1, (0, 0), 0),
     )
     table = CandidateTable(
         sessions, candidates, csr_matrix(np.eye(2)),
@@ -1596,7 +1616,7 @@ def test_lagrangian_recovery_caps_one_watt_overshoot_before_work(tmp_path):
     upgrade = replace(
         table,
         candidates=(
-            replace(candidates[0], migration_work_s=.01),
+            replace(candidates[0], migration_work_s=.01, duration_s=.01),
             candidates[1],
         ),
     )
@@ -1733,7 +1753,7 @@ def test_lagrangian_recovery_preserves_prefix_tie_order(tmp_path):
     power = ExpectedPower(scenario, profile)
     candidates = (
         Candidate(0, "replay", 0, 1, 1, 1, ("wan",), 1, (0, 0), 0),
-        Candidate(1, "replay", 0, 1, 0, 1, ("wan",), 1, (0, 0), 0),
+        Candidate(1, "replay", 0, 1, 0, 0, ("wan",), 1, (0, 0), 0),
     )
     table = CandidateTable(
         sessions, candidates, csr_matrix(np.eye(2)),

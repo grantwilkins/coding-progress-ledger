@@ -356,7 +356,7 @@ execution checks can produce less evacuation; the code does not claim a
 maximum executable integer set.
 
 The implementation fixes \(s\) to \(s^*\), within solver tolerance, and then
-minimizes total modeled migration work,
+minimizes total predicted action duration,
 
 \[
 q^*=\min_{x\in\mathcal X}\sum_c q_cx_c
@@ -365,9 +365,10 @@ q^*=\min_{x\in\mathcal X}\sum_c q_cx_c
 \tag{LP-2}
 \]
 
-where \(q_c=t_c\) for the fixed aggregate planner and is the measured migration
-work field for a pool with a fluid migration service. Finally it fixes that
-work, again within tolerance, and minimizes the largest normalized resource
+where \(q_c=t_c\). A fluid pool's endpoint replica-seconds remain a separate
+physical capacity coefficient in \(A\); reusing them as \(q_c\) would make
+route bandwidth invisible whenever its capacity row had slack. Finally the
+implementation fixes duration, again within tolerance, and minimizes the largest normalized resource
 pressure \(\phi\), subject to \(Ax\le\phi\mathbf1\) and \(\phi\le1\). These are
 three lexicographic phases, not a weighted sum.
 

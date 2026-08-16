@@ -12,8 +12,8 @@ Plausible wrong implementations:
 - Use a different Queue-Haul draw or solver at the shared two-thirds point.
 - Plot target-following policies against their own target instead of the
   distribution of maximum safely attainable power.
-- Collapse bandwidth states without proving they are paired null effects.
-- Omit or duplicate a factorial state when labeling bandwidth-null curve pairs.
+- Collapse distinct bandwidth states into a shared curve.
+- Omit or duplicate a factorial constraint state.
 """
 
 import numpy as np
@@ -21,17 +21,16 @@ import pytest
 
 import workload_adaptation_campaign as adaptation
 from workload_power_frontier import (
-    DISPLAY_GROUPS, SOLVERS, assert_bandwidth_null, capacity_summary,
-    power_summary, request_grid, sweep,
+    DISPLAY_STATES, SOLVERS, capacity_summary, power_summary, request_grid,
+    sweep,
 )
 
 
-def test_display_groups_partition_all_eight_factorial_states():
-    grouped = sum(DISPLAY_GROUPS.values(), ())
+def test_display_states_include_all_eight_factorial_states_once():
     expected = tuple(case_id for case_id, _, _ in adaptation.factorial_cases())
 
-    assert len(grouped) == len(set(grouped)) == 8
-    assert set(grouped) == set(expected)
+    assert DISPLAY_STATES == expected
+    assert len(DISPLAY_STATES) == len(set(DISPLAY_STATES)) == 8
 
 
 def test_capacity_summary_uses_one_maximum_per_paired_draw():
@@ -39,8 +38,7 @@ def test_capacity_summary_uses_one_maximum_per_paired_draw():
         "replicate": replicate, "factor_case_id": state,
         "policy": "queue_haul_lp", "requested_fraction": 1,
         "safely_attained_fraction": capacity,
-    } for state in ("none", "hbm", "dest_compute",
-                    "dest_compute-hbm")
+    } for state in DISPLAY_STATES
             for replicate, capacity in enumerate((.25, .75))]
 
     summary = capacity_summary(rows, grid=(0, .5, 1))
@@ -50,22 +48,6 @@ def test_capacity_summary_uses_one_maximum_per_paired_draw():
     assert all(row["cases"] == 2 for row in summary)
     with pytest.raises(RuntimeError, match="one maximum"):
         capacity_summary([*rows, rows[0]], grid=(0, .5, 1))
-
-
-def test_bandwidth_null_must_hold_for_every_paired_frontier_point():
-    pairs = (("none", "bandwidth"), ("hbm", "bandwidth-hbm"),
-             ("dest_compute", "bandwidth-dest_compute"),
-             ("dest_compute-hbm", "bandwidth-dest_compute-hbm"))
-    rows = [{
-        "replicate": 0, "factor_case_id": state,
-        "policy": "queue_haul_lp", "requested_fraction": fraction,
-        "safely_attained_fraction": fraction / 2,
-    } for pair in pairs for state in pair for fraction in (0, 1)]
-
-    assert_bandwidth_null(rows)
-    rows[-1]["safely_attained_fraction"] = .6
-    with pytest.raises(RuntimeError, match="bandwidth state is not null"):
-        assert_bandwidth_null(rows)
 
 
 def test_power_summary_weights_cases_once_and_keeps_watts():

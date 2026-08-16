@@ -24,18 +24,7 @@ DEFAULT_SAMPLES = 100
 DEFAULT_POINTS = 9
 MAX_REQUEST = 1.0
 SOLVERS = {"queue_haul_lp": "lp_highs"}
-DISPLAY_GROUPS = {
-    "none": ("none", "bandwidth"),
-    "hbm": ("hbm", "bandwidth-hbm"),
-    "dest_compute": ("dest_compute", "bandwidth-dest_compute"),
-    "all": ("dest_compute-hbm", "bandwidth-dest_compute-hbm"),
-}
-DISPLAY_STATES = {state: pair[0] for state, pair in DISPLAY_GROUPS.items()}
-BANDWIDTH_NULL_PAIRS = (
-    ("none", "bandwidth"), ("hbm", "bandwidth-hbm"),
-    ("dest_compute", "bandwidth-dest_compute"),
-    ("dest_compute-hbm", "bandwidth-dest_compute-hbm"),
-)
+DISPLAY_STATES = tuple(case_id for case_id, _, _ in adaptation.factorial_cases())
 plot_style.apply()
 
 
@@ -151,24 +140,6 @@ def power_summary(rows):
     return summary
 
 
-def assert_bandwidth_null(rows):
-    selected = [row for row in rows if row["policy"] == "queue_haul_lp"]
-    for baseline, constrained in BANDWIDTH_NULL_PAIRS:
-        paired = []
-        for state in (baseline, constrained):
-            values = {(row["replicate"], row["requested_fraction"]):
-                      row["safely_attained_fraction"] for row in selected
-                      if row["factor_case_id"] == state}
-            if len(values) != sum(row["factor_case_id"] == state
-                                  for row in selected):
-                raise RuntimeError("duplicate paired frontier point")
-            paired.append(values)
-        if paired[0].keys() != paired[1].keys() or any(
-                not np.isclose(paired[0][key], paired[1][key], rtol=0, atol=1e-12)
-                for key in paired[0]):
-            raise RuntimeError("bandwidth state is not null and cannot be collapsed")
-
-
 def capacity_summary(rows, grid=np.linspace(0, 1, 101)):
     if not len(grid) or grid[0] != 0 or grid[-1] != 1 \
             or any(right <= left for left, right in zip(grid, grid[1:])):
@@ -176,9 +147,9 @@ def capacity_summary(rows, grid=np.linspace(0, 1, 101)):
     selected = [row for row in rows if row["policy"] == "queue_haul_lp"]
     maximum_request = max(row["requested_fraction"] for row in selected)
     output = []
-    for state, factor_case in DISPLAY_STATES.items():
+    for state in DISPLAY_STATES:
         candidates = [row for row in selected
-                      if row["factor_case_id"] == factor_case
+                      if row["factor_case_id"] == state
                       and row["requested_fraction"] == maximum_request]
         capacities = {row["replicate"]: row["safely_attained_fraction"]
                       for row in candidates}
@@ -210,7 +181,7 @@ def write_capacity_plot(summary, out):
             where="post",
             color=plot_style.RESOURCE_STATE_COLORS[state],
             linestyle=plot_style.RESOURCE_STATE_LINESTYLES[state],
-            label=plot_style.RESOURCE_STATE_NAMES[state].replace(" / ", " /\n"),
+            label=plot_style.RESOURCE_STATE_NAMES[state],
         )
     axis.set(xlim=(0, 1), ylim=(0, 1),
              xlabel="Requested Source-Power Fraction",
@@ -241,7 +212,6 @@ def main():
     args = parser.parse_args()
     validation = adaptation.validate_surface()
     rows, workload = sweep(args.samples, args.points, args.seed, args.sessions)
-    assert_bandwidth_null(rows)
     summary = capacity_summary(rows)
     write_csv(rows, args.out.with_name(f"{args.out.name}_cases.csv"))
     write_csv(summary, args.out.with_suffix(".csv"))
@@ -250,7 +220,7 @@ def main():
     ))
     write_capacity_plot(summary, args.out)
     metadata = {
-        "schema": "queue-haul-workload-power-frontier-v4",
+        "schema": "queue-haul-workload-power-frontier-v5",
         "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
         "samples": args.samples, "factor_states": len(adaptation.ORDER),
         "pooled_cases": args.samples * len(adaptation.ORDER),
@@ -260,8 +230,8 @@ def main():
         "factor_levels": adaptation.LEVELS, "regions": list(adaptation.REGIONS),
         "normalization": "safely attained watts / draw-specific removable watts",
         "figure_metric": "fraction of paired draws whose maximum safely attained Queue-Haul source-power fraction meets each request",
-        "plotted_constraint_states": DISPLAY_GROUPS,
-        "bandwidth_null": "each measured-bandwidth state is exactly paired-equal to its released counterpart before sharing one explicitly paired curve label",
+        "plotted_constraint_states": list(DISPLAY_STATES),
+        "constraint_style": "color groups HBM/destination-compute state; a dashed line adds constrained bandwidth",
         "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
         "power_scope": "steady awake source-region power; destination power excluded",
         "source_load_definition": "sum(f/F + g/G)=0.4; distinct from sampled phase load z=af+bg",
@@ -282,7 +252,7 @@ def main():
             "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
             "each workload draw and global constraint state receives equal weight",
             "the main figure and raw tables show Queue-Haul capacity across all eight constraint states",
-            "measured bandwidth is a paired null effect in this workload ensemble; all eight states appear in four paired legend entries after an exact equality gate",
+            "all eight factorial states are plotted separately; constrained bandwidth can alter action duration and selection even when route capacity remains slack",
             "the frontier remains modeled rather than hardware-measured",
             "reported shed is awake source-region power rather than net fleet power or energy",
             "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",

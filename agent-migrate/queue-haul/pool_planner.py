@@ -54,6 +54,9 @@ class Candidate:
         return self.gain_w if self.selection_credit is None else self.selection_credit
 
     @property
+    def objective_cost_s(self): return self.duration_s
+
+    @property
     def replay_occupancy_s(self): return self.duration_s if self.method == "replay" else 0.0
 
     @property
@@ -1048,7 +1051,7 @@ def _recover_lagrangian(
                 ) if len(sources) == 1 else _lagrangian_gain(
                     table, power, pattern, gain_cache,
                 ),
-                sum(table.candidates[i].migration_work_s for i in pattern),
+                sum(table.candidates[i].objective_cost_s for i in pattern),
                 set(pattern),
                 pattern_usage,
             )
@@ -1181,7 +1184,7 @@ def _greedy_lagrangian(
                 for i in by_session.get(session, ()):
                     sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
                     rows, values = matrix.indices[sl], matrix.data[sl]
-                    value = table.candidates[i].migration_work_s \
+                    value = table.candidates[i].objective_cost_s \
                         / table.migration_horizon_s + prices[rows] @ values
                     actions.append((value, i))
                 if not actions:
@@ -1229,7 +1232,7 @@ def _greedy_lagrangian(
 def _round_lp(table, target, values):
     n = len(table.candidates)
     gains = np.array([c.credit for c in table.candidates])
-    work = np.array([c.migration_work_s for c in table.candidates])
+    work = np.array([c.objective_cost_s for c in table.candidates])
     matrix, selected, sessions = csc_matrix(table.resources), set(), set()
     usage, gain = np.zeros(table.resources.shape[0]), 0.0
     for i in np.lexsort((np.arange(n), work, -values)):
@@ -1264,7 +1267,7 @@ def _lp(table: CandidateTable, target: float, stats=None):
     started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
     x = cp.Variable(len(table.candidates), nonneg=True)
     gains = np.array([c.credit for c in table.candidates])
-    work = np.array([c.migration_work_s for c in table.candidates])
+    work = np.array([c.objective_cost_s for c in table.candidates])
     base = [table.incidence @ x <= 1, table.resources @ x <= 1, x <= 1]
     def solve(objective, constraints, maximize=False):
         nonlocal native_s, solves, iterations
@@ -1304,7 +1307,7 @@ def _lp_highs(table: CandidateTable, target: float, stats=None):
         return set()
     started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
     gains = np.array([c.credit for c in table.candidates])
-    work = np.array([c.migration_work_s for c in table.candidates])
+    work = np.array([c.objective_cost_s for c in table.candidates])
     if not np.array_equal(np.asarray(table.incidence.sum(0)).ravel(),
                           np.ones(len(table.candidates))):
         raise ValueError("each LP candidate must belong to exactly one session")
@@ -1413,7 +1416,7 @@ def _lp_column_generation(table: CandidateTable, target: float, stats=None):
     )
     shortfall = float(first.x[-1])
     effective = max(0.0, target - shortfall)
-    work = np.array([c.migration_work_s for c in table.candidates]) \
+    work = np.array([c.objective_cost_s for c in table.candidates]) \
         / table.migration_horizon_s
     second, columns, active = _column_phase(
         table, max(0.0, effective - 1e-7), work, active, False, phase2,
@@ -1555,7 +1558,7 @@ def _lp_column_generation_persistent(table: CandidateTable, target: float, stats
     )
     shortfall = float(first.col_value[0])
     effective = max(0.0, target - shortfall)
-    work = np.array([c.migration_work_s for c in table.candidates]) \
+    work = np.array([c.objective_cost_s for c in table.candidates]) \
         / table.migration_horizon_s
     active = np.flatnonzero(candidate_columns >= 0)
     status = highs.changeColsCost(
@@ -1628,11 +1631,11 @@ def _lazy_completion(oracle, candidates, values, target):
     after = {}
     for i in sorted(
         (i for i, value in enumerate(values) if value > 0),
-        key=lambda i: (-values[i], candidates[i].migration_work_s,
+        key=lambda i: (-values[i], candidates[i].objective_cost_s,
                        semantic(candidates[i])),
     ):
         candidate, entries = candidates[i], oracle.column(candidates[i])
-        rank = (-values[i], candidate.migration_work_s, *semantic(candidate))
+        rank = (-values[i], candidate.objective_cost_s, *semantic(candidate))
         if candidate.session in sessions:
             continue
         if all(usage[row] + value <= 1 + 1e-8 for row, value in entries):
@@ -1651,7 +1654,7 @@ def _lazy_completion(oracle, candidates, values, target):
         for candidate in oracle.choices(j):
             identity = (candidate.session, candidate.pool, candidate.method)
             rank = (
-                -masses.get(identity, 0.0), candidate.migration_work_s,
+                -masses.get(identity, 0.0), candidate.objective_cost_s,
                 *semantic(candidate),
             )
             if (after is None or rank > after) and (
@@ -1752,7 +1755,7 @@ def _lazy_column_phase(highs, oracle, target, phase_two, session_rows,
             minimum, best = np.inf, None
             for candidate in oracle.choices(j):
                 entries = oracle.column(candidate)
-                cost = candidate.migration_work_s / oracle.migration_horizon_s \
+                cost = candidate.objective_cost_s / oracle.migration_horizon_s \
                     if phase_two else 0.0
                 reduced = cost + sum(
                     resources[index] * value for index, value in entries
@@ -1917,7 +1920,7 @@ def _lp_column_generation_lazy(oracle, target, stats=None, native=False):
     if candidates:
         columns = np.arange(1, len(candidates) + 1, dtype=np.int32)
         costs = np.array([
-            candidate.migration_work_s / oracle.migration_horizon_s
+            candidate.objective_cost_s / oracle.migration_horizon_s
             for candidate in candidates
         ])
         if highs.changeColsCost(len(columns), columns, costs) \
@@ -2089,7 +2092,7 @@ def validate_destination_execution(scenario, architecture, moves):
 def _moves(table, selected, assignment, architecture, scenario, profile):
     links, moves = {x.link_id: x.bytes_per_s for x in scenario.links}, []
     ordered = sorted(selected, key=lambda i: (
-        table.candidates[i].migration_work_s / max(table.candidates[i].credit, 1e-12), i,
+        table.candidates[i].objective_cost_s / max(table.candidates[i].credit, 1e-12), i,
     ))
     for order, i in enumerate(ordered):
         c, session = table.candidates[i], table.sessions[table.candidates[i].session]
@@ -2520,7 +2523,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
     if selection_credits is not None:
         credited = sum(table.candidates[i].credit for i in selected)
         for i in sorted(selected, key=lambda i: (
-                table.candidates[i].migration_work_s, i), reverse=True):
+                table.candidates[i].objective_cost_s, i), reverse=True):
             if credited - table.candidates[i].credit >= target - 1e-9:
                 selected.remove(i)
                 assignment.pop(i, None)

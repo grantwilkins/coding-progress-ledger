@@ -66,8 +66,9 @@ LABELS = {
     frozenset(("bandwidth", "dest_compute")): "Bandwidth + compute",
     frozenset(FACTORS): "All bound", frozenset(): "None bound",
 }
-LEVELS = {"hbm": (0.0, .9), "bandwidth": ("natural", "controlled_40"),
+LEVELS = {"hbm": (0.0, .98), "bandwidth": ("natural", "controlled_40"),
           "dest_compute": (.25, .95)}
+MIN_ACTION_RESPONSE_RATE = .1
 REGIONS = ("east", "germany")
 ACTIONS = ("replay", "kv_transfer", "not_moved")
 POWER_TOLERANCE_W = 1e-6
@@ -474,7 +475,7 @@ def method_dominance(table, pools):
     def dominates(first, second):
         a, b = table.candidates[first], table.candidates[second]
         return a.gain_w + 1e-9 >= b.gain_w \
-            and a.migration_work_s <= b.migration_work_s + 1e-9 \
+            and a.objective_cost_s <= b.objective_cost_s + 1e-9 \
             and np.all(columns[:, first] <= columns[:, second] + 1e-9)
 
     for session, pool in product(range(len(table.sessions)), range(pools)):
@@ -631,6 +632,9 @@ def factor_checks(rows):
                     "fractional_lp_opportunity_change_w": opportunity_change,
                     "fractional_opportunity_worsened_on_release":
                         opportunity_change < -POWER_TOLERANCE_W,
+                    "resource_near_capacity": pressure >= .9,
+                    "opportunity_reduced":
+                        opportunity_change > POWER_TOLERANCE_W,
                     "active": pressure >= .9 \
                         or opportunity_change > POWER_TOLERANCE_W,
                 })
@@ -859,10 +863,16 @@ def main():
     summary, validation, checks = (summarize(rows), validate_surface(),
                                    factor_checks(rows))
     in_context_checks = factor_checks(in_context_rows)
-    activation = {(case, factor): np.mean([
-        row["active"] for row in checks
-        if row["case_id"] == case and row["factor"] == factor
-    ]) for case, factor in {(row["case_id"], row["factor"]) for row in checks}}
+    pairs = {(row["case_id"], row["factor"]) for row in checks}
+    def rates(field):
+        return {(case, factor): np.mean([
+            row[field] for row in checks
+            if row["case_id"] == case and row["factor"] == factor
+        ]) for case, factor in pairs}
+    activation, response = rates("active"), rates("action_changed_on_release")
+    near_capacity, opportunity_reduced = (
+        rates("resource_near_capacity"), rates("opportunity_reduced"),
+    )
     singles = {case_id for case_id, _, constraints in factorial_cases()
                if len(constraints) == 1}
     if any(row["fractional_opportunity_worsened_on_release"] for row in checks):
@@ -873,6 +883,9 @@ def main():
     if any(rate < .9 for (case, factor), rate in activation.items()
            if case in singles and factor in ACTIVATION_GATED_FACTORS):
         raise RuntimeError("labeled constraints failed activation gates")
+    if any(rate < MIN_ACTION_RESPONSE_RATE
+           for (case, _factor), rate in response.items() if case in singles):
+        raise RuntimeError("single-factor intervention did not change enough plans")
     write_csv(args.out / "action_mix.csv", rows)
     write_csv(args.out / "action_mix_summary.csv", summary)
     write_csv(args.out / "action_mix_support_restricted.csv", in_context_rows)
@@ -898,7 +911,7 @@ def main():
         if row["planner_shortfall_worsened_on_release"]
     ])
     metadata = {
-        "schema": "queue-haul-workload-adaptation-v4",
+        "schema": "queue-haul-workload-adaptation-v5",
         "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
@@ -915,6 +928,8 @@ def main():
         "route_compute_overlap": True,
         "route_endpoint_composition":
             "max(route time, fully shared Replay/KV endpoint work)",
+        "planner_objective_cost":
+            "sum of isolated candidate durations; endpoint replica-seconds remain a separate physical capacity row",
         "migration_horizon_s": MIGRATION_HORIZON_S,
         "regional_timing_destination_prefill_loads": timing_loads,
         "selected_session_totals": selected,
@@ -924,7 +939,7 @@ def main():
         },
         "candidate_method_dominance": dominance,
         "candidate_method_dominance_definition": {
-            "dominates": "weakly greater gain, weakly lower migration work, "
+            "dominates": "weakly greater gain, weakly lower predicted duration, "
                          "and no greater normalized LP resource coefficient",
             "slot_partition": ["candidate_matched_pairs", "candidate_replay_only",
                                "candidate_kv_only", "candidate_neither"],
@@ -975,6 +990,17 @@ def main():
         },
         "factor_activation_rate": {f"{case}/{factor}": float(rate)
                                    for (case, factor), rate in sorted(activation.items())},
+        "factor_action_response_rate": {f"{case}/{factor}": float(rate)
+                                        for (case, factor), rate in sorted(response.items())},
+        "factor_resource_near_capacity_rate": {
+            f"{case}/{factor}": float(rate)
+            for (case, factor), rate in sorted(near_capacity.items())
+        },
+        "factor_opportunity_reduction_rate": {
+            f"{case}/{factor}": float(rate)
+            for (case, factor), rate in sorted(opportunity_reduced.items())
+        },
+        "minimum_single_factor_action_response_rate": MIN_ACTION_RESPONSE_RATE,
         "activation_gated_factors": list(ACTIVATION_GATED_FACTORS),
         "planner_release_audit": {
             "comparisons": len(checks),
@@ -1028,8 +1054,8 @@ def main():
             "the relative-factor check does not directly validate the deployed regional concurrency-one loaded model",
             "the load campaign identifies prefill-heavy normalized load, not a separate decode-load coefficient",
             "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
-            "the destination envelope combines measured timing with synthetic HBM and service-pressure levels",
-            "the measured controlled-bandwidth state is imposed but nonbinding at the exact 67% target and is not labeled an activated bottleneck",
+            "the destination envelope combines measured timing with synthetic 98%-occupied HBM and service-pressure levels",
+            "the measured controlled-bandwidth route rarely saturates at the exact 67% target, but its rate still changes isolated duration and action selection; it is an intervention, not a labeled binding bottleneck",
             "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
             "each constraint state is planned independently; rounded-LP release regressions are reported",
             "fractional opportunity monotonicity does not prove integer packability",

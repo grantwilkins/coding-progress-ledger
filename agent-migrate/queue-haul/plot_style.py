@@ -107,16 +107,26 @@ ACTION_HATCHES = {
     "not_moved": "--",
 }
 RESOURCE_STATE_NAMES = {
-    "none": "None / bandwidth", "hbm": "HBM / HBM + bandwidth",
-    "dest_compute": "Dest. compute / bandwidth + compute",
-    "all": "HBM + compute / all bound",
+    "none": "None bound", "bandwidth": "Bandwidth",
+    "hbm": "HBM", "bandwidth-hbm": "HBM + bandwidth",
+    "dest_compute": "Dest. compute",
+    "bandwidth-dest_compute": "Bandwidth + compute",
+    "dest_compute-hbm": "HBM + compute",
+    "bandwidth-dest_compute-hbm": "All bound",
 }
 RESOURCE_STATE_COLORS = {
-    "none": POLICY_COLORS["queue_haul"], "hbm": POLICY_COLORS["greedy"],
-    "dest_compute": POLICY_COLORS["queue_haul_power_blind"], "all": "#000000",
+    "none": POLICY_COLORS["queue_haul"],
+    "bandwidth": POLICY_COLORS["queue_haul"],
+    "hbm": POLICY_COLORS["greedy"],
+    "bandwidth-hbm": POLICY_COLORS["greedy"],
+    "dest_compute": POLICY_COLORS["queue_haul_power_blind"],
+    "bandwidth-dest_compute": POLICY_COLORS["queue_haul_power_blind"],
+    "dest_compute-hbm": "#000000", "bandwidth-dest_compute-hbm": "#000000",
 }
 RESOURCE_STATE_LINESTYLES = {
-    "none": "-", "hbm": "--", "dest_compute": "-.", "all": ":",
+    "none": "-", "bandwidth": "--", "hbm": "-", "bandwidth-hbm": "--",
+    "dest_compute": "-", "bandwidth-dest_compute": "--",
+    "dest_compute-hbm": "-", "bandwidth-dest_compute-hbm": "--",
 }
 MODELS = ("openai/gpt-oss-20b", "Qwen/Qwen3.8-27B",
           "google/gemma-4-26B-A4B-it")

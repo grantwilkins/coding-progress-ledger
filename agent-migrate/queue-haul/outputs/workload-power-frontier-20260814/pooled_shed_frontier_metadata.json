@@ -1,6 +1,6 @@
 {
-  "bandwidth_null": "each measured-bandwidth state is exactly paired-equal to its released counterpart before sharing one explicitly paired curve label",
   "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
+  "constraint_style": "color groups HBM/destination-compute state; a dashed line adds constrained bandwidth",
   "factor_levels": {
     "bandwidth": [
       "natural",
@@ -12,7 +12,7 @@
     ],
     "hbm": [
       0.0,
-      0.9
+      0.98
     ]
   },
   "factor_states": 8,
@@ -33,7 +33,7 @@
     "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
     "each workload draw and global constraint state receives equal weight",
     "the main figure and raw tables show Queue-Haul capacity across all eight constraint states",
-    "measured bandwidth is a paired null effect in this workload ensemble; all eight states appear in four paired legend entries after an exact equality gate",
+    "all eight factorial states are plotted separately; constrained bandwidth can alter action duration and selection even when route capacity remains slack",
     "the frontier remains modeled rather than hardware-measured",
     "reported shed is awake source-region power rather than net fleet power or energy",
     "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
@@ -45,24 +45,16 @@
     "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases"
   ],
   "normalization": "safely attained watts / draw-specific removable watts",
-  "plotted_constraint_states": {
-    "all": [
-      "dest_compute-hbm",
-      "bandwidth-dest_compute-hbm"
-    ],
-    "dest_compute": [
-      "dest_compute",
-      "bandwidth-dest_compute"
-    ],
-    "hbm": [
-      "hbm",
-      "bandwidth-hbm"
-    ],
-    "none": [
-      "none",
-      "bandwidth"
-    ]
-  },
+  "plotted_constraint_states": [
+    "hbm",
+    "bandwidth",
+    "dest_compute",
+    "bandwidth-hbm",
+    "dest_compute-hbm",
+    "bandwidth-dest_compute",
+    "bandwidth-dest_compute-hbm",
+    "none"
+  ],
   "policies": [
     "queue_haul_lp"
   ],
@@ -86,7 +78,7 @@
     1.0
   ],
   "samples": 100,
-  "schema": "queue-haul-workload-power-frontier-v4",
+  "schema": "queue-haul-workload-power-frontier-v5",
   "seed": 1001,
   "sessions_per_pack": 28,
   "solvers": {

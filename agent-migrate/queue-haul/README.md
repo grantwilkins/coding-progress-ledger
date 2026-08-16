@@ -502,7 +502,7 @@ load-slowdown coefficient.
 Every cell runs exact maximum-shed Queue-Haul, Queue-Haul greedy, KV-only,
 replay-only, per-session-fastest, and power-blind Queue-Haul once. The exact
 binary solver jointly chooses sessions, methods, and destinations to maximize
-removed single-source load, then minimizes migration work at that optimum. In
+removed single-source load without a secondary tie-break. In
 the pinned simulation at `outputs/east-germany-constraint-20260808/`, it sheds
 49.25, 55.92, 60.48, and 51.69 W at 19, 30, 60, and quota-constrained 30
 seconds. Greedy reaches 46.99, 51.69, 60.48, and 51.69 W. The full-pack request
@@ -845,7 +845,12 @@ states share
 that draw. The planner uses measured East US 2 and Germany West Central
 effective pipeline rates. Network transfer overlaps destination migration work,
 while Replay and KV endpoint work share one conservative capacity envelope;
-background
+endpoint replica-seconds remain a physical capacity row while isolated
+candidate duration is the common action objective, so lower bandwidth changes
+action preference before the route capacity is exhausted. The HBM stress state
+uses 98% baseline occupancy on both destinations; the producer rejects a
+single-factor sweep unless at least 10% of paired plans respond.
+Background
 inference consumes shared prefill/decode destination-compute headroom. Replay
 endpoint work is multiplied by the measured relative factor
 `exp(0.284963 * rho)` at the incumbent normalized destination load; KV is
@@ -855,7 +860,7 @@ factor is applied to both destinations, using region-specific route rates.
 Within the measured regional 1,536--32,256-token migration support, Replay uses
 the base rate curve where available and its conservative minimum rate outside
 that narrower curve; candidate duration and shared migration work use the same
-rule.
+timing components but retain distinct objective and capacity roles.
 Stacked boundaries are the median Replay and median total-moved shares of
 modeled source phase load, the additive quantity used by the exact nonlinear
 power target. Black intervals show their 5--95% ranges. Raw session counts and
@@ -906,14 +911,12 @@ method-independent because either method leaves the same resident KV state.
 `workload_power_frontier.py` carries 100 deterministic paired Queue-Haul draws
 through all eight constraint states. Its main figure uses the monotone envelope
 at the 100% endpoint to recover each draw's maximum safely attained plan, then
-plots the fraction of draws capable of meeting each source-power request. Four
-curves explicitly pair None/Bandwidth, HBM/HBM+Bandwidth,
-destination-compute/Bandwidth+Compute, and HBM+Compute/All-Bound states. This
-avoids the uninformative identity obtained when every
+plots the fraction of draws capable of meeting each source-power request. All
+eight factorial states are explicit: color groups the HBM/destination-compute
+state, while a dashed line adds constrained bandwidth. This avoids the
+uninformative identity obtained when every
 target-aware policy is plotted against the target it is trying to meet. The
-measured bandwidth states share curves only after every paired Queue-Haul
-frontier point is exactly equal to its released counterpart;
-all eight factorial states remain in the raw CSV. Watts
+raw CSV retains every paired draw and request. Watts
 are normalized by each draw's removable source power. The companion
 `_power.csv` retains 5th, median, and 95th percentile watts. These are modeled
 sensitivity ranges, not confidence intervals or new hardware observations.
@@ -1512,8 +1515,9 @@ watts after packing. The fixed 0.4 workload normalization is service load
 `sum(f/F + g/G)`, not sampled phase load `af + bg`. The action and
 `workload_power_frontier.py` outputs report steady source-region power only;
 destination power and net fleet energy are outside their claim. The measured
-controlled-bandwidth state is retained as a null intervention at the exact
-67% target; only HBM and destination compute are required to activate alone.
+controlled-bandwidth state is retained explicitly: it can change isolated
+action duration and therefore selection before route capacity is saturated.
+Every single-factor state must change at least 10% of its paired plans.
 `simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
 10K-session idle snapshots: three trace seeds for each workload and five
 trace-derived context anchors. It compares Queue-Haul, static and Lagrangian

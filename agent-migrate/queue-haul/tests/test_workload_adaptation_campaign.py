@@ -19,6 +19,9 @@ Plausible wrong implementations:
 - Drop a migration method from contexts covered by the regional timing model.
 - Apply the measured load factor to route bytes, HBM, or the idle timing anchor.
 - Serialize route and endpoint work after fitting an end-to-end pipeline rate.
+- Use endpoint replica-seconds as the action objective and thereby hide a
+  bandwidth-dependent change in isolated migration duration.
+- Label a single-factor state despite no material paired action response.
 - Summarize a power-targeted action mix by session count instead of phase load.
 - Lose phase-load conservation when assigning selected sessions to actions.
 """
@@ -214,6 +217,8 @@ def test_opportunity_and_rounded_release_outcomes_are_distinct():
 
     assert hbm["fractional_lp_opportunity_change_w"] == 1
     assert not hbm["fractional_opportunity_worsened_on_release"]
+    assert not hbm["resource_near_capacity"]
+    assert hbm["opportunity_reduced"] and hbm["active"]
     assert hbm["planner_shortfall_worsened_on_release"]
 
 
@@ -380,7 +385,7 @@ def test_factor_levels_apply_to_both_destinations():
         states[bool(constraints)] = (scenario, architecture)
 
     for constrained, bandwidth_level, compute_level, hbm_level in (
-        (False, "natural", .25, 0), (True, "controlled_40", .95, .9),
+        (False, "natural", .25, 0), (True, "controlled_40", .95, .98),
     ):
         scenario, architecture = states[constrained]
         rates = {link.link_id: link.bytes_per_s for link in scenario.links}
@@ -402,6 +407,61 @@ def test_factor_levels_apply_to_both_destinations():
             assert replica.baseline_kv_tokens == resident
         assert {pool.replicas[0].replica_id for pool in architecture.pools} == \
             set(campaign.REGIONS)
+
+
+def test_single_factors_change_only_their_physical_columns():
+    fits = campaign.central_timing_fits()
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 28, 4))
+    tables = {}
+    for name, constraints in {
+        "none": frozenset(), "bandwidth": frozenset(("bandwidth",)),
+        "hbm": frozenset(("hbm",)),
+        "dest_compute": frozenset(("dest_compute",)),
+    }.items():
+        scenario, architecture, _, _ = campaign.build_problem(
+            profile, pack, constraints, 2 / 3, fits,
+        )
+        tables[name] = candidate_table(
+            scenario, profile, architecture, "normal",
+            ExpectedPower(scenario, profile),
+        )
+
+    def choices(table):
+        return {(row.session, row.pool, row.method): (i, row)
+                for i, row in enumerate(table.candidates)}
+
+    base = choices(tables["none"])
+    bandwidth = choices(tables["bandwidth"])
+    hbm = choices(tables["hbm"])
+    compute = choices(tables["dest_compute"])
+    key = next(key for key in base if key[1:] == (0, "kv_transfer"))
+    base_i, base_kv = base[key]
+    bandwidth_i, bandwidth_kv = bandwidth[key]
+    route = tables["none"].resource_names.index("route:link/east")
+    route_bound = tables["bandwidth"].resource_names.index("route:link/east")
+
+    assert bandwidth_kv.migration_work_s == pytest.approx(base_kv.migration_work_s)
+    assert bandwidth_kv.objective_cost_s > base_kv.objective_cost_s
+    assert tables["bandwidth"].resources[route_bound, bandwidth_i] \
+        > tables["none"].resources[route, base_i]
+
+    for method in ("replay", "kv_transfer"):
+        key = next(key for key in base.keys() & hbm.keys()
+                   if key[1:] == (0, method))
+        base_i, base_row = base[key]
+        hbm_i, hbm_row = hbm[key]
+        base_resource = tables["none"].resource_names.index("kv:pool/east")
+        hbm_resource = tables["hbm"].resource_names.index("kv:pool/east")
+        assert hbm_row.duration_s == pytest.approx(base_row.duration_s)
+        assert tables["hbm"].resources[hbm_resource, hbm_i] \
+            > tables["none"].resources[base_resource, base_i]
+
+    replay_key = next(key for key in base if key[1:] == (0, "replay"))
+    kv_key = next(key for key in base if key[1:] == (0, "kv_transfer"))
+    assert compute[replay_key][1].duration_s > base[replay_key][1].duration_s
+    assert compute[kv_key][1].duration_s == pytest.approx(base[kv_key][1].duration_s)
 
 
 def test_bootstrap_preserves_bandwidth_release_order():
