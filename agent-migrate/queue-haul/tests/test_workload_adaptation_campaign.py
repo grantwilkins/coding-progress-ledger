@@ -134,9 +134,14 @@ def test_phase_load_action_mix_uses_power_weights_not_session_counts():
     }
 
 
-def test_action_boxplot_uses_session_shares_for_only_five_declared_cases():
+def test_action_plots_use_only_the_three_single_bottlenecks_and_endpoints():
+    assert campaign.DISPLAY_CASES == (
+        "hbm", "bandwidth", "dest_compute",
+        "bandwidth-dest_compute-hbm", "none",
+    )
+
     rows = []
-    for case_id in campaign.ACTION_BOXPLOT_CASES:
+    for case_id in campaign.DISPLAY_CASES:
         for replicate, (replay, kv) in enumerate(zip(
                 (0, 10, 20, 30, 40), (0, 0, 10, 10, 20))):
             rows.append({
@@ -146,6 +151,10 @@ def test_action_boxplot_uses_session_shares_for_only_five_declared_cases():
                 "replay_phase_load": .99, "kv_transfer_phase_load": .005,
                 "not_moved_phase_load": .005,
             })
+    rows.append({
+        **rows[0], "case_id": "hbm-bandwidth", "replay_count": 100,
+        "not_moved_count": 0,
+    })
 
     summary = campaign.action_boxplot_statistics(rows)
     replay = next(row for row in summary
@@ -153,7 +162,7 @@ def test_action_boxplot_uses_session_shares_for_only_five_declared_cases():
 
     assert len(summary) == 5 * 3
     assert tuple(dict.fromkeys(row["case_id"] for row in summary)) \
-        == campaign.ACTION_BOXPLOT_CASES
+        == campaign.DISPLAY_CASES
     assert (replay["p05"], replay["p25"], replay["median"], replay["p75"],
             replay["p95"]) == pytest.approx((2, 10, 20, 30, 38))
 

@@ -13,7 +13,8 @@ Plausible wrong implementations:
 - Plot target-following policies against their own target instead of the
   distribution of maximum safely attainable power.
 - Collapse distinct bandwidth states into a shared curve.
-- Omit or duplicate a factorial constraint state.
+- Plot an intermediate joint state or omit one of the five declared display states.
+- Filter the raw factorial sweep down to only the five displayed states.
 """
 
 import numpy as np
@@ -26,11 +27,9 @@ from workload_power_frontier import (
 )
 
 
-def test_display_states_include_all_eight_factorial_states_once():
-    expected = tuple(case_id for case_id, _, _ in adaptation.factorial_cases())
-
-    assert DISPLAY_STATES == expected
-    assert len(DISPLAY_STATES) == len(set(DISPLAY_STATES)) == 8
+def test_display_states_match_the_five_declared_action_cases():
+    assert DISPLAY_STATES == adaptation.DISPLAY_CASES
+    assert len(DISPLAY_STATES) == len(set(DISPLAY_STATES)) == 5
 
 
 def test_capacity_summary_uses_one_maximum_per_paired_draw():
@@ -38,7 +37,7 @@ def test_capacity_summary_uses_one_maximum_per_paired_draw():
         "replicate": replicate, "factor_case_id": state,
         "policy": "queue_haul_lp", "requested_fraction": 1,
         "safely_attained_fraction": capacity,
-    } for state in DISPLAY_STATES
+    } for state, _, _ in adaptation.factorial_cases()
             for replicate, capacity in enumerate((.25, .75))]
 
     summary = capacity_summary(rows, grid=(0, .5, 1))

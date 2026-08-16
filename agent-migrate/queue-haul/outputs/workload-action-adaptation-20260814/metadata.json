@@ -282,6 +282,13 @@
     "target_loss_count": 43,
     "target_loss_rate": 0.0035833333333333333
   },
+  "plotted_constraint_states": [
+    "hbm",
+    "bandwidth",
+    "dest_compute",
+    "bandwidth-dest_compute-hbm",
+    "none"
+  ],
   "power_scope": "steady awake source-region power; destination power excluded",
   "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
   "regional_timing_destination_prefill_loads": [
@@ -313,7 +320,7 @@
   "route_compute_overlap": true,
   "route_endpoint_composition": "max(route time, fully shared Replay/KV endpoint work)",
   "samples": 1000,
-  "schema": "queue-haul-workload-adaptation-v6",
+  "schema": "queue-haul-workload-adaptation-v7",
   "seed": 1001,
   "selected_session_totals": {
     "kv_transfer": 24367,

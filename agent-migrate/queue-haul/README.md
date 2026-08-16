@@ -805,10 +805,11 @@ uv run python queue-haul/plot_pooled_resource_pressure.py \
 ```
 
 The action-adaptation views use the same equal-case sweep. The primary chart
-shows Queue-Haul's total replay/KV composition under all eight combinations of
-HBM, bandwidth, and prefill constraints at a common 67% target. Gray reports
+shows Queue-Haul's total replay/KV composition for the three single bottlenecks,
+all bound, and none bound at a common 67% target. Gray reports
 sessions left at the source, so every 100%-stacked bar accounts for the same
-28-session pack; destination identities are intentionally omitted.
+28-session pack; destination identities are intentionally omitted. The raw
+tables retain all eight HBM/bandwidth/destination-compute combinations.
 
 ```bash
 uv run python queue-haul/plot_pooled_action_adaptation.py \
@@ -861,6 +862,8 @@ Within the measured regional 1,536--32,256-token migration support, Replay uses
 the base rate curve where available and its conservative minimum rate outside
 that narrower curve; candidate duration and shared migration work use the same
 timing components but retain distinct objective and capacity roles.
+The stacked chart and companion boxplot show the three single bottlenecks, all
+bound, and none bound; intermediate two-factor states remain in the raw tables.
 Stacked boundaries are the median Replay and median total-moved shares of
 modeled source phase load, the additive quantity used by the exact nonlinear
 power target. The separate `action_mix_boxplot.pdf` shows session-count
@@ -912,12 +915,13 @@ a completed headroom campaign identifies an SLO budget. HBM remains
 method-independent because either method leaves the same resident KV state.
 
 `workload_power_frontier.py` carries 100 deterministic paired Queue-Haul draws
-through all eight constraint states. Its main figure uses the monotone envelope
+through all eight constraint states. Its main figure shows the three single
+bottlenecks, all bound, and none bound, using the monotone envelope
 at the 100% endpoint to recover each draw's maximum safely attained plan, then
-plots the fraction of draws capable of meeting each source-power request. All
-eight factorial states are explicit: color groups the HBM/destination-compute
-state, while a dashed line adds constrained bandwidth. This avoids the
-uninformative identity obtained when every
+plots the fraction of draws capable of meeting each source-power request. The
+three intermediate two-factor states remain available in the raw case table.
+Canonical color and line styles distinguish the five displayed states. This
+avoids the uninformative identity obtained when every
 target-aware policy is plotted against the target it is trying to meet. The
 raw CSV retains every paired draw and request. Watts
 are normalized by each draw's removable source power. The companion

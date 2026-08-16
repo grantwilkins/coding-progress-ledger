@@ -24,7 +24,7 @@ DEFAULT_SAMPLES = 100
 DEFAULT_POINTS = 9
 MAX_REQUEST = 1.0
 SOLVERS = {"queue_haul_lp": "lp_highs"}
-DISPLAY_STATES = tuple(case_id for case_id, _, _ in adaptation.factorial_cases())
+DISPLAY_STATES = adaptation.DISPLAY_CASES
 plot_style.apply()
 
 
@@ -220,7 +220,7 @@ def main():
     ))
     write_capacity_plot(summary, args.out)
     metadata = {
-        "schema": "queue-haul-workload-power-frontier-v5",
+        "schema": "queue-haul-workload-power-frontier-v6",
         "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
         "samples": args.samples, "factor_states": len(adaptation.ORDER),
         "pooled_cases": args.samples * len(adaptation.ORDER),
@@ -231,7 +231,7 @@ def main():
         "normalization": "safely attained watts / draw-specific removable watts",
         "figure_metric": "fraction of paired draws whose maximum safely attained Queue-Haul source-power fraction meets each request",
         "plotted_constraint_states": list(DISPLAY_STATES),
-        "constraint_style": "color groups HBM/destination-compute state; a dashed line adds constrained bandwidth",
+        "constraint_style": "canonical color and line styles distinguish the five displayed constraint states",
         "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
         "power_scope": "steady awake source-region power; destination power excluded",
         "source_load_definition": "sum(f/F + g/G)=0.4; distinct from sampled phase load z=af+bg",
@@ -251,8 +251,8 @@ def main():
         "limitations": [
             "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
             "each workload draw and global constraint state receives equal weight",
-            "the main figure and raw tables show Queue-Haul capacity across all eight constraint states",
-            "all eight factorial states are plotted separately; constrained bandwidth can alter action duration and selection even when route capacity remains slack",
+            "the main figure shows the three single bottlenecks plus all-bound and none-bound states; the raw case table retains all eight factorial states",
+            "the three intermediate two-factor states are retained in raw tables but omitted from the main figure",
             "the frontier remains modeled rather than hardware-measured",
             "reported shed is awake source-region power rather than net fleet power or energy",
             "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",

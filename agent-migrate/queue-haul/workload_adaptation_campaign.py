@@ -71,7 +71,7 @@ LEVELS = {"hbm": (0.0, .98), "bandwidth": ("natural", "controlled_40"),
 MIN_ACTION_RESPONSE_RATE = .1
 REGIONS = ("east", "germany")
 ACTIONS = ("replay", "kv_transfer", "not_moved")
-ACTION_BOXPLOT_CASES = (
+DISPLAY_CASES = (
     "hbm", "bandwidth", "dest_compute", "bandwidth-dest_compute-hbm", "none",
 )
 ACTION_BOXPLOT_QUANTILES = (.05, .25, .5, .75, .95)
@@ -791,25 +791,30 @@ def write_csv(path, rows):
 
 def plot(rows, path):
     fig, axis = plt.subplots(figsize=(5.5, 3))
+    labels = {case_id: label for case_id, label, _ in factorial_cases()}
     groups = [[row for row in rows if row["case_id"] == case_id]
-              for case_id, _, _ in factorial_cases()]
+              for case_id in DISPLAY_CASES]
+    if any(not group for group in groups):
+        raise RuntimeError("action plot is missing a displayed constraint case")
     replay = np.asarray([np.median([row["replay_phase_load"] for row in group])
                          for group in groups])
     moved = np.asarray([np.median([row["replay_phase_load"]
                                   + row["kv_transfer_phase_load"]
                                   for row in group]) for group in groups])
     values_by_action = (replay, moved - replay, 1 - moved)
-    left = np.zeros(8)
+    left = np.zeros(len(DISPLAY_CASES))
     for action, fractions in zip(ACTIONS, values_by_action):
         values = fractions * 100
         axis.barh(
-            range(8), values, left=left, color=plot_style.ACTION_COLORS[action],
+            range(len(DISPLAY_CASES)), values, left=left,
+            color=plot_style.ACTION_COLORS[action],
             hatch=plot_style.ACTION_HATCHES[action], edgecolor="white", linewidth=1.2,
             label=plot_style.ACTION_NAMES[action],
         )
         left += values
     axis.set(
-        yticks=range(8), yticklabels=[label for _, label, _ in factorial_cases()],
+        yticks=range(len(DISPLAY_CASES)),
+        yticklabels=[labels[case_id] for case_id in DISPLAY_CASES],
         xlim=(0, 100), xlabel="Modeled source phase-load share (%)",
     )
     axis.invert_yaxis()
@@ -830,7 +835,7 @@ def plot(rows, path):
 def action_boxplot_statistics(rows):
     output = []
     labels = {case_id: label for case_id, label, _ in factorial_cases()}
-    for case_id in ACTION_BOXPLOT_CASES:
+    for case_id in DISPLAY_CASES:
         selected = [row for row in rows if row["case_id"] == case_id]
         if not selected:
             raise RuntimeError(f"boxplot case has no draws: {case_id}")
@@ -857,7 +862,7 @@ def plot_action_boxplot(rows, path):
     from matplotlib.ticker import PercentFormatter
 
     statistics = action_boxplot_statistics(rows)
-    positions = np.arange(len(ACTION_BOXPLOT_CASES))
+    positions = np.arange(len(DISPLAY_CASES))
     fig, axis = plt.subplots(figsize=(5.5, 3))
     for action, offset in zip(ACTIONS, (-.24, 0, .24)):
         selected = [row for row in statistics if row["action"] == action]
@@ -875,13 +880,13 @@ def plot_action_boxplot(rows, path):
            medianprops={"color": "#222222", "linewidth": 1.3},
            whiskerprops={"color": "#444444", "linewidth": 1},
            capprops={"color": "#444444", "linewidth": 1})
-        if len(artists["boxes"]) != len(ACTION_BOXPLOT_CASES):
+        if len(artists["boxes"]) != len(DISPLAY_CASES):
             raise RuntimeError("boxplot omitted a constraint case")
     labels = {case_id: label for case_id, label, _ in factorial_cases()}
     tick_labels = [labels[case].replace("Dest. compute", "Dest.\ncompute")
                    .replace("All bound", "All\nbound")
                    .replace("None bound", "None\nbound")
-                   for case in ACTION_BOXPLOT_CASES]
+                   for case in DISPLAY_CASES]
     axis.set(
         xticks=positions, xticklabels=tick_labels, xlim=(-.55, 4.55),
         ylim=(0, 100), yticks=(0, 25, 50, 75, 100), ylabel="Sessions (%)",
@@ -984,13 +989,14 @@ def main():
         if row["planner_shortfall_worsened_on_release"]
     ])
     metadata = {
-        "schema": "queue-haul-workload-adaptation-v6",
+        "schema": "queue-haul-workload-adaptation-v7",
         "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
         "source_load_definition": "sum(f/F + g/G); distinct from sampled phase load z=af+bg",
-        "action_boxplot_cases": list(ACTION_BOXPLOT_CASES),
+        "plotted_constraint_states": list(DISPLAY_CASES),
+        "action_boxplot_cases": list(DISPLAY_CASES),
         "action_boxplot_metric": "per-draw percentage of source sessions assigned to each action",
         "action_boxplot_quantiles": list(ACTION_BOXPLOT_QUANTILES),
         "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",

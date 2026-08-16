@@ -1,6 +1,6 @@
 {
   "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
-  "constraint_style": "color groups HBM/destination-compute state; a dashed line adds constrained bandwidth",
+  "constraint_style": "canonical color and line styles distinguish the five displayed constraint states",
   "factor_levels": {
     "bandwidth": [
       "natural",
@@ -32,8 +32,8 @@
   "limitations": [
     "the first deterministic paired draws are a sensitivity ensemble, not independent observations or a confidence interval",
     "each workload draw and global constraint state receives equal weight",
-    "the main figure and raw tables show Queue-Haul capacity across all eight constraint states",
-    "all eight factorial states are plotted separately; constrained bandwidth can alter action duration and selection even when route capacity remains slack",
+    "the main figure shows the three single bottlenecks plus all-bound and none-bound states; the raw case table retains all eight factorial states",
+    "the three intermediate two-factor states are retained in raw tables but omitted from the main figure",
     "the frontier remains modeled rather than hardware-measured",
     "reported shed is awake source-region power rather than net fleet power or energy",
     "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
@@ -49,9 +49,6 @@
     "hbm",
     "bandwidth",
     "dest_compute",
-    "bandwidth-hbm",
-    "dest_compute-hbm",
-    "bandwidth-dest_compute",
     "bandwidth-dest_compute-hbm",
     "none"
   ],
@@ -78,7 +75,7 @@
     1.0
   ],
   "samples": 100,
-  "schema": "queue-haul-workload-power-frontier-v5",
+  "schema": "queue-haul-workload-power-frontier-v6",
   "seed": 1001,
   "sessions_per_pack": 28,
   "solvers": {
