@@ -1505,8 +1505,43 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
   service and loaded-migration evidence.
 - `service_headroom_campaign.py`: exact-stack A100/H100 incumbent-latency curves
   against Queue-Haul's normalized destination service load.
+- `fixed_shape_slo_campaign.py`: fixed-shape H100 service degradation against
+  offered request rate for the three pinned model architectures.
 - `service_surface_runner.py` and `service_profile_reduce.py`: isolated and
   mixed service profiles.
+
+The current three-model degradation run uses one H100 at a time and the same
+deterministic 3,920-token input plus forced 1,024-token output workload for
+GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B. Each model receives 32 seeded
+open-loop Poisson arrivals at every offered rate in
+`{0.125, 0.25, 0.5, 1, 2, 4, 8}` RPS. All 32 client workers may be in flight;
+there is no admission or SLO gate, and all seven rates run even after a
+violation. Afterward, the first rate violating either declared P90 SLO and its
+predecessor each run twice more. The plot reports the median of those three
+boundary runs with min--max whiskers. Incomplete requests count as service
+failures and violations, while launch, telemetry, token-accounting, or cache
+contamination errors invalidate the attempt and force a clean restart.
+
+The frozen plan records the default declared SLOs of 1 second TTFT and 0.1
+second per-request mean TPOT. Raw request token IDs and timestamps, offered
+arrival traces, full Prometheus scrapes, power samples, failure outcomes, and
+per-rate summaries remain available so other SLO thresholds can be evaluated
+without rerunning the base sweep. Use a fresh root for each model:
+
+```bash
+uv run python fixed_shape_slo_campaign.py prepare --model openai/gpt-oss-20b --out RUN-GPT/plan.json
+uv run python fixed_shape_slo_campaign.py run-model --plan RUN-GPT/plan.json --model openai/gpt-oss-20b --out RUN-GPT
+uv run python fixed_shape_slo_campaign.py prepare --model Qwen/Qwen3.8-27B --out RUN-QWEN/plan.json
+uv run python fixed_shape_slo_campaign.py run-model --plan RUN-QWEN/plan.json --model Qwen/Qwen3.8-27B --max-num-batched-tokens 1567 --out RUN-QWEN
+uv run python fixed_shape_slo_campaign.py prepare --model google/gemma-4-26B-A4B-it --out RUN-GEMMA/plan.json
+uv run python fixed_shape_slo_campaign.py run-model --plan RUN-GEMMA/plan.json --model google/gemma-4-26B-A4B-it --out RUN-GEMMA
+uv run python plot_fixed_shape_slo_curve.py --run-root RUN-GPT --run-root RUN-QWEN --run-root RUN-GEMMA --out outputs/fixed-shape-slo-h100/curve
+```
+
+Set `QH_LMCACHE_MODE=mp`; use `QH_RUNTIME=native` on the validated native
+vLLM/LMCache stack. The older normalized-rho campaign below remains the path
+for an additive admission bound, but it is not the current offered-RPS
+degradation run.
 
 Prepare the frozen cell matrix, follow its per-hardware run order, reduce one
 exact-stack normalization per hardware, then run and reduce the discovery cells.
