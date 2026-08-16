@@ -53,22 +53,16 @@ frontier. No value from this directory may update planner admission through
 - `service-headroom.pdf` / `.png`: discovery P90 TTFT versus measured offered
   prefill work `rho_p` along the prefill sweep (`rho_d=0.19--0.23`), and P90
   per-request mean TPOT versus measured offered decode work `rho_d` along the
-  decode sweep (`rho_p=0.08--0.10`). Restart-block min--max ranges are the
-  error bars; held-out ranges are open markers. TTFT is logarithmic so the
-  measured 24-second overload point does not hide the subsecond curve. These
-  are two measured conditional slices, not a two-dimensional response surface
-  or estimates of independent partial effects. The balanced treatment remains
-  in the held-out table and phase-coverage figure.
+  decode sweep (`rho_p=0.08--0.10`). It contains only the two discovery median
+  lines and dotted SLOs. TTFT is logarithmic so the measured 24-second overload
+  point does not hide the subsecond curve. These are two measured conditional
+  slices, not a two-dimensional response surface or estimates of independent
+  partial effects. Held-out values and restart-block ranges remain in the CSVs.
 - `service-headroom-phase.pdf` / `.png`: sampled prefill/decode work rays, with
   held-out points shown as open markers and any all-repeat evidence miss marked
   with an x. It is not a fitted frontier.
-- `service-headroom-sustainability.pdf` / `.png`: the minimal admission view.
-  The x-axis is added offered service work above the measured 0.25 incumbent
-  baseline; the y-axes are P90 TTFT and P90 mean TPOT. Curves and held-out
-  markers retain workload composition, error bars are restart-block min--max
-  ranges, and diamonds are the worse of incumbent/new-cohort P90 in the live
-  transition. The vertical line is the tested added-work budget 0.25
-  (equivalently total work 0.50), not a universal utilization limit.
+- `service-headroom-sustainability.pdf` / `.png`: compatibility copy of the
+  same two simple measured slices; it adds no admission marker or extra metric.
 - `service-headroom.csv`: discovery medians, ranges, phase coordinates, and
   repeat-level feasibility counts.
 - `service-headroom-heldout.csv`: the same reduction for unseen confirmation.

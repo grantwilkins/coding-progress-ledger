@@ -337,12 +337,15 @@ bound are inseparable from their measured prefill/decode rates and pinned
 serving stack; a bound must be rescaled or remeasured before use with another
 normalization.
 
-For the completed 4K A100 service class, the tested operating point is
-`W_safe=0.50` under the campaign rates `F=16758.928` and `G=3597.591` tokens/s.
-The incumbent uses approximately `W_0=0.25`, leaving tested added work
-`Delta W=0.25`. Three mixes across three fresh restart blocks passed at this
-point; the prior `W=0.70` held-out treatment missed the every-repeat stability
-contract. This is a profile-conditioned evidence statement. The transition
+For the completed 4K A100 service class, `W=0.50` is a tested safe floor under
+the campaign rates `F=16758.928` and `G=3597.591` tokens/s. The incumbent uses
+approximately `W_0=0.25`. Three mixes across three fresh restart blocks passed
+at `W=0.50`. At `W=0.70`, every held-out mix remained comfortably inside both
+latency SLOs, but each passed the every-repeat stability contract in only two
+of three blocks. The evidence therefore brackets, but does not identify, a
+higher stable bound: `0.50 <= W_safe < 0.70` under this contract. `W=0.50`
+must not be installed as a production cap if it makes the intended workload
+infeasible; one targeted `W=0.60` confirmation is required to raise it. The
 artifact remains non-promoting, and no historical destination profile or
 planner default is changed.
 

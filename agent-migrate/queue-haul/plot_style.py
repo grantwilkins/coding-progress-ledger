@@ -99,14 +99,7 @@ SERVICE_MIX_MARKERS = {
 SERVICE_EVIDENCE_STAGE_NAMES = {
     "discovery": "Discovery",
     "held_out": "Held-out confirmation",
-    "transition": "Live transition (worse cohort)",
 }
-SERVICE_EVIDENCE_STAGE_MARKERS = {
-    "discovery": "o", "held_out": "o", "transition": "D",
-}
-SERVICE_WORK_BUDGET_NAME = "Tested service-work budget"
-SERVICE_WORK_BUDGET_COLOR = "#000000"
-SERVICE_WORK_BUDGET_LINESTYLE = "-."
 ACTION_HATCHES = {
     "replay": "..", "kv_transfer": "xx",
     "east_replay": "..", "east_kv_transfer": "xx",

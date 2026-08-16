@@ -1591,10 +1591,10 @@ Interpret `rho` only as offered normalized phase work,
 it is not measured GPU utilization and is not composition-invariant. The main
 figure therefore plots TTFT against `rho_p` along the measured prefill sweep
 (`rho_d=0.19--0.23`) and TPOT against `rho_d` along the measured decode sweep
-(`rho_p=0.08--0.10`), with observed restart-block min--max bars. These are two
-conditional slices, not a two-dimensional surface or estimates of independent
-partial effects. The committed phase CSV reconstructs both coordinates for
-every aggregate point.
+(`rho_p=0.08--0.10`). It shows only the two median lines and their dotted SLOs;
+the held-out and restart-block details remain in the committed CSVs. These are
+two conditional slices, not a two-dimensional surface or estimates of
+independent partial effects.
 At total `rho` near 0.70, held-out prefill-heavy, balanced, and decode-heavy P90
 TTFT/mean-TPOT medians are respectively 234.7/59.7 ms, 152.9/42.7 ms, and
 131.7/37.2 ms. This composition dependence proves that total work is not a
@@ -1621,16 +1621,18 @@ instrumentation attempts are retained in immutable per-attempt directories.
 The result certifies only the three tested recipes for the 240-second declared
 horizon; `planner_usable` remains false and no interpolation is allowed.
 
-The transition completed 9/9 cells successfully. Together with the rejected
-0.70 held-out point, the YAGNI service gate is the existing scalar facet
-`W_0 + Delta W <= 0.50` for this exact A100/4K serving profile. The incumbent
-baseline is approximately 0.25, so the tested added-work budget is 0.25. This
-is a conservative profile-conditioned SLO certificate: above it is not
-certified, not necessarily physically impossible. It uses the campaign's
-16,758.928 prefill-token/s and 3,597.591 decode-token/s normalization and must
-not be copied into profiles with different rates. No planner/schema change or
-historical-profile edit is required; the current `(1,1)` service normal already
-represents the row, while KV, bandwidth, migration, and power stay separate.
+The transition completed 9/9 cells successfully, making `W=0.50` a tested safe
+floor for this exact A100/4K serving profile. It is not installed as a planner
+cap. At `W=0.70`, all held-out repeats remained inside both latency SLOs, but
+each mix passed the strict stability contract in only two of three blocks.
+Thus the data brackets a higher stable cap in `[0.50, 0.70)` without selecting
+one. If deployment needs more headroom, the minimal next measurement is one
+preregistered `W=0.60` transition point. This interpretation uses the
+campaign's 16,758.928 prefill-token/s and 3,597.591 decode-token/s normalization
+and must not be copied into profiles with different rates. No planner/schema
+change or historical-profile edit is required; the current `(1,1)` service
+normal already represents the row, while KV, bandwidth, migration, and power
+stay separate.
 The result follows the load-sweep methodology used by
 [DistServe](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf) and
 [vLLM's serving benchmark](https://docs.vllm.ai/en/latest/benchmarking/cli.html):

@@ -27,21 +27,18 @@ def test_aggregate_keeps_raw_block_range():
     assert not decode["physically_feasible"]
 
 
-def test_main_plot_accepts_heldout_repeat_ranges(tmp_path):
-    row = {
-        "direction": "prefill_heavy", "measured_rho_median": .85,
+def test_main_plot_renders_two_simple_phase_slices(tmp_path):
+    rows = [{
+        "direction": direction,
         "offered_prefill_rho_median": .63,
-        "offered_decode_rho_median": .22,
-        "p90_ttft_s_median": .4, "p90_ttft_s_minimum": .3,
-        "p90_ttft_s_maximum": .5, "p90_mean_tpot_s_median": .105,
-        "p90_mean_tpot_s_minimum": .102,
-        "p90_mean_tpot_s_maximum": .108,
-        "physically_feasible": True, "evidence_feasible": False,
-    }
+        "offered_decode_rho_median": .76,
+        "p90_ttft_s_median": .4,
+        "p90_mean_tpot_s_median": .04,
+    } for direction in ("prefill_heavy", "decode_heavy")]
     scout = {"targets": {"p90_ttft_s": 1, "p90_mean_tpot_s": .1}}
     out = tmp_path / "service-headroom"
 
-    plotter.plot([], [row], scout, {"planner_usable": False}, out)
+    plotter.plot(rows, scout, out)
 
     assert out.with_suffix(".pdf").is_file()
     assert out.with_suffix(".png").is_file()

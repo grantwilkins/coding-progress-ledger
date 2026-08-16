@@ -143,22 +143,17 @@ def write_csv(rows: list[dict], path: Path) -> None:
         writer.writerows(rows)
 
 
-def plot(rows: list[dict], heldout: list[dict], scout: dict,
-         confirmed: dict | None, out: Path) -> None:
+def plot(rows: list[dict], scout: dict, out: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.lines import Line2D
 
     panels = (
         ("p90_ttft_s", "offered_prefill_rho_median", "prefill_heavy",
-         "P90 TTFT (s)",
-         (r"Offered normalized prefill work, $\rho_p$ (GPU-s/s)"
-          "\n" r"($\rho_d=0.19$--$0.23$ along the loaded slice)")),
+         "P90 TTFT (s)", r"Prefill work, $\rho_p$ (GPU-s/s)"),
         ("p90_mean_tpot_s", "offered_decode_rho_median",
          "decode_heavy", "P90 mean TPOT (s)",
-         (r"Offered normalized decode work, $\rho_d$ (GPU-s/s)"
-          "\n" r"($\rho_p=0.08$--$0.10$ along the loaded slice)")),
+         r"Decode work, $\rho_d$ (GPU-s/s)"),
     )
     figure, axes = plt.subplots(
         2, 1, sharex=False,
@@ -170,99 +165,27 @@ def plot(rows: list[dict], heldout: list[dict], scout: dict,
                     and row.get(x_field) is not None]
         x = [row[x_field] for row in selected]
         y = [row[f"{metric}_median"] for row in selected]
-        lower = [row[f"{metric}_median"] - row[f"{metric}_minimum"]
-                 for row in selected]
-        upper = [row[f"{metric}_maximum"] - row[f"{metric}_median"]
-                 for row in selected]
         axis.plot(
             x, y, color=plot_style.SERVICE_MIX_COLORS[direction],
             linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
-            label=plot_style.SERVICE_MIX_NAMES[direction],
+            marker=plot_style.SERVICE_MIX_MARKERS[direction], markersize=5,
+            linewidth=1.8,
         )
-        feasible = [index for index, row in enumerate(selected)
-                    if row["physically_feasible"]]
-        infeasible = [index for index, row in enumerate(selected)
-                      if not row["physically_feasible"]]
-        if feasible:
-            axis.errorbar([x[index] for index in feasible],
-                          [y[index] for index in feasible],
-                          yerr=([lower[index] for index in feasible],
-                                [upper[index] for index in feasible]),
-                          color=plot_style.SERVICE_MIX_COLORS[direction],
-                          marker=plot_style.SERVICE_MIX_MARKERS[direction],
-                          linestyle="none", capsize=2, markersize=5)
-        if infeasible:
-            axis.scatter([x[index] for index in infeasible],
-                         [y[index] for index in infeasible], marker="x",
-                         color=plot_style.SERVICE_MIX_COLORS[direction],
-                         s=45, linewidths=1.5)
-        confirmation = [
-            row for row in heldout if row["direction"] == direction
-            and row[f"{metric}_median"] is not None
-            and row.get(x_field) is not None
-        ]
-        if confirmation:
-            heldout_x = [row[x_field] for row in confirmation]
-            heldout_y = [row[f"{metric}_median"] for row in confirmation]
-            heldout_lower = [
-                row[f"{metric}_median"] - row[f"{metric}_minimum"]
-                for row in confirmation
-            ]
-            heldout_upper = [
-                row[f"{metric}_maximum"] - row[f"{metric}_median"]
-                for row in confirmation
-            ]
-            axis.errorbar(
-                heldout_x, heldout_y,
-                yerr=(heldout_lower, heldout_upper),
-                color=plot_style.SERVICE_MIX_COLORS[direction],
-                marker=plot_style.SERVICE_MIX_MARKERS[direction],
-                markerfacecolor="white", markeredgewidth=1.5,
-                linestyle="none", capsize=3, markersize=7, zorder=4,
-            )
-            misses = [index for index, row in enumerate(confirmation)
-                      if not row["evidence_feasible"]]
-            if misses:
-                axis.scatter(
-                    [heldout_x[index] for index in misses],
-                    [heldout_y[index] for index in misses],
-                    marker="x", color="#222222", s=32,
-                    linewidths=1.2, zorder=5,
-                )
         target = scout["targets"][metric]
         axis.axhline(target, color="#555555", linestyle=":", linewidth=1.5)
-        if confirmed and confirmed.get("planner_usable"):
-            axis.axvline(confirmed["supported_bound"], color="#777777",
-                         linestyle="-.", linewidth=1.25)
+        axis.text(.98, target, "SLO", color="#555555", ha="right",
+                  va="bottom", fontsize=plot_style.COLUMN_FONT_SIZE,
+                  transform=axis.get_yaxis_transform())
         if metric == "p90_ttft_s":
             axis.set_yscale("log")
+        axis.set_title(plot_style.SERVICE_MIX_NAMES[direction], loc="left",
+                       color=plot_style.SERVICE_MIX_COLORS[direction],
+                       fontsize=plot_style.COLUMN_FONT_SIZE)
         axis.set_ylabel(ylabel, fontsize=plot_style.COLUMN_FONT_SIZE)
         axis.set_xlabel(xlabel, fontsize=plot_style.COLUMN_FONT_SIZE)
         axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
         axis.grid(alpha=.2)
-    handles = [Line2D([], [],
-                      color=plot_style.SERVICE_MIX_COLORS[direction],
-                      linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
-                      marker=plot_style.SERVICE_MIX_MARKERS[direction],
-                      label=plot_style.SERVICE_MIX_NAMES[direction])
-               for direction in plot_style.SERVICE_LOADS]
-    handles.append(Line2D([], [], color="#555555", linestyle=":",
-                          label="Evaluation target"))
-    handles.append(Line2D([], [], color="#555555", marker="x",
-                          linestyle="none",
-                          label="Any repeat missed evaluation contract"))
-    handles.append(Line2D(
-        [], [], color="#555555", marker="o", markerfacecolor="white",
-        linestyle="none",
-        label=(f"{plot_style.SERVICE_EVIDENCE_STAGE_NAMES['held_out']} "
-               "min–max"),
-    ))
-    if confirmed and confirmed.get("planner_usable"):
-        handles.append(Line2D([], [], color="#777777", linestyle="-.",
-                              label=r"Confirmed $\rho_{safe}$"))
-    figure.legend(handles=handles, frameon=False, fontsize=7, ncol=2,
-                  loc="upper center", bbox_to_anchor=(.5, .995))
-    figure.tight_layout(rect=(0, 0, 1, .84))
+    figure.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("pdf", "png"):
         figure.savefig(out.with_suffix(f".{suffix}"),
@@ -341,140 +264,12 @@ def plot_phase_surface(discovery: list[dict], heldout: list[dict],
     plt.close(figure)
 
 
-def plot_sustainability(discovery: list[dict], heldout: list[dict],
-                        transition: list[dict], scout: dict,
-                        baseline_work: float, out: Path) -> None:
-    """Plot the empirical profile-conditioned service-work certificate."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.lines import Line2D
-
-    metrics = (("p90_ttft_s", "P90 TTFT (s)"),
-               ("p90_mean_tpot_s", "P90 mean TPOT (s)"))
-    figure, axes = plt.subplots(
-        2, 1, sharex=True,
-        figsize=(plot_style.COMPACT_FIGSIZE[0], 4.8),
-    )
-    tested_total_work = [row["total_work"] for row in transition]
-    if max(tested_total_work) - min(tested_total_work) > 1e-3:
-        raise RuntimeError("transition mixes do not share one tested work point")
-    # Request discreteness leaves the frozen recipes within 0.07% of 0.50.
-    # Draw the certificate at the smallest work actually tested by every mix.
-    tested_added_work = min(tested_total_work) - baseline_work
-    for axis, (metric, ylabel) in zip(axes, metrics):
-        for direction in plot_style.SERVICE_LOADS:
-            selected = [row for row in discovery
-                        if row["direction"] == direction]
-            x = [row["measured_rho_median"] - baseline_work
-                 for row in selected]
-            y = [row[f"{metric}_median"] for row in selected]
-            lower = [row[f"{metric}_median"] - row[f"{metric}_minimum"]
-                     for row in selected]
-            upper = [row[f"{metric}_maximum"] - row[f"{metric}_median"]
-                     for row in selected]
-            axis.plot(
-                x, y, color=plot_style.SERVICE_MIX_COLORS[direction],
-                linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
-            )
-            axis.errorbar(
-                x, y, yerr=(lower, upper),
-                color=plot_style.SERVICE_MIX_COLORS[direction],
-                marker=plot_style.SERVICE_MIX_MARKERS[direction],
-                linestyle="none", capsize=2, markersize=5,
-            )
-        for direction in plot_style.SERVICE_MIXES:
-            confirmation = [row for row in heldout
-                            if row["direction"] == direction]
-            if confirmation:
-                x = [row["measured_rho_median"] - baseline_work
-                     for row in confirmation]
-                y = [row[f"{metric}_median"] for row in confirmation]
-                lower = [row[f"{metric}_median"] - row[f"{metric}_minimum"]
-                         for row in confirmation]
-                upper = [row[f"{metric}_maximum"] - row[f"{metric}_median"]
-                         for row in confirmation]
-                axis.errorbar(
-                    x, y, yerr=(lower, upper),
-                    color=plot_style.SERVICE_MIX_COLORS[direction],
-                    marker=plot_style.SERVICE_MIX_MARKERS[direction],
-                    markerfacecolor="white", markeredgewidth=1.5,
-                    linestyle="none", capsize=3, markersize=7, zorder=4,
-                )
-                misses = [index for index, row in enumerate(confirmation)
-                          if not row["evidence_feasible"]]
-                if misses:
-                    axis.scatter(
-                        [x[index] for index in misses],
-                        [y[index] for index in misses],
-                        marker="x", color="#222222", s=32,
-                        linewidths=1.2, zorder=5,
-                    )
-            live = [row for row in transition
-                    if row["direction"] == direction]
-            if live:
-                row = live[0]
-                center = row[f"{metric}_median"]
-                axis.errorbar(
-                    [row["added_work"]], [center],
-                    yerr=([center - row[f"{metric}_minimum"]],
-                          [row[f"{metric}_maximum"] - center]),
-                    color=plot_style.SERVICE_MIX_COLORS[direction],
-                    marker=plot_style.SERVICE_EVIDENCE_STAGE_MARKERS[
-                        "transition"],
-                    markeredgecolor="#222222", markeredgewidth=.8,
-                    linestyle="none", capsize=3, markersize=6, zorder=6,
-                )
-        axis.axhline(
-            scout["targets"][metric], color="#555555",
-            linestyle=":", linewidth=1.5,
-        )
-        axis.axvline(
-            tested_added_work,
-            color=plot_style.SERVICE_WORK_BUDGET_COLOR,
-            linestyle=plot_style.SERVICE_WORK_BUDGET_LINESTYLE,
-            linewidth=1.25,
-        )
-        if metric == "p90_ttft_s":
-            axis.set_yscale("log")
-        axis.set_ylabel(ylabel, fontsize=plot_style.COLUMN_FONT_SIZE)
-        axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
-        axis.grid(alpha=.2)
-    axes[-1].set_xlabel(
-        (r"Added offered service work, $\Delta W$ (GPU-s/s)"
-         "\n" f"Baseline total work $W_0={baseline_work:.2f}$"),
-        fontsize=plot_style.COLUMN_FONT_SIZE,
-    )
-    handles = [Line2D(
-        [], [], color=plot_style.SERVICE_MIX_COLORS[direction],
-        linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
-        marker=plot_style.SERVICE_MIX_MARKERS[direction],
-        label=plot_style.SERVICE_MIX_NAMES[direction],
-    ) for direction in plot_style.SERVICE_MIXES]
-    handles.extend((
-        Line2D([], [], color="#555555", linestyle=":",
-               label="Evaluation target"),
-        Line2D([], [], color=plot_style.SERVICE_WORK_BUDGET_COLOR,
-               linestyle=plot_style.SERVICE_WORK_BUDGET_LINESTYLE,
-               label=(f"{plot_style.SERVICE_WORK_BUDGET_NAME} "
-                      rf"($\Delta W={tested_added_work:.2f}$)")),
-        Line2D([], [], color="#555555", marker="o", markerfacecolor="white",
-               linestyle="none", label="Held-out min–max"),
-        Line2D([], [], color="#555555",
-               marker=plot_style.SERVICE_EVIDENCE_STAGE_MARKERS["transition"],
-               linestyle="none",
-               label=plot_style.SERVICE_EVIDENCE_STAGE_NAMES["transition"]),
-        Line2D([], [], color="#222222", marker="x", linestyle="none",
-               label="Any repeat missed contract"),
-    ))
-    figure.legend(handles=handles, frameon=False, fontsize=6.5, ncol=2,
-                  loc="upper center", bbox_to_anchor=(.5, .995))
-    figure.tight_layout(rect=(0, 0, 1, .80))
-    out.parent.mkdir(parents=True, exist_ok=True)
-    for suffix in ("pdf", "png"):
-        figure.savefig(out.with_suffix(f".{suffix}"),
-                       dpi=plot_style.SAVE_DPI, bbox_inches="tight")
-    plt.close(figure)
+def plot_sustainability(discovery: list[dict], transition: list[dict],
+                        scout: dict, out: Path) -> None:
+    """Retain the historical output name for the simple measured slices."""
+    if not transition:
+        raise RuntimeError("transition evidence is required")
+    plot(discovery, scout, out)
 
 
 def main(argv=None) -> None:
@@ -525,10 +320,10 @@ def main(argv=None) -> None:
         write_csv(transition, args.out.with_name(
             f"{args.out.name}-sustainability-transition").with_suffix(".csv"))
         plot_sustainability(
-            rows, heldout, transition, scout, baseline_work,
+            rows, transition, scout,
             args.out.with_name(f"{args.out.name}-sustainability"),
         )
-    plot(rows, heldout, scout, confirmed, args.out)
+    plot(rows, scout, args.out)
 
 
 if __name__ == "__main__":

@@ -395,14 +395,16 @@ The minimal fallback does not require a two-dimensional lattice. The frozen
 transition follow-up tested total work `W=0.50` at prefill-heavy, balanced, and
 decode-heavy recipes across three fresh restart blocks each. All 9/9 cells
 met both cohorts' P90 TTFT/TPOT targets, exact completion/cache checks, drain,
-and strict stability. This supports the conservative, profile-conditioned
-candidate row `W_0 + Delta W <= 0.50` for the exact 4K A100 normalization and
-stack; above the row is not certified. It does not identify a universal
-latency curve or arbitrary phase-mix surface, and the transition artifact does
-not automatically promote a planner profile. Collect a two-dimensional
-lattice only if a future claim specifically requires interpolation across
-unseen compositions. No such campaign is required for the scalar tested-work
-certificate.
+and strict stability. This makes `W=0.50` a conservative tested floor for the
+exact 4K A100 normalization and stack, not a production cap. The held-out
+`W=0.70` cells met both latency SLOs but missed the every-repeat stability rule,
+so the higher stable bound is bracketed in `[0.50, 0.70)` and remains
+unidentified. The transition artifact does not automatically promote a
+planner profile. If more headroom is operationally necessary, confirm one
+preregistered intermediate point, preferably `W=0.60`, rather than assuming
+interpolation. Collect a two-dimensional lattice only if a future claim
+specifically requires interpolation across unseen compositions. No such
+campaign is required for the scalar tested-work certificate.
 
 ## Prefill/decode holding follow-up (optional model promotion)
 
