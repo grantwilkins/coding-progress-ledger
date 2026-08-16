@@ -1532,9 +1532,9 @@ hard-checks 25 sliding `(head_dim=256, kv_heads=8)` and five full
 `(head_dim=512, kv_heads=2)` layers, and records that proof in the runtime log;
 it neither enables ambiguous global attribute access nor homogenizes the model,
 and uses that exact proof for vLLM's required unified Triton backend selection.
-The same hook identifies both Gemma's multimodal wrapper and copied inner
-text-only model by root/text-config identity and exact architecture, avoiding
-heterogeneous-config value equality.
+The same hook identifies Gemma's multimodal wrapper by root/text identity and
+its copied inner text-only configs by matching exact layer geometry and stable
+model dimensions, avoiding heterogeneous-config value equality.
 Non-GPT cells hard-check BF16 attention KV, record recurrent-state dtypes,
 check model-specific arguments, and enforce Qwen's
 784-token unified/cache-group alignment. Their normalization records the

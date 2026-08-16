@@ -143,8 +143,14 @@ def patch_gemma4_config(logger) -> None:
         multimodal = model_type == "gemma4"
         expected_arch = "Gemma4ForConditionalGeneration" if multimodal \
             else "Gemma4ForCausalLM"
+        if not multimodal:
+            gemma4_layer_configs(root)
+        same_text = multimodal or all(
+            getattr(root, name) == getattr(text, name)
+            for name in ("hidden_size", "num_hidden_layers", "vocab_size")
+        )
         if (getattr(root, "text_config", None) is not text if multimodal
-                else root is not text) \
+                else not same_text) \
                 or getattr(text, "model_type", None) != "gemma4_text" \
                 or self.architectures != [expected_arch] \
                 or self.runner not in {"auto", "generate"}:

@@ -210,6 +210,7 @@ def test_gemma4_config_uses_validated_layers_for_summary_and_backend():
     )
     text = gemma_layers()
     text.model_type = "gemma4_text"
+    text.hidden_size, text.num_hidden_layers, text.vocab_size = 3840, 30, 262208
     root = SimpleNamespace(model_type="gemma4", text_config=text)
     model = SimpleNamespace(
         hf_config=root, hf_text_config=text,
@@ -224,7 +225,10 @@ def test_gemma4_config_uses_validated_layers_for_summary_and_backend():
     assert config.attention_config.backend.name == "TRITON_ATTN"
     assert ModelConfig._get_transformers_backend_cls(model) \
         == "TransformersMultiModalMoEForCausalLM"
-    model.hf_config = model.hf_text_config
+    model.hf_config = gemma_layers()
+    model.hf_config.model_type = "gemma4_text"
+    model.hf_config.hidden_size, model.hf_config.num_hidden_layers, \
+        model.hf_config.vocab_size = 3840, 30, 262208
     model.architectures = ["Gemma4ForCausalLM"]
     assert ModelConfig._get_transformers_backend_cls(model) \
         == "TransformersMoEForCausalLM"
