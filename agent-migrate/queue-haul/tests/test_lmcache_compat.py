@@ -224,7 +224,12 @@ def test_gemma4_config_uses_validated_layers_for_summary_and_backend():
     assert config.attention_config.backend.name == "TRITON_ATTN"
     assert ModelConfig._get_transformers_backend_cls(model) \
         == "TransformersMultiModalMoEForCausalLM"
+    model.hf_config = model.hf_text_config
+    model.architectures = ["Gemma4ForCausalLM"]
+    assert ModelConfig._get_transformers_backend_cls(model) \
+        == "TransformersMoEForCausalLM"
     model.hf_config = SimpleNamespace(model_type="gemma4", text_config=object())
+    model.architectures = ["Gemma4ForConditionalGeneration"]
     with pytest.raises(RuntimeError, match="multimodal model structure"):
         ModelConfig._get_transformers_backend_cls(model)
     assert events.count("QH_GEMMA4_GEOMETRY_VERIFIED "

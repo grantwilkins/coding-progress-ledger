@@ -136,15 +136,21 @@ def patch_gemma4_config(logger) -> None:
 
     def transformers_backend(self):
         root, text = self.hf_config, self.hf_text_config
-        if getattr(root, "model_type", None) != "gemma4":
+        model_type = getattr(root, "model_type", None)
+        if model_type not in {"gemma4", "gemma4_text"}:
             return original_backend(self)
         gemma4_layer_configs(text)
-        if getattr(root, "text_config", None) is not text \
+        multimodal = model_type == "gemma4"
+        expected_arch = "Gemma4ForConditionalGeneration" if multimodal \
+            else "Gemma4ForCausalLM"
+        if (getattr(root, "text_config", None) is not text if multimodal
+                else root is not text) \
                 or getattr(text, "model_type", None) != "gemma4_text" \
-                or self.architectures != ["Gemma4ForConditionalGeneration"] \
+                or self.architectures != [expected_arch] \
                 or self.runner not in {"auto", "generate"}:
             raise RuntimeError("unexpected Gemma4 multimodal model structure")
-        return f"TransformersMultiModal{'MoE' if self.is_moe else ''}ForCausalLM"
+        return f"Transformers{'MultiModal' if multimodal else ''}" \
+               f"{'MoE' if self.is_moe else ''}ForCausalLM"
 
     Gemma4ModelArchConfigConvertor.get_head_size = \
         lambda self: max(layer.head_dim for layer in geometry(self))
