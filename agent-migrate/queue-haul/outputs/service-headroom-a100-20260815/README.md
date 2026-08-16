@@ -51,13 +51,14 @@ frontier. No value from this directory may update planner admission through
 ## Figures and tables
 
 - `service-headroom.pdf` / `.png`: discovery P90 TTFT versus measured offered
-  prefill work `rho_p`, and P90 per-request mean TPOT versus measured offered
-  decode work `rho_d`. Restart-block min--max ranges are the error bars;
-  held-out ranges are open markers. Separate phase-mix trajectories retain the
-  other, jointly varying coordinate, and the balanced held-out treatment is
-  shown without inventing a discovery curve. TTFT is logarithmic so the
+  prefill work `rho_p` along the prefill sweep (`rho_d=0.19--0.23`), and P90
+  per-request mean TPOT versus measured offered decode work `rho_d` along the
+  decode sweep (`rho_p=0.08--0.10`). Restart-block min--max ranges are the
+  error bars; held-out ranges are open markers. TTFT is logarithmic so the
   measured 24-second overload point does not hide the subsecond curve. These
-  are sampled trajectories, not estimates of independent partial effects.
+  are two measured conditional slices, not a two-dimensional response surface
+  or estimates of independent partial effects. The balanced treatment remains
+  in the held-out table and phase-coverage figure.
 - `service-headroom-phase.pdf` / `.png`: sampled prefill/decode work rays, with
   held-out points shown as open markers and any all-repeat evidence miss marked
   with an x. It is not a fitted frontier.

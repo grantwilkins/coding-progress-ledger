@@ -1589,11 +1589,12 @@ reports `planner_usable=false` and no supported scalar bound.
 Interpret `rho` only as offered normalized phase work,
 `rho_p + rho_d`, computed from exact offered tokens and isolated phase rates;
 it is not measured GPU utilization and is not composition-invariant. The main
-figure therefore plots TTFT against `rho_p` and TPOT against `rho_d`, with
-observed restart-block min--max bars and separate mix trajectories. The other
-coordinate still varies along each trajectory, so these are not estimates of
-independent partial effects. The committed phase CSV reconstructs both
-coordinates for every aggregate point.
+figure therefore plots TTFT against `rho_p` along the measured prefill sweep
+(`rho_d=0.19--0.23`) and TPOT against `rho_d` along the measured decode sweep
+(`rho_p=0.08--0.10`), with observed restart-block min--max bars. These are two
+conditional slices, not a two-dimensional surface or estimates of independent
+partial effects. The committed phase CSV reconstructs both coordinates for
+every aggregate point.
 At total `rho` near 0.70, held-out prefill-heavy, balanced, and decode-heavy P90
 TTFT/mean-TPOT medians are respectively 234.7/59.7 ms, 152.9/42.7 ms, and
 131.7/37.2 ms. This composition dependence and the rejected scalar promotion

@@ -108,83 +108,84 @@ def plot(rows: list[dict], heldout: list[dict], scout: dict,
     from matplotlib.lines import Line2D
 
     panels = (
-        ("p90_ttft_s", "offered_prefill_rho_median", "P90 TTFT (s)",
-         r"Offered normalized prefill work, $\rho_p$ (GPU-s/s)"),
+        ("p90_ttft_s", "offered_prefill_rho_median", "prefill_heavy",
+         "P90 TTFT (s)",
+         (r"Offered normalized prefill work, $\rho_p$ (GPU-s/s)"
+          "\n" r"($\rho_d=0.19$--$0.23$ along the loaded slice)")),
         ("p90_mean_tpot_s", "offered_decode_rho_median",
-         "P90 mean TPOT (s)",
-         r"Offered normalized decode work, $\rho_d$ (GPU-s/s)"),
+         "decode_heavy", "P90 mean TPOT (s)",
+         (r"Offered normalized decode work, $\rho_d$ (GPU-s/s)"
+          "\n" r"($\rho_p=0.08$--$0.10$ along the loaded slice)")),
     )
     figure, axes = plt.subplots(
         2, 1, sharex=False,
         figsize=(plot_style.COMPACT_FIGSIZE[0], 4.9),
     )
-    for axis, (metric, x_field, ylabel, xlabel) in zip(axes, panels):
-        for direction in plot_style.SERVICE_MIXES:
-            selected = [row for row in rows if row["direction"] == direction
-                        and row[f"{metric}_median"] is not None
-                        and row.get(x_field) is not None]
-            x = [row[x_field] for row in selected]
-            y = [row[f"{metric}_median"] for row in selected]
-            lower = [row[f"{metric}_median"] - row[f"{metric}_minimum"]
-                     for row in selected]
-            upper = [row[f"{metric}_maximum"] - row[f"{metric}_median"]
-                     for row in selected]
-            if selected:
-                axis.plot(
-                    x, y, color=plot_style.SERVICE_MIX_COLORS[direction],
-                    linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
-                    label=plot_style.SERVICE_MIX_NAMES[direction],
-                )
-            feasible = [index for index, row in enumerate(selected)
-                        if row["physically_feasible"]]
-            infeasible = [index for index, row in enumerate(selected)
-                          if not row["physically_feasible"]]
-            if feasible:
-                axis.errorbar([x[index] for index in feasible],
-                              [y[index] for index in feasible],
-                              yerr=([lower[index] for index in feasible],
-                                    [upper[index] for index in feasible]),
-                              color=plot_style.SERVICE_MIX_COLORS[direction],
-                              marker=plot_style.SERVICE_MIX_MARKERS[direction],
-                              linestyle="none", capsize=2, markersize=5)
-            if infeasible:
-                axis.scatter([x[index] for index in infeasible],
-                             [y[index] for index in infeasible], marker="x",
-                             color=plot_style.SERVICE_MIX_COLORS[direction],
-                             s=45, linewidths=1.5)
-            confirmation = [
-                row for row in heldout if row["direction"] == direction
-                and row[f"{metric}_median"] is not None
-                and row.get(x_field) is not None
+    for axis, (metric, x_field, direction, ylabel, xlabel) in zip(axes, panels):
+        selected = [row for row in rows if row["direction"] == direction
+                    and row[f"{metric}_median"] is not None
+                    and row.get(x_field) is not None]
+        x = [row[x_field] for row in selected]
+        y = [row[f"{metric}_median"] for row in selected]
+        lower = [row[f"{metric}_median"] - row[f"{metric}_minimum"]
+                 for row in selected]
+        upper = [row[f"{metric}_maximum"] - row[f"{metric}_median"]
+                 for row in selected]
+        axis.plot(
+            x, y, color=plot_style.SERVICE_MIX_COLORS[direction],
+            linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
+            label=plot_style.SERVICE_MIX_NAMES[direction],
+        )
+        feasible = [index for index, row in enumerate(selected)
+                    if row["physically_feasible"]]
+        infeasible = [index for index, row in enumerate(selected)
+                      if not row["physically_feasible"]]
+        if feasible:
+            axis.errorbar([x[index] for index in feasible],
+                          [y[index] for index in feasible],
+                          yerr=([lower[index] for index in feasible],
+                                [upper[index] for index in feasible]),
+                          color=plot_style.SERVICE_MIX_COLORS[direction],
+                          marker=plot_style.SERVICE_MIX_MARKERS[direction],
+                          linestyle="none", capsize=2, markersize=5)
+        if infeasible:
+            axis.scatter([x[index] for index in infeasible],
+                         [y[index] for index in infeasible], marker="x",
+                         color=plot_style.SERVICE_MIX_COLORS[direction],
+                         s=45, linewidths=1.5)
+        confirmation = [
+            row for row in heldout if row["direction"] == direction
+            and row[f"{metric}_median"] is not None
+            and row.get(x_field) is not None
+        ]
+        if confirmation:
+            heldout_x = [row[x_field] for row in confirmation]
+            heldout_y = [row[f"{metric}_median"] for row in confirmation]
+            heldout_lower = [
+                row[f"{metric}_median"] - row[f"{metric}_minimum"]
+                for row in confirmation
             ]
-            if confirmation:
-                heldout_x = [row[x_field] for row in confirmation]
-                heldout_y = [row[f"{metric}_median"] for row in confirmation]
-                heldout_lower = [
-                    row[f"{metric}_median"] - row[f"{metric}_minimum"]
-                    for row in confirmation
-                ]
-                heldout_upper = [
-                    row[f"{metric}_maximum"] - row[f"{metric}_median"]
-                    for row in confirmation
-                ]
-                axis.errorbar(
-                    heldout_x, heldout_y,
-                    yerr=(heldout_lower, heldout_upper),
-                    color=plot_style.SERVICE_MIX_COLORS[direction],
-                    marker=plot_style.SERVICE_MIX_MARKERS[direction],
-                    markerfacecolor="white", markeredgewidth=1.5,
-                    linestyle="none", capsize=3, markersize=7, zorder=4,
+            heldout_upper = [
+                row[f"{metric}_maximum"] - row[f"{metric}_median"]
+                for row in confirmation
+            ]
+            axis.errorbar(
+                heldout_x, heldout_y,
+                yerr=(heldout_lower, heldout_upper),
+                color=plot_style.SERVICE_MIX_COLORS[direction],
+                marker=plot_style.SERVICE_MIX_MARKERS[direction],
+                markerfacecolor="white", markeredgewidth=1.5,
+                linestyle="none", capsize=3, markersize=7, zorder=4,
+            )
+            misses = [index for index, row in enumerate(confirmation)
+                      if not row["evidence_feasible"]]
+            if misses:
+                axis.scatter(
+                    [heldout_x[index] for index in misses],
+                    [heldout_y[index] for index in misses],
+                    marker="x", color="#222222", s=32,
+                    linewidths=1.2, zorder=5,
                 )
-                misses = [index for index, row in enumerate(confirmation)
-                          if not row["evidence_feasible"]]
-                if misses:
-                    axis.scatter(
-                        [heldout_x[index] for index in misses],
-                        [heldout_y[index] for index in misses],
-                        marker="x", color="#222222", s=32,
-                        linewidths=1.2, zorder=5,
-                    )
         target = scout["targets"][metric]
         axis.axhline(target, color="#555555", linestyle=":", linewidth=1.5)
         if confirmed and confirmed.get("planner_usable"):
@@ -201,7 +202,7 @@ def plot(rows: list[dict], heldout: list[dict], scout: dict,
                       linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
                       marker=plot_style.SERVICE_MIX_MARKERS[direction],
                       label=plot_style.SERVICE_MIX_NAMES[direction])
-               for direction in plot_style.SERVICE_MIXES]
+               for direction in plot_style.SERVICE_LOADS]
     handles.append(Line2D([], [], color="#555555", linestyle=":",
                           label="Evaluation target"))
     handles.append(Line2D([], [], color="#555555", marker="x",
