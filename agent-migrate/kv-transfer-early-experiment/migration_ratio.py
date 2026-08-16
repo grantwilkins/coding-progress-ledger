@@ -46,6 +46,14 @@ RATIO_YLIM = (1e-3, 1e2)
 KV_REGION_COLOR = "#B1040E"
 CONTEXT_REGION_COLOR = "#008566"
 REGION_ALPHA = 0.06
+OKABE_ITO = {
+    "orange": "#E69F00",
+    "sky_blue": "#56B4E9",
+    "bluish_green": "#009E73",
+    "blue": "#0072B2",
+    "vermillion": "#D55E00",
+    "reddish_purple": "#CC79A7",
+}
 
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
@@ -150,7 +158,7 @@ MODELS = [
         qk_dim=512,
         v_dim=512,
         kv_bytes=dsv4_kv,
-        color="#111111",
+        color=OKABE_ITO["blue"],
         ls="-",
     ),
     Model(
@@ -162,7 +170,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=gemma4_kv,
-        color="#004488",
+        color=OKABE_ITO["orange"],
         ls=(0, (7, 2, 1, 2)),
     ),
     Model(
@@ -174,7 +182,7 @@ MODELS = [
         qk_dim=64,
         v_dim=64,
         kv_bytes=gpt_oss_kv,
-        color="#5B2C83",
+        color=OKABE_ITO["vermillion"],
         ls=(0, (2, 1, 2, 3)),
     ),
     Model(
@@ -186,7 +194,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=gqa_kv(16, 4, 256),
-        color="#9A5B00",
+        color=OKABE_ITO["reddish_purple"],
         ls=(0, (8, 2)),
     ),
     Model(
@@ -198,7 +206,7 @@ MODELS = [
         qk_dim=192,
         v_dim=128,
         kv_bytes=mla_kv(61, 512, 64),
-        color="#006699",
+        color=OKABE_ITO["bluish_green"],
         ls=(0, (3, 1, 1, 1, 1, 1)),
     ),
     Model(
@@ -210,7 +218,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=mla_kv(78, 512, 64),
-        color="#8C2F64",
+        color=OKABE_ITO["sky_blue"],
         ls=(0, (9, 3)),
     ),
 ]

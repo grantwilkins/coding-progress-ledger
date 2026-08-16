@@ -16,13 +16,12 @@ Plausible wrong implementations:
 - losing the causal 1/2, or applying compression to the window branch
 - reversing bytes/bits or Gbps in transfer time
 - rounding DeepSeek compressed entries down instead of up
-- choosing curve colors that disappear into either shaded decision region
+- retaining dark custom colors or duplicating an Okabe-Ito curve color
 """
 
 import math
 
 import migration_ratio as mr
-from matplotlib.colors import to_rgb
 
 # Attention groups represented by the cost model; Qwen3.8 omits fixed state.
 EXPECTED_LAYERS = {
@@ -43,24 +42,8 @@ def test_catalogue_matches_the_requested_six_models():
     assert [model.label for model in mr.MODELS] == list(EXPECTED_LAYERS)
 
 
-def test_model_colors_contrast_with_both_decision_regions():
-    def luminance(color):
-        rgb = [
-            v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
-            for v in color
-        ]
-        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
-
-    backgrounds = [
-        tuple(mr.REGION_ALPHA * v + 1 - mr.REGION_ALPHA for v in to_rgb(color))
-        for color in (mr.KV_REGION_COLOR, mr.CONTEXT_REGION_COLOR)
-    ]
-    for model in mr.MODELS:
-        for background in backgrounds:
-            light, dark = sorted(
-                (luminance(to_rgb(model.color)), luminance(background)), reverse=True
-            )
-            assert (light + 0.05) / (dark + 0.05) >= 4.5
+def test_model_colors_use_the_distinct_okabe_ito_curve_palette():
+    assert {model.color for model in mr.MODELS} == set(mr.OKABE_ITO.values())
 
 
 def test_attention_groups_cover_the_configs_kv_layers():
