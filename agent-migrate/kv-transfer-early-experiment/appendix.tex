@@ -99,13 +99,13 @@ We estimate prefill work as
 \underbrace{2AT}_{\text{model weights}}
 +
 \underbrace{
-2H_q(d_{qk}+d_v)
-\sum_{\ell=1}^{L} P_\ell(T)
+\sum_{\ell=1}^{L}
+2H_{q,\ell}(d_{qk,\ell}+d_{v,\ell})P_\ell(T)
 }_{\text{attention}},
 \]
 
-where \(A\) is the active parameter count, \(H_q\) is the number of query
-heads, \(d_{qk}\) and \(d_v\) are the query/key and value head dimensions, and
+where \(A\) is the active parameter count, \(H_{q,\ell}\) is the number of query
+heads, \(d_{qk,\ell}\) and \(d_{v,\ell}\) are the query/key and value head dimensions, and
 \(P_\ell(T)\) counts the causal query--key pairs processed by layer \(\ell\).
 
 \noindent\textbf{Hardware.}
@@ -149,7 +149,8 @@ kT-\dfrac{k^2m}{2}+wT,
 \]
 
 The two cases agree at \(T=km\). Setting \(m=1\), \(k=\infty\), and \(w=0\)
-recovers dense causal attention.
+recovers dense causal attention; setting \(m=1\), \(k\) to the window size,
+and \(w=0\) gives pure sliding-window attention.
 
 \noindent\textbf{Model inputs.}
 Table~\ref{tab:app-arch} lists the constants taken from each released model
@@ -166,8 +167,13 @@ attention in their full-attention layers.
 
 For the hybrid Qwen models, \(L\) counts only full-attention layers.
 Qwen3-Next-80B has 12 such layers among 48 total layers, while
-Qwen3.5-397B has 15 among 60. We omit the fixed recurrent state of their Gated
-DeltaNet layers because it does not grow with context length.
+Qwen3.5-397B has 15 among 60 and Qwen3.8-27B has 16 among
+64~\cite{qwen38}. We omit the fixed recurrent state of their Gated DeltaNet
+layers because it does not grow with context length. GPT-OSS-20B alternates 12
+full-attention layers with 12 128-token sliding-window layers~\cite{gptoss20}.
+Gemma-4-26B-A4B has 25 1024-token sliding-window layers with 256-dimensional
+heads and five global layers with 512-dimensional heads and unified keys and
+values~\cite{gemma4}.
 
 \begin{table}[t]
 \centering
@@ -177,16 +183,19 @@ DeltaNet layers because it does not grow with context length.
 Model & \(A\) (B) & \(L\) & Attention & \(\eta\) (KiB/tok) \\
 \midrule
 DeepSeek-V4~\cite{deepseekv4}    & 49 & 61 & CSA/HCA, \(k=1024\)    & 9.7   \\
+Gemma-4-26B-A4B~\cite{gemma4}    & 3.8 & 30 & sliding/global GQA     & 12.0  \\
 Qwen3-Next-80B~\cite{qwen3next}  & 3  & 12 & GQA, dense              & 24.0 \\
+GPT-OSS-20B~\cite{gptoss20}      & 3.61 & 24 & sliding/dense GQA       & 24.0 \\
 Qwen3.5-397B~\cite{qwen35}   & 17 & 15 & GQA, dense              & 30.0  \\
+Qwen3.8-27B~\cite{qwen38}        & 27 & 16 & GQA, dense              & 64.0  \\
 Kimi-K2.6~\cite{kimik2}          & 32 & 61 & MLA, dense              & 68.6  \\
 GLM-5~\cite{glm5}              & 40 & 78 & MLA + DSA, \(k=2048\)   & 87.8  \\
 Qwen3-235B~\cite{qwen3}    & 22 & 94 & GQA, dense              & 188.0  \\
 \bottomrule
 \end{tabular}}
 \caption{Model constants used by the analysis, sorted by KV size.
-\(A\) is the active parameter count, \(L\) is the number of layers with
-per-token KV state, and \(\eta\) is the BF16 KV size per token.}
+\(A\) is the active parameter count, \(L\) is the number of represented
+attention layers, and \(\eta\) is the BF16 KV size per token at 100k tokens.}
 \label{tab:app-arch}
 \end{table}
 
@@ -197,17 +206,18 @@ per-token KV state, and \(\eta\) is the BF16 KV size per token.}
 Model & KV at 100k & \(t^{R}\) (s) & \(\lambda^\star\) (Gbps) \\
 \midrule
 DeepSeek-V4     & \(0.99\) GB  & \(1.34\) & \(5.94\) \\
+Gemma-4-26B-A4B & \(1.23\) GB  & \(0.59\) & \(16.87\) \\
+Qwen3-Next-80B  & \(2.46\) GB  & \(0.57\) & \(34.41\) \\
+GPT-OSS-20B     & \(2.46\) GB  & \(0.62\) & \(31.94\) \\
+Qwen3.5-397B    & \(3.07\) GB  & \(2.11\) & \(11.62\) \\
+Qwen3.8-27B     & \(6.55\) GB  & \(2.66\) & \(19.72\) \\
 Kimi-K2.6           & \(7.03\) GB  & \(3.41\) & \(16.49\) \\
 GLM-5               & \(8.99\) GB  & \(1.63\) & \(44.08\) \\
-Qwen3.5-397B  & \(3.07\) GB  & \(2.11\) & \(11.62\) \\
 Qwen3-235B     & \(19.25\) GB & \(7.15\) & \(21.55\) \\
-Qwen3-Next-80B  & \(2.46\) GB  & \(0.57\) & \(34.41\) \\
 \bottomrule
 \end{tabular}
 \caption{Analytic results at \(T=100\)k tokens. The crossover ranges from
-\(6\) to \(44\)~Gbps and does not follow KV size alone. Qwen3-Next has a
-small cache, but its short replay time makes transfer useful only on a fast
-link.}
+\(6\) to \(44\)~Gbps and does not follow KV size alone.}
 \label{tab:app-crossover}
 \end{table}
 

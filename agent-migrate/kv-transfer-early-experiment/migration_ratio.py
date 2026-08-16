@@ -55,12 +55,15 @@ class Attn:
     compress: KV sequence compressed to T/compress entries (CSA/HCA).
     topk:     compressed entries each query attends to (DSA); 0 = dense.
     window:   uncompressed sliding-window entries, always attended.
+    qk_dim/v_dim: per-group overrides for hybrid head widths; 0 = model default.
     """
 
     layers: int
     compress: int = 1
     topk: int = 0
     window: int = 0
+    qk_dim: int = 0
+    v_dim: int = 0
 
     def pairs(self, T: int) -> float:
         """Causal (query, key) pairs summed over this group's layers.
@@ -117,10 +120,18 @@ def dsv4_kv(T: int) -> float:
     )
 
 
+def gemma4_kv(T: int) -> float:
+    """Five global shared-KV layers plus 25 local GQA layers."""
+    return BPE * (5 * 2 * 512 * T + 2 * 25 * 8 * 256 * min(T, 1024))
+
+
+def gpt_oss_kv(T: int) -> float:
+    """Twelve global and 12 128-token local GQA layers."""
+    return 2 * BPE * 8 * 64 * (12 * T + 12 * min(T, 128))
+
+
 # ── Model catalogue ───────────────────────────────────────────────────────────
-# The six canonical models of the evacuation problem setup (instance.py /
-# Table 2), sorted by KV size. eta and prefill rho both fall out of these
-# architecture configs, so the figure and the table cannot drift apart.
+# Released model configurations, sorted by KV size at 100k tokens.
 MODELS = [
     Model(
         "DeepSeek V4 Pro",
@@ -140,6 +151,18 @@ MODELS = [
         ls="-",
     ),
     Model(
+        "Gemma 4 26B-A4B",
+        active_b=3.8,
+        total_b=25.2,
+        attn=(Attn(25, topk=1024), Attn(5, qk_dim=512, v_dim=512)),
+        query_heads=16,
+        qk_dim=256,
+        v_dim=256,
+        kv_bytes=gemma4_kv,
+        color="#8c564b",
+        ls=(0, (7, 2, 1, 2)),
+    ),
+    Model(
         "Qwen3 Next 80B",
         active_b=3,
         total_b=80,
@@ -152,6 +175,18 @@ MODELS = [
         ls=(0, (6, 2)),
     ),
     Model(
+        "gpt-oss-20b",
+        active_b=3.61,
+        total_b=20.91,
+        attn=(Attn(12), Attn(12, topk=128)),
+        query_heads=64,
+        qk_dim=64,
+        v_dim=64,
+        kv_bytes=gpt_oss_kv,
+        color="#17becf",
+        ls=(0, (2, 1, 2, 3)),
+    ),
+    Model(
         "Qwen3.5 397B",
         active_b=17,
         total_b=397,
@@ -162,6 +197,18 @@ MODELS = [
         kv_bytes=gqa_kv(15, 2, 256),
         color="#9467bd",
         ls=(0, (4, 1.5, 1, 1.5)),
+    ),
+    Model(
+        "Qwen3.8 27B",
+        active_b=27,
+        total_b=27,
+        attn=(Attn(16),),
+        query_heads=24,
+        qk_dim=256,
+        v_dim=256,
+        kv_bytes=gqa_kv(16, 4, 256),
+        color="#bcbd22",
+        ls=(0, (8, 2)),
     ),
     Model(
         "Kimi K2.6",
@@ -216,8 +263,14 @@ def eff_flops(m: Model) -> float:
 
 def prefill_flops(m: Model, T: int) -> float:
     ffn = 2.0 * m.active_b * 1e9 * T
-    pairs = sum(g.pairs(T) for g in m.attn)
-    return ffn + 2.0 * m.query_heads * (m.qk_dim + m.v_dim) * pairs
+    attention = sum(
+        2.0
+        * m.query_heads
+        * ((g.qk_dim or m.qk_dim) + (g.v_dim or m.v_dim))
+        * g.pairs(T)
+        for g in m.attn
+    )
+    return ffn + attention
 
 
 def t_replay(m: Model, T: int) -> float:

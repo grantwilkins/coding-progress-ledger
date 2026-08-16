@@ -1,16 +1,19 @@
 """
 Claim:
-migration_ratio computes the six-model H100/BF16 replay-to-KV-transfer ratio.
+migration_ratio computes the nine-model H100/BF16 replay-to-KV-transfer ratio.
 Prefill is 2*A*T plus 2*H_q*(d_qk+d_v) times the causal (query, key) pairs
 implied by each layer group's compression m, top-k cap k, and sliding window w.
 Dense: T^2/(2m) per layer. Once the compressed pool outgrows k (T > k*m) each
 query is capped at k entries, so the group goes linear in T.
 
 Plausible wrong implementations:
+- omitting a requested model from the catalogue rendered by the figure
+- treating hybrid local or linear-attention layers as full quadratic attention
+- using query-head counts instead of KV-head counts for migration bytes
+- applying Gemma's 512-wide global heads to its 256-wide local layers
 - capping at T > k instead of T > k*m, moving the seam by a factor of m
 - dropping the -k^2*m/2 term, so pairs jump discontinuously at the seam
 - losing the causal 1/2, or applying compression to the window branch
-- letting the refactor change the four dense-attention models
 - reversing bytes/bits or Gbps in transfer time
 - rounding DeepSeek compressed entries down instead of up
 """
@@ -19,11 +22,14 @@ import math
 
 import migration_ratio as mr
 
-# Layers holding per-token KV, from each released config.
+# Attention groups represented by the cost model; hybrid Qwen omits fixed state.
 EXPECTED_LAYERS = {
     "DeepSeek V4 Pro": 61,
+    "Gemma 4 26B-A4B": 30,
     "Qwen3 Next 80B": 12,
+    "gpt-oss-20b": 24,
     "Qwen3.5 397B": 15,
+    "Qwen3.8 27B": 16,
     "Kimi K2.6": 61,
     "GLM 5": 78,
     "Qwen3 235B": 94,
@@ -34,7 +40,7 @@ def attn_flops(model, tokens):
     return mr.prefill_flops(model, tokens) - 2.0 * model.active_b * 1e9 * tokens
 
 
-def test_restored_catalogue_is_the_pre_inkling_six():
+def test_catalogue_includes_the_three_requested_models():
     assert [model.label for model in mr.MODELS] == list(EXPECTED_LAYERS)
 
 
@@ -82,6 +88,35 @@ def test_dense_models_keep_the_uncompressed_quadratic_form():
         assert math.isclose(attn_flops(model, 10_000), expected)
 
 
+def test_new_models_follow_their_hybrid_attention_layouts():
+    T = 2_048
+    gpt_pairs = 12 * T**2 / 2 + 12 * (128 * T - 128**2 / 2)
+    qwen_pairs = 16 * T**2 / 2
+    gemma_local = 25 * (1024 * T - 1024**2 / 2)
+    gemma_global = 5 * T**2 / 2
+    assert math.isclose(
+        attn_flops(mr.model("gpt-oss-20b"), T), 2 * 64 * (64 + 64) * gpt_pairs
+    )
+    assert math.isclose(
+        attn_flops(mr.model("Qwen3.8 27B"), T),
+        2 * 24 * (256 + 256) * qwen_pairs,
+    )
+    assert math.isclose(
+        attn_flops(mr.model("Gemma 4 26B-A4B"), T),
+        2 * 16 * (256 + 256) * gemma_local
+        + 2 * 16 * (512 + 512) * gemma_global,
+    )
+
+
+def test_new_models_count_only_live_bf16_migration_state():
+    T = 2_048
+    assert mr.gpt_oss_kv(T) == 2 * mr.BPE * 8 * 64 * (12 * T + 12 * 128)
+    assert mr.model("Qwen3.8 27B").kv_bytes(T) == 2 * mr.BPE * 16 * 4 * 256 * T
+    assert mr.gemma4_kv(T) == mr.BPE * (
+        5 * 2 * 512 * T + 2 * 25 * 8 * 256 * 1024
+    )
+
+
 def test_dsa_model_replay_grows_linearly_but_dense_model_does_not():
     glm, qwen = mr.model("GLM 5"), mr.model("Qwen3 235B")
     assert math.isclose(
@@ -96,8 +131,11 @@ def test_instance_size_follows_the_weight_footprint():
     got = {m.label: mr.nodes(m) for m in mr.MODELS}
     assert got == {
         "DeepSeek V4 Pro": 3,
+        "Gemma 4 26B-A4B": 1,
         "Qwen3 Next 80B": 1,
+        "gpt-oss-20b": 1,
         "Qwen3.5 397B": 1,
+        "Qwen3.8 27B": 1,
         "Kimi K2.6": 2,
         "GLM 5": 2,
         "Qwen3 235B": 1,
