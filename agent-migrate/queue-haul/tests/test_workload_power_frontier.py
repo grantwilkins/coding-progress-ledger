@@ -15,6 +15,8 @@ Plausible wrong implementations:
 - Collapse distinct bandwidth states into a shared curve.
 - Plot an intermediate joint state or omit one of the five declared display states.
 - Filter the raw factorial sweep down to only the five displayed states.
+- Put the exact physical maximum on the LP boundary instead of using the
+  explicit maximum-attainable fallback.
 """
 
 import numpy as np
@@ -22,14 +24,22 @@ import pytest
 
 import workload_adaptation_campaign as adaptation
 from workload_power_frontier import (
-    DISPLAY_STATES, SOLVERS, capacity_summary, power_summary, request_grid,
-    sweep,
+    DISPLAY_STATES, SOLVERS, capacity_summary, planning_request_w,
+    power_summary, request_grid, sweep,
 )
 
 
 def test_display_states_match_the_five_declared_action_cases():
     assert DISPLAY_STATES == adaptation.DISPLAY_CASES
     assert len(DISPLAY_STATES) == len(set(DISPLAY_STATES)) == 5
+
+
+def test_maximum_capacity_probe_is_above_only_the_exact_endpoint():
+    maximum = 42
+
+    assert planning_request_w(2 / 3, maximum) == 28
+    assert planning_request_w(1, maximum) == \
+        maximum + adaptation.POWER_TOLERANCE_W
 
 
 def test_capacity_summary_uses_one_maximum_per_paired_draw():

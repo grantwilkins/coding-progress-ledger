@@ -1,10 +1,18 @@
 {
+  "bandwidth_bottleneck": {
+    "natural_physical_route_mbps": {
+      "east": 2280.176174037911,
+      "germany": 8733.31359588583
+    },
+    "physical_route_mbps": 1000,
+    "pipeline_timing_condition": "controlled_40"
+  },
   "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
   "constraint_style": "canonical color and line styles distinguish the five displayed constraint states",
   "factor_levels": {
     "bandwidth": [
       "natural",
-      "controlled_40"
+      "bottleneck_1g"
     ],
     "dest_compute": [
       0.25,
@@ -22,6 +30,7 @@
     "outputs/coding-run/migrations.csv": "a3bfa6beb5f622d0d9f3f8e22cc1f362b44428d2817feaec3cbd8bc7281359af",
     "outputs/coding-run/scenarios.csv": "f6d8e8676c7ec0a2d491b41c8f629f4e65118ac08b39ff861bf571ab882c359c",
     "outputs/destination-v7-20260722/content-free-manifest.json": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
+    "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a",
     "outputs/loaded-service-model-20260815/model.json": "bfc46e12992e3387d40c044f864a0e78f21d31210a1d930974daa2527b51bdac",
     "outputs/policy-hardware-width8-frontier-20260730/migration_stages.csv": "e5a9f6a128ea7358353d92d02120d69bba6c4591b4fb2306624ecade233fb531",
     "outputs/policy-hardware-width8-frontier-20260730/scenarios.csv": "222cfddfda665a6cf1ea2e521cb25ba23bf7930ad0727a0c99b044b43a8dc2b8",
@@ -35,6 +44,7 @@
     "the main figure shows the three single bottlenecks plus all-bound and none-bound states; the raw case table retains all eight factorial states",
     "the three intermediate two-factor states are retained in raw tables but omitted from the main figure",
     "the frontier remains modeled rather than hardware-measured",
+    "the bandwidth state caps both physical destination routes at the 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
     "reported shed is awake source-region power rather than net fleet power or energy",
     "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
     "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
@@ -44,6 +54,7 @@
     "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
     "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases"
   ],
+  "maximum_capacity_probe": "the 100% solve requests one numerical tolerance above removable power to invoke the LP's maximum-attainable fallback; the reported request remains 100%",
   "normalization": "safely attained watts / draw-specific removable watts",
   "plotted_constraint_states": [
     "hbm",
@@ -75,7 +86,7 @@
     1.0
   ],
   "samples": 100,
-  "schema": "queue-haul-workload-power-frontier-v6",
+  "schema": "queue-haul-workload-power-frontier-v7",
   "seed": 1001,
   "sessions_per_pack": 28,
   "solvers": {

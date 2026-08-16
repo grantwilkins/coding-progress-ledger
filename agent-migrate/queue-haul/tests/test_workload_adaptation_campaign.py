@@ -21,6 +21,11 @@ Plausible wrong implementations:
 - Serialize route and endpoint work after fitting an end-to-end pipeline rate.
 - Use endpoint replica-seconds as the action objective and thereby hide a
   bandwidth-dependent change in isolated migration duration.
+- Reuse the fitted end-to-end pipeline rate as the physical link budget, leaving
+  Germany effectively unconstrained.
+- Apply the bandwidth bottleneck to only one destination or confuse Mbit/s with
+  bytes/s.
+- Widen context support when extending only the measured bandwidth boundary.
 - Label a single-factor state despite no material paired action response.
 - Summarize a power-targeted action mix by session count instead of phase load.
 - Lose phase-load conservation when assigning selected sessions to actions.
@@ -119,6 +124,10 @@ def test_one_paired_draw_conserves_sessions_and_target():
         row["route_utilization"] for row in rows
         if row["case_id"] == "bandwidth"
     )
+    none = next(row for row in rows if row["case_id"] == "none")
+    constrained = next(row for row in rows if row["case_id"] == "bandwidth")
+    assert constrained["fractional_lp_opportunity_w"] \
+        < none["fractional_lp_opportunity_w"]
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
 
@@ -344,16 +353,56 @@ def test_central_surface_uses_regional_timing_and_routes():
     services = {pool.pool_id: pool.fluid_migration
                 for pool in architecture.pools}
 
-    assert {link.bytes_per_s for link in scenario.links} == {
-        fits[region]["effective_pipeline_mbps"]["natural"] * 125_000
-        for region in campaign.REGIONS
+    links = {link.link_id: link.bytes_per_s for link in scenario.links}
+    physical = campaign.physical_route_mbps()
+    assert links == {
+        **{f"link/{region}": physical[region] * 125_000
+           for region in campaign.REGIONS},
+        **{f"pipeline/{region}":
+           fits[region]["effective_pipeline_mbps"]["natural"] * 125_000
+           for region in campaign.REGIONS},
     }
+    assert routes == {("source", region):
+                      (f"link/{region}", f"pipeline/{region}")
+                      for region in campaign.REGIONS}
     assert all(service.route_overlap for service in services.values())
     assert services["pool/east"].kv_ingest_bytes_per_s == \
         fits["east"]["kv_ingest_lower_bound_bytes_per_s"]
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
     assert summary["migration_gate_passed"]
     assert all(row["coverage"] == 1 for row in summary["held_out"].values())
+
+
+def test_bandwidth_state_caps_both_physical_routes_at_measured_floor():
+    fits = campaign.central_timing_fits()
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(
+        profile, campaign.sample_pack(templates, 28, 4),
+    )
+    scenario, architecture, routes, _ = campaign.build_problem(
+        profile, pack, frozenset(("bandwidth",)), 2 / 3, fits,
+    )
+    links = {link.link_id: link.bytes_per_s for link in scenario.links}
+    cap = campaign.BANDWIDTH_BOTTLENECK_MBPS * 125_000
+
+    assert campaign.BANDWIDTH_BOTTLENECK_MBPS == \
+        campaign.loaded_service_model()["validation_bandwidth_mbps"][0]
+    assert {links[f"link/{region}"] for region in campaign.REGIONS} == {cap}
+    assert all(links[f"pipeline/{region}"] ==
+               fits[region]["effective_pipeline_mbps"]["controlled_40"] * 125_000
+               for region in campaign.REGIONS)
+    assert all(routes[("source", region)] ==
+               (f"link/{region}", f"pipeline/{region}")
+               for region in campaign.REGIONS)
+    for q in architecture.types:
+        raw = fits[q.type_id.rsplit("/", 1)[-1]]["migration_components"]
+        for method, support in q.migration.items():
+            assert support.context_range == tuple(raw[method]["context_range"])
+            assert support.bandwidth_range_bytes_per_s[0] <= min(
+                links[link] for link in routes[("source", q.type_id.rsplit("/", 1)[-1])]
+            )
+            assert not support.allow_extrapolation
 
 
 def test_destination_load_scales_replay_endpoint_but_not_kv_or_idle_anchor():
@@ -421,15 +470,25 @@ def test_factor_levels_apply_to_both_destinations():
         )
         states[bool(constraints)] = (scenario, architecture)
 
-    for constrained, bandwidth_level, compute_level, hbm_level in (
+    physical = campaign.physical_route_mbps()
+    for constrained, timing_level, compute_level, hbm_level in (
         (False, "natural", .25, 0), (True, "controlled_40", .95, .98),
     ):
         scenario, architecture = states[constrained]
         rates = {link.link_id: link.bytes_per_s for link in scenario.links}
         assert rates == {
-            f"link/{region}": fits[region]["effective_pipeline_mbps"][
-                bandwidth_level] * 125_000
-            for region in campaign.REGIONS
+            **{
+                f"link/{region}": (
+                    campaign.BANDWIDTH_BOTTLENECK_MBPS
+                    if constrained else physical[region]
+                ) * 125_000
+                for region in campaign.REGIONS
+            },
+            **{
+                f"pipeline/{region}": fits[region]["effective_pipeline_mbps"][
+                    timing_level] * 125_000
+                for region in campaign.REGIONS
+            },
         }
         for pool in architecture.pools:
             dtype, replica = architecture.type_by_id[pool.type_id], pool.replicas[0]
@@ -529,3 +588,18 @@ def test_action_mix_figure_is_exactly_five_and_a_half_by_three(tmp_path):
                                5.5 * campaign.plot_style.SAVE_DPI)
     assert len({campaign.plot_style.ACTION_HATCHES[action]
                 for action in campaign.ACTIONS}) == len(campaign.ACTIONS)
+
+
+def test_stacked_action_mix_uses_pooled_mean_phase_shares():
+    rows = [{
+        "case_id": case_id,
+        **{f"{action}_phase_load": value for action, value in zip(
+            campaign.ACTIONS, values,
+        )},
+    } for case_id in campaign.DISPLAY_CASES
+        for values in ((.2, .3, .5), (.6, .1, .3))]
+
+    expected = np.asarray((.4, .2, .4))[:, None]
+    assert campaign.action_mix_means(rows) == pytest.approx(
+        np.repeat(expected, len(campaign.DISPLAY_CASES), axis=1),
+    )

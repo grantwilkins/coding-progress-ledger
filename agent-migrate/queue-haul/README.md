@@ -843,14 +843,22 @@ normalizes the 28-session source pack to the
 campaign's 0.4 load, refits the balanced regional timing cells, and samples one
 joint phase-power bootstrap tuple. All eight HBM/bandwidth/destination-compute
 states share
-that draw. The planner uses measured East US 2 and Germany West Central
-effective pipeline rates. Network transfer overlaps destination migration work,
+that draw. The planner separates each region's measured physical route from its
+calibrated effective migration pipeline. The bandwidth state caps both physical
+routes at 1 Gbit/s, the predeclared lower boundary of the existing A100 loaded-
+migration validation, and retains each region's controlled pipeline fit. Network
+transfer overlaps destination migration work,
 while Replay and KV endpoint work share one conservative capacity envelope;
 endpoint replica-seconds remain a physical capacity row while isolated
-candidate duration is the common action objective, so lower bandwidth changes
-action preference before the route capacity is exhausted. The HBM stress state
-uses 98% baseline occupancy on both destinations; the producer rejects a
-single-factor sweep unless at least 10% of paired plans respond.
+candidate duration is the common action objective. Queue-Haul can therefore
+avoid route-heavy KV transfers and leave the physical route slack after the
+bottleneck has reduced the available opportunity. The HBM stress state
+uses 98% baseline occupancy on both destinations; the producer rejects any
+single-factor label unless it activates in at least 90% of paired draws and at
+least 10% of paired plans respond.
+In the regenerated ensemble, the cap replaces the no-bound KV share with Replay;
+the source-power frontier stays close to none bound because Replay transfers
+little network state. That is the modeled adaptation, not an inactive link.
 Background
 inference consumes shared prefill/decode destination-compute headroom. Replay
 endpoint work is multiplied by the measured relative factor
@@ -864,9 +872,9 @@ that narrower curve; candidate duration and shared migration work use the same
 timing components but retain distinct objective and capacity roles.
 The stacked chart and companion boxplot show the three single bottlenecks, all
 bound, and none bound; intermediate two-factor states remain in the raw tables.
-Stacked boundaries are the median Replay and median total-moved shares of
-modeled source phase load, the additive quantity used by the exact nonlinear
-power target. The separate `action_mix_boxplot.pdf` shows session-count
+Each stacked bar is the mean modeled source phase-load share across paired
+draws, the additive quantity used by the exact nonlinear power target. The
+separate `action_mix_boxplot.pdf` shows session-count
 variation for HBM, bandwidth, destination compute, all bound, and none bound:
 each x-position has Replay, KV-transfer, and not-moved boxes spanning the
 25th--75th percentiles, median lines, and 5th--95th-percentile whiskers. Raw
@@ -1521,10 +1529,11 @@ hard-fails multiple-source phase topologies, and verifies nonlinear source
 watts after packing. The fixed 0.4 workload normalization is service load
 `sum(f/F + g/G)`, not sampled phase load `af + bg`. The action and
 `workload_power_frontier.py` outputs report steady source-region power only;
-destination power and net fleet energy are outside their claim. The measured
-controlled-bandwidth state is retained explicitly: it can change isolated
-action duration and therefore selection before route capacity is saturated.
-Every single-factor state must change at least 10% of its paired plans.
+destination power and net fleet energy are outside their claim. The bandwidth
+state caps both physical destination routes at 1 Gbit/s while retaining the
+region-specific controlled effective-pipeline fits. Every single-factor state
+must activate in at least 90% of paired draws and change at least 10% of paired
+plans.
 `simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
 10K-session idle snapshots: three trace seeds for each workload and five
 trace-derived context anchors. It compares Queue-Haul, static and Lagrangian

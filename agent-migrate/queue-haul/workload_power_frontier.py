@@ -34,6 +34,12 @@ def request_grid(points, maximum=MAX_REQUEST):
     return tuple(sorted(set(np.linspace(0, maximum, points)) | {2 / 3}))
 
 
+def planning_request_w(fraction, maximum):
+    return fraction * maximum + (
+        adaptation.POWER_TOLERANCE_W if fraction == MAX_REQUEST else 0
+    )
+
+
 def sweep(samples=DEFAULT_SAMPLES, points=DEFAULT_POINTS,
           seed=adaptation.DEFAULT_SEED, sessions=28):
     if samples < 1 or sessions < 1:
@@ -66,7 +72,10 @@ def sweep(samples=DEFAULT_SAMPLES, points=DEFAULT_POINTS,
                 raw, admissible, pending = [], [], []
                 for fraction in fractions:
                     target = fraction * maximum
-                    actual = replace(problem, power_limit_w=initial - target)
+                    actual = replace(
+                        problem,
+                        power_limit_w=initial - planning_request_w(fraction, maximum),
+                    )
                     planned = planning_problem(actual, policy)
                     if fraction == 0:
                         shed, safe, failure = 0.0, True, ""
@@ -220,7 +229,7 @@ def main():
     ))
     write_capacity_plot(summary, args.out)
     metadata = {
-        "schema": "queue-haul-workload-power-frontier-v6",
+        "schema": "queue-haul-workload-power-frontier-v7",
         "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
         "samples": args.samples, "factor_states": len(adaptation.ORDER),
         "pooled_cases": args.samples * len(adaptation.ORDER),
@@ -228,8 +237,14 @@ def main():
         "requested_fractions": list(request_grid(args.points)),
         "policies": list(SOLVERS), "solvers": SOLVERS, "workload": workload,
         "factor_levels": adaptation.LEVELS, "regions": list(adaptation.REGIONS),
+        "bandwidth_bottleneck": {
+            "physical_route_mbps": adaptation.BANDWIDTH_BOTTLENECK_MBPS,
+            "natural_physical_route_mbps": adaptation.physical_route_mbps(),
+            "pipeline_timing_condition": "controlled_40",
+        },
         "normalization": "safely attained watts / draw-specific removable watts",
         "figure_metric": "fraction of paired draws whose maximum safely attained Queue-Haul source-power fraction meets each request",
+        "maximum_capacity_probe": "the 100% solve requests one numerical tolerance above removable power to invoke the LP's maximum-attainable fallback; the reported request remains 100%",
         "plotted_constraint_states": list(DISPLAY_STATES),
         "constraint_style": "canonical color and line styles distinguish the five displayed constraint states",
         "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
@@ -241,7 +256,7 @@ def main():
             for path in (
                 adaptation.PROFILE, adaptation.MANIFEST, adaptation.TIMING,
                 adaptation.TIMING_SUMMARY, adaptation.TIMING_PARENT,
-                adaptation.LOADED_SERVICE,
+                adaptation.LOADED_SERVICE, adaptation.NETWORK_CALIBRATION,
                 adaptation.LOCAL_TIMING / "scenarios.csv",
                 adaptation.LOCAL_TIMING / "migrations.csv",
                 adaptation.WIDTH8_TIMING / "scenarios.csv",
@@ -254,6 +269,7 @@ def main():
             "the main figure shows the three single bottlenecks plus all-bound and none-bound states; the raw case table retains all eight factorial states",
             "the three intermediate two-factor states are retained in raw tables but omitted from the main figure",
             "the frontier remains modeled rather than hardware-measured",
+            "the bandwidth state caps both physical destination routes at the 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
             "reported shed is awake source-region power rather than net fleet power or energy",
             "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
             "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",

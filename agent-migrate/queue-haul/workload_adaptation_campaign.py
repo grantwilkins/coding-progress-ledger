@@ -48,11 +48,12 @@ TIMING = ROOT / "outputs/timing-power-validation-20260814/migrations.csv"
 TIMING_SUMMARY = ROOT / "outputs/timing-power-validation-20260814/timing-summary.json"
 TIMING_PARENT = ROOT / "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json"
 LOADED_SERVICE = ROOT / "outputs/loaded-service-model-20260815/model.json"
+NETWORK_CALIBRATION = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 OUT = ROOT / "outputs/workload-action-adaptation-20260814"
 BASE_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 WIDTH8_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 FACTORS = ("hbm", "bandwidth", "dest_compute")
-ACTIVATION_GATED_FACTORS = ("hbm", "dest_compute")
+ACTIVATION_GATED_FACTORS = FACTORS
 ORDER = (
     frozenset(("hbm",)), frozenset(("bandwidth",)), frozenset(("dest_compute",)),
     frozenset(("hbm", "bandwidth")), frozenset(("hbm", "dest_compute")),
@@ -66,7 +67,7 @@ LABELS = {
     frozenset(("bandwidth", "dest_compute")): "Bandwidth + compute",
     frozenset(FACTORS): "All bound", frozenset(): "None bound",
 }
-LEVELS = {"hbm": (0.0, .98), "bandwidth": ("natural", "controlled_40"),
+LEVELS = {"hbm": (0.0, .98), "bandwidth": ("natural", "bottleneck_1g"),
           "dest_compute": (.25, .95)}
 MIN_ACTION_RESPONSE_RATE = .1
 REGIONS = ("east", "germany")
@@ -77,6 +78,7 @@ DISPLAY_CASES = (
 ACTION_BOXPLOT_QUANTILES = (.05, .25, .5, .75, .95)
 POWER_TOLERANCE_W = 1e-6
 MIGRATION_HORIZON_S = 25
+BANDWIDTH_BOTTLENECK_MBPS = 1000
 SOURCE_LOAD = .4
 DEFAULT_SEED = 1001
 plot_style.apply()
@@ -188,6 +190,21 @@ def loaded_service_model(path=LOADED_SERVICE):
     return value
 
 
+@lru_cache(maxsize=1)
+def physical_route_mbps(path=NETWORK_CALIBRATION):
+    raw = json.loads(Path(path).read_text())
+    expected = json.loads(TIMING_PARENT.read_text())["calibration"]
+    if raw.get("schema") != "queue-haul-network-calibration-v1" \
+            or set(raw.get("paths", {})) != set(REGIONS) \
+            or file_hash(Path(path)) != expected["sha256"]:
+        raise ValueError("regional network calibration does not match timing evidence")
+    values = {region: float(np.median(raw["paths"][region]["simultaneous_mbps"]))
+              for region in REGIONS}
+    if min(values.values()) <= BANDWIDTH_BOTTLENECK_MBPS:
+        raise ValueError("bandwidth bottleneck must be below natural route capacity")
+    return values
+
+
 def central_timing_fits():
     profile = ModelProfile.load(PROFILE)
     fits = timing_fit(
@@ -247,16 +264,26 @@ def sample_draw(profile, templates, timing_rows, parent, rng, replicate, seed,
 
 def build_problem(profile, sessions, constraints, target_fraction, fits):
     values, case = state_values(constraints), profile.case()
-    bandwidths = {region: fits[region]["effective_pipeline_mbps"][
-        values["bandwidth"]] * 125_000 for region in REGIONS}
+    constrained = values["bandwidth"] == "bottleneck_1g"
+    timing_condition = "controlled_40" if constrained else "natural"
+    physical = physical_route_mbps()
+    physical_bandwidths = {region: (
+        BANDWIDTH_BOTTLENECK_MBPS if constrained else physical[region]
+    ) * 125_000 for region in REGIONS}
+    pipeline_bandwidths = {region: fits[region]["effective_pipeline_mbps"][
+        timing_condition] * 125_000 for region in REGIONS}
+    paths = {region: (f"link/{region}", f"pipeline/{region}")
+             for region in REGIONS}
     scenario = ExecutionScenario(
         30, 30, 0, "awake", 0,
         (PowerNode("source-node", 1, True), *(PowerNode(
             f"{region}-node", 1, False) for region in REGIONS)),
         (ServingInstance("source", ("source-node",)), *(ServingInstance(
             region, (f"{region}-node",)) for region in REGIONS)),
-        sessions, tuple(NetworkLink(f"link/{region}", bandwidths[region])
-                        for region in REGIONS),
+        sessions, tuple(link for region in REGIONS for link in (
+            NetworkLink(f"link/{region}", physical_bandwidths[region]),
+            NetworkLink(f"pipeline/{region}", pipeline_bandwidths[region]),
+        )),
     )
     phase = case.phase_power
     if phase is None or not phase.contains(
@@ -285,16 +312,28 @@ def build_problem(profile, sessions, constraints, target_fraction, fits):
                      for method in ("replay", "kv_transfer")}
     sink_action = {method: case.action_power_w[method].power(1, False)
                    for method in source_action}
+    load = loaded_service_model()
+    if BANDWIDTH_BOTTLENECK_MBPS != load["validation_bandwidth_mbps"][0]:
+        raise ValueError("bandwidth bottleneck must match measured validation support")
     types, pools = [], []
     for region in REGIONS:
         raw = fits[region]["migration_components"]
-        migration = {method: MigrationComponents(
-            tuple(value["context_range"]),
-            tuple(value["bandwidth_range_bytes_per_s"]), value["provenance"],
-            value.get("compute_completion_factor", 1), value.get("residual_s", 0),
-            value.get("kv_ingest_bytes_per_s"),
-        ) for method, value in raw.items()}
-        load = loaded_service_model()
+        path_bandwidth = min(
+            physical_bandwidths[region], pipeline_bandwidths[region],
+        )
+        migration = {}
+        for method, value in raw.items():
+            bandwidth_range = tuple(value["bandwidth_range_bytes_per_s"])
+            provenance = value["provenance"]
+            if path_bandwidth < bandwidth_range[0]:
+                bandwidth_range = (path_bandwidth, bandwidth_range[1])
+                provenance += f"; {LOADED_SERVICE.relative_to(ROOT)} 1-Gbit/s validation"
+            migration[method] = MigrationComponents(
+                tuple(value["context_range"]), bandwidth_range, provenance,
+                value.get("compute_completion_factor", 1),
+                value.get("residual_s", 0),
+                value.get("kv_ingest_bytes_per_s"),
+            )
         loaded = {method: LoadedCoefficients(
             tuple(load["rho_grid"]), tuple(load["slowdown"][method]),
             migration[method].context_range,
@@ -320,14 +359,14 @@ def build_problem(profile, sessions, constraints, target_fraction, fits):
             f"pool/{region}", dtype.type_id,
             (DestinationReplica(
                 region, tuple(values["dest_compute"] * direction), resident,
-            ),), f"route/{region}", (f"link/{region}",),
+            ),), f"route/{region}", paths[region],
             fluid_migration=service,
         ))
     architecture = DestinationArchitecture(
         architecture.schema, architecture.source_compatibility,
         tuple(types), tuple(pools),
     )
-    routes = {("source", region): (f"link/{region}",) for region in REGIONS}
+    routes = {("source", region): paths[region] for region in REGIONS}
     return scenario, architecture, routes, target
 
 
@@ -612,7 +651,7 @@ def factor_checks(rows):
                     if row["replicate"] == replicate}
         for case_id, label, constraints in factorial_cases():
             constrained = selected[case_id]
-            for factor in constraints:
+            for factor in sorted(constraints):
                 released = selected[by_case[constraints - {factor}]]
                 actions = tuple(f"{action}_count" for action in ACTIONS)
                 changed = any(constrained[name] != released[name] for name in actions)
@@ -789,19 +828,22 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-def plot(rows, path):
-    fig, axis = plt.subplots(figsize=(5.5, 3))
-    labels = {case_id: label for case_id, label, _ in factorial_cases()}
+def action_mix_means(rows):
     groups = [[row for row in rows if row["case_id"] == case_id]
               for case_id in DISPLAY_CASES]
     if any(not group for group in groups):
         raise RuntimeError("action plot is missing a displayed constraint case")
-    replay = np.asarray([np.median([row["replay_phase_load"] for row in group])
-                         for group in groups])
-    moved = np.asarray([np.median([row["replay_phase_load"]
-                                  + row["kv_transfer_phase_load"]
-                                  for row in group]) for group in groups])
-    values_by_action = (replay, moved - replay, 1 - moved)
+    values = np.asarray([[np.mean([row[f"{action}_phase_load"] for row in group])
+                          for group in groups] for action in ACTIONS])
+    if not np.allclose(values.sum(0), 1):
+        raise RuntimeError("mean action mix does not conserve phase load")
+    return values
+
+
+def plot(rows, path):
+    fig, axis = plt.subplots(figsize=(5.5, 3))
+    labels = {case_id: label for case_id, label, _ in factorial_cases()}
+    values_by_action = action_mix_means(rows)
     left = np.zeros(len(DISPLAY_CASES))
     for action, fractions in zip(ACTIONS, values_by_action):
         values = fractions * 100
@@ -989,7 +1031,7 @@ def main():
         if row["planner_shortfall_worsened_on_release"]
     ])
     metadata = {
-        "schema": "queue-haul-workload-adaptation-v7",
+        "schema": "queue-haul-workload-adaptation-v8",
         "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
@@ -998,6 +1040,7 @@ def main():
         "plotted_constraint_states": list(DISPLAY_CASES),
         "action_boxplot_cases": list(DISPLAY_CASES),
         "action_boxplot_metric": "per-draw percentage of source sessions assigned to each action",
+        "stacked_action_metric": "mean modeled source phase-load share across paired draws",
         "action_boxplot_quantiles": list(ACTION_BOXPLOT_QUANTILES),
         "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
         "power_scope": "steady awake source-region power; destination power excluded",
@@ -1030,6 +1073,12 @@ def main():
                                        "candidate_equivalent", "candidate_incomparable"],
         },
         "factor_levels": LEVELS, "workload": workload,
+        "bandwidth_bottleneck": {
+            "physical_route_mbps": BANDWIDTH_BOTTLENECK_MBPS,
+            "natural_physical_route_mbps": physical_route_mbps(),
+            "pipeline_timing_condition": "controlled_40",
+            "selection_basis": "lowest bandwidth in the existing 1-10-Gbit/s A100 loaded-migration validation",
+        },
         "target_met_rate": {
             label: float(np.mean([row["target_met"] for row in rows
                                   if row["case_id"] == case_id]))
@@ -1110,7 +1159,7 @@ def main():
         },
         "inputs": {str(path.relative_to(ROOT)): file_hash(path) for path in (
             PROFILE, MANIFEST, TIMING, TIMING_SUMMARY, TIMING_PARENT,
-            LOADED_SERVICE,
+            LOADED_SERVICE, NETWORK_CALIBRATION,
             LOCAL_TIMING / "scenarios.csv",
             LOCAL_TIMING / "migrations.csv", WIDTH8_TIMING / "scenarios.csv",
             WIDTH8_TIMING / "migration_stages.csv",
@@ -1137,7 +1186,8 @@ def main():
             "the load campaign identifies prefill-heavy normalized load, not a separate decode-load coefficient",
             "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
             "the destination envelope combines measured timing with synthetic 98%-occupied HBM and service-pressure levels",
-            "the measured controlled-bandwidth route rarely saturates at the exact 67% target, but its rate still changes isolated duration and action selection; it is an intervention, not a labeled binding bottleneck",
+            "the bandwidth state caps both physical destination routes at the predeclared 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
+            "East's fitted controlled pipeline remains below 1 Gbit/s, so its loaded-factor transport is counted outside the validation bandwidth range",
             "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
             "each constraint state is planned independently; rounded-LP release regressions are reported",
             "fractional opportunity monotonicity does not prove integer packability",
