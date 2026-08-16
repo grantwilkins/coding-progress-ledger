@@ -1607,7 +1607,9 @@ audit and retained evidence.
 for the pinned GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B checkpoints. It
 keeps BF16 KV, TP1, 32K context, eight sessions, 90% GPU memory, and exact token
 shapes fixed across A100 and H100 arms. Use the native vLLM 0.22/LMCache 0.5.1
-stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`.
+stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`. The shipped connector
+retains Qwen's separate attention/Mamba groups while re-viewing its K/V-first
+FlashAttention kernel pages at the 784-token logical block size without a copy.
 
 ```bash
 uv run python model_architecture_campaign.py prepare --out-dir runs/model-architecture/plans

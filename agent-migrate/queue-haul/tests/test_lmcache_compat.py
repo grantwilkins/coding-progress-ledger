@@ -3,8 +3,17 @@ from __future__ import annotations
 import asyncio
 import builtins
 import threading
+from types import SimpleNamespace
 
-from lmcache_compat.connector_patch import bypass_lmcache, independent_transaction, patch_on_import
+import pytest
+import torch
+
+from lmcache_compat.connector_patch import (
+    bypass_lmcache,
+    independent_transaction,
+    kv_first_attention_page_view,
+    patch_on_import,
+)
 
 
 class FragmentedSocket:
@@ -42,6 +51,24 @@ def test_replay_bypass_is_explicit():
     assert bypass_lmcache(mp_request)
     mp_request.sampling_params.extra_args = {"qh_bypass_lmcache": 1}
     assert bypass_lmcache(mp_request)
+
+
+def test_kv_first_attention_pages_merge_without_copy_or_group_flattening():
+    cache = torch.arange(2 * 6 * 2 * 2, dtype=torch.float32).view(2, 6, 2, 1, 2)
+    spec = SimpleNamespace(block_size=4, page_size_bytes=64)
+
+    edited = kv_first_attention_page_view(spec, cache)
+
+    assert edited.shape == (2, 3, 4, 1, 2)
+    assert edited.data_ptr() == cache.data_ptr()
+    assert torch.equal(edited[0, 1].flatten(), cache[0, 2:4].flatten())
+    assert torch.equal(edited[1, 2].flatten(), cache[1, 4:6].flatten())
+    with pytest.raises(ValueError, match="tile"):
+        kv_first_attention_page_view(
+            SimpleNamespace(block_size=4, page_size_bytes=128), cache,
+        )
+    with pytest.raises(ValueError, match="contiguous"):
+        kv_first_attention_page_view(spec, torch.empty(2, 6, 4, 1, 2)[:, :, ::2])
 
 
 

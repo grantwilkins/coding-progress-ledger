@@ -14,6 +14,46 @@ def bypass_lmcache(request) -> bool:
                 (direct or extra.get("kv_transfer_params") or {}).get("qh_bypass_lmcache"))
 
 
+def kv_first_attention_page_view(spec, kv_cache):
+    if kv_cache.ndim != 5 or kv_cache.shape[0] != 2:
+        raise ValueError(f"expected K/V-first attention KV, got {tuple(kv_cache.shape)}")
+    logical, kernel = spec.block_size, kv_cache.shape[2]
+    if logical % kernel:
+        raise ValueError(f"logical block size {logical} is not a multiple of {kernel}")
+    ratio = logical // kernel
+    pages = kv_cache.shape[1]
+    if pages % ratio:
+        raise ValueError(f"kernel page count {pages} is not a multiple of {ratio}")
+    page_bytes = kv_cache.shape[0] * kv_cache.shape[2:].numel() \
+        * kv_cache.element_size()
+    if page_bytes * ratio != spec.page_size_bytes:
+        raise ValueError("kernel pages do not tile the logical attention page")
+    if not kv_cache.is_contiguous():
+        raise ValueError("K/V-first attention KV must be contiguous")
+    elements = spec.page_size_bytes // kv_cache.element_size()
+    if elements % (2 * logical):
+        raise ValueError("logical attention page does not factor by block size")
+    return kv_cache.view(2, pages // ratio, logical, 1, elements // (2 * logical))
+
+
+def patch_attention_kv_layout() -> None:
+    from lmcache.integration.vllm.kv_cache_group_edits import (
+        _SubpagedAttentionViewEdit,
+    )
+
+    if getattr(_SubpagedAttentionViewEdit, "_qh_kv_first_patched", False):
+        return
+    original = _SubpagedAttentionViewEdit.apply
+
+    def apply(self, spec, kv_cache):
+        if getattr(kv_cache, "ndim", 0) == 5 and kv_cache.shape[0] == 2:
+            return kv_first_attention_page_view(spec, kv_cache)
+        return original(self, spec, kv_cache)
+
+    _SubpagedAttentionViewEdit.apply = apply
+    _SubpagedAttentionViewEdit._qh_kv_first_patched = True
+
+
 
 def patch_on_import(module: str, patch) -> None:
     original = builtins.__import__
@@ -151,6 +191,7 @@ def patch_adapter() -> None:
 def patch_mp_connector() -> None:
     from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector, logger
 
+    patch_attention_kv_layout()
     if getattr(LMCacheMPConnector, "_qh_bypass_patched", False):
         return
     original_lookup = LMCacheMPConnector.get_num_new_matched_tokens

@@ -549,7 +549,7 @@ def gpu_count() -> int:
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
     if lmcache_mode() == "mp":
-        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; assert LMCacheMPConnector._qh_bypass_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
+        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; from lmcache.integration.vllm.kv_cache_group_edits import _SubpagedAttentionViewEdit; assert LMCacheMPConnector._qh_bypass_patched and _SubpagedAttentionViewEdit._qh_kv_first_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
         script = "\n".join([
             f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}",
             shell(["python", "-c", check]),
