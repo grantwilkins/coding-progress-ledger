@@ -284,10 +284,12 @@ def validate_model_runtime_log(cfg: Config, text: str) -> None:
         ))
     if not proved_bf16:
         raise RuntimeError("architecture campaign did not prove BF16 KV cache")
-    if cfg.model == "google/gemma-4-26B-A4B-it" and text.count(
-            "QH_GEMMA4_GEOMETRY_VERIFIED "
-            "sliding=25x(head_dim=256,kv_heads=8) "
-            "full=5x(head_dim=512,kv_heads=2)") != 1:
+    gemma_marker = "QH_GEMMA4_GEOMETRY_VERIFIED"
+    gemma_proof = (f"{gemma_marker} sliding=25x(head_dim=256,kv_heads=8) "
+                   "full=5x(head_dim=512,kv_heads=2)")
+    if cfg.model == "google/gemma-4-26B-A4B-it" and (
+            gemma_proof not in text
+            or text.count(gemma_marker) != text.count(gemma_proof)):
         raise RuntimeError("Gemma campaign did not prove its per-layer KV geometry")
     expected = model_spec(cfg.model).unified_block_tokens
     if expected is not None and set(map(int, re.findall(

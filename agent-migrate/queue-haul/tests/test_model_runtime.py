@@ -117,8 +117,11 @@ def test_gemma_log_must_prove_exact_heterogeneous_geometry():
     )
 
     testbed.validate_model_runtime_log(cfg, good)
+    testbed.validate_model_runtime_log(cfg, good + good)
     with pytest.raises(RuntimeError, match="per-layer KV geometry"):
         testbed.validate_model_runtime_log(cfg, good.replace("25x", "24x"))
+    with pytest.raises(RuntimeError, match="per-layer KV geometry"):
+        testbed.validate_model_runtime_log(cfg, good + good.replace("25x", "24x"))
 
 
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):
