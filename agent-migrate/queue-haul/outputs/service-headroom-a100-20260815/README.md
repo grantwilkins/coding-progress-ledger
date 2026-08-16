@@ -62,15 +62,24 @@ frontier. No value from this directory may update planner admission through
 - `service-headroom-phase.pdf` / `.png`: sampled prefill/decode work rays, with
   held-out points shown as open markers and any all-repeat evidence miss marked
   with an x. It is not a fitted frontier.
+- `service-headroom-sustainability.pdf` / `.png`: the minimal admission view.
+  The x-axis is added offered service work above the measured 0.25 incumbent
+  baseline; the y-axes are P90 TTFT and P90 mean TPOT. Curves and held-out
+  markers retain workload composition, error bars are restart-block min--max
+  ranges, and diamonds are the worse of incumbent/new-cohort P90 in the live
+  transition. The vertical line is the tested added-work budget 0.25
+  (equivalently total work 0.50), not a universal utilization limit.
 - `service-headroom.csv`: discovery medians, ranges, phase coordinates, and
   repeat-level feasibility counts.
 - `service-headroom-heldout.csv`: the same reduction for unseen confirmation.
 - `service-headroom-phase.csv`: both stages in one table.
+- `service-headroom-sustainability-transition.csv`: the three live transition
+  points reduced conservatively to the worse cohort in each restart block.
 - `plan.json`, `normalization.json`, `scout.json`, `confirmation-plan.json`,
   `confirmed.json`, and `confirmation-status.json`: immutable campaign inputs
   and reduced evidence.
 
-Both figure writers call `plot_style.apply()` and use the registered service
+All figure writers call `plot_style.apply()` and use the registered service
 mix identities.
 
 ## Provenance

@@ -91,6 +91,49 @@ def aggregate_confirmation(result: dict, plan: dict, rates: dict) -> list[dict]:
     )
 
 
+def aggregate_transition(result: dict, baseline_work: float) -> list[dict]:
+    """Reduce the live transition to one conservative point per mix.
+
+    Each metric is the worse of the incumbent and newly admitted cohort for a
+    restart block.  The plotted range is the observed minimum--maximum across
+    the three blocks, not a confidence interval.
+    """
+    if result.get("campaign_pass") is not True \
+            or result.get("planner_usable") is not False:
+        raise RuntimeError("transition evidence is not a complete passing run")
+    rows = []
+    for direction in plot_style.SERVICE_MIXES:
+        selected = [row for row in result.get("rows", ())
+                    if row.get("direction") == direction]
+        if len(selected) != 3 or {row.get("block") for row in selected} \
+                != {6, 7, 8}:
+            raise RuntimeError("transition evidence does not cover three blocks")
+        total_work = {row["offered_coordinates"]["offered_rho"]
+                      for row in selected}
+        if len(total_work) != 1:
+            raise RuntimeError("transition mix changed work across blocks")
+        values = {}
+        for metric in ("p90_ttft_s", "p90_mean_tpot_s"):
+            block_values = [max(
+                row["windows"]["post_admission"][metric],
+                row["new_cohort"][metric],
+            ) for row in selected]
+            values[metric] = block_values
+        rows.append({
+            "stage": "transition", "direction": direction,
+            "blocks": len(selected),
+            "total_work": next(iter(total_work)),
+            "added_work": next(iter(total_work)) - baseline_work,
+            **{f"{metric}_median": statistics.median(metric_values)
+               for metric, metric_values in values.items()},
+            **{f"{metric}_minimum": min(metric_values)
+               for metric, metric_values in values.items()},
+            **{f"{metric}_maximum": max(metric_values)
+               for metric, metric_values in values.items()},
+        })
+    return rows
+
+
 def write_csv(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as stream:
@@ -298,6 +341,142 @@ def plot_phase_surface(discovery: list[dict], heldout: list[dict],
     plt.close(figure)
 
 
+def plot_sustainability(discovery: list[dict], heldout: list[dict],
+                        transition: list[dict], scout: dict,
+                        baseline_work: float, out: Path) -> None:
+    """Plot the empirical profile-conditioned service-work certificate."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    metrics = (("p90_ttft_s", "P90 TTFT (s)"),
+               ("p90_mean_tpot_s", "P90 mean TPOT (s)"))
+    figure, axes = plt.subplots(
+        2, 1, sharex=True,
+        figsize=(plot_style.COMPACT_FIGSIZE[0], 4.8),
+    )
+    tested_total_work = [row["total_work"] for row in transition]
+    if max(tested_total_work) - min(tested_total_work) > 1e-3:
+        raise RuntimeError("transition mixes do not share one tested work point")
+    # Request discreteness leaves the frozen recipes within 0.07% of 0.50.
+    # Draw the certificate at the smallest work actually tested by every mix.
+    tested_added_work = min(tested_total_work) - baseline_work
+    for axis, (metric, ylabel) in zip(axes, metrics):
+        for direction in plot_style.SERVICE_LOADS:
+            selected = [row for row in discovery
+                        if row["direction"] == direction]
+            x = [row["measured_rho_median"] - baseline_work
+                 for row in selected]
+            y = [row[f"{metric}_median"] for row in selected]
+            lower = [row[f"{metric}_median"] - row[f"{metric}_minimum"]
+                     for row in selected]
+            upper = [row[f"{metric}_maximum"] - row[f"{metric}_median"]
+                     for row in selected]
+            axis.plot(
+                x, y, color=plot_style.SERVICE_MIX_COLORS[direction],
+                linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
+            )
+            axis.errorbar(
+                x, y, yerr=(lower, upper),
+                color=plot_style.SERVICE_MIX_COLORS[direction],
+                marker=plot_style.SERVICE_MIX_MARKERS[direction],
+                linestyle="none", capsize=2, markersize=5,
+            )
+        for direction in plot_style.SERVICE_MIXES:
+            confirmation = [row for row in heldout
+                            if row["direction"] == direction]
+            if confirmation:
+                x = [row["measured_rho_median"] - baseline_work
+                     for row in confirmation]
+                y = [row[f"{metric}_median"] for row in confirmation]
+                lower = [row[f"{metric}_median"] - row[f"{metric}_minimum"]
+                         for row in confirmation]
+                upper = [row[f"{metric}_maximum"] - row[f"{metric}_median"]
+                         for row in confirmation]
+                axis.errorbar(
+                    x, y, yerr=(lower, upper),
+                    color=plot_style.SERVICE_MIX_COLORS[direction],
+                    marker=plot_style.SERVICE_MIX_MARKERS[direction],
+                    markerfacecolor="white", markeredgewidth=1.5,
+                    linestyle="none", capsize=3, markersize=7, zorder=4,
+                )
+                misses = [index for index, row in enumerate(confirmation)
+                          if not row["evidence_feasible"]]
+                if misses:
+                    axis.scatter(
+                        [x[index] for index in misses],
+                        [y[index] for index in misses],
+                        marker="x", color="#222222", s=32,
+                        linewidths=1.2, zorder=5,
+                    )
+            live = [row for row in transition
+                    if row["direction"] == direction]
+            if live:
+                row = live[0]
+                center = row[f"{metric}_median"]
+                axis.errorbar(
+                    [row["added_work"]], [center],
+                    yerr=([center - row[f"{metric}_minimum"]],
+                          [row[f"{metric}_maximum"] - center]),
+                    color=plot_style.SERVICE_MIX_COLORS[direction],
+                    marker=plot_style.SERVICE_EVIDENCE_STAGE_MARKERS[
+                        "transition"],
+                    markeredgecolor="#222222", markeredgewidth=.8,
+                    linestyle="none", capsize=3, markersize=6, zorder=6,
+                )
+        axis.axhline(
+            scout["targets"][metric], color="#555555",
+            linestyle=":", linewidth=1.5,
+        )
+        axis.axvline(
+            tested_added_work,
+            color=plot_style.SERVICE_WORK_BUDGET_COLOR,
+            linestyle=plot_style.SERVICE_WORK_BUDGET_LINESTYLE,
+            linewidth=1.25,
+        )
+        if metric == "p90_ttft_s":
+            axis.set_yscale("log")
+        axis.set_ylabel(ylabel, fontsize=plot_style.COLUMN_FONT_SIZE)
+        axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
+        axis.grid(alpha=.2)
+    axes[-1].set_xlabel(
+        (r"Added offered service work, $\Delta W$ (GPU-s/s)"
+         "\n" f"Baseline total work $W_0={baseline_work:.2f}$"),
+        fontsize=plot_style.COLUMN_FONT_SIZE,
+    )
+    handles = [Line2D(
+        [], [], color=plot_style.SERVICE_MIX_COLORS[direction],
+        linestyle=plot_style.SERVICE_MIX_LINESTYLES[direction],
+        marker=plot_style.SERVICE_MIX_MARKERS[direction],
+        label=plot_style.SERVICE_MIX_NAMES[direction],
+    ) for direction in plot_style.SERVICE_MIXES]
+    handles.extend((
+        Line2D([], [], color="#555555", linestyle=":",
+               label="Evaluation target"),
+        Line2D([], [], color=plot_style.SERVICE_WORK_BUDGET_COLOR,
+               linestyle=plot_style.SERVICE_WORK_BUDGET_LINESTYLE,
+               label=(f"{plot_style.SERVICE_WORK_BUDGET_NAME} "
+                      rf"($\Delta W={tested_added_work:.2f}$)")),
+        Line2D([], [], color="#555555", marker="o", markerfacecolor="white",
+               linestyle="none", label="Held-out min–max"),
+        Line2D([], [], color="#555555",
+               marker=plot_style.SERVICE_EVIDENCE_STAGE_MARKERS["transition"],
+               linestyle="none",
+               label=plot_style.SERVICE_EVIDENCE_STAGE_NAMES["transition"]),
+        Line2D([], [], color="#222222", marker="x", linestyle="none",
+               label="Any repeat missed contract"),
+    ))
+    figure.legend(handles=handles, frameon=False, fontsize=6.5, ncol=2,
+                  loc="upper center", bbox_to_anchor=(.5, .995))
+    figure.tight_layout(rect=(0, 0, 1, .80))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    for suffix in ("pdf", "png"):
+        figure.savefig(out.with_suffix(f".{suffix}"),
+                       dpi=plot_style.SAVE_DPI, bbox_inches="tight")
+    plt.close(figure)
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, required=True)
@@ -305,6 +484,7 @@ def main(argv=None) -> None:
     parser.add_argument("--scout", type=Path, required=True)
     parser.add_argument("--confirmed", type=Path)
     parser.add_argument("--confirmation-plan", type=Path)
+    parser.add_argument("--transition", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     if bool(args.confirmed) != bool(args.confirmation_plan):
@@ -335,6 +515,19 @@ def main(argv=None) -> None:
             f"{args.out.name}-phase").with_suffix(".csv"))
         plot_phase_surface(rows, heldout, args.out.with_name(
             f"{args.out.name}-phase"))
+    if args.transition:
+        transition_result = json.loads(args.transition.read_text())
+        baseline_work = statistics.median(
+            row["measured_rho_median"] for row in rows
+            if row["target_rho"] == campaign.BASE_RHO
+        )
+        transition = aggregate_transition(transition_result, baseline_work)
+        write_csv(transition, args.out.with_name(
+            f"{args.out.name}-sustainability-transition").with_suffix(".csv"))
+        plot_sustainability(
+            rows, heldout, transition, scout, baseline_work,
+            args.out.with_name(f"{args.out.name}-sustainability"),
+        )
     plot(rows, heldout, scout, confirmed, args.out)
 
 

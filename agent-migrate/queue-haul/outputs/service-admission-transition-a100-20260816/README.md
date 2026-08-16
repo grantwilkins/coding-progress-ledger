@@ -1,6 +1,6 @@
 # A100 service-admission transition confirmation
 
-This is a nine-cell confirmation of three discrete destination-service
+This is a completed nine-cell confirmation of three discrete destination-service
 recipes, not a fitted frontier or an end-to-end migration experiment. The
 frozen treatment is:
 
@@ -21,15 +21,25 @@ are checked from raw records. Every invalid instrumentation attempt remains in
 its own attempt directory; a failed materialization is a valid failed outcome
 and is not retried away.
 
-The campaign may establish only that eight prefixes were materialized and
-their offered workload was sustained for 240 seconds at each passing recipe.
-Each recipe's coordinates sum to approximately 0.50 by construction, but that
-scalar is neither measured utilization nor an admission limit.
+All 9/9 cells passed. Across the three mixes and three fresh restart blocks,
+incumbent P90 TTFT was 117--207 ms and P90 mean TPOT was 34.9--43.9 ms; the
+added cohort was 122--227 ms and 34.7--42.3 ms. Every offered request
+completed, every cell drained and met the strict stability rule, and no cache
+mismatch occurred.
+
+The campaign establishes that eight prefixes were materialized and their
+offered workload was sustained for 240 seconds at each recipe. Each recipe's
+coordinates sum to approximately 0.50 by construction, but that scalar is not
+measured utilization. Combined with the earlier held-out failure of the
+every-repeat contract at total work 0.70, it supports 0.50 as a conservative
+tested operating point for this exact profile family. The frozen transition
+artifact remains `planner_usable=false`; it does not silently promote a
+destination profile.
 It does not establish a planner decision, reservation lease, source power
 action, migration, route switch, arbitrary session count, indefinite service
 guarantee, interpolated service envelope, or universal utilization limit.
 
 Raw evidence is written under
-`/datadrive/qh-service-admission-transition-a100-20260816-r1`. The reduced
-result will be `summary.json`; it always retains `planner_usable=false` and
+`/datadrive/qh-service-admission-transition-a100-20260816-r1`. The authenticated
+reduction is `summary.json`; it retains `planner_usable=false` and
 `supported_envelope=null`.

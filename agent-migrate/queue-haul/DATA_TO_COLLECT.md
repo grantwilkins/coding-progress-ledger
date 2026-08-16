@@ -382,16 +382,27 @@ reliability guarantee. The confirmed value is a total-load cap:
 `rho_safe - (b_f + b_g)`, never `rho_safe` itself.
 
 The 2026-08-15 A100 execution completed 54/54 discovery and 18/18 held-out cells
-without a collection retry, but did not confirm a scalar cap. At the selected
+without a collection retry, but did not confirm the initially selected scalar
+cap. At the selected
 `rho=0.70`, prefill-heavy, balanced, and decode-heavy each passed only two of
 three unseen blocks. Prefill-heavy `rho=0.85` failed the 100-ms P90 mean-TPOT
 target in all three blocks, while decode-heavy `rho=0.85` was queue-stable in
 one block and unstable in two despite repeatable latency. Consequently the
 frozen reducer reports no planner-usable value. Retain these curves as
-composition-sensitivity evidence. A planner-grade follow-up must sample a
-preregistered two-dimensional `(rho_f,rho_d)` lattice, confirm a conservative
-interior monotone hull, and use separate phase limits for genuinely
-disaggregated pools rather than relabeling the rejected scalar boundary.
+composition-sensitivity evidence.
+
+The minimal fallback does not require a two-dimensional lattice. The frozen
+transition follow-up tested total work `W=0.50` at prefill-heavy, balanced, and
+decode-heavy recipes across three fresh restart blocks each. All 9/9 cells
+met both cohorts' P90 TTFT/TPOT targets, exact completion/cache checks, drain,
+and strict stability. This supports the conservative, profile-conditioned
+candidate row `W_0 + Delta W <= 0.50` for the exact 4K A100 normalization and
+stack; above the row is not certified. It does not identify a universal
+latency curve or arbitrary phase-mix surface, and the transition artifact does
+not automatically promote a planner profile. Collect a two-dimensional
+lattice only if a future claim specifically requires interpolation across
+unseen compositions. No such campaign is required for the scalar tested-work
+certificate.
 
 ## Prefill/decode holding follow-up (optional model promotion)
 

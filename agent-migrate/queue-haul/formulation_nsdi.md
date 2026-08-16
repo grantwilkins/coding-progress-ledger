@@ -184,6 +184,22 @@ One replica-second is the work one pinned replica performs in one second.
 Integrated pools use their measured rule for sharing prefill and decode.
 Disaggregated pools expose separate prefill and decode budgets.
 
+For an integrated pool with a pinned workload profile, the conservative
+service contract may specialize to the single measured-work row
+
+\[
+W_0+\Delta W=
+b_{p,f}+b_{p,d}+\sum_c(s_{c,f}+s_{c,d})x_c
+\le W_{safe}.
+\]
+
+This is a profile-conditioned SLO admission certificate, not a universal
+utilization measure or a formula for TTFT/TPOT. `W_safe` is the last tested
+load whose complete repeat range satisfies both P90 SLOs and drains. Above
+the row, admission is unverified and fails closed. Queue-Haul already encodes
+this specialization with the service-facet normal `(1,1)`; KV, route,
+migration, and power constraints remain separate.
+
 Live KV is rounded for each session:
 
 \[

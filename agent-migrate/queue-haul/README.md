@@ -1526,7 +1526,7 @@ confirmation plan, then reduce it:
 uv run python service_headroom_campaign.py prepare-confirmation --plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --hardware a100 --out runs/service-headroom/a100-confirmation.json
 uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/a100-confirmation.json --cell-id CELL --normalization /datadrive/service-headroom/a100-normalization.json --out /datadrive/service-headroom-confirmation
 uv run python service_headroom_campaign.py reduce-confirmation --plan runs/service-headroom/a100-confirmation.json --core-plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --runs /datadrive/service-headroom-confirmation --out /datadrive/service-headroom/a100-confirmed.json
-uv run python plot_service_headroom.py --plan runs/service-headroom/plan.json --normalization /datadrive/service-headroom/a100-normalization.json --scout /datadrive/service-headroom/a100-scout.json --confirmation-plan runs/service-headroom/a100-confirmation.json --confirmed /datadrive/service-headroom/a100-confirmed.json --out outputs/service-headroom-a100/service-headroom
+uv run python plot_service_headroom.py --plan runs/service-headroom/plan.json --normalization /datadrive/service-headroom/a100-normalization.json --scout /datadrive/service-headroom/a100-scout.json --confirmation-plan runs/service-headroom/a100-confirmation.json --confirmed /datadrive/service-headroom/a100-confirmed.json --transition outputs/service-admission-transition-a100-20260816/summary.json --out outputs/service-headroom-a100/service-headroom
 ```
 
 Only a confirmation result accepted by `supported_bound()` supplies a service
@@ -1597,12 +1597,11 @@ partial effects. The committed phase CSV reconstructs both coordinates for
 every aggregate point.
 At total `rho` near 0.70, held-out prefill-heavy, balanced, and decode-heavy P90
 TTFT/mean-TPOT medians are respectively 234.7/59.7 ms, 152.9/42.7 ms, and
-131.7/37.2 ms. This composition dependence and the rejected scalar promotion
-motivate a follow-up conservative feasible region over `(rho_f,rho_d)`. On a
-disaggregated destination that may reduce to separate phase limits; on a
-colocated GPU it must retain the measured interference frontier. The present
-three sampled rays are descriptive evidence, not a fitted two-dimensional
-admission surface.
+131.7/37.2 ms. This composition dependence proves that total work is not a
+latency-response model. It does not prevent using a lower total-work row as a
+conservative admission certificate when every tested composition passes. A
+two-dimensional campaign is needed only to claim extra headroom for unseen
+phase mixtures; the present evidence does not make that stronger claim.
 
 `service_admission_transition_campaign.py` is the deliberately small live
 follow-up. It does not fit an admission surface or exercise an end-to-end
@@ -1621,6 +1620,22 @@ Admission failure is a measured failure, not a retryable invalid cell. Invalid
 instrumentation attempts are retained in immutable per-attempt directories.
 The result certifies only the three tested recipes for the 240-second declared
 horizon; `planner_usable` remains false and no interpolation is allowed.
+
+The transition completed 9/9 cells successfully. Together with the rejected
+0.70 held-out point, the YAGNI service gate is the existing scalar facet
+`W_0 + Delta W <= 0.50` for this exact A100/4K serving profile. The incumbent
+baseline is approximately 0.25, so the tested added-work budget is 0.25. This
+is a conservative profile-conditioned SLO certificate: above it is not
+certified, not necessarily physically impossible. It uses the campaign's
+16,758.928 prefill-token/s and 3,597.591 decode-token/s normalization and must
+not be copied into profiles with different rates. No planner/schema change or
+historical-profile edit is required; the current `(1,1)` service normal already
+represents the row, while KV, bandwidth, migration, and power stay separate.
+The result follows the load-sweep methodology used by
+[DistServe](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf) and
+[vLLM's serving benchmark](https://docs.vllm.ai/en/latest/benchmarking/cli.html):
+hold the workload profile fixed, vary offered load, and retain the last point
+whose latency and completion contract passes.
 
 ```bash
 uv run python service_admission_transition_campaign.py prepare \

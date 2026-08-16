@@ -317,6 +317,35 @@ session vectors among replicas and also satisfy KV, migration, route, and
 impact constraints. Equal GPU counts therefore need not imply equal available
 capacity.
 
+The minimal profile-conditioned specialization uses one scalar service-work
+facet rather than a latency model. For a pinned hardware/runtime, incumbent
+profile, added-cohort family, service horizon, and TTFT/TPOT policy, define
+
+\[
+W_0+\Delta W=
+b_f+b_d+\sum_s\left(w_{s,f}+w_{s,d}\right)x_s
+\le W_{safe}.
+\]
+
+This is exactly the existing facet `N=((1,1),)`; no new solver row or variable
+is required. `W_safe` is the largest tested point whose complete repeat
+envelope satisfies both P90 latency targets, exact completion, drain, and the
+declared queue-stability rule. Exceeding it means that admission is not
+certified, not that the workload is physically impossible. It predicts
+neither TTFT nor TPOT and is not GPU utilization. The work coordinates and
+bound are inseparable from their measured prefill/decode rates and pinned
+serving stack; a bound must be rescaled or remeasured before use with another
+normalization.
+
+For the completed 4K A100 service class, the tested operating point is
+`W_safe=0.50` under the campaign rates `F=16758.928` and `G=3597.591` tokens/s.
+The incumbent uses approximately `W_0=0.25`, leaving tested added work
+`Delta W=0.25`. Three mixes across three fresh restart blocks passed at this
+point; the prior `W=0.70` held-out treatment missed the every-repeat stability
+contract. This is a profile-conditioned evidence statement. The transition
+artifact remains non-promoting, and no historical destination profile or
+planner default is changed.
+
 An evidence-robust label requires an accepted envelope and every case inside
 its support. The five v7 private-prefix-consistent executions provide
 descriptive sensitivity anchors only. The colder under-hit is not promoted

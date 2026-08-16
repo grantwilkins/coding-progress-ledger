@@ -45,3 +45,31 @@ def test_main_plot_accepts_heldout_repeat_ranges(tmp_path):
 
     assert out.with_suffix(".pdf").is_file()
     assert out.with_suffix(".png").is_file()
+
+
+def test_transition_uses_worse_cohort_and_observed_block_range():
+    rows = []
+    for block, incumbent, admitted in (
+            (6, .20, .22), (7, .21, .19), (8, .18, .23)):
+        rows.append({
+            "direction": "prefill_heavy", "block": block,
+            "offered_coordinates": {"offered_rho": .5},
+            "windows": {"post_admission": {
+                "p90_ttft_s": incumbent, "p90_mean_tpot_s": incumbent / 5,
+            }},
+            "new_cohort": {
+                "p90_ttft_s": admitted, "p90_mean_tpot_s": admitted / 5,
+            },
+        })
+    for direction in ("balanced", "decode_heavy"):
+        rows.extend({**row, "direction": direction} for row in rows[:3])
+    result = {"campaign_pass": True, "planner_usable": False, "rows": rows}
+
+    reduced = plotter.aggregate_transition(result, .25)
+    prefill = next(row for row in reduced
+                   if row["direction"] == "prefill_heavy")
+
+    assert prefill["added_work"] == .25
+    assert prefill["p90_ttft_s_median"] == .22
+    assert prefill["p90_ttft_s_minimum"] == .21
+    assert prefill["p90_ttft_s_maximum"] == .23
