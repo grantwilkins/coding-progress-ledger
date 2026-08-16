@@ -543,7 +543,7 @@ def stack_commands(cfg: testbed.Config, extra: list[str]) -> dict[str, list[str]
                 cfg, "sink", l2_port=cfg.lmc_port,
             ))),
             "vllm": list(map(str, testbed.vllm_cmd(
-                cfg, "sink", ["--no-async-scheduling", "--stream-interval", 1,
+                cfg, "sink", ["--no-async-scheduling", "--stream-interval", "1",
                               *extra], gpu_index=0,
             )))}
 
