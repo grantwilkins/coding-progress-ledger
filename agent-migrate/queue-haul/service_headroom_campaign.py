@@ -363,9 +363,14 @@ def measurement_rows(plan: dict, rows: list[dict]) -> list[dict]:
     return [row for row in rows if lo <= row["offset_s"] < hi]
 
 
+def offered_phase_rho(plan: dict, rows: list[dict]) -> tuple[float, float]:
+    measured = measurement_rows(plan, rows)
+    return tuple(sum(row[f"{phase}_work_s"] for row in measured)
+                 / plan["measurement_s"] for phase in ("prefill", "decode"))
+
+
 def offered_rho(plan: dict, rows: list[dict]) -> float:
-    return sum(row["prefill_work_s"] + row["decode_work_s"]
-               for row in measurement_rows(plan, rows)) / plan["measurement_s"]
+    return sum(offered_phase_rho(plan, rows))
 
 
 def quantile(values: list[float], q: float) -> float | None:
@@ -477,8 +482,11 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
             and max(gaps_ns) <= tolerance
     loads = [in_system(row, observed) for row in window_metrics]
     p99 = len(good) >= plan["p99_min_incumbent_requests"]
+    prefill_rho, decode_rho = offered_phase_rho(plan, offered)
     return {
-        "offered_rho": offered_rho(plan, offered),
+        "offered_prefill_rho": prefill_rho,
+        "offered_decode_rho": decode_rho,
+        "offered_rho": prefill_rho + decode_rho,
         "offered_requests": len(observed),
         "incumbent_offered": len(incumbent),
         "incumbent_exact": len(good),

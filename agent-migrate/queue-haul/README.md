@@ -1537,6 +1537,17 @@ limit; that loader rechecks the exact core plan, scout, confirmation plan, and
 all held-out decisions. It returns a total normalized-load cap, so P1/P2 use
 `b_f + b_g + sum_i(w_i,f + w_i,g) <= rho_safe`; available added headroom is
 `rho_safe - (b_f + b_g)`.
+For a phase-plane view, each measurement result also records exact
+`offered_prefill_rho` and `offered_decode_rho`; their sum is `offered_rho`.
+Existing raw traces can be reduced and replotted against any external SLOs:
+
+```bash
+uv run python plot_service_headroom_phase_plane.py --run-root /datadrive/service-headroom-gpt-oss-20b-h100-20260815-v10 --slo tight:.5:.05 --slo paper:1:.1 --slo relaxed:2:.2 --out outputs/service-headroom-gpt-oss-20b-h100-20260816/phase-plane
+```
+
+The CSV/JSON preserve the measured `(rho_p, rho_d)` points and conservative
+across-block TTFT/TPOT values. The figure connects only sampled directional
+rays; it does not interpolate an unmeasured full-plane SLO contour.
 The paper figure is P90, matching the DistServe-style comparison; P99 remains
 null unless a cell has at least 1,000 incumbent completions. TTFT and TPOT
 targets are declared evaluation inputs; raw P90 curves, joint

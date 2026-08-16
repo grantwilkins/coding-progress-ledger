@@ -78,6 +78,14 @@ MODEL_NAMES = dict(zip(MODELS, ("GPT-OSS-20B", "Qwen3.8-27B",
 MODEL_COLORS = dict(zip(MODELS, ("#0072B2", "#D55E00", "#009E73")))
 MODEL_LINESTYLES = dict(zip(MODELS, ("-", "--", ":")))
 MODEL_MARKERS = dict(zip(MODELS, ("o", "s", "^")))
+SERVICE_DIRECTIONS = ("baseline", "prefill_heavy", "balanced", "decode_heavy")
+SERVICE_DIRECTION_NAMES = dict(zip(SERVICE_DIRECTIONS, (
+    "Baseline", "Prefill-heavy", "Balanced", "Decode-heavy")))
+SERVICE_DIRECTION_COLORS = dict(zip(SERVICE_DIRECTIONS, (
+    "#777777", "#D55E00", "#009E73", "#0072B2")))
+SERVICE_DIRECTION_LINESTYLES = dict(zip(SERVICE_DIRECTIONS, (
+    ":", "-", "-.", "--")))
+SERVICE_DIRECTION_MARKERS = dict(zip(SERVICE_DIRECTIONS, ("D", "^", "s", "o")))
 REPAIR_NAMES = {
     "unchanged": "No repair needed",
     "applied": "Repair applied",

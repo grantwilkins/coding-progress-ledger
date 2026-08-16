@@ -70,3 +70,13 @@ def test_model_architectures_have_one_canonical_visual_identity():
         == set(plot_style.MODEL_COLORS) == set(plot_style.MODEL_LINESTYLES) \
         == set(plot_style.MODEL_MARKERS)
     assert len(set(plot_style.MODEL_COLORS.values())) == len(plot_style.MODELS)
+
+
+def test_service_directions_have_one_canonical_visual_identity():
+    assert set(plot_style.SERVICE_DIRECTIONS) == set(
+        plot_style.SERVICE_DIRECTION_NAMES) == set(
+        plot_style.SERVICE_DIRECTION_COLORS) == set(
+        plot_style.SERVICE_DIRECTION_LINESTYLES) == set(
+        plot_style.SERVICE_DIRECTION_MARKERS)
+    assert len(set(plot_style.SERVICE_DIRECTION_MARKERS.values())) \
+        == len(plot_style.SERVICE_DIRECTIONS)

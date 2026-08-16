@@ -106,6 +106,9 @@ def test_incumbent_trace_is_paired_and_offered_work_is_context_normalized():
     assert incumbent(baseline) == incumbent(loaded)
     assert campaign.offered_rho(plan, baseline) == pytest.approx(.25, rel=.01)
     assert campaign.offered_rho(plan, loaded) == pytest.approx(.95, rel=.01)
+    prefill, decode = campaign.offered_phase_rho(plan, loaded)
+    assert prefill + decode == campaign.offered_rho(plan, loaded)
+    assert prefill / (prefill + decode) < .2 and decode > .8
     assert campaign.phase_share(campaign.SHAPES["prefill_heavy"], RATES) > .9
     assert campaign.phase_share(campaign.SHAPES["decode_heavy"], RATES) < .05
     campaign.validate_rates(RATES)
