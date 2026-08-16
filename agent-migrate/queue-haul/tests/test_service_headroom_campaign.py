@@ -95,6 +95,37 @@ def test_plan_has_three_restart_blocks_for_each_hardware_direction_and_load():
     campaign.validate_plan(json.loads(json.dumps(plan)))
 
 
+def test_hybrid_model_service_plan_pins_runtime_and_cache_geometry(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    model = "Qwen/Qwen3.8-27B"
+    plan = campaign.make_plan(model)
+    cfg = campaign.testbed.Config(
+        model=model, max_num_batched_tokens=1567, service_campaign=True,
+    )
+
+    assert plan["stack"]["max_num_batched_tokens"] == 1567
+    assert plan["stack"]["gpu_memory_utilization"] == .9
+    assert not plan["stack"]["disable_hybrid_kv_cache_manager"]
+    campaign.validate_plan(json.loads(json.dumps(plan)))
+    campaign.testbed.validate_model_runtime(cfg)
+    vllm = " ".join(map(str, campaign.testbed.vllm_cmd(cfg, "sink")))
+    cache = " ".join(map(str, campaign.testbed.mp_server_cmd(cfg, "sink")))
+    assert "--dtype bfloat16" in vllm
+    assert "--language-model-only" in vllm
+    assert "--mamba-cache-mode align" in vllm
+    assert "--gpu-memory-utilization 0.9" in vllm
+    assert "--disable-hybrid-kv-cache-manager" not in vllm
+    assert "--chunk-size 784" in cache
+    assert "--separate-object-groups" in cache
+    campaign.testbed.validate_model_runtime_log(
+        cfg, "KV cache dtype bfloat16; attention block size to 784 tokens",
+    )
+    rates = {**RATES, "cache_chunk_tokens": 784}
+    assert campaign.parked_prefix_tokens(rates) % 784 == 0
+    assert campaign.parked_prefix_tokens(rates) != campaign.parked_prefix_tokens(RATES)
+
+
 def test_incumbent_trace_is_paired_and_offered_work_is_context_normalized():
     plan = campaign.make_plan()
     baseline = campaign.offered_trace(plan, RATES, "prefill_heavy", .25, 0)

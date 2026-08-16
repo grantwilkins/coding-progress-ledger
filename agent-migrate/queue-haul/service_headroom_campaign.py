@@ -15,7 +15,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -61,7 +61,9 @@ def digest(value) -> str:
     ).encode()).hexdigest()
 
 
-def make_plan() -> dict:
+def make_plan(model: str = testbed.MODEL) -> dict:
+    spec = testbed.model_spec(model)
+    specialized = model != testbed.MODEL
     calibration = [
         {"cell_id": f"{hardware}-cal-{phase}-n{concurrency}-b{block}",
          "hardware": hardware, "kind": "calibration", "phase": phase,
@@ -95,7 +97,7 @@ def make_plan() -> dict:
     cells = calibration + headroom + controls
     return {
         "schema": SCHEMA, "image_sha256": IMAGE_SHA256,
-        "model": testbed.MODEL, "context_tokens": CONTEXT,
+        "model": model, "context_tokens": CONTEXT,
         "base_rho": BASE_RHO, "loads": list(LOADS), "blocks": BLOCKS,
         "warmup_s": 60, "measurement_s": 240, "drain_s": 180,
         "request_timeout_s": 180, "max_send_lateness_s": .05,
@@ -105,11 +107,12 @@ def make_plan() -> dict:
         "p99_min_incumbent_requests": 1000,
         "stack": {
             "tensor_parallel_size": 1, "max_model_len": 32768,
-            "max_num_seqs": 256, "max_num_batched_tokens": 8192,
+            "max_num_seqs": 256, "max_num_batched_tokens": spec.batched_tokens,
             "kv_cache_dtype": "auto", "block_size": 16,
-            "gpu_memory_utilization": .75, "chunked_prefill": True,
+            "gpu_memory_utilization": .9 if specialized else .75,
+            "chunked_prefill": True,
             "prefix_caching": True, "enforce_eager": True,
-            "disable_hybrid_kv_cache_manager": True,
+            "disable_hybrid_kv_cache_manager": not specialized,
             "async_scheduling": False, "stream_interval": 1,
             "runtime_versions": {
                 "apptainer": list(testbed.MP_RUNTIME_VERSIONS),
@@ -140,7 +143,7 @@ def make_plan() -> dict:
 def validate_plan(plan: dict) -> None:
     if plan.get("schema") == CONFIRM_SCHEMA:
         validate_confirmation_plan(plan)
-    elif plan != make_plan():
+    elif plan != make_plan(plan.get("model", testbed.MODEL)):
         raise ValueError("service-headroom plan changed from the frozen design")
 
 
@@ -214,7 +217,7 @@ def make_confirmation_plan(core: dict, scout: dict, hardware: str) -> dict:
 
 
 def validate_confirmation_plan(plan: dict) -> None:
-    core = make_plan()
+    core = make_plan(plan.get("model", testbed.MODEL))
     common = ("image_sha256", "model", "context_tokens", "base_rho", "loads",
               "blocks", "warmup_s", "measurement_s", "drain_s",
               "request_timeout_s", "max_send_lateness_s", "kv_match_tolerance",
@@ -267,8 +270,9 @@ def shape_for(name: str, rates: dict) -> Shape:
 
 
 def parked_prefix_tokens(rates: dict) -> int:
+    chunk = rates.get("cache_chunk_tokens", 16)
     return SESSIONS_PER_SHAPE * sum(
-        (shape_for(name, rates).prefix_tokens - 1) // 16 * 16
+        (shape_for(name, rates).prefix_tokens - 1) // chunk * chunk
         for name in ("prefill_heavy", "decode_heavy", "balanced"))
 
 
@@ -296,14 +300,16 @@ def runtime_contract(plan: dict, cfg: testbed.Config, extra: list[str], gpu: dic
         raise RuntimeError("formal cells forbid extra vLLM arguments")
     commands = semantic_commands(commands)
     stack = plan["stack"]
+    specialized = cfg.model != testbed.MODEL
     actual = {"tensor_parallel_size": 1,
               "max_model_len": cfg.max_model_len,
               "max_num_seqs": cfg.max_num_seqs,
               "max_num_batched_tokens": cfg.max_num_batched_tokens,
               "kv_cache_dtype": "auto", "block_size": 16,
-              "gpu_memory_utilization": .75, "chunked_prefill": True,
+              "gpu_memory_utilization": .9 if specialized else .75,
+              "chunked_prefill": True,
               "prefix_caching": True, "enforce_eager": True,
-              "disable_hybrid_kv_cache_manager": True,
+              "disable_hybrid_kv_cache_manager": not specialized,
               "async_scheduling": False, "stream_interval": 1}
     expected = {key: value for key, value in stack.items()
                 if key != "runtime_versions"}
@@ -319,7 +325,8 @@ def runtime_contract(plan: dict, cfg: testbed.Config, extra: list[str], gpu: dic
             or list(versions) != stack["runtime_versions"].get(mode) \
             or not valid_runtime:
         raise RuntimeError("serving stack differs from the frozen plan")
-    identity = {"model": cfg.model, "model_revision": testbed.MODEL_REVISION,
+    identity = {"model": cfg.model,
+                "model_revision": testbed.model_spec(cfg.model).revision,
                 "runtime": runtime, "runtime_versions": list(versions),
                 "git_sha": git_sha,
                 "gpu": gpu, "scheduler": actual, "commands": commands}
@@ -691,6 +698,7 @@ def destination_stack(cfg: testbed.Config, root: Path, hardware: str,
         )
         testbed.wait_health_process(cfg.host, cfg.sink_port, testbed.health_timeout(),
                                     engine, root / "sink.log")
+        testbed.validate_model_runtime_log(cfg, testbed.read_text(root / "sink.log"))
         capacity = vllm_kv_capacity(root / "sink.log")
         metadata = {"hardware": identity["gpu"], "preflight": preflight,
                     "runtime_identity": identity,
@@ -999,6 +1007,8 @@ def reduce_calibration(plan: dict, hardware: str, root: Path) -> dict:
              "runtime_identity_sha256": rows[0]["runtime_identity_sha256"],
              "normalizer_kind": "synchronized_burst_throughput",
              "kv_capacity_tokens": next(iter(capacities))}
+    if plan["model"] != testbed.MODEL:
+        rates["cache_chunk_tokens"] = testbed.model_spec(plan["model"]).chunk_tokens
     edge_censored = False
     for phase in ("prefill", "decode"):
         peaks, peak_concurrency = [], []
@@ -1306,6 +1316,8 @@ def parse_args(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     prepare = sub.add_parser("prepare")
     prepare.add_argument("--out", type=Path, required=True)
+    prepare.add_argument("--model", choices=testbed.MODEL_SPECS,
+                         default=testbed.MODEL)
     confirmation = sub.add_parser("prepare-confirmation")
     confirmation.add_argument("--plan", type=Path, required=True)
     confirmation.add_argument("--scout", type=Path, required=True)
@@ -1343,7 +1355,7 @@ def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(make_plan(), indent=2) + "\n")
+        args.out.write_text(json.dumps(make_plan(args.model), indent=2) + "\n")
         return
     if args.command == "prepare-confirmation":
         plan = make_confirmation_plan(
@@ -1358,6 +1370,8 @@ def main(argv=None) -> None:
         if cell is None:
             raise ValueError("unknown service-headroom cell")
         cfg = testbed.config_from_args(args)
+        if plan["model"] != testbed.MODEL:
+            cfg = replace(cfg, service_campaign=True)
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] \
             else args.extra_vllm_args
         identity = collect_runtime_identity(

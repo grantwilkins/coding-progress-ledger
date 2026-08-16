@@ -1523,6 +1523,20 @@ uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom
 uv run python service_headroom_campaign.py reduce --plan runs/service-headroom/plan.json --hardware a100 --runs /datadrive/service-headroom --ttft-target-s 1 --tpot-target-s .1 --out /datadrive/service-headroom/a100-scout.json
 ```
 
+The same one-GPU campaign supports the pinned Qwen3.8-27B and
+Gemma-4-26B-A4B checkpoints. Pass the identical model to `prepare` and every
+`run-cell`; Qwen additionally requires `--max-num-batched-tokens 1567`.
+Non-GPT cells hard-check BF16 KV, model-specific arguments, and Qwen's
+784-token unified/cache-group alignment. Their normalization records the
+model-specific cache chunk used to compute resident stock:
+
+```bash
+uv run python service_headroom_campaign.py prepare --model Qwen/Qwen3.8-27B --out runs/service-headroom/qwen-plan.json
+uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/qwen-plan.json --model Qwen/Qwen3.8-27B --max-num-batched-tokens 1567 --cell-id CELL --out /datadrive/service-headroom-qwen
+uv run python service_headroom_campaign.py prepare --model google/gemma-4-26B-A4B-it --out runs/service-headroom/gemma-plan.json
+uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/gemma-plan.json --model google/gemma-4-26B-A4B-it --cell-id CELL --out /datadrive/service-headroom-gemma
+```
+
 The discovery result cannot update P1/P2. Generate and execute its unseen
 confirmation plan, then reduce it:
 

@@ -170,6 +170,7 @@ class Config:
     max_num_seqs: int = 256
     max_num_batched_tokens: int = 8192
     architecture_campaign: bool = False
+    service_campaign: bool = False
 
 
 @dataclass(frozen=True)
@@ -241,24 +242,26 @@ def model_campaign_config(model: str) -> Config:
 
 def model_chunk_tokens(cfg: Config) -> int:
     return model_spec(cfg.model).chunk_tokens \
-        if getattr(cfg, "architecture_campaign", False) else 256
+        if getattr(cfg, "architecture_campaign", False) \
+        or getattr(cfg, "service_campaign", False) else 256
 
 
 def validate_model_runtime(cfg: Config) -> None:
-    if not cfg.architecture_campaign:
+    if not (cfg.architecture_campaign or cfg.service_campaign):
         if cfg.model != MODEL:
-            raise ValueError("additional models require architecture_campaign")
+            raise ValueError("additional models require a model campaign")
         return
     spec = model_spec(cfg.model)
+    expected_seqs = 256 if cfg.service_campaign else 8
     if (cfg.max_model_len, cfg.max_num_seqs, cfg.max_num_batched_tokens) != (
-            32768, 8, spec.batched_tokens):
-        raise ValueError("architecture-campaign runtime geometry changed")
+            32768, expected_seqs, spec.batched_tokens):
+        raise ValueError("model-campaign runtime geometry changed")
     if lmcache_mode() != "mp":
-        raise ValueError("architecture campaign requires QH_LMCACHE_MODE=mp")
+        raise ValueError("model campaigns require QH_LMCACHE_MODE=mp")
 
 
 def validate_model_runtime_log(cfg: Config, text: str) -> None:
-    if not cfg.architecture_campaign:
+    if not (cfg.architecture_campaign or cfg.service_campaign):
         return
     if not re.search(r"(?:bfloat16|bf16).{0,80}kv.?cache|kv.?cache.{0,80}(?:bfloat16|bf16)",
                      text, re.IGNORECASE):
@@ -422,7 +425,8 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
         "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(),
         "--eviction-policy", "LRU",
         "--chunk-size", model_chunk_tokens(cfg),
-        *(["--separate-object-groups"] if cfg.architecture_campaign
+        *(["--separate-object-groups"] if (cfg.architecture_campaign
+          or cfg.service_campaign)
           and spec.separate_object_groups else []),
         "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
@@ -474,7 +478,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         "--max-num-batched-tokens",
         cfg.max_num_batched_tokens,
         *(["--dtype", "bfloat16", *spec.vllm_args]
-          if cfg.architecture_campaign else []),
+          if cfg.architecture_campaign or cfg.service_campaign else []),
         "--kv-cache-dtype",
         "auto",
         "--block-size",
@@ -485,8 +489,10 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         *(["--enable-sleep-mode"] if role == "source" and (
             sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
         ) else []),
-        *(["--gpu-memory-utilization", 0.9 if cfg.architecture_campaign else 0.75,
-           *([] if cfg.architecture_campaign else ["--disable-hybrid-kv-cache-manager"]),
+        *(["--gpu-memory-utilization", 0.9 if cfg.architecture_campaign
+           or cfg.service_campaign else 0.75,
+           *([] if cfg.architecture_campaign or cfg.service_campaign
+             else ["--disable-hybrid-kv-cache-manager"]),
            "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         "--kv-transfer-config",
         kv_config(engine_id, kv_role, kv_port, rpc_port),
