@@ -273,10 +273,8 @@ def write_capacity_plot(summary, out):
     axis.xaxis.label.set_size(10)
     axis.yaxis.label.set_size(10)
     axis.grid(alpha=.2)
-    handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, fontsize=7.5, ncol=1,
-               loc="center left", bbox_to_anchor=(.63, .5))
-    fig.subplots_adjust(left=.25, right=.62, bottom=.2, top=.97)
+    axis.legend(frameon=False, fontsize=7.5, loc="lower left")
+    fig.subplots_adjust(left=.25, right=.97, bottom=.2, top=.97)
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
