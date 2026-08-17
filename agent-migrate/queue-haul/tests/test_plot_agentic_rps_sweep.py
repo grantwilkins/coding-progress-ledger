@@ -40,6 +40,8 @@ def test_plot_selects_sorted_gpt_oss_curve_and_fixed_slos(tmp_path, monkeypatch)
 
     assert output.with_suffix(".pdf").is_file()
     assert len(axes) == 2
+    assert plt.gcf().get_figwidth() <= 3.5
+    assert axes[0].get_position().x0 < axes[1].get_position().x0
     assert list(axes[0].lines[0].get_xdata()) == [1, 2]
     assert list(axes[0].lines[0].get_ydata()) == [1, 2]
     assert axes[0].lines[0].get_label() == "OpenHands Agentic"
@@ -78,13 +80,16 @@ def test_plot_compares_matching_hardware_with_one_shared_slo(tmp_path,
     monkeypatch.setattr(plt, "close", lambda figure: None)
 
     plotter.plot(summary, tmp_path, h100)
-    lines = plt.gcf().axes[0].lines
+    figure = plt.gcf()
+    lines = figure.axes[0].lines
 
     assert [line.get_label() for line in lines] == [
         "Agent - A100", "Agent - H100", "SLO"]
     assert [list(line.get_ydata()) for line in lines] == [[3], [1], [1, 1]]
-    assert [list(line.get_ydata()) for line in plt.gcf().axes[1].lines] \
+    assert [list(line.get_ydata()) for line in figure.axes[1].lines] \
         == [[30], [50], [50, 50]]
+    assert [text.get_text() for text in figure.legends[0].texts] == [
+        "Agent - A100", "Agent - H100", "SLO"]
     plt.close("all")
 
 

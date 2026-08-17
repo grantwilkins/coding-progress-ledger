@@ -33,7 +33,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
         if h100_result["slo"] != result["slo"]:
             raise ValueError("A100 and H100 SLOs do not match")
         curves["h100"] = h100_result["curve"]
-    figure, axes = plt.subplots(2, 1, figsize=(4, 4), sharex=True)
+    figure, axes = plt.subplots(1, 2, figsize=(3.35, 1.9), sharex=True)
     for axis, (field, ylabel, scale) in zip(axes, METRICS):
         for hardware, rows in curves.items():
             rows = sorted(rows, key=lambda row: row["offered_rps"])
@@ -50,15 +50,16 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
             SLOS[field] * scale, color="black", linestyle=":",
             linewidth=1.2, label="SLO",
         )
-        axis.set_ylabel(ylabel, fontsize=plot_style.COLUMN_FONT_SIZE)
-        axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
+        axis.set_ylabel(ylabel, fontsize=plot_style.HALF_COLUMN_FONT_SIZE)
+        axis.set_xlabel("Rate (req/s)", fontsize=plot_style.HALF_COLUMN_FONT_SIZE)
+        axis.tick_params(labelsize=plot_style.HALF_COLUMN_FONT_SIZE)
         axis.grid(alpha=.2)
-    axes[-1].set_xlabel("Rate (req/s)", fontsize=plot_style.COLUMN_FONT_SIZE)
     axes[-1].set_xlim(0, max(row["offered_rps"] for rows in curves.values()
                              for row in rows) + .25)
-    axes[0].legend(frameon=False, ncol=1, loc="upper left",
-                   fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE)
-    figure.subplots_adjust(left=.19, right=.97, bottom=.13, top=.97, hspace=.12)
+    handles, labels = axes[0].get_legend_handles_labels()
+    figure.legend(handles, labels, frameon=False, ncol=len(handles),
+                  loc="upper center", fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE)
+    figure.subplots_adjust(left=.14, right=.98, bottom=.24, top=.76, wspace=.42)
     output.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("pdf", "png"):
         figure.savefig(output.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
