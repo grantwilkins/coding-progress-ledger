@@ -138,6 +138,7 @@ def test_attainment_export_matches_action_panel_size(monkeypatch):
 
     assert tuple(plt.gcf().get_size_inches()) == plotter.PANEL_FIGSIZE
     assert plt.gca().get_xlabel() == "Time (s)"
-    assert "25 s goal" in [text.get_text() for text in
+    assert plt.gca().lines[-1].get_xdata()[0] == 30
+    assert "30 s goal" in [text.get_text() for text in
                            plt.gca().get_legend().get_texts()]
     plt.close("all")

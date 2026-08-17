@@ -172,7 +172,7 @@ def summarize(rows: list[dict], bundle: dict, target_fraction: float,
     }
 
 
-def plot(curve: list[dict], cutoff_s: float, horizon_s: float,
+def plot(curve: list[dict], _cutoff_s: float, horizon_s: float,
          output: Path) -> None:
     fig, axis = plt.subplots(figsize=PANEL_FIGSIZE)
     for policy in POLICIES:
@@ -185,12 +185,12 @@ def plot(curve: list[dict], cutoff_s: float, horizon_s: float,
             label=plot_style.SCHEDULE_COMPARISON_NAMES[policy],
         )
     axis.axvline(
-        cutoff_s, color=plot_style.EVENT_COLORS["shed_target"],
+        30, color=plot_style.EVENT_COLORS["shed_target"],
         linestyle=plot_style.EVENT_LINESTYLES["repair_decision"],
-        linewidth=1.5, label="25 s goal",
+        linewidth=1.5, label="30 s goal",
     )
     axis.set(xlim=(0, horizon_s), ylim=(0, 100),
-             xticks=(0, 25, 60, 120), yticks=(0, 50, 100),
+             xticks=(0, 30, 60, 120), yticks=(0, 50, 100),
              xlabel="Time (s)", ylabel="Target attainment (%)")
     axis.grid(axis="y", alpha=.2)
     axis.tick_params(labelsize=PANEL_FONT_SIZE)
