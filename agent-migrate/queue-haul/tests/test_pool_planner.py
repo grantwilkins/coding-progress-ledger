@@ -42,6 +42,7 @@ Plausible wrong implementations:
 - Materialize every source prefix even though recovery retains a bounded frontier.
 - Reverse or mis-scale the HiGHS target row or skip maximum-gain fallback.
 - Leave an integrally feasible target unmet after fractional LP rounding.
+- Leave an integrally feasible target unmet after greedy selection.
 - Route the existing `lp` solver through HiGHS instead of keeping it additive.
 - Charge migration work during shortfall minimization or omit the session dual.
 - Run Phase II at an infeasible requested target instead of maximum attainable gain.
@@ -255,6 +256,20 @@ def test_highs_lp_recovers_an_integrally_feasible_target_after_rounding():
 
     assert _lp_highs(table, 10) == {1, 2}
 
+
+def test_greedy_repairs_an_integrally_feasible_target():
+    sessions = tuple(SimpleNamespace(session_id=name) for name in "abc")
+    candidates = tuple(
+        Candidate(i, "replay", 0, gain, 1, duration, (), 0, (0, 0), 0)
+        for i, (gain, duration) in enumerate(((6, 1), (5, 2), (5, 2)))
+    )
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(3)),
+        csr_matrix(np.array(((.6, .5, .5),))),
+        ("route",), (1,), ("fraction",), 10,
+    )
+
+    assert _greedy(table, 10, repair=True) == {1, 2}
 
 def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):
     scenario = replace(problem(), sessions=(

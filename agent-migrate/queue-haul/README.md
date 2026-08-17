@@ -1350,7 +1350,8 @@ trailing power window, and retains misses as missing CDF mass. Every policy
 appends the same relaxed-horizon
 independent-fastest tail for unadmitted sessions after the scoring deadline,
 analogous to the hardware campaign tail. Queue-Haul uses the target-aware
-HiGHS LP with integral target recovery. Regenerate it with
+HiGHS LP with integral target recovery; Queue-Haul Greedy shares that recovery
+only when its one-pass choice misses an integrally feasible target. Regenerate it with
 `uv run python plot_workload_policy_attainment.py`.
 
 | Internal name | Display name | Okabe–Ito | Line |

@@ -849,7 +849,28 @@ def _scarcity_prices(table, matrix, eligible=None):
     return np.maximum(demand, 1)
 
 
-def _greedy(table: CandidateTable, target: float, eligible=None):
+def _integral_target_recovery(table, target):
+    n = len(table.candidates)
+    if not n:
+        return None
+    gains = np.array([c.credit for c in table.candidates])
+    work = np.array([c.objective_cost_s for c in table.candidates])
+    matrix = vstack((table.incidence, table.resources), format="csr")
+    result = milp(
+        work / table.migration_horizon_s, integrality=np.ones(n),
+        bounds=Bounds(0, 1), constraints=(
+            LinearConstraint(matrix, -np.inf, 1),
+            LinearConstraint(gains, target - 1e-8, np.inf),
+        ),
+    )
+    if result.success:
+        return set(np.flatnonzero(result.x > .5))
+    if result.status != 2:
+        raise RuntimeError(f"integral target recovery returned {result.message}")
+    return None
+
+
+def _greedy(table: CandidateTable, target: float, eligible=None, repair=False):
     matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
     eligible = tuple(range(len(table.candidates))) if eligible is None else tuple(eligible)
     prices, score = _scarcity_prices(table, matrix, eligible), []
@@ -871,6 +892,10 @@ def _greedy(table: CandidateTable, target: float, eligible=None):
         sessions.add(c.session)
         usage[rows] += values
         gain += c.credit
+    if repair and gain < target - 1e-8:
+        recovered = _integral_target_recovery(table, target)
+        if recovered is not None:
+            return recovered
     return selected
 
 
@@ -1302,18 +1327,9 @@ def _round_lp(table, target, values):
             usage[rows] += added
             gain += c.credit
     if gain < target - 1e-8:
-        matrix = vstack((table.incidence, table.resources), format="csr")
-        result = milp(
-            work / table.migration_horizon_s, integrality=np.ones(n),
-            bounds=Bounds(0, 1), constraints=(
-                LinearConstraint(matrix, -np.inf, 1),
-                LinearConstraint(gains, target - 1e-8, np.inf),
-            ),
-        )
-        if result.success:
-            return set(np.flatnonzero(result.x > .5))
-        if result.status != 2:
-            raise RuntimeError(f"LP target recovery returned {result.message}")
+        recovered = _integral_target_recovery(table, target)
+        if recovered is not None:
+            return recovered
     return selected
 
 
@@ -2557,6 +2573,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
         selected, assignment = _greedy_lagrangian(
             table, target, power, architecture, scenario, mode, True,
         )
+    elif solver == "greedy":
+        selected = _greedy(table, target, repair=True)
     elif solver in {"isolated_fastest", "random", "replay_only", "kv_only"}:
         selected = _baseline_policy(table, target, solver, seed)
     else:
