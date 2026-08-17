@@ -25,8 +25,9 @@ import service_headroom_campaign as headroom
 import single_gpu_capacity_campaign as capacity
 
 
-SCHEMA = "queue-haul-agentic-rps-sweep-v2"
-PARENT_SCHEMA = "queue-haul-agentic-rps-sweep-v1"
+SCHEMA = "queue-haul-agentic-rps-sweep-v3"
+PARENT_SCHEMA = "queue-haul-agentic-rps-sweep-v2"
+PARENT_PLAN_SHA256 = "194ad7d6e376e903fb7ce3db7f40df925942f8cb21b91e2d6fb890a39825512d"
 MODELS = tuple(testbed.MODEL_SPECS)
 BASE_RATES_RPS = (.125, .25, .5, 1.0, 2.0, 4.0, 8.0)
 REFINEMENT_RATES_RPS = {
@@ -48,9 +49,9 @@ BOUNDARY_REPEATS = (1, 2)
 REQUEST_TIMEOUT_S = 1800.0
 FIXED_SLOS = {
     "openai/gpt-oss-20b": {"p90_ttft_s": 2.0,
-                            "p90_mean_tpot_s": .1},
+                            "p90_tpot_s": .1},
     "google/gemma-4-26B-A4B-it": {"p90_ttft_s": 2.0,
-                                   "p90_mean_tpot_s": .2},
+                                   "p90_tpot_s": .2},
 }
 
 
@@ -69,52 +70,7 @@ def write_json(path: Path, value) -> None:
     temporary.replace(path)
 
 
-def _legacy_plan(seed: int) -> dict:
-    """Reconstruct the immutable parent plan used by the completed cells."""
-    return {
-        "schema": PARENT_SCHEMA,
-        "campaign": "agentic_rps_sweep",
-        "hardware": "a100",
-        "models": list(MODELS),
-        "model_revisions": {
-            model: testbed.model_spec(model).revision for model in MODELS
-        },
-        "request_shape": {
-            "prompt_tokens": PROMPT_TOKENS,
-            "output_tokens": OUTPUT_TOKENS,
-            "source": "fixed compact shape derived from the OpenHands coding trace",
-        },
-        "rates_rps": list(BASE_RATES_RPS),
-        "requests_per_point": REQUESTS_PER_POINT,
-        "boundary_repeats": list(BOUNDARY_REPEATS),
-        "request_timeout_s": REQUEST_TIMEOUT_S,
-        "slo": {
-            "fixed": {
-                "openai/gpt-oss-20b": FIXED_SLOS["openai/gpt-oss-20b"],
-            },
-            "relative_models": [
-                "Qwen/Qwen3.8-27B", "google/gemma-4-26B-A4B-it",
-            ],
-            "relative_baseline_rps": BASE_RATES_RPS[0],
-            "relative_multiplier": 2.0,
-        },
-        "runtime": capacity.make_runtime_contract(),
-        "semantics": {
-            "open_loop_poisson": True,
-            "max_concurrency": None,
-            "run_all_rates_after_violation": True,
-            "slo_is_control_flow": False,
-            "service_failures_are_outcomes": True,
-            "unique_private_prompts": True,
-            "forced_exact_output_length": True,
-            "one_engine_per_model_unless_service_restart_is_needed": True,
-        },
-        "seed": seed,
-    }
-
-
 def _plan(seed: int) -> dict:
-    parent = _legacy_plan(seed)
     return {
         "schema": SCHEMA,
         "campaign": "agentic_rps_sweep",
@@ -137,10 +93,13 @@ def _plan(seed: int) -> dict:
             model: list(REFINEMENT_RATES_RPS[model]) for model in MODELS
         },
         "parent": {
-            "schema": parent["schema"],
-            "plan_sha256": digest(parent),
-            "reusable_rates_rps": list(BASE_RATES_RPS),
-            "relationship": "same request and runtime contract; denser offered-rate grid",
+            "schema": PARENT_SCHEMA,
+            "plan_sha256": PARENT_PLAN_SHA256,
+            "reusable_rates_rps": [],
+            "relationship": (
+                "same request and runtime contract; cells require re-reduction "
+                "from token timestamps because TPOT aggregation changed"
+            ),
         },
         "implementation": {
             "campaign_source_sha256": hashlib.sha256(
@@ -167,6 +126,7 @@ def _plan(seed: int) -> dict:
             "forced_exact_output_length": True,
             "one_engine_per_model_unless_service_restart_is_needed": True,
             "refinement_points_predeclared": True,
+            "tpot_definition": "p90_of_all_exact_post_first_token_intervals",
         },
         "seed": seed,
     }
@@ -288,8 +248,10 @@ def summarize_cell(plan: dict, cell: dict, requests: list[dict],
     exact = [row for row in completed if serving.exact_token_timing(row)]
     ttft = [float(row["ttft_s"]) for row in completed
             if row.get("ttft_s") is not None]
-    tpot = [float(row["mean_tpot_s"]) for row in exact
-            if row.get("mean_tpot_s") is not None]
+    tpot = [float(value) for row in exact
+            for value in row.get("token_itls_s", [])]
+    request_mean_tpot = [float(row["mean_tpot_s"]) for row in exact
+                         if row.get("mean_tpot_s") is not None]
     scheduled = sorted(int(row["scheduled_ns"]) for row in requests)
     starts = sorted(int(row["start_ns"]) for row in requests)
     peak_running = max((row.get("vllm:num_requests_running", 0)
@@ -306,7 +268,12 @@ def summarize_cell(plan: dict, cell: dict, requests: list[dict],
         "failed": plan["requests_per_point"] - len(completed),
         "exact_timing": len(exact),
         "p90_ttft_s": float(np.quantile(ttft, .9)) if ttft else None,
-        "p90_mean_tpot_s": float(np.quantile(tpot, .9)) if tpot else None,
+        "p90_tpot_s": float(np.quantile(tpot, .9)) if tpot else None,
+        "diagnostic_p90_request_mean_tpot_s": (
+            float(np.quantile(request_mean_tpot, .9))
+            if request_mean_tpot else None
+        ),
+        "tpot_samples": len(tpot),
         "scheduled_span_s": ((scheduled[-1] - scheduled[0]) / 1e9
                              if len(scheduled) > 1 else 0.0),
         "actual_start_span_s": ((starts[-1] - starts[0]) / 1e9
@@ -366,11 +333,7 @@ def read_result(plan: dict, cell: dict, path: Path) -> dict:
     same_cell = all(result.get(key) == value for key, value in cell.items())
     current = result.get("schema") == SCHEMA \
         and result.get("plan_sha256") == digest(plan)
-    parent = plan["parent"]
-    reusable_parent = result.get("schema") == parent["schema"] \
-        and result.get("plan_sha256") == parent["plan_sha256"] \
-        and cell["offered_rps"] in parent["reusable_rates_rps"]
-    if not same_cell or not (current or reusable_parent):
+    if not same_cell or not current:
         raise RuntimeError(f"stale or invalid sweep result: {cell['cell_id']}")
     return result
 
@@ -420,9 +383,8 @@ def derive_slo(plan: dict, model: str, discovery: list[dict]) -> dict:
     return {
         "p90_ttft_s": (baseline["p90_ttft_s"] * multiplier
                        if baseline.get("p90_ttft_s") is not None else None),
-        "p90_mean_tpot_s": (baseline["p90_mean_tpot_s"] * multiplier
-                            if baseline.get("p90_mean_tpot_s") is not None
-                            else None),
+        "p90_tpot_s": (baseline["p90_tpot_s"] * multiplier
+                       if baseline.get("p90_tpot_s") is not None else None),
         "source": f"{multiplier:g}x-{baseline_rate:g}-rps-baseline",
     }
 
@@ -431,7 +393,7 @@ def metric_violation(row: dict, slo: dict) -> bool:
     return any(
         row.get(field) is not None and slo.get(field) is not None
         and row[field] > slo[field]
-        for field in ("p90_ttft_s", "p90_mean_tpot_s")
+        for field in ("p90_ttft_s", "p90_tpot_s")
     )
 
 
@@ -470,7 +432,7 @@ def run_model(plan: dict, model: str, root: Path) -> None:
 def aggregate_rate(rows: list[dict], rate: float) -> dict:
     matches = [row for row in rows if row["offered_rps"] == rate]
     aggregate = {"offered_rps": rate, "repeats": len(matches)}
-    for field in ("p90_ttft_s", "p90_mean_tpot_s"):
+    for field in ("p90_ttft_s", "p90_tpot_s"):
         values = [float(row[field]) for row in matches
                   if row.get(field) is not None]
         aggregate.update({
@@ -498,7 +460,7 @@ def reduce_model(plan: dict, model: str, root: Path) -> tuple[list[dict], dict]:
         row["offered_rps"] for row in aggregated
         if row["repeats"] >= 3 and metric_violation({
             "p90_ttft_s": row["p90_ttft_s_median"],
-            "p90_mean_tpot_s": row["p90_mean_tpot_s_median"],
+            "p90_tpot_s": row["p90_tpot_s_median"],
         }, slo)
     ), None)
     return rows, {

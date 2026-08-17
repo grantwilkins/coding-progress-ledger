@@ -19,7 +19,7 @@ plot_style.apply()
 
 METRICS = (
     ("p90_ttft_s", "P90 TTFT (s)"),
-    ("p90_mean_tpot_s", "P90 mean TPOT (s)"),
+    ("p90_tpot_s", "P90 TPOT (s)"),
 )
 
 

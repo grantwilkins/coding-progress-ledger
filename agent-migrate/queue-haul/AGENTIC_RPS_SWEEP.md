@@ -30,10 +30,11 @@ unless a limit is explicitly requested.
 - Repeat the first discovery violation and the preceding rate twice more. The
   three boundary observations produce median curves and min-max whiskers.
 
-The dense plan is schema v2 and names the immutable schema-v1 parent plan
-hash. A copied parent result is reusable only at one of the seven original
-rates and only when its schema, plan hash, and complete cell identity match.
-The four added rates always produce new v2 cells.
+The plan is schema v3. TPOT is the P90 over all exact post-first-token
+intervals in a cell, pooled across its 32 fixed-length requests. The earlier
+schema-v2 results used P90 over per-request mean TPOT and therefore cannot be
+used directly; they must be re-reduced from their retained token timestamps or
+rerun.
 
 The fixed SLOs are 2.0 s TTFT / 0.1 s TPOT for GPT-OSS and 2.0 s TTFT /
 0.2 s TPOT for Gemma. Qwen uses twice its 0.125-RPS P90 baseline for each

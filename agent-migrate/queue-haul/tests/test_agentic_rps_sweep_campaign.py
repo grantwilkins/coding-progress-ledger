@@ -32,8 +32,10 @@ def test_plan_is_fixed_shape_open_loop_and_runs_every_rate():
     assert plan["semantics"]["refinement_points_predeclared"]
     assert plan["slo"]["fixed"]["google/gemma-4-26B-A4B-it"] == {
         "p90_ttft_s": 2,
-        "p90_mean_tpot_s": .2,
+        "p90_tpot_s": .2,
     }
+    assert plan["semantics"]["tpot_definition"] \
+        == "p90_of_all_exact_post_first_token_intervals"
     assert plan["slo"]["relative_models"] == ["Qwen/Qwen3.8-27B"]
 
 
@@ -66,7 +68,7 @@ def synthetic_result(plan, model, rate, repeat, ttft, tpot):
         "failed": 0,
         "exact_timing": 32,
         "p90_ttft_s": ttft,
-        "p90_mean_tpot_s": tpot,
+        "p90_tpot_s": tpot,
     }
 
 
@@ -114,38 +116,30 @@ def test_reduction_repeats_only_observed_boundary_and_never_gates(tmp_path):
                     if row["offered_rps"] == violation)["repeats"] == 3
         if model == "openai/gpt-oss-20b":
             assert result["slo"]["p90_ttft_s"] == 2
-            assert result["slo"]["p90_mean_tpot_s"] == .1
+            assert result["slo"]["p90_tpot_s"] == .1
         elif model == "google/gemma-4-26B-A4B-it":
             assert result["slo"]["p90_ttft_s"] == 2
-            assert result["slo"]["p90_mean_tpot_s"] == .2
+            assert result["slo"]["p90_tpot_s"] == .2
         else:
             assert result["slo"]["p90_ttft_s"] == 2
-            assert result["slo"]["p90_mean_tpot_s"] == .08
+            assert result["slo"]["p90_tpot_s"] == .08
 
 
-def test_parent_power_of_two_cells_are_reused_but_refinement_is_not(tmp_path):
+def test_old_mean_tpot_cells_are_not_reused(tmp_path):
     plan = campaign.make_plan(seed=1)
     assert plan["parent"]["plan_sha256"] \
-        == "4709014a6cbaa32104531be1c9e0482094a4f3ac6d155fb44d015f13473b67ed"
+        == campaign.PARENT_PLAN_SHA256
+    assert plan["parent"]["reusable_rates_rps"] == []
     model = "openai/gpt-oss-20b"
     cell = campaign.cell_spec(model, 4, 0)
     row = synthetic_result(plan, model, 4, 0, 1.0, .04)
-    row.update({
-        "schema": campaign.PARENT_SCHEMA,
-        "plan_sha256": plan["parent"]["plan_sha256"],
-    })
+    row.update({"schema": campaign.PARENT_SCHEMA,
+                "plan_sha256": campaign.PARENT_PLAN_SHA256})
     write_result(tmp_path, row)
 
-    assert campaign.read_result(
-        plan, cell, campaign.result_path(tmp_path, cell)) == row
-
-    row["offered_rps"] = 3
-    row["cell_id"] = campaign.cell_id(model, 3, 0)
-    write_result(tmp_path, row)
-    refinement = campaign.cell_spec(model, 3, 0)
     with pytest.raises(RuntimeError, match="stale or invalid"):
         campaign.read_result(
-            plan, refinement, campaign.result_path(tmp_path, refinement))
+            plan, cell, campaign.result_path(tmp_path, cell))
 
 
 def test_service_failures_remain_curve_data():
@@ -156,7 +150,8 @@ def test_service_failures_remain_curve_data():
         "finish_reason": "length", "output_tokens": 1024,
         "recorded_output_tokens": 1024, "planned_output_tokens": 1024,
         "exact_token_timestamps": True, "ttft_s": 1.0,
-        "mean_tpot_s": .05, "scheduled_ns": index * 10,
+        "mean_tpot_s": .05, "token_itls_s": [.01, .02, .03, .20],
+        "scheduled_ns": index * 10,
         "start_ns": index * 10, "send_lateness_s": 0,
     } for index in range(3)]
 
@@ -169,4 +164,7 @@ def test_service_failures_remain_curve_data():
     assert result["completed"] == 3
     assert result["failed"] == 29
     assert result["p90_ttft_s"] == 1
+    assert result["p90_tpot_s"] == pytest.approx(.20)
+    assert result["tpot_samples"] == 12
+    assert result["diagnostic_p90_request_mean_tpot_s"] == .05
     assert "one client failed" in result["client_error"]

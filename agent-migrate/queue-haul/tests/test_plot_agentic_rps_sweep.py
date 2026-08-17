@@ -13,13 +13,13 @@ def result(model):
             "p90_ttft_s_median": ttft,
             "p90_ttft_s_minimum": ttft - .1,
             "p90_ttft_s_maximum": ttft + .1,
-            "p90_mean_tpot_s_median": tpot,
-            "p90_mean_tpot_s_minimum": tpot - .005,
-            "p90_mean_tpot_s_maximum": tpot + .005,
+            "p90_tpot_s_median": tpot,
+            "p90_tpot_s_minimum": tpot - .005,
+            "p90_tpot_s_maximum": tpot + .005,
         })
     return {
         "model": model,
-        "slo": {"p90_ttft_s": 2, "p90_mean_tpot_s": .1},
+        "slo": {"p90_ttft_s": 2, "p90_tpot_s": .1},
         "first_confirmed_violation_rps": .5,
         "curve": curve,
     }
