@@ -882,8 +882,9 @@ session counts and count shares remain in the CSV; they intentionally differ
 from phase-load weighting because a few sessions can carry most of the load.
 Target misses and one-factor-release checks remain in the output tables.
 The eight states are independent branches. Their fractional LP opportunity
-sets must expand on every release; any rounded-planner regressions are reported
-rather than repaired with a counterfactual plan. Noisy bootstrap route draws
+sets must expand on every release. If greedy LP rounding misses the target, an
+integral recovery minimizes migration work under the same target and resource
+constraints. Noisy bootstrap route draws
 are minimally projected to preserve natural bandwidth at or above the measured
 40%-route condition, and the projection rate is recorded.
 
@@ -1173,7 +1174,8 @@ source for assumed paper operating points and their replacement evidence.
 The default pool LP remains the Clarabel implementation. The experimental
 `lp_highs` solver runs the same relaxation and rounder through SciPy/HiGHS;
 resource rows are assembled directly from candidate nonzeros, and maximum-gain
-fallback uses a scale-relative normalized feasibility margin.
+fallback uses a scale-relative normalized feasibility margin. Its rounder uses
+exact integral recovery only when its heuristic selection misses the target.
 `lp_column_generation` is a Phase-I/Phase-II prototype with a reported
 primal-dual certificate. It materializes the full candidate table and rebuilds
 restricted masters, so it is a correctness reference rather than the
@@ -1348,7 +1350,7 @@ deadline-blind policies, includes the trailing power window, and retains misses
 as missing CDF mass. Every policy appends the same relaxed-horizon
 independent-fastest tail for unadmitted sessions after the scoring deadline,
 analogous to the hardware campaign tail. Queue-Haul uses the target-aware
-HiGHS LP. Regenerate it with
+HiGHS LP with integral target recovery. Regenerate it with
 `uv run python plot_workload_policy_attainment.py`.
 
 | Internal name | Display name | Okabe–Ito | Line |
