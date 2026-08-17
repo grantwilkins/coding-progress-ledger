@@ -26,7 +26,9 @@ def test_plot_writes_combined_curve_with_boundary_whiskers(tmp_path):
             "input_tokens": 3920, "output_tokens": 1024,
             "requests_per_point": 32, "rates_rps": list(campaign.RATES),
             "ttft_slo_s": 1, "tpot_slo_s": .1,
-            "boundary": {"predecessor_rps": 1, "first_violating_rps": 2},
+            "boundary": ({"predecessor_rps": 1, "first_violating_rps": 2}
+                         if index else None),
+            "whisker_rates_rps": [1, 2],
             "curve": curve,
         }))
         roots.append(root)

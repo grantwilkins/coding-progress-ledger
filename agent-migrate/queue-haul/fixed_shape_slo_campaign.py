@@ -231,8 +231,8 @@ def aggregate(rows: list[dict], plan: dict) -> list[dict]:
     return output
 
 
-def write_summary(root: Path, plan: dict, rows: list[dict], boundary: tuple[float, float],
-                  identity: dict) -> dict:
+def write_summary(root: Path, plan: dict, rows: list[dict], pair: tuple[float, float],
+                  identity: dict, bracketed: bool = True) -> dict:
     compact = [{key: value for key, value in row.items()
                 if key not in ("offered_trace", "runtime_identity")}
                for row in sorted(rows, key=lambda row: (row["offered_rps"],
@@ -243,8 +243,10 @@ def write_summary(root: Path, plan: dict, rows: list[dict], boundary: tuple[floa
                "input_tokens": INPUT_TOKENS, "output_tokens": OUTPUT_TOKENS,
                "requests_per_point": REQUESTS, "rates_rps": list(RATES),
                "ttft_slo_s": plan["ttft_slo_s"], "tpot_slo_s": plan["tpot_slo_s"],
-               "boundary": {"predecessor_rps": boundary[0],
-                            "first_violating_rps": boundary[1]},
+               "boundary": ({"predecessor_rps": pair[0],
+                             "first_violating_rps": pair[1]} if bracketed else None),
+               "boundary_bracketed": bracketed,
+               "whisker_rates_rps": list(pair),
                "runs": compact,
                "curve": aggregate(rows, plan)}
     (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -284,6 +286,7 @@ def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
 
         rows = [one(expected) for expected in plan["base_cells"]]
         boundary = first_boundary(rows)
+        bracketed = True
         if boundary[0] is None:
             violation = boundary[1]
             for cells in plan["lower_bracket_cells"]:
@@ -293,7 +296,8 @@ def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
                     break
                 violation = rows[-1]["offered_rps"]
             else:
-                raise RuntimeError("conditional lower ladder does not bracket the SLO")
+                boundary = tuple(sorted(row["offered_rps"] for row in rows)[:2])
+                bracketed = False
         for replicate in range(1, BOUNDARY_REPEATS + 1):
             for rate in boundary:
                 expected = (cell(rate, RATES.index(rate), replicate, plan["seed"])
@@ -301,7 +305,7 @@ def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
                                 cells[replicate] for cells in plan["lower_bracket_cells"]
                                 if cells[0]["offered_rps"] == rate))
                 rows.append(one(expected))
-        write_summary(root, plan, rows, boundary, identity)
+        write_summary(root, plan, rows, boundary, identity, bracketed)
 
 
 def parse_args(argv=None):

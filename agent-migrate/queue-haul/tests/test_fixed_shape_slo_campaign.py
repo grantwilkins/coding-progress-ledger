@@ -53,3 +53,13 @@ def test_boundary_aggregation_reports_three_run_min_max_whiskers():
     assert predecessor["replicates"] == violation["replicates"] == 3
     assert (predecessor["p90_ttft_s_min"], predecessor["p90_ttft_s_max"]) == (.4, .6)
     assert (violation["p90_ttft_s_min"], violation["p90_ttft_s_max"]) == (1.2, 1.4)
+
+
+def test_unbracketed_summary_marks_lowest_pair_as_whiskers(tmp_path):
+    plan = campaign.make_plan("openai/gpt-oss-20b")
+    rows = [result(rate, violation=True) for rate in (.015625, .03125, *campaign.RATES)]
+    summary = campaign.write_summary(tmp_path, plan, rows, (.015625, .03125), {}, False)
+
+    assert summary["boundary"] is None
+    assert summary["boundary_bracketed"] is False
+    assert summary["whisker_rates_rps"] == [.015625, .03125]

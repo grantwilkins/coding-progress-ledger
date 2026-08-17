@@ -30,7 +30,7 @@ def load(roots: list[Path]) -> tuple[list[dict], dict]:
     if len(contract) != 1:
         raise ValueError("fixed-shape summaries use different contracts")
     rows = [{**point, "boundary": point["offered_rps"] in
-             summary["boundary"].values()}
+             (summary.get("whisker_rates_rps") or summary["boundary"].values())}
             for summary in summaries for point in summary["curve"]]
     hardware, input_tokens, output_tokens, requests, rates, ttft, tpot = contract.pop()
     return rows, {"hardware": hardware, "input_tokens": input_tokens,
