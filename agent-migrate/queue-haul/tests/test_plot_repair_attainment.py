@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Aggregate action transitions without conserving pending actions.
 - Keep abbreviated resources or stale action-axis and legend labels.
 - Emit panels too wide or with typography too small for side-by-side use.
+- Give the two exported panels different physical dimensions.
 """
 
 from pathlib import Path
@@ -124,4 +125,19 @@ def test_response_plots_are_separate_and_use_requested_labels(monkeypatch):
     assert all(text.get_fontsize() >= plotter.PANEL_LEGEND_FONT_SIZE
                for figure in figures for text in
                figure.axes[0].get_legend().get_texts())
+    plt.close("all")
+
+
+def test_attainment_export_matches_action_panel_size(monkeypatch):
+    rows = plotter.paired_rows(_bundle(), .5)
+    curve = plotter.attainment_curve(rows, 120, 25)
+    monkeypatch.setattr(plt.Figure, "savefig", lambda *args, **kwargs: None)
+    monkeypatch.setattr(plt, "close", lambda figure: None)
+
+    plotter.plot(curve, 25, 120, Path("attainment_cdf"))
+
+    assert tuple(plt.gcf().get_size_inches()) == plotter.PANEL_FIGSIZE
+    assert plt.gca().get_xlabel() == "Time (s)"
+    assert "25 s goal" in [text.get_text() for text in
+                           plt.gca().get_legend().get_texts()]
     plt.close("all")
