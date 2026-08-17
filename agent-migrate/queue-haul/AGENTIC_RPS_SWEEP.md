@@ -71,10 +71,11 @@ uv run python agentic_rps_sweep_campaign.py prepare \
   --out runs/agentic-rps-sweep-a100/plan.json
 ```
 
-Use `--hardware h100` for the identical H100 campaign; the runtime validates
-that the visible GPU matches the plan and leaves CUDA architecture selection
-to that GPU. Runtime provenance allows up to three minutes for vLLM to
-serialize its full server configuration before failing the launch.
+Use `--hardware h100` for the same workload on the optimized H100 runtime. It
+validates the visible GPU, leaves CUDA architecture selection to that GPU, and
+enables vLLM compilation and CUDA graphs; the A100 runtime remains eager.
+Runtime provenance allows up to three minutes for vLLM to serialize its full
+server configuration before failing the launch.
 
 Run one model per node. These commands are independent and can run in
 parallel:

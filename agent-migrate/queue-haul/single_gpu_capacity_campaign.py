@@ -126,13 +126,13 @@ def validate_plan(plan: dict) -> None:
         raise ValueError("invalid single-GPU capacity plan")
 
 
-def make_runtime_contract() -> dict:
+def make_runtime_contract(enforce_eager: bool = True) -> dict:
     return {
         "gpu_count": 1, "tensor_parallel_size": 1,
         "dtype": "bfloat16", "kv_cache_dtype": "auto",
         "max_model_len": MAX_MODEL_LEN, "max_num_seqs": MAX_NUM_SEQS,
         "gpu_memory_utilization": .9, "chunked_prefill": True,
-        "prefix_caching": True, "enforce_eager": True,
+        "prefix_caching": True, "enforce_eager": enforce_eager,
         "lmcache_mode": "mp",
     }
 

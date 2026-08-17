@@ -14,6 +14,7 @@ import json
 import os
 import statistics
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -120,7 +121,7 @@ def _plan(seed: int, hardware: str) -> dict:
             "relative_baseline_rps": BASE_RATES_RPS[0],
             "relative_multiplier": 2.0,
         },
-        "runtime": capacity.make_runtime_contract(),
+        "runtime": capacity.make_runtime_contract(hardware == "a100"),
         "semantics": {
             "open_loop_poisson": True,
             "max_concurrency": None,
@@ -213,8 +214,8 @@ def prepared_trace(plan: dict, model: str, rate: float,
     return rows
 
 
-def model_config(model: str) -> testbed.Config:
-    return capacity.model_config(model)
+def model_config(model: str, hardware: str = "a100") -> testbed.Config:
+    return replace(capacity.model_config(model), enforce_eager=hardware == "a100")
 
 
 def runtime_identity(plan: dict, cfg: testbed.Config, commands: dict) -> dict:
@@ -432,7 +433,7 @@ def run_specs(plan: dict, model: str, specs: list[dict], root: Path) -> None:
             pending.append(cell)
     if not pending:
         return
-    cfg = model_config(model)
+    cfg = model_config(model, plan["hardware"])
     restart = len(list((root / "stacks" / slug(model)).glob("restart-*")))
     while pending:
         commands = capacity.stack_commands(cfg)

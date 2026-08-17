@@ -44,7 +44,11 @@ def test_h100_plan_changes_only_hardware():
     a100 = campaign.make_plan(seed=7)
     h100 = campaign.make_plan(seed=7, hardware="h100")
 
-    assert h100 == {**a100, "hardware": "h100"}
+    assert h100 == {**a100, "hardware": "h100",
+                    "runtime": {**a100["runtime"], "enforce_eager": False}}
+    assert campaign.model_config("openai/gpt-oss-20b").enforce_eager
+    assert not campaign.model_config(
+        "openai/gpt-oss-20b", "h100").enforce_eager
 
 
 def test_trace_forces_long_output_and_unique_private_prompts():

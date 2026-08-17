@@ -145,6 +145,15 @@ def test_capacity_and_architecture_modes_are_mutually_exclusive(monkeypatch):
         testbed.validate_model_runtime(cfg)
 
 
+def test_optimized_runtime_does_not_force_eager(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    cfg = replace(testbed.Config(), enforce_eager=False)
+
+    assert "--enforce-eager" not in testbed.shell(
+        testbed.vllm_cmd(cfg, "sink", [], gpu_index=0))
+
+
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):
     with pytest.raises(ValueError, match="unsupported model"):
         testbed.model_path(testbed.Config(model="example/unknown", hf_home=tmp_path))
