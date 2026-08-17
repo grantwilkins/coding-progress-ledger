@@ -110,3 +110,11 @@ def test_knee_plan_requires_bound_explosion_and_freezes_dense_rates(tmp_path):
     high.write_text(__import__("json").dumps(row))
     with pytest.raises(RuntimeError, match="does not meet"):
         campaign.explosion_evidence(tmp_path)
+
+
+def test_explosion_plan_runs_only_low_and_high_endpoints():
+    plan = campaign.make_explosion_plan("Qwen/Qwen3.8-27B", 7)
+
+    assert plan["rates_rps"] == [.125, 8]
+    assert [row["poisson_seed"] for row in plan["base_cells"]] == [207, 208]
+    assert not plan["lower_bracket_cells"] and plan["boundary_repeats"] == 0

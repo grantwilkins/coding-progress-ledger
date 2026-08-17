@@ -32,6 +32,7 @@ KNEE_RATES = {
     "google/gemma-4-26B-A4B-it": tuple(index / 2 for index in range(9, 16)),
 }
 EXPLOSION_TTFT_RATIO = 4
+EXPLOSION_RATES = (RATES[0], RATES[-1])
 
 
 def rate_label(rate: float) -> str:
@@ -77,8 +78,11 @@ def explosion_evidence(root: Path) -> dict:
     plan = json.loads((root / "plan.json").read_text())
     if (plan.get("schema"), plan.get("hardware"), plan.get("input_tokens"),
             plan.get("output_tokens"), plan.get("requests_per_point"),
-            plan.get("rates_rps")) != (SCHEMA, "h100", INPUT_TOKENS,
-                                       OUTPUT_TOKENS, REQUESTS, list(RATES)):
+            plan.get("rates_rps")) not in ((SCHEMA, "h100", INPUT_TOKENS,
+                                            OUTPUT_TOKENS, REQUESTS, list(RATES)),
+                                           (SCHEMA, "h100", INPUT_TOKENS,
+                                            OUTPUT_TOKENS, REQUESTS,
+                                            list(EXPLOSION_RATES))):
         raise ValueError("invalid historical base-sweep contract")
     rows = {row["offered_rps"]: row for row in (
         json.loads(path.read_text()) for path in (root / "base").glob("*/result.json"))}
@@ -115,12 +119,23 @@ def make_knee_plan(model: str, evidence: dict, seed: int = DEFAULT_SEED) -> dict
                            for index, rate in enumerate(rates)]}
 
 
+def make_explosion_plan(model: str, seed: int = DEFAULT_SEED) -> dict:
+    plan = make_plan(model, seed=seed)
+    return {**plan, "design": "explosion", "rates_rps": list(EXPLOSION_RATES),
+            "boundary_repeats": 0, "conditional_lower_bracket_rps": [],
+            "lower_bracket_cells": [],
+            "base_cells": [cell(rate, index, 0, seed + 200)
+                           for index, rate in enumerate(EXPLOSION_RATES)]}
+
+
 def read_plan(path: Path) -> dict:
     plan = json.loads(path.read_text())
     expected = (make_knee_plan(plan.get("model", ""),
                                plan.get("explosion_evidence", {}),
                                plan.get("seed", -1))
                 if plan.get("design") == "knee" else
+                make_explosion_plan(plan.get("model", ""), plan.get("seed", -1))
+                if plan.get("design") == "explosion" else
                 make_plan(plan.get("model", ""), plan.get("ttft_slo_s", 0),
                           plan.get("tpot_slo_s", 0), plan.get("seed", -1)))
     if plan != expected:
@@ -355,7 +370,7 @@ def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
             return result
 
         rows = [one(expected) for expected in plan["base_cells"]]
-        if plan.get("design") == "knee":
+        if plan.get("design") in ("explosion", "knee"):
             write_summary(root, plan, rows, (), identity, False, False)
             return
         boundary = first_boundary(rows)
@@ -389,7 +404,8 @@ def parse_args(argv=None):
     prepare.add_argument("--ttft-slo-s", type=float, default=1.)
     prepare.add_argument("--tpot-slo-s", type=float, default=.1)
     prepare.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    prepare.add_argument("--design", choices=("base", "knee"), default="base")
+    prepare.add_argument("--design", choices=("base", "explosion", "knee"),
+                         default="base")
     prepare.add_argument("--base-root", type=Path)
     prepare.add_argument("--out", type=Path, required=True)
     run = sub.add_parser("run-model")
@@ -409,7 +425,8 @@ def main(argv=None) -> None:
             raise ValueError("knee design requires --base-root")
         args.out.parent.mkdir(parents=True, exist_ok=True)
         plan = (make_knee_plan(args.model, explosion_evidence(args.base_root), args.seed)
-                if args.design == "knee" else make_plan(
+                if args.design == "knee" else make_explosion_plan(args.model, args.seed)
+                if args.design == "explosion" else make_plan(
                     args.model, args.ttft_slo_s, args.tpot_slo_s, args.seed))
         args.out.write_text(json.dumps(plan, indent=2) + "\n")
         return
