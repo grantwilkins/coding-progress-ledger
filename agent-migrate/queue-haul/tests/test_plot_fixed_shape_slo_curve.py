@@ -67,3 +67,22 @@ def test_plot_accepts_upper_curve_without_slo_or_whiskers(tmp_path):
 
     assert not any(row["boundary"] for row in rows)
     assert contract["ttft_slo_s"] is contract["tpot_slo_s"] is None
+
+
+def test_dense_knees_merge_with_base_contract(tmp_path):
+    roots = []
+    for index, model in enumerate(plot_style.MODELS):
+        root = tmp_path / f"knee-{index}"
+        root.mkdir()
+        (root / "summary.json").write_text(json.dumps({
+            "schema": campaign.SCHEMA, "model": model, "hardware": "h100",
+            "input_tokens": 3920, "output_tokens": 1024,
+            "requests_per_point": 32, "curve": [{"model": model,
+                "offered_rps": campaign.KNEE_RATES[model][0]}]}))
+        roots.append(root)
+
+    rows = plot.load_knees(roots, {"hardware": "h100", "input_tokens": 3920,
+                                   "output_tokens": 1024,
+                                   "requests_per_point": 32})
+
+    assert len(rows) == 3 and not any(row["boundary"] for row in rows)

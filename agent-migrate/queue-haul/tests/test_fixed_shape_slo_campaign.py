@@ -65,7 +65,7 @@ def test_unbracketed_summary_marks_lowest_pair_as_whiskers(tmp_path):
     assert summary["whisker_rates_rps"] == [.015625, .03125]
 
 
-def test_upper_reduction_uses_only_base_rates_without_slo_claim(monkeypatch, tmp_path):
+def test_upper_reduction_uses_only_base_rates_without_slo_claim(tmp_path):
     plan = campaign.make_plan("openai/gpt-oss-20b")
     identity = {"sha256": campaign.service.digest({})}
     for expected in plan["base_cells"]:
@@ -83,3 +83,29 @@ def test_upper_reduction_uses_only_base_rates_without_slo_claim(monkeypatch, tmp
     assert len(summary["curve"]) == len(campaign.RATES)
     assert summary["boundary"] is None and summary["whisker_rates_rps"] == []
     assert summary["ttft_slo_s"] is summary["tpot_slo_s"] is None
+
+
+def test_knee_plan_requires_bound_explosion_and_freezes_dense_rates(tmp_path):
+    plan = campaign.make_plan("openai/gpt-oss-20b")
+    (tmp_path / "plan.json").write_text(__import__("json").dumps(plan))
+    for rate, ttft, peak in ((.125, 1., 4), (8., 4., 32)):
+        path = tmp_path / "base" / campaign.cell(rate, 0, 0, plan["seed"])["cell_id"]
+        path.mkdir(parents=True)
+        (path / "result.json").write_text(__import__("json").dumps({
+            "offered_rps": rate, "status": "complete", "drained": True,
+            "exact_completions": 32, "p90_ttft_s": ttft,
+            "max_in_system_requests": peak}))
+
+    evidence = campaign.explosion_evidence(tmp_path)
+    knee = campaign.make_knee_plan(plan["model"], evidence)
+
+    assert knee["rates_rps"] == list(campaign.KNEE_RATES[plan["model"]])
+    assert knee["explosion_evidence"] == evidence
+    assert not knee["lower_bracket_cells"] and knee["boundary_repeats"] == 0
+
+    high = tmp_path / "base" / "rps8-rep0" / "result.json"
+    row = __import__("json").loads(high.read_text())
+    row["p90_ttft_s"] = 3.99
+    high.write_text(__import__("json").dumps(row))
+    with pytest.raises(RuntimeError, match="does not meet"):
+        campaign.explosion_evidence(tmp_path)

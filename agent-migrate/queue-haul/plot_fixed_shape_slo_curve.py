@@ -39,6 +39,20 @@ def load(roots: list[Path]) -> tuple[list[dict], dict]:
                   "tpot_slo_s": tpot}
 
 
+def load_knees(roots: list[Path], contract: dict) -> list[dict]:
+    summaries = [json.loads((root / "summary.json").read_text()) for root in roots]
+    if {row.get("schema") for row in summaries} != {campaign.SCHEMA} \
+            or {row["model"] for row in summaries} != set(plot_style.MODELS) \
+            or any((row["hardware"], row["input_tokens"], row["output_tokens"],
+                    row["requests_per_point"]) !=
+                   (contract["hardware"], contract["input_tokens"],
+                    contract["output_tokens"], contract["requests_per_point"])
+                   for row in summaries):
+        raise ValueError("knee summaries differ from the base contract")
+    return [{**point, "boundary": False}
+            for summary in summaries for point in summary["curve"]]
+
+
 def write(rows: list[dict], contract: dict, out: Path) -> None:
     plot_style.apply()
     fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.2), sharex=True)
@@ -95,9 +109,13 @@ def write(rows: list[dict], contract: dict, out: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-root", action="append", type=Path, required=True)
+    parser.add_argument("--knee-root", action="append", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    write(*load(args.run_root), args.out)
+    rows, contract = load(args.run_root)
+    if args.knee_root:
+        rows += load_knees(args.knee_root, contract)
+    write(rows, contract, args.out)
 
 
 if __name__ == "__main__":

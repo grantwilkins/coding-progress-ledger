@@ -1554,6 +1554,18 @@ uv run python fixed_shape_slo_campaign.py reduce-upper --plan RUN/plan.json --ou
 This excludes conditional lower probes and repeat cells from the primary curve
 and draws no SLO line; their raw artifacts remain in the run root.
 
+The dense knee follow-up defines an observed explosion as 8-RPS P90 TTFT at
+least 4x the 0.125-RPS value plus all 32 requests simultaneously in system.
+`prepare --design knee` hard-validates and binds those endpoint results, then
+runs seven ungated rates: GPT `{2.25,...,3.75}`, Qwen
+`{0.5625,...,0.9375}`, and Gemma `{4.5,...,7.5}` RPS.
+
+```bash
+uv run python fixed_shape_slo_campaign.py prepare --design knee --model MODEL --base-root BASE-RUN --out KNEE-RUN/plan.json
+uv run python fixed_shape_slo_campaign.py run-model --plan KNEE-RUN/plan.json --model MODEL --out KNEE-RUN
+uv run python plot_fixed_shape_slo_curve.py --run-root BASE-GPT --run-root BASE-QWEN --run-root BASE-GEMMA --knee-root KNEE-GPT --knee-root KNEE-QWEN --knee-root KNEE-GEMMA --out outputs/fixed-shape-slo-h100/curve
+```
+
 Set `QH_LMCACHE_MODE=mp`; use `QH_RUNTIME=native` on the validated native
 vLLM/LMCache stack. The older normalized-rho campaign below remains the path
 for an additive admission bound, but it is not the current offered-RPS

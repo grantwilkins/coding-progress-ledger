@@ -26,6 +26,12 @@ REQUESTS = 32
 BOUNDARY_REPEATS = 2
 DEFAULT_SEED = 20260816
 LOWER_BRACKET_RATES = tuple(RATES[0] / 2**step for step in range(1, 4))
+KNEE_RATES = {
+    "openai/gpt-oss-20b": tuple(index / 4 for index in range(9, 16)),
+    "Qwen/Qwen3.8-27B": tuple(index / 16 for index in range(9, 16)),
+    "google/gemma-4-26B-A4B-it": tuple(index / 2 for index in range(9, 16)),
+}
+EXPLOSION_TTFT_RATIO = 4
 
 
 def rate_label(rate: float) -> str:
@@ -67,10 +73,51 @@ def make_plan(model: str, ttft_slo_s: float = 1., tpot_slo_s: float = .1,
                 for index, rate in enumerate(LOWER_BRACKET_RATES)]}
 
 
+def explosion_evidence(root: Path) -> dict:
+    plan = read_plan(root / "plan.json")
+    rows = {row["offered_rps"]: row for row in (
+        json.loads(path.read_text()) for path in (root / "base").glob("*/result.json"))}
+    low, high = rows.get(RATES[0]), rows.get(RATES[-1])
+    if not low or not high or any(row["status"] != "complete" or not row["drained"]
+                                 or row["exact_completions"] != REQUESTS
+                                 for row in (low, high)):
+        raise RuntimeError("explosion endpoints are incomplete")
+    ratio = high["p90_ttft_s"] / low["p90_ttft_s"]
+    if ratio < EXPLOSION_TTFT_RATIO or high["max_in_system_requests"] != REQUESTS:
+        raise RuntimeError("8 RPS does not meet the frozen explosion definition")
+    return {"model": plan["model"], "base_plan_sha256": service.digest(plan),
+            "low_rps": RATES[0], "high_rps": RATES[-1],
+            "p90_ttft_ratio": ratio,
+            "high_max_in_system_requests": high["max_in_system_requests"],
+            "endpoint_result_sha256": [service.digest(row) for row in (low, high)]}
+
+
+def make_knee_plan(model: str, evidence: dict, seed: int = DEFAULT_SEED) -> dict:
+    if model not in KNEE_RATES or evidence.get("model") != model \
+            or evidence.get("low_rps") != RATES[0] \
+            or evidence.get("high_rps") != RATES[-1] \
+            or evidence.get("p90_ttft_ratio", 0) < EXPLOSION_TTFT_RATIO \
+            or evidence.get("high_max_in_system_requests") != REQUESTS \
+            or len(evidence.get("endpoint_result_sha256", ())) != 2:
+        raise ValueError("invalid explosion evidence")
+    rates = KNEE_RATES[model]
+    plan = make_plan(model, seed=seed)
+    return {**plan, "design": "knee", "explosion_evidence": evidence,
+            "rates_rps": list(rates), "boundary_repeats": 0,
+            "conditional_lower_bracket_rps": [], "lower_bracket_cells": [],
+            "base_cells": [cell(rate, index, 0, seed + 100)
+                           for index, rate in enumerate(rates)]}
+
+
 def read_plan(path: Path) -> dict:
     plan = json.loads(path.read_text())
-    if plan != make_plan(plan.get("model", ""), plan.get("ttft_slo_s", 0),
-                         plan.get("tpot_slo_s", 0), plan.get("seed", -1)):
+    expected = (make_knee_plan(plan.get("model", ""),
+                               plan.get("explosion_evidence", {}),
+                               plan.get("seed", -1))
+                if plan.get("design") == "knee" else
+                make_plan(plan.get("model", ""), plan.get("ttft_slo_s", 0),
+                          plan.get("tpot_slo_s", 0), plan.get("seed", -1)))
+    if plan != expected:
         raise ValueError("fixed-shape plan is not canonical")
     return plan
 
@@ -242,7 +289,7 @@ def write_summary(root: Path, plan: dict, rows: list[dict], pair: tuple[float, .
                "plan_sha256": service.digest(plan), "runtime_identity": identity,
                "runtime_identity_sha256": service.identity_sha(identity),
                "input_tokens": INPUT_TOKENS, "output_tokens": OUTPUT_TOKENS,
-               "requests_per_point": REQUESTS, "rates_rps": list(RATES),
+               "requests_per_point": REQUESTS, "rates_rps": plan["rates_rps"],
                "ttft_slo_s": plan["ttft_slo_s"] if include_slos else None,
                "tpot_slo_s": plan["tpot_slo_s"] if include_slos else None,
                "boundary": ({"predecessor_rps": pair[0],
@@ -302,6 +349,9 @@ def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
             return result
 
         rows = [one(expected) for expected in plan["base_cells"]]
+        if plan.get("design") == "knee":
+            write_summary(root, plan, rows, (), identity, False, False)
+            return
         boundary = first_boundary(rows)
         bracketed = True
         if boundary[0] is None:
@@ -333,6 +383,8 @@ def parse_args(argv=None):
     prepare.add_argument("--ttft-slo-s", type=float, default=1.)
     prepare.add_argument("--tpot-slo-s", type=float, default=.1)
     prepare.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    prepare.add_argument("--design", choices=("base", "knee"), default="base")
+    prepare.add_argument("--base-root", type=Path)
     prepare.add_argument("--out", type=Path, required=True)
     run = sub.add_parser("run-model")
     run.add_argument("--plan", type=Path, required=True)
@@ -347,9 +399,13 @@ def parse_args(argv=None):
 def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
+        if args.design == "knee" and args.base_root is None:
+            raise ValueError("knee design requires --base-root")
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(make_plan(
-            args.model, args.ttft_slo_s, args.tpot_slo_s, args.seed), indent=2) + "\n")
+        plan = (make_knee_plan(args.model, explosion_evidence(args.base_root), args.seed)
+                if args.design == "knee" else make_plan(
+                    args.model, args.ttft_slo_s, args.tpot_slo_s, args.seed))
+        args.out.write_text(json.dumps(plan, indent=2) + "\n")
         return
     plan = read_plan(args.plan)
     if args.command == "reduce-upper":
