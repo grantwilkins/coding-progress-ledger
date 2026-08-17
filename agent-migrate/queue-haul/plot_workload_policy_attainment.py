@@ -25,6 +25,7 @@ POLICIES = {
     "replay_only": "replay_only",
 }
 FIGSIZE = (3.85, 2.5)
+LABEL_SIZE = 7
 plot_style.apply()
 
 
@@ -179,19 +180,19 @@ def write_plot(rows, path):
     axis.text(
         deadline, .4, "30 s deadline", transform=axis.get_xaxis_transform(),
         ha="center", va="center", rotation=90, fontstyle="italic",
-        fontsize=9,
+        fontsize=LABEL_SIZE,
         bbox={"facecolor": "white", "edgecolor": "none", "pad": 1},
     )
     axis.set(xlim=(0, min(horizon, 60)), ylim=(0, 1.02),
-             xlabel=f"Time to {fraction:.0%} Power-Shed Attainment (s)",
+             xlabel="Time to Power Target (s)",
              ylabel="Cumulative Distribution")
-    axis.tick_params(labelsize=10)
-    axis.xaxis.label.set_size(10)
-    axis.yaxis.label.set_size(10)
+    axis.tick_params(labelsize=LABEL_SIZE)
+    axis.xaxis.label.set_size(LABEL_SIZE)
+    axis.yaxis.label.set_size(LABEL_SIZE)
     axis.grid(alpha=.25)
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False,
-               fontsize=7, handlelength=1.8, columnspacing=1)
+        fontsize=LABEL_SIZE, handlelength=1.8, columnspacing=1)
     fig.subplots_adjust(left=.19, right=.98, bottom=.22, top=.7)
     path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
