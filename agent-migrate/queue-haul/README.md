@@ -1340,6 +1340,12 @@ labels, and ticks, 11-point legends and annotations, 3-point lines, and 220 DPI.
 Plot-specific layouts may use the shared compact size. New and modified plot
 producers must inherit it. Policy identities are:
 
+`plot_workload_policy_attainment.py` pools all eight constraint states and all
+paired workload, timing, and power draws into one modeled deadline-attainment
+CDF. It compares Queue-Haul with independent-fastest and power-blind planning;
+the CSV retains one row per policy, draw, and constraint state. Regenerate it
+with `uv run python plot_workload_policy_attainment.py`.
+
 | Internal name | Display name | Okabe–Ito | Line |
 |---|---|---:|---|
 | `queue_haul` | Queue-Haul LP | `#0072B2` | solid |
