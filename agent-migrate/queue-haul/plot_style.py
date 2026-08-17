@@ -165,7 +165,7 @@ REPAIR_COLORS = {
     "revised_maximum": "#D55E00",
 }
 SCHEDULE_COMPARISON_NAMES = {
-    "replan": "QH replan",
+    "replan": "Queue-Haul replan",
     "no_replan": "No replan",
 }
 SCHEDULE_COMPARISON_COLORS = {

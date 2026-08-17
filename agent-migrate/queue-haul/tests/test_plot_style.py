@@ -51,7 +51,7 @@ def test_selected_actions_have_unique_hatches():
 
 def test_repair_comparison_has_canonical_policy_and_event_styles():
     assert plot_style.SCHEDULE_COMPARISON_NAMES == {
-        "replan": "QH replan", "no_replan": "No replan"}
+        "replan": "Queue-Haul replan", "no_replan": "No replan"}
     assert plot_style.SCHEDULE_COMPARISON_COLORS["replan"] \
         == plot_style.POLICY_COLORS["queue_haul"]
     assert set(plot_style.EVENT_NAMES) == {
