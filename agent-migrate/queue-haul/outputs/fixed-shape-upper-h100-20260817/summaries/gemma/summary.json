@@ -1,0 +1,1570 @@
+{
+  "schema": "queue-haul-fixed-shape-slo-v1",
+  "model": "google/gemma-4-26B-A4B-it",
+  "hardware": "h100",
+  "plan_sha256": "6f553e6bf3b8be35315b8b8e308636662478056ff67d7ca7f95c3a991fbe0951",
+  "runtime_identity": {
+    "model": "google/gemma-4-26B-A4B-it",
+    "model_revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
+    "runtime": {
+      "mode": "native",
+      "environment": {
+        "python": "3.12.13 (main, Jul 18 2026, 17:02:19) [Clang 22.1.3 ]",
+        "packages": [
+          [
+            "aiofile",
+            "3.12.3",
+            "0cdf496b435bc42ac33d07e8a10b980ea79188c203a172569a1aeec0596fa2ea"
+          ],
+          [
+            "aiofiles",
+            "25.1.0",
+            "e3fa09d80891aacbff2844e3b25cafa706d5c12bfeef193c074299f6bee0c4be"
+          ],
+          [
+            "aiohappyeyeballs",
+            "2.7.1",
+            "14263431f101aad85e690b74756640a356c3f311654f0db92305c7fd5fcfa75c"
+          ],
+          [
+            "aiohttp",
+            "3.14.3",
+            "bc34b38778b0573b047023f313f60fa8f87fef8f2318b6709b043ed3b8f5dfa3"
+          ],
+          [
+            "aiosignal",
+            "1.4.0",
+            "b9a6cd07dac78298d856613e8140b7da26b20506ed07747802bd513bf9b3ea35"
+          ],
+          [
+            "annotated-doc",
+            "0.0.5",
+            "eee5b3b5754ae1cb431e5aba650cdab050673d518473f0fb2b4ad9f48671e2e7"
+          ],
+          [
+            "annotated-types",
+            "0.8.0",
+            "8191d3aa1ac93480688819b4db2385606219a3f7a453b85e086646134ded4f96"
+          ],
+          [
+            "anthropic",
+            "0.121.0",
+            "cb02169a7388dd4a1e71e02b7f564fdb22b879f54ec0a0dfe88a87be41ad90c0"
+          ],
+          [
+            "anyio",
+            "4.14.2",
+            "722d3bb1432c0f34f49dca8ac66fa132db1e4a2151f7104ee66a8cd44222c0b6"
+          ],
+          [
+            "apache-tvm-ffi",
+            "0.1.9",
+            "933d0bacc45bc4015bd8e283feece4e0ca8b9d01383197c1f58112a0c9f43cb1"
+          ],
+          [
+            "astor",
+            "0.8.1",
+            "09853d467a6dc3475fe8f076e538be0798969f57e8b33e614c0623f56a71fdb0"
+          ],
+          [
+            "attrs",
+            "26.1.0",
+            "6b0b326d4b4ee0fac27909ac7cbb066fc4bdf8e93d87031e27e770db059e5a04"
+          ],
+          [
+            "awscrt",
+            "0.36.1",
+            "3cc7a2be0eb8633b0585eb64e2637643c320717ac5e1efde2c07156516500b77"
+          ],
+          [
+            "blake3",
+            "1.0.9",
+            "fcdc67ec314b5b4c9854bcab77966bb8ab3f9993eda92a4cb88e7057356c9d72"
+          ],
+          [
+            "cachetools",
+            "7.1.7",
+            "eb883fe0ca808ba3ce48c5019d5735ad13eb80aa25c786651500c614cca148ec"
+          ],
+          [
+            "caio",
+            "0.12.2",
+            "935a76ad6cd517f80de3438b0b9fce472a64bcd1ac7922066642a5d6c9aa0e2c"
+          ],
+          [
+            "cbor2",
+            "6.1.4",
+            "31fdf2cedeed3c7ce754d54e573fc439e8c7c5f1e6a53c32fe1d4b389ecc87ce"
+          ],
+          [
+            "certifi",
+            "2026.7.22",
+            "cff9d243744c96445494c29abee3d592d0a6955d5504f4fbe034dce7aaf38490"
+          ],
+          [
+            "cffi",
+            "2.0.0",
+            "9d78802828bdcf6bc7b8ca907af54cea1db7007902b682982ed4097d40625972"
+          ],
+          [
+            "charset-normalizer",
+            "3.4.9",
+            "8f65823a95a819c8b215443133b8e291546173d92874b5230f5713e44dd73499"
+          ],
+          [
+            "clarabel",
+            "0.11.1",
+            "e3a2e4d34e97eb19cca3fdfc6c80cd7a916315aad5e988aa1224f8626b109c21"
+          ],
+          [
+            "click",
+            "8.4.2",
+            "f14e3990f101ef4a1dd09903eb3f859f233ec1d9bd9a00e4470f207568804d12"
+          ],
+          [
+            "cloudpickle",
+            "3.1.2",
+            "a24820e3d3ea3f0fb210f58b84abb5450a94cc649e573a9a0a69354afc6fa1de"
+          ],
+          [
+            "compressed-tensors",
+            "0.15.0.1",
+            "d4a616afc2fc0e37cdd58a05c26429c8618655311bf3799d32a62b73ea48ab95"
+          ],
+          [
+            "contourpy",
+            "1.3.3",
+            "b0fd23e6bceaf821a5069943a104623c591ea0c4ce69fcfd6f975f102e02cc74"
+          ],
+          [
+            "cryptography",
+            "50.0.0",
+            "d652ae1934eb5e602af17c8beb37942362e320d7a61a7916bbbf39140a6ded3b"
+          ],
+          [
+            "cuda-bindings",
+            "12.9.7",
+            "f0086eb6dd1fd116b6f0415cab4142f28ffee96120c7ca7c3afbe555d6d03880"
+          ],
+          [
+            "cuda-pathfinder",
+            "1.6.0",
+            "c85bfd1226261ba6af05cf2f2a59aeb296e37ec79c4a5be5c4847ee66db7a0d1"
+          ],
+          [
+            "cuda-python",
+            "12.9.7",
+            "a85500522cca2f940cbe691e02033800261b90b02118575a7ea53139269c91c5"
+          ],
+          [
+            "cuda-tile",
+            "1.5.0",
+            "978a08cbc234c1278ce5de41b23a438f59ce34027fea5bb8427c35a8c0ff3dd8"
+          ],
+          [
+            "cuda-toolkit",
+            "12.9.1",
+            "f04fa4d68fe5664f99921bc882648d6971793490246644bb1eaca2d2847f7bdc"
+          ],
+          [
+            "cufile-python",
+            "0.2.0",
+            "832ded614a9b8133de4208dd016bb897280497d37521176c5e10fda831d7ecbf"
+          ],
+          [
+            "cupy-cuda12x",
+            "14.1.1",
+            "18981909438820342d24e04af03ac3fdeb70fcf3739c7d6c563005b295d8fd00"
+          ],
+          [
+            "cvxpy",
+            "1.8.2",
+            "6ac88bee1fa663c610393b33f02e42ab7e5df67d55f98fced7f8df13e3ffe756"
+          ],
+          [
+            "cycler",
+            "0.12.1",
+            "cbcbee5f18d75bd4935199b135aa33c3ed62df14991110a35c428883798d7979"
+          ],
+          [
+            "depyf",
+            "0.20.0",
+            "0e17b93f7a5779405ad8f9d0a4ee5354b120b886d2c831a836ef98370792ccf6"
+          ],
+          [
+            "detect-installer",
+            "0.1.0",
+            "9451a881c8b6a8cfbc11f1200c3a882731456ac0fb3b607dc14f92132dd1e8ec"
+          ],
+          [
+            "dill",
+            "0.4.1",
+            "f49fbb0f031f79ca37aed6f9712873c907cd8357d509d6176aa5539e073dccf1"
+          ],
+          [
+            "diskcache",
+            "5.6.3",
+            "ab59122ad3cfc35cf47cc5b5d97ccf567fcad86a80588cfaca049a797f7088aa"
+          ],
+          [
+            "distro",
+            "1.9.0",
+            "abcd43b67dcf933c652b99b3b06896ae4e751891b62ea4792a2a9866bfa8982e"
+          ],
+          [
+            "dnspython",
+            "2.8.0",
+            "835d7f4fdc1c7488000c15b9296e76053aacb4eba2692e5b4bada924f21172c7"
+          ],
+          [
+            "docstring_parser",
+            "0.18.0",
+            "ed0a3538437bb77b4efc7e9b93ed802ac99acf1dedd7b1c5b36d0b0ef0f11398"
+          ],
+          [
+            "einops",
+            "0.8.2",
+            "f5ab2503eead94b7dbb3c722415260439feee273c0b91019e1f0788f041400bc"
+          ],
+          [
+            "email-validator",
+            "2.3.0",
+            "c9250877c94fd5133b3b47eaad0425d1c997112e73ddd4d4e95228d7cf73cbf9"
+          ],
+          [
+            "fastapi",
+            "0.141.1",
+            "e290a734d2699ece2f97f7f463309714591bf67e09167fde2f6da19dbad6cc0e"
+          ],
+          [
+            "fastapi-cli",
+            "0.0.32",
+            "cf60c41586a09255f25bb6552993bf581ef08f22a1a800abfd289c1f6b5284aa"
+          ],
+          [
+            "fastapi-cloud-cli",
+            "0.23.0",
+            "2a0597b10aae140f473789f804b57660661f1abac58febc0523eb3ffba860b82"
+          ],
+          [
+            "fastar",
+            "0.11.0",
+            "76705d9f4f05a1b39e5b8e8df7d13b53cf1e6b0291c0aa4ee2eae814d57140b6"
+          ],
+          [
+            "fastsafetensors",
+            "0.3.3",
+            "04d7ad4f2eaadc46b297f4003a4d6e4e67dde2cf61c80a9da495df40561ae001"
+          ],
+          [
+            "filelock",
+            "3.32.2",
+            "29872bd99dcbb773451d0a701b019ff5df251ebacf02be4d103b001619b8a4b1"
+          ],
+          [
+            "flashinfer-cubin",
+            "0.6.11.post2",
+            "8e4d0fb7f9ce6cc35fc9e36149adbf6c34cfe4fd426d09a817c064dae12791c8"
+          ],
+          [
+            "flashinfer-python",
+            "0.6.11.post2",
+            "a27574fc5d0fee99ebfd4bc4861cfcbb74aabbd490f8a1320bcc5cbddb968d30"
+          ],
+          [
+            "fonttools",
+            "4.62.1",
+            "b5b15ba7afefb5f943ae691b9efdb6ddd607b7cdf5662ba3963736c09cf0512e"
+          ],
+          [
+            "frozenlist",
+            "1.8.0",
+            "8f934b7c96c7ba14179d87da9876b436b260e2b97200915756ed8ab880f807fe"
+          ],
+          [
+            "fsspec",
+            "2026.7.0",
+            "bf8970ef32f4fa1da4c23e55e648fbcd3980d3d67f14268a514a5973514fd2a0"
+          ],
+          [
+            "gguf",
+            "0.19.0",
+            "f622a6c9ada1a7393a4c70b70f196d67d599dc1d9c680d38b70ef3278ec23617"
+          ],
+          [
+            "google-api-core",
+            "2.34.0",
+            "7b1b348dbb81a90c9e3fa642ff09cb703d17d41d81253b55fc74dd968be578d6"
+          ],
+          [
+            "google-auth",
+            "2.56.3",
+            "7d1d188ef9a61d5fc308a2b72ec8c858c3c59c50dda1bb157902ea8e8b15551a"
+          ],
+          [
+            "google-cloud-bigtable",
+            "2.41.0",
+            "b0028419ef1298ca4a9e06952c0d2b54e82ad9c3f2f02b92de91a5548ef4a8ed"
+          ],
+          [
+            "google-cloud-core",
+            "2.6.1",
+            "64fbeeb2ece14caeb4f866ae7ff0f3713928f00ea0b45754ac0162a5e40b257a"
+          ],
+          [
+            "google-crc32c",
+            "1.8.0",
+            "b9eec1a8402fc528c7119f89d5e18065a46dd2b23465e5eed30e658a2524bf59"
+          ],
+          [
+            "googleapis-common-protos",
+            "1.75.1",
+            "b80d608f75cd49c98bbb3e7f90639022515306ed3334dc3395ff51b3b0677a5d"
+          ],
+          [
+            "grpc-google-iam-v1",
+            "0.14.5",
+            "3f7d504213daa8a1c4174e2ed0c2cb95bd371f854ef076c81c6d8cbe2dbbb5f9"
+          ],
+          [
+            "grpcio",
+            "1.83.0",
+            "61a792505d8edd193ac79fd2a6138c5ba933a8e588c968785002883661993827"
+          ],
+          [
+            "grpcio-status",
+            "1.83.0",
+            "9a9e027927a99376f6ac8ce0a4582b8bf2f5407b9678a882bc0ff64eb2f61ce4"
+          ],
+          [
+            "h11",
+            "0.16.0",
+            "3779e13c17d8e21c769ed9ee8780af123cc3f8656185f5f8d3af258ff5639b3e"
+          ],
+          [
+            "hf-xet",
+            "1.6.0",
+            "2318fde279c6403677728a82e00f020e82cb4cee5f04ab2abc6f3fc93d7f7e3b"
+          ],
+          [
+            "highspy",
+            "1.14.0",
+            "b3a1f23ca9f1b2b4571f64192f62aa9409ebb9b787620a7a77d736c0e095342b"
+          ],
+          [
+            "httpcore",
+            "1.0.9",
+            "67cb4644d84fef1df8c5a0862c57c3380eff058a153bac7a4ba2722779982554"
+          ],
+          [
+            "httpcore2",
+            "2.10.0",
+            "1232490c3affe905f4925d29860a25c5da0c3cdfa64a272ce9577568e9f7018d"
+          ],
+          [
+            "httptools",
+            "0.8.0",
+            "ec3aaee7dba4c908829d663a4acde40782d78aecf9155e24761fa35dfe413fc8"
+          ],
+          [
+            "httpx",
+            "0.28.1",
+            "e3866ebbf964deaee14bacafaf80dd096c9e498325e5b1b8689e63004aac426c"
+          ],
+          [
+            "httpx2",
+            "2.10.0",
+            "9aec706d856311db72d1a2158566c782cbe1b3d02f472e05d887edf3abef596c"
+          ],
+          [
+            "huggingface_hub",
+            "1.27.0",
+            "470edd938df64bacf5c900077105d8a487b18b2a467030bfc83f22768e0fb2cb"
+          ],
+          [
+            "humming-kernels",
+            "0.1.2",
+            "8a103d2d00317b04d87170197107412bfb88c1114decf8477e2b07d94c170c23"
+          ],
+          [
+            "idna",
+            "3.18",
+            "be6f0a98efa8921d93c3f52a73a6f5d6cb71104dfc8407e81246553f7434a4b6"
+          ],
+          [
+            "ijson",
+            "3.5.1",
+            "6ec8c0b26104c537e262087a0cc84b0e77c3a505954c68fc44b5542917f51750"
+          ],
+          [
+            "importlib_metadata",
+            "8.7.1",
+            "52a6b8ee0de15cf7fd99625f43b97cd2e3942ac86f16054ea90de48e66f29355"
+          ],
+          [
+            "iniconfig",
+            "2.3.0",
+            "4b560f65489a4dc0f32d8403da676d2e6338c371fe844160934b3fe469785185"
+          ],
+          [
+            "interegular",
+            "0.3.3",
+            "b1b0a33168bec8acee564aac1eec86011399cf8e37a8571051380e0b017068d8"
+          ],
+          [
+            "jinja2",
+            "3.1.6",
+            "4551b3fb657b85a9f01e961c0f8a235da65d758149b619400211964b3ac02bdc"
+          ],
+          [
+            "jiter",
+            "0.16.0",
+            "414ad3e49106c41cb7d8a1ee4a220e9acce7709f733fda1ca6fa47e2d8b7d100"
+          ],
+          [
+            "jmespath",
+            "1.1.0",
+            "c5cc3703b88c05b69f6b90c0f09525b934057956fc1a69a489b4b1ef0f4008f8"
+          ],
+          [
+            "joblib",
+            "1.5.3",
+            "de09a1190b65801ed7ada8395671b94da2278e33d15356223b2b2d3201180e76"
+          ],
+          [
+            "jsonschema",
+            "4.26.0",
+            "d86846b7ff69de0a3b32e8ec7847d59a409ed45ac80756007e7888e3f25094e1"
+          ],
+          [
+            "jsonschema-specifications",
+            "2025.9.1",
+            "0b1047ee6c7d5d7c242b642d689820f4572860ecf7886b2074f821ed85cbe7b6"
+          ],
+          [
+            "kiwisolver",
+            "1.5.0",
+            "eff0b04e1528659d8bc580684a58de8131282ddf67afda48304dd9b36cb1020f"
+          ],
+          [
+            "lark",
+            "1.2.2",
+            "06c6b4283d3177598c754e33e6cf451b914e9300f13bb0ccb4257007dceb3649"
+          ],
+          [
+            "llguidance",
+            "1.7.6",
+            "a59f0faa866c70ea1978a0334ea25c21149335e05a5fbb20c30f248aa3941e07"
+          ],
+          [
+            "llvmlite",
+            "0.47.0",
+            "843e64891c2096b7666280d04f5ff809e31ed1f978ced22ca6f927c2b0faadc8"
+          ],
+          [
+            "lm-format-enforcer",
+            "0.11.3",
+            "b1a7444b54181db9f87afda4825892cfb28818ca29820968d79be9a717438b03"
+          ],
+          [
+            "lmcache",
+            "0.5.1",
+            "7430b91f95e7cbff952098990208eae65e6ff832c72894563be05b802d746e20"
+          ],
+          [
+            "loguru",
+            "0.7.3",
+            "f561bf516e2dacc992d6041c129f33d6c98d63794d424e6738389eb031a40177"
+          ],
+          [
+            "markdown-it-py",
+            "4.2.0",
+            "77fe553563480b56c48e833645081fcb6169a40d7e7c15ac0786ac0c24d4ae59"
+          ],
+          [
+            "markupsafe",
+            "3.0.3",
+            "3e96bcf1c73245c4ff9be34b7df22f705b615b7980b7b984fd2feba5032127b6"
+          ],
+          [
+            "matplotlib",
+            "3.10.9",
+            "20b92c1ec33e66ec19286def2ee9cad84989f5780c4fdea75ab731c88dbdbece"
+          ],
+          [
+            "maturin",
+            "1.14.1",
+            "216a14b01af7184fee11f454528b73ace35eca9bf0b32efac83bc2d56d381b1b"
+          ],
+          [
+            "mcp",
+            "2.0.0",
+            "f3f9b7463f13cb220320b7ccc641cdeb9440454cb8a43abba382a5e4e9c5c7b6"
+          ],
+          [
+            "mcp-types",
+            "2.0.0",
+            "81a10c041b54bffdb18a17ed5ed90926e8b8271561260189a26ce74a09c3344d"
+          ],
+          [
+            "mdurl",
+            "0.1.2",
+            "9a1b05128e711beabd7684e116fcf408ce8cff7ef10e7e8b359b248924fe529c"
+          ],
+          [
+            "mistral_common",
+            "1.11.7",
+            "82746d0271d930efa5d8958612461580106a8e30fa8b80c44dc1f8e78254899a"
+          ],
+          [
+            "ml_dtypes",
+            "0.5.4",
+            "cf3c62d8fef69b076a5a4f2812da26e7d4e73e1325e6b2a7821db62f0edd3079"
+          ],
+          [
+            "model-hosting-container-standards",
+            "0.1.16",
+            "89469a17486f7898c1d574da994ce3917f52f8c2922832f3981a4cc057e580b1"
+          ],
+          [
+            "mpmath",
+            "1.3.0",
+            "09cbd04e87d0c5ab64aab08291b31883e4ea27e8d2c640710e0beb1995e86b9b"
+          ],
+          [
+            "msgspec",
+            "0.21.1",
+            "a5be666753a2a639a9c465a963ef4bd5b4f6909e9f8f88622f0db198f2964dd7"
+          ],
+          [
+            "multidict",
+            "6.7.1",
+            "00df5867e4b6ddcb88675199117a50f3784270ec62e22efc964cd091c65a2edf"
+          ],
+          [
+            "networkx",
+            "3.6.1",
+            "f6833bb525b720a7809dd6280817601af3dbd78efef02d9e55d4b887ec1f52da"
+          ],
+          [
+            "ninja",
+            "1.13.0",
+            "7857caad4adc83377eb319912ce4f7efdf6ea8f6e102398bad54370ea99d98d0"
+          ],
+          [
+            "nixl-cu12",
+            "1.3.2",
+            "cd89e1c70a9c333b61db176a0c0141391d05b9340b11d135e8c26bb2d701bf21"
+          ],
+          [
+            "numba",
+            "0.65.0",
+            "ca4450fcf68ea97ecff1d3a2d9648f85339a5781cd6eda2706a056051d34116c"
+          ],
+          [
+            "numpy",
+            "2.4.4",
+            "83e941cded90b8435240bb2ac3e8e56628ea0f1c0aad663d31369f94514d8cbc"
+          ],
+          [
+            "nvidia-cublas-cu12",
+            "12.9.1.4",
+            "fed69f94a7605c6810d43e23c178c32e5934625c1d460d50e582ead541654d06"
+          ],
+          [
+            "nvidia-cuda-cccl",
+            "13.3.3.4.1",
+            "3f6532c07c38b63d07c7d34500180cd379d43eb50a4b963f3a98c07a63e043f8"
+          ],
+          [
+            "nvidia-cuda-crt",
+            "13.3.73",
+            "fee273c45eb414af0bc11cf5d4467d8995533c21a9da54a7af831d772bc0bb49"
+          ],
+          [
+            "nvidia-cuda-cupti-cu12",
+            "12.9.79",
+            "d4e5028d9b45eeb14b39d3e44a7f1c6d649d889a1b38d47a15f6bd1ad3689cfa"
+          ],
+          [
+            "nvidia-cuda-nvcc",
+            "13.3.73",
+            "59a20c88cc355c23b6095ef6d1d1bc1d2696c4e757095c0bc92f1da7cbc40945"
+          ],
+          [
+            "nvidia-cuda-nvrtc",
+            "13.3.33",
+            "8bb83dc1e70453311d08e3fc207ca9c291028a36e87ec059ef8f45b8beb5e9e8"
+          ],
+          [
+            "nvidia-cuda-nvrtc-cu12",
+            "12.9.86",
+            "5f0f55db846b51d7cd220725afc049c05823cd4e4668f56ba6b807d7e1798ecc"
+          ],
+          [
+            "nvidia-cuda-runtime",
+            "13.3.29",
+            "6bc42d2f1ef6fb7e74bf68ba0cc987ea40b29350a6b4264b01cefa2641985953"
+          ],
+          [
+            "nvidia-cuda-runtime-cu12",
+            "12.9.79",
+            "02233c722c04360ad7115d236647f8bde21c4ae04ba32eea557ccf91166897b5"
+          ],
+          [
+            "nvidia-cudnn-cu12",
+            "9.17.1.4",
+            "24cc82ac73a77c161dec22a0cb40237c3162c45a532f5878a8339c58c88949c3"
+          ],
+          [
+            "nvidia-cudnn-frontend",
+            "1.18.0",
+            "20d5594c29a6f51d072d0bd20f6df2a6800537eb472e0bc97b134b984da183f3"
+          ],
+          [
+            "nvidia-cufft-cu12",
+            "11.4.1.4",
+            "3c539e4e2d64d4293164fb7623fe42f645a2f541793691f19625bb64e5a2d232"
+          ],
+          [
+            "nvidia-cufile-cu12",
+            "1.14.1.1",
+            "6b9e8420eed1d9ae9e22163e9ee4e5d57e7251519fceac605b762ec06585459b"
+          ],
+          [
+            "nvidia-curand-cu12",
+            "10.3.10.19",
+            "64dcf6e22cbeff9de338285f350576071ed65d99f3de04d231774390bad5fdf4"
+          ],
+          [
+            "nvidia-cusolver-cu12",
+            "11.7.5.82",
+            "3c2cacced4d8bd5e663ba2489aabae8c7f9e6d26002c4168732c414c94351dc1"
+          ],
+          [
+            "nvidia-cusparse-cu12",
+            "12.5.10.65",
+            "798dd0b2fc94b065e1581fc16d2b072b45d34ed5b6558d3b8b0816c79c5da286"
+          ],
+          [
+            "nvidia-cusparselt-cu12",
+            "0.7.1",
+            "a0d0794ea5e6fbf009a350cd345b93b49c5ce40a57270eecbf0c96233bac8ee0"
+          ],
+          [
+            "nvidia-cutlass-dsl",
+            "4.5.2",
+            "7c7b716148f0bbddaf3d13a671e8bd61b62eb4507c3749ddcfe1f31db1ce6cf2"
+          ],
+          [
+            "nvidia-cutlass-dsl-libs-base",
+            "4.5.2",
+            "765651525e5b37362fce3b250585a7ba1c9abddb5517a09df6f902ab3393fd7d"
+          ],
+          [
+            "nvidia-cutlass-dsl-libs-cu13",
+            "4.5.2",
+            "1dda71564e38f7cf5c57db8a41fb53c09d3aa8e09ba6dae079815933cf38bcd5"
+          ],
+          [
+            "nvidia-ml-py",
+            "13.610.43",
+            "f6be691475d9c8520acd8e46a955f9a4a01504a343aa9262f1969cb2917b7f4b"
+          ],
+          [
+            "nvidia-nccl-cu12",
+            "2.28.9",
+            "547619e86b9b9c3424c2f3a115fdc7f692adfce29db2935b02a3cfdc1c6abac3"
+          ],
+          [
+            "nvidia-nvjitlink-cu12",
+            "12.9.86",
+            "e449586fe4b5ac3edd418ecb49375dd9fd83135b9d33ad7fd398fd1a64ff473d"
+          ],
+          [
+            "nvidia-nvshmem-cu12",
+            "3.4.5",
+            "7a627d8939071037225418f0cc848ee8dbb149d82f5fb33d74e1900649cbd0eb"
+          ],
+          [
+            "nvidia-nvtx-cu12",
+            "12.9.79",
+            "29400bdd4784fda6d46a51898242b0ccf0a0103a5a33a34bc5eb1a7d4cd380dc"
+          ],
+          [
+            "nvidia-nvvm",
+            "13.3.73",
+            "652fb36841403f9d6c911823f01ffbf60007567326fe14b79ab4a0113452e771"
+          ],
+          [
+            "nvtx",
+            "0.2.15",
+            "6b842cbb84556c89a5ca411fe0f5558b5a029a812bd3bc13e8fee097cf8f9b58"
+          ],
+          [
+            "openai",
+            "2.53.0",
+            "12ac75353e80e5e56b04e27971e80da7ca8cf737eade8600153d62acba67e1dc"
+          ],
+          [
+            "openai-harmony",
+            "0.0.8",
+            "3af9a3b775cbb8b63c0bff36f1b0917be51574517c227b0dd48f97606ee3d76b"
+          ],
+          [
+            "opencv-python-headless",
+            "5.0.0.93",
+            "a4172fa37f8a5c3352f206f392daabe05cfa35010d3b7dd9dd9d9f404be49abb"
+          ],
+          [
+            "opentelemetry-api",
+            "1.40.0",
+            "5a69dcd07231d39a5f870d829e76407448313e990dc902f959172cd3463b0e22"
+          ],
+          [
+            "opentelemetry-exporter-otlp",
+            "1.40.0",
+            "b73b300d0a1a35f8621c5928289da5fb98a31103706374a356029c142474ba3a"
+          ],
+          [
+            "opentelemetry-exporter-otlp-proto-common",
+            "1.40.0",
+            "5fb3013554b3b758a822c554bab493da1ff48f2631049ab7a5c3d9e6f15eee12"
+          ],
+          [
+            "opentelemetry-exporter-otlp-proto-grpc",
+            "1.40.0",
+            "aa6fa23b0aa99bb9fa603d33c04ab8594a90340bb2e6ca8f93e5e4dbfa0e39c4"
+          ],
+          [
+            "opentelemetry-exporter-otlp-proto-http",
+            "1.40.0",
+            "235b87af145c47e3d5020ba7ca0303acdce245034c6a3ecd3d1991ad3330ea73"
+          ],
+          [
+            "opentelemetry-exporter-prometheus",
+            "0.61b0",
+            "eca64b1e51d7d7ca27081edbc50a0793cbaa59865a7607f28e41ac4257a9da8f"
+          ],
+          [
+            "opentelemetry-proto",
+            "1.40.0",
+            "21ed05c2cfaa43eb750d7af6f0b75a2b87d36f7abed2f3582f51d87deb00ccb3"
+          ],
+          [
+            "opentelemetry-sdk",
+            "1.40.0",
+            "77964208568fa7216fb8bfb07f24b2da42c619d357e989f7f86c430797b768a9"
+          ],
+          [
+            "opentelemetry-semantic-conventions",
+            "0.61b0",
+            "598552409702fc4636877d6ef84b5198c7a2914be7682a7402663e9d2f386572"
+          ],
+          [
+            "opentelemetry-semantic-conventions-ai",
+            "0.5.1",
+            "e81dc3c95d0442daafd53de9501de62942527fbd24fff8f017832f4b26f2800c"
+          ],
+          [
+            "osqp",
+            "1.1.1",
+            "a2631817cb206d9e86633e6f2f599102030869292772ac0c63f86557e5877606"
+          ],
+          [
+            "outlines_core",
+            "0.2.14",
+            "0ff2229bb96529f54393fb7de20424264cccda57f6b8e704224e79100ed55529"
+          ],
+          [
+            "packaging",
+            "26.2",
+            "34a791dcc687723f1d7601aa68319f6d51aa00e44d85818995dd33a1b7c5a49c"
+          ],
+          [
+            "pandas",
+            "3.0.2",
+            "1c039f8a4ef447603d777e717c82d2ccdf71287d2827e50fc957a215564b91c0"
+          ],
+          [
+            "partial-json-parser",
+            "0.2.1.1.post7",
+            "93091c21b8686fd7470613fc6aabfe2835eb97b1df746c58c24908fd19bf7a9c"
+          ],
+          [
+            "pillow",
+            "12.2.0",
+            "53b47039991e1b17866b667c725ffa7517200b6cf2d6e4c932ca0fb6ce98bd9c"
+          ],
+          [
+            "pluggy",
+            "1.6.0",
+            "a42a63bcba12ddb7e7db19158c8d05d8fc41d51f48686b411ad3a0213fbd7721"
+          ],
+          [
+            "prometheus-fastapi-instrumentator",
+            "8.1.0",
+            "b202f3ca79cd70f1f18fe849cda93aa0cfe9ad76466d7d14bbb816b4c7632db0"
+          ],
+          [
+            "prometheus_client",
+            "0.24.1",
+            "55a408a45e559da9059e6ae4d30cc4b5db8b658c4fe26c59c4bd7c67484578b0"
+          ],
+          [
+            "propcache",
+            "0.5.2",
+            "5b47b5249186957cc332c6bc948cae117846f92e3561d6a8835888d6da3ba392"
+          ],
+          [
+            "proto-plus",
+            "1.28.3",
+            "e5a29f545069a88a6a7024206c100d83759e572de150dc31b8dbb56047c606b5"
+          ],
+          [
+            "protobuf",
+            "6.33.6",
+            "eec74a7da0f936d6cc8b5a98671c627a9a75e0f2775f6318a7dcec6338347fd9"
+          ],
+          [
+            "psutil",
+            "7.2.2",
+            "2af7e87b12ad6542c1eaaf20a299c109fa09b9dc5d69faf745219bd61e8cfca6"
+          ],
+          [
+            "py-cpuinfo",
+            "9.0.0",
+            "6d396776954f63acbe888fa269d0ff1687819115a89e5bc10bd06d49f254d6b5"
+          ],
+          [
+            "pyasn1",
+            "0.6.4",
+            "a090dfffb5eba2e22eaf9fa9368748a431669c88ae5eb8043afd5fb16b398fa3"
+          ],
+          [
+            "pyasn1_modules",
+            "0.4.2",
+            "6645737688eada1bc4448276028ef35d5a1132cf61f292667af044f0d8703b24"
+          ],
+          [
+            "pybase64",
+            "1.5.0",
+            "a0f216893c13a02cb2c4a3740f31307f4b75d7b18b96d764e0e020260929f0fc"
+          ],
+          [
+            "pycountry",
+            "26.2.16",
+            "f7c488f0acc09e2d1ca0ca2ea08f27e095bcf5f0454fd8115e97f6055e25d8fd"
+          ],
+          [
+            "pycparser",
+            "3.0",
+            "e752c5c64ce06f508a80e0edeef0c165df849587b829cb9a7b7bb22ac43b0c7e"
+          ],
+          [
+            "pydantic",
+            "2.13.4",
+            "d0cbe0f34b294885175920bc8f2ece0b3ed6d9874347dc9cfb2caf4931329272"
+          ],
+          [
+            "pydantic-extra-types",
+            "2.11.1",
+            "97cdd61dee1a5d20bd92f941aaf66a6b47c6509a411bd731d7e169198e072925"
+          ],
+          [
+            "pydantic-settings",
+            "2.15.0",
+            "5572a2e2cf981af8f9fc9e507dca3e957a2e398b5150cc01bfc0e673909d7aa3"
+          ],
+          [
+            "pydantic_core",
+            "2.46.4",
+            "3e55a95c4577dcb5dfd08cb8740db06dad7117273dd4885c090413888e606fc0"
+          ],
+          [
+            "pyelftools",
+            "0.33",
+            "0f426233bf56ec854349110054b58bd2256ed9cb51c773229465f721f6350065"
+          ],
+          [
+            "pygments",
+            "2.20.0",
+            "d1d622e4d25ce0b32474f8e3c6023d0e5099aa808bcb4b3b6d99238d30a7955c"
+          ],
+          [
+            "pyjwt",
+            "2.13.0",
+            "b86eb3be0a89de734598127029531ba39dcdc6962c4c996fbac48218f8a52879"
+          ],
+          [
+            "pyparsing",
+            "3.3.2",
+            "239325f438cc3542c4d936b77d4539132f7db3b83d55bf9b811db76cce83f0ee"
+          ],
+          [
+            "pytest",
+            "9.0.3",
+            "7c5b525813f2044068af04092ce41357f60a33d85a427de98dc418691b141512"
+          ],
+          [
+            "python-dateutil",
+            "2.9.0.post0",
+            "e15e868a50b9c4e71df17b31369843617780146ac5adb1bbfdcced0ebe501824"
+          ],
+          [
+            "python-dotenv",
+            "1.2.2",
+            "843a1786e68299492ba2647502fbd30f7a772d1fe75dfc9499f41625cfe57654"
+          ],
+          [
+            "python-json-logger",
+            "4.1.0",
+            "a635b68ada7ff0a7025b56fe6c46bb6c106dc7a45416888ad61b2b8110ba2e75"
+          ],
+          [
+            "python-multipart",
+            "0.0.32",
+            "5c11c391e44fdc2dbec56603265b8af273dae504ee2e6143d3b9d3bab2bc12df"
+          ],
+          [
+            "pyyaml",
+            "6.0.3",
+            "7d0856221a182f5b25fde9bb976af79b4883090f54680d86a42b35fc8d6735a2"
+          ],
+          [
+            "pyzmq",
+            "27.1.0",
+            "5d6335bd4cb60ac1bee8883bdaf7fa6217eb09eb98bf4158a685fe304c3338b4"
+          ],
+          [
+            "quack-kernels",
+            "0.5.0",
+            "6287dcd11c76a47a8743ea17a557c9629227bd2d445499ca17e37a822292657d"
+          ],
+          [
+            "queue-haul-native",
+            "0.1.0",
+            "d6b62ea9f874f3db448a3a23f34fc40cae8cbef96d84380fe5a83f9ffd650489"
+          ],
+          [
+            "redis",
+            "8.1.0",
+            "2d47b6d8c09f1c56717d0786d682db273b51f85c05df4eb9ddcc80da2142fe5c"
+          ],
+          [
+            "referencing",
+            "0.37.0",
+            "d7ecf9906a4a4ea4837d16e324e344f9f00b328570cf695a96a8de46b8766982"
+          ],
+          [
+            "regex",
+            "2026.7.19",
+            "e12c6bf2ed883dc5c5f624987d553f7405af4a587560454ddc7ee39359a55c5d"
+          ],
+          [
+            "requests",
+            "2.34.2",
+            "fc8c5216d0e865d815bd04cc240b5adc5d56f6c3dbe9aef3b4ea3b83d735bdfe"
+          ],
+          [
+            "rich",
+            "15.0.0",
+            "1b725253b1bd316b53169a3a0b35d03d6c81bad9009ddae73d8645fb3cd3f292"
+          ],
+          [
+            "rich-toolkit",
+            "0.20.3",
+            "42e6feb09ddc15b7003dac16b41ebf286f62ddb8f663fe6e2693aae90595e98e"
+          ],
+          [
+            "rignore",
+            "0.8.1",
+            "3f7b2971ce882f109a50667fc2606bda84697a3489d4ec08c689c0d7bdd20d7e"
+          ],
+          [
+            "rpds-py",
+            "2026.6.3",
+            "8e825dd83fbb7bdc9ff8941296bc53b6c0e07d0420ae28efa150830d6cf178fe"
+          ],
+          [
+            "safetensors",
+            "0.8.0",
+            "c5110881c0c39a4f163a23b2ccc88cad19ce1823b6dce1ceef353d33f16c004b"
+          ],
+          [
+            "scipy",
+            "1.17.1",
+            "bebd5a00dcf3d8fd96b1f5d18d985564b891d893de7584d65ccea6902888a7a8"
+          ],
+          [
+            "scs",
+            "3.2.11",
+            "2ec78fd1c7ddecf72a7363a117270ca3dfad5ae00e1e90be09fd92960b13b5a0"
+          ],
+          [
+            "seaborn",
+            "0.13.2",
+            "28cc11a75b9a326c2f28947db88e83b1215702c219ca61a9470cbc7439d447cd"
+          ],
+          [
+            "sentencepiece",
+            "0.2.2",
+            "01a5ca51eeeb3a09f58e7fa466d0e6985646d4687575c06f50926cabc1f9ac32"
+          ],
+          [
+            "sentry-sdk",
+            "2.67.1",
+            "57a5105fbd0f5b9e9e6789ae463365b07097ed46ab1840a3c59a80979cb785ca"
+          ],
+          [
+            "setproctitle",
+            "1.3.7",
+            "23d6e3d52b2be9205df4fc0e3174e6074647b8d671773f8b29061b4251a17f01"
+          ],
+          [
+            "setuptools",
+            "82.0.1",
+            "ac112ce85e62901c060079af7ad0d74e10ac9214f530d85e9dec0ef11bc2a2b0"
+          ],
+          [
+            "setuptools-scm",
+            "10.2.1",
+            "98e3d6ae5738437abcd0a80759b0c92bb3a1e27ddd4da7555e260609f456fdf1"
+          ],
+          [
+            "shellingham",
+            "1.5.4",
+            "2a878ed08ec32adc6b08a9b6a83754cd7c30ffb8a67e26527292456da9ff2fee"
+          ],
+          [
+            "six",
+            "1.17.0",
+            "d16e50f347969b1e1919fb0c88bac4b9c644f5305bcfcfb00f72b646dbd4065d"
+          ],
+          [
+            "sniffio",
+            "1.3.1",
+            "e6c97953661def7ab6dac78f83c86f31e622bee38ff55ea508cb04e1a604d4ff"
+          ],
+          [
+            "sortedcontainers",
+            "2.4.0",
+            "2e764b15bb6fc2e19a0a795409c5da3eae994032a5d9173a4dadc7ef238cab52"
+          ],
+          [
+            "sse-starlette",
+            "3.4.8",
+            "51ae4ed28baf3802aa3330ba8179fdc4870df4e94eacf6d70165d5a8cd0bacd4"
+          ],
+          [
+            "starlette",
+            "1.6.0",
+            "ce00b84cd91bcb3a3c9d05d0acb8d879ad8f28232ef1941cf82e2cb0661e4be1"
+          ],
+          [
+            "supervisor",
+            "4.3.0",
+            "9c47edc896d7286d41fcc6b61cc04b60e7b1b12d588401966243b46ba2de02f0"
+          ],
+          [
+            "sympy",
+            "1.14.0",
+            "741c6d547923d3014a044b9cc4f30fb9a652176596271d91dadf5de3557f5fff"
+          ],
+          [
+            "tabulate",
+            "0.10.0",
+            "224592836eff327694b603f76aeb4297b81085d2473152a554cff5418bc78ce2"
+          ],
+          [
+            "tiktoken",
+            "0.13.0",
+            "f84ea16165064b385d0944e174d1aa76bed07e57abed4c48444a7adaf2fb944b"
+          ],
+          [
+            "tilelang",
+            "0.1.9",
+            "0be414b4e238854e630223415621b1aa086d9e82670ae59eec4440fa11c5d0f2"
+          ],
+          [
+            "tokenizers",
+            "0.22.2",
+            "f6cf016a34d1eb2dbf38bb6b0896b18f1d81651c97ddf514674a42ec3e958bc7"
+          ],
+          [
+            "tokenspeed-mla",
+            "0.1.2",
+            "129b61d3053a6e233caff78a576252759208b770b19c94b2c63a0239f26c8e83"
+          ],
+          [
+            "tokenspeed-triton",
+            "3.8.10.post20260721",
+            "d8c51fc50b6f613172a7342c5a4e98254fe977105cb0a17c755f1dbed37c7aea"
+          ],
+          [
+            "torch",
+            "2.11.0+cu129",
+            "d5185297cadc15ddacd34a94288fcc41096e216898c4dcb68939233d1670d018"
+          ],
+          [
+            "torch_c_dlpack_ext",
+            "0.1.5",
+            "3ca68ad15fde3e4ea2ecf0f1cea8ba0d62ec8397957f68eb80653fc01a0040c0"
+          ],
+          [
+            "torchaudio",
+            "2.11.0+cu129",
+            "7043f0db88c18cbb716ae93018d4bf04a1a9a6cf1f486261d191d41bca0bc0ee"
+          ],
+          [
+            "torchvision",
+            "0.26.0+cu129",
+            "95706052f49861e7c822daf68258bfab99fc02c2c6b1c9e6d59cf6318e3ec695"
+          ],
+          [
+            "tqdm",
+            "4.70.0",
+            "858f34fbc38b556e6ccd844d51d36be69f58ee5bccf6d4685aea0986d70a0ce6"
+          ],
+          [
+            "transformers",
+            "5.15.0",
+            "aab3eaecf38df31096e2efd2a8685fa8174e24888094c01ab720a86c650e25f6"
+          ],
+          [
+            "triton",
+            "3.6.0",
+            "5997e7e86bb2063bc9e60990382910f2c6182a57157ed57b9129ea8f4d8f8673"
+          ],
+          [
+            "truststore",
+            "0.10.4",
+            "78e60fe51ee9228a9a31d401f4cf7dcca5b7363a893b65f30e957de919e9f01a"
+          ],
+          [
+            "typer",
+            "0.27.1",
+            "4f57a37519218b70c391d5714c5a4582ae04388512dc369828c6636f48a3055b"
+          ],
+          [
+            "typing-inspection",
+            "0.4.3",
+            "2abb0d9e6edd5578b57ef803c75141cccb9b05b268107baca111f2db5a7ead98"
+          ],
+          [
+            "typing_extensions",
+            "4.16.0",
+            "9e07fea845cac76293d927afa7157a14ecba39b318bc8af236b8de530b7656c1"
+          ],
+          [
+            "urllib3",
+            "2.7.0",
+            "4869c7ca2082c964b4e2bb8244deda15cfa069d93e4543d3a16eca6a63cbb81f"
+          ],
+          [
+            "uvicorn",
+            "0.52.1",
+            "678cf3fa0864368e45229f19681a501c7a4dc4f1aa6b5653b8fc56271f300a1a"
+          ],
+          [
+            "uvloop",
+            "0.22.1",
+            "562769559d99609e53bed0deaf383980bf14b495e0c1e65f8c03a979d80308a2"
+          ],
+          [
+            "vcs-versioning",
+            "2.2.4",
+            "c6acce6165567dcf46197ae7c14df28fa1c0923e7e1497c1f9edf84425577adf"
+          ],
+          [
+            "vllm",
+            "0.22.0",
+            "c99d458524e254975ac0574c0fd88e1b131108d09d51cc23b0f9398060fbba14"
+          ],
+          [
+            "watchfiles",
+            "1.2.0",
+            "0fa5d542d047f117cdf212eeea772b6dbdca48539c68401f305251fb752c99bc"
+          ],
+          [
+            "websockets",
+            "17.0.1",
+            "837709c06b077d7478cb421badc768d3fe13a160cc6f13a04346196732589b7b"
+          ],
+          [
+            "xgrammar",
+            "0.2.3",
+            "c6f9b8c31852b01f619958631d00ea939f71f0ea59663495a66a242ae4224a3e"
+          ],
+          [
+            "yarl",
+            "1.24.5",
+            "d40a254cba18576a55cf15d488882e1b78cc091e1175f581c9db9b273bfa71d4"
+          ],
+          [
+            "z3-solver",
+            "4.15.4.0",
+            "5d9bf43293125dfb00dfdb7bf958b44528977358fadfb63677e99e98de887943"
+          ],
+          [
+            "zipp",
+            "4.1.0",
+            "09471a1e570a024020ae32570ac57c6e906d76a4840b93b92801ea1b6eec71a1"
+          ]
+        ]
+      },
+      "environment_sha256": "5c1a8b210176c5bfa68d901a58aa8fc88b042b2f8e01b87ae0cb288c580edabe"
+    },
+    "runtime_versions": [
+      "0.22.0",
+      "0.5.1"
+    ],
+    "git_sha": "fb13ac5fece2aafbabceed5fea65bc681fe9ae69",
+    "gpu": {
+      "device": "0",
+      "name": "NVIDIA H100 NVL",
+      "uuid": "GPU-a2ee88bd-80a5-8093-96ea-42e3975a5178",
+      "driver_version": "580.159.04",
+      "memory.total": "95830",
+      "power.limit": "400.00",
+      "clocks.applications.graphics": "1785",
+      "clocks.applications.memory": "2619"
+    },
+    "scheduler": {
+      "tensor_parallel_size": 1,
+      "max_model_len": 32768,
+      "max_num_seqs": 256,
+      "max_num_batched_tokens": 8192,
+      "kv_cache_dtype": "auto",
+      "block_size": 16,
+      "gpu_memory_utilization": 0.9,
+      "chunked_prefill": true,
+      "prefix_caching": true,
+      "enforce_eager": true,
+      "disable_hybrid_kv_cache_manager": false,
+      "async_scheduling": false,
+      "stream_interval": 1
+    },
+    "commands": {
+      "redis": [
+        "valkey-server",
+        "--bind",
+        "127.0.0.1",
+        "--port",
+        "5655",
+        "--save",
+        "",
+        "--appendonly",
+        "no"
+      ],
+      "cache": [
+        "bash",
+        "-lc",
+        "export PATH=/home/azureuser/queue-haul-h100/agent-migrate/agent-migrate/.venv/bin:$PATH\nexport CUDA_VISIBLE_DEVICES=\nlmcache server --instance-id queue-haul-sink --host 127.0.0.1 --port 5556 --http-host 127.0.0.1 --http-port 8081 --l1-size-gb 16 --eviction-policy LRU --chunk-size 256 --max-workers 8 --supported-transfer-mode engine_driven --l2-adapter '{\"type\":\"resp\",\"host\":\"127.0.0.1\",\"port\":5655,\"num_workers\":8}'"
+      ],
+      "vllm": [
+        "env",
+        "CUDA_VISIBLE_DEVICES=0",
+        "bash",
+        "-lc",
+        "export PATH=/home/azureuser/queue-haul-h100/agent-migrate/agent-migrate/.venv/bin:$PATH\nmkdir -p /tmp/qh-sink-{pid} /datadrive/queue-haul-cache/stage1b-sink/xdg /datadrive/queue-haul-cache/stage1b-sink/torch_extensions /datadrive/queue-haul-cache/stage1b-sink/torchinductor /datadrive/queue-haul-cache/stage1b-sink/triton\nexport PYTHONHASHSEED=0\nexport VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=900\nexport VLLM_SERVER_DEV_MODE=1\nexport VLLM_USE_FLASHINFER_SAMPLER=0\nexport TORCH_CUDA_ARCH_LIST=8.0\nexport TMPDIR=/tmp/qh-sink-{pid}\nexport VLLM_RPC_BASE_PATH=/tmp/qh-sink-{pid}\nexport HF_HOME=/datadrive\nexport HF_HUB_OFFLINE=1\nexport TRANSFORMERS_OFFLINE=1\nexport QH_MODEL=google/gemma-4-26B-A4B-it\nexport LMCACHE_REMOTE_URL=lm://127.0.0.1:8300\nexport LMCACHE_REMOTE_SERDE=naive\nexport LMCACHE_LMCACHE_INSTANCE_ID=stage1b_sink\nexport LMCACHE_CHUNK_SIZE=256\nexport LMCACHE_LOCAL_CPU=False\nexport LMCACHE_MAX_LOCAL_CPU_SIZE=4\nexport XDG_CACHE_HOME=/datadrive/queue-haul-cache/stage1b-sink/xdg\nexport TORCH_EXTENSIONS_DIR=/datadrive/queue-haul-cache/stage1b-sink/torch_extensions\nexport TORCHINDUCTOR_CACHE_DIR=/datadrive/queue-haul-cache/stage1b-sink/torchinductor\nexport TRITON_CACHE_DIR=/datadrive/queue-haul-cache/stage1b-sink/triton\nexport PYTHONPATH=/home/azureuser/queue-haul-h100/agent-migrate/agent-migrate/queue-haul/lmcache_compat\nvllm serve /datadrive/hub/models--google--gemma-4-26B-A4B-it/snapshots/4d7ae4984b7db7de8f8457170b3f1a419ee76d52 --host 127.0.0.1 --port 8200 --served-model-name google/gemma-4-26B-A4B-it --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --dtype bfloat16 --limit-mm-per-prompt '{\"image\":0,\"audio\":0}' --kv-cache-dtype auto --block-size 16 --enable-chunked-prefill --enable-prefix-caching --enforce-eager --gpu-memory-utilization 0.9 --enable-prompt-tokens-details --kv-transfer-config '{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"connector_patch\",\"kv_role\":\"kv_consumer\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"tcp://127.0.0.1\",\"lmcache.mp.port\":5556,\"lmcache.mp.mp_transfer_mode\":\"engine_driven\"}}' --no-async-scheduling --stream-interval 1"
+      ]
+    },
+    "sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf"
+  },
+  "runtime_identity_sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf",
+  "input_tokens": 3920,
+  "output_tokens": 1024,
+  "requests_per_point": 32,
+  "rates_rps": [
+    0.125,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0,
+    8.0
+  ],
+  "ttft_slo_s": null,
+  "tpot_slo_s": null,
+  "boundary": null,
+  "boundary_bracketed": false,
+  "whisker_rates_rps": [],
+  "runs": [
+    {
+      "schema": "queue-haul-fixed-shape-slo-v1",
+      "plan_sha256": "6f553e6bf3b8be35315b8b8e308636662478056ff67d7ca7f95c3a991fbe0951",
+      "cell_id": "rps0p125-rep0",
+      "offered_rps": 0.125,
+      "replicate": 0,
+      "poisson_seed": 20260816,
+      "runtime_identity_sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf",
+      "started_wall_ns": 1786926381111388490,
+      "status": "complete",
+      "offered_requests": 32,
+      "realized_arrival_rps": 0.12686122782807469,
+      "exact_completions": 32,
+      "exact_completion_rate": 1.0,
+      "service_failure_rate": 0.0,
+      "p90_ttft_s": 0.1980316314,
+      "p90_mean_tpot_s": 0.03597940195845552,
+      "ttft_slo_s": 1.0,
+      "tpot_slo_s": 0.1,
+      "slo_violation": false,
+      "drained": true,
+      "engine_exited": false,
+      "engine_failure_kind": null,
+      "cache_hit_requests": 0,
+      "max_send_lateness_s": 0.00062223,
+      "max_in_system_requests": 8.0
+    },
+    {
+      "schema": "queue-haul-fixed-shape-slo-v1",
+      "plan_sha256": "6f553e6bf3b8be35315b8b8e308636662478056ff67d7ca7f95c3a991fbe0951",
+      "cell_id": "rps0p25-rep0",
+      "offered_rps": 0.25,
+      "replicate": 0,
+      "poisson_seed": 20260817,
+      "runtime_identity_sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf",
+      "started_wall_ns": 1786926677929720445,
+      "status": "complete",
+      "offered_requests": 32,
+      "realized_arrival_rps": 0.29895318968190315,
+      "exact_completions": 32,
+      "exact_completion_rate": 1.0,
+      "service_failure_rate": 0.0,
+      "p90_ttft_s": 0.1942380726,
+      "p90_mean_tpot_s": 0.03902603839638319,
+      "ttft_slo_s": 1.0,
+      "tpot_slo_s": 0.1,
+      "slo_violation": false,
+      "drained": true,
+      "engine_exited": false,
+      "engine_failure_kind": null,
+      "cache_hit_requests": 0,
+      "max_send_lateness_s": 0.000472254,
+      "max_in_system_requests": 16.0
+    },
+    {
+      "schema": "queue-haul-fixed-shape-slo-v1",
+      "plan_sha256": "6f553e6bf3b8be35315b8b8e308636662478056ff67d7ca7f95c3a991fbe0951",
+      "cell_id": "rps0p5-rep0",
+      "offered_rps": 0.5,
+      "replicate": 0,
+      "poisson_seed": 20260818,
+      "runtime_identity_sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf",
+      "started_wall_ns": 1786926833106314221,
+      "status": "complete",
+      "offered_requests": 32,
+      "realized_arrival_rps": 0.5506053872177408,
+      "exact_completions": 32,
+      "exact_completion_rate": 1.0,
+      "service_failure_rate": 0.0,
+      "p90_ttft_s": 0.2033499699,
+      "p90_mean_tpot_s": 0.037600119039882696,
+      "ttft_slo_s": 1.0,
+      "tpot_slo_s": 0.1,
+      "slo_violation": false,
+      "drained": true,
+      "engine_exited": false,
+      "engine_failure_kind": null,
+      "cache_hit_requests": 0,
+      "max_send_lateness_s": 0.000586859,
+      "max_in_system_requests": 22.0
+    },
+    {
+      "schema": "queue-haul-fixed-shape-slo-v1",
+      "plan_sha256": "6f553e6bf3b8be35315b8b8e308636662478056ff67d7ca7f95c3a991fbe0951",
+      "cell_id": "rps1-rep0",
+      "offered_rps": 1.0,
+      "replicate": 0,
+      "poisson_seed": 20260819,
+      "runtime_identity_sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf",
+      "started_wall_ns": 1786926927238472922,
+      "status": "complete",
+      "offered_requests": 32,
+      "realized_arrival_rps": 1.185051686651619,
+      "exact_completions": 32,
+      "exact_completion_rate": 1.0,
+      "service_failure_rate": 0.0,
+      "p90_ttft_s": 0.33754227290000005,
+      "p90_mean_tpot_s": 0.03859815742091886,
+      "ttft_slo_s": 1.0,
+      "tpot_slo_s": 0.1,
+      "slo_violation": false,
+      "drained": true,
+      "engine_exited": false,
+      "engine_failure_kind": null,
+      "cache_hit_requests": 0,
+      "max_send_lateness_s": 0.000674211,
+      "max_in_system_requests": 32.0
+    },
+    {
+      "schema": "queue-haul-fixed-shape-slo-v1",
+      "plan_sha256": "6f553e6bf3b8be35315b8b8e308636662478056ff67d7ca7f95c3a991fbe0951",
+      "cell_id": "rps2-rep0",
+      "offered_rps": 2.0,
+      "replicate": 0,
+      "poisson_seed": 20260820,
+      "runtime_identity_sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf",
+      "started_wall_ns": 1786926991086557125,
+      "status": "complete",
+      "offered_requests": 32,
+      "realized_arrival_rps": 1.6142749593019217,
+      "exact_completions": 32,
+      "exact_completion_rate": 1.0,
+      "service_failure_rate": 0.0,
+      "p90_ttft_s": 0.197576919,
+      "p90_mean_tpot_s": 0.03852564044516129,
+      "ttft_slo_s": 1.0,
+      "tpot_slo_s": 0.1,
+      "slo_violation": false,
+      "drained": true,
+      "engine_exited": false,
+      "engine_failure_kind": null,
+      "cache_hit_requests": 0,
+      "max_send_lateness_s": 0.000525039,
+      "max_in_system_requests": 32.0
+    },
+    {
+      "schema": "queue-haul-fixed-shape-slo-v1",
+      "plan_sha256": "6f553e6bf3b8be35315b8b8e308636662478056ff67d7ca7f95c3a991fbe0951",
+      "cell_id": "rps4-rep0",
+      "offered_rps": 4.0,
+      "replicate": 0,
+      "poisson_seed": 20260821,
+      "runtime_identity_sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf",
+      "started_wall_ns": 1786927048338184030,
+      "status": "complete",
+      "offered_requests": 32,
+      "realized_arrival_rps": 3.5423935665925304,
+      "exact_completions": 32,
+      "exact_completion_rate": 1.0,
+      "service_failure_rate": 0.0,
+      "p90_ttft_s": 0.5129829996000002,
+      "p90_mean_tpot_s": 0.038583448023753665,
+      "ttft_slo_s": 1.0,
+      "tpot_slo_s": 0.1,
+      "slo_violation": false,
+      "drained": true,
+      "engine_exited": false,
+      "engine_failure_kind": null,
+      "cache_hit_requests": 0,
+      "max_send_lateness_s": 0.00600473,
+      "max_in_system_requests": 32.0
+    },
+    {
+      "schema": "queue-haul-fixed-shape-slo-v1",
+      "plan_sha256": "6f553e6bf3b8be35315b8b8e308636662478056ff67d7ca7f95c3a991fbe0951",
+      "cell_id": "rps8-rep0",
+      "offered_rps": 8.0,
+      "replicate": 0,
+      "poisson_seed": 20260822,
+      "runtime_identity_sha256": "61a9cb1bf1aed9e8b00fd427047875992f1a116ae82ceb9314ac13e279db4cdf",
+      "started_wall_ns": 1786927094832193132,
+      "status": "complete",
+      "offered_requests": 32,
+      "realized_arrival_rps": 11.518488925521082,
+      "exact_completions": 32,
+      "exact_completion_rate": 1.0,
+      "service_failure_rate": 0.0,
+      "p90_ttft_s": 2.057441876,
+      "p90_mean_tpot_s": 0.038756678511925706,
+      "ttft_slo_s": 1.0,
+      "tpot_slo_s": 0.1,
+      "slo_violation": true,
+      "drained": true,
+      "engine_exited": false,
+      "engine_failure_kind": null,
+      "cache_hit_requests": 0,
+      "max_send_lateness_s": 0.003671949,
+      "max_in_system_requests": 32.0
+    }
+  ],
+  "curve": [
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "offered_rps": 0.125,
+      "replicates": 1,
+      "exact_completion_rate_min": 1.0,
+      "p90_ttft_s": 0.1980316314,
+      "p90_ttft_s_min": 0.1980316314,
+      "p90_ttft_s_max": 0.1980316314,
+      "p90_mean_tpot_s": 0.03597940195845552,
+      "p90_mean_tpot_s_min": 0.03597940195845552,
+      "p90_mean_tpot_s_max": 0.03597940195845552
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "offered_rps": 0.25,
+      "replicates": 1,
+      "exact_completion_rate_min": 1.0,
+      "p90_ttft_s": 0.1942380726,
+      "p90_ttft_s_min": 0.1942380726,
+      "p90_ttft_s_max": 0.1942380726,
+      "p90_mean_tpot_s": 0.03902603839638319,
+      "p90_mean_tpot_s_min": 0.03902603839638319,
+      "p90_mean_tpot_s_max": 0.03902603839638319
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "offered_rps": 0.5,
+      "replicates": 1,
+      "exact_completion_rate_min": 1.0,
+      "p90_ttft_s": 0.2033499699,
+      "p90_ttft_s_min": 0.2033499699,
+      "p90_ttft_s_max": 0.2033499699,
+      "p90_mean_tpot_s": 0.037600119039882696,
+      "p90_mean_tpot_s_min": 0.037600119039882696,
+      "p90_mean_tpot_s_max": 0.037600119039882696
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "offered_rps": 1.0,
+      "replicates": 1,
+      "exact_completion_rate_min": 1.0,
+      "p90_ttft_s": 0.33754227290000005,
+      "p90_ttft_s_min": 0.33754227290000005,
+      "p90_ttft_s_max": 0.33754227290000005,
+      "p90_mean_tpot_s": 0.03859815742091886,
+      "p90_mean_tpot_s_min": 0.03859815742091886,
+      "p90_mean_tpot_s_max": 0.03859815742091886
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "offered_rps": 2.0,
+      "replicates": 1,
+      "exact_completion_rate_min": 1.0,
+      "p90_ttft_s": 0.197576919,
+      "p90_ttft_s_min": 0.197576919,
+      "p90_ttft_s_max": 0.197576919,
+      "p90_mean_tpot_s": 0.03852564044516129,
+      "p90_mean_tpot_s_min": 0.03852564044516129,
+      "p90_mean_tpot_s_max": 0.03852564044516129
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "offered_rps": 4.0,
+      "replicates": 1,
+      "exact_completion_rate_min": 1.0,
+      "p90_ttft_s": 0.5129829996000002,
+      "p90_ttft_s_min": 0.5129829996000002,
+      "p90_ttft_s_max": 0.5129829996000002,
+      "p90_mean_tpot_s": 0.038583448023753665,
+      "p90_mean_tpot_s_min": 0.038583448023753665,
+      "p90_mean_tpot_s_max": 0.038583448023753665
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "offered_rps": 8.0,
+      "replicates": 1,
+      "exact_completion_rate_min": 1.0,
+      "p90_ttft_s": 2.057441876,
+      "p90_ttft_s_min": 2.057441876,
+      "p90_ttft_s_max": 2.057441876,
+      "p90_mean_tpot_s": 0.038756678511925706,
+      "p90_mean_tpot_s_min": 0.038756678511925706,
+      "p90_mean_tpot_s_max": 0.038756678511925706
+    }
+  ]
+}

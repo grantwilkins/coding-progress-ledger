@@ -540,6 +540,8 @@ def test_mp_runtime_requires_lookup_bypass_patch(monkeypatch):
 
     assert s.runtime_versions(s.Config()) == s.MP_RUNTIME_VERSIONS
     assert "LMCacheMPConnector._qh_bypass_patched" in s.shell(commands[0])
+    assert "LMCacheMPConnector._qh_kv_dtype_registration_patched" in s.shell(commands[0])
+    assert "_SubpagedAttentionViewEdit._qh_kv_first_patched" in s.shell(commands[0])
     assert "lmcache_compat" in s.shell(commands[0])
 
 

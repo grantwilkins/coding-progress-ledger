@@ -72,6 +72,21 @@ def test_session_forced_tokens_use_the_observed_safe_range(monkeypatch):
     assert vocabularies[-1] == ("s:0:output", 200000)
 
 
+def test_issue_accepts_a_prepared_request(monkeypatch):
+    session = runner.Session("s", 4, 2, 3, 100, 0)
+    prepared = ([1, 2, 3], 7)
+    monkeypatch.setattr(session, "prompt", lambda _index: pytest.fail("rebuilt prompt"))
+    monkeypatch.setattr(runner, "_completion", lambda *args: {
+        "start_ns": 1, "prompt": args[3], "forced": args[5], "body": args[8],
+    })
+
+    row = runner.issue(
+        "h", 1, "m", session, 0, 1, 2, prepared=prepared, body="serialized",
+    )
+
+    assert (row["prompt"], row["forced"], row["body"]) == (*prepared, "serialized")
+
+
 def test_token_timing_excludes_metadata_and_done_delay():
     row = runner.completion_row(
         200, 100_000_000, 900_000_000,
@@ -238,6 +253,13 @@ def test_queue_drift_can_include_active_decode_hold():
 
     assert runner.queue_drift_upper(rows) == pytest.approx(0)
     assert runner.queue_drift_upper(rows, include_running=True) > 0
+
+
+def test_queue_drift_discards_an_incomplete_trailing_block():
+    rows = [{"monotonic_ns": i * 10**9,
+             "vllm:num_requests_waiting": max(0, i - 59)} for i in range(71)]
+
+    assert runner.queue_drift_upper(rows) == pytest.approx(0)
 
 
 def test_client_side_backlog_is_not_classified_stable():
