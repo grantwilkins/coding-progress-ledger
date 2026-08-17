@@ -84,7 +84,7 @@ def write(rows: list[dict], contract: dict, out: Path) -> None:
             axis.axhline(slo, color="black", linestyle=(0, (3, 1)), linewidth=1.5,
                          label=f"SLO = {slo:g}")
         axis.set_xscale("log", base=2)
-        ticks = sorted({row["offered_rps"] for row in rows})
+        ticks = contract["rates_rps"]
         axis.set_xticks(ticks, [f"{rate:g}" for rate in ticks])
         axis.set_xlabel("Offered request rate (RPS)")
         axis.set_ylabel(ylabel)

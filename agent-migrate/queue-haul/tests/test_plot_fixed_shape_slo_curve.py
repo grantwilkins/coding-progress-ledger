@@ -86,3 +86,20 @@ def test_dense_knees_merge_with_base_contract(tmp_path):
                                    "requests_per_point": 32})
 
     assert len(rows) == 3 and not any(row["boundary"] for row in rows)
+
+
+def test_dense_plot_keeps_base_rate_ticks(tmp_path):
+    contract = {"hardware": "h100", "input_tokens": 3920,
+                "output_tokens": 1024, "requests_per_point": 32,
+                "rates_rps": list(campaign.RATES), "ttft_slo_s": None,
+                "tpot_slo_s": None}
+    rows = [{"model": model, "offered_rps": rate, "boundary": False,
+             "p90_ttft_s": 1, "p90_ttft_s_min": 1, "p90_ttft_s_max": 1,
+             "p90_mean_tpot_s": .1, "p90_mean_tpot_s_min": .1,
+             "p90_mean_tpot_s_max": .1}
+            for model in plot_style.MODELS for rate in (*campaign.RATES,
+                                                         *campaign.KNEE_RATES[model])]
+
+    plot.write(rows, contract, tmp_path / "dense")
+
+    assert (tmp_path / "dense.png").stat().st_size
