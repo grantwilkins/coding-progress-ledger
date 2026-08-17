@@ -23,6 +23,9 @@ SOURCE_SCHEMA = "queue-haul-repair-stress-multiaxis-preflight-v3"
 POPULATION_SCHEMA = "queue-haul-repair-attainment-population-v1"
 COMMON_PHASE = "common_workload_multiaxis"
 POLICIES = ("replan", "no_replan")
+PANEL_FIGSIZE = (3.25, 2.25)
+PANEL_FONT_SIZE = 9
+PANEL_LEGEND_FONT_SIZE = 7.5
 DEFAULT_SOURCE = Path(
     "outputs/repair-stress-multiaxis-hardware-20260814/preflight.json")
 DEFAULT_OUT = Path("outputs/repair-attainment-simulation-20260817")
@@ -230,7 +233,7 @@ def transition_summary(bundle: dict, target_fraction: float) -> list[dict]:
 def plot_response(curve: list[dict], transitions: list[dict], cutoff_s: float,
                   horizon_s: float, output: Path) -> None:
     actions = tuple(plot_style.REPAIR_ACTION_NAMES)
-    fig, cdf_axis = plt.subplots(figsize=(3.35, 2.25))
+    fig, cdf_axis = plt.subplots(figsize=PANEL_FIGSIZE)
     for policy in POLICIES:
         cdf_axis.step(
             [row["time_s"] for row in curve],
@@ -247,15 +250,18 @@ def plot_response(curve: list[dict], transitions: list[dict], cutoff_s: float,
                  xticks=(0, 25, 60, 120), yticks=(0, 50, 100),
                  xlabel="Time (s)", ylabel="Target attainment (%)")
     cdf_axis.grid(axis="y", alpha=.2)
-    plot_style.half_column(cdf_axis)
-    cdf_axis.legend(frameon=False, loc="lower right", fontsize=5.3,
+    cdf_axis.tick_params(labelsize=PANEL_FONT_SIZE)
+    cdf_axis.xaxis.label.set_size(PANEL_FONT_SIZE)
+    cdf_axis.yaxis.label.set_size(PANEL_FONT_SIZE)
+    cdf_axis.legend(frameon=False, loc="lower right",
+                    fontsize=PANEL_LEGEND_FONT_SIZE,
                     handlelength=1.5, borderpad=.1, labelspacing=.25)
     fig.subplots_adjust(left=.2, right=.97, bottom=.22, top=.97)
     for suffix in ("png", "pdf"):
         fig.savefig(output.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
-    fig, mix_axis = plt.subplots(figsize=(3.35, 2.25))
+    fig, mix_axis = plt.subplots(figsize=PANEL_FIGSIZE)
     ordered = [next(row for row in transitions
                     if row["fault_axis"] == axis)
                for axis in ("bandwidth", "prefill", "joint")]
@@ -275,12 +281,15 @@ def plot_response(curve: list[dict], transitions: list[dict], cutoff_s: float,
                      row["fault_axis"]] for row in ordered])
     mix_axis.invert_yaxis()
     mix_axis.grid(axis="x", alpha=.2)
-    plot_style.half_column(mix_axis)
+    mix_axis.tick_params(labelsize=PANEL_FONT_SIZE)
+    mix_axis.xaxis.label.set_size(PANEL_FONT_SIZE)
+    mix_axis.yaxis.label.set_size(PANEL_FONT_SIZE)
     mix_axis.legend(frameon=False, ncol=2, loc="lower center",
-               bbox_to_anchor=(.5, -.48),
-               fontsize=5.5, handlelength=1.5, columnspacing=.9,
+               bbox_to_anchor=(.5, -.62),
+               fontsize=PANEL_LEGEND_FONT_SIZE, handlelength=1.5,
+               columnspacing=.9,
                labelspacing=.25)
-    fig.subplots_adjust(left=.24, right=.97, bottom=.35, top=.97)
+    fig.subplots_adjust(left=.24, right=.97, bottom=.42, top=.97)
     for suffix in ("png", "pdf"):
         fig.savefig(output.with_name("repair_actions").with_suffix(f".{suffix}"),
                     dpi=plot_style.SAVE_DPI)

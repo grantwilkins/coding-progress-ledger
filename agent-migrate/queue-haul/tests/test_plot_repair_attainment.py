@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Select applied interventions based on their attainment time.
 - Aggregate action transitions without conserving pending actions.
 - Keep abbreviated resources or stale action-axis and legend labels.
+- Emit panels too wide or with typography too small for side-by-side use.
 """
 
 from pathlib import Path
@@ -109,6 +110,8 @@ def test_response_plots_are_separate_and_use_requested_labels(monkeypatch):
                           25, 120, Path("repair_response"))
 
     figures = [plt.figure(number) for number in plt.get_fignums()[-2:]]
+    assert all(tuple(figure.get_size_inches()) == plotter.PANEL_FIGSIZE
+               for figure in figures)
     assert saved == [Path("repair_response.png"), Path("repair_response.pdf"),
                      Path("repair_actions.png"), Path("repair_actions.pdf")]
     assert [tick.get_text() for tick in figures[1].axes[0].get_yticklabels()] == [
@@ -116,4 +119,7 @@ def test_response_plots_are_separate_and_use_requested_labels(monkeypatch):
     assert figures[1].axes[0].get_xlabel() == "Actions (%)"
     assert "Diff. Action" in [text.get_text() for text in
                               figures[1].axes[0].get_legend().get_texts()]
+    assert all(text.get_fontsize() >= plotter.PANEL_LEGEND_FONT_SIZE
+               for figure in figures for text in
+               figure.axes[0].get_legend().get_texts())
     plt.close("all")
