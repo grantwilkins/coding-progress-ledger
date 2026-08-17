@@ -106,3 +106,34 @@ The plot command writes one aligned two-panel PDF and PNG. Both panels use raw
 seconds and a conventional linear RPS axis; each contains one canonical model
 curve, model-colored SLO lines, first-confirmed-violation markers, and min-max
 whiskers at repeated boundary rates.
+
+## H100 GPT-OSS result
+
+The workload-matched H100 run is retained in
+`outputs/agentic-rps-sweep-h100-vllm019-20260817`. It used the same model
+revision, 3,920/1,024-token request shape, Poisson seeds, rates, and 32 requests
+per cell as the A100 campaign. All 352 requests completed and neither SLO was
+violated through 8 RPS.
+
+| RPS | P90 TTFT (s) | P90 TPOT (ms) |
+|---:|---:|---:|
+| 0.125 | 0.095 | 4.93 |
+| 0.25 | 0.095 | 5.27 |
+| 0.5 | 0.096 | 5.69 |
+| 1 | 0.105 | 6.01 |
+| 2 | 0.138 | 7.44 |
+| 3 | 0.173 | 8.40 |
+| 4 | 0.163 | 8.85 |
+| 5 | 0.194 | 8.86 |
+| 6 | 0.252 | 8.38 |
+| 7 | 0.274 | 8.41 |
+| 8 | 1.498 | 8.33 |
+
+These are workload-matched, not runtime-version-matched, results. The current
+vLLM 0.22 environment showed a severe GPT-OSS low/moderate-batch regression on
+H100 even with fresh SM90 caches, compilation, and both Triton and Marlin MXFP4
+backends. The retained result therefore uses an isolated vLLM 0.19.1 runtime
+with compilation and CUDA graphs. A 16-request diagnostic improved from about
+186 output tokens/s and 80 ms P90 TPOT on vLLM 0.22 to 2,050 output tokens/s
+and 5.94 ms on vLLM 0.19.1, confirming that the earlier inversion was a
+software-stack artifact rather than H100 performance.

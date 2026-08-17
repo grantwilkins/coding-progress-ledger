@@ -1,0 +1,168 @@
+{
+  "base_rates_rps": [
+    0.125,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0,
+    8.0
+  ],
+  "boundary_repeats": [
+    1,
+    2
+  ],
+  "campaign": "agentic_rps_sweep",
+  "hardware": "h100",
+  "implementation": {
+    "campaign_source_sha256": "dc964faefd1ba353b54a7adaa0990d29f74d49dc8d2cc5a71797f62f3643bc59"
+  },
+  "model_revisions": {
+    "Qwen/Qwen3.8-27B": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "google/gemma-4-26B-A4B-it": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
+    "openai/gpt-oss-20b": "6cee5e81ee83917806bbde320786a8fb61efebee"
+  },
+  "models": [
+    "openai/gpt-oss-20b",
+    "Qwen/Qwen3.8-27B",
+    "google/gemma-4-26B-A4B-it"
+  ],
+  "parent": {
+    "plan_sha256": "194ad7d6e376e903fb7ce3db7f40df925942f8cb21b91e2d6fb890a39825512d",
+    "relationship": "same request and runtime contract; cells require re-reduction from token timestamps because TPOT aggregation changed",
+    "reusable_rates_rps": [],
+    "schema": "queue-haul-agentic-rps-sweep-v2"
+  },
+  "rates_rps": [
+    0.125,
+    0.25,
+    0.5,
+    0.6,
+    0.7,
+    0.8,
+    0.9,
+    1.0,
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    7.0,
+    8.0
+  ],
+  "rates_rps_by_model": {
+    "Qwen/Qwen3.8-27B": [
+      0.125,
+      0.25,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9,
+      1.0,
+      2.0,
+      4.0,
+      8.0
+    ],
+    "google/gemma-4-26B-A4B-it": [
+      0.125,
+      0.25,
+      0.5,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      8.0
+    ],
+    "openai/gpt-oss-20b": [
+      0.125,
+      0.25,
+      0.5,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      8.0
+    ]
+  },
+  "refinement_rates_rps_by_model": {
+    "Qwen/Qwen3.8-27B": [
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "google/gemma-4-26B-A4B-it": [
+      3.0,
+      5.0,
+      6.0,
+      7.0
+    ],
+    "openai/gpt-oss-20b": [
+      3.0,
+      5.0,
+      6.0,
+      7.0
+    ]
+  },
+  "request_shape": {
+    "output_tokens": 1024,
+    "prompt_tokens": 3920,
+    "source": "fixed compact shape derived from the OpenHands coding trace"
+  },
+  "request_timeout_s": 1800.0,
+  "requests_per_point": 32,
+  "runtime": {
+    "chunked_prefill": true,
+    "dtype": "bfloat16",
+    "enforce_eager": false,
+    "flashinfer": "0.6.6",
+    "gpu_count": 1,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "auto",
+    "lmcache_mode": "none",
+    "max_model_len": 32768,
+    "max_num_seqs": 256,
+    "prefix_caching": true,
+    "server": "external-standalone",
+    "tensor_parallel_size": 1,
+    "vllm": "0.19.1"
+  },
+  "schema": "queue-haul-agentic-rps-sweep-v3",
+  "seed": 1,
+  "semantics": {
+    "forced_exact_output_length": true,
+    "max_concurrency": null,
+    "one_engine_per_model_unless_service_restart_is_needed": true,
+    "open_loop_poisson": true,
+    "refinement_points_predeclared": true,
+    "run_all_rates_after_violation": true,
+    "service_failures_are_outcomes": true,
+    "slo_is_control_flow": false,
+    "tpot_definition": "p90_of_all_exact_post_first_token_intervals",
+    "unique_private_prompts": true
+  },
+  "slo": {
+    "fixed": {
+      "google/gemma-4-26B-A4B-it": {
+        "p90_tpot_s": 0.2,
+        "p90_ttft_s": 2.0
+      },
+      "openai/gpt-oss-20b": {
+        "p90_tpot_s": 0.1,
+        "p90_ttft_s": 2.0
+      }
+    },
+    "relative_baseline_rps": 0.125,
+    "relative_models": [
+      "Qwen/Qwen3.8-27B"
+    ],
+    "relative_multiplier": 2.0
+  }
+}
