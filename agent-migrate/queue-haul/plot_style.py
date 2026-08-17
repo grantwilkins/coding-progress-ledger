@@ -195,7 +195,7 @@ REPAIR_ACTION_NAMES = {
 }
 REPAIR_ACTION_SHORT_NAMES = {
     "retained": "Retained",
-    "method": "Method",
+    "method": "Diff. Action",
     "destination": "Destination",
     "removed": "Removed",
 }
@@ -214,6 +214,11 @@ REPAIR_ACTION_HATCHES = {
 RESOURCE_FAULT_SHORT_NAMES = {
     "bandwidth": "BW",
     "prefill": "PF",
+    "joint": "Both",
+}
+RESOURCE_FAULT_NAMES = {
+    "bandwidth": "Bandwidth",
+    "prefill": "Prefill",
     "joint": "Both",
 }
 POWER_VALIDATION_METHODS = ("lp", "greedy", "milp", "power-unaware", "random")
