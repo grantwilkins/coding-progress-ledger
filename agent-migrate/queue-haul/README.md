@@ -1351,6 +1351,9 @@ producers must inherit it. Policy identities are:
 | `queue_haul_power_blind` | Queue-Haul Power Blind | `#009E73` | short dash |
 | `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | `#000000` | fine dotted |
 
+Stress-frontier figures omit the modeled MILP reference and normalize every
+displayed policy to the shared maximum 90%-coverage attainment.
+
 Rebuild them with:
 
 ```bash
