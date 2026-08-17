@@ -128,6 +128,12 @@ def make_explosion_plan(model: str, seed: int = DEFAULT_SEED) -> dict:
                            for index, rate in enumerate(EXPLOSION_RATES)]}
 
 
+def make_upper_plan(model: str, seed: int = DEFAULT_SEED) -> dict:
+    plan = make_plan(model, seed=seed)
+    return {**plan, "design": "upper", "boundary_repeats": 0,
+            "conditional_lower_bracket_rps": [], "lower_bracket_cells": []}
+
+
 def read_plan(path: Path) -> dict:
     plan = json.loads(path.read_text())
     expected = (make_knee_plan(plan.get("model", ""),
@@ -136,6 +142,8 @@ def read_plan(path: Path) -> dict:
                 if plan.get("design") == "knee" else
                 make_explosion_plan(plan.get("model", ""), plan.get("seed", -1))
                 if plan.get("design") == "explosion" else
+                make_upper_plan(plan.get("model", ""), plan.get("seed", -1))
+                if plan.get("design") == "upper" else
                 make_plan(plan.get("model", ""), plan.get("ttft_slo_s", 0),
                           plan.get("tpot_slo_s", 0), plan.get("seed", -1)))
     if plan != expected:
@@ -370,7 +378,7 @@ def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
             return result
 
         rows = [one(expected) for expected in plan["base_cells"]]
-        if plan.get("design") in ("explosion", "knee"):
+        if plan.get("design") in ("explosion", "knee", "upper"):
             write_summary(root, plan, rows, (), identity, False, False)
             return
         boundary = first_boundary(rows)
@@ -404,7 +412,7 @@ def parse_args(argv=None):
     prepare.add_argument("--ttft-slo-s", type=float, default=1.)
     prepare.add_argument("--tpot-slo-s", type=float, default=.1)
     prepare.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    prepare.add_argument("--design", choices=("base", "explosion", "knee"),
+    prepare.add_argument("--design", choices=("base", "explosion", "knee", "upper"),
                          default="base")
     prepare.add_argument("--base-root", type=Path)
     prepare.add_argument("--out", type=Path, required=True)
@@ -426,7 +434,8 @@ def main(argv=None) -> None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         plan = (make_knee_plan(args.model, explosion_evidence(args.base_root), args.seed)
                 if args.design == "knee" else make_explosion_plan(args.model, args.seed)
-                if args.design == "explosion" else make_plan(
+                if args.design == "explosion" else make_upper_plan(args.model, args.seed)
+                if args.design == "upper" else make_plan(
                     args.model, args.ttft_slo_s, args.tpot_slo_s, args.seed))
         args.out.write_text(json.dumps(plan, indent=2) + "\n")
         return

@@ -118,3 +118,11 @@ def test_explosion_plan_runs_only_low_and_high_endpoints():
     assert plan["rates_rps"] == [.125, 8]
     assert [row["poisson_seed"] for row in plan["base_cells"]] == [207, 208]
     assert not plan["lower_bracket_cells"] and plan["boundary_repeats"] == 0
+
+
+def test_upper_plan_runs_all_rates_without_boundary_search():
+    plan = campaign.make_upper_plan("Qwen/Qwen3.8-27B", 7)
+
+    assert plan["rates_rps"] == list(campaign.RATES)
+    assert len(plan["base_cells"]) == len(campaign.RATES)
+    assert not plan["lower_bracket_cells"] and plan["boundary_repeats"] == 0

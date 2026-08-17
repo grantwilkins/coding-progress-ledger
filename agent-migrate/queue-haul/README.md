@@ -1561,6 +1561,7 @@ runs seven ungated rates: GPT `{2.25,...,3.75}`, Qwen
 `{0.5625,...,0.9375}`, and Gemma `{4.5,...,7.5}` RPS.
 Use `--design explosion` to measure only 0.125 and 8 RPS when endpoint evidence
 must be re-established on a new H100 before preparing the knee plan.
+Use `--design upper` for the ungated seven-rate sweep with no lower search.
 
 ```bash
 uv run python fixed_shape_slo_campaign.py prepare --design knee --model MODEL --base-root BASE-RUN --out KNEE-RUN/plan.json
