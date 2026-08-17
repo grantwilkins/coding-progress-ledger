@@ -41,7 +41,7 @@ object hash is
 - `rps-sweep.csv`: 45 figure inputs plus header.
 - `all-rereduced-cells.csv`: all 59 re-reduced cells plus header.
 - `summary.json`: reduced curves, SLOs, boundary repeats, and source hashes.
-- `agentic-rps-sweep.pdf` and `.png`: aligned TTFT and TPOT panels.
+- `agentic-rps-sweep.pdf` and `.png`: compact stacked GPT-OSS-20B TTFT and pooled-P90 TPOT panels for the OpenHands Agentic workload.
 - `plan.json`: immutable schema-v3 plan.
 
 SHA-256:
@@ -50,5 +50,5 @@ SHA-256:
 - `summary.json`: `7b87cfa93c5ce3e1360c784685a79673964cb6726afd024f869711c4d9d88494`
 - `rps-sweep.csv`: `004ea5dbc9e8b32382ff1811347b8ff1a42c225426ff49aee7a6746324fd78de`
 - `all-rereduced-cells.csv`: `694289b8bc62b1692bed0cb526cac6e33b9819eda8363f22e4a448d02fbdeec5`
-- `agentic-rps-sweep.pdf`: `ee968f5b5e9f422980079ae5c05d5808b0a25b36547e413026a51253c87b3ac7`
-- `agentic-rps-sweep.png`: `c22160f12b05a053160d9baebc5e906e739f6e1070a98895bfbcf731479b9e0c`
+- `agentic-rps-sweep.pdf`: `41aabbd007b6cd9a0c0035da736a4b532c59251ce492a6efd9a8a915b52ec435`
+- `agentic-rps-sweep.png`: `47f2f01a858bae283b1c619ed1100d79bef288717525fcd1d12e5779eafcc698`

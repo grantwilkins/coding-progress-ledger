@@ -12,7 +12,7 @@ import plot_style
 plot_style.apply()
 
 MODEL = "openai/gpt-oss-20b"
-SCHEMA = "queue-haul-agentic-rps-sweep-v2"
+SCHEMA = "queue-haul-agentic-rps-sweep-v3"
 METRICS = (
     ("p90_ttft_s", "P90 TTFT (s)"),
     ("p90_tpot_s", "P90 TPOT (s)"),

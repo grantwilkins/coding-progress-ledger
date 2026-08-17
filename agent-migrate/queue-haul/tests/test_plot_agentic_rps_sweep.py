@@ -9,6 +9,7 @@ Plausible wrong implementations:
 """
 
 import matplotlib.pyplot as plt
+import pytest
 
 import plot_agentic_rps_sweep as plotter
 
@@ -46,3 +47,9 @@ def test_plot_selects_sorted_gpt_oss_curve_and_fixed_slos(tmp_path, monkeypatch)
     assert axes[0].lines[1].get_color() == "black"
     assert axes[0].lines[1].get_linestyle() == ":"
     plt.close("all")
+
+
+def test_plot_rejects_legacy_mean_tpot_summary(tmp_path):
+    with pytest.raises(ValueError, match="not reduced evidence"):
+        plotter.plot({"schema": "queue-haul-agentic-rps-sweep-v2",
+                      "stage": "reduced"}, tmp_path)
