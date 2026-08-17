@@ -575,7 +575,7 @@ def test_bootstrap_preserves_bandwidth_release_order():
         )
 
 
-def test_action_mix_figure_is_exactly_five_and_a_half_by_three(tmp_path):
+def test_action_mix_figure_has_half_column_canvas(tmp_path):
     rows = [{
         "case_id": case_id, "replay_phase_load": .4,
         "kv_transfer_phase_load": .3, "not_moved_phase_load": .3,
@@ -584,8 +584,8 @@ def test_action_mix_figure_is_exactly_five_and_a_half_by_three(tmp_path):
     campaign.plot(rows, tmp_path / "mix")
     image = campaign.plt.imread(tmp_path / "mix.png")
 
-    assert image.shape[:2] == (3 * campaign.plot_style.SAVE_DPI,
-                               5.5 * campaign.plot_style.SAVE_DPI)
+    assert image.shape[:2] == (2.1 * campaign.plot_style.SAVE_DPI,
+                               3.85 * campaign.plot_style.SAVE_DPI)
     assert len({campaign.plot_style.ACTION_HATCHES[action]
                 for action in campaign.ACTIONS}) == len(campaign.ACTIONS)
 

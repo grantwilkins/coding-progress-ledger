@@ -28,12 +28,26 @@ from profiles import ModelProfile
 from workload_power_frontier import (
     CAPACITY_SOLVER, DISPLAY_STATES, SOLVERS, capacity_release_audit,
     capacity_summary, planning_request_w, power_summary, request_grid, sweep,
+    write_capacity_plot,
 )
 
 
 def test_display_states_match_the_five_declared_action_cases():
     assert DISPLAY_STATES == adaptation.DISPLAY_CASES
     assert len(DISPLAY_STATES) == len(set(DISPLAY_STATES)) == 5
+
+
+def test_capacity_figure_has_half_column_canvas(tmp_path):
+    rows = [{
+        "constraint_state": state, "requested_fraction": request,
+        "attainment_rate": 1 - request,
+    } for state in DISPLAY_STATES for request in (0, 1)]
+
+    write_capacity_plot(rows, tmp_path / "frontier")
+    image = adaptation.plt.imread(tmp_path / "frontier.png")
+
+    assert image.shape[:2] == tuple(int(value * adaptation.plot_style.SAVE_DPI)
+                                    for value in (2.2, 3.35))
 
 
 def test_raw_lp_endpoint_explicitly_requests_its_maximum_fallback():

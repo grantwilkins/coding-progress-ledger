@@ -28,6 +28,7 @@ SOLVERS = {"queue_haul_lp": "lp_highs"}
 CAPACITY_SOLVER = "max_shed_capacity"
 CAPACITY_ORDER_TOLERANCE = 4 * MAX_SHED_CAPACITY_GAP
 DISPLAY_STATES = adaptation.DISPLAY_CASES
+FIGSIZE = (3.35, 2.2)
 plot_style.apply()
 
 
@@ -250,7 +251,7 @@ def write_capacity_plot(summary, out):
     import matplotlib.pyplot as plt
     from matplotlib.ticker import PercentFormatter
 
-    fig, axis = plt.subplots(figsize=(4, 3))
+    fig, axis = plt.subplots(figsize=FIGSIZE)
     for state in DISPLAY_STATES:
         selected = [row for row in summary if row["constraint_state"] == state]
         axis.step(
@@ -266,17 +267,16 @@ def write_capacity_plot(summary, out):
              ylabel="Cases Meeting Target")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
-    axis.tick_params(labelsize=11)
-    axis.xaxis.label.set_size(12)
-    axis.yaxis.label.set_size(12)
+    axis.tick_params(labelsize=8)
+    axis.xaxis.label.set_size(8)
+    axis.yaxis.label.set_size(8)
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, fontsize=9, ncol=1,
-               loc="center left", bbox_to_anchor=(.93, .5))
-    fig.tight_layout()
+    fig.legend(handles, labels, frameon=False, fontsize=6.5, ncol=1,
+               loc="center left", bbox_to_anchor=(.66, .5))
+    fig.subplots_adjust(left=.2, right=.65, bottom=.22, top=.97)
     for suffix in ("png", "pdf"):
-        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
-                    bbox_inches="tight")
+        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
 

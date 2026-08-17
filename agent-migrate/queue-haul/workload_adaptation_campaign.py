@@ -841,7 +841,7 @@ def action_mix_means(rows):
 
 
 def plot(rows, path):
-    fig, axis = plt.subplots(figsize=(5.5, 3))
+    fig, axis = plt.subplots(figsize=(3.85, 2.1))
     labels = {case_id: label for case_id, label, _ in factorial_cases()}
     values_by_action = action_mix_means(rows)
     left = np.zeros(len(DISPLAY_CASES))
@@ -861,14 +861,14 @@ def plot(rows, path):
     )
     axis.invert_yaxis()
     axis.grid(axis="x", alpha=.2)
-    axis.tick_params(labelsize=11)
-    axis.xaxis.label.set_size(12)
+    axis.tick_params(labelsize=8)
+    axis.xaxis.label.set_size(8)
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(
         handles, labels, frameon=False, ncol=2, loc="lower center",
-        bbox_to_anchor=(.58, .01), fontsize=10, handlelength=1.8,
+        bbox_to_anchor=(.58, .01), fontsize=7, handlelength=1.8,
     )
-    fig.subplots_adjust(left=.34, right=.98, bottom=.36, top=.98)
+    fig.subplots_adjust(left=.34, right=.95, bottom=.4, top=.98)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
