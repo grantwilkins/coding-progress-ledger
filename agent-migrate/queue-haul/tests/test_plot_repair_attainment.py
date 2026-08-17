@@ -59,3 +59,16 @@ def test_applied_population_is_selected_without_using_attainment():
     rows = plotter.paired_rows(bundle, .5, "applied")
     assert len(rows) == 5
     assert all(row["repair_outcome"] == "applied" for row in rows)
+
+
+def test_transition_summary_conserves_pending_actions():
+    bundle = _bundle()
+    for row in bundle["cells"]:
+        row["transition_counts"] = {
+            "pending": 10, "retained": 4, "method": 3,
+            "destination": 2, "removed": 1,
+        }
+    summary = plotter.transition_summary(bundle, .5)
+    assert len(summary) == 3
+    assert all(row["pending_actions"] == 20 for row in summary)
+    assert all(row["retained_fraction"] == .4 for row in summary)
