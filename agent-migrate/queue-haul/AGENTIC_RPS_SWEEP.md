@@ -37,6 +37,26 @@ used directly; they must be re-reduced from their retained token timestamps or
 rerun. The v3 `rps-sweep.csv` exports this pooled metric as `p90_tpot_s` and
 omits the diagnostic per-request-mean percentile.
 
+Retained schema-v1/v2 request files can be pooled without rerunning inference:
+
+```bash
+uv run python agentic_rps_sweep_campaign.py rereduce \
+  --plan runs/agentic-rps-sweep-a100/plan.json \
+  --source-root /path/to/sweden/cells \
+  --source-root /path/to/east/cells \
+  --source-root /path/to/germany/cells \
+  --source-label swedencentral \
+  --source-label eastus2 \
+  --source-label germanywestcentral \
+  --source-origin /persistent/sweden/cells \
+  --source-origin /persistent/east/cells \
+  --source-origin /persistent/germany/cells \
+  --run-root runs/agentic-rps-sweep-a100-pooled \
+  --csv outputs/agentic-rps-sweep-a100-pooled/all-rereduced-cells.csv
+```
+
+Each derived cell records hashes of its source result and raw request file.
+
 The fixed SLOs are 2.0 s TTFT / 0.1 s TPOT for GPT-OSS and 2.0 s TTFT /
 0.2 s TPOT for Gemma. Qwen uses twice its 0.125-RPS P90 baseline for each
 metric.
