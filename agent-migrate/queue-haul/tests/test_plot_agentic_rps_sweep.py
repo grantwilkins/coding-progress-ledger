@@ -42,6 +42,8 @@ def test_plot_selects_sorted_gpt_oss_curve_and_fixed_slos(tmp_path, monkeypatch)
     assert len(axes) == 2
     assert plt.gcf().get_figwidth() <= 3.5
     assert axes[0].get_position().x0 < axes[1].get_position().x0
+    assert axes[0].get_xlim() == axes[1].get_xlim() == (0, 10)
+    assert axes[1].get_ylim() == (0, 50)
     assert list(axes[0].lines[0].get_xdata()) == [1, 2]
     assert list(axes[0].lines[0].get_ydata()) == [1, 2]
     assert axes[0].lines[0].get_label() == "OpenHands Agentic"
@@ -88,6 +90,7 @@ def test_plot_compares_matching_hardware_with_one_shared_slo(tmp_path,
     assert [list(line.get_ydata()) for line in lines] == [[3], [1], [1, 1]]
     assert [list(line.get_ydata()) for line in figure.axes[1].lines] \
         == [[30], [50], [50, 50]]
+    assert lines[-1].get_linewidth() > lines[0].get_linewidth()
     assert [text.get_text() for text in figure.legends[0].texts] == [
         "Agent - A100", "Agent - H100", "SLO"]
     plt.close("all")

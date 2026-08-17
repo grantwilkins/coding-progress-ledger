@@ -44,22 +44,24 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                        f"Agent - {plot_style.AGENTIC_HARDWARE_NAMES[hardware]}"),
                 color=plot_style.AGENTIC_HARDWARE_COLORS[hardware],
                 marker=plot_style.AGENTIC_HARDWARE_MARKERS[hardware],
-                linewidth=1.5,
+                linewidth=1.1,
             )
         axis.axhline(
             SLOS[field] * scale, color="black", linestyle=":",
-            linewidth=1.2, label="SLO",
+            linewidth=1.7, label="SLO", zorder=5,
         )
         axis.set_ylabel(ylabel, fontsize=plot_style.HALF_COLUMN_FONT_SIZE)
         axis.set_xlabel("Rate (req/s)", fontsize=plot_style.HALF_COLUMN_FONT_SIZE)
         axis.tick_params(labelsize=plot_style.HALF_COLUMN_FONT_SIZE)
         axis.grid(alpha=.2)
-    axes[-1].set_xlim(0, max(row["offered_rps"] for rows in curves.values()
-                             for row in rows) + .25)
+    for axis in axes:
+        axis.set_xlim(0, 10)
+    axes[1].set_ylim(0, 50)
     handles, labels = axes[0].get_legend_handles_labels()
     figure.legend(handles, labels, frameon=False, ncol=len(handles),
-                  loc="upper center", fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE)
-    figure.subplots_adjust(left=.14, right=.98, bottom=.24, top=.76, wspace=.42)
+                  loc="upper center", bbox_to_anchor=(.5, .94),
+                  fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE)
+    figure.subplots_adjust(left=.14, right=.98, bottom=.24, top=.82, wspace=.42)
     output.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("pdf", "png"):
         figure.savefig(output.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
