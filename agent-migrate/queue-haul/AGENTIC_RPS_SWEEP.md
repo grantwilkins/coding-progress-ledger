@@ -34,7 +34,8 @@ The plan is schema v3. TPOT is the P90 over all exact post-first-token
 intervals in a cell, pooled across its 32 fixed-length requests. The earlier
 schema-v2 results used P90 over per-request mean TPOT and therefore cannot be
 used directly; they must be re-reduced from their retained token timestamps or
-rerun.
+rerun. The v3 `rps-sweep.csv` exports this pooled metric as `p90_tpot_s` and
+omits the diagnostic per-request-mean percentile.
 
 The fixed SLOs are 2.0 s TTFT / 0.1 s TPOT for GPT-OSS and 2.0 s TTFT /
 0.2 s TPOT for Gemma. Qwen uses twice its 0.125-RPS P90 baseline for each

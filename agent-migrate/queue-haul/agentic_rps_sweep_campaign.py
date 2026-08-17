@@ -494,11 +494,14 @@ def reduce(plan: dict, root: Path) -> dict:
 
 def write_csv(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fields = list(dict.fromkeys(key for row in rows for key in row))
+    fields = list(dict.fromkeys(
+        key for row in rows for key in row
+        if key != "diagnostic_p90_request_mean_tpot_s"
+    ))
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(({key: row.get(key) for key in fields} for row in rows))
 
 
 def run_campaign(plan: dict, root: Path, models: tuple[str, ...]) -> dict | None:

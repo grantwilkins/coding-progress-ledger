@@ -1,5 +1,6 @@
 """Tests for the intentionally small, non-gating agentic RPS sweep."""
 
+import csv
 import json
 
 import pytest
@@ -168,3 +169,14 @@ def test_service_failures_remain_curve_data():
     assert result["tpot_samples"] == 12
     assert result["diagnostic_p90_request_mean_tpot_s"] == .05
     assert "one client failed" in result["client_error"]
+
+
+def test_csv_exports_pooled_tpot_not_request_mean(tmp_path):
+    path = tmp_path / "rps-sweep.csv"
+    campaign.write_csv(path, [{
+        "p90_tpot_s": .2,
+        "diagnostic_p90_request_mean_tpot_s": .05,
+    }])
+
+    row = next(csv.DictReader(path.open()))
+    assert row == {"p90_tpot_s": "0.2"}
