@@ -56,7 +56,7 @@ def make_plan(model: str, ttft_slo_s: float = 1., tpot_slo_s: float = .1,
               seed: int = DEFAULT_SEED) -> dict:
     if model not in testbed.MODEL_SPECS or min(ttft_slo_s, tpot_slo_s) <= 0:
         raise ValueError("invalid fixed-shape campaign inputs")
-    stack = service.make_plan(model)
+    stack = service.make_plan()
     return {"schema": SCHEMA, "model": model, "hardware": "h100",
             "input_tokens": INPUT_TOKENS, "output_tokens": OUTPUT_TOKENS,
             "requests_per_point": REQUESTS, "rates_rps": list(RATES),
@@ -170,7 +170,7 @@ def summarize(plan: dict, spec: dict, requests: list[dict], metrics: list[dict],
                 and row.get("prompt_tokens") == INPUT_TOKENS
                 and row.get("output_tokens") == OUTPUT_TOKENS]
     ttft = [row["ttft_s"] for row in complete]
-    tpot = [row["mean_tpot_s"] for row in complete]
+    tpot = [value for row in complete for value in row["token_itls_s"]]
     p90_ttft, p90_tpot = service.quantile(ttft, .9), service.quantile(tpot, .9)
     violation = len(complete) != REQUESTS or p90_ttft is None or p90_tpot is None \
         or p90_ttft > plan["ttft_slo_s"] or p90_tpot > plan["tpot_slo_s"]
@@ -183,7 +183,7 @@ def summarize(plan: dict, spec: dict, requests: list[dict], metrics: list[dict],
             "exact_completions": len(complete),
             "exact_completion_rate": len(complete) / REQUESTS,
             "service_failure_rate": 1 - len(complete) / REQUESTS,
-            "p90_ttft_s": p90_ttft, "p90_mean_tpot_s": p90_tpot,
+            "p90_ttft_s": p90_ttft, "p90_tpot_s": p90_tpot,
             "ttft_slo_s": plan["ttft_slo_s"],
             "tpot_slo_s": plan["tpot_slo_s"], "slo_violation": violation,
             "drained": drained, "engine_exited": engine_exited,
@@ -298,7 +298,7 @@ def aggregate(rows: list[dict], plan: dict) -> list[dict]:
                 "replicates": len(group),
                 "exact_completion_rate_min": min(row["exact_completion_rate"]
                                                   for row in group)}
-        for metric in ("p90_ttft_s", "p90_mean_tpot_s"):
+        for metric in ("p90_ttft_s", "p90_tpot_s"):
             values = [row[metric] for row in group if row[metric] is not None]
             item[metric] = statistics.median(values) if values else None
             item[f"{metric}_min"] = min(values) if values else None
@@ -344,6 +344,12 @@ def reduce_upper(root: Path, plan: dict) -> dict:
         validate_resume(result, plan, expected, identity)
         if result["status"] != "complete":
             raise RuntimeError("upper sweep contains an incomplete result")
+        requests = json.loads(
+            (root / "base" / expected["cell_id"] / "requests.json").read_text())
+        exact = [row for row in requests if serving.exact_token_timing(row)]
+        result["p90_tpot_s"] = service.quantile(
+            [value for row in exact for value in row["token_itls_s"]], .9)
+        result.pop("p90_mean_tpot_s", None)
         rows.append(result)
     if len({row["runtime_identity_sha256"] for row in rows}) != 1:
         raise RuntimeError("upper sweep mixes runtime identities")
