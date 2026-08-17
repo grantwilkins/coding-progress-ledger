@@ -175,7 +175,9 @@ def write_plot(rows, path):
     for policy in POLICIES:
         x, y = attainment_curve(rows, policy)
         axis.step(np.r_[x, horizon], np.r_[y, y[-1]], where="post",
-                  **plot_style.policy_style(policy))
+                  **plot_style.policy_style(
+                      policy, names=plot_style.COMPACT_POLICY_NAMES,
+                  ))
     axis.axvline(deadline, color="black", linestyle="--", linewidth=1.5)
     axis.text(
         deadline, .4, "30 s deadline", transform=axis.get_xaxis_transform(),

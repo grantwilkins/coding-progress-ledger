@@ -30,6 +30,9 @@ POLICY_NAMES = dict(zip(POLICIES, (
     "True Greedy", "KV Migrate Only", "Replay Context Only",
     "Queue-Haul Power Blind", "Queue-Haul Deadline Blind",
 )))
+COMPACT_POLICY_NAMES = {
+    **POLICY_NAMES, "kv_only": "KV Migrate", "replay_only": "Replay Context",
+}
 SHORT_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "Queue-Haul"}
 POLICY_COLORS = dict(zip(POLICIES, (
     "#0072B2", "#E69F00", "#F0E442", "#D55E00",
