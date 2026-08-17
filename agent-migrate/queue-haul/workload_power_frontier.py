@@ -28,7 +28,7 @@ SOLVERS = {"queue_haul_lp": "lp_highs"}
 CAPACITY_SOLVER = "max_shed_capacity"
 CAPACITY_ORDER_TOLERANCE = 4 * MAX_SHED_CAPACITY_GAP
 DISPLAY_STATES = adaptation.DISPLAY_CASES
-FIGSIZE = (3.35, 2.2)
+FIGSIZE = (3.35, 2.5)
 plot_style.apply()
 
 
@@ -267,14 +267,14 @@ def write_capacity_plot(summary, out):
              ylabel="Cases Meeting Target")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
-    axis.tick_params(labelsize=8)
-    axis.xaxis.label.set_size(8)
-    axis.yaxis.label.set_size(8)
+    axis.tick_params(labelsize=10)
+    axis.xaxis.label.set_size(10)
+    axis.yaxis.label.set_size(10)
     axis.grid(alpha=.2)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, fontsize=6.5, ncol=1,
-               loc="center left", bbox_to_anchor=(.66, .5))
-    fig.subplots_adjust(left=.2, right=.65, bottom=.22, top=.97)
+    fig.legend(handles, labels, frameon=False, fontsize=7.5, ncol=1,
+               loc="center left", bbox_to_anchor=(.63, .5))
+    fig.subplots_adjust(left=.25, right=.62, bottom=.2, top=.97)
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)

@@ -47,7 +47,7 @@ def test_capacity_figure_has_half_column_canvas(tmp_path):
     image = adaptation.plt.imread(tmp_path / "frontier.png")
 
     assert image.shape[:2] == tuple(int(value * adaptation.plot_style.SAVE_DPI)
-                                    for value in (2.2, 3.35))
+                                    for value in (2.5, 3.35))
 
 
 def test_raw_lp_endpoint_explicitly_requests_its_maximum_fallback():

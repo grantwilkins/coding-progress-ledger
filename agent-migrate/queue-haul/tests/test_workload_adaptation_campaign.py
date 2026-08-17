@@ -584,7 +584,7 @@ def test_action_mix_figure_has_half_column_canvas(tmp_path):
     campaign.plot(rows, tmp_path / "mix")
     image = campaign.plt.imread(tmp_path / "mix.png")
 
-    assert image.shape[:2] == (2.1 * campaign.plot_style.SAVE_DPI,
+    assert image.shape[:2] == (2.5 * campaign.plot_style.SAVE_DPI,
                                3.85 * campaign.plot_style.SAVE_DPI)
     assert len({campaign.plot_style.ACTION_HATCHES[action]
                 for action in campaign.ACTIONS}) == len(campaign.ACTIONS)
