@@ -1504,82 +1504,12 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 - `destination_campaign.py` and `destination_runner.py`: targeted destination
   service and loaded-migration evidence.
 - `service_headroom_campaign.py`: exact-stack A100/H100 incumbent-latency curves
-  against Queue-Haul's normalized destination service load.
-- `fixed_shape_slo_campaign.py`: fixed-shape H100 service degradation against
-  offered request rate for the three pinned model architectures.
+  against Queue-Haul's offered normalized prefill/decode service work.
 - `service_surface_runner.py` and `service_profile_reduce.py`: isolated and
   mixed service profiles.
 
-The current three-model degradation run uses one H100 at a time and the same
-deterministic 3,920-token input plus forced 1,024-token output workload for
-GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B. Each model receives 32 seeded
-open-loop Poisson arrivals at every offered rate in
-`{0.125, 0.25, 0.5, 1, 2, 4, 8}` RPS. All 32 client workers may be in flight;
-there is no admission or SLO gate, and all seven rates run even after a
-violation. Afterward, the first rate violating either declared P90 SLO and its
-predecessor each run twice more. The plot reports the median of those three
-boundary runs with min--max whiskers. Incomplete requests count as service
-failures and violations, while launch, telemetry, token-accounting, or cache
-contamination errors invalidate the attempt and force a clean restart.
-If 0.125 RPS is already the first violation, the frozen plan probes the
-`{0.0625, 0.03125, 0.015625}` RPS ladder only until it finds a passing point,
-then repeats that true adjacent pass/fail pair twice; the requested seven-point
-base sweep is unchanged. If every lower probe also violates, the two lowest
-observed rates receive the repeats and the summary marks the boundary
-unbracketed instead of discarding otherwise valid measurements.
-
-The frozen plan records the default declared SLOs of 1 second TTFT and 0.1
-second per-request mean TPOT. Raw request token IDs and timestamps, offered
-arrival traces, full Prometheus scrapes, power samples, failure outcomes, and
-per-rate summaries remain available so other SLO thresholds can be evaluated
-without rerunning the base sweep. Use a fresh root for each model:
-
-```bash
-uv run python fixed_shape_slo_campaign.py prepare --model openai/gpt-oss-20b --out RUN-GPT/plan.json
-uv run python fixed_shape_slo_campaign.py run-model --plan RUN-GPT/plan.json --model openai/gpt-oss-20b --out RUN-GPT
-uv run python fixed_shape_slo_campaign.py prepare --model Qwen/Qwen3.8-27B --out RUN-QWEN/plan.json
-uv run python fixed_shape_slo_campaign.py run-model --plan RUN-QWEN/plan.json --model Qwen/Qwen3.8-27B --max-num-batched-tokens 1567 --out RUN-QWEN
-uv run python fixed_shape_slo_campaign.py prepare --model google/gemma-4-26B-A4B-it --out RUN-GEMMA/plan.json
-uv run python fixed_shape_slo_campaign.py run-model --plan RUN-GEMMA/plan.json --model google/gemma-4-26B-A4B-it --out RUN-GEMMA
-uv run python plot_fixed_shape_slo_curve.py --run-root RUN-GPT --run-root RUN-QWEN --run-root RUN-GEMMA --out outputs/fixed-shape-slo-h100/curve
-```
-
-When model-specific SLOs are not declared, skip boundary interpretation and
-reduce only the complete upper sweep before plotting raw degradation:
-
-```bash
-uv run python fixed_shape_slo_campaign.py reduce-upper --plan RUN/plan.json --out RUN
-```
-
-This excludes conditional lower probes and repeat cells from the primary curve
-and draws no SLO line; their raw artifacts remain in the run root.
-
-The dense knee follow-up defines an observed explosion as 8-RPS P90 TTFT at
-least 4x the 0.125-RPS value plus all 32 requests simultaneously in system.
-`prepare --design knee` hard-validates and binds those endpoint results, then
-runs seven ungated rates: GPT `{2.25,...,3.75}`, Qwen
-`{0.5625,...,0.9375}`, and Gemma `{4.5,...,7.5}` RPS.
-Use `--design explosion` to measure only 0.125 and 8 RPS when endpoint evidence
-must be re-established on a new H100 before preparing the knee plan.
-Use `--design upper` for the ungated seven-rate sweep with no lower search.
-
-```bash
-uv run python fixed_shape_slo_campaign.py prepare --design knee --model MODEL --base-root BASE-RUN --out KNEE-RUN/plan.json
-uv run python fixed_shape_slo_campaign.py run-model --plan KNEE-RUN/plan.json --model MODEL --out KNEE-RUN
-uv run python plot_fixed_shape_slo_curve.py --run-root BASE-GPT --run-root BASE-QWEN --run-root BASE-GEMMA --knee-root KNEE-GPT --knee-root KNEE-QWEN --knee-root KNEE-GEMMA --out outputs/fixed-shape-slo-h100/curve
-```
-
-Set `QH_LMCACHE_MODE=mp`; use `QH_RUNTIME=native` on the validated native
-vLLM/LMCache stack. The older normalized-rho campaign below remains the path
-for an additive admission bound, but it is not the current offered-RPS
-degradation run.
-
 Prepare the frozen cell matrix, follow its per-hardware run order, reduce one
-exact-stack normalization per hardware, then run and reduce the discovery cells.
-Use `QH_LMCACHE_MODE=mp`; add `QH_RUNTIME=native` for the native vLLM
-0.22.0/LMCache 0.5.1 environment instead of the pinned MP Apptainer image.
-Native runs bind the Python version and installed-distribution RECORD hashes
-into the runtime identity:
+exact-stack normalization per hardware, then run and reduce the discovery cells:
 
 ```bash
 uv run python service_headroom_campaign.py prepare --out runs/service-headroom/plan.json
@@ -1589,35 +1519,6 @@ uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom
 uv run python service_headroom_campaign.py reduce --plan runs/service-headroom/plan.json --hardware a100 --runs /datadrive/service-headroom --ttft-target-s 1 --tpot-target-s .1 --out /datadrive/service-headroom/a100-scout.json
 ```
 
-The same one-GPU campaign supports the pinned Qwen3.8-27B and
-Gemma-4-26B-A4B checkpoints. Pass the identical model to `prepare` and every
-`run-cell`; Qwen additionally requires `--max-num-batched-tokens 1567`.
-Gemma's text-only launch passes its disabled image/audio limits as JSON. A
-repo-local vLLM compatibility hook consumes only its 30 concrete layer configs,
-hard-checks 25 sliding `(head_dim=256, kv_heads=8)` and five full
-`(head_dim=512, kv_heads=2)` layers, and records that proof in the runtime log;
-it neither enables ambiguous global attribute access nor homogenizes the model,
-and uses that exact proof for vLLM's required unified Triton backend selection.
-The same hook identifies Gemma's multimodal wrapper by root/text identity and
-its copied inner text-only configs by matching exact layer geometry and stable
-model dimensions, avoiding heterogeneous-config value equality.
-Non-GPT cells hard-check BF16 attention KV, record recurrent-state dtypes,
-check model-specific arguments, and enforce Qwen's
-784-token unified/cache-group alignment. Normalization records LMCache transfer
-chunks separately from the measured APC hit quantum used for cache-hit and
-resident-stock checks: GPT-OSS 16, Qwen 784, and Gemma 32 tokens. Qwen and
-Gemma decode calibration uses the bounded 4/8/16 ladder: isolated H100 n16
-diagnostics completed 16/16 with exact 3,920- and 4,064-token hits respectively,
-while Qwen n64 timed out and mixed hits with misses. Partial, undrained, or
-cache-miss-contaminated calibration cells are invalid, never normalizers.
-
-```bash
-uv run python service_headroom_campaign.py prepare --model Qwen/Qwen3.8-27B --out runs/service-headroom/qwen-plan.json
-uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/qwen-plan.json --model Qwen/Qwen3.8-27B --max-num-batched-tokens 1567 --cell-id CELL --out /datadrive/service-headroom-qwen
-uv run python service_headroom_campaign.py prepare --model google/gemma-4-26B-A4B-it --out runs/service-headroom/gemma-plan.json
-uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/gemma-plan.json --model google/gemma-4-26B-A4B-it --cell-id CELL --out /datadrive/service-headroom-gemma
-```
-
 The discovery result cannot update P1/P2. Generate and execute its unseen
 confirmation plan, then reduce it:
 
@@ -1625,6 +1526,7 @@ confirmation plan, then reduce it:
 uv run python service_headroom_campaign.py prepare-confirmation --plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --hardware a100 --out runs/service-headroom/a100-confirmation.json
 uv run python service_headroom_campaign.py run-cell --plan runs/service-headroom/a100-confirmation.json --cell-id CELL --normalization /datadrive/service-headroom/a100-normalization.json --out /datadrive/service-headroom-confirmation
 uv run python service_headroom_campaign.py reduce-confirmation --plan runs/service-headroom/a100-confirmation.json --core-plan runs/service-headroom/plan.json --scout /datadrive/service-headroom/a100-scout.json --runs /datadrive/service-headroom-confirmation --out /datadrive/service-headroom/a100-confirmed.json
+uv run python plot_service_headroom.py --plan runs/service-headroom/plan.json --normalization /datadrive/service-headroom/a100-normalization.json --scout /datadrive/service-headroom/a100-scout.json --confirmation-plan runs/service-headroom/a100-confirmation.json --confirmed /datadrive/service-headroom/a100-confirmed.json --transition outputs/service-admission-transition-a100-20260816/summary.json --out outputs/service-headroom-a100/service-headroom
 ```
 
 Only a confirmation result accepted by `supported_bound()` supplies a service
@@ -1632,42 +1534,126 @@ limit; that loader rechecks the exact core plan, scout, confirmation plan, and
 all held-out decisions. It returns a total normalized-load cap, so P1/P2 use
 `b_f + b_g + sum_i(w_i,f + w_i,g) <= rho_safe`; available added headroom is
 `rho_safe - (b_f + b_g)`.
-For a phase-plane view, each measurement result also records exact
-`offered_prefill_rho` and `offered_decode_rho`; their sum is `offered_rho`.
-Existing raw traces can be reduced and replotted against any external SLOs:
-
-```bash
-uv run python plot_service_headroom_phase_plane.py --run-root /datadrive/service-headroom-gpt-oss-20b-h100-20260815-v10 --slo tight:.5:.05 --slo paper:1:.1 --slo relaxed:2:.2 --out outputs/service-headroom-gpt-oss-20b-h100-20260816/phase-plane
-```
-
-The CSV/JSON preserve the measured `(rho_p, rho_d)` points and conservative
-across-block TTFT/TPOT values. The figure connects only sampled directional
-rays; it does not interpolate an unmeasured full-plane SLO contour.
+`validate_confirmation_evidence()` separately authenticates rejected held-out
+evidence for analysis and plotting; it never supplies a planner bound.
 The paper figure is P90, matching the DistServe-style comparison; P99 remains
 null unless a cell has at least 1,000 incumbent completions. TTFT and TPOT
 targets are declared evaluation inputs; raw P90 curves, joint
 offered-request attainment, physical stability, and censoring remain in the
-outputs. Calibration prepares every prompt and serialized request body, then
-waits for every worker before releasing its common request epoch. The harness preserves exact token
-IDs/events, labeled Prometheus
+outputs. The harness preserves exact token IDs/events, labeled Prometheus
 scrapes, queue/KV/power series, partial failures, cache proof, and complete
 runtime identity, including the exact vLLM, LMCache, and Redis commands. It
-disables vLLM asynchronous scheduling and fixes its stream interval to one so
-each returned token has a literal SSE timestamp. It enforces the frozen
-randomized cell order and hashes an unchanged image once
-per stage, or records the native environment manifest. The balanced confirmation workload is derived from each hardware's
+uses one asynchronous task per offered request across 32 fixed event-loop
+shards, pins the aiohttp version, and disables cyclic GC during the trace to
+prevent periodic scheduler stalls. It restores GC afterward and invalidates
+any cell whose launch schedule slips by more than 50 ms or whose exact token
+timing coverage falls below 99%. TPOT quantiles use only exact streams, report
+that coverage, and treat an ambiguous stream as a joint-SLO miss. It
+fits total in-system requests over the final two thirds of the measurement
+window and calls growth material only above one fitted accumulated request;
+the older block-bootstrap upper bound remains a diagnostic field and does not
+decide feasibility. It
+enforces the frozen randomized cell order and hashes an unchanged image once
+per stage. The balanced confirmation workload is derived from each hardware's
 normalization and must have a 40--60% prefill share. Live KV capacity and the
-planned block-rounded parked stock are bound into the normalization, checked
-by an exact-token pre-arrival cache-hit census against live capacity, and
-reproduced in confirmation. Submit A100 and
-H100 separately.
+planned block-rounded prefix stock are bound into the normalization. Exact
+successful uncached prewarm tokens must differ from the incumbent-only control
+by that planned stock, and confirmation must reproduce the full prewarm count;
+the vLLM active-KV gauge is retained only as a diagnostic because it does not
+measure reclaimable APC blocks. Use the exact
+vLLM 0.22/LMCache 0.5.1 MP stack provisioned by `setup.sh`
+(`QH_RUNTIME=native`, `QH_LMCACHE_MODE=mp`) or the checksum-pinned Apptainer
+equivalent. The selected runtime mode, versions, and semantic commands become
+part of the cross-cell service identity. Discovery and confirmation may use
+different collector commits only when that service identity is unchanged;
+both complete runtime identities and collector SHAs remain in the evidence.
+Submit A100 and H100 separately.
 Retry an invalid measurement immediately before starting the next frozen cell;
 a later retry violates the audited order and stops the stage. A valid service
 failure is never retried away.
-Queue stability bootstraps complete 30-second blocks and excludes the trailing
-fragment, preventing measurement-window phase from reversing a load boundary.
 See `DATA_TO_COLLECT.md` for the 54-cell discovery and 18-cell confirmation
 matrix per hardware and the claim boundary.
+
+The completed A100 run is in `outputs/service-headroom-a100-20260815/`. All 54
+discovery cells and all 18 unseen confirmation cells completed in frozen order;
+the confirmation service had zero restarts, invalid cells, or cache mismatches.
+The isolated normalization was 16,758.93 prefill tok/s and 3,597.59 decode
+tok/s. Discovery selected `rho=0.70` as the candidate and `rho=0.85` as the
+first fail for both directional slices. Held out, however, every `rho=0.70`
+mix passed only two of three blocks under the one-fitted-request stability
+contract. Prefill-heavy `rho=0.85` failed TPOT in all three blocks; decode-heavy
+`rho=0.85` passed one of three blocks and failed stability in two. The balanced
+`rho=0.70` check also passed only two of three. The reducer therefore correctly
+reports `planner_usable=false` and no supported scalar bound.
+
+Interpret `rho` only as offered normalized phase work,
+`rho_p + rho_d`, computed from exact offered tokens and isolated phase rates;
+it is not measured GPU utilization and is not composition-invariant. The main
+figure therefore plots TTFT against `rho_p` along the measured prefill sweep
+(`rho_d=0.19--0.23`) and TPOT against `rho_d` along the measured decode sweep
+(`rho_p=0.08--0.10`). It shows only the two median lines and their dotted SLOs;
+the held-out and restart-block details remain in the committed CSVs. These are
+two conditional slices, not a two-dimensional surface or estimates of
+independent partial effects.
+At total `rho` near 0.70, held-out prefill-heavy, balanced, and decode-heavy P90
+TTFT/mean-TPOT medians are respectively 234.7/59.7 ms, 152.9/42.7 ms, and
+131.7/37.2 ms. This composition dependence proves that total work is not a
+latency-response model. It does not prevent using a lower total-work row as a
+conservative admission certificate when every tested composition passes. A
+two-dimensional campaign is needed only to claim extra headroom for unseen
+phase mixtures; the present evidence does not make that stronger claim.
+
+`service_admission_transition_campaign.py` is the deliberately small live
+follow-up. It does not fit an admission surface or exercise an end-to-end
+Queue-Haul migration. It freezes three discrete normalized phase-work recipes
+`(w_F,w_D)` in GPU-s/s: prefill-heavy `(0.3078,0.1919)`, balanced
+`(0.1996,0.3003)`, and decode-heavy `(0.08163,0.41806)`. Their sums are near
+0.50 by construction; that scalar is neither utilization nor an admission
+limit. Each of three fresh restart blocks per recipe begins with 60 seconds of
+incumbent-only traffic,
+cold-materializes eight added session prefixes during a fixed 30-second
+window, and then offers both cohorts for 240 seconds. A recipe passes only if
+all three blocks preserve the frozen 1-second TTFT and 100-ms TPOT rules for
+both incumbents and the added cohort, exactly complete and cache every request,
+retain complete telemetry, and meet the strict queue-stability contract.
+Admission failure is a measured failure, not a retryable invalid cell. Invalid
+instrumentation attempts are retained in immutable per-attempt directories.
+The result certifies only the three tested recipes for the 240-second declared
+horizon; `planner_usable` remains false and no interpolation is allowed.
+
+The transition completed 9/9 cells successfully, making `W=0.50` a tested safe
+floor for this exact A100/4K serving profile. It is not installed as a planner
+cap. At `W=0.70`, all held-out repeats remained inside both latency SLOs, but
+each mix passed the strict stability contract in only two of three blocks.
+Thus the data brackets a higher stable cap in `[0.50, 0.70)` without selecting
+one. If deployment needs more headroom, the minimal next measurement is one
+preregistered `W=0.60` transition point. This interpretation uses the
+campaign's 16,758.928 prefill-token/s and 3,597.591 decode-token/s normalization
+and must not be copied into profiles with different rates. No planner/schema
+change or historical-profile edit is required; the current `(1,1)` service
+normal already represents the row, while KV, bandwidth, migration, and power
+stay separate.
+The result follows the load-sweep methodology used by
+[DistServe](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf) and
+[vLLM's serving benchmark](https://docs.vllm.ai/en/latest/benchmarking/cli.html):
+hold the workload profile fixed, vary offered load, and retain the last point
+whose latency and completion contract passes.
+
+```bash
+uv run python service_admission_transition_campaign.py prepare \
+  --source-plan outputs/service-headroom-a100-20260815/plan.json \
+  --normalization outputs/service-headroom-a100-20260815/normalization.json \
+  --scout outputs/service-headroom-a100-20260815/scout.json \
+  --confirmation-plan outputs/service-headroom-a100-20260815/confirmation-plan.json \
+  --confirmed outputs/service-headroom-a100-20260815/confirmed.json \
+  --out outputs/service-admission-transition-a100-20260816/plan.json
+QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python \
+  service_admission_transition_campaign.py run \
+  --plan outputs/service-admission-transition-a100-20260816/plan.json \
+  --normalization outputs/service-headroom-a100-20260815/normalization.json \
+  --run-root /datadrive/qh-service-admission-transition-a100-20260816-r1 \
+  --summary outputs/service-admission-transition-a100-20260816/summary.json
+```
 
 The verified 2026-07-23 destination bundle is retained under
 `outputs/destination-v7-20260722/`. Do not treat its service rows as an accepted
@@ -1684,18 +1670,60 @@ audit and retained evidence.
 
 ## Model-architecture campaign
 
+`single_gpu_capacity_campaign.py` is the non-gating A100 precursor. It discovers
+how much of each pinned checkpoint can actually be served on one physical GPU;
+it does not require the requested width or context to pass. Each of the three
+models gets a fresh engine at five contexts. Synchronized geometric bursts
+from 1 through 256 requests distinguish the largest eventually completed burst
+from the maximum number vLLM reports running simultaneously. Launch rejection,
+OOM, queue saturation, timeout, or a service crash is retained as the capacity
+outcome rather than retried away. Only infrastructure and runtime-contract
+failures are retryable.
+
+The runtime is one A100, BF16 KV, TP1, 32K `max_model_len`, 256
+`max_num_seqs`, 90% memory, chunked prefill, APC, eager execution, and the
+hybrid KV manager. Qwen contexts are multiples of its measured 784-token
+unified block and its LMCache server uses separate object groups. The pinned
+vLLM 0.22 Qwen cache is exposed as a K/V-major transpose of a contiguous
+page-major allocation; `connector_patch.py` restores that page-major view
+without copying and delegates its 784-token logical-page re-view to LMCache.
+The live launch must prove that group geometry.
+Results are descriptive limits, not admission gates.
+
+```bash
+uv run python single_gpu_capacity_campaign.py prepare --seed 1 --out runs/single-gpu-capacity-a100/plan.json
+CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python single_gpu_capacity_campaign.py run --plan runs/single-gpu-capacity-a100/plan.json --run-root /datadrive/single-gpu-capacity-a100
+uv run python single_gpu_capacity_campaign.py reduce --plan runs/single-gpu-capacity-a100/plan.json --run-root /datadrive/single-gpu-capacity-a100 --out outputs/single-gpu-capacity-a100/summary.json
+uv run python plot_single_gpu_capacity.py outputs/single-gpu-capacity-a100/summary.json outputs/single-gpu-capacity-a100/single-gpu-capacity.pdf
+```
+
+The raw evidence includes exact token events, complete request responses,
+Prometheus scrapes, queue/running/KV traces, power samples, server info, launch
+logs, runtime-reported KV-token capacity, available KV GiB, and the complete
+hashed runtime command identity. An open marker in the reduced plot means the
+last tested synchronized burst completed and is therefore a right-censored
+lower bound, whether the geometric sweep ended at 256 or stopped after a
+repeated running-capacity plateau. An `x` means that model/context did not
+launch.
+
+The completed A100 run is under
+`outputs/single-gpu-capacity-a100-20260815/`. All 15 model/context cells
+launched on their first attempt, all tested bursts completed and drained, and
+the persistent service exited successfully without a restart. Maximum observed
+simultaneous running requests across increasing contexts were
+`65/33/17/12/10` for both GPT-OSS and Gemma, but only `8/5/3/2/2` for Qwen.
+This equality does not make GPT-OSS and Gemma equivalent: runtime KV capacity
+was 1,952,597 tokens for GPT-OSS versus 286,068 for Gemma, and first-saturation
+KV usage was 11--13% versus 45--89%. Qwen exposed 285,354 KV tokens, proved its
+784-token hybrid alignment, and saturated at 16--20% KV usage. Treat service
+flow, KV capacity, prefill, decode, and power as separate measured constraints;
+the observed request plateau is not a scalar utilization bound.
+
 `model_architecture_campaign.py` reuses the migration profiler and base planner
 for the pinned GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B checkpoints. It
-keeps BF16 attention KV, TP1, 32K context, eight sessions, 90% GPU memory, and
-exact token shapes fixed across A100 and H100 arms. Use the native vLLM
-0.22/LMCache 0.5.1
-stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`. The shipped connector
-retains Qwen's separate attention/Mamba groups. It accepts only vLLM's exact
-`[2, NB, 16, NH, HS]` hybrid-attention shape and stride, restores the underlying
-block-major view without a copy, and lets LMCache form 784-token logical pages.
-Startup succeeds only after every registered attention tensor is directly
-verified as BF16 and each floating recurrent-state list's actual dtype sequence
-and count are recorded by `QH_KV_CACHE_DTYPES_VERIFIED`.
+keeps BF16 KV, TP1, 32K context, eight sessions, 90% GPU memory, and exact token
+shapes fixed across A100 and H100 arms. Use the native vLLM 0.22/LMCache 0.5.1
+stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`.
 
 ```bash
 uv run python model_architecture_campaign.py prepare --out-dir runs/model-architecture/plans

@@ -317,6 +317,38 @@ session vectors among replicas and also satisfy KV, migration, route, and
 impact constraints. Equal GPU counts therefore need not imply equal available
 capacity.
 
+The minimal profile-conditioned specialization uses one scalar service-work
+facet rather than a latency model. For a pinned hardware/runtime, incumbent
+profile, added-cohort family, service horizon, and TTFT/TPOT policy, define
+
+\[
+W_0+\Delta W=
+b_f+b_d+\sum_s\left(w_{s,f}+w_{s,d}\right)x_s
+\le W_{safe}.
+\]
+
+This is exactly the existing facet `N=((1,1),)`; no new solver row or variable
+is required. `W_safe` is the largest tested point whose complete repeat
+envelope satisfies both P90 latency targets, exact completion, drain, and the
+declared queue-stability rule. Exceeding it means that admission is not
+certified, not that the workload is physically impossible. It predicts
+neither TTFT nor TPOT and is not GPU utilization. The work coordinates and
+bound are inseparable from their measured prefill/decode rates and pinned
+serving stack; a bound must be rescaled or remeasured before use with another
+normalization.
+
+For the completed 4K A100 service class, `W=0.50` is a tested safe floor under
+the campaign rates `F=16758.928` and `G=3597.591` tokens/s. The incumbent uses
+approximately `W_0=0.25`. Three mixes across three fresh restart blocks passed
+at `W=0.50`. At `W=0.70`, every held-out mix remained comfortably inside both
+latency SLOs, but each passed the every-repeat stability contract in only two
+of three blocks. The evidence therefore brackets, but does not identify, a
+higher stable bound: `0.50 <= W_safe < 0.70` under this contract. `W=0.50`
+must not be installed as a production cap if it makes the intended workload
+infeasible; one targeted `W=0.60` confirmation is required to raise it. The
+artifact remains non-promoting, and no historical destination profile or
+planner default is changed.
+
 An evidence-robust label requires an accepted envelope and every case inside
 its support. The five v7 private-prefix-consistent executions provide
 descriptive sensitivity anchors only. The colder under-hit is not promoted

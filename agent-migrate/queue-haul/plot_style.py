@@ -65,6 +65,41 @@ TIMING_ACTION_COLORS = {"replay": ACTION_COLORS["replay"],
 POWER_FAMILY_NAMES = {"idle": "Idle", "sessions": "Sessions"}
 POWER_FAMILY_COLORS = {"idle": "#777777", "sessions": "#006CB8"}
 POWER_FAMILY_MARKERS = {"idle": "o", "sessions": "s"}
+SERVICE_LOADS = ("prefill_heavy", "decode_heavy")
+SERVICE_LOAD_NAMES = {
+    "prefill_heavy": "Prefill-heavy added load",
+    "decode_heavy": "Decode-heavy added load",
+}
+SERVICE_LOAD_COLORS = {
+    "prefill_heavy": "#D55E00",
+    "decode_heavy": "#0072B2",
+}
+SERVICE_LOAD_LINESTYLES = {
+    "prefill_heavy": "--",
+    "decode_heavy": "-",
+}
+SERVICE_LOAD_MARKERS = {"prefill_heavy": "o", "decode_heavy": "s"}
+SERVICE_MIXES = ("prefill_heavy", "balanced", "decode_heavy")
+SERVICE_MIX_NAMES = {
+    **SERVICE_LOAD_NAMES,
+    "balanced": "Balanced added load",
+}
+SERVICE_MIX_COLORS = {
+    **SERVICE_LOAD_COLORS,
+    "balanced": "#009E73",
+}
+SERVICE_MIX_LINESTYLES = {
+    **SERVICE_LOAD_LINESTYLES,
+    "balanced": ":",
+}
+SERVICE_MIX_MARKERS = {
+    **SERVICE_LOAD_MARKERS,
+    "balanced": "^",
+}
+SERVICE_EVIDENCE_STAGE_NAMES = {
+    "discovery": "Discovery",
+    "held_out": "Held-out confirmation",
+}
 ACTION_HATCHES = {
     "replay": "..", "kv_transfer": "xx",
     "east_replay": "..", "east_kv_transfer": "xx",

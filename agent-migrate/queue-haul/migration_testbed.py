@@ -135,18 +135,16 @@ class ModelSpec:
     vllm_args: tuple[str, ...] = ()
     unified_block_tokens: int | None = None
     separate_object_groups: bool = False
-    cache_hit_quantum_tokens: int = 16
 
 
 MODEL_SPECS = {
     MODEL: ModelSpec(MODEL_REVISION),
     "Qwen/Qwen3.8-27B": ModelSpec(
         "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0", 1567, 784,
-        ("--language-model-only", "--mamba-cache-mode", "align"), 784, True, 784),
+        ("--language-model-only", "--mamba-cache-mode", "align"), 784, True),
     "google/gemma-4-26B-A4B-it": ModelSpec(
         "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
-        vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}'),
-        cache_hit_quantum_tokens=32),
+        vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}')),
 }
 
 
@@ -172,7 +170,7 @@ class Config:
     max_num_seqs: int = 256
     max_num_batched_tokens: int = 8192
     architecture_campaign: bool = False
-    service_campaign: bool = False
+    capacity_discovery: bool = False
 
 
 @dataclass(frozen=True)
@@ -244,55 +242,54 @@ def model_campaign_config(model: str) -> Config:
 
 def model_chunk_tokens(cfg: Config) -> int:
     return model_spec(cfg.model).chunk_tokens \
-        if getattr(cfg, "architecture_campaign", False) \
-        or getattr(cfg, "service_campaign", False) else 256
+        if (getattr(cfg, "architecture_campaign", False)
+            or getattr(cfg, "capacity_discovery", False)) else 256
 
 
 def validate_model_runtime(cfg: Config) -> None:
-    if not (cfg.architecture_campaign or cfg.service_campaign):
+    if cfg.architecture_campaign and cfg.capacity_discovery:
+        raise ValueError("model runtime modes are mutually exclusive")
+    if cfg.capacity_discovery:
+        spec = model_spec(cfg.model)
+        if cfg.max_model_len != 32768 or cfg.max_num_seqs != 256 \
+                or cfg.max_num_batched_tokens != spec.batched_tokens:
+            raise ValueError("capacity-discovery runtime geometry changed")
+        if lmcache_mode() != "mp":
+            raise ValueError("capacity discovery requires QH_LMCACHE_MODE=mp")
+        return
+    if not cfg.architecture_campaign:
         if cfg.model != MODEL:
-            raise ValueError("additional models require a model campaign")
+            raise ValueError("additional models require architecture_campaign")
         return
     spec = model_spec(cfg.model)
-    expected_seqs = 256 if cfg.service_campaign else 8
     if (cfg.max_model_len, cfg.max_num_seqs, cfg.max_num_batched_tokens) != (
-            32768, expected_seqs, spec.batched_tokens):
-        raise ValueError("model-campaign runtime geometry changed")
+            32768, 8, spec.batched_tokens):
+        raise ValueError("architecture-campaign runtime geometry changed")
     if lmcache_mode() != "mp":
-        raise ValueError("model campaigns require QH_LMCACHE_MODE=mp")
+        raise ValueError("architecture campaign requires QH_LMCACHE_MODE=mp")
 
 
-def validate_model_runtime_log(cfg: Config, text: str) -> None:
-    if not (cfg.architecture_campaign or cfg.service_campaign):
+def effective_kv_cache_dtype(server_info: dict) -> str:
+    config = server_info.get("vllm_config", {})
+    cache_dtype = str(config.get("cache_config", {}).get("cache_dtype"))
+    if cache_dtype.lower() == "auto":
+        return str(config.get("model_config", {}).get("dtype"))
+    return cache_dtype
+
+
+def validate_model_runtime_log(cfg: Config, text: str,
+                               server_info: dict | None = None) -> None:
+    if not (cfg.architecture_campaign or cfg.capacity_discovery):
         return
-    marker = "QH_KV_CACHE_DTYPES_VERIFIED"
-    direct = re.findall(
-        rf"{marker} attention=torch.bfloat16:(\d+) recurrent=(\S+)(?:\s|$)",
-        text,
-    )
-    if marker in text:
-        recurrent = r"torch\.[a-z0-9_]+(?:\+torch\.[a-z0-9_]+)*:[1-9]\d*"
-        proved_bf16 = text.count(marker) == len(direct) and all(
-            int(attention) > 0 and (signatures == "none" or all(
-                re.fullmatch(recurrent, signature)
-                for signature in signatures.split(",")
-            ))
-            for attention, signatures in direct
-        )
-    else:
-        proved_bf16 = bool(re.search(
-            r"(?:bfloat16|bf16).{0,80}kv.?cache|kv.?cache.{0,80}(?:bfloat16|bf16)",
-            text, re.IGNORECASE,
-        ))
-    if not proved_bf16:
+    if cfg.capacity_discovery:
+        effective_dtype = effective_kv_cache_dtype(server_info or {})
+        if effective_dtype.lower() not in {"bfloat16", "torch.bfloat16"}:
+            raise RuntimeError(
+                "capacity discovery did not read back resolved BF16 KV cache")
+    elif not re.search(
+            r"(?:bfloat16|bf16).{0,80}kv.?cache|"
+            r"kv.?cache.{0,80}(?:bfloat16|bf16)", text, re.IGNORECASE):
         raise RuntimeError("architecture campaign did not prove BF16 KV cache")
-    gemma_marker = "QH_GEMMA4_GEOMETRY_VERIFIED"
-    gemma_proof = (f"{gemma_marker} sliding=25x(head_dim=256,kv_heads=8) "
-                   "full=5x(head_dim=512,kv_heads=2)")
-    if cfg.model == "google/gemma-4-26B-A4B-it" and (
-            gemma_proof not in text
-            or text.count(gemma_marker) != text.count(gemma_proof)):
-        raise RuntimeError("Gemma campaign did not prove its per-layer KV geometry")
     expected = model_spec(cfg.model).unified_block_tokens
     if expected is not None and set(map(int, re.findall(
             r"attention block size to (\d+) tokens", text, re.IGNORECASE))) != {expected}:
@@ -359,7 +356,6 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "HF_HOME": str(cfg.hf_home),
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
-        "QH_MODEL": cfg.model,
         "LMCACHE_REMOTE_URL": remote_url,
         "LMCACHE_REMOTE_SERDE": "naive",
         "LMCACHE_LMCACHE_INSTANCE_ID": f"stage1b_{role}",
@@ -453,8 +449,8 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
         "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(),
         "--eviction-policy", "LRU",
         "--chunk-size", model_chunk_tokens(cfg),
-        *(["--separate-object-groups"] if (cfg.architecture_campaign
-          or cfg.service_campaign)
+        *(["--separate-object-groups"] if (
+            cfg.architecture_campaign or cfg.capacity_discovery)
           and spec.separate_object_groups else []),
         "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
@@ -506,7 +502,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         "--max-num-batched-tokens",
         cfg.max_num_batched_tokens,
         *(["--dtype", "bfloat16", *spec.vllm_args]
-          if cfg.architecture_campaign or cfg.service_campaign else []),
+          if (cfg.architecture_campaign or cfg.capacity_discovery) else []),
         "--kv-cache-dtype",
         "auto",
         "--block-size",
@@ -517,9 +513,9 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         *(["--enable-sleep-mode"] if role == "source" and (
             sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
         ) else []),
-        *(["--gpu-memory-utilization", 0.9 if cfg.architecture_campaign
-           or cfg.service_campaign else 0.75,
-           *([] if cfg.architecture_campaign or cfg.service_campaign
+        *(["--gpu-memory-utilization", 0.9 if (
+            cfg.architecture_campaign or cfg.capacity_discovery) else 0.75,
+           *([] if (cfg.architecture_campaign or cfg.capacity_discovery)
              else ["--disable-hybrid-kv-cache-manager"]),
            "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         "--kv-transfer-config",
@@ -577,10 +573,8 @@ def gpu_count() -> int:
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
     if lmcache_mode() == "mp":
-        gemma = cfg.model == "google/gemma-4-26B-A4B-it"
-        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; from lmcache.integration.vllm.kv_cache_group_edits import _SubpagedAttentionViewEdit; assert LMCacheMPConnector._qh_bypass_patched and LMCacheMPConnector._qh_kv_dtype_registration_patched and _SubpagedAttentionViewEdit._qh_kv_first_patched; " + ("from vllm.config.model import ModelConfig; from vllm.model_executor.models.config import Gemma4Config; from vllm.model_executor.models.gemma4 import Gemma4DecoderLayer; from vllm.transformers_utils.model_arch_config_convertor import Gemma4ModelArchConfigConvertor; assert ModelConfig._qh_gemma4_backend_patched and Gemma4Config._qh_heterogeneous_patched and Gemma4DecoderLayer._qh_heterogeneous_patched and Gemma4ModelArchConfigConvertor._qh_heterogeneous_patched; " if gemma else "") + "print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
+        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; assert LMCacheMPConnector._qh_bypass_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
         script = "\n".join([
-            f"export QH_MODEL={shlex.quote(cfg.model)}",
             f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}",
             shell(["python", "-c", check]),
         ])

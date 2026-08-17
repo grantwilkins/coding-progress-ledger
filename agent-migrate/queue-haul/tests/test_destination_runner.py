@@ -171,6 +171,23 @@ def test_sampler_writes_partial_rows_before_reporting_failure(tmp_path):
     assert (tmp_path / "engine.csv").read_text().splitlines()[-1].endswith(",3")
 
 
+def test_sampler_preserves_metrics_that_appear_after_first_scrape(tmp_path):
+    sampler = runner.MetricsSampler("h", 1, tmp_path / "engine.csv")
+    sampler.rows = [
+        {"monotonic_ns": 1, "vllm:num_requests_running": 0},
+        {"monotonic_ns": 2, "vllm:num_requests_running": 1,
+         "vllm:num_requests_waiting_by_reason": 3},
+    ]
+    sampler.thread = SimpleNamespace(join=lambda _timeout: None,
+                                     is_alive=lambda: False)
+
+    sampler.close()
+
+    lines = (tmp_path / "engine.csv").read_text().splitlines()
+    assert "vllm:num_requests_waiting_by_reason" in lines[0]
+    assert lines[-1].endswith(",3")
+
+
 def test_prewarm_rejects_status_200_without_token_work(monkeypatch):
     monkeypatch.setattr(runner, "_completion", lambda *_: {
         "status": 200, "error": "", "prompt_tokens": 0, "output_tokens": 0,
@@ -949,3 +966,23 @@ def test_prewarm_uses_its_own_shorter_timeout(tmp_path, monkeypatch):
     load.start()
     load.stop.set(); load.thread.join(5)
     assert seen == [300]
+
+
+def test_prepared_issue_moves_prompt_work_before_dispatch(monkeypatch):
+    session = runner.Session("prepared", 16, 8, 2, 123, 1)
+    prepared = runner.prepare_issue(session, 7, "model", True)
+    calls = []
+    def completion(*_args, **kwargs):
+        calls.append(kwargs)
+        return {"start_ns": 1_010_000_000}
+    monkeypatch.setattr(runner, "_completion", completion)
+
+    row = runner.issue_prepared("host", 1, "model", prepared,
+                                1_000_000_000, 1)
+
+    assert row["session_id"] == "prepared"
+    assert row["request_index"] == 7
+    assert row["send_lateness_s"] == .01
+    assert row["prompt_sha256"] == prepared["prompt_sha256"]
+    assert prepared["body"]
+    assert calls[0]["prepared_body"] == prepared["body"]

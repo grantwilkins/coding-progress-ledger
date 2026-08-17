@@ -1,0 +1,207 @@
+{
+  "schema": "queue-haul-service-admission-transition-v1",
+  "image_sha256": "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab",
+  "model": "openai/gpt-oss-20b",
+  "context_tokens": 4096,
+  "drain_s": 180,
+  "request_timeout_s": 180,
+  "max_send_lateness_s": 0.05,
+  "max_client_tasks": 4096,
+  "max_metric_gap_s": 1,
+  "min_exact_timing_coverage": 0.99,
+  "p99_min_incumbent_requests": 1000,
+  "client": {
+    "scheduler": "asyncio-aiohttp-open-loop",
+    "aiohttp_version": "3.14.3",
+    "launch_lead_s": 2.0,
+    "event_loop_shards": 32,
+    "cyclic_gc_during_trace": false
+  },
+  "stack": {
+    "tensor_parallel_size": 1,
+    "max_model_len": 32768,
+    "max_num_seqs": 256,
+    "max_num_batched_tokens": 8192,
+    "kv_cache_dtype": "auto",
+    "block_size": 16,
+    "gpu_memory_utilization": 0.75,
+    "chunked_prefill": true,
+    "prefix_caching": true,
+    "enforce_eager": true,
+    "disable_hybrid_kv_cache_manager": true,
+    "runtime_versions": {
+      "apptainer": [
+        "0.22.0+cu129",
+        "0.5.1"
+      ],
+      "native": [
+        "0.22.0",
+        "0.5.1"
+      ]
+    }
+  },
+  "shapes": {
+    "incumbent": {
+      "prefix_tokens": 3840,
+      "append_tokens": 256,
+      "output_tokens": 128
+    },
+    "prefill_heavy": {
+      "prefix_tokens": 2048,
+      "append_tokens": 2048,
+      "output_tokens": 32
+    },
+    "decode_heavy": {
+      "prefix_tokens": 4032,
+      "append_tokens": 64,
+      "output_tokens": 512
+    },
+    "balanced": {
+      "context_tokens": 4096,
+      "output_tokens": 128,
+      "prefill_share_range": [
+        0.4,
+        0.6
+      ]
+    }
+  },
+  "hardware": "a100",
+  "base_rho": 0.25,
+  "target_rho": 0.5,
+  "baseline_s": 60,
+  "transition_window_s": 30,
+  "warmup_s": 90,
+  "measurement_s": 240,
+  "targets": {
+    "p90_ttft_s": 1.0,
+    "p90_mean_tpot_s": 0.1
+  },
+  "admission": {
+    "initial_incumbent_sessions": 8,
+    "new_sessions": 8,
+    "start_offset_s": 60,
+    "ongoing_start_offset_s": 90,
+    "launch_lead_s": 0.1,
+    "claim": "three discrete resident-cohort recipes only"
+  },
+  "evidence_status": "transition_confirmation_only",
+  "planner_usable": false,
+  "source_plan_sha256": "2435f84b2a1bde80896565f9d5b7a59bfcd6adbe12fe7a094172d01a741c03f6",
+  "source_scout_sha256": "fe144885b5882fcafdc13458ed9a7d39d82aee1805635ee176b76050c20898f1",
+  "source_confirmation_plan_sha256": "8575a6cbb276b5c1ae0c6b4d9e595b5b68834657f9c2981d8ff9711a133f7f5f",
+  "source_confirmed_sha256": "3781cb2e47ebb694d8450e930c3e27068a83c01e633cb22c0e7a6763aa45abb3",
+  "normalization_sha256": "b25d8ec6bd4002b549cf5e3a6d3980801ef65df5a4fe882d4c2b9e8236869634",
+  "service_runtime_identity_sha256": "e3cb11186d494bcb719b92552dfe0530f1f995da64205cc1761ec169a7380fe6",
+  "kv_capacity_tokens": 964976,
+  "phase_rates": {
+    "prefill_tps": 16758.92810849146,
+    "decode_tps": 3597.5906032380035
+  },
+  "balanced_shape": {
+    "prefix_tokens": 3504,
+    "append_tokens": 592,
+    "output_tokens": 128
+  },
+  "cells": [
+    {
+      "cell_id": "a100-transition-prefill_heavy-rho0.50-b6",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 6
+    },
+    {
+      "cell_id": "a100-transition-prefill_heavy-rho0.50-b7",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 7
+    },
+    {
+      "cell_id": "a100-transition-prefill_heavy-rho0.50-b8",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 8
+    },
+    {
+      "cell_id": "a100-transition-balanced-rho0.50-b6",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "balanced",
+      "target_rho": 0.5,
+      "block": 6
+    },
+    {
+      "cell_id": "a100-transition-balanced-rho0.50-b7",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "balanced",
+      "target_rho": 0.5,
+      "block": 7
+    },
+    {
+      "cell_id": "a100-transition-balanced-rho0.50-b8",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "balanced",
+      "target_rho": 0.5,
+      "block": 8
+    },
+    {
+      "cell_id": "a100-transition-decode_heavy-rho0.50-b6",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 6
+    },
+    {
+      "cell_id": "a100-transition-decode_heavy-rho0.50-b7",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 7
+    },
+    {
+      "cell_id": "a100-transition-decode_heavy-rho0.50-b8",
+      "hardware": "a100",
+      "kind": "admission_transition",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 8
+    }
+  ],
+  "run_order": [
+    "a100-transition-prefill_heavy-rho0.50-b6",
+    "a100-transition-balanced-rho0.50-b6",
+    "a100-transition-balanced-rho0.50-b8",
+    "a100-transition-decode_heavy-rho0.50-b7",
+    "a100-transition-decode_heavy-rho0.50-b6",
+    "a100-transition-decode_heavy-rho0.50-b8",
+    "a100-transition-prefill_heavy-rho0.50-b8",
+    "a100-transition-balanced-rho0.50-b7",
+    "a100-transition-prefill_heavy-rho0.50-b7"
+  ],
+  "recipes": {
+    "prefill_heavy": {
+      "offered_prefill_rho": 0.3078001150554687,
+      "offered_decode_rho": 0.1918691543293986,
+      "offered_rho": 0.49966926938486733
+    },
+    "balanced": {
+      "offered_prefill_rho": 0.1996229499290934,
+      "offered_decode_rho": 0.3003491648996419,
+      "offered_rho": 0.4999721148287353
+    },
+    "decode_heavy": {
+      "offered_prefill_rho": 0.08162813224951172,
+      "offered_decode_rho": 0.41805757404589844,
+      "offered_rho": 0.49968570629541015
+    }
+  }
+}

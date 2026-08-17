@@ -1,0 +1,1150 @@
+{
+  "schema": "queue-haul-service-headroom-v1",
+  "image_sha256": "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab",
+  "model": "openai/gpt-oss-20b",
+  "context_tokens": 4096,
+  "base_rho": 0.25,
+  "loads": [
+    0.25,
+    0.5,
+    0.7,
+    0.85,
+    0.95,
+    1.1
+  ],
+  "blocks": 3,
+  "warmup_s": 60,
+  "measurement_s": 240,
+  "drain_s": 180,
+  "request_timeout_s": 180,
+  "max_send_lateness_s": 0.05,
+  "max_client_tasks": 4096,
+  "client": {
+    "scheduler": "asyncio-aiohttp-open-loop",
+    "aiohttp_version": "3.14.3",
+    "launch_lead_s": 2.0,
+    "event_loop_shards": 32,
+    "cyclic_gc_during_trace": false
+  },
+  "max_metric_gap_s": 1,
+  "min_exact_timing_coverage": 0.99,
+  "kv_match_tolerance": 0.02,
+  "residency_control_max_relative_degradation": 0.15,
+  "p99_min_incumbent_requests": 1000,
+  "stack": {
+    "tensor_parallel_size": 1,
+    "max_model_len": 32768,
+    "max_num_seqs": 256,
+    "max_num_batched_tokens": 8192,
+    "kv_cache_dtype": "auto",
+    "block_size": 16,
+    "gpu_memory_utilization": 0.75,
+    "chunked_prefill": true,
+    "prefix_caching": true,
+    "enforce_eager": true,
+    "disable_hybrid_kv_cache_manager": true,
+    "runtime_versions": {
+      "apptainer": [
+        "0.22.0+cu129",
+        "0.5.1"
+      ],
+      "native": [
+        "0.22.0",
+        "0.5.1"
+      ]
+    }
+  },
+  "shapes": {
+    "incumbent": {
+      "prefix_tokens": 3840,
+      "append_tokens": 256,
+      "output_tokens": 128
+    },
+    "prefill_heavy": {
+      "prefix_tokens": 2048,
+      "append_tokens": 2048,
+      "output_tokens": 32
+    },
+    "decode_heavy": {
+      "prefix_tokens": 4032,
+      "append_tokens": 64,
+      "output_tokens": 512
+    },
+    "balanced": {
+      "context_tokens": 4096,
+      "output_tokens": 128,
+      "prefill_share_range": [
+        0.4,
+        0.6
+      ]
+    }
+  },
+  "cells": [
+    {
+      "cell_id": "a100-cal-prefill-n1-b0",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 1,
+      "block": 0
+    },
+    {
+      "cell_id": "a100-cal-prefill-n4-b0",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 4,
+      "block": 0
+    },
+    {
+      "cell_id": "a100-cal-prefill-n16-b0",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 16,
+      "block": 0
+    },
+    {
+      "cell_id": "a100-cal-decode-n16-b0",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 16,
+      "block": 0
+    },
+    {
+      "cell_id": "a100-cal-decode-n64-b0",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 64,
+      "block": 0
+    },
+    {
+      "cell_id": "a100-cal-decode-n128-b0",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 128,
+      "block": 0
+    },
+    {
+      "cell_id": "a100-cal-prefill-n1-b1",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 1,
+      "block": 1
+    },
+    {
+      "cell_id": "a100-cal-prefill-n4-b1",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 4,
+      "block": 1
+    },
+    {
+      "cell_id": "a100-cal-prefill-n16-b1",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 16,
+      "block": 1
+    },
+    {
+      "cell_id": "a100-cal-decode-n16-b1",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 16,
+      "block": 1
+    },
+    {
+      "cell_id": "a100-cal-decode-n64-b1",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 64,
+      "block": 1
+    },
+    {
+      "cell_id": "a100-cal-decode-n128-b1",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 128,
+      "block": 1
+    },
+    {
+      "cell_id": "a100-cal-prefill-n1-b2",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 1,
+      "block": 2
+    },
+    {
+      "cell_id": "a100-cal-prefill-n4-b2",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 4,
+      "block": 2
+    },
+    {
+      "cell_id": "a100-cal-prefill-n16-b2",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 16,
+      "block": 2
+    },
+    {
+      "cell_id": "a100-cal-decode-n16-b2",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 16,
+      "block": 2
+    },
+    {
+      "cell_id": "a100-cal-decode-n64-b2",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 64,
+      "block": 2
+    },
+    {
+      "cell_id": "a100-cal-decode-n128-b2",
+      "hardware": "a100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 128,
+      "block": 2
+    },
+    {
+      "cell_id": "h100-cal-prefill-n1-b0",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 1,
+      "block": 0
+    },
+    {
+      "cell_id": "h100-cal-prefill-n4-b0",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 4,
+      "block": 0
+    },
+    {
+      "cell_id": "h100-cal-prefill-n16-b0",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 16,
+      "block": 0
+    },
+    {
+      "cell_id": "h100-cal-decode-n16-b0",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 16,
+      "block": 0
+    },
+    {
+      "cell_id": "h100-cal-decode-n64-b0",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 64,
+      "block": 0
+    },
+    {
+      "cell_id": "h100-cal-decode-n128-b0",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 128,
+      "block": 0
+    },
+    {
+      "cell_id": "h100-cal-prefill-n1-b1",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 1,
+      "block": 1
+    },
+    {
+      "cell_id": "h100-cal-prefill-n4-b1",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 4,
+      "block": 1
+    },
+    {
+      "cell_id": "h100-cal-prefill-n16-b1",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 16,
+      "block": 1
+    },
+    {
+      "cell_id": "h100-cal-decode-n16-b1",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 16,
+      "block": 1
+    },
+    {
+      "cell_id": "h100-cal-decode-n64-b1",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 64,
+      "block": 1
+    },
+    {
+      "cell_id": "h100-cal-decode-n128-b1",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 128,
+      "block": 1
+    },
+    {
+      "cell_id": "h100-cal-prefill-n1-b2",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 1,
+      "block": 2
+    },
+    {
+      "cell_id": "h100-cal-prefill-n4-b2",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 4,
+      "block": 2
+    },
+    {
+      "cell_id": "h100-cal-prefill-n16-b2",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "prefill",
+      "concurrency": 16,
+      "block": 2
+    },
+    {
+      "cell_id": "h100-cal-decode-n16-b2",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 16,
+      "block": 2
+    },
+    {
+      "cell_id": "h100-cal-decode-n64-b2",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 64,
+      "block": 2
+    },
+    {
+      "cell_id": "h100-cal-decode-n128-b2",
+      "hardware": "h100",
+      "kind": "calibration",
+      "phase": "decode",
+      "concurrency": 128,
+      "block": 2
+    },
+    {
+      "cell_id": "a100-baseline-rho0.25-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "baseline",
+      "target_rho": 0.25,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-baseline-rho0.25-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "baseline",
+      "target_rho": 0.25,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-baseline-rho0.25-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "baseline",
+      "target_rho": 0.25,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-baseline-rho0.25-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "baseline",
+      "target_rho": 0.25,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-baseline-rho0.25-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "baseline",
+      "target_rho": 0.25,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-baseline-rho0.25-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "baseline",
+      "target_rho": 0.25,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.50-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.70-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.7,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.85-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.85,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.95-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.95,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho1.10-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 1.1,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.50-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.70-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.7,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.85-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.85,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.95-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.95,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho1.10-b0",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 1.1,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.50-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.70-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.7,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.85-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.85,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.95-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.95,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho1.10-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 1.1,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.50-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.70-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.7,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.85-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.85,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.95-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.95,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho1.10-b1",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 1.1,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.50-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.70-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.7,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.85-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.85,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho0.95-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.95,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-prefill_heavy-rho1.10-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 1.1,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.50-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.70-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.7,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.85-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.85,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho0.95-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.95,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-decode_heavy-rho1.10-b2",
+      "hardware": "a100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 1.1,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.50-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.70-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.7,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.85-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.85,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.95-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.95,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho1.10-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 1.1,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.50-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.70-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.7,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.85-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.85,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.95-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.95,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho1.10-b0",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 1.1,
+      "block": 0,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.50-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.70-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.7,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.85-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.85,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.95-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.95,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho1.10-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 1.1,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.50-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.70-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.7,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.85-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.85,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.95-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.95,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho1.10-b1",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 1.1,
+      "block": 1,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.50-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.5,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.70-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.7,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.85-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.85,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho0.95-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 0.95,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-prefill_heavy-rho1.10-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "prefill_heavy",
+      "target_rho": 1.1,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.50-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.5,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.70-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.7,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.85-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.85,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho0.95-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 0.95,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "h100-decode_heavy-rho1.10-b2",
+      "hardware": "h100",
+      "kind": "headroom",
+      "direction": "decode_heavy",
+      "target_rho": 1.1,
+      "block": 2,
+      "resident_state": true
+    },
+    {
+      "cell_id": "a100-no-resident-control-b0",
+      "hardware": "a100",
+      "kind": "residency_control",
+      "direction": "prefill_heavy",
+      "target_rho": 0.25,
+      "block": 0,
+      "resident_state": false
+    },
+    {
+      "cell_id": "a100-no-resident-control-b1",
+      "hardware": "a100",
+      "kind": "residency_control",
+      "direction": "prefill_heavy",
+      "target_rho": 0.25,
+      "block": 1,
+      "resident_state": false
+    },
+    {
+      "cell_id": "a100-no-resident-control-b2",
+      "hardware": "a100",
+      "kind": "residency_control",
+      "direction": "prefill_heavy",
+      "target_rho": 0.25,
+      "block": 2,
+      "resident_state": false
+    },
+    {
+      "cell_id": "h100-no-resident-control-b0",
+      "hardware": "h100",
+      "kind": "residency_control",
+      "direction": "prefill_heavy",
+      "target_rho": 0.25,
+      "block": 0,
+      "resident_state": false
+    },
+    {
+      "cell_id": "h100-no-resident-control-b1",
+      "hardware": "h100",
+      "kind": "residency_control",
+      "direction": "prefill_heavy",
+      "target_rho": 0.25,
+      "block": 1,
+      "resident_state": false
+    },
+    {
+      "cell_id": "h100-no-resident-control-b2",
+      "hardware": "h100",
+      "kind": "residency_control",
+      "direction": "prefill_heavy",
+      "target_rho": 0.25,
+      "block": 2,
+      "resident_state": false
+    }
+  ],
+  "run_order": {
+    "a100": {
+      "calibration": [
+        "a100-cal-decode-n64-b2",
+        "a100-cal-prefill-n1-b1",
+        "a100-cal-prefill-n1-b0",
+        "a100-cal-prefill-n4-b1",
+        "a100-cal-decode-n64-b0",
+        "a100-cal-decode-n128-b2",
+        "a100-cal-decode-n128-b1",
+        "a100-cal-prefill-n16-b1",
+        "a100-cal-prefill-n4-b0",
+        "a100-cal-prefill-n1-b2",
+        "a100-cal-decode-n16-b2",
+        "a100-cal-prefill-n16-b2",
+        "a100-cal-prefill-n16-b0",
+        "a100-cal-decode-n128-b0",
+        "a100-cal-decode-n64-b1",
+        "a100-cal-decode-n16-b1",
+        "a100-cal-prefill-n4-b2",
+        "a100-cal-decode-n16-b0"
+      ],
+      "measurement": [
+        "a100-prefill_heavy-rho1.10-b0",
+        "a100-prefill_heavy-rho0.50-b0",
+        "a100-decode_heavy-rho0.50-b1",
+        "a100-decode_heavy-rho0.70-b1",
+        "a100-prefill_heavy-rho1.10-b2",
+        "a100-decode_heavy-rho1.10-b1",
+        "a100-decode_heavy-rho1.10-b2",
+        "a100-decode_heavy-rho1.10-b0",
+        "a100-decode_heavy-rho0.95-b0",
+        "a100-baseline-rho0.25-b1",
+        "a100-prefill_heavy-rho0.85-b2",
+        "a100-decode_heavy-rho0.95-b2",
+        "a100-prefill_heavy-rho0.50-b2",
+        "a100-prefill_heavy-rho0.70-b2",
+        "a100-decode_heavy-rho0.85-b1",
+        "a100-no-resident-control-b1",
+        "a100-decode_heavy-rho0.70-b0",
+        "a100-decode_heavy-rho0.50-b2",
+        "a100-prefill_heavy-rho1.10-b1",
+        "a100-decode_heavy-rho0.85-b0",
+        "a100-prefill_heavy-rho0.85-b1",
+        "a100-baseline-rho0.25-b0",
+        "a100-prefill_heavy-rho0.70-b1",
+        "a100-decode_heavy-rho0.85-b2",
+        "a100-prefill_heavy-rho0.95-b0",
+        "a100-prefill_heavy-rho0.70-b0",
+        "a100-no-resident-control-b0",
+        "a100-prefill_heavy-rho0.95-b1",
+        "a100-prefill_heavy-rho0.95-b2",
+        "a100-prefill_heavy-rho0.85-b0",
+        "a100-decode_heavy-rho0.50-b0",
+        "a100-prefill_heavy-rho0.50-b1",
+        "a100-no-resident-control-b2",
+        "a100-baseline-rho0.25-b2",
+        "a100-decode_heavy-rho0.70-b2",
+        "a100-decode_heavy-rho0.95-b1"
+      ]
+    },
+    "h100": {
+      "calibration": [
+        "h100-cal-prefill-n4-b1",
+        "h100-cal-prefill-n1-b1",
+        "h100-cal-decode-n64-b0",
+        "h100-cal-prefill-n16-b0",
+        "h100-cal-prefill-n4-b0",
+        "h100-cal-decode-n128-b0",
+        "h100-cal-decode-n16-b0",
+        "h100-cal-prefill-n1-b2",
+        "h100-cal-decode-n16-b2",
+        "h100-cal-prefill-n4-b2",
+        "h100-cal-decode-n64-b2",
+        "h100-cal-decode-n128-b1",
+        "h100-cal-decode-n16-b1",
+        "h100-cal-prefill-n16-b2",
+        "h100-cal-decode-n128-b2",
+        "h100-cal-prefill-n16-b1",
+        "h100-cal-prefill-n1-b0",
+        "h100-cal-decode-n64-b1"
+      ],
+      "measurement": [
+        "h100-decode_heavy-rho0.50-b1",
+        "h100-decode_heavy-rho0.95-b1",
+        "h100-prefill_heavy-rho0.70-b0",
+        "h100-decode_heavy-rho0.50-b0",
+        "h100-decode_heavy-rho0.85-b1",
+        "h100-baseline-rho0.25-b1",
+        "h100-prefill_heavy-rho0.50-b2",
+        "h100-prefill_heavy-rho0.50-b0",
+        "h100-decode_heavy-rho0.50-b2",
+        "h100-prefill_heavy-rho0.95-b2",
+        "h100-prefill_heavy-rho1.10-b0",
+        "h100-decode_heavy-rho1.10-b1",
+        "h100-decode_heavy-rho0.70-b0",
+        "h100-prefill_heavy-rho0.85-b2",
+        "h100-prefill_heavy-rho0.70-b1",
+        "h100-decode_heavy-rho0.95-b2",
+        "h100-baseline-rho0.25-b0",
+        "h100-no-resident-control-b1",
+        "h100-prefill_heavy-rho0.85-b1",
+        "h100-prefill_heavy-rho0.70-b2",
+        "h100-no-resident-control-b0",
+        "h100-no-resident-control-b2",
+        "h100-decode_heavy-rho0.70-b1",
+        "h100-baseline-rho0.25-b2",
+        "h100-prefill_heavy-rho0.95-b0",
+        "h100-decode_heavy-rho0.70-b2",
+        "h100-decode_heavy-rho0.85-b0",
+        "h100-prefill_heavy-rho1.10-b1",
+        "h100-decode_heavy-rho1.10-b2",
+        "h100-prefill_heavy-rho1.10-b2",
+        "h100-decode_heavy-rho1.10-b0",
+        "h100-decode_heavy-rho0.95-b0",
+        "h100-prefill_heavy-rho0.85-b0",
+        "h100-prefill_heavy-rho0.95-b1",
+        "h100-prefill_heavy-rho0.50-b1",
+        "h100-decode_heavy-rho0.85-b2"
+      ]
+    }
+  },
+  "confirmation": {
+    "heldout": "repeat one shared baseline and each direction's last pass and first fail in three new restart blocks",
+    "balanced": "three restart blocks at the selected boundary",
+    "shape_checks": [
+      "matched-rho long/few versus short/many decode",
+      "matched-rho smooth versus microburst prefill"
+    ]
+  }
+}

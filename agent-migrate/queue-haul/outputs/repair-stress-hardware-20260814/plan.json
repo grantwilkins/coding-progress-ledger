@@ -1,0 +1,1973 @@
+{
+  "base_plan": {
+    "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/repair-scheduled-hardware-20260814/plan.json",
+    "sha256": "8d5df680c1deeeea74277a31c9fe6743907b758f623c76c46818456f0ea2d275"
+  },
+  "cluster": {
+    "destinations": [
+      {
+        "host": "10.1.0.4",
+        "id": "east",
+        "region": "eastus2",
+        "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
+        "run_root": "/datadrive/queue-haul-network",
+        "ssh_port": 22,
+        "ssh_user": "azureuser"
+      },
+      {
+        "host": "10.3.0.4",
+        "id": "germany",
+        "region": "germanywestcentral",
+        "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
+        "run_root": "/datadrive/queue-haul-network",
+        "ssh_port": 22,
+        "ssh_user": "azureuser"
+      }
+    ],
+    "schema": "queue-haul-azure-cluster-v1",
+    "source": {
+      "host": "10.0.0.4",
+      "id": "sweden",
+      "region": "swedencentral",
+      "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
+      "run_root": "/datadrive/queue-haul-network",
+      "ssh_port": 22,
+      "ssh_user": "azureuser"
+    }
+  },
+  "cluster_input": {
+    "path": "queue-haul/azure_network_cluster_east_germany.json",
+    "sha256": "1ab587586fb19d7ed2ab1cd400b96d83bc1e0efb69949089e69ae4bee3edcb2b"
+  },
+  "episodes": [
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "e2c599550d94be14",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 4,
+      "policy": "shadow_validate_then_apply_pending_only",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "306b9bd2eea7b4e7",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 4,
+      "policy": "shadow_validate_but_keep_original_pending",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "516a9a6771981b3b",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 3,
+      "policy": "shadow_validate_but_keep_original_pending",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "82c392b28bda092d",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 3,
+      "policy": "shadow_validate_then_apply_pending_only",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "a996f996b384a28a",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 1,
+      "policy": "shadow_validate_but_keep_original_pending",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "aa6ac7e00dc028dc",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 1,
+      "policy": "shadow_validate_then_apply_pending_only",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "0e603ddae1126fde",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 0,
+      "policy": "shadow_validate_but_keep_original_pending",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "8c2ff2542345a48a",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 0,
+      "policy": "shadow_validate_then_apply_pending_only",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "14c3d93c92441c8a",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 2,
+      "policy": "shadow_validate_then_apply_pending_only",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    },
+    {
+      "bandwidth_state": "germany",
+      "context_seed": 20,
+      "context_support": [
+        14042,
+        30785,
+        31547
+      ],
+      "cut_scale": 0.1,
+      "detection_at_s": 2.0,
+      "episode_id": "9f090b7fa57d8567",
+      "expected_initial_moves_sha256": "c3595112e201046fc65bf8973eea15d0269ad931dda7cbd7123468d424bc7d69",
+      "fault_at_s": 1.0,
+      "frozen_initial_moves": [
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-6"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-14"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-separation-22"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-13"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-21"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-10"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 7,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-separation-5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 8,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-26"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 9,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-separation-18"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 10,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-separation-15"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 11,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-12"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 12,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-separation-20"
+        }
+      ],
+      "healthy_east_load": 0.5,
+      "migration_cutoff_s": 25.0,
+      "move_concurrency": 4,
+      "pair": 2,
+      "policy": "shadow_validate_but_keep_original_pending",
+      "power_deadline_s": 30.0,
+      "prefill_state": "germany",
+      "target_shed_fraction": 0.5
+    }
+  ],
+  "implementation": {
+    "dirty": false,
+    "files": [
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/destination.py",
+        "sha256": "d34d1079b53e3509d7d065251a8442dc7ced5f2b387633bd2718ab04f4d98fe1"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py",
+        "sha256": "0d6e3a75f462bd9b1bf7057779b74c6327ac4fb29a071f76990e1050bb3a84a1"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py",
+        "sha256": "baa0fbd185ac8410e22aa8a0caf16239354115dfc0dd26490dc9255e0ec3de90"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py",
+        "sha256": "44eabd67d3303e19c9b526517f9f232016ed37b409cc75e1e69c893f231d0c22"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_planner.py",
+        "sha256": "aa5cf8b1939980fb9ce1cce10d9159631dce2bb98f814f18cf5c12a85bb71ee2"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/prefill_gateway.py",
+        "sha256": "453e5dea43784b30275d2c147efd32e311d51655746573250ec2750022bc225d"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/repair_controller.py",
+        "sha256": "c4f490f7701a7ecd18a2f1b2cbebce9e74ddf98b60249cbbf9fed110cb2f0c8a"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/repair_hardware_campaign.py",
+        "sha256": "66136417f183498790a9f42e493779b59f8645fe806334e5bd69c88b16e3c409"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/repair_plan_shift_campaign.py",
+        "sha256": "555737a1f3ec0b43d1d0f472adca34e2a604acae2f97a5673bc296f94f07bd75"
+      },
+      {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/repair_stress_campaign.py",
+        "sha256": "a9e6a2af9bdf61fa7b1e74c0743ce89f207c5e9549057a4e3c0dd3b26500cdab"
+      }
+    ],
+    "git_sha": "af3ae111a5e82031909354df59a0389f5ed4eae2"
+  },
+  "manifest": {
+    "path": "queue-haul/outputs/coding-manifest.json",
+    "sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435"
+  },
+  "model_profile": {
+    "path": "queue-haul/profiles/gpt_oss_20b_a100_tp1_azure_300w.json",
+    "sha256": "b837fac06c63b002be84579e1e1be2159e8efdc65c45817ebf92737ae9cd5d58"
+  },
+  "network_contract": {
+    "aggregate": {
+      "controlled_mbps": {
+        "40": 4300,
+        "80": 8700
+      },
+      "natural_mbps": 10967.371696787159
+    },
+    "paths": {
+      "east": {
+        "controlled_mbps": {
+          "40": 900,
+          "80": 1800
+        },
+        "natural_mbps": 2280.176174037911,
+        "rtt_ms": 98.0
+      },
+      "germany": {
+        "controlled_mbps": {
+          "40": 3400,
+          "80": 6900
+        },
+        "natural_mbps": 8733.31359588583,
+        "rtt_ms": 25.1
+      }
+    },
+    "schema": "queue-haul-network-contract-v1"
+  },
+  "pair_order_seed": 20260814,
+  "parent": {
+    "path": "queue-haul/outputs/timing-power-validation-20260814/separation-regional-timing-v2.json",
+    "sha256": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe"
+  },
+  "preflight": {
+    "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/repair-stress-hardware-20260814/preflight.json",
+    "schema": "queue-haul-repair-stress-preflight-v1",
+    "sha256": "588746559b3babf5d3c1485171273af73bdd89c9bb7ac3378af8196f8c0249f4"
+  },
+  "qualification": {
+    "control_min_shortfall_fraction": 0.05,
+    "maximum_predecision_fraction": 0.25,
+    "minimum_redirected_sessions": 2,
+    "minimum_target_time_gap_s": 5.0,
+    "repair_latest_s": 22.0,
+    "requires_no_extrapolation": true
+  },
+  "repeats": 5,
+  "schema": "queue-haul-repair-stress-hardware-plan-v1",
+  "selection": {
+    "context_seed": 20,
+    "control_shortfall_fraction": 0.22714075237240958,
+    "control_target_s": 73.05727759213701,
+    "diff": {
+      "added_sessions": 1,
+      "changed_sessions": 9,
+      "redirected_sessions": 5,
+      "removed_sessions": 3,
+      "unchanged_sessions": 5
+    },
+    "healthy_east_load": 0.5,
+    "move_concurrency": 4,
+    "no_extrapolation": true,
+    "predecision_fraction": 0.0,
+    "repair_target_s": 17.212935853787123,
+    "requested_shed_w": 30.928316227187338,
+    "stable_target_s": 9.508904840494367,
+    "sweep_phase": "workload_bootstrap",
+    "target_fraction": 0.5
+  },
+  "semantics": "five randomized interleaved early-fault repair/control pairs; control dispatches continuously during detection",
+  "timing": {
+    "path": "/datadrive/queue-haul-repair-20260814-r3/calibration/summary.json",
+    "schema": "queue-haul-repair-10x-timing-fit-v3",
+    "sha256": "00c6daa3f42089d3fccd587ea41d58e6babbf3003385dac55c19a2b4fdd63158"
+  }
+}

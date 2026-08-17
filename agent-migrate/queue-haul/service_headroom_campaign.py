@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import csv
+import gc
 import hashlib
-import importlib.metadata
 import json
 import math
 import re
 import statistics
 import subprocess
-import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
+import aiohttp
 import numpy as np
 
 import destination_runner as serving
@@ -33,13 +35,13 @@ HARDWARE = {"a100": "NVIDIA A100", "h100": "NVIDIA H100"}
 LOADS = (.25, .50, .70, .85, .95, 1.10)
 PREFILL_CONCURRENCY = (1, 4, 16)
 DECODE_CONCURRENCY = (16, 64, 128)
-SPECIALIZED_DECODE_CONCURRENCY = (4, 8, 16)
 BLOCKS = 3
 BASE_RHO = .25
 CONTEXT = 4096
 SESSIONS_PER_SHAPE = 8
 BALANCED_OUTPUT_TOKENS = 128
 BALANCED_SHARE_RANGE = (.4, .6)
+MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS = 1.0
 
 
 @dataclass(frozen=True)
@@ -62,17 +64,14 @@ def digest(value) -> str:
     ).encode()).hexdigest()
 
 
-def make_plan(model: str = testbed.MODEL) -> dict:
-    spec = testbed.model_spec(model)
-    specialized = model != testbed.MODEL
+def make_plan() -> dict:
     calibration = [
         {"cell_id": f"{hardware}-cal-{phase}-n{concurrency}-b{block}",
          "hardware": hardware, "kind": "calibration", "phase": phase,
          "concurrency": concurrency, "block": block}
         for hardware in HARDWARE for block in range(BLOCKS)
         for phase, levels in (("prefill", PREFILL_CONCURRENCY),
-                              ("decode", SPECIALIZED_DECODE_CONCURRENCY
-                               if specialized else DECODE_CONCURRENCY))
+                              ("decode", DECODE_CONCURRENCY))
         for concurrency in levels
     ]
     headroom = [
@@ -99,25 +98,28 @@ def make_plan(model: str = testbed.MODEL) -> dict:
     cells = calibration + headroom + controls
     return {
         "schema": SCHEMA, "image_sha256": IMAGE_SHA256,
-        "model": model, "context_tokens": CONTEXT,
-        **({"cache_hit_quantum_tokens": spec.cache_hit_quantum_tokens}
-           if specialized else {}),
+        "model": testbed.MODEL, "context_tokens": CONTEXT,
         "base_rho": BASE_RHO, "loads": list(LOADS), "blocks": BLOCKS,
         "warmup_s": 60, "measurement_s": 240, "drain_s": 180,
         "request_timeout_s": 180, "max_send_lateness_s": .05,
+        "max_client_tasks": 4096,
+        "client": {"scheduler": "asyncio-aiohttp-open-loop",
+                   "aiohttp_version": aiohttp.__version__,
+                   "launch_lead_s": 2.0,
+                   "event_loop_shards": 32,
+                   "cyclic_gc_during_trace": False},
         "max_metric_gap_s": 1,
+        "min_exact_timing_coverage": .99,
         "kv_match_tolerance": .02,
         "residency_control_max_relative_degradation": .15,
         "p99_min_incumbent_requests": 1000,
         "stack": {
             "tensor_parallel_size": 1, "max_model_len": 32768,
-            "max_num_seqs": 256, "max_num_batched_tokens": spec.batched_tokens,
+            "max_num_seqs": 256, "max_num_batched_tokens": 8192,
             "kv_cache_dtype": "auto", "block_size": 16,
-            "gpu_memory_utilization": .9 if specialized else .75,
-            "chunked_prefill": True,
+            "gpu_memory_utilization": .75, "chunked_prefill": True,
             "prefix_caching": True, "enforce_eager": True,
-            "disable_hybrid_kv_cache_manager": not specialized,
-            "async_scheduling": False, "stream_interval": 1,
+            "disable_hybrid_kv_cache_manager": True,
             "runtime_versions": {
                 "apptainer": list(testbed.MP_RUNTIME_VERSIONS),
                 "native": list(testbed.NATIVE_RUNTIME_VERSIONS),
@@ -147,7 +149,7 @@ def make_plan(model: str = testbed.MODEL) -> dict:
 def validate_plan(plan: dict) -> None:
     if plan.get("schema") == CONFIRM_SCHEMA:
         validate_confirmation_plan(plan)
-    elif plan != make_plan(plan.get("model", testbed.MODEL)):
+    elif plan != make_plan():
         raise ValueError("service-headroom plan changed from the frozen design")
 
 
@@ -196,21 +198,23 @@ def make_confirmation_plan(core: dict, scout: dict, hardware: str) -> dict:
     common = {key: core[key] for key in (
         "image_sha256", "model", "context_tokens", "base_rho", "loads", "blocks",
         "warmup_s", "measurement_s", "drain_s", "request_timeout_s",
-        "max_send_lateness_s", "max_metric_gap_s", "kv_match_tolerance",
+        "max_send_lateness_s", "max_client_tasks", "max_metric_gap_s",
+        "min_exact_timing_coverage",
+        "kv_match_tolerance",
         "residency_control_max_relative_degradation",
-        "p99_min_incumbent_requests", "stack", "shapes",
+        "p99_min_incumbent_requests", "client", "stack", "shapes",
     )}
-    if "cache_hit_quantum_tokens" in core:
-        common["cache_hit_quantum_tokens"] = core["cache_hit_quantum_tokens"]
     plan = {"schema": CONFIRM_SCHEMA, **common, "hardware": hardware,
             "source_plan_sha256": digest(core),
             "source_scout_sha256": digest(scout), "targets": scout["targets"],
             "runtime_identity": scout["runtime_identity"],
             "runtime_identity_sha256": scout["runtime_identity_sha256"],
+            "service_runtime_identity_sha256": service_runtime_identity_sha(
+                scout["runtime_identity"]),
             "normalization_sha256": scout["normalization_sha256"],
             "source_residency_control_pass": scout["residency_control"]["pass"],
-            "expected_resident_preloaded_kv_usage":
-            scout["residency_control"]["resident_preloaded_kv_median"],
+            "expected_resident_prewarmed_prefix_tokens":
+            scout["residency_control"]["resident_prewarmed_prefix_tokens"],
             "kv_capacity_tokens": scout["residency_control"]["kv_capacity_tokens"],
             "planned_parked_prefix_tokens":
             scout["residency_control"]["planned_parked_prefix_tokens"],
@@ -223,15 +227,14 @@ def make_confirmation_plan(core: dict, scout: dict, hardware: str) -> dict:
 
 
 def validate_confirmation_plan(plan: dict) -> None:
-    core = make_plan(plan.get("model", testbed.MODEL))
+    core = make_plan()
     common = ("image_sha256", "model", "context_tokens", "base_rho", "loads",
               "blocks", "warmup_s", "measurement_s", "drain_s",
               "request_timeout_s", "max_send_lateness_s", "kv_match_tolerance",
-              "max_metric_gap_s",
+              "max_metric_gap_s", "max_client_tasks",
+              "min_exact_timing_coverage",
               "residency_control_max_relative_degradation",
-              "p99_min_incumbent_requests", "stack", "shapes")
-    if "cache_hit_quantum_tokens" in core:
-        common += ("cache_hit_quantum_tokens",)
+              "p99_min_incumbent_requests", "client", "stack", "shapes")
     selection = plan.get("selection", {})
     directions = [selection.get(name, {}) for name in
                   ("prefill_heavy", "decode_heavy")]
@@ -249,7 +252,9 @@ def validate_confirmation_plan(plan: dict) -> None:
                 key=lambda value: digest(["confirm-order", value])) \
             or plan.get("runtime_identity_sha256") \
             != identity_sha(plan.get("runtime_identity", {})) \
-            or not 0 <= plan.get("expected_resident_preloaded_kv_usage", -1) <= 1 \
+            or plan.get("service_runtime_identity_sha256") \
+            != service_runtime_identity_sha(plan.get("runtime_identity", {})) \
+            or plan.get("expected_resident_prewarmed_prefix_tokens", 0) <= 0 \
             or min(plan.get("kv_capacity_tokens", 0),
                    plan.get("planned_parked_prefix_tokens", 0)) <= 0:
         raise ValueError("service-headroom confirmation plan is invalid")
@@ -278,9 +283,8 @@ def shape_for(name: str, rates: dict) -> Shape:
 
 
 def parked_prefix_tokens(rates: dict) -> int:
-    chunk = rates.get("cache_hit_quantum_tokens", 16)
     return SESSIONS_PER_SHAPE * sum(
-        (shape_for(name, rates).prefix_tokens - 1) // chunk * chunk
+        shape_for(name, rates).prefix_tokens
         for name in ("prefill_heavy", "decode_heavy", "balanced"))
 
 
@@ -289,8 +293,7 @@ def validate_rates(rates: dict) -> None:
         balanced = phase_share(balanced_shape(rates), rates)
     except (KeyError, ValueError, ZeroDivisionError) as exc:
         raise ValueError("normalization does not separate the phase directions") from exc
-    if min(rates["prefill_tps"], rates["decode_tps"],
-           rates.get("cache_hit_quantum_tokens", 16)) <= 0 \
+    if min(rates["prefill_tps"], rates["decode_tps"]) <= 0 \
             or phase_share(SHAPES["prefill_heavy"], rates) < .7 \
             or phase_share(SHAPES["decode_heavy"], rates) > .2 \
             or not BALANCED_SHARE_RANGE[0] <= balanced <= BALANCED_SHARE_RANGE[1]:
@@ -303,40 +306,31 @@ def validate_rates(rates: dict) -> None:
 
 
 def runtime_contract(plan: dict, cfg: testbed.Config, extra: list[str], gpu: dict,
-                     versions: tuple[str, str], runtime: dict,
+                     versions: tuple[str, str], image_sha256: str | None,
                      git_sha: str, commands: dict[str, list[str]]) -> dict:
     if extra:
         raise RuntimeError("formal cells forbid extra vLLM arguments")
     commands = semantic_commands(commands)
     stack = plan["stack"]
-    specialized = cfg.model != testbed.MODEL
+    mode = testbed.runtime_mode()
     actual = {"tensor_parallel_size": 1,
               "max_model_len": cfg.max_model_len,
               "max_num_seqs": cfg.max_num_seqs,
               "max_num_batched_tokens": cfg.max_num_batched_tokens,
               "kv_cache_dtype": "auto", "block_size": 16,
-              "gpu_memory_utilization": .9 if specialized else .75,
-              "chunked_prefill": True,
+              "gpu_memory_utilization": .75, "chunked_prefill": True,
               "prefix_caching": True, "enforce_eager": True,
-              "disable_hybrid_kv_cache_manager": not specialized,
-              "async_scheduling": False, "stream_interval": 1}
-    expected = {key: value for key, value in stack.items()
-                if key != "runtime_versions"}
-    mode = runtime.get("mode")
-    environment = runtime.get("environment")
-    valid_runtime = mode == "apptainer" \
-        and runtime.get("image_sha256") == plan["image_sha256"] \
-        or mode == "native" and environment is not None \
-        and runtime.get("environment_sha256") == digest(environment)
-    if cfg.model != plan["model"] \
+              "disable_hybrid_kv_cache_manager": True,
+              "runtime_versions": stack["runtime_versions"]}
+    if cfg.model != plan["model"] or actual != stack \
             or set(commands) != {"vllm", "cache", "redis"} \
-            or actual != expected \
-            or list(versions) != stack["runtime_versions"].get(mode) \
-            or not valid_runtime:
+            or mode not in stack["runtime_versions"] \
+            or list(versions) != stack["runtime_versions"][mode] \
+            or (mode == "apptainer" and image_sha256 != plan["image_sha256"]) \
+            or (mode == "native" and image_sha256 is not None):
         raise RuntimeError("serving stack differs from the frozen plan")
-    identity = {"model": cfg.model,
-                "model_revision": testbed.model_spec(cfg.model).revision,
-                "runtime": runtime, "runtime_versions": list(versions),
+    identity = {"model": cfg.model, "model_revision": testbed.MODEL_REVISION,
+                "runtime_mode": mode, "image_sha256": image_sha256,
                 "git_sha": git_sha,
                 "gpu": gpu, "scheduler": actual, "commands": commands}
     return {**identity, "sha256": digest(identity)}
@@ -379,24 +373,145 @@ def measurement_rows(plan: dict, rows: list[dict]) -> list[dict]:
     return [row for row in rows if lo <= row["offset_s"] < hi]
 
 
-def offered_phase_rho(plan: dict, rows: list[dict]) -> tuple[float, float]:
-    measured = measurement_rows(plan, rows)
-    return tuple(sum(row[f"{phase}_work_s"] for row in measured)
-                 / plan["measurement_s"] for phase in ("prefill", "decode"))
+def client_task_count(plan: dict, trace: list[dict]) -> int:
+    tasks = len(trace)
+    if tasks <= 0 or tasks > plan["max_client_tasks"]:
+        raise RuntimeError("offered trace exceeds the frozen client task ceiling")
+    return tasks
+
+
+async def async_completion(session: aiohttp.ClientSession, host: str, port: int,
+                           prepared: dict, scheduled_ns: int,
+                           timeout_s: float) -> dict:
+    """Issue one exact-timing completion without occupying an OS thread."""
+    start, usage, events, done = time.monotonic_ns(), {}, [], False
+    request_id, finish_reason, status, error = "", None, 0, ""
+    try:
+        async with session.post(
+                f"http://{host}:{port}/v1/completions",
+                data=prepared["body"],
+                headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=timeout_s)) as response:
+            status = response.status
+            if status != 200:
+                error = await response.text(errors="ignore")
+            else:
+                async for line in response.content:
+                    if not line.strip().startswith(b"data:"):
+                        continue
+                    now, data = time.monotonic_ns(), line.strip()[5:].strip()
+                    if data == b"[DONE]":
+                        done = True
+                        break
+                    item = json.loads(data)
+                    request_id = request_id or item.get("id", "")
+                    usage = item.get("usage") or usage
+                    for choice in item.get("choices") or ():
+                        if choice.get("token_ids"):
+                            events.append({"monotonic_ns": now,
+                                           "token_ids": list(choice["token_ids"])})
+                        finish_reason = choice.get("finish_reason") or finish_reason
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
+        error = f"{type(exc).__name__}: {exc}"
+    row = serving.completion_row(
+        status, start, time.monotonic_ns(), usage, events, done,
+        request_id, finish_reason, error,
+    )
+    session_, index = prepared["session"], prepared["index"]
+    row.update({"request_index": index, "session_id": session_.session_id,
+                "scheduled_ns": scheduled_ns,
+                "input_tokens": session_.append_tokens,
+                "prefix_tokens": session_.prefix_tokens,
+                "planned_prompt_tokens": len(prepared["prompt"]),
+                "planned_output_tokens": session_.output_tokens,
+                "send_lateness_s": (start - scheduled_ns) / 1e9,
+                "prompt_sha256": prepared["prompt_sha256"]})
+    return row
+
+
+async def issue_async_shard(host: str, port: int, prepared_trace: list[dict],
+                            epoch_ns: int,
+                            timeout_s: float) -> tuple[list[dict], Exception | None]:
+    connector = aiohttp.TCPConnector(limit=0, force_close=True)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async def one(item: dict) -> dict:
+            scheduled_ns = epoch_ns + int(item["offset_s"] * 1e9)
+            await asyncio.sleep(max(
+                0, (scheduled_ns - time.monotonic_ns()) / 1e9,
+            ))
+            result = await async_completion(
+                session, host, port, item["prepared"], scheduled_ns, timeout_s,
+            )
+            return {**result, "population": item["population"],
+                    "offset_s": item["offset_s"]}
+
+        settled = await asyncio.gather(
+            *(one(item) for item in prepared_trace), return_exceptions=True,
+        )
+        rows = [item for item in settled if isinstance(item, dict)]
+        error = next((item for item in settled
+                      if isinstance(item, Exception)), None)
+        return rows, error
+
+
+def issue_async_trace(host: str, port: int, prepared_trace: list[dict],
+                      epoch_ns: int, timeout_s: float,
+                      shards: int) -> tuple[list[dict], Exception | None]:
+    """Drive one open-loop trace across independent streaming event loops."""
+    if not 1 <= shards <= len(prepared_trace):
+        raise ValueError("invalid client event-loop shard count")
+    partitions = [prepared_trace[index::shards] for index in range(shards)]
+    gc_was_enabled = gc.isenabled()
+    gc.collect()
+    gc.disable()
+    rows, error = [], None
+    try:
+        with ThreadPoolExecutor(max_workers=shards) as executor:
+            futures = [executor.submit(
+                asyncio.run,
+                issue_async_shard(host, port, partition, epoch_ns, timeout_s),
+            ) for partition in partitions]
+            for future in futures:
+                try:
+                    shard_rows, shard_error = future.result()
+                    rows.extend(shard_rows)
+                    error = error or shard_error
+                except Exception as exc:
+                    error = error or exc
+        return sorted(rows, key=lambda row: row["scheduled_ns"]), error
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+            gc.collect()
 
 
 def offered_rho(plan: dict, rows: list[dict]) -> float:
-    return sum(offered_phase_rho(plan, rows))
+    return sum(row["prefill_work_s"] + row["decode_work_s"]
+               for row in measurement_rows(plan, rows)) / plan["measurement_s"]
+
+
+def offered_phase_rho(plan: dict, rows: list[dict]) -> dict[str, float]:
+    """Return the two measured-work coordinates behind additive ``rho``.
+
+    These are offered prefill/decode GPU-seconds per measurement second under
+    the frozen isolated-rate normalization.  They are not utilization.
+    """
+    measured = measurement_rows(plan, rows)
+    return {
+        "offered_prefill_rho": sum(row["prefill_work_s"] for row in measured)
+        / plan["measurement_s"],
+        "offered_decode_rho": sum(row["decode_work_s"] for row in measured)
+        / plan["measurement_s"],
+    }
 
 
 def quantile(values: list[float], q: float) -> float | None:
     return float(np.quantile(values, q)) if values else None
 
 
-def cache_mismatches(rows: list[dict], quantum: int = 16) -> list[dict]:
+def cache_mismatches(rows: list[dict]) -> list[dict]:
     return [row for row in rows if serving.service_completion(row)
-            and row.get("cached_tokens")
-            != row.get("prefix_tokens", 0) // quantum * quantum]
+            and row.get("cached_tokens") != row.get("prefix_tokens", 0) // 16 * 16]
 
 
 def validate_prewarm(rows: list[dict], sessions_: list[serving.Session]) -> None:
@@ -406,18 +521,6 @@ def validate_prewarm(rows: list[dict], sessions_: list[serving.Session]) -> None
             or row.get("cached_tokens") != 0
             for row, session in zip(rows, sessions_)):
         raise RuntimeError("private-prefix prewarm contract failed")
-
-
-def resident_tokens(rows: list[dict], sessions_: list[serving.Session],
-                    quantum: int = 16) -> int:
-    if len(rows) != len(sessions_) or any(
-            not serving.service_completion(row)
-            or row.get("prompt_tokens") != session.prefix_tokens
-            or row.get("cached_tokens")
-            != (session.prefix_tokens - 1) // quantum * quantum
-            for row, session in zip(rows, sessions_)):
-        raise RuntimeError("private-prefix residency contract failed")
-    return sum(row["cached_tokens"] for row in rows)
 
 
 def engine_failure_kind(log: Path, exited: bool) -> str | None:
@@ -448,7 +551,7 @@ def invalid_reason(plan: dict, trace: list[dict], requests: list[dict],
         return "offered trace schedule slip"
     if summary["cache_mismatch_count"]:
         return "cache contract mismatch"
-    if summary.get("incumbent_exact", 1) and not summary["tpot_reportable"]:
+    if summary.get("incumbent_completed", 1) and not summary["tpot_reportable"]:
         return "token timing is not observable"
     if not summary["telemetry_window_complete"] and engine_failure != "service":
         return "measurement telemetry is incomplete"
@@ -461,6 +564,38 @@ def in_system(row: dict, requests: list[dict]) -> float:
                   < int(request.get("start_ns", 0)) for request in requests)
     return float(row["vllm:num_requests_running"]
                  + row["vllm:num_requests_waiting"] + pending)
+
+
+def late_window_queue_growth(metrics: list[dict], loads: list[float]) -> dict:
+    """Fit queue growth over the final two thirds of the observed window.
+
+    Reporting fitted accumulated requests makes the materiality threshold
+    independent of whether telemetry lands on the nominal window endpoints.
+    """
+    if len(metrics) != len(loads) or len(metrics) < 2:
+        return {"late_window_queue_slope_requests_per_s": math.inf,
+                "late_window_queue_window_s": 0.0,
+                "late_window_queue_accumulation_requests": math.inf}
+    first_ns, last_ns = (int(metrics[0]["monotonic_ns"]),
+                         int(metrics[-1]["monotonic_ns"]))
+    cutoff_ns = first_ns + (last_ns - first_ns) // 3
+    points = [((int(row["monotonic_ns"]) - first_ns) / 1e9, load)
+              for row, load in zip(metrics, loads)
+              if int(row["monotonic_ns"]) >= cutoff_ns]
+    if len(points) < 2:
+        return {"late_window_queue_slope_requests_per_s": math.inf,
+                "late_window_queue_window_s": 0.0,
+                "late_window_queue_accumulation_requests": math.inf}
+    times, values = zip(*points)
+    mean_time, mean_value = statistics.mean(times), statistics.mean(values)
+    denominator = sum((value - mean_time) ** 2 for value in times)
+    slope = (sum((x - mean_time) * (y - mean_value)
+                 for x, y in points) / denominator
+             if denominator else math.inf)
+    duration = times[-1] - times[0]
+    return {"late_window_queue_slope_requests_per_s": slope,
+            "late_window_queue_window_s": duration,
+            "late_window_queue_accumulation_requests": slope * duration}
 
 
 def summarize(plan: dict, offered: list[dict], requests: list[dict],
@@ -500,18 +635,19 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
             and hi - window_metrics[-1]["monotonic_ns"] <= tolerance \
             and max(gaps_ns) <= tolerance
     loads = [in_system(row, observed) for row in window_metrics]
-    p99 = len(good) >= plan["p99_min_incumbent_requests"]
-    prefill_rho, decode_rho = offered_phase_rho(plan, offered)
+    queue_growth = late_window_queue_growth(window_metrics, loads)
+    timing_coverage = len(timed) / len(good) if good else 0
+    p99 = min(len(good), len(timed)) >= plan["p99_min_incumbent_requests"]
     return {
-        "offered_prefill_rho": prefill_rho,
-        "offered_decode_rho": decode_rho,
-        "offered_rho": prefill_rho + decode_rho,
+        "offered_rho": offered_rho(plan, offered),
         "offered_requests": len(observed),
         "incumbent_offered": len(incumbent),
-        "incumbent_exact": len(good),
-        "incumbent_exact_completion_rate": len(good) / len(incumbent),
+        "incumbent_completed": len(good),
+        "incumbent_completion_rate": len(good) / len(incumbent),
+        "incumbent_timing_exact": len(timed),
+        "incumbent_timing_exact_coverage": timing_coverage,
         "incumbent_service_failure_rate": 1 - len(good) / len(incumbent),
-        "all_offered_exact_completion_rate": len(completed) / len(observed),
+        "all_offered_completion_rate": len(completed) / len(observed),
         "all_offered_service_failure_rate": 1 - len(completed) / len(observed),
         "p50_ttft_s": quantile(ttft, .5), "p90_ttft_s": quantile(ttft, .9),
         "p95_ttft_s": quantile(ttft, .95),
@@ -524,10 +660,13 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
         "p95_token_itl_s": quantile(gaps, .95),
         "p99_token_itl_s": quantile(gaps, .99),
         "p99_reportable": p99,
-        "tpot_reportable": bool(good) and len(timed) == len(good),
-        "cache_mismatch_count": len(cache_mismatches(
-            observed, plan.get("cache_hit_quantum_tokens", 16))),
+        "tpot_reportable": bool(good) and timing_coverage
+        >= plan["min_exact_timing_coverage"],
+        "cache_mismatch_count": len(cache_mismatches(observed)),
         "queue_drift_upper_requests_per_s": drift,
+        **queue_growth,
+        "queue_accumulation_tolerance_requests":
+        MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS,
         "initial_in_system_requests": loads[0] if loads else None,
         "late_window_p90_in_system_requests": quantile(loads[len(loads) * 2 // 3:], .9),
         "initial_kv_usage": window_metrics[0]["vllm:gpu_cache_usage_perc"]
@@ -537,7 +676,9 @@ def summarize(plan: dict, offered: list[dict], requests: list[dict],
         "telemetry_window_complete": telemetry_complete,
         "drained": drained,
         "stable": bool(all_good and drained and telemetry_complete
-                       and drift <= 1 / plan["measurement_s"]),
+                       and queue_growth[
+                           "late_window_queue_accumulation_requests"]
+                       <= MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS),
         "max_send_lateness_s": max(row["send_lateness_s"] for row in observed),
     }
 
@@ -571,8 +712,7 @@ def stack_commands(cfg: testbed.Config, extra: list[str]) -> dict[str, list[str]
                 cfg, "sink", l2_port=cfg.lmc_port,
             ))),
             "vllm": list(map(str, testbed.vllm_cmd(
-                cfg, "sink", ["--no-async-scheduling", "--stream-interval", "1",
-                              *extra], gpu_index=0,
+                cfg, "sink", extra, gpu_index=0,
             )))}
 
 
@@ -592,30 +732,16 @@ def cached_image_hash(path: Path, cache: Path) -> str:
     return sha256
 
 
-def runtime_provenance(cfg: testbed.Config, cache: Path) -> dict:
-    mode = testbed.runtime_mode()
-    if mode == "apptainer":
-        return {"mode": mode,
-                "image_sha256": cached_image_hash(cfg.sandbox, cache)}
-    packages = sorted(
-        (distribution.metadata["Name"].lower(), distribution.version,
-         hashlib.sha256((distribution.read_text("RECORD")
-                         or distribution.read_text("METADATA") or "").encode()).hexdigest())
-        for distribution in importlib.metadata.distributions()
-    )
-    environment = {"python": sys.version, "packages": packages}
-    return {"mode": mode, "environment": environment,
-            "environment_sha256": digest(environment)}
-
-
 def collect_runtime_identity(plan: dict, cfg: testbed.Config, hardware: str,
-                             extra: list[str], runtime: dict) -> dict:
+                             extra: list[str], image_sha256: str | None) -> dict:
     if testbed.lmcache_mode() != "mp" or not testbed.prefix_caching():
         raise RuntimeError("service-headroom requires the pinned MP stack")
-    git_sha, _dirty = profiler.git_state(False)
+    git_sha, dirty = profiler.git_state(False)
+    if dirty:
+        raise RuntimeError("service-headroom requires a clean launch commit")
     return runtime_contract(plan, cfg, extra, hardware_snapshot(hardware),
                             testbed.runtime_versions(cfg),
-                            runtime, git_sha,
+                            image_sha256, git_sha,
                             stack_commands(cfg, extra))
 
 
@@ -625,6 +751,18 @@ def identity_sha(identity: dict) -> str:
     if checksum is not None and checksum != digest(body):
         raise RuntimeError("runtime identity checksum changed")
     return checksum or digest(identity)
+
+
+def service_runtime_identity_sha(identity: dict) -> str:
+    """Hash serving semantics while retaining collector SHA separately.
+
+    Analysis-only fixes may change the campaign's git commit between discovery
+    and confirmation.  The model, hardware, runtime, scheduler, and exact
+    launch commands must still be byte-for-byte equivalent.
+    """
+    identity_sha(identity)
+    return digest({key: value for key, value in identity.items()
+                   if key not in {"git_sha", "sha256"}})
 
 
 def validate_resume(result: dict, plan: dict, cell: dict, identity: dict,
@@ -672,6 +810,44 @@ def load_results(plan: dict, hardware: str, root: Path, kind: str) -> list[dict]
     return validate_result_rows(plan, hardware, kind, rows)
 
 
+def read_engine_metrics(path: Path) -> list[dict]:
+    with path.open(newline="") as handle:
+        return [{"monotonic_ns": int(row["monotonic_ns"]),
+                 "vllm:num_requests_running":
+                 float(row["vllm:num_requests_running"]),
+                 "vllm:num_requests_waiting":
+                 float(row["vllm:num_requests_waiting"]),
+                 "vllm:gpu_cache_usage_perc":
+                 float(row["vllm:gpu_cache_usage_perc"])}
+                for row in csv.DictReader(handle)]
+
+
+def reanalyze_result(plan: dict, root: Path, row: dict) -> dict:
+    """Recompute reducer-owned fields from immutable raw traces.
+
+    This supports analysis corrections without rewriting acquisition results.
+    The original bootstrap diagnostic is recomputed and retained.
+    """
+    derived = {"prewarmed_prefix_tokens",
+               "late_window_queue_slope_requests_per_s",
+               "late_window_queue_window_s",
+               "late_window_queue_accumulation_requests",
+               "queue_accumulation_tolerance_requests"}
+    if derived <= row.keys():
+        return dict(row)
+    cell = root / row["cell_id"]
+    offered = json.loads((cell / "offered.json").read_text())
+    requests = json.loads((cell / "requests.json").read_text())
+    metrics = read_engine_metrics(cell / "engine.csv")
+    summary = summarize(plan, offered, requests, metrics, bool(row["drained"]))
+    prewarm = json.loads((cell / "prewarm.json").read_text())
+    prewarmed = sum(int(value["prompt_tokens"]) for value in prewarm)
+    if not prewarm or any(int(value.get("cached_tokens", -1)) != 0
+                          for value in prewarm):
+        raise RuntimeError(f"invalid prewarm evidence: {row['cell_id']}")
+    return {**row, **summary, "prewarmed_prefix_tokens": prewarmed}
+
+
 def validate_run_order(plan: dict, hardware: str, stage: str,
                        rows: list[dict]) -> None:
     expected = plan["run_order"] if plan["schema"] == CONFIRM_SCHEMA \
@@ -711,7 +887,6 @@ def destination_stack(cfg: testbed.Config, root: Path, hardware: str,
         )
         testbed.wait_health_process(cfg.host, cfg.sink_port, testbed.health_timeout(),
                                     engine, root / "sink.log")
-        testbed.validate_model_runtime_log(cfg, testbed.read_text(root / "sink.log"))
         capacity = vllm_kv_capacity(root / "sink.log")
         metadata = {"hardware": identity["gpu"], "preflight": preflight,
                     "runtime_identity": identity,
@@ -782,31 +957,43 @@ def settle_futures(futures) -> tuple[list[dict], Exception | None]:
     return rows, error
 
 
-def synchronized_submit(executor, items, fn):
-    items = list(items)
-    ready, gate = threading.Barrier(len(items) + 1), threading.Event()
-    def run(item):
+def submit_synchronized(executor: ThreadPoolExecutor, items: list,
+                        issue, lead_s: float = .1):
+    """Queue every worker before releasing a synchronized request burst."""
+    if not items or executor._max_workers < len(items) or lead_s <= 0:
+        raise ValueError("synchronized burst needs one ready worker per item")
+    ready = threading.Barrier(len(items) + 1)
+    release = threading.Event()
+    epoch = 0
+
+    def invoke(item):
         ready.wait()
-        gate.wait()
-        return fn(item)
-    futures = [executor.submit(run, item) for item in items]
+        release.wait()
+        time.sleep(max(0, epoch / 1e9 - time.monotonic()))
+        return issue(item, epoch)
+
+    futures = [executor.submit(invoke, item) for item in items]
     ready.wait()
-    return futures, gate
+    epoch = time.monotonic_ns() + int(lead_s * 1e9)
+    release.set()
+    return futures, epoch
 
 
 def validate_stage_inputs(plan: dict, rates: dict, identity: dict) -> None:
-    if rates["runtime_identity_sha256"] != identity_sha(identity) \
-            or rates.get("kv_capacity_tokens", 0) <= 0 \
+    if rates.get("kv_capacity_tokens", 0) <= 0 \
             or rates.get("balanced_shape") != asdict(balanced_shape(rates)) \
-            or rates.get("cache_hit_quantum_tokens", 16) \
-            != plan.get("cache_hit_quantum_tokens", 16) \
             or rates.get("planned_parked_prefix_tokens") \
             != parked_prefix_tokens(rates):
         raise RuntimeError("normalization and headroom runtime identities differ")
-    if plan["schema"] == CONFIRM_SCHEMA and (
-            plan["runtime_identity_sha256"] != identity_sha(identity)
-            or plan["normalization_sha256"] != rates["sha256"]):
-        raise RuntimeError("confirmation differs from discovery runtime or normalization")
+    if plan["schema"] == SCHEMA:
+        if rates["runtime_identity_sha256"] != identity_sha(identity):
+            raise RuntimeError("normalization and headroom runtime identities differ")
+        return
+    expected = plan["service_runtime_identity_sha256"]
+    if service_runtime_identity_sha(rates["runtime_identity"]) != expected \
+            or service_runtime_identity_sha(identity) != expected \
+            or plan["normalization_sha256"] != rates["sha256"]:
+        raise RuntimeError("confirmation differs from discovery service runtime or normalization")
 
 
 def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
@@ -815,13 +1002,15 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
     validate_stage_inputs(plan, rates, identity)
     trace = offered_trace(plan, rates, cell["direction"], cell["target_rho"],
                           cell["block"])
+    client_tasks = client_task_count(plan, trace)
     root.mkdir(parents=True, exist_ok=True)
     (root / "offered.json").write_text(json.dumps(trace, indent=2) + "\n")
     pool = sessions(cell["block"], rates)
-    requests, futures, error = [], [], None
+    requests, error = [], None
     started_wall_ns = time.time_ns()
     epoch = wall = 0
     preloaded_kv_usage = None
+    prewarmed_prefix_tokens = None
     kv_capacity_tokens = None
     planned_parked_tokens = rates["planned_parked_prefix_tokens"]
     drained, engine_exited, failure_kind = False, False, None
@@ -838,43 +1027,30 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
                                    plan["request_timeout_s"], True)
             (root / "prewarm.json").write_text(json.dumps(warm, indent=2) + "\n")
             validate_prewarm(warm, warm_sessions)
-            resident = serving.prewarm(cfg.host, stack.port, cfg.model, warm_sessions,
-                                       plan["request_timeout_s"], True)
-            (root / "residency.json").write_text(
-                json.dumps(resident, indent=2) + "\n")
-            preloaded_kv_usage = resident_tokens(
-                resident, warm_sessions,
-                plan.get("cache_hit_quantum_tokens", 16)) \
-                / kv_capacity_tokens
+            prewarmed_prefix_tokens = sum(int(row["prompt_tokens"]) for row in warm)
+            prepared_trace = [{**row, "prepared": serving.prepare_issue(
+                pool[row["session_id"]], row["request_index"], cfg.model, True,
+            )} for row in trace]
             sampler = serving.MetricsSampler(cfg.host, stack.port, root / "engine.csv")
             power = profiler.PowerSampler(root / "power.csv")
             sampler.start()
             power.start()
             try:
                 wait_sampler(sampler)
-                epoch, wall = time.monotonic_ns(), time.time_ns()
-                def issue(row):
-                    result = serving.issue(
-                        cfg.host, stack.port, cfg.model, pool[row["session_id"]],
-                        row["request_index"], epoch + int(row["offset_s"] * 1e9),
-                        plan["request_timeout_s"], True,
-                    )
-                    return {**result, "population": row["population"],
-                            "offset_s": row["offset_s"]}
-                with ThreadPoolExecutor(max_workers=512) as executor:
-                    for row in trace:
-                        scheduled = epoch / 1e9 + row["offset_s"]
-                        time.sleep(max(0, scheduled - time.monotonic()))
-                        futures.append(executor.submit(issue, row))
-                requests, error = settle_futures(futures)
+                preloaded_kv_usage = sampler.rows[-1]["vllm:gpu_cache_usage_perc"]
+                lead_ns = int(plan["client"]["launch_lead_s"] * 1e9)
+                epoch = time.monotonic_ns() + lead_ns
+                wall = time.time_ns() + lead_ns
+                requests, error = issue_async_trace(
+                    cfg.host, stack.port, prepared_trace, epoch,
+                    plan["request_timeout_s"],
+                    plan["client"]["event_loop_shards"],
+                )
                 if error is None:
                     drained = drain(sampler, plan["drain_s"])
             except Exception as exc:
                 error = error or exc
             finally:
-                if futures and not requests:
-                    requests, future_error = settle_futures(futures)
-                    error = error or future_error
                 try:
                     engine_exited = close_samplers(sampler, power, stack.engine)
                 except Exception as exc:
@@ -890,8 +1066,15 @@ def run_headroom(plan: dict, cell: dict, rates: dict, cfg: testbed.Config,
             "started_wall_ns": started_wall_ns,
             "epoch_monotonic_ns": epoch, "epoch_wall_ns": wall,
             "preloaded_kv_usage": preloaded_kv_usage,
+            "prewarmed_prefix_tokens": prewarmed_prefix_tokens,
             "kv_capacity_tokens": kv_capacity_tokens,
             "planned_parked_prefix_tokens": planned_parked_tokens,
+            "client_scheduler": plan["client"]["scheduler"],
+            "client_runtime_version": plan["client"]["aiohttp_version"],
+            "client_event_loop_shards": plan["client"]["event_loop_shards"],
+            "client_cyclic_gc_during_trace":
+            plan["client"]["cyclic_gc_during_trace"],
+            "client_task_count": client_tasks,
             "engine_exited": engine_exited, "engine_failure_kind": failure_kind,
             "added_prefill_share": (None if cell["direction"] == "baseline" else
                                      phase_share(shape_for(cell["direction"], rates),
@@ -941,24 +1124,15 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
             power.start()
             try:
                 wait_sampler(sampler)
-                prepared = [session.prompt(index)
-                            for index, session in enumerate(group)]
-                bodies = [serving.completion_body(
-                    cfg.model, prompt, session.output_tokens, forced, True,
-                ) for session, (prompt, forced) in zip(group, prepared)]
-                def issue(item):
-                    time.sleep(max(0, epoch / 1e9 - time.monotonic()))
-                    return serving.issue(
-                        cfg.host, stack.port, cfg.model, item[1], item[0], epoch,
-                        plan["request_timeout_s"], True, prepared[item[0]],
-                        bodies[item[0]],
+                prepared = [serving.prepare_issue(item, index, cfg.model, True)
+                            for index, item in enumerate(group)]
+                def issue(item, scheduled_ns):
+                    return serving.issue_prepared(
+                        cfg.host, stack.port, cfg.model, item, scheduled_ns,
+                        plan["request_timeout_s"], True,
                     )
                 with ThreadPoolExecutor(max_workers=cell["concurrency"]) as executor:
-                    futures, gate = synchronized_submit(
-                        executor, enumerate(group), issue,
-                    )
-                    epoch = time.monotonic_ns() + 100_000_000
-                    gate.set()
+                    futures, epoch = submit_synchronized(executor, prepared, issue)
                 requests, error = settle_futures(futures)
                 if error is None:
                     drained = drain(sampler, plan["drain_s"])
@@ -980,15 +1154,14 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
         serving.service_completion(row) for row in requests)
     schedule_valid = bool(requests) and max(row["send_lateness_s"] for row in requests) \
         <= plan["max_send_lateness_s"]
-    quantum = plan.get("cache_hit_quantum_tokens", 16)
-    cache_valid = not cache_mismatches(requests, quantum)
+    cache_valid = not cache_mismatches(requests)
     duration = (max(row["last_token_ns"] for row in requests)
                 - min(row["start_ns"] for row in requests)) / 1e9 if complete else None
     tokens = sum(row["planned_prompt_tokens"] - row["cached_tokens"]
                  if cell["phase"] == "prefill"
                  else row["planned_output_tokens"] for row in requests)
-    invalid = error or failure_kind == "infrastructure" or not complete \
-        or not drained or not schedule_valid or not cache_valid
+    invalid = error or failure_kind == "infrastructure" or not schedule_valid \
+        or not cache_valid
     result = {"schema": plan["schema"], "plan_sha256": digest(plan),
               "runtime_identity": identity,
               "runtime_identity_sha256": identity_sha(identity),
@@ -998,7 +1171,7 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
               "status": "invalid" if invalid else "complete", **cell,
               "service_completion": complete, "drained": drained,
               "engine_exited": engine_exited, "engine_failure_kind": failure_kind,
-              "cache_mismatch_count": len(cache_mismatches(requests, quantum)),
+              "cache_mismatch_count": len(cache_mismatches(requests)),
               "measurement_error": f"{type(error).__name__}: {error}" if error else None,
               "max_send_lateness_s": max((row["send_lateness_s"]
                                            for row in requests), default=None),
@@ -1013,9 +1186,7 @@ def run_calibration(plan: dict, cell: dict, cfg: testbed.Config,
 def reduce_calibration(plan: dict, hardware: str, root: Path) -> dict:
     rows = load_results(plan, hardware, root, "calibration")
     validate_run_order(plan, hardware, "calibration", rows)
-    if any(row["status"] != "complete" or not row.get("service_completion")
-           or not row.get("drained") or row.get("cache_mismatch_count")
-           or row.get("tokens_per_s") is None for row in rows):
+    if any(row["status"] != "complete" for row in rows):
         raise RuntimeError("calibration contains invalid measurements")
     capacities = {row["kv_capacity_tokens"] for row in rows}
     if len(capacities) != 1 or next(iter(capacities)) <= 0:
@@ -1027,9 +1198,6 @@ def reduce_calibration(plan: dict, hardware: str, root: Path) -> dict:
              "runtime_identity_sha256": rows[0]["runtime_identity_sha256"],
              "normalizer_kind": "synchronized_burst_throughput",
              "kv_capacity_tokens": next(iter(capacities))}
-    if plan["model"] != testbed.MODEL:
-        rates["cache_chunk_tokens"] = testbed.model_spec(plan["model"]).chunk_tokens
-        rates["cache_hit_quantum_tokens"] = plan["cache_hit_quantum_tokens"]
     edge_censored = False
     for phase in ("prefill", "decode"):
         peaks, peak_concurrency = [], []
@@ -1061,10 +1229,7 @@ def joint_attainment(plan: dict, requests: list[dict], ttft_target_s: float,
                 if row["population"] == "incumbent"]
     if not eligible:
         raise RuntimeError("joint attainment has no offered incumbents")
-    if any(serving.service_completion(row) and not serving.exact_token_timing(row)
-           for row in eligible):
-        raise RuntimeError("joint attainment needs exact token timing")
-    good = sum(serving.service_completion(row)
+    good = sum(serving.exact_token_timing(row)
                and row["ttft_s"] <= ttft_target_s
                and row["mean_tpot_s"] <= tpot_target_s for row in eligible)
     return good / len(eligible)
@@ -1097,16 +1262,20 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     if len(controls) != plan["blocks"] \
             or any(row["status"] != "complete" for row in controls):
         raise RuntimeError("residency controls are incomplete")
-    if any(row["incumbent_exact"] and not row["tpot_reportable"]
+    if any(row["incumbent_completed"] and not row["tpot_reportable"]
            for row in rows + controls):
         raise RuntimeError("headroom reduction lacks exact TPOT measurements")
-    resident_kv = [row["preloaded_kv_usage"] for row in rows]
-    control_kv = [row["preloaded_kv_usage"] for row in controls]
+    resident_prewarmed = [row["prewarmed_prefix_tokens"] for row in rows]
+    control_prewarmed = [row["prewarmed_prefix_tokens"] for row in controls]
+    resident_kv = [row["preloaded_kv_usage"] for row in rows
+                   if row["preloaded_kv_usage"] is not None]
+    control_kv = [row["preloaded_kv_usage"] for row in controls
+                  if row["preloaded_kv_usage"] is not None]
     measurement_kv = [row["initial_kv_usage"] for row in rows]
-    if any(value is None for value in resident_kv + control_kv):
-        raise RuntimeError("headroom reduction lacks preloaded KV telemetry")
-    if max(resident_kv) - min(resident_kv) > plan["kv_match_tolerance"]:
-        raise RuntimeError("resident KV stock changed across the headroom curve")
+    if min(resident_prewarmed + control_prewarmed, default=0) <= 0 \
+            or len(set(resident_prewarmed)) != 1 \
+            or len(set(control_prewarmed)) != 1:
+        raise RuntimeError("headroom reduction lacks exact prewarm-token evidence")
     capacities = {row["kv_capacity_tokens"] for row in rows + controls}
     parked = {row["planned_parked_prefix_tokens"] for row in rows + controls}
     if len(capacities) != 1 or len(parked) != 1:
@@ -1115,7 +1284,10 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     direction_results = {}
     for direction in ("prefill_heavy", "decode_heavy"):
         slo_labels = [all(
-            row["stable"] and row["p90_ttft_s"] <= targets["p90_ttft_s"]
+            row["stable"] and row["tpot_reportable"]
+            and row["p90_ttft_s"] is not None
+            and row["p90_mean_tpot_s"] is not None
+            and row["p90_ttft_s"] <= targets["p90_ttft_s"]
             and row["p90_mean_tpot_s"] <= targets["p90_mean_tpot_s"]
             for row in rows if row["target_rho"] == rho
             and (rho == BASE_RHO or row["direction"] == direction)) for rho in LOADS]
@@ -1132,11 +1304,11 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
         }
     resident_base = [row for row in rows if row["target_rho"] == BASE_RHO]
     healthy_controls = all(
-        row["stable"] and row["incumbent_exact_completion_rate"] == 1
-        and row["all_offered_exact_completion_rate"] == 1 for row in controls)
+        row["stable"] and row["incumbent_completion_rate"] == 1
+        and row["all_offered_completion_rate"] == 1 for row in controls)
     healthy_resident_base = all(
-        row["stable"] and row["incumbent_exact_completion_rate"] == 1
-        and row["all_offered_exact_completion_rate"] == 1 for row in resident_base)
+        row["stable"] and row["incumbent_completion_rate"] == 1
+        and row["all_offered_completion_rate"] == 1 for row in resident_base)
     ratios = {
         metric: statistics.median(row[metric] for row in resident_base)
         / statistics.median(row[metric] for row in controls) - 1
@@ -1144,10 +1316,10 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     } if healthy_controls and healthy_resident_base else {
         "p90_ttft_s": None, "p90_mean_tpot_s": None,
     }
-    stock_delta = statistics.median(resident_kv) - statistics.median(control_kv)
-    expected_stock_delta = planned_parked / capacity
-    stock_match = abs(stock_delta - expected_stock_delta) \
-        <= plan["kv_match_tolerance"]
+    stock_delta = int(statistics.median(resident_prewarmed)
+                      - statistics.median(control_prewarmed))
+    expected_stock_delta = planned_parked
+    stock_match = stock_delta == expected_stock_delta
     residency_pass = healthy_controls and healthy_resident_base \
         and stock_match \
         and max(ratios.values()) \
@@ -1159,6 +1331,12 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
     return {"schema": SCHEMA, "stage": "scout", "hardware": hardware,
             "plan_sha256": digest(plan), "planner_usable": False,
             "targets": targets,
+            "queue_stability_contract": {
+                "estimator": "least_squares_final_two_thirds",
+                "maximum_fitted_accumulation_requests":
+                MAX_LATE_WINDOW_QUEUE_ACCUMULATION_REQUESTS,
+                "legacy_block_bootstrap": "diagnostic_only",
+            },
             "runtime_identity": rows[0]["runtime_identity"],
             "runtime_identity_sha256": rows[0]["runtime_identity_sha256"],
             "normalization_sha256": rows[0]["normalization_sha256"],
@@ -1170,13 +1348,18 @@ def build_scout(plan: dict, hardware: str, rows: list[dict], controls: list[dict
                 "healthy_controls": healthy_controls,
                 "healthy_resident_baseline": healthy_resident_base,
                 "stock_match": stock_match,
-                "preloaded_kv_usage_delta": stock_delta,
-                "expected_preloaded_kv_usage_delta": expected_stock_delta,
+                "prewarmed_prefix_tokens_delta": stock_delta,
+                "expected_prewarmed_prefix_tokens_delta": expected_stock_delta,
                 "kv_capacity_tokens": capacity,
                 "planned_parked_prefix_tokens": planned_parked,
                 "relative_degradation": ratios,
-                "resident_preloaded_kv_median": statistics.median(resident_kv),
-                "control_preloaded_kv_median": statistics.median(control_kv),
+                "resident_prewarmed_prefix_tokens":
+                int(statistics.median(resident_prewarmed)),
+                "control_prewarmed_prefix_tokens":
+                int(statistics.median(control_prewarmed)),
+                "active_kv_gauge_delta_diagnostic":
+                (statistics.median(resident_kv) - statistics.median(control_kv)
+                 if resident_kv and control_kv else None),
                 "measurement_start_kv_range": ([min(observed_kv), max(observed_kv)]
                                                if (observed_kv := [value for value
                                                    in measurement_kv if value is not None])
@@ -1206,8 +1389,10 @@ def validate_scout_evidence(plan: dict, scout: dict, hardware: str) -> None:
 
 def reduce_headroom(plan: dict, hardware: str, root: Path,
                     ttft_target_s: float, tpot_target_s: float) -> dict:
-    rows = load_results(plan, hardware, root, "headroom")
-    controls = load_results(plan, hardware, root, "residency_control")
+    rows = [reanalyze_result(plan, root, row) for row in
+            load_results(plan, hardware, root, "headroom")]
+    controls = [reanalyze_result(plan, root, row) for row in
+                load_results(plan, hardware, root, "residency_control")]
     for row in rows:
         requests = json.loads((root / row["cell_id"] / "requests.json").read_text())
         row["joint_slo_attainment"] = joint_attainment(
@@ -1219,7 +1404,10 @@ def reduce_headroom(plan: dict, hardware: str, root: Path,
 
 
 def row_feasible(row: dict, targets: dict) -> bool:
-    return bool(row["stable"] and row["p90_ttft_s"] <= targets["p90_ttft_s"]
+    return bool(row["stable"] and row["tpot_reportable"]
+                and row["p90_ttft_s"] is not None
+                and row["p90_mean_tpot_s"] is not None
+                and row["p90_ttft_s"] <= targets["p90_ttft_s"]
                 and row["p90_mean_tpot_s"] <= targets["p90_mean_tpot_s"])
 
 
@@ -1234,15 +1422,17 @@ def validate_confirmation_source(plan: dict, core: dict, scout: dict) -> None:
 
 def reduce_confirmation(plan: dict, root: Path, core: dict, scout: dict) -> dict:
     validate_confirmation_source(plan, core, scout)
-    rows = load_results(plan, plan["hardware"], root, "confirmation")
-    if any(row["status"] != "complete" or row["incumbent_exact"]
+    rows = [reanalyze_result(plan, root, row) for row in
+            load_results(plan, plan["hardware"], root, "confirmation")]
+    if any(row["status"] != "complete" or row["incumbent_completed"]
            and not row["tpot_reportable"] for row in rows):
         raise RuntimeError("confirmation contains invalid or incomplete measurements")
-    if {row["runtime_identity_sha256"] for row in rows} \
-            != {plan["runtime_identity_sha256"]} \
+    if len({row["runtime_identity_sha256"] for row in rows}) != 1 \
+            or {service_runtime_identity_sha(row["runtime_identity"])
+                for row in rows} != {plan["service_runtime_identity_sha256"]} \
             or {row["normalization_sha256"] for row in rows} \
             != {plan["normalization_sha256"]}:
-        raise RuntimeError("confirmation runtime differs from discovery")
+        raise RuntimeError("confirmation service runtime differs from discovery")
     for row in rows:
         requests = json.loads((root / row["cell_id"] / "requests.json").read_text())
         row["joint_slo_attainment"] = joint_attainment(
@@ -1255,21 +1445,21 @@ def reduce_confirmation(plan: dict, root: Path, core: dict, scout: dict) -> dict
 def build_confirmation(plan: dict, rows: list[dict]) -> dict:
     rows = validate_result_rows(plan, plan["hardware"], "confirmation", rows)
     validate_run_order(plan, plan["hardware"], "confirmation", rows)
-    if any(row["status"] != "complete" or row["incumbent_exact"]
+    if any(row["status"] != "complete" or row["incumbent_completed"]
            and not row["tpot_reportable"] for row in rows):
         raise RuntimeError("confirmation contains invalid or incomplete measurements")
-    if {row["runtime_identity_sha256"] for row in rows} \
-            != {plan["runtime_identity_sha256"]} \
+    if len({row["runtime_identity_sha256"] for row in rows}) != 1 \
+            or {service_runtime_identity_sha(row["runtime_identity"])
+                for row in rows} != {plan["service_runtime_identity_sha256"]} \
             or {row["normalization_sha256"] for row in rows} \
             != {plan["normalization_sha256"]}:
-        raise RuntimeError("confirmation runtime differs from discovery")
+        raise RuntimeError("confirmation service runtime differs from discovery")
     if any(row["kv_capacity_tokens"] != plan["kv_capacity_tokens"]
            or row["planned_parked_prefix_tokens"]
            != plan["planned_parked_prefix_tokens"]
-           or abs(row["preloaded_kv_usage"]
-                  - plan["expected_resident_preloaded_kv_usage"])
-           > plan["kv_match_tolerance"] for row in rows):
-        raise RuntimeError("confirmation parked KV stock differs from discovery")
+           or row["prewarmed_prefix_tokens"]
+           != plan["expected_resident_prewarmed_prefix_tokens"] for row in rows):
+        raise RuntimeError("confirmation prewarm stock differs from discovery")
     checks = {}
     baseline = all(row_feasible(row, plan["targets"]) for row in rows
                    if row["role"] == "baseline")
@@ -1289,21 +1479,35 @@ def build_confirmation(plan: dict, rows: list[dict]) -> dict:
             "source_plan_sha256": plan["source_plan_sha256"],
             "source_scout_sha256": plan["source_scout_sha256"],
             "targets": plan["targets"], "checks": checks,
-            "runtime_identity": plan["runtime_identity"],
-            "runtime_identity_sha256": plan["runtime_identity_sha256"],
+            "source_runtime_identity": plan["runtime_identity"],
+            "source_runtime_identity_sha256": plan["runtime_identity_sha256"],
+            "confirmation_runtime_identity": rows[0]["runtime_identity"],
+            "confirmation_runtime_identity_sha256":
+            rows[0]["runtime_identity_sha256"],
+            "service_runtime_identity_sha256":
+            plan["service_runtime_identity_sha256"],
             "normalization_sha256": plan["normalization_sha256"],
             "planner_usable": usable,
             "supported_bound": plan["selection"]["supported_candidate"] if usable else None,
             "rows": rows}
 
 
-def supported_bound(result: dict, plan: dict, core: dict, scout: dict) -> float:
+def validate_confirmation_evidence(result: dict, plan: dict, core: dict,
+                                   scout: dict) -> dict:
+    """Authenticate confirmation evidence without promoting a failed bound."""
     validate_confirmation_source(plan, core, scout)
     try:
         expected = build_confirmation(plan, result["rows"])
     except (KeyError, RuntimeError, TypeError, ValueError) as exc:
         raise RuntimeError("confirmation result is not eligible for planner use") from exc
-    if result != expected or not expected["planner_usable"]:
+    if result != expected:
+        raise RuntimeError("confirmation result is not eligible for planner use")
+    return expected
+
+
+def supported_bound(result: dict, plan: dict, core: dict, scout: dict) -> float:
+    expected = validate_confirmation_evidence(result, plan, core, scout)
+    if not expected["planner_usable"]:
         raise RuntimeError("confirmation result is not eligible for planner use")
     return float(result["supported_bound"])
 
@@ -1337,8 +1541,6 @@ def parse_args(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     prepare = sub.add_parser("prepare")
     prepare.add_argument("--out", type=Path, required=True)
-    prepare.add_argument("--model", choices=testbed.MODEL_SPECS,
-                         default=testbed.MODEL)
     confirmation = sub.add_parser("prepare-confirmation")
     confirmation.add_argument("--plan", type=Path, required=True)
     confirmation.add_argument("--scout", type=Path, required=True)
@@ -1376,7 +1578,7 @@ def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(make_plan(args.model), indent=2) + "\n")
+        args.out.write_text(json.dumps(make_plan(), indent=2) + "\n")
         return
     if args.command == "prepare-confirmation":
         plan = make_confirmation_plan(
@@ -1391,15 +1593,13 @@ def main(argv=None) -> None:
         if cell is None:
             raise ValueError("unknown service-headroom cell")
         cfg = testbed.config_from_args(args)
-        if plan["model"] != testbed.MODEL:
-            cfg = replace(cfg, service_campaign=True)
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] \
             else args.extra_vllm_args
         identity = collect_runtime_identity(
             plan, cfg, cell["hardware"], extra,
-            runtime_provenance(
-                cfg, args.out / f".{cell['hardware']}-image-sha256.json",
-            ),
+            cached_image_hash(
+                cfg.sandbox, args.out / f".{cell['hardware']}-image-sha256.json",
+            ) if testbed.runtime_mode() == "apptainer" else None,
         )
         source_plan_sha = digest(plan) if plan["schema"] == SCHEMA \
             else plan["source_plan_sha256"]

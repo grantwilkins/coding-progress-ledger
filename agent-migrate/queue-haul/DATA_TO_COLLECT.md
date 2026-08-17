@@ -246,12 +246,19 @@ This is a measured calibration of the existing service constraint, not a new
 serving simulator. Hold a deterministic incumbent stream fixed at
 `rho_b=0.25`, preload the same fixed, predeclared pre-arrival parked stock in
 every main cell, and add Queue-Haul work until total scheduled load reaches
-`rho={0.25,0.50,0.70,0.85,0.95,1.10}`. The x coordinate is recomputed from all
+`rho={0.25,0.50,0.70,0.85,0.95,1.10}`. This scalar is offered normalized phase
+work, not measured GPU utilization. The x coordinate is recomputed from all
 offered work during the frozen measurement window:
 
 ```text
 rho = sum_r(append_r / R_P(4096) + output_r / R_D(4096)) / window_s.
 ```
+
+Preserve the two components before summation:
+`rho_f=sum_r append_r/R_P/window_s` and
+`rho_d=sum_r output_r/R_D/window_s`. A scalar may be promoted only as a
+conservative envelope across tested mixtures; composition-dependent latency or
+stability must remain visible in `(rho_f,rho_d)` space.
 
 No migration bytes move during this curve: it isolates the steady-state
 serving effect after sessions are placed. Existing replay/KV experiments remain
@@ -263,14 +270,10 @@ point infeasible rather than adding a third line. Preserve p50/p90/p95/p99,
 every returned token ID and SSE timestamp, and full Prometheus histograms. A
 multi-token SSE event is an exact completion but does not expose literal token
 gaps, so it invalidates TPOT/ITL measurement rather than counting as a service
-failure. Freeze vLLM asynchronous scheduling off and its stream interval at one
-to make literal per-token SSE events part of the measured serving stack. P99 is
-reportable only with at least 1,000 incumbent requests in a
+failure. P99 is reportable only with at least 1,000 incumbent requests in a
 cell; otherwise it is null.
 Horizontal latency targets are evaluation inputs, not values inferred from the
 curve.
-Bootstrap queue slopes from complete 30-second blocks only; discard the
-incomplete trailing fragment.
 
 Use one 4K controlled continuation pack so phase attribution is unambiguous.
 Incumbent requests use 3,840 cached +256 appended prompt tokens and 128 output
@@ -310,39 +313,52 @@ dimension automatically.
 
 Every cell uses a fresh process, cache reset, private-prefix prewarm, 60-second
 warmup, 240-second measurement window, absolute 180-second request deadline,
-180-second drain limit, and a smooth uniform open-loop schedule. Stability uses
+180-second drain limit, and a smooth uniform open-loop schedule. One
+predeclared asynchronous client task is available per offered request under a
+frozen 4,096-task ceiling. One unbounded aiohttp connector drives the exact
+open-loop schedule in each of 32 fixed event-loop shards, so queued responses
+neither consume one OS thread apiece nor starve token-stream parsing. The plan
+pins the client runtime and shard count and disables cyclic GC only while the
+trace is active so response-object collection cannot pause request release.
+Reference counting remains active, and cyclic GC is restored after the trace.
+Stability uses
 running plus waiting plus client-pending requests only inside the measurement
-window; it cannot be rescued by warmup or post-window drain. The measurement
+window; it cannot be rescued by warmup or post-window drain. Fit those requests
+over the final two thirds of the observed window and report both the slope and
+its fitted accumulated-request change. At most one fitted accumulated request
+is no material growth. Preserve the legacy 30-second block-bootstrap upper
+bound as diagnostic-only metadata. The measurement
 hard-fails a scrape gap over one second. A send slip over 50 ms,
-parser/configuration/cache-proof error, token-timing ambiguity, GPU
+parser/configuration/cache-proof error, exact token-timing coverage below 99%, GPU
 preemption/Xid, or missing live-engine sampler invalidates the measurement.
 Timeout, rejection, incomplete output, OOM, or load-induced engine exit is a
 service miss and remains in the offered denominator. Partial request and metric
-evidence is written before failure classification. Invalid measurements may be
+evidence is written before failure classification. Mean-TPOT quantiles use only
+the exact-timing subset and carry its coverage; every ambiguous stream remains a
+miss in joint TTFT/TPOT attainment. Invalid measurements may be
 rerun only immediately in place, before any later cell in the frozen order;
 otherwise stop the stage. Complete service failures may not be rerun.
 
 Every calibration, discovery, and confirmation result carries the exact model
-revision, Apptainer image-byte hash or native environment manifest,
-vLLM/LMCache versions, semantic scheduler command,
+revision, image-byte hash, vLLM/LMCache versions, semantic scheduler command,
 GPU SKU/UUID/memory/power/application clocks, commit, plan hash, and
 normalization hash. The runtime identity includes and rechecks the canonical
 vLLM, LMCache, and Redis launch commands, including environment-dependent GPU
-and KV roles. An image is hashed once per unchanged stage artifact; a native
-run records the Python version and installed-distribution RECORD hashes. Each
+and KV roles. The image is hashed once per unchanged stage artifact, and each
 reducer reconstructs the observed wall-clock cell order and requires it to equal
-the frozen randomized order. Any cross-cell mismatch hard-fails reduction. Successful
+the frozen randomized order. Any cross-cell service-identity mismatch hard-fails
+reduction. An analysis-only collector change between discovery and confirmation
+is allowed only when the model, hardware, runtime versions, scheduler, and
+semantic launch commands are unchanged; record both full identities and commit
+SHAs. Successful
 measurement requests must report exactly the block-rounded private prefix as
 cached; under-hit and append-hot cells are invalid because their actual prefill
-work no longer equals the x coordinate. Fixed parked stock is checked by a
-second exact-token cache-hit census immediately after prewarm and before
-offered arrivals; this includes inactive prefix-cache blocks that vLLM 0.22
-omits from its active-KV gauge and excludes each terminal partial/full block,
-which vLLM does not make reusable until later tokens exist.
-The engine-reported live KV-token capacity is bound into the normalization;
-resident-minus-control occupancy must equal the planned block-rounded parked
-tokens divided by that capacity within two percentage points, and confirmation
-must reproduce the discovery preload.
+work no longer equals the x coordinate. Fixed prefix conditioning is checked
+from exact successful uncached prewarm prompt tokens: resident minus control
+must equal the planned block-rounded prefix tokens exactly, and confirmation
+must reproduce the resident prewarm count. The engine-reported live KV-token
+capacity remains bound into the normalization. The immediate active-KV gauge
+is diagnostic only because it does not measure reclaimable APC cache blocks.
 Measurement-start KV includes load-dependent active decodes, so it is retained
 as an outcome and is not used to match cells.
 
@@ -364,6 +380,31 @@ not a maximum hardware-occupancy claim, universal latency equation, or fleet
 reliability guarantee. The confirmed value is a total-load cap:
 `b_f + b_g + sum_i(w_i,f + w_i,g) <= rho_safe`. Available added headroom is
 `rho_safe - (b_f + b_g)`, never `rho_safe` itself.
+
+The 2026-08-15 A100 execution completed 54/54 discovery and 18/18 held-out cells
+without a collection retry, but did not confirm the initially selected scalar
+cap. At the selected
+`rho=0.70`, prefill-heavy, balanced, and decode-heavy each passed only two of
+three unseen blocks. Prefill-heavy `rho=0.85` failed the 100-ms P90 mean-TPOT
+target in all three blocks, while decode-heavy `rho=0.85` was queue-stable in
+one block and unstable in two despite repeatable latency. Consequently the
+frozen reducer reports no planner-usable value. Retain these curves as
+composition-sensitivity evidence.
+
+The minimal fallback does not require a two-dimensional lattice. The frozen
+transition follow-up tested total work `W=0.50` at prefill-heavy, balanced, and
+decode-heavy recipes across three fresh restart blocks each. All 9/9 cells
+met both cohorts' P90 TTFT/TPOT targets, exact completion/cache checks, drain,
+and strict stability. This makes `W=0.50` a conservative tested floor for the
+exact 4K A100 normalization and stack, not a production cap. The held-out
+`W=0.70` cells met both latency SLOs but missed the every-repeat stability rule,
+so the higher stable bound is bracketed in `[0.50, 0.70)` and remains
+unidentified. The transition artifact does not automatically promote a
+planner profile. If more headroom is operationally necessary, confirm one
+preregistered intermediate point, preferably `W=0.60`, rather than assuming
+interpolation. Collect a two-dimensional lattice only if a future claim
+specifically requires interpolation across unseen compositions. No such
+campaign is required for the scalar tested-work certificate.
 
 ## Prefill/decode holding follow-up (optional model promotion)
 
@@ -413,6 +454,28 @@ finite emitted gaps caused by service misses is a valid infeasible outcome, not
 an invalid measurement. Record any unmet runtime sample target rather than
 extending only unfavorable cells. A valid run must achieve the scheduled load
 within 1% without client-side completion backpressure.
+
+### Non-gating single-A100 capacity discovery
+
+Before treating a model/context width as a comparable architecture point, run
+`single_gpu_capacity_campaign.py` on one visible A100. Use fresh processes for
+the Cartesian product of the three pinned checkpoints and five contexts, BF16
+KV, TP1, `max_model_len=32768`, `max_num_seqs=256`, and synchronized widths
+`1,2,4,8,16,32,64,128,256`. Qwen prompt contexts must be exact multiples of
+its measured 784-token unified attention block. Preserve the model-specific
+LMCache chunking and separate object groups. For vLLM 0.22's Qwen K/V-major
+attention tensor, require the zero-copy 784-token logical-page view, contiguous
+per-K and per-V slices, and the live group-edit log; a tensor-layout mismatch is
+a runtime-contract failure, never a launch-capacity outcome.
+
+This stage has no performance gate. Report launchability, launch/OOM/service
+failure, the largest completely served burst, maximum observed running and
+waiting requests, first saturated and failed width, and whether the sweep is
+right-censored. vLLM may eventually complete a burst much larger than its
+physical simultaneous-running capacity, so those two quantities must never be
+collapsed. Retry only instrumentation, host, or runtime-contract failures;
+valid OOM, context rejection, timeout, incomplete output, or engine exit is the
+limit being discovered.
 
 ### Paired necessity design
 

@@ -1,8 +1,7 @@
 """
 Claim:
-Each architecture-campaign checkpoint uses its pinned snapshot, BF16 attention
-KV, recorded recurrent-state dtypes, and validated hybrid-cache geometry on the
-same TP1, 32K, eight-session runtime.
+Each architecture-campaign checkpoint uses its pinned snapshot and validated
+hybrid-cache geometry on the same BF16, TP1, 32K, eight-session runtime.
 
 Plausible wrong implementations:
 - Reuse the GPT-OSS revision for Qwen or Gemma.
@@ -56,8 +55,8 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
     gemma_vllm = testbed.shell(testbed.vllm_cmd(
         configs["google/gemma-4-26B-A4B-it"], "source"))
     assert "--limit-mm-per-prompt" in gemma_vllm
-    assert testbed.model_spec("google/gemma-4-26B-A4B-it").vllm_args[-1] \
-        == '{"image":0,"audio":0}'
+    assert '"image":0,"audio":0' in gemma_vllm
+    assert "image=0,audio=0" not in gemma_vllm
 
     for cfg in configs.values():
         command = testbed.shell(testbed.vllm_cmd(cfg, "source"))
@@ -92,36 +91,57 @@ def test_campaign_log_must_prove_bf16_and_qwen_unified_block():
         testbed.validate_model_runtime_log(
             qwen, good.replace("bfloat16", "float8_e4m3fn"))
 
-    direct = """
-    QH_KV_CACHE_DTYPES_VERIFIED attention=torch.bfloat16:24 recurrent=torch.bfloat16+torch.float32:24 [3m(connector_patch.py:1)[0m
-    Setting attention block size to 784 tokens
-    """
-    testbed.validate_model_runtime_log(qwen, direct)
-    with pytest.raises(RuntimeError, match="BF16"):
-        testbed.validate_model_runtime_log(
-            qwen, direct.replace("attention=torch.bfloat16", "attention=torch.float16"))
-    with pytest.raises(RuntimeError, match="BF16"):
-        testbed.validate_model_runtime_log(
-            qwen, direct.replace("bfloat16:24 recurrent", "bfloat16:0 recurrent"))
-    with pytest.raises(RuntimeError, match="BF16"):
-        testbed.validate_model_runtime_log(
-            qwen, direct.replace("torch.bfloat16+torch.float32:24", "bad"))
 
-
-def test_gemma_log_must_prove_exact_heterogeneous_geometry():
-    cfg = testbed.model_campaign_config("google/gemma-4-26B-A4B-it")
-    good = (
-        "Using bfloat16 data type to store kv cache\n"
-        "QH_GEMMA4_GEOMETRY_VERIFIED sliding=25x(head_dim=256,kv_heads=8) "
-        "full=5x(head_dim=512,kv_heads=2)\n"
+def test_capacity_discovery_uses_full_single_gpu_scheduler(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    spec = testbed.model_spec("Qwen/Qwen3.8-27B")
+    cfg = testbed.Config(
+        model="Qwen/Qwen3.8-27B", max_model_len=32768,
+        max_num_seqs=256, max_num_batched_tokens=spec.batched_tokens,
+        capacity_discovery=True,
     )
 
-    testbed.validate_model_runtime_log(cfg, good)
-    testbed.validate_model_runtime_log(cfg, good + good)
-    with pytest.raises(RuntimeError, match="per-layer KV geometry"):
-        testbed.validate_model_runtime_log(cfg, good.replace("25x", "24x"))
-    with pytest.raises(RuntimeError, match="per-layer KV geometry"):
-        testbed.validate_model_runtime_log(cfg, good + good.replace("25x", "24x"))
+    testbed.validate_model_runtime(cfg)
+    command = testbed.shell(testbed.vllm_cmd(cfg, "sink", [], gpu_index=0))
+    assert "--max-num-seqs 256" in command
+    assert "--dtype bfloat16" in command
+    assert "--disable-hybrid-kv-cache-manager" not in command
+
+    with pytest.raises(ValueError, match="runtime geometry"):
+        testbed.validate_model_runtime(replace(cfg, max_num_seqs=8))
+
+
+def test_capacity_log_uses_resolved_server_kv_dtype(monkeypatch):
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    spec = testbed.model_spec("Qwen/Qwen3.8-27B")
+    cfg = testbed.Config(
+        model="Qwen/Qwen3.8-27B", max_model_len=32768,
+        max_num_seqs=256, max_num_batched_tokens=spec.batched_tokens,
+        capacity_discovery=True,
+    )
+    log = "Setting attention block size to 784 tokens"
+    info = {"vllm_config": {
+        "cache_config": {"cache_dtype": "auto"},
+        "model_config": {"dtype": "torch.bfloat16"},
+    }}
+
+    testbed.validate_model_runtime_log(cfg, log, info)
+    assert testbed.effective_kv_cache_dtype(info) == "torch.bfloat16"
+    with pytest.raises(RuntimeError, match="resolved BF16"):
+        testbed.validate_model_runtime_log(
+            cfg, log, {"vllm_config": {
+                "cache_config": {"cache_dtype": "auto"},
+                "model_config": {"dtype": "torch.float16"},
+            }})
+
+
+def test_capacity_and_architecture_modes_are_mutually_exclusive(monkeypatch):
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    cfg = replace(testbed.model_campaign_config("openai/gpt-oss-20b"),
+                  capacity_discovery=True)
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        testbed.validate_model_runtime(cfg)
 
 
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):

@@ -203,8 +203,10 @@ class MetricsSampler:
     def close(self):
         self.stop.set(); self.thread.join(10)
         if self.rows:
+            fieldnames = list(dict.fromkeys(
+                key for row in self.rows for key in row))
             with self.path.open("w", newline="") as handle:
-                writer = csv.DictWriter(handle, fieldnames=list(self.rows[0]))
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
                 writer.writeheader(); writer.writerows(self.rows)
         if self.thread.is_alive() or self.error or not self.rows:
             raise RuntimeError("destination metrics sampler failed") from self.error
@@ -221,13 +223,6 @@ def completion_payload(model: str, prompt: list[int], output_tokens: int,
             "qh_bypass_lmcache": True, "lmcache.skip_save": True,
         }
     return payload
-
-
-def completion_body(model: str, prompt: list[int], output_tokens: int,
-                    forced: int, bypass_lmcache: bool = False) -> str:
-    return json.dumps(completion_payload(
-        model, prompt, output_tokens, forced, bypass_lmcache,
-    ))
 
 
 def completion_row(status: int, start_ns: int, end_ns: int, usage: dict,
@@ -258,8 +253,9 @@ def completion_row(status: int, start_ns: int, end_ns: int, usage: dict,
 
 def _completion(host: str, port: int, model: str, prompt: list[int], output_tokens: int,
                 forced: int, timeout_s: float, bypass_lmcache: bool = False,
-                body: str | None = None) -> dict:
-    body = body or completion_body(model, prompt, output_tokens, forced, bypass_lmcache)
+                *, prepared_body: str | None = None) -> dict:
+    body = prepared_body or json.dumps(completion_payload(
+        model, prompt, output_tokens, forced, bypass_lmcache))
     start, usage, events, done = time.monotonic_ns(), {}, [], False
     deadline = start + int(timeout_s * 1e9)
     request_id, finish_reason, status = "", None, 0
@@ -363,19 +359,45 @@ def issue_chat(host: str, port: int, model: str, session: Session, index: int,
 
 def issue(host: str, port: int, model: str, session: Session, index: int,
           scheduled_ns: int, timeout_s: float,
-          bypass_lmcache: bool = False,
-          prepared: tuple[list[int], int] | None = None,
-          body: str | None = None) -> dict:
-    prompt, forced = session.prompt(index) if prepared is None else prepared
-    row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s,
-                      bypass_lmcache, body)
+          bypass_lmcache: bool = False) -> dict:
+    return issue_prepared(
+        host, port, model,
+        prepare_issue(session, index, model, bypass_lmcache), scheduled_ns,
+        timeout_s, bypass_lmcache,
+    )
+
+
+def prepare_issue(session: Session, index: int, model: str | None = None,
+                  bypass_lmcache: bool = False) -> dict:
+    prompt, forced = session.prompt(index)
+    prepared = {
+        "session": session, "index": index, "prompt": prompt, "forced": forced,
+        "prompt_sha256": hashlib.sha256(
+            bytes(np.asarray(prompt, dtype=np.uint32)),
+        ).hexdigest(),
+    }
+    if model is not None:
+        prepared["body"] = json.dumps(completion_payload(
+            model, prompt, session.output_tokens, forced, bypass_lmcache,
+        ))
+    return prepared
+
+
+def issue_prepared(host: str, port: int, model: str, prepared: dict,
+                   scheduled_ns: int, timeout_s: float,
+                   bypass_lmcache: bool = False) -> dict:
+    session, index, prompt = (prepared["session"], prepared["index"],
+                              prepared["prompt"])
+    row = _completion(host, port, model, prompt, session.output_tokens,
+                      prepared["forced"], timeout_s,
+                      bypass_lmcache, prepared_body=prepared.get("body"))
     row.update({"request_index": index, "session_id": session.session_id,
                 "scheduled_ns": scheduled_ns, "input_tokens": session.append_tokens,
                 "prefix_tokens": session.prefix_tokens,
                 "planned_prompt_tokens": len(prompt),
                 "planned_output_tokens": session.output_tokens,
                 "send_lateness_s": (row["start_ns"] - scheduled_ns) / 1e9,
-                "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
+                "prompt_sha256": prepared["prompt_sha256"]})
     return row
 
 
@@ -728,7 +750,7 @@ def queue_drift_upper(rows: list[dict], requests=(), block_s: float = 30,
              for q in requests)) for r in rows]
     points = [p for p in points if p[0] >= points[-1][0] / 3]
     slopes = []
-    for block in range(math.floor((points[-1][0] - points[0][0]) / block_s)):
+    for block in range(max(1, math.ceil((points[-1][0] - points[0][0]) / block_s))):
         selected = [p for p in points if block * block_s <= p[0] - points[0][0] < (block + 1) * block_s]
         if len(selected) >= 2 and np.ptp([p[0] for p in selected]) > 0:
             slopes.append(float(np.polyfit(*zip(*selected), 1)[0]))
