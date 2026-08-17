@@ -63,3 +63,23 @@ def test_unbracketed_summary_marks_lowest_pair_as_whiskers(tmp_path):
     assert summary["boundary"] is None
     assert summary["boundary_bracketed"] is False
     assert summary["whisker_rates_rps"] == [.015625, .03125]
+
+
+def test_upper_reduction_uses_only_base_rates_without_slo_claim(monkeypatch, tmp_path):
+    plan = campaign.make_plan("openai/gpt-oss-20b")
+    identity = {"sha256": campaign.service.digest({})}
+    for expected in plan["base_cells"]:
+        path = tmp_path / "base" / expected["cell_id"]
+        path.mkdir(parents=True)
+        row = {**result(expected["offered_rps"]), **expected,
+               "schema": campaign.SCHEMA, "status": "complete",
+               "plan_sha256": campaign.service.digest(plan),
+               "runtime_identity": identity,
+               "runtime_identity_sha256": campaign.service.identity_sha(identity)}
+        (path / "result.json").write_text(__import__("json").dumps(row))
+
+    summary = campaign.reduce_upper(tmp_path, plan)
+
+    assert len(summary["curve"]) == len(campaign.RATES)
+    assert summary["boundary"] is None and summary["whisker_rates_rps"] == []
+    assert summary["ttft_slo_s"] is summary["tpot_slo_s"] is None

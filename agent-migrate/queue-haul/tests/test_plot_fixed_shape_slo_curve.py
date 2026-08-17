@@ -41,3 +41,29 @@ def test_plot_writes_combined_curve_with_boundary_whiskers(tmp_path):
     assert contract["ttft_slo_s"] == 1
     for suffix in ("csv", "json", "png", "pdf"):
         assert (tmp_path / f"curve.{suffix}").stat().st_size
+
+
+def test_plot_accepts_upper_curve_without_slo_or_whiskers(tmp_path):
+    roots = []
+    for index, model in enumerate(plot_style.MODELS):
+        root = tmp_path / f"upper-{index}"
+        root.mkdir()
+        (root / "summary.json").write_text(json.dumps({
+            "schema": campaign.SCHEMA, "model": model, "hardware": "h100",
+            "input_tokens": 3920, "output_tokens": 1024,
+            "requests_per_point": 32, "rates_rps": list(campaign.RATES),
+            "ttft_slo_s": None, "tpot_slo_s": None, "boundary": None,
+            "whisker_rates_rps": [], "curve": [{
+                "model": model, "offered_rps": rate, "replicates": 1,
+                "exact_completion_rate_min": 1, "p90_ttft_s": rate,
+                "p90_ttft_s_min": rate, "p90_ttft_s_max": rate,
+                "p90_mean_tpot_s": rate / 10,
+                "p90_mean_tpot_s_min": rate / 10,
+                "p90_mean_tpot_s_max": rate / 10} for rate in campaign.RATES]}))
+        roots.append(root)
+
+    rows, contract = plot.load(roots)
+    plot.write(rows, contract, tmp_path / "upper")
+
+    assert not any(row["boundary"] for row in rows)
+    assert contract["ttft_slo_s"] is contract["tpot_slo_s"] is None

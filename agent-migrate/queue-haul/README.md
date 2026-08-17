@@ -1544,6 +1544,16 @@ uv run python fixed_shape_slo_campaign.py run-model --plan RUN-GEMMA/plan.json -
 uv run python plot_fixed_shape_slo_curve.py --run-root RUN-GPT --run-root RUN-QWEN --run-root RUN-GEMMA --out outputs/fixed-shape-slo-h100/curve
 ```
 
+When model-specific SLOs are not declared, skip boundary interpretation and
+reduce only the complete upper sweep before plotting raw degradation:
+
+```bash
+uv run python fixed_shape_slo_campaign.py reduce-upper --plan RUN/plan.json --out RUN
+```
+
+This excludes conditional lower probes and repeat cells from the primary curve
+and draws no SLO line; their raw artifacts remain in the run root.
+
 Set `QH_LMCACHE_MODE=mp`; use `QH_RUNTIME=native` on the validated native
 vLLM/LMCache stack. The older normalized-rho campaign below remains the path
 for an additive admission bound, but it is not the current offered-RPS

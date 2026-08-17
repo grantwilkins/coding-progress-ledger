@@ -231,8 +231,9 @@ def aggregate(rows: list[dict], plan: dict) -> list[dict]:
     return output
 
 
-def write_summary(root: Path, plan: dict, rows: list[dict], pair: tuple[float, float],
-                  identity: dict, bracketed: bool = True) -> dict:
+def write_summary(root: Path, plan: dict, rows: list[dict], pair: tuple[float, ...],
+                  identity: dict, bracketed: bool = True,
+                  include_slos: bool = True) -> dict:
     compact = [{key: value for key, value in row.items()
                 if key not in ("offered_trace", "runtime_identity")}
                for row in sorted(rows, key=lambda row: (row["offered_rps"],
@@ -242,7 +243,8 @@ def write_summary(root: Path, plan: dict, rows: list[dict], pair: tuple[float, f
                "runtime_identity_sha256": service.identity_sha(identity),
                "input_tokens": INPUT_TOKENS, "output_tokens": OUTPUT_TOKENS,
                "requests_per_point": REQUESTS, "rates_rps": list(RATES),
-               "ttft_slo_s": plan["ttft_slo_s"], "tpot_slo_s": plan["tpot_slo_s"],
+               "ttft_slo_s": plan["ttft_slo_s"] if include_slos else None,
+               "tpot_slo_s": plan["tpot_slo_s"] if include_slos else None,
                "boundary": ({"predecessor_rps": pair[0],
                              "first_violating_rps": pair[1]} if bracketed else None),
                "boundary_bracketed": bracketed,
@@ -256,6 +258,21 @@ def write_summary(root: Path, plan: dict, rows: list[dict], pair: tuple[float, f
                                     lineterminator="\n")
             writer.writeheader(); writer.writerows(values)
     return summary
+
+
+def reduce_upper(root: Path, plan: dict) -> dict:
+    rows = []
+    for expected in plan["base_cells"]:
+        result = json.loads((root / "base" / expected["cell_id"] / "result.json").read_text())
+        identity = result["runtime_identity"]
+        validate_resume(result, plan, expected, identity)
+        if result["status"] != "complete":
+            raise RuntimeError("upper sweep contains an incomplete result")
+        rows.append(result)
+    if len({row["runtime_identity_sha256"] for row in rows}) != 1:
+        raise RuntimeError("upper sweep mixes runtime identities")
+    return write_summary(root, plan, rows, (), rows[0]["runtime_identity"],
+                         False, False)
 
 
 def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
@@ -321,6 +338,9 @@ def parse_args(argv=None):
     run.add_argument("--plan", type=Path, required=True)
     run.add_argument("--out", type=Path, required=True)
     testbed.add_common(run)
+    reduce = sub.add_parser("reduce-upper")
+    reduce.add_argument("--plan", type=Path, required=True)
+    reduce.add_argument("--out", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -332,6 +352,9 @@ def main(argv=None) -> None:
             args.model, args.ttft_slo_s, args.tpot_slo_s, args.seed), indent=2) + "\n")
         return
     plan = read_plan(args.plan)
+    if args.command == "reduce-upper":
+        reduce_upper(args.out, plan)
+        return
     cfg = replace(testbed.config_from_args(args), service_campaign=True)
     args.out.mkdir(parents=True, exist_ok=True)
     run_model(plan, cfg, args.out)

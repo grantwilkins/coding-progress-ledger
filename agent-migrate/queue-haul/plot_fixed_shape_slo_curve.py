@@ -30,7 +30,7 @@ def load(roots: list[Path]) -> tuple[list[dict], dict]:
     if len(contract) != 1:
         raise ValueError("fixed-shape summaries use different contracts")
     rows = [{**point, "boundary": point["offered_rps"] in
-             (summary.get("whisker_rates_rps") or summary["boundary"].values())}
+             summary.get("whisker_rates_rps", ())}
             for summary in summaries for point in summary["curve"]]
     hardware, input_tokens, output_tokens, requests, rates, ttft, tpot = contract.pop()
     return rows, {"hardware": hardware, "input_tokens": input_tokens,
@@ -66,8 +66,9 @@ def write(rows: list[dict], contract: dict, out: Path) -> None:
                     fmt="none", capsize=4, linewidth=1.5,
                     color=plot_style.MODEL_COLORS[model],
                 )
-        axis.axhline(slo, color="black", linestyle=(0, (3, 1)), linewidth=1.5,
-                     label=f"SLO = {slo:g}")
+        if slo is not None:
+            axis.axhline(slo, color="black", linestyle=(0, (3, 1)), linewidth=1.5,
+                         label=f"SLO = {slo:g}")
         axis.set_xscale("log", base=2)
         ticks = sorted({row["offered_rps"] for row in rows})
         axis.set_xticks(ticks, [f"{rate:g}" for rate in ticks])
