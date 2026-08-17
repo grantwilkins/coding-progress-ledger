@@ -13,7 +13,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-import network_campaign
 import plot_style
 import workload_adaptation_campaign as campaign
 from planner import _expected_scenario, _resident_tokens, plan
@@ -24,9 +23,8 @@ POLICIES = {
     "queue_haul": "lp_highs", "greedy": "greedy",
     "isolated_fastest": "isolated_fastest", "kv_only": "kv_only",
     "replay_only": "replay_only",
-    "queue_haul_power_blind": "lp_power_blind",
-    "queue_haul_deadline_blind": "lp_highs",
 }
+FIGSIZE = (3.85, 2.5)
 plot_style.apply()
 
 
@@ -121,12 +119,8 @@ def attainment_rows(samples=1000, seed=campaign.DEFAULT_SEED, sessions=28,
             )
             initial = campaign.source_power(problem, sampled_profile)
             for policy, solver in POLICIES.items():
-                planned = replace(
-                    problem, deadline_s=network_campaign.ORACLE_STALE_HORIZON_S,
-                    end_s=network_campaign.ORACLE_STALE_HORIZON_S,
-                ) if policy == "queue_haul_deadline_blind" else problem
                 moves, tail, tail_problem, tail_architecture = policy_moves(
-                    planned, sampled_profile, routes, architecture, solver,
+                    problem, sampled_profile, routes, architecture, solver,
                     replicate, horizon_s,
                 )
                 execution = predict(
@@ -176,7 +170,7 @@ def write_plot(rows, path):
     deadline = 30
     horizon = max(float(row["horizon_s"]) for row in rows)
     fraction = float(rows[0]["requested_fraction"])
-    fig, axis = plt.subplots(figsize=plot_style.WIDE_FIGSIZE)
+    fig, axis = plt.subplots(figsize=FIGSIZE)
     for policy in POLICIES:
         x, y = attainment_curve(rows, policy)
         axis.step(np.r_[x, horizon], np.r_[y, y[-1]], where="post",
@@ -185,23 +179,23 @@ def write_plot(rows, path):
     axis.text(
         deadline, .4, "30 s deadline", transform=axis.get_xaxis_transform(),
         ha="center", va="center", rotation=90, fontstyle="italic",
-        fontsize=plot_style.LARGE_ANNOTATION_FONT_SIZE,
+        fontsize=9,
         bbox={"facecolor": "white", "edgecolor": "none", "pad": 1},
     )
     axis.set(xlim=(0, min(horizon, 60)), ylim=(0, 1.02),
              xlabel=f"Time to {fraction:.0%} Power-Shed Attainment (s)",
              ylabel="Cumulative Distribution")
-    axis.tick_params(labelsize=plot_style.LARGE_FONT_SIZE)
-    axis.xaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
-    axis.yaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
+    axis.tick_params(labelsize=10)
+    axis.xaxis.label.set_size(10)
+    axis.yaxis.label.set_size(10)
     axis.grid(alpha=.25)
-    axis.legend(loc="upper right", framealpha=1, facecolor="white",
-                edgecolor="none", fontsize=plot_style.LARGE_LEGEND_FONT_SIZE)
-    fig.tight_layout()
+    handles, labels = axis.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False,
+               fontsize=7, handlelength=1.8, columnspacing=1)
+    fig.subplots_adjust(left=.19, right=.98, bottom=.22, top=.7)
     path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
-        fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
-                    bbox_inches="tight")
+        fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
 

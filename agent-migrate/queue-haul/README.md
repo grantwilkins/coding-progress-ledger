@@ -1345,9 +1345,9 @@ producers must inherit it. Policy identities are:
 
 `plot_workload_policy_attainment.py` pools all eight constraint states and all
 paired workload, timing, and power draws into one modeled time-to-target CDF.
-It compares Queue-Haul with greedy, fixed-action, power-blind, and
-deadline-blind policies, includes the trailing power window, and retains misses
-as missing CDF mass. Every policy appends the same relaxed-horizon
+It compares Queue-Haul with greedy and fixed-action policies, includes the
+trailing power window, and retains misses as missing CDF mass. Every policy
+appends the same relaxed-horizon
 independent-fastest tail for unadmitted sessions after the scoring deadline,
 analogous to the hardware campaign tail. Queue-Haul uses the target-aware
 HiGHS LP with integral target recovery. Regenerate it with
