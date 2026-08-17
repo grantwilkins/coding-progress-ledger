@@ -81,7 +81,7 @@ def test_plot_compares_matching_hardware_with_one_shared_slo(tmp_path,
     lines = plt.gcf().axes[0].lines
 
     assert [line.get_label() for line in lines] == [
-        "OpenHands Agentic · A100", "OpenHands Agentic · H100", "SLO"]
+        "Agent - A100", "Agent - H100", "SLO"]
     assert [list(line.get_ydata()) for line in lines] == [[3], [1], [2, 2]]
     plt.close("all")
 

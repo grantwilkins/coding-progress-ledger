@@ -40,8 +40,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                 [row["offered_rps"] for row in rows],
                 [row[f"{field}_median"] for row in rows],
                 label=(plot_style.AGENTIC_WORKLOAD_NAME if h100 is None else
-                       f"{plot_style.AGENTIC_WORKLOAD_NAME} · "
-                       f"{plot_style.AGENTIC_HARDWARE_NAMES[hardware]}"),
+                       f"Agent - {plot_style.AGENTIC_HARDWARE_NAMES[hardware]}"),
                 color=plot_style.AGENTIC_HARDWARE_COLORS[hardware],
                 marker=plot_style.AGENTIC_HARDWARE_MARKERS[hardware],
                 linewidth=1.5,
