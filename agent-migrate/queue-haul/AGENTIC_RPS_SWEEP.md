@@ -19,12 +19,21 @@ unless a limit is explicitly requested.
 - Models: GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B-it.
 - One compact OpenHands-derived shape: 3,920 prompt tokens and exactly 1,024
   generated tokens (`ignore_eos=true`).
-- Seeded open-loop Poisson arrivals at 0.125, 0.25, 0.5, 1, 2, 4, and 8 RPS.
+- Seeded open-loop Poisson arrivals at the original 0.125, 0.25, 0.5, 1, 2,
+  4, and 8 RPS discovery points.
+- Predeclared dense refinement points at 3, 5, 6, and 7 RPS for GPT-OSS
+  and Gemma, and at 0.6, 0.7, 0.8, and 0.9 RPS for Qwen. These localize
+  each observed SLO knee without wasting Qwen cells deep in overload.
 - 32 requests at every rate, with no concurrency cap.
 - Every rate runs even after a violation. Failures and engine exits are data,
   not campaign gates.
 - Repeat the first discovery violation and the preceding rate twice more. The
   three boundary observations produce median curves and min-max whiskers.
+
+The dense plan is schema v2 and names the immutable schema-v1 parent plan
+hash. A copied parent result is reusable only at one of the seven original
+rates and only when its schema, plan hash, and complete cell identity match.
+The four added rates always produce new v2 cells.
 
 The fixed SLOs are 2.0 s TTFT / 0.1 s TPOT for GPT-OSS and 2.0 s TTFT /
 0.2 s TPOT for Gemma. Qwen uses twice its 0.125-RPS P90 baseline for each
@@ -65,7 +74,6 @@ uv run python plot_agentic_rps_sweep.py \
 ```
 
 The plot command writes one aligned two-panel PDF and PNG. Both panels use raw
-seconds and literal RPS tick values with base-2 spacing for the geometric
-sweep; each contains one canonical model curve, model-colored SLO lines,
-first-confirmed-violation markers, and min-max whiskers at repeated boundary
-rates.
+seconds and a conventional linear RPS axis; each contains one canonical model
+curve, model-colored SLO lines, first-confirmed-violation markers, and min-max
+whiskers at repeated boundary rates.

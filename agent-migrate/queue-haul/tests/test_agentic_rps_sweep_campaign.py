@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 import agentic_rps_sweep_campaign as campaign
 
 
@@ -13,12 +15,21 @@ def test_plan_is_fixed_shape_open_loop_and_runs_every_rate():
         "output_tokens": 1024,
         "source": "fixed compact shape derived from the OpenHands coding trace",
     }
-    assert plan["rates_rps"] == [.125, .25, .5, 1, 2, 4, 8]
+    assert plan["rates_rps"] == [
+        .125, .25, .5, .6, .7, .8, .9, 1, 2, 3, 4, 5, 6, 7, 8,
+    ]
+    assert plan["rates_rps_by_model"]["openai/gpt-oss-20b"] == [
+        .125, .25, .5, 1, 2, 3, 4, 5, 6, 7, 8,
+    ]
+    assert plan["rates_rps_by_model"]["Qwen/Qwen3.8-27B"] == [
+        .125, .25, .5, .6, .7, .8, .9, 1, 2, 4, 8,
+    ]
     assert plan["requests_per_point"] == 32
     assert plan["semantics"]["open_loop_poisson"]
     assert plan["semantics"]["max_concurrency"] is None
     assert plan["semantics"]["run_all_rates_after_violation"]
     assert not plan["semantics"]["slo_is_control_flow"]
+    assert plan["semantics"]["refinement_points_predeclared"]
     assert plan["slo"]["fixed"]["google/gemma-4-26B-A4B-it"] == {
         "p90_ttft_s": 2,
         "p90_mean_tpot_s": .2,
@@ -67,19 +78,22 @@ def write_result(root, row):
 
 def populate_results(plan, root):
     for model in campaign.MODELS:
-        ttfts = (1.0, 1.5, 2.5, 3.5, 5.0, 7.0, 9.0)
-        tpots = (.04, .06, .09, .12, .2, .3, .4)
-        if model == "openai/gpt-oss-20b":
-            ttfts = (1.0, 1.5, 2.5, 3.5, 5.0, 7.0, 9.0)
-            tpots = (.04, .06, .08, .12, .2, .3, .4)
-        for rate, ttft, tpot in zip(campaign.RATES_RPS, ttfts, tpots):
+        violation = .8 if model == "Qwen/Qwen3.8-27B" else 6
+        rates = campaign.model_rates(plan, model)
+        predecessor = rates[rates.index(violation) - 1]
+        for rate in rates:
+            ttft = 1.0 if rate < violation else 3.0 + rate / 100
+            tpot = .04
             write_result(root, synthetic_result(
                 plan, model, rate, 0, ttft, tpot,
             ))
-        for rate, ttft, tpot in ((.25, 1.5, .06), (.5, 2.6, .091)):
+        for rate in (predecessor, violation):
             for repeat, delta in ((1, -.05), (2, .05)):
                 write_result(root, synthetic_result(
-                    plan, model, rate, repeat, ttft + delta, tpot,
+                    plan, model, rate, repeat,
+                    (1.0 if rate < violation else 3.0 + rate / 100)
+                    + delta,
+                    .04,
                 ))
 
 
@@ -90,12 +104,14 @@ def test_reduction_repeats_only_observed_boundary_and_never_gates(tmp_path):
     summary = campaign.reduce(plan, tmp_path)
 
     assert not summary["campaign_gate"]
-    assert len(summary["rows"]) == 33
+    assert len(summary["rows"]) == 45
     for model, result in summary["models"].items():
-        assert result["repeated_boundary_rates"] == [.25, .5]
-        assert result["first_confirmed_violation_rps"] == .5
+        violation = .8 if model == "Qwen/Qwen3.8-27B" else 6
+        predecessor = .7 if model == "Qwen/Qwen3.8-27B" else 5
+        assert result["repeated_boundary_rates"] == [predecessor, violation]
+        assert result["first_confirmed_violation_rps"] == violation
         assert next(row for row in result["curve"]
-                    if row["offered_rps"] == .5)["repeats"] == 3
+                    if row["offered_rps"] == violation)["repeats"] == 3
         if model == "openai/gpt-oss-20b":
             assert result["slo"]["p90_ttft_s"] == 2
             assert result["slo"]["p90_mean_tpot_s"] == .1
@@ -105,6 +121,31 @@ def test_reduction_repeats_only_observed_boundary_and_never_gates(tmp_path):
         else:
             assert result["slo"]["p90_ttft_s"] == 2
             assert result["slo"]["p90_mean_tpot_s"] == .08
+
+
+def test_parent_power_of_two_cells_are_reused_but_refinement_is_not(tmp_path):
+    plan = campaign.make_plan(seed=1)
+    assert plan["parent"]["plan_sha256"] \
+        == "4709014a6cbaa32104531be1c9e0482094a4f3ac6d155fb44d015f13473b67ed"
+    model = "openai/gpt-oss-20b"
+    cell = campaign.cell_spec(model, 4, 0)
+    row = synthetic_result(plan, model, 4, 0, 1.0, .04)
+    row.update({
+        "schema": campaign.PARENT_SCHEMA,
+        "plan_sha256": plan["parent"]["plan_sha256"],
+    })
+    write_result(tmp_path, row)
+
+    assert campaign.read_result(
+        plan, cell, campaign.result_path(tmp_path, cell)) == row
+
+    row["offered_rps"] = 3
+    row["cell_id"] = campaign.cell_id(model, 3, 0)
+    write_result(tmp_path, row)
+    refinement = campaign.cell_spec(model, 3, 0)
+    with pytest.raises(RuntimeError, match="stale or invalid"):
+        campaign.read_result(
+            plan, refinement, campaign.result_path(tmp_path, refinement))
 
 
 def test_service_failures_remain_curve_data():

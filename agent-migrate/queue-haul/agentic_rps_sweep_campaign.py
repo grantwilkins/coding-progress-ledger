@@ -25,9 +25,22 @@ import service_headroom_campaign as headroom
 import single_gpu_capacity_campaign as capacity
 
 
-SCHEMA = "queue-haul-agentic-rps-sweep-v1"
+SCHEMA = "queue-haul-agentic-rps-sweep-v2"
+PARENT_SCHEMA = "queue-haul-agentic-rps-sweep-v1"
 MODELS = tuple(testbed.MODEL_SPECS)
-RATES_RPS = (.125, .25, .5, 1.0, 2.0, 4.0, 8.0)
+BASE_RATES_RPS = (.125, .25, .5, 1.0, 2.0, 4.0, 8.0)
+REFINEMENT_RATES_RPS = {
+    "openai/gpt-oss-20b": (3.0, 5.0, 6.0, 7.0),
+    "Qwen/Qwen3.8-27B": (.6, .7, .8, .9),
+    "google/gemma-4-26B-A4B-it": (3.0, 5.0, 6.0, 7.0),
+}
+RATES_RPS_BY_MODEL = {
+    model: tuple(sorted((*BASE_RATES_RPS, *REFINEMENT_RATES_RPS[model])))
+    for model in MODELS
+}
+RATES_RPS = tuple(sorted({
+    rate for rates in RATES_RPS_BY_MODEL.values() for rate in rates
+}))
 PROMPT_TOKENS = 3920
 OUTPUT_TOKENS = 1024
 REQUESTS_PER_POINT = 32
@@ -56,9 +69,10 @@ def write_json(path: Path, value) -> None:
     temporary.replace(path)
 
 
-def _plan(seed: int) -> dict:
+def _legacy_plan(seed: int) -> dict:
+    """Reconstruct the immutable parent plan used by the completed cells."""
     return {
-        "schema": SCHEMA,
+        "schema": PARENT_SCHEMA,
         "campaign": "agentic_rps_sweep",
         "hardware": "a100",
         "models": list(MODELS),
@@ -70,15 +84,18 @@ def _plan(seed: int) -> dict:
             "output_tokens": OUTPUT_TOKENS,
             "source": "fixed compact shape derived from the OpenHands coding trace",
         },
-        "rates_rps": list(RATES_RPS),
+        "rates_rps": list(BASE_RATES_RPS),
         "requests_per_point": REQUESTS_PER_POINT,
         "boundary_repeats": list(BOUNDARY_REPEATS),
         "request_timeout_s": REQUEST_TIMEOUT_S,
         "slo": {
-            "fixed": FIXED_SLOS,
-            "relative_models": [model for model in MODELS
-                                if model not in FIXED_SLOS],
-            "relative_baseline_rps": RATES_RPS[0],
+            "fixed": {
+                "openai/gpt-oss-20b": FIXED_SLOS["openai/gpt-oss-20b"],
+            },
+            "relative_models": [
+                "Qwen/Qwen3.8-27B", "google/gemma-4-26B-A4B-it",
+            ],
+            "relative_baseline_rps": BASE_RATES_RPS[0],
             "relative_multiplier": 2.0,
         },
         "runtime": capacity.make_runtime_contract(),
@@ -96,6 +113,65 @@ def _plan(seed: int) -> dict:
     }
 
 
+def _plan(seed: int) -> dict:
+    parent = _legacy_plan(seed)
+    return {
+        "schema": SCHEMA,
+        "campaign": "agentic_rps_sweep",
+        "hardware": "a100",
+        "models": list(MODELS),
+        "model_revisions": {
+            model: testbed.model_spec(model).revision for model in MODELS
+        },
+        "request_shape": {
+            "prompt_tokens": PROMPT_TOKENS,
+            "output_tokens": OUTPUT_TOKENS,
+            "source": "fixed compact shape derived from the OpenHands coding trace",
+        },
+        "rates_rps": list(RATES_RPS),
+        "rates_rps_by_model": {
+            model: list(RATES_RPS_BY_MODEL[model]) for model in MODELS
+        },
+        "base_rates_rps": list(BASE_RATES_RPS),
+        "refinement_rates_rps_by_model": {
+            model: list(REFINEMENT_RATES_RPS[model]) for model in MODELS
+        },
+        "parent": {
+            "schema": parent["schema"],
+            "plan_sha256": digest(parent),
+            "reusable_rates_rps": list(BASE_RATES_RPS),
+            "relationship": "same request and runtime contract; denser offered-rate grid",
+        },
+        "implementation": {
+            "campaign_source_sha256": hashlib.sha256(
+                Path(__file__).read_bytes()).hexdigest(),
+        },
+        "requests_per_point": REQUESTS_PER_POINT,
+        "boundary_repeats": list(BOUNDARY_REPEATS),
+        "request_timeout_s": REQUEST_TIMEOUT_S,
+        "slo": {
+            "fixed": FIXED_SLOS,
+            "relative_models": [model for model in MODELS
+                                if model not in FIXED_SLOS],
+            "relative_baseline_rps": BASE_RATES_RPS[0],
+            "relative_multiplier": 2.0,
+        },
+        "runtime": capacity.make_runtime_contract(),
+        "semantics": {
+            "open_loop_poisson": True,
+            "max_concurrency": None,
+            "run_all_rates_after_violation": True,
+            "slo_is_control_flow": False,
+            "service_failures_are_outcomes": True,
+            "unique_private_prompts": True,
+            "forced_exact_output_length": True,
+            "one_engine_per_model_unless_service_restart_is_needed": True,
+            "refinement_points_predeclared": True,
+        },
+        "seed": seed,
+    }
+
+
 def make_plan(seed: int = 1) -> dict:
     plan = _plan(seed)
     validate_plan(plan)
@@ -106,15 +182,7 @@ def validate_plan(plan: dict) -> None:
     seed = plan.get("seed")
     if not isinstance(seed, int):
         raise ValueError("invalid agentic RPS sweep plan")
-    expected = _plan(seed)
-    legacy = _plan(seed)
-    legacy["slo"]["fixed"] = {
-        "openai/gpt-oss-20b": FIXED_SLOS["openai/gpt-oss-20b"],
-    }
-    legacy["slo"]["relative_models"] = [
-        "Qwen/Qwen3.8-27B", "google/gemma-4-26B-A4B-it",
-    ]
-    if plan not in (expected, legacy):
+    if plan != _plan(seed):
         raise ValueError("invalid agentic RPS sweep plan")
 
 
@@ -129,8 +197,11 @@ def stable_seed(plan: dict, rate: float, repeat: int, purpose: str) -> int:
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "little")
 
 
-def arrival_offsets(plan: dict, rate: float, repeat: int) -> tuple[float, ...]:
-    if rate not in RATES_RPS or repeat < 0:
+def arrival_offsets(plan: dict, model: str, rate: float,
+                    repeat: int) -> tuple[float, ...]:
+    if model not in MODELS \
+            or rate not in plan["rates_rps_by_model"][model] \
+            or repeat < 0:
         raise ValueError("unsupported RPS cell")
     return serving.poisson_schedule(
         rate, plan["requests_per_point"],
@@ -156,7 +227,8 @@ def cell_spec(model: str, rate: float, repeat: int) -> dict:
 def prepared_trace(plan: dict, model: str, rate: float,
                    repeat: int) -> list[dict]:
     rows = []
-    for index, offset in enumerate(arrival_offsets(plan, rate, repeat)):
+    for index, offset in enumerate(arrival_offsets(
+            plan, model, rate, repeat)):
         session = serving.Session(
             session_id=f"agentic-{slug(model)}-{rate:g}-{repeat}-{index}",
             prefix_tokens=1,
@@ -291,15 +363,28 @@ def result_path(root: Path, cell: dict) -> Path:
 
 def read_result(plan: dict, cell: dict, path: Path) -> dict:
     result = json.loads(path.read_text())
-    if result.get("schema") != SCHEMA \
-            or result.get("plan_sha256") != digest(plan) \
-            or any(result.get(key) != value for key, value in cell.items()):
+    same_cell = all(result.get(key) == value for key, value in cell.items())
+    current = result.get("schema") == SCHEMA \
+        and result.get("plan_sha256") == digest(plan)
+    parent = plan["parent"]
+    reusable_parent = result.get("schema") == parent["schema"] \
+        and result.get("plan_sha256") == parent["plan_sha256"] \
+        and cell["offered_rps"] in parent["reusable_rates_rps"]
+    if not same_cell or not (current or reusable_parent):
         raise RuntimeError(f"stale or invalid sweep result: {cell['cell_id']}")
     return result
 
 
 def run_specs(plan: dict, model: str, specs: list[dict], root: Path) -> None:
-    pending = [cell for cell in specs if not result_path(root, cell).exists()]
+    pending = []
+    for cell in specs:
+        path = result_path(root, cell)
+        if path.exists():
+            read_result(plan, cell, path)
+        else:
+            pending.append(cell)
+    if not pending:
+        return
     cfg = model_config(model)
     restart = len(list((root / "stacks" / slug(model)).glob("restart-*")))
     while pending:
@@ -317,15 +402,20 @@ def run_specs(plan: dict, model: str, specs: list[dict], root: Path) -> None:
                     break
 
 
-def discovery_specs(model: str) -> list[dict]:
-    return [cell_spec(model, rate, 0) for rate in RATES_RPS]
+def model_rates(plan: dict, model: str) -> tuple[float, ...]:
+    return tuple(plan["rates_rps_by_model"][model])
+
+
+def discovery_specs(plan: dict, model: str) -> list[dict]:
+    return [cell_spec(model, rate, 0) for rate in model_rates(plan, model)]
 
 
 def derive_slo(plan: dict, model: str, discovery: list[dict]) -> dict:
     if model in FIXED_SLOS:
         return {**FIXED_SLOS[model], "source": "fixed"}
+    baseline_rate = plan["slo"]["relative_baseline_rps"]
     baseline = next(row for row in discovery
-                    if row["offered_rps"] == RATES_RPS[0])
+                    if row["offered_rps"] == baseline_rate)
     multiplier = plan["slo"]["relative_multiplier"]
     return {
         "p90_ttft_s": (baseline["p90_ttft_s"] * multiplier
@@ -333,7 +423,7 @@ def derive_slo(plan: dict, model: str, discovery: list[dict]) -> dict:
         "p90_mean_tpot_s": (baseline["p90_mean_tpot_s"] * multiplier
                             if baseline.get("p90_mean_tpot_s") is not None
                             else None),
-        "source": f"{multiplier:g}x-{RATES_RPS[0]:g}-rps-baseline",
+        "source": f"{multiplier:g}x-{baseline_rate:g}-rps-baseline",
     }
 
 
@@ -366,7 +456,7 @@ def load_specs(plan: dict, root: Path, specs: list[dict]) -> list[dict]:
 
 
 def run_model(plan: dict, model: str, root: Path) -> None:
-    discovery_cells = discovery_specs(model)
+    discovery_cells = discovery_specs(plan, model)
     run_specs(plan, model, discovery_cells, root)
     discovery = load_specs(plan, root, discovery_cells)
     slo = derive_slo(plan, model, discovery)
@@ -396,13 +486,14 @@ def aggregate_rate(rows: list[dict], rate: float) -> dict:
 
 
 def reduce_model(plan: dict, model: str, root: Path) -> tuple[list[dict], dict]:
-    discovery_cells = discovery_specs(model)
+    discovery_cells = discovery_specs(plan, model)
     discovery = load_specs(plan, root, discovery_cells)
     slo = derive_slo(plan, model, discovery)
     rates = boundary_rates(discovery, slo)
     extra_cells = boundary_specs(model, rates)
     rows = discovery + load_specs(plan, root, extra_cells)
-    aggregated = [aggregate_rate(rows, rate) for rate in RATES_RPS]
+    aggregated = [aggregate_rate(rows, rate)
+                  for rate in model_rates(plan, model)]
     confirmed = next((
         row["offered_rps"] for row in aggregated
         if row["repeats"] >= 3 and metric_violation({
@@ -433,6 +524,7 @@ def reduce(plan: dict, root: Path) -> dict:
         "hardware": plan["hardware"],
         "request_shape": plan["request_shape"],
         "campaign_gate": False,
+        "source_plan_sha256s": sorted({row["plan_sha256"] for row in rows}),
         "rows": rows,
         "models": model_results,
     }

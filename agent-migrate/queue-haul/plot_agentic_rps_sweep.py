@@ -80,10 +80,8 @@ def plot_summary(summary: dict, output: Path) -> None:
                 )
         axis.set_xlabel("Total offered RPS")
         axis.set_ylabel(ylabel)
-        axis.set_xscale("log", base=2)
-        axis.set_xticks(campaign.RATES_RPS,
-                        labels=[f"{rate:g}" for rate in campaign.RATES_RPS])
-        axis.tick_params(axis="x", labelrotation=45)
+        axis.set_xlim(0, max(campaign.RATES_RPS) + .15)
+        axis.set_xticks(range(0, int(max(campaign.RATES_RPS)) + 1))
         axis.grid(alpha=.22)
     handles, labels = axes[0].get_legend_handles_labels()
     handles.extend([
@@ -100,7 +98,7 @@ def plot_summary(summary: dict, output: Path) -> None:
         loc="upper center", bbox_to_anchor=(.5, .99),
     )
     figure.subplots_adjust(
-        left=.11, right=.98, bottom=.22, top=.82, wspace=.35,
+        left=.11, right=.98, bottom=.16, top=.82, wspace=.35,
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("pdf", "png"):
