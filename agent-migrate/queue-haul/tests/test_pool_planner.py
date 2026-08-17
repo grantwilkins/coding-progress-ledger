@@ -31,6 +31,8 @@ Plausible wrong implementations:
 - Credit node shutdown during session selection instead of only after planning.
 - Rank sessions only by initial marginal power and miss a feasible source prefix.
 - Sum initial marginal watts instead of inverting the nonlinear one-source phase curve.
+- Prune an action by total resource use even though it trades one resource for another.
+- Drop the tighter of two nested resource limits while simplifying the maximum-shed MILP.
 - Apply one additive phase-load target across multiple source instances.
 - Correct the LP power target but leave fixed-action baselines on marginal watts.
 - Assign every Lagrangian prefix member to the same cheap pool and fail concrete packing.
@@ -198,6 +200,44 @@ def test_exact_max_shed_uses_phase_power_load_not_candidate_credit():
     power = SimpleNamespace(route={"prefill": "source", "decode": "source"},
                             ell={"prefill": .1, "decode": .9})
     assert pool_planner._max_shed(table, power) == {1}
+
+
+def test_exact_max_shed_keeps_resource_incomparable_actions():
+    sessions = tuple(SimpleNamespace(session_id=name) for name in "ab")
+    candidates = (
+        Candidate(0, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0),
+        Candidate(0, "kv_transfer", 0, 1, 1, 1, (), 0, (0, 0), 0),
+        Candidate(1, "replay", 0, 2, 1, 1, (), 0, (0, 0), 0),
+    )
+    table = CandidateTable(
+        sessions, candidates,
+        csr_matrix((np.ones(3), ((0, 0, 1), range(3))), shape=(2, 3)),
+        csr_matrix(np.array(((.8, 0, .3), (0, .9, 0)))),
+        ("route", "compute"), (1, 1), ("fraction", "fraction"), 1,
+    )
+    power = SimpleNamespace(
+        route={name: "source" for name in "ab"}, ell={"a": 1, "b": 2},
+    )
+
+    assert pool_planner._max_shed(table, power, .0025) == {1, 2}
+
+
+def test_exact_max_shed_keeps_the_tighter_resource_row():
+    sessions = tuple(SimpleNamespace(session_id=name) for name in "ab")
+    candidates = tuple(
+        Candidate(i, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0)
+        for i in range(2)
+    )
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(2)),
+        csr_matrix(np.array(((.6, .6), (.3, .3)))),
+        ("tight", "loose"), (1, 1), ("fraction", "fraction"), 1,
+    )
+    power = SimpleNamespace(
+        route={name: "source" for name in "ab"}, ell={"a": 1, "b": 1},
+    )
+
+    assert len(pool_planner._max_shed(table, power, .0025)) == 1
 
 
 def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):

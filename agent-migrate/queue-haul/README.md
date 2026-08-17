@@ -922,19 +922,22 @@ the prediction gate. The existing service-debt machinery remains disabled until
 a completed headroom campaign identifies an SLO budget. HBM remains
 method-independent because either method leaves the same resident KV state.
 
-`workload_power_frontier.py` carries 100 deterministic paired Queue-Haul draws
-through all eight constraint states. Its main figure shows the three single
-bottlenecks, all bound, and none bound, using the monotone envelope
-at the 100% endpoint to recover each draw's maximum safely attained plan, then
-plots the fraction of draws capable of meeting each source-power request. The
-three intermediate two-factor states remain available in the raw case table.
-Canonical color and line styles distinguish the five displayed states. This
-avoids the uninformative identity obtained when every
-target-aware policy is plotted against the target it is trying to meet. The
-raw CSV retains every paired draw and request. Watts
-are normalized by each draw's removable source power. The companion
-`_power.csv` retains 5th, median, and 95th percentile watts. These are modeled
-sensitivity ranges, not confidence intervals or new hardware observations.
+`workload_power_frontier.py` carries 100 deterministic paired draws through all
+eight constraint states. For each draw and state, the main figure uses an
+integer MILP that maximizes removed phase load `sum(a*f + b*g)` under the same
+session, route, HBM, migration, and destination-compute constraints. The MILP
+has a certified 0.25% relative gap; exact nonlinear source watts are evaluated
+after packing. A feasible result from a tighter paired state is retained after
+constraint release, so the reported capacity cannot physically decrease; an
+independent-solve inversion above 1% hard-fails. The figure shows the three
+single bottlenecks, all bound, and none bound, while the raw table retains all
+eight states and every target-specific Queue-Haul LP solve. Watts are normalized
+by each draw's removable source power. The current phase profile is
+`outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json`;
+one joint `(p0, delta, a, b)` bootstrap tuple is shared by all eight states in a
+draw and recorded in every row. The companion `_power.csv` retains 5th, median,
+and 95th percentile watts. These are modeled sensitivity ranges, not confidence
+intervals or new hardware observations.
 
 ```bash
 uv run python queue-haul/workload_power_frontier.py

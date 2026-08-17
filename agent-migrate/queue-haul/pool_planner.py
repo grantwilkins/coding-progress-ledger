@@ -32,6 +32,8 @@ COLUMN_GROWTH_SWEEPS = 20
 COLUMN_TOLERANCE = 1e-8
 COLUMN_GAP_TOLERANCE = 1e-7
 NATIVE_PRICING_CHUNK = 65_536
+MAX_SHED_CAPACITY_GAP = .0025
+MAX_SHED_SOLVERS = {"max_shed", "max_shed_capacity"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -757,7 +759,7 @@ def phase_one_capacity_duals(table: CandidateTable):
     return -float(result.fun), np.maximum(0, duals)
 
 
-def _max_shed(table: CandidateTable, power: ExpectedPower):
+def _max_shed(table: CandidateTable, power: ExpectedPower, relative_gap=0):
     """Maximize exact awake-state shed for one source instance."""
     if not table.candidates:
         return set()
@@ -765,20 +767,61 @@ def _max_shed(table: CandidateTable, power: ExpectedPower):
     if len({power.route[session_ids[candidate.session]]
             for candidate in table.candidates}) != 1:
         raise ValueError("max_shed requires one source instance")
-    loads = np.asarray([
-        power.ell[session_ids[candidate.session]]
-        for candidate in table.candidates
-    ])
-    matrix = vstack((table.incidence, table.resources), format="csr")
+    columns, rows = tuple(range(len(table.candidates))), \
+        tuple(range(table.resources.shape[0]))
+    if relative_gap:
+        resources = table.resources.toarray()
+        columns = tuple(i for i, candidate in enumerate(table.candidates)
+                        if not any(
+                            other != i
+                            and table.candidates[other].session == candidate.session
+                            and table.candidates[other].pool == candidate.pool
+                            and np.all(resources[:, other]
+                                       <= resources[:, i] + 1e-12)
+                            and np.any(resources[:, other]
+                                       < resources[:, i] - 1e-12)
+                            for other in range(len(table.candidates))))
+        groups = tuple(tuple(
+            column for column, i in enumerate(columns)
+            if table.candidates[i].session == session
+        ) for session in range(len(table.sessions)))
+        upper = np.asarray([
+            sum(resources[row, columns][list(group)].max(initial=0)
+                for group in groups)
+            for row in rows
+        ])
+        rows = tuple(row for row in rows if upper[row] > 1 + 1e-12
+                     and not any(
+                         other != row
+                         and np.all(resources[other, columns]
+                                    >= resources[row, columns] - 1e-12)
+                         and (other < row or np.any(
+                             resources[other, columns]
+                             > resources[row, columns] + 1e-12))
+                         for other in range(resources.shape[0])))
+    if relative_gap:
+        loads = np.asarray([
+            power.ell[session_ids[table.candidates[i].session]] for i in columns
+        ])
+        matrix = vstack((table.incidence[:, columns],
+                         table.resources[list(rows)][:, columns]), format="csr")
+    else:
+        loads = np.asarray([
+            power.ell[session_ids[candidate.session]]
+            for candidate in table.candidates
+        ])
+        matrix = vstack((table.incidence, table.resources), format="csr")
     base = LinearConstraint(matrix, -np.inf, 1)
     bounds, integer = Bounds(0, 1), np.ones(len(loads))
+    if not 0 <= relative_gap < 1:
+        raise ValueError("maximum-shed relative gap must lie in [0, 1)")
 
     def optimize(cost, constraints):
         result = milp(
             cost, integrality=integer, bounds=bounds, constraints=constraints,
-            options={"mip_rel_gap": 0},
+            options={"mip_rel_gap": relative_gap},
         )
-        if not result.success:
+        if not result.success or result.mip_gap > relative_gap + 1e-12:
             raise RuntimeError(f"maximum-shed MILP returned {result.message}")
         return result.x
 
@@ -788,7 +831,7 @@ def _max_shed(table: CandidateTable, power: ExpectedPower):
     # take orders of magnitude longer to prove because HiGHS must reason about
     # an almost-exact dense equality; it does not change the reference shed.
     maximum = optimize(-loads, base)
-    return set(np.flatnonzero(maximum > .5))
+    return {columns[i] for i in np.flatnonzero(maximum > .5)}
 
 
 def _scarcity_prices(table, matrix, eligible=None):
@@ -2466,7 +2509,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
     streamed = solver in {"lp_column_generation_lazy", "lp_column_generation_native"}
     selection_credits = None
     if power is not None and solver not in {
-            "greedy_lagrangian", "max_shed", "lp_power_blind"}:
+            "greedy_lagrangian", *MAX_SHED_SOLVERS, "lp_power_blind"}:
         sessions = tuple(s for s in _local_sessions(scenario) if s.state == "active")
         selection_credits, target, _ = _phase_power_target(
             power, sessions, target,
@@ -2492,8 +2535,11 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
                 replace(candidate, gain_w=gain) for candidate in table.candidates))
     if streamed:
         pass
-    elif solver == "max_shed":
-        selected = _max_shed(table, power)
+    elif solver in MAX_SHED_SOLVERS:
+        selected = _max_shed(
+            table, power,
+            MAX_SHED_CAPACITY_GAP if solver == "max_shed_capacity" else 0,
+        )
     elif solver == "greedy_lagrangian":
         selected, assignment = _greedy_lagrangian(
             table, target, power, architecture, scenario, mode, True,
@@ -2515,7 +2561,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
         assignment, cut = _pack(
             table, selected, architecture, scenario, mode, repair=True,
         )
-        if solver == "max_shed" and cut:
+        if solver in MAX_SHED_SOLVERS and cut:
             raise RuntimeError("maximum-shed set is not replica-packable")
         selected.difference_update(cut)
         repairs = len(cut)
@@ -2533,7 +2579,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture,
                      admission_mode=None):
-    if solver not in {"greedy", "greedy_lagrangian", "max_shed",
+    if solver not in {"greedy", "greedy_lagrangian", *MAX_SHED_SOLVERS,
                       "isolated_fastest", "random", "replay_only", "kv_only",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
                       "lp_power_blind",
@@ -2590,7 +2636,7 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         deadline_repairs += 1
         deadline_repair_s += perf_counter() - started
     if power.case.phase_power is not None and solver not in {
-            "greedy_lagrangian", "max_shed", "lp_power_blind"}:
+            "greedy_lagrangian", *MAX_SHED_SOLVERS, "lp_power_blind"}:
         _, required_load, _ = _phase_power_target(power, table.sessions, target)
         credited_load = sum(table.candidates[i].credit for i in selected)
         if (credited_load >= required_load - 1e-9) != \

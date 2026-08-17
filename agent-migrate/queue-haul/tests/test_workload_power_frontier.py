@@ -1,13 +1,14 @@
 """
 Claim:
 The workload frontier pairs every Queue-Haul request within each sampled
-workload/calibration draw, credits only safe shed by 30 seconds, normalizes by
-that draw's removable power, and weights each draw-by-factor case once.
+workload/calibration draw, uses a certified integer phase-load maximum for its
+capacity curve, normalizes by that draw's removable power, and weights each
+draw-by-factor case once.
 
 Plausible wrong implementations:
 - Resample the workload, timing, or power model independently by request.
 - Divide attained power by requested power or a global maximum.
-- Credit an unsafe higher-request plan instead of retaining the last safe plan.
+- Use the rounded target-following LP plateau as the capacity endpoint.
 - Overweight a case because it contributes extra rows or policies.
 - Use a different Queue-Haul draw or solver at the shared two-thirds point.
 - Plot target-following policies against their own target instead of the
@@ -15,17 +16,18 @@ Plausible wrong implementations:
 - Collapse distinct bandwidth states into a shared curve.
 - Plot an intermediate joint state or omit one of the five declared display states.
 - Filter the raw factorial sweep down to only the five displayed states.
-- Put the exact physical maximum on the LP boundary instead of using the
-  explicit maximum-attainable fallback.
+- Maximize the obsolete one-dimensional power load instead of sampled af+bg.
+- Let a released constraint have lower capacity than its paired constrained case.
 """
 
 import numpy as np
 import pytest
 
 import workload_adaptation_campaign as adaptation
+from profiles import ModelProfile
 from workload_power_frontier import (
-    DISPLAY_STATES, SOLVERS, capacity_summary, planning_request_w,
-    power_summary, request_grid, sweep,
+    CAPACITY_SOLVER, DISPLAY_STATES, SOLVERS, capacity_release_audit,
+    capacity_summary, planning_request_w, power_summary, request_grid, sweep,
 )
 
 
@@ -34,19 +36,17 @@ def test_display_states_match_the_five_declared_action_cases():
     assert len(DISPLAY_STATES) == len(set(DISPLAY_STATES)) == 5
 
 
-def test_maximum_capacity_probe_is_above_only_the_exact_endpoint():
-    maximum = 42
-
-    assert planning_request_w(2 / 3, maximum) == 28
-    assert planning_request_w(1, maximum) == \
-        maximum + adaptation.POWER_TOLERANCE_W
+def test_raw_lp_endpoint_explicitly_requests_its_maximum_fallback():
+    assert planning_request_w(2 / 3, 42) == 28
+    assert planning_request_w(1, 42) == 42 + adaptation.POWER_TOLERANCE_W
 
 
 def test_capacity_summary_uses_one_maximum_per_paired_draw():
     rows = [{
         "replicate": replicate, "factor_case_id": state,
         "policy": "queue_haul_lp", "requested_fraction": 1,
-        "safely_attained_fraction": capacity,
+        "capacity_mip_shed_w": capacity,
+        "maximum_attainable_fraction": capacity,
     } for state, _, _ in adaptation.factorial_cases()
             for replicate, capacity in enumerate((.25, .75))]
 
@@ -55,8 +55,29 @@ def test_capacity_summary_uses_one_maximum_per_paired_draw():
 
     assert [row["attainment_rate"] for row in none] == [1, .5, 0]
     assert all(row["cases"] == 2 for row in summary)
-    with pytest.raises(RuntimeError, match="one maximum"):
-        capacity_summary([*rows, rows[0]], grid=(0, .5, 1))
+    conflicting = {**rows[0], "maximum_attainable_fraction": .5}
+    with pytest.raises(RuntimeError, match="conflicting"):
+        capacity_summary([*rows, conflicting], grid=(0, .5, 1))
+
+
+def test_capacity_release_closure_retains_a_known_tighter_plan():
+    rows = [{
+        "replicate": 0, "factor_case_id": state,
+        "maximum_removable_w": 100,
+        "capacity_mip_shed_w": 60 if state == "bandwidth" else 59,
+    } for state, _, _ in adaptation.factorial_cases()]
+
+    audit = capacity_release_audit(rows, close=True)
+
+    none = next(row for row in rows if row["factor_case_id"] == "none")
+    assert none["maximum_attainable_shed_w"] == 60
+    assert audit["raw_solver_inversions"] == 1
+
+    next(row for row in rows if row["factor_case_id"] == "bandwidth")[
+        "capacity_mip_shed_w"
+    ] = 61
+    with pytest.raises(RuntimeError, match="release tolerance"):
+        capacity_release_audit(rows, close=True)
 
 
 def test_power_summary_weights_cases_once_and_keeps_watts():
@@ -85,10 +106,22 @@ def test_sampled_frontier_is_paired_normalized_and_monotone():
     assert len({row["power_bootstrap_index"] for row in rows}) == 1
     assert len({row["timing_fit_sha256"] for row in rows}) == 1
     assert len({row["maximum_removable_w"] for row in rows}) == 1
+    assert {row["capacity_solver"] for row in rows} == {CAPACITY_SOLVER}
+    assert capacity_release_audit(rows)["violations"] == 0
     assert all(np.isclose(
         row["requested_shed_w"],
         row["requested_fraction"] * row["maximum_removable_w"],
     ) for row in rows)
+    profile = ModelProfile.load(adaptation.PROFILE)
+    bootstrap = profile.case().phase_power.bootstrap
+    assert all(np.allclose(
+        (row["phase_p0_w"], row["phase_delta_w"],
+         row["phase_a_s_per_prefill_token"],
+         row["phase_b_s_per_decode_token"]),
+        bootstrap[row["power_bootstrap_index"]],
+    ) for row in rows)
+    assert all(0 <= row["maximum_attainable_fraction"] <= 1 + 1e-8
+               for row in rows)
     assert all(np.isclose(
         row["safely_attained_fraction"],
         row["safely_attained_shed_w"] / row["maximum_removable_w"],

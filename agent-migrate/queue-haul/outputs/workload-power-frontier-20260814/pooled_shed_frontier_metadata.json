@@ -7,7 +7,18 @@
     "physical_route_mbps": 1000,
     "pipeline_timing_condition": "controlled_40"
   },
-  "claim": "modeled Queue-Haul source-power capacity distribution across regional constraint states with exact nonlinear one-source power targets",
+  "capacity_reference": {
+    "mip_relative_gap": 0.0025,
+    "objective": "maximize removed z=sum(a*f+b*g) with integer session actions",
+    "release_audit": {
+      "comparisons": 1200,
+      "maximum_monotone_uplift_fraction": 0.004162285880763424,
+      "raw_solver_inversions": 55,
+      "violations": 0
+    },
+    "solver": "max_shed_capacity"
+  },
+  "claim": "modeled source-power capacity distribution across regional constraint states using a certified integer maximum-phase-load reference",
   "constraint_style": "canonical color and line styles distinguish the five displayed constraint states",
   "factor_levels": {
     "bandwidth": [
@@ -24,7 +35,7 @@
     ]
   },
   "factor_states": 8,
-  "figure_metric": "fraction of paired draws whose maximum safely attained Queue-Haul source-power fraction meets each request",
+  "figure_metric": "fraction of paired draws whose certified maximum attainable source-power fraction meets each request",
   "inputs": {
     "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
     "outputs/coding-run/migrations.csv": "a3bfa6beb5f622d0d9f3f8e22cc1f362b44428d2817feaec3cbd8bc7281359af",
@@ -44,6 +55,7 @@
     "the main figure shows the three single bottlenecks plus all-bound and none-bound states; the raw case table retains all eight factorial states",
     "the three intermediate two-factor states are retained in raw tables but omitted from the main figure",
     "the frontier remains modeled rather than hardware-measured",
+    "the integer capacity reference is solved to a certified 0.25% relative MIP gap",
     "the bandwidth state caps both physical destination routes at the 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
     "reported shed is awake source-region power rather than net fleet power or energy",
     "Replay endpoint work uses the measured prefill-heavy relative load factor; KV is load-neutral centrally",
@@ -54,7 +66,6 @@
     "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
     "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases"
   ],
-  "maximum_capacity_probe": "the 100% solve requests one numerical tolerance above removable power to invoke the LP's maximum-attainable fallback; the reported request remains 100%",
   "normalization": "safely attained watts / draw-specific removable watts",
   "plotted_constraint_states": [
     "hbm",
@@ -67,6 +78,12 @@
     "queue_haul_lp"
   ],
   "pooled_cases": 800,
+  "power_model": {
+    "a_s_per_prefill_token": 0.0001783544319906395,
+    "b_s_per_decode_token": 0.009287706208604906,
+    "bootstrap_draw": "one joint (p0, delta, a, b) tuple per replicate",
+    "profile": "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json"
+  },
   "power_scope": "steady awake source-region power; destination power excluded",
   "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
   "regions": [
@@ -86,7 +103,7 @@
     1.0
   ],
   "samples": 100,
-  "schema": "queue-haul-workload-power-frontier-v7",
+  "schema": "queue-haul-workload-power-frontier-v8",
   "seed": 1001,
   "sessions_per_pack": 28,
   "solvers": {
