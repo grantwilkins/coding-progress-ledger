@@ -25,6 +25,7 @@ OUTPUT_TOKENS = 1024
 REQUESTS = 32
 BOUNDARY_REPEATS = 2
 DEFAULT_SEED = 20260816
+LOWER_BRACKET_RPS = RATES[0] / 2
 
 
 def rate_label(rate: float) -> str:
@@ -35,6 +36,12 @@ def cell(rate: float, rate_index: int, replicate: int, seed: int) -> dict:
     return {"cell_id": f"rps{rate_label(rate)}-rep{replicate}",
             "offered_rps": rate, "replicate": replicate,
             "poisson_seed": seed + rate_index + replicate * len(RATES)}
+
+
+def lower_cell(replicate: int, seed: int) -> dict:
+    return {"cell_id": f"rps{rate_label(LOWER_BRACKET_RPS)}-rep{replicate}",
+            "offered_rps": LOWER_BRACKET_RPS, "replicate": replicate,
+            "poisson_seed": seed + 3 * len(RATES) + replicate}
 
 
 def make_plan(model: str, ttft_slo_s: float = 1., tpot_slo_s: float = .1,
@@ -49,9 +56,12 @@ def make_plan(model: str, ttft_slo_s: float = 1., tpot_slo_s: float = .1,
             "seed": seed, "request_timeout_s": 1200, "drain_s": 1200,
             "ttft_slo_s": ttft_slo_s, "tpot_slo_s": tpot_slo_s,
             "boundary_repeats": BOUNDARY_REPEATS,
+            "conditional_lower_bracket_rps": LOWER_BRACKET_RPS,
             "image_sha256": stack["image_sha256"], "stack": stack["stack"],
             "base_cells": [cell(rate, index, 0, seed)
-                           for index, rate in enumerate(RATES)]}
+                           for index, rate in enumerate(RATES)],
+            "lower_bracket_cells": [lower_cell(replicate, seed)
+                                    for replicate in range(BOUNDARY_REPEATS + 1)]}
 
 
 def read_plan(path: Path) -> dict:
@@ -187,14 +197,15 @@ def run_rate(plan: dict, expected: dict, cfg: testbed.Config, stack,
     return result
 
 
-def first_boundary(rows: list[dict]) -> tuple[float, float]:
+def first_boundary(rows: list[dict]) -> tuple[float | None, float]:
     ordered = sorted((row for row in rows if row["replicate"] == 0),
                      key=lambda row: row["offered_rps"])
     index = next((index for index, row in enumerate(ordered)
                   if row["slo_violation"]), None)
-    if index is None or index == 0:
+    if index is None:
         raise RuntimeError("SLO boundary is not bracketed by the offered rates")
-    return ordered[index - 1]["offered_rps"], ordered[index]["offered_rps"]
+    return (ordered[index - 1]["offered_rps"] if index else None,
+            ordered[index]["offered_rps"])
 
 
 def aggregate(rows: list[dict], plan: dict) -> list[dict]:
@@ -202,7 +213,7 @@ def aggregate(rows: list[dict], plan: dict) -> list[dict]:
     for row in rows:
         grouped.setdefault(row["offered_rps"], []).append(row)
     output = []
-    for rate in plan["rates_rps"]:
+    for rate in sorted(grouped):
         group = sorted(grouped[rate], key=lambda row: row["replicate"])
         item = {"model": plan["model"], "offered_rps": rate,
                 "replicates": len(group),
@@ -252,37 +263,36 @@ def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
     stack_index = len(list((root / "stacks").glob("attempt-*"))) + 1
     with service.destination_stack(cfg, root / "stacks" / f"attempt-{stack_index}",
                                    "h100", [], identity) as stack:
-        rows = []
-        for expected in plan["base_cells"]:
-            path = root / "base" / expected["cell_id"]
+        def one(expected: dict) -> dict:
+            group = "base" if expected in plan["base_cells"] else "boundary"
+            path = root / group / expected["cell_id"]
             if (path / "result.json").exists():
                 result = json.loads((path / "result.json").read_text())
                 validate_resume(result, plan, expected, identity)
                 if result["status"] == "complete":
-                    rows.append(result); continue
+                    return result
                 archive_partial(path)
             elif path.exists():
                 archive_partial(path)
-            rows.append(run_rate(plan, expected, cfg, stack, identity, path, sessions))
-            if rows[-1]["engine_exited"] or not rows[-1]["drained"]:
+            result = run_rate(plan, expected, cfg, stack, identity, path, sessions)
+            if result["engine_exited"] or not result["drained"]:
                 raise RuntimeError("service outcome requires a clean engine restart")
+            return result
+
+        rows = [one(expected) for expected in plan["base_cells"]]
         boundary = first_boundary(rows)
+        if boundary[0] is None:
+            expected = plan["lower_bracket_cells"][0]
+            rows.append(one(expected))
+            if rows[-1]["slo_violation"]:
+                raise RuntimeError("conditional lower rate also violates the SLO")
+            boundary = expected["offered_rps"], boundary[1]
         for replicate in range(1, BOUNDARY_REPEATS + 1):
             for rate in boundary:
-                index = RATES.index(rate)
-                expected = cell(rate, index, replicate, plan["seed"])
-                path = root / "boundary" / expected["cell_id"]
-                if (path / "result.json").exists():
-                    result = json.loads((path / "result.json").read_text())
-                    validate_resume(result, plan, expected, identity)
-                    if result["status"] == "complete":
-                        rows.append(result); continue
-                    archive_partial(path)
-                elif path.exists():
-                    archive_partial(path)
-                rows.append(run_rate(plan, expected, cfg, stack, identity, path, sessions))
-                if rows[-1]["engine_exited"] or not rows[-1]["drained"]:
-                    raise RuntimeError("service outcome requires a clean engine restart")
+                expected = (plan["lower_bracket_cells"][replicate]
+                            if rate == LOWER_BRACKET_RPS else
+                            cell(rate, RATES.index(rate), replicate, plan["seed"]))
+                rows.append(one(expected))
         write_summary(root, plan, rows, boundary, identity)
 
 

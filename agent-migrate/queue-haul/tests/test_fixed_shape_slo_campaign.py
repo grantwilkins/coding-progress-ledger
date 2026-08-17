@@ -18,6 +18,7 @@ def test_plan_freezes_exact_shape_poisson_rates_and_unlimited_concurrency():
     assert (plan["input_tokens"], plan["output_tokens"],
             plan["requests_per_point"], plan["max_concurrency"]) == (3920, 1024, 32, None)
     assert [row["poisson_seed"] for row in plan["base_cells"]] == list(range(7, 14))
+    assert [row["poisson_seed"] for row in plan["lower_bracket_cells"]] == [28, 29, 30]
     assert len(campaign.offered_trace(.125, 7)) == 32
     assert campaign.offered_trace(.125, 7) == campaign.offered_trace(.125, 7)
 
@@ -27,8 +28,9 @@ def test_boundary_uses_first_combined_slo_violation_and_predecessor():
     assert campaign.first_boundary(rows) == (1, 2)
     with pytest.raises(RuntimeError, match="not bracketed"):
         campaign.first_boundary([result(rate) for rate in campaign.RATES])
-    with pytest.raises(RuntimeError, match="not bracketed"):
-        campaign.first_boundary([result(rate, violation=True) for rate in campaign.RATES])
+    assert campaign.first_boundary([
+        result(rate, violation=True) for rate in campaign.RATES
+    ]) == (None, .125)
 
 
 def test_boundary_aggregation_reports_three_run_min_max_whiskers():
