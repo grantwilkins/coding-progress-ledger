@@ -245,7 +245,7 @@ def plot_response(curve: list[dict], transitions: list[dict], cutoff_s: float,
     cdf_axis.axvline(
         cutoff_s, color=plot_style.EVENT_COLORS["shed_target"],
         linestyle=plot_style.EVENT_LINESTYLES["repair_decision"],
-        linewidth=1, label="25 s cutoff")
+        linewidth=1, label="25 s goal")
     cdf_axis.set(xlim=(0, horizon_s), ylim=(0, 100),
                  xticks=(0, 25, 60, 120), yticks=(0, 50, 100),
                  xlabel="Time (s)", ylabel="Target attainment (%)")

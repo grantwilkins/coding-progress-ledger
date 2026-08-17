@@ -114,6 +114,8 @@ def test_response_plots_are_separate_and_use_requested_labels(monkeypatch):
                for figure in figures)
     assert saved == [Path("repair_response.png"), Path("repair_response.pdf"),
                      Path("repair_actions.png"), Path("repair_actions.pdf")]
+    assert "25 s goal" in [text.get_text() for text in
+                           figures[0].axes[0].get_legend().get_texts()]
     assert [tick.get_text() for tick in figures[1].axes[0].get_yticklabels()] == [
         "Bandwidth", "Prefill", "Both"]
     assert figures[1].axes[0].get_xlabel() == "Actions (%)"
