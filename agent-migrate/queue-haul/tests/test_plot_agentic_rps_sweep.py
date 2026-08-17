@@ -42,8 +42,10 @@ def test_plot_selects_sorted_gpt_oss_curve_and_fixed_slos(tmp_path, monkeypatch)
     assert len(axes) == 2
     assert plt.gcf().get_figwidth() <= 3.5
     assert axes[0].get_position().x0 < axes[1].get_position().x0
-    assert axes[0].get_xlim() == axes[1].get_xlim() == (0, 10)
-    assert axes[1].get_ylim() == (0, 50)
+    assert axes[0].get_xlim() == axes[1].get_xlim() == (0, 8.25)
+    assert list(axes[0].get_xticks()) == [0, 2, 4, 6, 8]
+    assert axes[1].get_ylim() == (0, 52)
+    assert axes[1].get_yticks()[-1] == 50
     assert list(axes[0].lines[0].get_xdata()) == [1, 2]
     assert list(axes[0].lines[0].get_ydata()) == [1, 2]
     assert axes[0].lines[0].get_label() == "OpenHands Agentic"

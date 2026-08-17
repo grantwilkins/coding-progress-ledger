@@ -55,8 +55,10 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
         axis.tick_params(labelsize=plot_style.HALF_COLUMN_FONT_SIZE)
         axis.grid(alpha=.2)
     for axis in axes:
-        axis.set_xlim(0, 10)
-    axes[1].set_ylim(0, 50)
+        axis.set_xlim(0, 8.25)
+        axis.set_xticks((0, 2, 4, 6, 8))
+    axes[1].set_ylim(0, 52)
+    axes[1].set_yticks((0, 10, 20, 30, 40, 50))
     handles, labels = axes[0].get_legend_handles_labels()
     figure.legend(handles, labels, frameon=False, ncol=len(handles),
                   loc="upper center", bbox_to_anchor=(.5, .94),
