@@ -206,7 +206,7 @@ def runtime_identity(plan: dict, cfg: testbed.Config, commands: dict) -> dict:
 
 
 def http_json(host: str, port: int, path: str) -> dict:
-    with urllib.request.urlopen(f"http://{host}:{port}{path}", timeout=30) as response:
+    with urllib.request.urlopen(f"http://{host}:{port}{path}", timeout=180) as response:
         return json.loads(response.read().decode())
 
 

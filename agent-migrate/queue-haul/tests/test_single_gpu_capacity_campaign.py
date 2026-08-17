@@ -8,6 +8,20 @@ import migration_testbed as testbed
 import single_gpu_capacity_campaign as capacity
 
 
+def test_server_info_allows_slow_h100_serialization(monkeypatch):
+    calls = []
+    response = type("Response", (), {
+        "__enter__": lambda self: self,
+        "__exit__": lambda self, *_: None,
+        "read": lambda self: b"{}",
+    })()
+    monkeypatch.setattr(capacity.urllib.request, "urlopen",
+                        lambda url, timeout: calls.append((url, timeout)) or response)
+
+    assert capacity.http_json("host", 1, "/server_info") == {}
+    assert calls == [("http://host:1/server_info", 180)]
+
+
 def test_plan_is_single_a100_phase_and_non_gating():
     plan = capacity.make_plan(seed=7)
 
