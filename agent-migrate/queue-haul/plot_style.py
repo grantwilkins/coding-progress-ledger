@@ -146,6 +146,10 @@ SERVICE_DIRECTION_MARKERS = dict(zip(SERVICE_DIRECTIONS, ("D", "^", "s", "o")))
 AGENTIC_WORKLOAD_NAME = "OpenHands Agentic"
 AGENTIC_WORKLOAD_COLOR = MODEL_COLORS["openai/gpt-oss-20b"]
 AGENTIC_WORKLOAD_MARKER = "o"
+AGENTIC_HARDWARE = ("a100", "h100")
+AGENTIC_HARDWARE_NAMES = {"a100": "A100", "h100": "H100"}
+AGENTIC_HARDWARE_COLORS = {"a100": "#0072B2", "h100": "#D55E00"}
+AGENTIC_HARDWARE_MARKERS = {"a100": "o", "h100": "s"}
 REPAIR_NAMES = {
     "unchanged": "No repair needed",
     "applied": "Repair applied",

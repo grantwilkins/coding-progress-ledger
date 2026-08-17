@@ -53,3 +53,40 @@ def test_plot_rejects_legacy_mean_tpot_summary(tmp_path):
     with pytest.raises(ValueError, match="not reduced evidence"):
         plotter.plot({"schema": "queue-haul-agentic-rps-sweep-v2",
                       "stage": "reduced"}, tmp_path)
+
+
+def test_plot_compares_matching_hardware_with_one_shared_slo(tmp_path,
+                                                             monkeypatch):
+    summary = {
+        "schema": plotter.SCHEMA, "stage": "reduced",
+        "models": {plotter.MODEL: {
+            "slo": {"p90_ttft_s": 2, "p90_tpot_s": .1},
+            "curve": [{"offered_rps": 1, "p90_ttft_s_median": 3,
+                       "p90_tpot_s_median": .03}],
+        }},
+    }
+    h100 = {
+        "contract": {"hardware": "h100", "input_tokens": 3920,
+                     "output_tokens": 1024, "requests_per_point": 32},
+        "points": [{"model": plotter.MODEL, "offered_rps": 1,
+                    "p90_ttft_s": 1, "p90_tpot_s": .05}],
+    }
+    monkeypatch.setattr(plt, "close", lambda figure: None)
+
+    plotter.plot(summary, tmp_path, h100)
+    lines = plt.gcf().axes[0].lines
+
+    assert [line.get_label() for line in lines] == [
+        "OpenHands Agentic · A100", "OpenHands Agentic · H100", "SLO"]
+    assert [list(line.get_ydata()) for line in lines] == [[3], [1], [2, 2]]
+    plt.close("all")
+
+
+def test_plot_rejects_mismatched_h100_request_shape(tmp_path):
+    summary = {"schema": plotter.SCHEMA, "stage": "reduced",
+               "models": {plotter.MODEL: {"curve": [], "slo": {}}}}
+    h100 = {"contract": {"hardware": "h100", "input_tokens": 3920,
+                         "output_tokens": 512, "requests_per_point": 32}}
+
+    with pytest.raises(ValueError, match="request shape"):
+        plotter.plot(summary, tmp_path, h100)

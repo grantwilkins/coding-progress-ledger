@@ -102,6 +102,9 @@ uv run python plot_agentic_rps_sweep.py \
   outputs/agentic-rps-sweep
 ```
 
+Pass `--h100-curve outputs/fixed-shape-upper-h100-20260817/curve.json`
+to compare the matching H100 curve against the same fixed SLOs.
+
 The plot command writes a compact, vertically stacked PDF and PNG for
 GPT-OSS-20B. Both panels use raw seconds and an increasing linear RPS axis,
 with the OpenHands Agentic curve and a black dotted SLO line.

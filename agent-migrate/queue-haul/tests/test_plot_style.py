@@ -92,6 +92,13 @@ def test_service_directions_have_one_canonical_visual_identity():
         == len(plot_style.SERVICE_DIRECTIONS)
 
 
+def test_agentic_hardware_has_one_canonical_visual_identity():
+    assert set(plot_style.AGENTIC_HARDWARE) == set(
+        plot_style.AGENTIC_HARDWARE_NAMES) == set(
+        plot_style.AGENTIC_HARDWARE_COLORS) == set(
+        plot_style.AGENTIC_HARDWARE_MARKERS)
+
+
 def test_displayed_resource_states_have_distinct_canonical_colors():
     states = ("hbm", "bandwidth", "dest_compute",
               "bandwidth-dest_compute-hbm", "none")
