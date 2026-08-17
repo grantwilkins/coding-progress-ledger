@@ -102,10 +102,9 @@ uv run python plot_agentic_rps_sweep.py \
   outputs/agentic-rps-sweep
 ```
 
-The plot command writes one aligned two-panel PDF and PNG. Both panels use raw
-seconds and a conventional linear RPS axis; each contains one canonical model
-curve, model-colored SLO lines, first-confirmed-violation markers, and min-max
-whiskers at repeated boundary rates.
+The plot command writes a compact, vertically stacked PDF and PNG for
+GPT-OSS-20B. Both panels use raw seconds and an increasing linear RPS axis,
+with the OpenHands Agentic curve and a black dotted SLO line.
 
 ## H100 GPT-OSS result
 

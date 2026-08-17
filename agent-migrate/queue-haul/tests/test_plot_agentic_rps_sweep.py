@@ -1,39 +1,48 @@
-import agentic_rps_sweep_campaign as campaign
+"""
+Claim:
+The figure plots only GPT-OSS-20B in increasing RPS order against fixed SLOs.
+
+Plausible wrong implementations:
+- Plot all models from the summary.
+- Preserve arbitrary input order instead of increasing RPS.
+- Use observed measurements or model-colored lines as SLOs.
+"""
+
+import matplotlib.pyplot as plt
+
 import plot_agentic_rps_sweep as plotter
 
 
-def result(model):
-    curve = []
-    for index, rate in enumerate(campaign.RATES_RPS):
-        ttft = 1 + index
-        tpot = .04 + index * .03
-        curve.append({
-            "offered_rps": rate,
-            "repeats": 3 if rate in (.25, .5) else 1,
-            "p90_ttft_s_median": ttft,
-            "p90_ttft_s_minimum": ttft - .1,
-            "p90_ttft_s_maximum": ttft + .1,
-            "p90_tpot_s_median": tpot,
-            "p90_tpot_s_minimum": tpot - .005,
-            "p90_tpot_s_maximum": tpot + .005,
-        })
-    return {
-        "model": model,
-        "slo": {"p90_ttft_s": 2, "p90_tpot_s": .1},
-        "first_confirmed_violation_rps": .5,
-        "curve": curve,
-    }
+def test_plot_selects_sorted_gpt_oss_curve_and_fixed_slos(tmp_path, monkeypatch):
+    def result(offset):
+        return {
+            "slo": {"p90_ttft_s": 2, "p90_tpot_s": .1},
+            "curve": [
+                {"offered_rps": rate, "p90_ttft_s_median": offset + rate,
+                 "p90_tpot_s_median": offset + rate / 100}
+                for rate in (2, 1)
+            ],
+        }
 
-
-def test_plot_writes_one_two_panel_figure_with_every_model(tmp_path):
     summary = {
-        "schema": campaign.SCHEMA,
+        "schema": plotter.SCHEMA,
         "stage": "reduced",
-        "models": {model: result(model) for model in campaign.MODELS},
+        "models": {
+            plotter.MODEL: result(0),
+            "plausible/wrong-model": result(10),
+        },
     }
+    monkeypatch.setattr(plt, "close", lambda figure: None)
 
     output = plotter.plot(summary, tmp_path)
+    axes = plt.gcf().axes
 
-    assert output.name == "agentic-rps-sweep"
     assert output.with_suffix(".pdf").is_file()
-    assert output.with_suffix(".png").is_file()
+    assert len(axes) == 2
+    assert list(axes[0].lines[0].get_xdata()) == [1, 2]
+    assert list(axes[0].lines[0].get_ydata()) == [1, 2]
+    assert axes[0].lines[0].get_label() == "OpenHands Agentic"
+    assert set(axes[0].lines[1].get_ydata()) == {2}
+    assert axes[0].lines[1].get_color() == "black"
+    assert axes[0].lines[1].get_linestyle() == ":"
+    plt.close("all")
