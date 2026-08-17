@@ -350,7 +350,6 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
         "VLLM_SERVER_DEV_MODE": "1",
         "VLLM_USE_FLASHINFER_SAMPLER": "0",
-        "TORCH_CUDA_ARCH_LIST": "8.0",
         "TMPDIR": str(tmpdir(role)),
         "VLLM_RPC_BASE_PATH": str(tmpdir(role)),
         "HF_HOME": str(cfg.hf_home),
