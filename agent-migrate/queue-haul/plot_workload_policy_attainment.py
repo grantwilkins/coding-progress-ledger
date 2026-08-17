@@ -21,7 +21,7 @@ from simulate import predict
 
 
 POLICIES = {
-    plot_style.MAX_SHED: "max_shed_capacity", "greedy": "greedy",
+    "queue_haul": "lp_highs", "greedy": "greedy",
     "isolated_fastest": "isolated_fastest", "kv_only": "kv_only",
     "replay_only": "replay_only",
     "queue_haul_power_blind": "lp_power_blind",

@@ -43,10 +43,6 @@ REFERENCE = "exact_modeled_milp_optimum"
 POLICY_NAMES[REFERENCE] = "Exact modeled MILP optimum"
 POLICY_COLORS[REFERENCE] = "#000000"
 POLICY_LINESTYLES[REFERENCE] = "-"
-MAX_SHED = "queue_haul_max_shed"
-POLICY_NAMES[MAX_SHED] = "Queue-Haul Max-Shed"
-POLICY_COLORS[MAX_SHED] = POLICY_COLORS["queue_haul"]
-POLICY_LINESTYLES[MAX_SHED] = POLICY_LINESTYLES["queue_haul"]
 ACTION_NAMES = {
     "replay": "Replay", "kv_transfer": "KV transfer",
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",

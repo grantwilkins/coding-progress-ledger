@@ -1346,8 +1346,8 @@ It compares Queue-Haul with greedy, fixed-action, power-blind, and
 deadline-blind policies, includes the trailing power window, and retains misses
 as missing CDF mass. Every policy appends the same relaxed-horizon
 independent-fastest tail for unadmitted sessions after the scoring deadline,
-analogous to the hardware campaign tail. Queue-Haul uses the registered
-maximum-shed MILP with a 0.25% capacity-gap tolerance. Regenerate it with
+analogous to the hardware campaign tail. Queue-Haul uses the target-aware
+HiGHS LP. Regenerate it with
 `uv run python plot_workload_policy_attainment.py`.
 
 | Internal name | Display name | Okabe–Ito | Line |
