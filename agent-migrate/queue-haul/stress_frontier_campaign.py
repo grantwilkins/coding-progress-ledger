@@ -20,8 +20,8 @@ from simulate import predict
 
 
 SCHEMA = "queue-haul-stress-frontier-plan-v1"
-POLICIES = ("queue_haul", "greedy", "replay_only", "kv_only",
-            "isolated_fastest", "queue_haul_power_blind",
+POLICIES = ("queue_haul", "greedy", "greedy_lagrangian", "replay_only",
+            "kv_only", "isolated_fastest", "queue_haul_power_blind",
             network.DEADLINE_BLIND_POLICY)
 REFERENCE = plot_style.REFERENCE
 DEADLINES = tuple(range(10, 61, 5))
@@ -203,7 +203,9 @@ def run(plan_path: Path, out: Path, shard: int = 0, shards: int = 1) -> list[dic
         problem, architecture, routes, _target = network.joint_problem(
             scenario, snapshots, profile, base_demand)
         initial = source_power(problem, profile)
-        for policy in (*POLICIES, REFERENCE):
+        policies = (*plan["policies"], *((plan.get("reference"),)
+                                         if plan.get("reference") else ()))
+        for policy in policies:
             planning = problem
             solver = "max_shed" if policy == REFERENCE else network.joint_solver(
                 policy, scenario["objective"])

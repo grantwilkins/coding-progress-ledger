@@ -54,14 +54,20 @@ def test_reduction_labels_unpromoted_frontier_as_modeled(tmp_path, monkeypatch):
 
 
 def test_plot_normalizes_to_non_milp_maximum(tmp_path, monkeypatch):
+    values = range(2, 2 * len(campaign.POLICIES) + 1, 2)
     rows = [{"deadline_s": 10, "policy": policy,
              "coverage_90_shed_w": value}
             for policy, value in zip((*campaign.POLICIES, campaign.REFERENCE),
-                                     (2, 4, 6, 8, 10, 12, 14, 100))]
+                                     (*values, 100))]
     lines = []
     monkeypatch.setattr(campaign.plot_style, "policy_style", lambda policy: {})
     import matplotlib.axes
     monkeypatch.setattr(matplotlib.axes.Axes, "plot",
                         lambda self, x, y, **kwargs: lines.append(y))
     campaign._plot(rows, tmp_path / "frontier", False)
-    assert lines == [[value / 14] for value in (2, 4, 6, 8, 10, 12, 14)]
+    assert lines == [[value / max(values)] for value in values]
+
+
+def test_stress_frontier_compares_both_greedy_algorithms():
+    assert "greedy" in campaign.POLICIES
+    assert "greedy_lagrangian" in campaign.POLICIES

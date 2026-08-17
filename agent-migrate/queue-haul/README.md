@@ -1352,7 +1352,8 @@ producers must inherit it. Policy identities are:
 | `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | `#000000` | fine dotted |
 
 Stress-frontier figures omit the modeled MILP reference and normalize every
-displayed policy to the shared maximum 90%-coverage attainment.
+displayed policy to the shared maximum 90%-coverage attainment. They include
+static and Lagrangian greedy so their LP tracking can be compared directly.
 
 Rebuild them with:
 
