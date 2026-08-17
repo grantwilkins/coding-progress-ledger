@@ -74,12 +74,18 @@ def make_plan(model: str, ttft_slo_s: float = 1., tpot_slo_s: float = .1,
 
 
 def explosion_evidence(root: Path) -> dict:
-    plan = read_plan(root / "plan.json")
+    plan = json.loads((root / "plan.json").read_text())
+    if (plan.get("schema"), plan.get("hardware"), plan.get("input_tokens"),
+            plan.get("output_tokens"), plan.get("requests_per_point"),
+            plan.get("rates_rps")) != (SCHEMA, "h100", INPUT_TOKENS,
+                                       OUTPUT_TOKENS, REQUESTS, list(RATES)):
+        raise ValueError("invalid historical base-sweep contract")
     rows = {row["offered_rps"]: row for row in (
         json.loads(path.read_text()) for path in (root / "base").glob("*/result.json"))}
     low, high = rows.get(RATES[0]), rows.get(RATES[-1])
     if not low or not high or any(row["status"] != "complete" or not row["drained"]
                                  or row["exact_completions"] != REQUESTS
+                                 or row.get("plan_sha256") != service.digest(plan)
                                  for row in (low, high)):
         raise RuntimeError("explosion endpoints are incomplete")
     ratio = high["p90_ttft_s"] / low["p90_ttft_s"]

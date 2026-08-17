@@ -94,7 +94,8 @@ def test_knee_plan_requires_bound_explosion_and_freezes_dense_rates(tmp_path):
         (path / "result.json").write_text(__import__("json").dumps({
             "offered_rps": rate, "status": "complete", "drained": True,
             "exact_completions": 32, "p90_ttft_s": ttft,
-            "max_in_system_requests": peak}))
+            "max_in_system_requests": peak,
+            "plan_sha256": campaign.service.digest(plan)}))
 
     evidence = campaign.explosion_evidence(tmp_path)
     knee = campaign.make_knee_plan(plan["model"], evidence)
