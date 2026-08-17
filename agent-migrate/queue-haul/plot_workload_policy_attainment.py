@@ -25,7 +25,7 @@ POLICIES = {
     "replay_only": "replay_only",
 }
 FIGSIZE = (3.85, 2.5)
-LABEL_SIZE = 7
+LABEL_SIZE = 8
 plot_style.apply()
 
 
