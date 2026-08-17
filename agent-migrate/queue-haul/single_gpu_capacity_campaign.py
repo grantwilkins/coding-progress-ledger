@@ -153,7 +153,7 @@ def model_config(model: str) -> testbed.Config:
     )
 
 
-def gpu_snapshot() -> dict:
+def gpu_snapshot(expected: str = "A100") -> dict:
     devices = testbed.allocated_gpu_ids()
     if len(devices) != 1:
         raise RuntimeError("capacity discovery requires exactly one visible GPU")
@@ -164,8 +164,8 @@ def gpu_snapshot() -> dict:
         f"--query-gpu={','.join(fields)}", "--format=csv,noheader,nounits",
     ], text=True).strip()
     values = [value.strip() for value in text.split(",")]
-    if len(values) != len(fields) or "A100" not in values[0]:
-        raise RuntimeError(f"expected one A100, saw {text}")
+    if len(values) != len(fields) or expected not in values[0]:
+        raise RuntimeError(f"expected one {expected}, saw {text}")
     return {"device": devices[0], **dict(zip(fields, values))}
 
 

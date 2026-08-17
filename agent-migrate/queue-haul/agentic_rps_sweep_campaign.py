@@ -75,11 +75,11 @@ def write_json(path: Path, value) -> None:
     temporary.replace(path)
 
 
-def _plan(seed: int) -> dict:
+def _plan(seed: int, hardware: str) -> dict:
     return {
         "schema": SCHEMA,
         "campaign": "agentic_rps_sweep",
-        "hardware": "a100",
+        "hardware": hardware,
         "models": list(MODELS),
         "model_revisions": {
             model: testbed.model_spec(model).revision for model in MODELS
@@ -137,17 +137,18 @@ def _plan(seed: int) -> dict:
     }
 
 
-def make_plan(seed: int = 1) -> dict:
-    plan = _plan(seed)
+def make_plan(seed: int = 1, hardware: str = "a100") -> dict:
+    plan = _plan(seed, hardware)
     validate_plan(plan)
     return plan
 
 
 def validate_plan(plan: dict) -> None:
     seed = plan.get("seed")
-    if not isinstance(seed, int):
+    hardware = plan.get("hardware")
+    if not isinstance(seed, int) or hardware not in {"a100", "h100"}:
         raise ValueError("invalid agentic RPS sweep plan")
-    if plan != _plan(seed):
+    if plan != _plan(seed, hardware):
         raise ValueError("invalid agentic RPS sweep plan")
 
 
@@ -224,7 +225,7 @@ def runtime_identity(plan: dict, cfg: testbed.Config, commands: dict) -> dict:
         "git_dirty": dirty,
         "model": cfg.model,
         "revision": testbed.model_spec(cfg.model).revision,
-        "hardware": capacity.gpu_snapshot(),
+        "hardware": capacity.gpu_snapshot(plan["hardware"].upper()),
         "runtime_mode": testbed.runtime_mode(),
         "runtime_versions": testbed.runtime_versions(cfg),
         "scheduler": plan["runtime"],
@@ -556,9 +557,9 @@ def reduce_model(plan: dict, model: str, root: Path) -> tuple[list[dict], dict]:
     }
 
 
-def reduce(plan: dict, root: Path) -> dict:
+def reduce(plan: dict, root: Path, models: tuple[str, ...] = MODELS) -> dict:
     rows, model_results = [], {}
-    for model in MODELS:
+    for model in models:
         model_rows, result = reduce_model(plan, model, root)
         rows.extend(model_rows)
         model_results[model] = result
@@ -606,6 +607,7 @@ def parse_args(argv=None):
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--out", type=Path, required=True)
     prepare.add_argument("--seed", type=int, default=1)
+    prepare.add_argument("--hardware", choices=("a100", "h100"), default="a100")
     run = commands.add_parser("run")
     run.add_argument("--plan", type=Path, required=True)
     run.add_argument("--run-root", type=Path, required=True)
@@ -615,6 +617,7 @@ def parse_args(argv=None):
     reduce_parser.add_argument("--run-root", type=Path, required=True)
     reduce_parser.add_argument("--out", type=Path, required=True)
     reduce_parser.add_argument("--csv", type=Path)
+    reduce_parser.add_argument("--model", choices=MODELS, action="append")
     rereduce = commands.add_parser("rereduce")
     rereduce.add_argument("--plan", type=Path, required=True)
     rereduce.add_argument("--source-root", type=Path, action="append",
@@ -630,7 +633,7 @@ def parse_args(argv=None):
 def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
-        write_json(args.out, make_plan(args.seed))
+        write_json(args.out, make_plan(args.seed, args.hardware))
         return
     plan = read_plan(args.plan)
     if args.command == "run":
@@ -646,7 +649,7 @@ def main(argv=None) -> None:
         if args.csv:
             write_csv(args.csv, rows)
         return
-    summary = reduce(plan, args.run_root)
+    summary = reduce(plan, args.run_root, tuple(args.model or MODELS))
     write_json(args.out, summary)
     write_csv(args.csv or args.out.with_suffix(".csv"), summary["rows"])
 

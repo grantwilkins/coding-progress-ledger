@@ -40,6 +40,13 @@ def test_plan_is_fixed_shape_open_loop_and_runs_every_rate():
     assert plan["slo"]["relative_models"] == ["Qwen/Qwen3.8-27B"]
 
 
+def test_h100_plan_changes_only_hardware():
+    a100 = campaign.make_plan(seed=7)
+    h100 = campaign.make_plan(seed=7, hardware="h100")
+
+    assert h100 == {**a100, "hardware": "h100"}
+
+
 def test_trace_forces_long_output_and_unique_private_prompts():
     plan = campaign.make_plan(seed=3)
     model = "Qwen/Qwen3.8-27B"

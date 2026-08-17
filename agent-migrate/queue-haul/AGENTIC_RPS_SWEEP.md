@@ -67,8 +67,13 @@ Prepare one immutable plan:
 
 ```bash
 uv run python agentic_rps_sweep_campaign.py prepare \
+  --hardware a100 \
   --out runs/agentic-rps-sweep-a100/plan.json
 ```
+
+Use `--hardware h100` for the identical H100 campaign; the runtime validates
+that the visible GPU matches the plan and leaves CUDA architecture selection
+to that GPU.
 
 Run one model per node. These commands are independent and can run in
 parallel:
