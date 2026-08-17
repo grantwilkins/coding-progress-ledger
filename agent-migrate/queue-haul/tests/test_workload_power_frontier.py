@@ -26,7 +26,7 @@ import pytest
 import workload_adaptation_campaign as adaptation
 from profiles import ModelProfile
 from workload_power_frontier import (
-    CAPACITY_SOLVER, DISPLAY_STATES, SOLVERS, capacity_release_audit,
+    CAPACITY_SOLVER, DISPLAY_STATES, LINE_ZORDERS, SOLVERS, capacity_release_audit,
     capacity_summary, planning_request_w, power_summary, request_grid, sweep,
     write_capacity_plot,
 )
@@ -35,6 +35,7 @@ from workload_power_frontier import (
 def test_display_states_match_the_five_declared_action_cases():
     assert DISPLAY_STATES == adaptation.DISPLAY_CASES
     assert len(DISPLAY_STATES) == len(set(DISPLAY_STATES)) == 5
+    assert LINE_ZORDERS["bandwidth"] > LINE_ZORDERS["none"]
 
 
 def test_capacity_figure_has_half_column_canvas(tmp_path):

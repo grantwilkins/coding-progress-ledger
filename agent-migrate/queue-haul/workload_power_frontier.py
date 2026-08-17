@@ -28,6 +28,7 @@ SOLVERS = {"queue_haul_lp": "lp_highs"}
 CAPACITY_SOLVER = "max_shed_capacity"
 CAPACITY_ORDER_TOLERANCE = 4 * MAX_SHED_CAPACITY_GAP
 DISPLAY_STATES = adaptation.DISPLAY_CASES
+LINE_ZORDERS = {"bandwidth": 3, "none": 2}
 FIGSIZE = (3.35, 2.5)
 plot_style.apply()
 
@@ -260,6 +261,7 @@ def write_capacity_plot(summary, out):
             where="post",
             color=plot_style.RESOURCE_STATE_COLORS[state],
             linestyle=plot_style.RESOURCE_STATE_LINESTYLES[state],
+            zorder=LINE_ZORDERS.get(state, 1),
             label=plot_style.RESOURCE_STATE_NAMES[state],
         )
     axis.set(xlim=(0, 1), ylim=(0, 1),
