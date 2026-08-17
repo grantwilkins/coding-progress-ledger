@@ -193,7 +193,7 @@ def write_plot(rows, path):
     handles, labels = axis.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False,
         fontsize=LABEL_SIZE, handlelength=1.8, columnspacing=1)
-    fig.subplots_adjust(left=.19, right=.98, bottom=.22, top=.7)
+    fig.subplots_adjust(left=.19, right=.98, bottom=.22, top=.82)
     path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
