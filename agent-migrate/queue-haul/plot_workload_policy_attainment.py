@@ -25,7 +25,8 @@ POLICIES = {
     "replay_only": "replay_only",
 }
 FIGSIZE = (3.85, 2.5)
-LABEL_SIZE = 8
+LABEL_SIZE = 10
+LEGEND_SIZE = 7.5
 plot_style.apply()
 
 
@@ -193,9 +194,10 @@ def write_plot(rows, path):
     axis.yaxis.label.set_size(LABEL_SIZE)
     axis.grid(alpha=.25)
     handles, labels = axis.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False,
-        fontsize=LABEL_SIZE, handlelength=1.8, columnspacing=1)
-    fig.subplots_adjust(left=.19, right=.98, bottom=.22, top=.82)
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(.5, .01),
+        ncol=3, frameon=False, fontsize=LEGEND_SIZE, handlelength=1.8,
+        handletextpad=.5, columnspacing=.5)
+    fig.subplots_adjust(left=.19, right=.98, bottom=.36, top=.98)
     path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
