@@ -43,7 +43,7 @@ def test_plot_selects_sorted_gpt_oss_curve_and_fixed_slos(tmp_path, monkeypatch)
     assert list(axes[0].lines[0].get_xdata()) == [1, 2]
     assert list(axes[0].lines[0].get_ydata()) == [1, 2]
     assert axes[0].lines[0].get_label() == "OpenHands Agentic"
-    assert set(axes[0].lines[1].get_ydata()) == {2}
+    assert set(axes[0].lines[1].get_ydata()) == {1}
     assert axes[0].lines[1].get_color() == "black"
     assert axes[0].lines[1].get_linestyle() == ":"
     plt.close("all")
@@ -82,7 +82,9 @@ def test_plot_compares_matching_hardware_with_one_shared_slo(tmp_path,
 
     assert [line.get_label() for line in lines] == [
         "Agent - A100", "Agent - H100", "SLO"]
-    assert [list(line.get_ydata()) for line in lines] == [[3], [1], [2, 2]]
+    assert [list(line.get_ydata()) for line in lines] == [[3], [1], [1, 1]]
+    assert [list(line.get_ydata()) for line in plt.gcf().axes[1].lines] \
+        == [[30], [50], [50, 50]]
     plt.close("all")
 
 

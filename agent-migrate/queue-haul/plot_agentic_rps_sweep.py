@@ -14,9 +14,10 @@ plot_style.apply()
 MODEL = "openai/gpt-oss-20b"
 SCHEMA = "queue-haul-agentic-rps-sweep-v3"
 METRICS = (
-    ("p90_ttft_s", "P90 TTFT (s)"),
-    ("p90_tpot_s", "P90 TPOT (s)"),
+    ("p90_ttft_s", "P90 TTFT (s)", 1),
+    ("p90_tpot_s", "P90 TPOT (ms)", 1000),
 )
+SLOS = {"p90_ttft_s": 1.0, "p90_tpot_s": .05}
 
 
 def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
@@ -33,12 +34,12 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
             raise ValueError("A100 and H100 SLOs do not match")
         curves["h100"] = h100_result["curve"]
     figure, axes = plt.subplots(2, 1, figsize=(4, 4), sharex=True)
-    for axis, (field, ylabel) in zip(axes, METRICS):
+    for axis, (field, ylabel, scale) in zip(axes, METRICS):
         for hardware, rows in curves.items():
             rows = sorted(rows, key=lambda row: row["offered_rps"])
             axis.plot(
                 [row["offered_rps"] for row in rows],
-                [row[f"{field}_median"] for row in rows],
+                [row[f"{field}_median"] * scale for row in rows],
                 label=(plot_style.AGENTIC_WORKLOAD_NAME if h100 is None else
                        f"Agent - {plot_style.AGENTIC_HARDWARE_NAMES[hardware]}"),
                 color=plot_style.AGENTIC_HARDWARE_COLORS[hardware],
@@ -46,7 +47,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                 linewidth=1.5,
             )
         axis.axhline(
-            result["slo"][field], color="black", linestyle=":",
+            SLOS[field] * scale, color="black", linestyle=":",
             linewidth=1.2, label="SLO",
         )
         axis.set_ylabel(ylabel, fontsize=plot_style.COLUMN_FONT_SIZE)

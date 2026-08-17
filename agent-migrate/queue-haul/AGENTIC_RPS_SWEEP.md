@@ -104,7 +104,7 @@ uv run python plot_agentic_rps_sweep.py \
 
 Pass `--h100-summary outputs/agentic-rps-sweep-h100-vllm019-20260817/summary.json`
 to compare the workload-matched vLLM 0.19 H100 curve against the same fixed
-SLOs.
+paper-reference SLOs: 1.0 s TTFT and 50 ms TPOT.
 
 The plot command writes a compact, vertically stacked PDF and PNG for
 GPT-OSS-20B. Both panels use raw seconds and an increasing linear RPS axis,
