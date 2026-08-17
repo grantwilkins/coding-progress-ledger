@@ -19,6 +19,9 @@ import plot_style
 
 def test_policy_styles_are_stable_and_unique():
     assert plot_style.POLICY_NAMES["isolated_fastest"] == "True Greedy"
+    assert plot_style.POLICY_NAMES[plot_style.MAX_SHED] == "Queue-Haul Max-Shed"
+    assert plot_style.POLICY_COLORS[plot_style.MAX_SHED] \
+        == plot_style.POLICY_COLORS["queue_haul"]
     assert [matplotlib.colors.to_hex(plot_style.POLICY_COLORS[policy])
             for policy in plot_style.POLICIES] == [
         "#0072b2", "#e69f00", "#f0e442", "#d55e00",

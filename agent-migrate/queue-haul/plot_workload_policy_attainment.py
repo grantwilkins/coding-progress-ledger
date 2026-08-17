@@ -1,10 +1,11 @@
-"""Plot policy attainment pooled over workload-constraint draws."""
+"""Plot pooled time to power-target attainment across bound states."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import matplotlib
@@ -12,21 +13,36 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+import network_campaign
 import plot_style
 import workload_adaptation_campaign as campaign
-from planner import plan
+from planner import _expected_scenario, plan
+from simulate import predict
 
 
 POLICIES = {
-    "queue_haul": "lp_highs", "isolated_fastest": "isolated_fastest",
+    plot_style.MAX_SHED: "max_shed_capacity", "greedy": "greedy",
+    "isolated_fastest": "isolated_fastest", "kv_only": "kv_only",
+    "replay_only": "replay_only",
     "queue_haul_power_blind": "lp_power_blind",
+    "queue_haul_deadline_blind": "lp_highs",
 }
 plot_style.apply()
 
 
+def attainment_time(commits, shed, target, power_window_s):
+    moved = []
+    for time_s, session_id in sorted(commits):
+        moved.append(session_id)
+        if shed(moved) >= target - 1e-8:
+            return time_s + power_window_s
+    return None
+
+
 def attainment_rows(samples=1000, seed=campaign.DEFAULT_SEED, sessions=28,
-                    target_fraction=2 / 3):
-    if samples < 1 or sessions < 1 or not 0 < target_fraction <= 1:
+                    target_fraction=2 / 3, horizon_s=90):
+    if samples < 1 or sessions < 1 or not 0 < target_fraction <= 1 \
+            or horizon_s < 30:
         raise ValueError("invalid policy-attainment controls")
     profile = campaign.ModelProfile.load(campaign.PROFILE)
     templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
@@ -44,21 +60,39 @@ def attainment_rows(samples=1000, seed=campaign.DEFAULT_SEED, sessions=28,
             problem, architecture, routes, target = campaign.build_problem(
                 sampled_profile, pack, constraints, target_fraction, fits,
             )
+            initial = campaign.source_power(problem, sampled_profile)
             for policy, solver in POLICIES.items():
+                planned = replace(
+                    problem, deadline_s=network_campaign.ORACLE_STALE_HORIZON_S,
+                    end_s=network_campaign.ORACLE_STALE_HORIZON_S,
+                ) if policy == "queue_haul_deadline_blind" else problem
                 result = plan(
-                    problem, sampled_profile, routes, solver, seed=replicate,
+                    planned, sampled_profile, routes, solver, seed=replicate,
                     destination=architecture, admission_mode="normal",
                 )
-                shed = result.initial_source_power_w \
-                    - result.expected_source_power_at_deadline_w
+                execution = predict(
+                    _expected_scenario(
+                        replace(problem, end_s=horizon_s), result.moves,
+                    ), sampled_profile, result.moves, destination=architecture,
+                )
+                commits = [(row.committed_s, row.session_id)
+                           for row in execution.sessions
+                           if row.committed_s is not None]
+                time_s = attainment_time(
+                    commits,
+                    lambda moved: initial - campaign.source_power(
+                        problem, sampled_profile, moved),
+                    target, sampled_profile.power_window_s,
+                )
                 rows.append({
                     "replicate": replicate, "case_id": case_id,
                     "bound_constraint": label, "policy": policy,
                     "power_bootstrap_index": power_index,
                     "timing_fit_sha256": timing_hash, "target_w": target,
-                    "attainment_fraction": max(0, min(1, shed / target)),
-                    "target_met": result.feasible
-                    and result.power_shortfall_w <= campaign.POWER_TOLERANCE_W,
+                    "requested_fraction": target_fraction, "deadline_s": 30,
+                    "horizon_s": horizon_s,
+                    "attainment_time_s": "" if time_s is None else time_s,
+                    "target_met_by_30s": time_s is not None and time_s <= 30,
                 })
     return rows
 
@@ -68,22 +102,36 @@ def attainment_curve(rows, policy):
     cases = {(int(row["replicate"]), row["case_id"]) for row in selected}
     if not selected or len(selected) != len(cases):
         raise RuntimeError("attainment CDF requires one row per paired case")
-    values = np.sort([100 * float(row["attainment_fraction"])
-                      for row in selected])
-    return values, np.arange(1, len(values) + 1) / len(values)
+    events = sorted(float(row["attainment_time_s"]) for row in selected
+                    if row["attainment_time_s"] not in (None, ""))
+    return np.r_[0, events], np.r_[0, np.arange(1, len(events) + 1) / len(cases)]
 
 
 def write_plot(rows, path):
+    deadline = 30
+    horizon = max(float(row["horizon_s"]) for row in rows)
+    fraction = float(rows[0]["requested_fraction"])
     fig, axis = plt.subplots(figsize=plot_style.WIDE_FIGSIZE)
     for policy in POLICIES:
         x, y = attainment_curve(rows, policy)
-        axis.step(x, y, where="post", **plot_style.policy_style(policy))
-    axis.set(xlim=(0, 101), ylim=(0, 1.02),
-             xlabel="Power-target attainment by deadline (%)",
-             ylabel="Cumulative distribution")
+        axis.step(np.r_[x, horizon], np.r_[y, y[-1]], where="post",
+                  **plot_style.policy_style(policy))
+    axis.axvline(deadline, color="black", linestyle="--", linewidth=1.5)
+    axis.text(
+        deadline, .4, "30 s deadline", transform=axis.get_xaxis_transform(),
+        ha="center", va="center", rotation=90, fontstyle="italic",
+        fontsize=plot_style.LARGE_ANNOTATION_FONT_SIZE,
+        bbox={"facecolor": "white", "edgecolor": "none", "pad": 1},
+    )
+    axis.set(xlim=(0, min(horizon, 60)), ylim=(0, 1.02),
+             xlabel=f"Time to {fraction:.0%} Power-Shed Attainment (s)",
+             ylabel="Cumulative Distribution")
+    axis.tick_params(labelsize=plot_style.LARGE_FONT_SIZE)
+    axis.xaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
+    axis.yaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
     axis.grid(alpha=.25)
-    axis.legend(loc="upper left", frameon=False,
-                fontsize=plot_style.LEGEND_FONT_SIZE)
+    axis.legend(loc="upper right", framealpha=1, facecolor="white",
+                edgecolor="none", fontsize=plot_style.LARGE_LEGEND_FONT_SIZE)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
@@ -95,7 +143,7 @@ def write_plot(rows, path):
 def write_csv(rows, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as output:
-        writer = csv.DictWriter(output, rows[0])
+        writer = csv.DictWriter(output, rows[0], lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -106,9 +154,12 @@ def main():
     parser.add_argument("--seed", type=int, default=campaign.DEFAULT_SEED)
     parser.add_argument("--sessions", type=int, default=28)
     parser.add_argument("--target", type=float, default=2 / 3)
+    parser.add_argument("--horizon-s", type=float, default=90)
     parser.add_argument("--out", type=Path, default=campaign.OUT / "policy_attainment")
     args = parser.parse_args()
-    rows = attainment_rows(args.samples, args.seed, args.sessions, args.target)
+    rows = attainment_rows(
+        args.samples, args.seed, args.sessions, args.target, args.horizon_s,
+    )
     write_csv(rows, args.out.with_suffix(".csv"))
     write_plot(rows, args.out)
 

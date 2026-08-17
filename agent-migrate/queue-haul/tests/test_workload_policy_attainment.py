@@ -1,31 +1,42 @@
 """
 Claim:
-The policy CDF pools every paired workload-constraint draw once and reports its
-nonlinear source-power target-attainment fraction.
+The policy CDF pools every paired workload-constraint case once and reports the
+first exact nonlinear shed attainment time, including the power-window delay.
 
 Plausible wrong implementations:
-- Average constraint summaries instead of equally weighted cases.
-- Drop low-attainment cases or normalize by successful cases.
+- Divide by successful cases and hide missing deadline-attainment mass.
+- Accumulate sessions out of completion order or linearize their shed gains.
+- Omit the trailing power-window delay.
 - Include the same draw-constraint case more than once for a policy.
-- Plot a 0-1 fraction as though it were already a percentage.
 """
 
 import pytest
 
-from plot_workload_policy_attainment import attainment_curve
+from plot_workload_policy_attainment import attainment_curve, attainment_time
 
 
-def test_attainment_curve_weights_every_paired_case_once_and_scales_percent():
+def test_attainment_time_uses_completion_order_full_set_and_power_window():
+    seen = []
+
+    def shed(moved):
+        seen.append(tuple(moved))
+        return {("early",): 3, ("early", "late"): 7}[tuple(moved)]
+
+    assert attainment_time([(8, "late"), (2, "early")], shed, 6, 5) == 13
+    assert seen == [("early",), ("early", "late")]
+
+
+def test_attainment_curve_retains_misses_and_rejects_duplicate_cases():
     rows = [
         {"replicate": 0, "case_id": "hbm", "policy": "queue_haul",
-         "attainment_fraction": 1},
+         "attainment_time_s": 10},
         {"replicate": 0, "case_id": "none", "policy": "queue_haul",
-         "attainment_fraction": .25},
+         "attainment_time_s": ""},
         {"replicate": 1, "case_id": "hbm", "policy": "queue_haul",
-         "attainment_fraction": 0},
+         "attainment_time_s": 20},
     ]
     x, y = attainment_curve(rows, "queue_haul")
-    assert x.tolist() == [0, 25, 100]
-    assert y.tolist() == pytest.approx([1 / 3, 2 / 3, 1])
+    assert x.tolist() == [0, 10, 20]
+    assert y.tolist() == pytest.approx([0, 1 / 3, 2 / 3])
     with pytest.raises(RuntimeError, match="one row"):
         attainment_curve(rows + [rows[0]], "queue_haul")
