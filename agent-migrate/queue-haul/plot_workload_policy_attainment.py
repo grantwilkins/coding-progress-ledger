@@ -16,7 +16,7 @@ import numpy as np
 import network_campaign
 import plot_style
 import workload_adaptation_campaign as campaign
-from planner import _expected_scenario, plan
+from planner import _expected_scenario, _resident_tokens, plan
 from simulate import predict
 
 
@@ -37,6 +37,65 @@ def attainment_time(commits, shed, target, power_window_s):
         if shed(moved) >= target - 1e-8:
             return time_s + power_window_s
     return None
+
+
+def execution_commits(primary, tail=(), deadline_s=30):
+    if any(row.committed_s is not None and row.committed_s <= deadline_s
+           for row in tail):
+        raise RuntimeError("post-deadline tail committed before the deadline")
+    return [(row.committed_s, row.session_id) for row in (*primary, *tail)
+            if row.committed_s is not None]
+
+
+def landed_architecture(architecture, problem, moves, horizon_s):
+    sessions = {session.session_id: session for session in problem.sessions}
+    pools = []
+    for pool in architecture.pools:
+        q = architecture.type_by_id[pool.type_id]
+        replicas = []
+        for replica in pool.replicas:
+            work, tokens = np.asarray(replica.baseline_work), replica.baseline_kv_tokens
+            for move in moves:
+                if move.destination_instance != replica.replica_id:
+                    continue
+                session = sessions[move.session_id]
+                resident = _resident_tokens(session, horizon_s)
+                work = work + q.work(
+                    session.expected_f, session.expected_g, resident,
+                    q.migration is not None,
+                )
+                tokens += -(-resident // q.kv_block_tokens) * q.kv_block_tokens
+            replicas.append(replace(
+                replica, baseline_work=tuple(work), baseline_kv_tokens=tokens,
+            ))
+        pools.append(replace(pool, replicas=tuple(replicas)))
+    return replace(architecture, pools=tuple(pools),
+                   residency_horizon_s=horizon_s)
+
+
+def policy_moves(problem, profile, routes, architecture, solver, seed, horizon_s):
+    result = plan(problem, profile, routes, solver, seed=seed,
+                  destination=architecture, admission_mode="normal")
+    admitted = {move.session_id for move in result.moves}
+    remaining = tuple(session for session in problem.sessions
+                      if session.session_id not in admitted)
+    if not remaining:
+        return result.moves, (), None, None
+    tail_problem = replace(
+        problem, sessions=remaining, controller_delay_s=30,
+        deadline_s=horizon_s, end_s=horizon_s,
+    )
+    tail_problem = replace(tail_problem, power_limit_w=campaign.source_power(
+        tail_problem, profile, (session.session_id for session in remaining),
+    ))
+    tail_architecture = landed_architecture(
+        architecture, problem, result.moves, horizon_s,
+    )
+    tail = plan(
+        tail_problem, profile, routes, "isolated_fastest", seed=seed,
+        destination=tail_architecture, admission_mode="normal",
+    ).moves
+    return result.moves, tail, tail_problem, tail_architecture
 
 
 def attainment_rows(samples=1000, seed=campaign.DEFAULT_SEED, sessions=28,
@@ -66,18 +125,24 @@ def attainment_rows(samples=1000, seed=campaign.DEFAULT_SEED, sessions=28,
                     problem, deadline_s=network_campaign.ORACLE_STALE_HORIZON_S,
                     end_s=network_campaign.ORACLE_STALE_HORIZON_S,
                 ) if policy == "queue_haul_deadline_blind" else problem
-                result = plan(
-                    planned, sampled_profile, routes, solver, seed=replicate,
-                    destination=architecture, admission_mode="normal",
+                moves, tail, tail_problem, tail_architecture = policy_moves(
+                    planned, sampled_profile, routes, architecture, solver,
+                    replicate, horizon_s,
                 )
                 execution = predict(
                     _expected_scenario(
-                        replace(problem, end_s=horizon_s), result.moves,
-                    ), sampled_profile, result.moves, destination=architecture,
+                        replace(problem, end_s=horizon_s), moves,
+                    ), sampled_profile, moves, destination=architecture,
                 )
-                commits = [(row.committed_s, row.session_id)
-                           for row in execution.sessions
-                           if row.committed_s is not None]
+                tail_sessions = ()
+                if tail:
+                    tail_sessions = predict(
+                        _expected_scenario(tail_problem, tail),
+                        sampled_profile, tail, destination=tail_architecture,
+                    ).sessions
+                commits = execution_commits(
+                    execution.sessions, tail_sessions, problem.deadline_s,
+                )
                 time_s = attainment_time(
                     commits,
                     lambda moved: initial - campaign.source_power(

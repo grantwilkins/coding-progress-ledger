@@ -11,8 +11,11 @@ Plausible wrong implementations:
 """
 
 import pytest
+from types import SimpleNamespace
 
-from plot_workload_policy_attainment import attainment_curve, attainment_time
+from plot_workload_policy_attainment import (
+    attainment_curve, attainment_time, execution_commits,
+)
 
 
 def test_attainment_time_uses_completion_order_full_set_and_power_window():
@@ -40,3 +43,13 @@ def test_attainment_curve_retains_misses_and_rejects_duplicate_cases():
     assert y.tolist() == pytest.approx([0, 1 / 3, 2 / 3])
     with pytest.raises(RuntimeError, match="one row"):
         attainment_curve(rows + [rows[0]], "queue_haul")
+
+
+def test_tail_cannot_change_deadline_attainment():
+    row = lambda session, time: SimpleNamespace(
+        session_id=session, committed_s=time,
+    )
+    assert execution_commits((row("primary", 20),), (row("tail", 40),)) \
+        == [(20, "primary"), (40, "tail")]
+    with pytest.raises(RuntimeError, match="before the deadline"):
+        execution_commits((), (row("tail", 30),))
