@@ -41,6 +41,7 @@ Plausible wrong implementations:
 - Choose one cheap action per session before exploring feasible mixed-method patterns.
 - Materialize every source prefix even though recovery retains a bounded frontier.
 - Reverse or mis-scale the HiGHS target row or skip maximum-gain fallback.
+- Leave an integrally feasible target unmet after fractional LP rounding.
 - Route the existing `lp` solver through HiGHS instead of keeping it additive.
 - Charge migration work during shortfall minimization or omit the session dual.
 - Run Phase II at an infeasible requested target instead of maximum attainable gain.
@@ -238,6 +239,21 @@ def test_exact_max_shed_keeps_the_tighter_resource_row():
     )
 
     assert len(pool_planner._max_shed(table, power, .0025)) == 1
+
+
+def test_highs_lp_recovers_an_integrally_feasible_target_after_rounding():
+    sessions = tuple(SimpleNamespace(session_id=name) for name in "abc")
+    candidates = tuple(
+        Candidate(i, "replay", 0, gain, 1, duration, (), 0, (0, 0), 0)
+        for i, (gain, duration) in enumerate(((6, 1), (5, 2), (5, 2)))
+    )
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(3)),
+        csr_matrix(np.array(((.6, .5, 0), (.6, 0, .5)))),
+        ("route", "compute"), (1, 1), ("fraction", "fraction"), 10,
+    )
+
+    assert _lp_highs(table, 10) == {1, 2}
 
 
 def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):

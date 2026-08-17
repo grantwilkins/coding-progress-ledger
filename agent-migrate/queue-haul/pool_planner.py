@@ -1301,6 +1301,19 @@ def _round_lp(table, target, values):
             sessions.add(c.session)
             usage[rows] += added
             gain += c.credit
+    if gain < target - 1e-8:
+        matrix = vstack((table.incidence, table.resources), format="csr")
+        result = milp(
+            work / table.migration_horizon_s, integrality=np.ones(n),
+            bounds=Bounds(0, 1), constraints=(
+                LinearConstraint(matrix, -np.inf, 1),
+                LinearConstraint(gains, target - 1e-8, np.inf),
+            ),
+        )
+        if result.success:
+            return set(np.flatnonzero(result.x > .5))
+        if result.status != 2:
+            raise RuntimeError(f"LP target recovery returned {result.message}")
     return selected
 
 
