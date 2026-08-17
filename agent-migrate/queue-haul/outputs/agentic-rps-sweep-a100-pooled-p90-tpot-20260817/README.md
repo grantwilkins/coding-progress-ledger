@@ -3,8 +3,8 @@
 This schema-v3 evidence re-reduces the retained token timestamps from the
 Sweden Central, East US 2, and Germany West Central A100 runs. It does not
 rerun inference. TPOT is the P90 over every exact post-first-token interval in
-a cell, pooled across its fixed-length requests. The previous per-request mean
-TPOT remains only as a diagnostic CSV column.
+a cell, pooled across its fixed-length requests. The CSVs export this metric as
+`p90_tpot_s` and omit the previous per-request-mean percentile.
 
 | Model | Last TTFT-SLO-met rate | First confirmed violation | Maximum P90 TPOT | TPOT SLO |
 |---|---:|---:|---:|---:|
@@ -48,7 +48,7 @@ SHA-256:
 
 - `plan.json`: `20d644adee121f07ce9f146fd96657278df15312a5074a4cd172604fb61ec293`
 - `summary.json`: `7b87cfa93c5ce3e1360c784685a79673964cb6726afd024f869711c4d9d88494`
-- `rps-sweep.csv`: `4b7aedf35a9833eac52356f7e7a7291e1957cb079efa64bcee4dc62b041c22dd`
-- `all-rereduced-cells.csv`: `14e341a3479d8dbd955bb12b25ca618716a8dcb394b88f8d011286b4d163d24f`
+- `rps-sweep.csv`: `004ea5dbc9e8b32382ff1811347b8ff1a42c225426ff49aee7a6746324fd78de`
+- `all-rereduced-cells.csv`: `694289b8bc62b1692bed0cb526cac6e33b9819eda8363f22e4a448d02fbdeec5`
 - `agentic-rps-sweep.pdf`: `ee968f5b5e9f422980079ae5c05d5808b0a25b36547e413026a51253c87b3ac7`
 - `agentic-rps-sweep.png`: `c22160f12b05a053160d9baebc5e906e739f6e1070a98895bfbcf731479b9e0c`

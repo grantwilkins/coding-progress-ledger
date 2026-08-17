@@ -126,13 +126,13 @@ def validate_plan(plan: dict) -> None:
         raise ValueError("invalid single-GPU capacity plan")
 
 
-def make_runtime_contract() -> dict:
+def make_runtime_contract(enforce_eager: bool = True) -> dict:
     return {
         "gpu_count": 1, "tensor_parallel_size": 1,
         "dtype": "bfloat16", "kv_cache_dtype": "auto",
         "max_model_len": MAX_MODEL_LEN, "max_num_seqs": MAX_NUM_SEQS,
         "gpu_memory_utilization": .9, "chunked_prefill": True,
-        "prefix_caching": True, "enforce_eager": True,
+        "prefix_caching": True, "enforce_eager": enforce_eager,
         "lmcache_mode": "mp",
     }
 
@@ -153,7 +153,7 @@ def model_config(model: str) -> testbed.Config:
     )
 
 
-def gpu_snapshot() -> dict:
+def gpu_snapshot(expected: str = "A100") -> dict:
     devices = testbed.allocated_gpu_ids()
     if len(devices) != 1:
         raise RuntimeError("capacity discovery requires exactly one visible GPU")
@@ -164,8 +164,8 @@ def gpu_snapshot() -> dict:
         f"--query-gpu={','.join(fields)}", "--format=csv,noheader,nounits",
     ], text=True).strip()
     values = [value.strip() for value in text.split(",")]
-    if len(values) != len(fields) or "A100" not in values[0]:
-        raise RuntimeError(f"expected one A100, saw {text}")
+    if len(values) != len(fields) or expected not in values[0]:
+        raise RuntimeError(f"expected one {expected}, saw {text}")
     return {"device": devices[0], **dict(zip(fields, values))}
 
 
@@ -206,7 +206,7 @@ def runtime_identity(plan: dict, cfg: testbed.Config, commands: dict) -> dict:
 
 
 def http_json(host: str, port: int, path: str) -> dict:
-    with urllib.request.urlopen(f"http://{host}:{port}{path}", timeout=30) as response:
+    with urllib.request.urlopen(f"http://{host}:{port}{path}", timeout=180) as response:
         return json.loads(response.read().decode())
 
 

@@ -57,7 +57,7 @@ def write(rows: list[dict], contract: dict, out: Path) -> None:
     plot_style.apply()
     fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.2), sharex=True)
     panels = (("p90_ttft_s", "P90 TTFT (s)", contract["ttft_slo_s"]),
-              ("p90_mean_tpot_s", "P90 mean TPOT (s/token)",
+              ("p90_tpot_s", "P90 TPOT (s/token)",
                contract["tpot_slo_s"]))
     for axis, (metric, ylabel, slo) in zip(axes, panels):
         for model in plot_style.MODELS:

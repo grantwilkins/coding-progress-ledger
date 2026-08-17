@@ -17,9 +17,9 @@ def test_plot_writes_combined_curve_with_boundary_whiskers(tmp_path):
                   "exact_completion_rate_min": 1,
                   "p90_ttft_s": rate / 2, "p90_ttft_s_min": rate / 2 - .01,
                   "p90_ttft_s_max": rate / 2 + .01,
-                  "p90_mean_tpot_s": rate / 20,
-                  "p90_mean_tpot_s_min": rate / 20 - .001,
-                  "p90_mean_tpot_s_max": rate / 20 + .001}
+                  "p90_tpot_s": rate / 20,
+                  "p90_tpot_s_min": rate / 20 - .001,
+                  "p90_tpot_s_max": rate / 20 + .001}
                  for rate in campaign.RATES]
         (root / "summary.json").write_text(json.dumps({
             "schema": campaign.SCHEMA, "model": model, "hardware": "h100",
@@ -57,9 +57,9 @@ def test_plot_accepts_upper_curve_without_slo_or_whiskers(tmp_path):
                 "model": model, "offered_rps": rate, "replicates": 1,
                 "exact_completion_rate_min": 1, "p90_ttft_s": rate,
                 "p90_ttft_s_min": rate, "p90_ttft_s_max": rate,
-                "p90_mean_tpot_s": rate / 10,
-                "p90_mean_tpot_s_min": rate / 10,
-                "p90_mean_tpot_s_max": rate / 10} for rate in campaign.RATES]}))
+                "p90_tpot_s": rate / 10,
+                "p90_tpot_s_min": rate / 10,
+                "p90_tpot_s_max": rate / 10} for rate in campaign.RATES]}))
         roots.append(root)
 
     rows, contract = plot.load(roots)
@@ -95,8 +95,8 @@ def test_dense_plot_keeps_base_rate_ticks(tmp_path):
                 "tpot_slo_s": None}
     rows = [{"model": model, "offered_rps": rate, "boundary": False,
              "p90_ttft_s": 1, "p90_ttft_s_min": 1, "p90_ttft_s_max": 1,
-             "p90_mean_tpot_s": .1, "p90_mean_tpot_s_min": .1,
-             "p90_mean_tpot_s_max": .1}
+             "p90_tpot_s": .1, "p90_tpot_s_min": .1,
+             "p90_tpot_s_max": .1}
             for model in plot_style.MODELS for rate in (*campaign.RATES,
                                                          *campaign.KNEE_RATES[model])]
 

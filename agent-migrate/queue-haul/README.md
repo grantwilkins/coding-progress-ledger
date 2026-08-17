@@ -1505,6 +1505,9 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
   service and loaded-migration evidence.
 - `service_headroom_campaign.py`: exact-stack A100/H100 incumbent-latency curves
   against Queue-Haul's offered normalized prefill/decode service work.
+- `fixed_shape_slo_campaign.py`: H100 fixed-shape RPS curves. Its TPOT column is
+  `p90_tpot_s`, pooled over every exact post-first-token interval in each cell.
+  Launches leave CUDA architecture selection to the visible GPU.
 - `service_surface_runner.py` and `service_profile_reduce.py`: isolated and
   mixed service profiles.
 

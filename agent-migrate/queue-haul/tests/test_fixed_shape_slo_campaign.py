@@ -8,7 +8,7 @@ import fixed_shape_slo_campaign as campaign
 def result(rate, replicate=0, violation=False, ttft=.5, tpot=.05):
     return {"offered_rps": rate, "replicate": replicate,
             "slo_violation": violation, "exact_completion_rate": 1,
-            "p90_ttft_s": ttft, "p90_mean_tpot_s": tpot}
+            "p90_ttft_s": ttft, "p90_tpot_s": tpot}
 
 
 def test_plan_freezes_exact_shape_poisson_rates_and_unlimited_concurrency():
@@ -77,6 +77,9 @@ def test_upper_reduction_uses_only_base_rates_without_slo_claim(tmp_path):
                "runtime_identity": identity,
                "runtime_identity_sha256": campaign.service.identity_sha(identity)}
         (path / "result.json").write_text(__import__("json").dumps(row))
+        (path / "requests.json").write_text(__import__("json").dumps([{
+            "exact_token_timestamps": True, "token_itls_s": [row["p90_tpot_s"]],
+        }]))
 
     summary = campaign.reduce_upper(tmp_path, plan)
 

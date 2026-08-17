@@ -171,6 +171,7 @@ class Config:
     max_num_batched_tokens: int = 8192
     architecture_campaign: bool = False
     capacity_discovery: bool = False
+    enforce_eager: bool = True
 
 
 @dataclass(frozen=True)
@@ -350,7 +351,6 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
         "VLLM_SERVER_DEV_MODE": "1",
         "VLLM_USE_FLASHINFER_SAMPLER": "0",
-        "TORCH_CUDA_ARCH_LIST": "8.0",
         "TMPDIR": str(tmpdir(role)),
         "VLLM_RPC_BASE_PATH": str(tmpdir(role)),
         "HF_HOME": str(cfg.hf_home),
@@ -509,7 +509,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         16,
         "--enable-chunked-prefill",
         "--enable-prefix-caching" if prefix_caching() else "--no-enable-prefix-caching",
-        "--enforce-eager",
+        *(["--enforce-eager"] if cfg.enforce_eager else []),
         *(["--enable-sleep-mode"] if role == "source" and (
             sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
         ) else []),

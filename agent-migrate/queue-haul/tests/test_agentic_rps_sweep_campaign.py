@@ -1,5 +1,6 @@
 """Tests for the intentionally small, non-gating agentic RPS sweep."""
 
+import csv
 import json
 
 import pytest
@@ -37,6 +38,17 @@ def test_plan_is_fixed_shape_open_loop_and_runs_every_rate():
     assert plan["semantics"]["tpot_definition"] \
         == "p90_of_all_exact_post_first_token_intervals"
     assert plan["slo"]["relative_models"] == ["Qwen/Qwen3.8-27B"]
+
+
+def test_h100_plan_changes_only_hardware():
+    a100 = campaign.make_plan(seed=7)
+    h100 = campaign.make_plan(seed=7, hardware="h100")
+
+    assert h100 == {**a100, "hardware": "h100",
+                    "runtime": {**a100["runtime"], "enforce_eager": False}}
+    assert campaign.model_config("openai/gpt-oss-20b").enforce_eager
+    assert not campaign.model_config(
+        "openai/gpt-oss-20b", "h100").enforce_eager
 
 
 def test_trace_forces_long_output_and_unique_private_prompts():
@@ -210,3 +222,14 @@ def test_service_failures_remain_curve_data():
     assert result["tpot_samples"] == 12
     assert result["diagnostic_p90_request_mean_tpot_s"] == .05
     assert "one client failed" in result["client_error"]
+
+
+def test_csv_exports_pooled_tpot_not_request_mean(tmp_path):
+    path = tmp_path / "rps-sweep.csv"
+    campaign.write_csv(path, [{
+        "p90_tpot_s": .2,
+        "diagnostic_p90_request_mean_tpot_s": .05,
+    }])
+
+    row = next(csv.DictReader(path.open()))
+    assert row == {"p90_tpot_s": "0.2"}

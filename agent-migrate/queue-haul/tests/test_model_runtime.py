@@ -60,6 +60,7 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
 
     for cfg in configs.values():
         command = testbed.shell(testbed.vllm_cmd(cfg, "source"))
+        assert "TORCH_CUDA_ARCH_LIST" not in command
         assert "--tensor-parallel-size 1" in command
         assert "--dtype bfloat16" in command
         assert "--kv-cache-dtype auto" in command
@@ -142,6 +143,15 @@ def test_capacity_and_architecture_modes_are_mutually_exclusive(monkeypatch):
                   capacity_discovery=True)
     with pytest.raises(ValueError, match="mutually exclusive"):
         testbed.validate_model_runtime(cfg)
+
+
+def test_optimized_runtime_does_not_force_eager(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    cfg = replace(testbed.Config(), enforce_eager=False)
+
+    assert "--enforce-eager" not in testbed.shell(
+        testbed.vllm_cmd(cfg, "sink", [], gpu_index=0))
 
 
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):
