@@ -142,6 +142,48 @@ def test_old_mean_tpot_cells_are_not_reused(tmp_path):
             plan, cell, campaign.result_path(tmp_path, cell))
 
 
+def test_historical_cells_are_rereduced_from_all_token_intervals(tmp_path):
+    plan = campaign.make_plan(seed=1)
+    model = "openai/gpt-oss-20b"
+    cell = campaign.cell_spec(model, 4, 0)
+    source = tmp_path / "old" / "cells" / cell["cell_id"]
+    old = synthetic_result(plan, model, 4, 0, 1.0, .04)
+    old.update({
+        "schema": "queue-haul-agentic-rps-sweep-v1",
+        "plan_sha256": next(
+            digest for schema, digest in campaign.HISTORICAL_RESULT_IDENTITIES
+            if schema == "queue-haul-agentic-rps-sweep-v1"
+        ),
+        "peak_running_requests": 7,
+    })
+    write_result(tmp_path / "old", old)
+    requests = [{
+        "status": 200, "error": "", "done": True,
+        "finish_reason": "length", "output_tokens": 1024,
+        "recorded_output_tokens": 1024, "planned_output_tokens": 1024,
+        "exact_token_timestamps": True, "ttft_s": 1.0,
+        "mean_tpot_s": .05, "token_itls_s": [.01, .02, .03, .20],
+        "scheduled_ns": index * 10, "start_ns": index * 10,
+        "send_lateness_s": 0,
+    } for index in range(3)]
+    (source / "requests.json").write_text(json.dumps(requests))
+
+    rows = campaign.rereduce_sources(
+        plan, [tmp_path / "old" / "cells"], tmp_path / "new", (model,),
+        ["test-node"], ["/persistent/test/cells"],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["schema"] == campaign.SCHEMA
+    assert rows[0]["p90_tpot_s"] == pytest.approx(.20)
+    assert rows[0]["tpot_samples"] == 12
+    assert rows[0]["peak_running_requests"] == 7
+    assert rows[0]["source_label"] == "test-node"
+    assert rows[0]["source_root"] == "/persistent/test/cells"
+    assert rows[0]["source_schema"] \
+        == "queue-haul-agentic-rps-sweep-v1"
+
+
 def test_service_failures_remain_curve_data():
     plan = campaign.make_plan()
     cell = campaign.cell_spec(campaign.MODELS[0], .5, 0)

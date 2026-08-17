@@ -28,6 +28,11 @@ import single_gpu_capacity_campaign as capacity
 SCHEMA = "queue-haul-agentic-rps-sweep-v3"
 PARENT_SCHEMA = "queue-haul-agentic-rps-sweep-v2"
 PARENT_PLAN_SHA256 = "194ad7d6e376e903fb7ce3db7f40df925942f8cb21b91e2d6fb890a39825512d"
+HISTORICAL_RESULT_IDENTITIES = {
+    ("queue-haul-agentic-rps-sweep-v1",
+     "4709014a6cbaa32104531be1c9e0482094a4f3ac6d155fb44d015f13473b67ed"),
+    (PARENT_SCHEMA, PARENT_PLAN_SHA256),
+}
 MODELS = tuple(testbed.MODEL_SPECS)
 BASE_RATES_RPS = (.125, .25, .5, 1.0, 2.0, 4.0, 8.0)
 REFINEMENT_RATES_RPS = {
@@ -338,6 +343,84 @@ def read_result(plan: dict, cell: dict, path: Path) -> dict:
     return result
 
 
+def rereduce_cell(plan: dict, source: Path, destination: Path,
+                  source_label: str, source_origin: str) -> dict:
+    """Recompute one historical cell from its retained token timestamps."""
+    old_result_path = source / "result.json"
+    requests_path = source / "requests.json"
+    old = json.loads(old_result_path.read_text())
+    requests = json.loads(requests_path.read_text())
+    identity = (old.get("schema"), old.get("plan_sha256"))
+    model = old.get("model")
+    rate = old.get("offered_rps")
+    repeat = old.get("repeat")
+    if identity not in HISTORICAL_RESULT_IDENTITIES \
+            or model not in MODELS \
+            or rate not in model_rates(plan, model) \
+            or repeat not in (0, *BOUNDARY_REPEATS):
+        raise RuntimeError(f"invalid historical sweep cell: {source}")
+    cell = cell_spec(model, rate, repeat)
+    if any(old.get(key) != value for key, value in cell.items()):
+        raise RuntimeError(f"historical sweep cell identity mismatch: {source}")
+    derived = summarize_cell(
+        plan, cell, requests, [], bool(old.get("drained")), None,
+        bool(old.get("engine_exited")), None,
+    )
+    for field in (
+        "peak_running_requests", "peak_waiting_requests", "drained",
+        "engine_exited", "client_error", "sampler_error",
+    ):
+        derived[field] = old.get(field)
+    derived.update({
+        "source_schema": old["schema"],
+        "source_plan_sha256": old["plan_sha256"],
+        "source_result_sha256": hashlib.sha256(
+            old_result_path.read_bytes()).hexdigest(),
+        "source_requests_sha256": hashlib.sha256(
+            requests_path.read_bytes()).hexdigest(),
+        "source_label": source_label,
+        "source_root": source_origin,
+    })
+    write_json(destination / cell["cell_id"] / "result.json", derived)
+    return derived
+
+
+def rereduce_sources(plan: dict, sources: list[Path], root: Path,
+                     models: tuple[str, ...],
+                     source_labels: list[str] | None = None,
+                     source_origins: list[str] | None = None) -> list[dict]:
+    """Pool historical raw cells into a new result root without rerunning."""
+    selected = set(models)
+    labels = source_labels or [source.name for source in sources]
+    origins = source_origins or [str(source) for source in sources]
+    if len(labels) != len(sources) or len(set(labels)) != len(labels):
+        raise ValueError("source labels must be unique and match source roots")
+    if len(origins) != len(sources):
+        raise ValueError("source origins must match source roots")
+    written = {}
+    rows = []
+    for source_root, source_label, source_origin in zip(
+            sources, labels, origins):
+        for requests_path in sorted(source_root.glob("*/requests.json")):
+            source = requests_path.parent
+            old = json.loads((source / "result.json").read_text())
+            if old.get("model") not in selected:
+                continue
+            cell = old.get("cell_id")
+            source_hash = hashlib.sha256(requests_path.read_bytes()).hexdigest()
+            if cell in written:
+                if written[cell] != source_hash:
+                    raise RuntimeError(f"conflicting historical sweep cell: {cell}")
+                continue
+            result = rereduce_cell(
+                plan, source, root / "cells", source_label, source_origin,
+            )
+            written[cell] = source_hash
+            rows.append(result)
+    write_json(root / "plan.json", plan)
+    return rows
+
+
 def run_specs(plan: dict, model: str, specs: list[dict], root: Path) -> None:
     pending = []
     for cell in specs:
@@ -529,6 +612,15 @@ def parse_args(argv=None):
     reduce_parser.add_argument("--run-root", type=Path, required=True)
     reduce_parser.add_argument("--out", type=Path, required=True)
     reduce_parser.add_argument("--csv", type=Path)
+    rereduce = commands.add_parser("rereduce")
+    rereduce.add_argument("--plan", type=Path, required=True)
+    rereduce.add_argument("--source-root", type=Path, action="append",
+                         required=True)
+    rereduce.add_argument("--source-label", action="append")
+    rereduce.add_argument("--source-origin", action="append")
+    rereduce.add_argument("--run-root", type=Path, required=True)
+    rereduce.add_argument("--model", choices=MODELS, action="append")
+    rereduce.add_argument("--csv", type=Path)
     return parser.parse_args(argv)
 
 
@@ -541,6 +633,15 @@ def main(argv=None) -> None:
     if args.command == "run":
         models = tuple(args.model or MODELS)
         run_campaign(plan, args.run_root, models)
+        return
+    if args.command == "rereduce":
+        models = tuple(args.model or MODELS)
+        rows = rereduce_sources(
+            plan, args.source_root, args.run_root, models, args.source_label,
+            args.source_origin,
+        )
+        if args.csv:
+            write_csv(args.csv, rows)
         return
     summary = reduce(plan, args.run_root)
     write_json(args.out, summary)
