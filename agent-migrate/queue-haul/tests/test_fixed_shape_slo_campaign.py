@@ -18,7 +18,9 @@ def test_plan_freezes_exact_shape_poisson_rates_and_unlimited_concurrency():
     assert (plan["input_tokens"], plan["output_tokens"],
             plan["requests_per_point"], plan["max_concurrency"]) == (3920, 1024, 32, None)
     assert [row["poisson_seed"] for row in plan["base_cells"]] == list(range(7, 14))
-    assert [row["poisson_seed"] for row in plan["lower_bracket_cells"]] == [28, 29, 30]
+    assert [[row["poisson_seed"] for row in cells]
+            for cells in plan["lower_bracket_cells"]] == [
+                [28, 29, 30], [31, 32, 33], [34, 35, 36]]
     assert len(campaign.offered_trace(.125, 7)) == 32
     assert campaign.offered_trace(.125, 7) == campaign.offered_trace(.125, 7)
 

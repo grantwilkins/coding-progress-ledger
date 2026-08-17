@@ -25,7 +25,7 @@ OUTPUT_TOKENS = 1024
 REQUESTS = 32
 BOUNDARY_REPEATS = 2
 DEFAULT_SEED = 20260816
-LOWER_BRACKET_RPS = RATES[0] / 2
+LOWER_BRACKET_RATES = tuple(RATES[0] / 2**step for step in range(1, 4))
 
 
 def rate_label(rate: float) -> str:
@@ -38,10 +38,11 @@ def cell(rate: float, rate_index: int, replicate: int, seed: int) -> dict:
             "poisson_seed": seed + rate_index + replicate * len(RATES)}
 
 
-def lower_cell(replicate: int, seed: int) -> dict:
-    return {"cell_id": f"rps{rate_label(LOWER_BRACKET_RPS)}-rep{replicate}",
-            "offered_rps": LOWER_BRACKET_RPS, "replicate": replicate,
-            "poisson_seed": seed + 3 * len(RATES) + replicate}
+def lower_cell(rate: float, rate_index: int, replicate: int, seed: int) -> dict:
+    return {"cell_id": f"rps{rate_label(rate)}-rep{replicate}",
+            "offered_rps": rate, "replicate": replicate,
+            "poisson_seed": seed + 3 * len(RATES)
+            + rate_index * (BOUNDARY_REPEATS + 1) + replicate}
 
 
 def make_plan(model: str, ttft_slo_s: float = 1., tpot_slo_s: float = .1,
@@ -56,12 +57,14 @@ def make_plan(model: str, ttft_slo_s: float = 1., tpot_slo_s: float = .1,
             "seed": seed, "request_timeout_s": 1200, "drain_s": 1200,
             "ttft_slo_s": ttft_slo_s, "tpot_slo_s": tpot_slo_s,
             "boundary_repeats": BOUNDARY_REPEATS,
-            "conditional_lower_bracket_rps": LOWER_BRACKET_RPS,
+            "conditional_lower_bracket_rps": list(LOWER_BRACKET_RATES),
             "image_sha256": stack["image_sha256"], "stack": stack["stack"],
             "base_cells": [cell(rate, index, 0, seed)
                            for index, rate in enumerate(RATES)],
-            "lower_bracket_cells": [lower_cell(replicate, seed)
-                                    for replicate in range(BOUNDARY_REPEATS + 1)]}
+            "lower_bracket_cells": [
+                [lower_cell(rate, index, replicate, seed)
+                 for replicate in range(BOUNDARY_REPEATS + 1)]
+                for index, rate in enumerate(LOWER_BRACKET_RATES)]}
 
 
 def read_plan(path: Path) -> dict:
@@ -282,16 +285,21 @@ def run_model(plan: dict, cfg: testbed.Config, root: Path) -> None:
         rows = [one(expected) for expected in plan["base_cells"]]
         boundary = first_boundary(rows)
         if boundary[0] is None:
-            expected = plan["lower_bracket_cells"][0]
-            rows.append(one(expected))
-            if rows[-1]["slo_violation"]:
-                raise RuntimeError("conditional lower rate also violates the SLO")
-            boundary = expected["offered_rps"], boundary[1]
+            violation = boundary[1]
+            for cells in plan["lower_bracket_cells"]:
+                rows.append(one(cells[0]))
+                if not rows[-1]["slo_violation"]:
+                    boundary = rows[-1]["offered_rps"], violation
+                    break
+                violation = rows[-1]["offered_rps"]
+            else:
+                raise RuntimeError("conditional lower ladder does not bracket the SLO")
         for replicate in range(1, BOUNDARY_REPEATS + 1):
             for rate in boundary:
-                expected = (plan["lower_bracket_cells"][replicate]
-                            if rate == LOWER_BRACKET_RPS else
-                            cell(rate, RATES.index(rate), replicate, plan["seed"]))
+                expected = (cell(rate, RATES.index(rate), replicate, plan["seed"])
+                            if rate in RATES else next(
+                                cells[replicate] for cells in plan["lower_bracket_cells"]
+                                if cells[0]["offered_rps"] == rate))
                 rows.append(one(expected))
         write_summary(root, plan, rows, boundary, identity)
 

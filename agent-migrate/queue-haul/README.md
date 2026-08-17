@@ -1521,10 +1521,11 @@ predecessor each run twice more. The plot reports the median of those three
 boundary runs with min--max whiskers. Incomplete requests count as service
 failures and violations, while launch, telemetry, token-accounting, or cache
 contamination errors invalidate the attempt and force a clean restart.
-If 0.125 RPS is already the first violation, the frozen plan runs a conditional
-0.0625-RPS predecessor three times and repeats 0.125 RPS twice; the requested
-seven-point base sweep is unchanged. The campaign hard-fails if that lower
-probe also violates rather than reporting an unbracketed boundary.
+If 0.125 RPS is already the first violation, the frozen plan probes the
+`{0.0625, 0.03125, 0.015625}` RPS ladder only until it finds a passing point,
+then repeats that true adjacent pass/fail pair twice; the requested seven-point
+base sweep is unchanged. The campaign hard-fails if the ladder remains
+unbracketed.
 
 The frozen plan records the default declared SLOs of 1 second TTFT and 0.1
 second per-request mean TPOT. Raw request token IDs and timestamps, offered
