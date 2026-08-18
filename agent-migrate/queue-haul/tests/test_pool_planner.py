@@ -1540,7 +1540,9 @@ def test_fluid_deadline_repair_is_separate_and_recomputes_shortfall(
     result = plan(problem(), model(tmp_path, switch=0, tp=1), PATHS, "greedy",
                   destination=arch)
 
-    assert len(calls) == 1
+    # One selection pack, plus one refill probe that the deadline rejects.
+    assert len(calls) == 2
+    assert len(result.moves) == 1
     assert result.deadline_repair_count == 1
     assert result.packing_repair_count == 0
     assert result.predicted_migration_makespan_s <= 9
@@ -2900,3 +2902,97 @@ def test_fluid_headroom_must_cover_every_method_equally():
             DestinationPool("p0", "q", replicas, "r0", ("wan",),
                             migration_headroom=headroom,
                             fluid_migration=_decoupled_service(100))
+
+
+# Claims: after a packing or deadline cut the planner reoptimizes instead of
+# just shrinking - the target is topped back up from candidates the policy can
+# still use, and a session dropped at the deadline may leave by another pool.
+# Plausible wrong implementations: cutting without refill (the selection only
+# ever shrinks); refilling with candidates the policy may not use; re-adding
+# the exact candidate the deadline already rejected.
+def test_packing_cut_refills_toward_the_target(tmp_path):
+    base = architecture(
+        normal=.5, emergency=.5, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), methods=("replay",),
+    )
+    arch = replace(base, pools=(replace(
+        base.pools[0], replicas=(DestinationReplica("t0", (0, 0)),
+                                 DestinationReplica("t1", (0, 0))),
+    ),))
+    scenario = replace(problem(), sessions=(
+        SimSession("a", "s0", 10, 30, 0, 100),
+        SimSession("b", "s0", 10, 30, 0, 100),
+        SimSession("c", "s1", 10, 30, 0, 100),
+        SimSession("d", "s1", 10, 20, 0, 100),
+    ))
+    profile = model(tmp_path, switch=0, tp=1)
+    power = ExpectedPower(scenario, profile)
+    target = sum(power.marginal(s) for s in "abc")
+
+    table, selected, assignment, repairs, _ = pool_planner._mode_plan(
+        scenario, profile, arch, "greedy", "normal", power, target, 0,
+    )
+
+    # Three 0.3-work sessions fit the aggregate budget (0.9 of 2 x 0.5) but
+    # not two replicas of bound 0.5; the third is cut and the 0.2 session,
+    # which the target run skipped, refills the freed replica exactly.
+    chosen = {table.sessions[table.candidates[i].session].session_id
+              for i in selected}
+    assert repairs == 1
+    assert "d" in chosen and len(chosen & {"a", "b", "c"}) == 2
+    assert set(assignment) == set(selected)
+
+
+def test_deadline_cut_reroutes_the_dropped_session(tmp_path):
+    service = _decoupled_service(1e9)
+    base = architecture(
+        normal=1, emergency=1, stable=2, baselines=((0, 0), (0, 0)),
+        routes=(("wan",), ("wan2",)), methods=("kv_transfer",), fluid=service,
+    )
+    components = MigrationComponents((1, 1000), (1, 1000), "hand", 1, 1, 100)
+    arch = replace(base, types=(replace(
+        base.types[0],
+        migration={m: components for m in ("replay", "kv_transfer")},
+    ),))
+    scenario = replace(problem(), sessions=(
+        SimSession("a", "s0", 20, 25, 0, 100),
+        SimSession("b", "s1", 20, 25, 0, 100),
+    ), links=(NetworkLink("wan", 100), NetworkLink("wan2", 100)))
+    profile = model(tmp_path, switch=0, tp=1)
+    power = ExpectedPower(scenario, profile)
+    scenario = replace(
+        scenario, deadline_s=5.5, end_s=20,
+        power_limit_w=power.power(True) - power.drain_gain(["a", "b"]),
+    )
+
+    result = plan(scenario, profile, PATHS, "greedy", destination=arch,
+                  admission_mode="normal")
+
+    # Both sessions first pick pool p0: their 200-byte transfers share the
+    # 100 B/s link, land at 4 s, and the two 1 s residuals on one replica
+    # commit at 6 s - past the 4.5 s horizon.  The repair drops one, and the
+    # refill must move it through wan2/p1 (3 s) instead of abandoning it.
+    assert len(result.moves) == 2
+    assert {move.destination_pool for move in result.moves} == {"p0", "p1"}
+    assert result.deadline_repair_count == 1
+
+
+def test_isolated_fastest_keeps_every_destination_of_the_fastest_method(
+        tmp_path):
+    arch = architecture(normal=1, emergency=1, stable=1, kv=10, block=1)
+    scenario = problem()
+    profile = model(tmp_path, tp=1, replay_rate={
+        "1": [[1, 2], [1000, 2]], "2": [[1, 2], [1000, 2]]})
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+
+    selected = pool_planner._baseline_policy(table, 1e9, "isolated_fastest", 0)
+
+    # KV (about 1 s) beats 2 tok/s replay (5 s) for every session, and one
+    # session's KV fills a pool: isolation may fix the method but must not
+    # strand the second session on the first pool.
+    picked = [table.candidates[i] for i in selected]
+    assert {c.session for c in picked} == {0, 1}
+    assert all(c.method == "kv_transfer" for c in picked)
+    assert len({c.pool for c in picked}) == 2

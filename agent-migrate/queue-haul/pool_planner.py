@@ -887,7 +887,8 @@ def _integral_target_recovery(table, target):
     return None
 
 
-def _greedy(table: CandidateTable, target: float, eligible=None, repair=False):
+def _greedy(table: CandidateTable, target: float, eligible=None, repair=False,
+            state=None):
     matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
     eligible = tuple(range(len(table.candidates))) if eligible is None else tuple(eligible)
     prices, score = _scarcity_prices(table, matrix, eligible), []
@@ -897,6 +898,12 @@ def _greedy(table: CandidateTable, target: float, eligible=None, repair=False):
         rows, values = matrix.indices[sl], matrix.data[sl]
         score.append((c.credit / max(values @ prices[rows], 1e-12), i))
     sessions, gain = set(), 0.0
+    if state:
+        selected = set(state)
+        sessions = {table.candidates[i].session for i in selected}
+        gain = sum(table.candidates[i].credit for i in selected)
+        usage = np.asarray(
+            table.resources[:, sorted(selected)].sum(axis=1)).ravel()
     for _, i in sorted(score, key=lambda row: (-row[0], row[1])):
         c = table.candidates[i]
         if gain >= target - 1e-8:
@@ -940,20 +947,26 @@ def _baseline_policy(table: CandidateTable, target: float, policy: str, seed: in
             if gain >= target - 1e-8:
                 break
         return selected
-    eligible = [
-        i for i, candidate in enumerate(table.candidates)
-        if policy not in {"replay_only", "kv_only"}
-        or candidate.method == ("replay" if policy == "replay_only" else "kv_transfer")
-    ]
-    if policy == "isolated_fastest":
-        fastest = {}
-        for i in eligible:
-            candidate = table.candidates[i]
-            key = (candidate.duration_s, candidate.migration_work_s, i)
-            if candidate.session not in fastest or key < fastest[candidate.session][0]:
-                fastest[candidate.session] = key, i
-        eligible = [value[1] for value in fastest.values()]
-    return _greedy(table, target, eligible)
+    return _greedy(table, target, _policy_eligible(table, policy))
+
+
+def _policy_eligible(table, policy):
+    """Candidate indices a policy may select; None means unrestricted."""
+    if policy in {"replay_only", "kv_only"}:
+        method = "replay" if policy == "replay_only" else "kv_transfer"
+        return [i for i, c in enumerate(table.candidates) if c.method == method]
+    if policy != "isolated_fastest":
+        return None
+    # Isolation is per session and per method: each session commits to its
+    # fastest method in isolation but keeps every destination offering it, so
+    # one crowded pool cannot strand the rest of the fleet.
+    fastest = {}
+    for i, c in enumerate(table.candidates):
+        key = (c.duration_s, c.migration_work_s, i)
+        if c.session not in fastest or key < fastest[c.session][0]:
+            fastest[c.session] = key, c.method
+    return [i for i, c in enumerate(table.candidates)
+            if c.method == fastest[c.session][1]]
 
 
 def _lagrangian_gain(table, power, pattern, cache=None):
@@ -2632,14 +2645,30 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
     repairs, repair_s = 0, 0.0
     if assignment is None:
         started = perf_counter()
-        assignment, cut = _pack(
-            table, selected, architecture, scenario, mode, repair=True,
-        )
-        if solver in MAX_SHED_SOLVERS and cut:
-            raise RuntimeError("maximum-shed set is not replica-packable")
-        selected.difference_update(cut)
-        repairs = len(cut)
-        repair_s = perf_counter() - started if cut else 0.0
+        eligible = _policy_eligible(table, solver)
+        banned = set()
+        while True:
+            assignment, cut = _pack(
+                table, selected, architecture, scenario, mode, repair=True,
+            )
+            if solver in MAX_SHED_SOLVERS and cut:
+                raise RuntimeError("maximum-shed set is not replica-packable")
+            if not cut:
+                break
+            selected.difference_update(cut)
+            banned.update(cut)
+            repairs += len(cut)
+            if sum(table.candidates[i].credit for i in selected) >= target - 1e-8:
+                break
+            grown = _greedy(table, target, [
+                i for i in (range(len(table.candidates))
+                            if eligible is None else eligible)
+                if i not in banned and i not in selected
+            ], state=selected)
+            if grown == selected:
+                break
+            selected = grown
+        repair_s = perf_counter() - started if repairs else 0.0
     if selection_credits is not None:
         credited = sum(table.candidates[i].credit for i in selected)
         for i in sorted(selected, key=lambda i: (
@@ -2690,9 +2719,7 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
     deadline_repair_s = 0.0
     deadline = scenario.controller_delay_s + table.migration_horizon_s
 
-    def attempt(dropped):
-        chosen = set(selected) - dropped
-        picks = {i: v for i, v in assignment.items() if i in chosen}
+    def attempt(chosen, picks):
         built = _moves(table, chosen, picks, architecture, scenario, profile)
         validate_destination_execution(scenario, architecture, built)
         return chosen, picks, built, predict(
@@ -2700,32 +2727,63 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
             architecture,
         )
 
+    def without(dropped):
+        chosen = set(selected) - dropped
+        return attempt(chosen, {i: v for i, v in assignment.items() if i in chosen})
+
     def fits(outcome):
         return not fluid or (outcome.migration_makespan_s is not None
                              and outcome.migration_makespan_s <= deadline + 1e-9)
 
-    _, _, moves, expected = attempt(frozenset())
+    _, _, moves, expected = attempt(
+        set(selected), dict(assignment) if assignment else {})
     if not fits(expected) and selected:
         # Candidates leave in a fixed order, worst cost per credit first, and
         # the makespan falls monotonically as more of them go.  Bisect on how
         # many to drop rather than simulating once per drop.
         started = perf_counter()
         costs = np.asarray(table.resources.sum(0)).ravel()
-        order = sorted(selected, key=lambda i: (
-            costs[i] / max(table.candidates[i].credit, 1e-12), i), reverse=True)
+        ratio = lambda i: costs[i] / max(table.candidates[i].credit, 1e-12)
+        order = sorted(selected, key=lambda i: (ratio(i), i), reverse=True)
         low, high, best = 1, len(order), None
         while low <= high:
             middle = (low + high) // 2
-            outcome = attempt(frozenset(order[:middle]))
+            outcome = without(frozenset(order[:middle]))
             if fits(outcome[3]):
                 best, high = outcome, middle - 1
             else:
                 low = middle + 1
         if best is None:
-            best = attempt(frozenset(order))
+            best = without(frozenset(order))
         chosen, picks, moves, expected = best
         deadline_repairs = len(selected) - len(chosen)
-        selected.intersection_update(chosen)
+        # The cut alone is destructive: sessions the policy can still move by
+        # another method or pool refill the plan, keeping the longest cheap
+        # prefix of additions that still meets the deadline.
+        dropped = set(selected) - set(chosen)
+        eligible = _policy_eligible(table, solver)
+        taken = {table.candidates[i].session for i in chosen}
+        extras = sorted(_greedy(table, target, [
+            i for i in (range(len(table.candidates))
+                        if eligible is None else eligible)
+            if i not in dropped and i not in chosen
+            and table.candidates[i].session not in taken
+        ], state=chosen) - set(chosen), key=ratio)
+        low, high = 1, len(extras)
+        while low <= high:
+            middle = (low + high) // 2
+            trial = set(chosen) | set(extras[:middle])
+            trial_picks, cut = _pack(
+                table, trial, architecture, scenario, mode, repair=True,
+            )
+            outcome = attempt(trial - set(cut), trial_picks)
+            if fits(outcome[3]):
+                best, low = outcome, middle + 1
+            else:
+                high = middle - 1
+        chosen, picks, moves, expected = best
+        selected.clear()
+        selected.update(chosen)
         assignment.clear()
         assignment.update(picks)
         moved = [table.sessions[table.candidates[i].session].session_id
