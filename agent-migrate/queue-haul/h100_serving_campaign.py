@@ -147,9 +147,11 @@ def run_prefill(plan: dict, model: str, root: Path) -> None:
                     raise RuntimeError("stale prefill evidence")
                 continue
             testbed.reset_vllm_caches(cfg, (stack.log,), ports=(stack.port,))
+            requests = trace(plan, model, cell)
             rows, error = headroom.issue_async_trace(
-                cfg.host, stack.port, trace(plan, model, cell),
-                time.monotonic_ns() + 1_000_000_000, 1800, 16)
+                cfg.host, stack.port, requests,
+                time.monotonic_ns() + 1_000_000_000, 1800,
+                min(16, len(requests)))
             if error:
                 raise error
             write_json(result.parent / "requests.json", rows)
