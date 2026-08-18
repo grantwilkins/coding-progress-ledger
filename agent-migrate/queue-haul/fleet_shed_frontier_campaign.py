@@ -14,8 +14,7 @@ import numpy as np
 
 from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
                          DestinationArchitecture, DestinationPool, DestinationReplica,
-                         DestinationType, FluidMigrationService, LoadedCoefficients,
-                         MigrationComponents)
+                         DestinationType, LoadedCoefficients, MigrationComponents)
 from migration_profiler import file_hash, stable_seed
 from planner import InstanceCapacity, plan, source_power
 from power_model import ExpectedPower
@@ -195,10 +194,6 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
         return ContextRate(*(tuple(map(float, v)) for v in curve.by_concurrency[1]))
 
     loaded_fit = json.loads(LOADED.read_text())
-    source_action = {method: case.action_power_w[method].power(1, True)
-                     for method in ("replay", "kv_transfer")}
-    sink_action = {method: case.action_power_w[method].power(1, False)
-                   for method in source_action}
     baseline = tuple(rho * bounds["normal"] / request_work(case).sum()
                      * request_work(case))
     types, pools = [], []
@@ -237,13 +232,7 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
                   for i in range(replicas)),
             f"route/{region}", (f"pipeline/{region}",),
             migration_headroom={method: headroom
-                                for method in ("replay", "kv_transfer")},
-            fluid_migration=FluidMigrationService(
-                1 / factors["replay"],
-                fits[region]["kv_ingest_lower_bound_bytes_per_s"],
-                source_action, sink_action,
-                f"{TIMING.relative_to(ROOT)} regional pipelined timing fit",
-                0, True)))
+                                for method in ("replay", "kv_transfer")}))
     return DestinationArchitecture(DESTINATION_SCHEMA, fingerprint, tuple(types),
                                    tuple(pools))
 
