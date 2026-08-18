@@ -955,18 +955,22 @@ def _policy_eligible(table, policy):
     if policy in {"replay_only", "kv_only"}:
         method = "replay" if policy == "replay_only" else "kv_transfer"
         return [i for i, c in enumerate(table.candidates) if c.method == method]
-    if policy != "isolated_fastest":
+    if policy not in {"isolated_fastest", "isolated_myopic"}:
         return None
     # Isolation is per session and per method: each session commits to its
-    # fastest method in isolation but keeps every destination offering it, so
-    # one crowded pool cannot strand the rest of the fleet.
+    # fastest method in isolation.  isolated_fastest keeps every destination
+    # offering that method, so one crowded pool cannot strand the fleet;
+    # isolated_myopic also locks the route to the single fastest candidate,
+    # the deliberately weak method-and-route baseline.
     fastest = {}
     for i, c in enumerate(table.candidates):
         key = (c.duration_s, c.migration_work_s, i)
         if c.session not in fastest or key < fastest[c.session][0]:
-            fastest[c.session] = key, c.method
+            fastest[c.session] = key, i
+    if policy == "isolated_myopic":
+        return [i for _, i in fastest.values()]
     return [i for i, c in enumerate(table.candidates)
-            if c.method == fastest[c.session][1]]
+            if c.method == table.candidates[fastest[c.session][1]].method]
 
 
 def _lagrangian_gain(table, power, pattern, cache=None):
@@ -2631,7 +2635,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
         )
     elif solver == "greedy":
         selected = _greedy(table, target, repair=True)
-    elif solver in {"isolated_fastest", "random", "replay_only", "kv_only"}:
+    elif solver in {"isolated_fastest", "isolated_myopic", "random",
+                    "replay_only", "kv_only"}:
         selected = _baseline_policy(table, target, solver, seed)
     else:
         selected = (_lp_column_generation_persistent(table, target)
@@ -2683,7 +2688,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
 def plan_destination(scenario, profile, solver, case_id, seed, architecture,
                      admission_mode=None):
     if solver not in {"greedy", "greedy_lagrangian", *MAX_SHED_SOLVERS,
-                      "isolated_fastest", "random", "replay_only", "kv_only",
+                      "isolated_fastest", "isolated_myopic", "random",
+                      "replay_only", "kv_only",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
                       "lp_power_blind",
                       "lp_column_generation", "lp_column_generation_persistent",

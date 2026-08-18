@@ -238,3 +238,85 @@ def test_calibration_bisects_through_a_local_plateau(monkeypatch):
     _, shed, _, steps = campaign.calibrated_plan(
         Snapshot(0.0), None, None, "greedy", 1, "normal", power, 100.0, 80.0)
     assert shed == 50.0 and steps < campaign.CALIBRATION_STEPS
+
+
+# Claims: the frontier headline is the median over seeds of each seed's
+# largest executed, envelope-compliant shed attained by the deadline, and the
+# reduction refuses stale or mixed shards.  Plausible wrong implementations:
+# taking the max over all rows so one lucky seed decides the headline;
+# counting envelope-breaching rows; accepting shards from another commit or
+# rows that disagree with the manifest.
+def _mini_campaign(tmp_path, rows):
+    manifest = {
+        "schema": campaign.SCHEMA, "claim": "test", "sessions": 4,
+        "shards": 1, "window_s": 5, "source_site": "s", "sites": {"e": "e"},
+        "envelope": {"normal": {"rps": 5.0, "ttft_slo_s": 2.0,
+                                "right_censored": False},
+                     "emergency": {"rps": 8.0, "ttft_slo_s": 10.0,
+                                   "right_censored": True}},
+        "inputs": {}, "git_sha": "cafe" * 10,
+        "rows": [{"row_id": i, "deadline_s": 300.0, "policy": "greedy",
+                  "requested_fraction": row["requested_fraction"],
+                  "mode": "normal", "tier": "natural", "rho": 0.45,
+                  "seed": row["seed"], "headline": True}
+                 for i, row in enumerate(rows)],
+    }
+    (tmp_path / "plan.json").write_text(json.dumps(manifest))
+    full = [{**manifest["rows"][i], "git_sha": manifest["git_sha"],
+             "realized_shed_w": 1000 * row["realized_shed_fraction"],
+             "destination_offered_rps": 4.0, **row}
+            for i, row in enumerate(rows)]
+    campaign.write_csv(tmp_path / "shard-00.csv", full)
+    return manifest
+
+
+def test_reduce_medians_per_seed_executed_shed_not_the_lucky_seed(tmp_path):
+    _mini_campaign(tmp_path, [
+        {"seed": 1, "requested_fraction": 0.5, "realized_shed_fraction": 0.5,
+         "target_met": True, "within_envelope": True},
+        {"seed": 1, "requested_fraction": 0.95, "realized_shed_fraction": 0.95,
+         "target_met": False, "within_envelope": False},
+        {"seed": 2, "requested_fraction": 0.9, "realized_shed_fraction": 0.9,
+         "target_met": True, "within_envelope": True},
+    ])
+
+    campaign.reduce(tmp_path)
+
+    frontier = campaign._csv(tmp_path / "frontier.csv")
+    assert len(frontier) == 1
+    row = frontier[0]
+    # Seed 1's compliant best is 0.5 (its 0.95 breached the envelope), seed
+    # 2's is 0.9: the headline is their median 0.7, not the 0.95 or the 0.9.
+    assert float(row["median_executed_shed_fraction"]) == pytest.approx(0.7)
+    assert float(row["min_executed_shed_fraction"]) == pytest.approx(0.5)
+    assert float(row["max_executed_shed_fraction"]) == pytest.approx(0.9)
+    assert float(row["median_max_requested_met"]) == pytest.approx(0.7)
+
+
+def test_reduce_rejects_stale_or_mixed_shards(tmp_path):
+    rows = [
+        {"seed": 1, "requested_fraction": 0.5, "realized_shed_fraction": 0.5,
+         "target_met": True, "within_envelope": True},
+        {"seed": 2, "requested_fraction": 0.5, "realized_shed_fraction": 0.4,
+         "target_met": False, "within_envelope": True},
+    ]
+    _mini_campaign(tmp_path, rows)
+    shard = tmp_path / "shard-00.csv"
+    good = shard.read_text()
+
+    shard.write_text(good.replace("cafe" * 10, "dead" * 10))
+    with pytest.raises(RuntimeError, match="commit"):
+        campaign.reduce(tmp_path)
+
+    lines = good.splitlines()
+    shard.write_text("\n".join(lines + [lines[-1]]) + "\n")
+    with pytest.raises(RuntimeError, match="duplicate"):
+        campaign.reduce(tmp_path)
+
+    shard.write_text("\n".join(lines[:-1]) + "\n")
+    with pytest.raises(RuntimeError, match="every manifest row"):
+        campaign.reduce(tmp_path)
+
+    shard.write_text(good.replace("greedy", "queue_haul"))
+    with pytest.raises(RuntimeError, match="match the manifest"):
+        campaign.reduce(tmp_path)

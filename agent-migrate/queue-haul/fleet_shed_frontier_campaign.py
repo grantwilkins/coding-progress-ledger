@@ -51,8 +51,9 @@ ADMISSION_MODES = ("normal", "emergency")
 # The grid stops below 1.00 deliberately: requesting the whole removable band
 # sets the limit exactly at the idle floor, which only a full evacuation reaches,
 # so that row alone lands back in the infeasible fallback and its attainment is
-# decided by float tolerance rather than by the plan.
-TARGETS = (0.10, 0.25, 0.50, 0.75, 0.90)
+# decided by float tolerance rather than by the plan.  It runs to 0.99 so the
+# frontier top is set by capacity, not by the grid.
+TARGETS = (0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99)
 SEEDS = (1001, 1002, 1003)
 SESSIONS = 50_000
 RHO_DEST = 0.45
@@ -61,7 +62,7 @@ PROMPT, OUTPUT, REF_CONTEXT = 3920, 1024, 3920
 NORMAL_TTFT_SLO_S, EMERGENCY_TTFT_SLO_S = 2.0, 10.0
 WINDOW_S = 5
 SHARDS = 32
-SCHEMA = "queue-haul-fleet-shed-frontier-v1"
+SCHEMA = "queue-haul-fleet-shed-frontier-v2"
 ENVELOPE_SCHEMA = "queue-haul-agentic-rps-sweep-v3"
 
 
@@ -312,7 +313,8 @@ def run_row(row: dict, manifest: dict) -> dict:
     binding = max(planned.resource_uses, key=lambda r: r.utilization,
                   default=None)
     record = {
-        **row, "planner_seed": seed, "source_replicas": replicas,
+        **row, "git_sha": manifest["git_sha"],
+        "planner_seed": seed, "source_replicas": replicas,
         "destination_replicas": replicas * len(REGIONS),
         "migration_headroom": headroom, "absorbed_fraction": absorbed,
         "initial_source_power_w": initial, "idle_source_power_w": idle,
@@ -355,11 +357,17 @@ def run_row(row: dict, manifest: dict) -> dict:
     # Worst pool decides compliance; the pools are not loaded symmetrically.
     offered = max((baseline_rps + work / replicas / per_request
                    for work in landed_work.values()), default=baseline_rps)
+    within = offered <= manifest["envelope"][row["mode"]]["rps"] + 1e-9
     return {
         **record, "realized_shed_w": realized,
         "realized_shed_fraction": realized / removable,
         "landed_sessions": len(committed),
-        "target_met": attained_at is not None,
+        "attained": attained_at is not None,
+        "within_envelope": within,
+        # Met means legitimately met: the executed power reached the request
+        # by the deadline, the plan was feasible, and the destinations stayed
+        # inside the admission mode's measured envelope.
+        "target_met": attained_at is not None and within and planned.feasible,
         "attainment_s": attained_at if attained_at is not None else "",
         "destination_offered_rps": offered,
         "destination_rho": offered / manifest["envelope"]["normal"]["rps"],
@@ -421,7 +429,9 @@ def prepare(out: Path) -> dict:
         "schema": SCHEMA,
         "claim": "deadline-to-shed frontier for one shedding source site and two "
                  "equally sized destination sites held inside the measured "
-                 "offered-RPS service envelope",
+                 "offered-RPS service envelope; the headline is each seed's "
+                 "largest executed shed attained by the deadline, aggregated "
+                 "over seeds by the median",
         "sessions": SESSIONS, "shards": SHARDS, "window_s": WINDOW_S,
         "source_site": SOURCE_SITE, "sites": SITES,
         "envelope": {
@@ -445,6 +455,11 @@ def run_shard(out: Path, shard: int) -> int:
     manifest = json.loads((out / "plan.json").read_text())
     if manifest["schema"] != SCHEMA:
         raise RuntimeError("unexpected plan schema")
+    git = subprocess.run(("git", "rev-parse", "HEAD"), capture_output=True,
+                         text=True, cwd=ROOT, check=True).stdout.strip()
+    if git != manifest["git_sha"]:
+        raise RuntimeError(f"shard {shard} would run on {git[:12]}, "
+                           f"manifest is {manifest['git_sha'][:12]}")
     rows = [row for row in manifest["rows"] if row["row_id"] % SHARDS == shard]
     if not rows:
         raise RuntimeError(f"shard {shard} is empty")
@@ -463,11 +478,30 @@ def reduce(out: Path) -> dict:
     if manifest["schema"] != SCHEMA:
         raise RuntimeError("unexpected plan schema")
     rows = [row for shard in sorted(out.glob("shard-*.csv")) for row in _csv(shard)]
-    if len(rows) != len(manifest["rows"]):
-        raise RuntimeError("reduce requires every shard")
+    expected = {row["row_id"]: row for row in manifest["rows"]}
+    seen = set()
+    for row in rows:
+        i = int(row["row_id"])
+        if i in seen or i not in expected:
+            raise RuntimeError(f"duplicate or unknown row {i}")
+        seen.add(i)
+        if row["git_sha"] != manifest["git_sha"]:
+            raise RuntimeError(f"row {i} was produced by commit "
+                               f"{row['git_sha'][:12]}, not the manifest's")
+        stale = [key for key in ("deadline_s", "policy", "requested_fraction",
+                                 "mode", "tier", "rho", "seed", "headline")
+                 if row[key] != str(expected[i][key])]
+        if stale:
+            raise RuntimeError(f"row {i} does not match the manifest: {stale}")
+    if seen != set(expected):
+        raise RuntimeError("reduce requires every manifest row exactly once")
     headline = [row for row in rows if row["headline"] == "True"]
     envelope = manifest["envelope"]["normal"]["rps"]
 
+    # The headline is executed shed, per seed: for each seed the largest
+    # envelope-compliant shed actually attained by the deadline across the
+    # request grid, aggregated over seeds by the median (min/max kept as the
+    # spread).  No single lucky seed and no coarse threshold decides it.
     frontier, keys = [], []
     for row in headline:
         key = (float(row["deadline_s"]), row["policy"], row["mode"])
@@ -479,17 +513,32 @@ def reduce(out: Path) -> dict:
                  == (deadline, policy, mode)]
         met = [float(row["requested_fraction"]) for row in group
                if row["target_met"] == "True"]
-        realized = [float(row["realized_shed_fraction"]) for row in group]
+        shed_by_seed, met_by_seed = {}, {}
+        for row in group:
+            seed = int(row["seed"])
+            met_by_seed.setdefault(seed, [])
+            shed_by_seed.setdefault(seed, [(0.0, 0.0)])
+            if row["target_met"] == "True":
+                met_by_seed[seed].append(float(row["requested_fraction"]))
+            if row["within_envelope"] == "True":
+                # removable_power_w is per seed, so compare fractions and
+                # carry each seed's watts alongside.
+                shed_by_seed[seed].append((float(row["realized_shed_fraction"]),
+                                           float(row["realized_shed_w"])))
+        best = [max(values) for values in shed_by_seed.values()]
         frontier.append({
             "deadline_s": deadline, "policy": policy, "mode": mode,
-            "cases": len(group),
+            "cases": len(group), "seeds": len(met_by_seed),
             "attained_requests": len(met),
             "attainment_rate": len(met) / len(group),
-            "max_requested_met": max(met, default=0.0),
-            "median_realized_shed_fraction": float(np.median(realized)),
-            "max_realized_shed_fraction": max(realized, default=0.0),
-            "median_realized_shed_kw": float(np.median(
-                [float(row["realized_shed_w"]) for row in group])) / 1000,
+            "median_max_requested_met": float(np.median(
+                [max(values, default=0.0) for values in met_by_seed.values()])),
+            "median_executed_shed_fraction": float(np.median(
+                [fraction for fraction, _ in best])),
+            "min_executed_shed_fraction": min(fraction for fraction, _ in best),
+            "max_executed_shed_fraction": max(fraction for fraction, _ in best),
+            "median_executed_shed_kw": float(np.median(
+                [watts for _, watts in best])) / 1000,
         })
 
     compliance = [{
@@ -497,8 +546,8 @@ def reduce(out: Path) -> dict:
         "mode": row["mode"], "requested_fraction": float(row["requested_fraction"]),
         "seed": int(row["seed"]),
         "destination_offered_rps": float(row["destination_offered_rps"]),
-        "envelope_rps": envelope,
-        "within_envelope": float(row["destination_offered_rps"]) <= envelope + 1e-9,
+        "envelope_rps": manifest["envelope"][row["mode"]]["rps"],
+        "within_envelope": row["within_envelope"] == "True",
     } for row in headline]
     breaches = [row for row in compliance
                 if row["mode"] == "normal" and not row["within_envelope"]]
@@ -530,9 +579,11 @@ def reduce(out: Path) -> dict:
             "replica-second migration budget by a fraction of the service "
             "envelope, which is conservative only while that envelope "
             "exceeds one concurrency-1 replica-second per second.",
-            "Destination pools use decoupled per-method migration budgets "
-            "(coupling=0), which the planner requires before a migration "
-            "headroom may be set; the hardware campaigns couple them.",
+            "Destination pools declare one migration headroom shared by "
+            "both methods (coupling=0): the planner budgets and the executor "
+            "serves replicas x headroom jointly, so a mixed plan cannot book "
+            "the derived slack once per method.  The hardware campaigns "
+            "couple per-method budgets instead.",
             "The stable envelope is assumed equal to the emergency envelope; "
             "no measurement separates them.",
             "The service envelope was measured on the source region's A100 and "
@@ -542,12 +593,13 @@ def reduce(out: Path) -> dict:
             "They dip below a per-replica prefill-throughput estimate at 16384 "
             "tokens; a scalar floor was tried and rejected because it tripled "
             "the error against that same evidence file.",
-            "Sessions are priced by the chord of the measured power curve, "
-            "which sums to "
-            "exactly the removable power but majorises the concave gain, so a "
-            "plan can certify watts it does not deliver. The LP objective is "
-            "modular and true shed is supermodular, so no per-session price can "
-            "make the last session on an instance worth more than the first.",
+            "This profile has no phase_power, so sessions are priced by "
+            "their initial marginal power, which undercounts the concave "
+            "removable power several-fold; the calibration ladder compensates "
+            "by scaling the credit ask until the realised shed matches the "
+            "request. The LP objective is modular and true shed is "
+            "supermodular, so no per-session price can make the last session "
+            "on an instance worth more than the first.",
             "queue_haul is the target-first LP. In a separate spot check at a "
             "300 s deadline and a 25% request it reached 0.96 of the requested "
             "shed where the Lagrangian greedy, which scores prefixes on the "
@@ -566,15 +618,18 @@ def reduce(out: Path) -> dict:
     normal = [row for row in frontier if row["mode"] == "normal"]
     table = "\n".join(
         f"| {row['deadline_s']:.0f} | {row['policy']} | "
-        f"{row['max_requested_met']:.0%} | "
-        f"{row['median_realized_shed_kw']:.1f} |" for row in normal)
+        f"{row['median_executed_shed_fraction']:.0%} | "
+        f"{row['median_executed_shed_kw']:.1f} | "
+        f"{row['median_max_requested_met']:.0%} |" for row in normal)
     (out / "README.md").write_text(
         f"# Fleet shed frontier, {manifest['sessions']:,} sessions\n\n"
         f"One shedding source site ({manifest['source_site']}) and two equally "
         f"sized destination sites ({', '.join(manifest['sites'].values())}), "
         f"gpt-oss-20b on A100. Each row requests a fraction of removable source "
         f"power and is scored on whether it attained that request by the "
-        f"deadline.\n\n"
+        f"deadline; the headline is the median over seeds of each seed's "
+        f"largest executed shed attained by the deadline among "
+        f"envelope-compliant rows.\n\n"
         f"Destination admission is capped at the measured "
         f"{envelope:g} offered RPS per replica, the last swept rate whose "
         f"median p90 TTFT meets the {manifest['envelope']['normal']['ttft_slo_s']} s "
@@ -582,8 +637,9 @@ def reduce(out: Path) -> dict:
         f"{len(breaches)} exceeded that envelope under normal admission.\n\n"
         f"Power is accelerator-scoped: the sum of a measured per-GPU curve over "
         f"the modeled fleet. No facility, cooling, or host power is claimed.\n\n"
-        f"| Deadline (s) | Policy | Max request met | Median shed (kW) |\n"
-        f"|---|---|---|---|\n{table}\n")
+        f"| Deadline (s) | Policy | Median executed shed | Median shed (kW) "
+        f"| Median max request met |\n"
+        f"|---|---|---|---|---|\n{table}\n")
     return summary
 
 

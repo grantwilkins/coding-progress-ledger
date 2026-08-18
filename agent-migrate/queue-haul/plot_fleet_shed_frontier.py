@@ -35,18 +35,26 @@ def read(path: Path, mode: str = "normal") -> dict:
             raise RuntimeError(f"frontier is missing policy {policy!r}")
         curves[policy] = (
             np.array([float(row["deadline_s"]) for row in selected]),
-            np.array([float(row["max_requested_met"]) for row in selected]),
+            np.array([float(row["median_executed_shed_fraction"])
+                      for row in selected]),
+            np.array([float(row["min_executed_shed_fraction"])
+                      for row in selected]),
+            np.array([float(row["max_executed_shed_fraction"])
+                      for row in selected]),
         )
     return curves
 
 
 def write(curves: dict, out: Path) -> None:
     figure, axis = plt.subplots(figsize=plot_style.COLUMN_FIGSIZE)
-    for policy, (deadlines, shed) in curves.items():
-        axis.plot(deadlines, shed, **plot_style.policy_style(policy))
+    for policy, (deadlines, shed, low, high) in curves.items():
+        style = plot_style.policy_style(policy)
+        axis.plot(deadlines, shed, **style)
+        axis.fill_between(deadlines, low, high, color=style["color"],
+                          alpha=.15, linewidth=0)
     axis.set(xscale="log", ylim=(-.02, 1.02),
              xlabel="Demand-Response Notice (s)",
-             ylabel="Shed Attained by Deadline")
+             ylabel="Executed Shed by Deadline")
     ticks = next(iter(curves.values()))[0]
     axis.set_xticks(ticks)
     # Label a readable subset: adjacent log-spaced deadlines collide otherwise.
@@ -81,7 +89,7 @@ def main() -> None:
     args = parser.parse_args()
     curves = read(args.campaign / "frontier.csv", args.mode)
     summary = json.loads((args.campaign / "summary.json").read_text())
-    if summary["schema"] != "queue-haul-fleet-shed-frontier-v1":
+    if summary["schema"] != "queue-haul-fleet-shed-frontier-v2":
         raise RuntimeError("unexpected frontier schema")
     write(curves, args.out or args.campaign / "fleet-shed-frontier")
 
