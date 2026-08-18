@@ -144,9 +144,7 @@ MODEL_SPECS = {
         ("--language-model-only", "--mamba-cache-mode", "align"), 784, True),
     "google/gemma-4-26B-A4B-it": ModelSpec(
         "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
-        vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}',
-                   "--hf-overrides",
-                   '{"text_config":{"allow_global_per_layer_attribute_access":true}}')),
+        vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}')),
 }
 
 
