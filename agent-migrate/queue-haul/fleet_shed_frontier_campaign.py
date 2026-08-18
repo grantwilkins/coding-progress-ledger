@@ -39,7 +39,6 @@ SOURCE_SITE = "swedencentral"
 DEADLINES_S = (30, 60, 120, 180, 300, 450, 600, 900)
 POLICIES = {
     "queue_haul": "lp_work_first", "greedy": "greedy",
-    "greedy_lagrangian": "greedy_lagrangian",
     "isolated_fastest": "isolated_fastest", "kv_only": "kv_only",
     "replay_only": "replay_only",
 }
@@ -539,11 +538,12 @@ def reduce(out: Path) -> dict:
             "plan can certify watts it does not deliver. The LP objective is "
             "modular and true shed is supermodular, so no per-session price can "
             "make the last session on an instance worth more than the first.",
-            "queue_haul is the target-first LP and reaches about 0.96 of a "
-            "requested shed where queue_haul_lagrangian, which scores prefixes "
-            "on the exact joint gain, reaches 1.00. The gap is the linear "
-            "proxy, not the resource model, and is reported rather than tuned "
-            "away.",
+            "queue_haul is the target-first LP. In a separate spot check at a "
+            "300 s deadline and a 25% request it reached 0.96 of the requested "
+            "shed where the Lagrangian greedy, which scores prefixes on the "
+            "exact joint gain, reached 1.00. That solver is not swept here "
+            "because its prefix scoring is superlinear and does not finish at "
+            "fleet scale; the gap is the linear proxy, not the resource model.",
             "Source packing is descending-load first-fit, which gives each "
             "instance near-identical sessions and so flatters any credit-ordered "
             "selector; an arrival-order fleet is a harder case and is not swept "
