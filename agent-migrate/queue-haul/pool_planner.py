@@ -2681,26 +2681,49 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
     fluid = any(pool.fluid_migration for pool in architecture.pools)
     deadline_repairs = 0
     deadline_repair_s = 0.0
-    while True:
-        moves = _moves(table, selected, assignment, architecture, scenario, profile)
-        validate_destination_execution(scenario, architecture, moves)
-        expected = predict(
-            _expected_scenario(scenario, moves), profile, moves, case_id, architecture,
+    deadline = scenario.controller_delay_s + table.migration_horizon_s
+
+    def attempt(dropped):
+        chosen = set(selected) - dropped
+        picks = {i: v for i, v in assignment.items() if i in chosen}
+        built = _moves(table, chosen, picks, architecture, scenario, profile)
+        validate_destination_execution(scenario, architecture, built)
+        return chosen, picks, built, predict(
+            _expected_scenario(scenario, built), profile, built, case_id,
+            architecture,
         )
-        deadline = scenario.controller_delay_s + table.migration_horizon_s
-        if not fluid or expected.migration_makespan_s is not None \
-                and expected.migration_makespan_s <= deadline + 1e-9 or not selected:
-            break
+
+    def fits(outcome):
+        return not fluid or (outcome.migration_makespan_s is not None
+                             and outcome.migration_makespan_s <= deadline + 1e-9)
+
+    _, _, moves, expected = attempt(frozenset())
+    if not fits(expected) and selected:
+        # Candidates leave in a fixed order, worst cost per credit first, and
+        # the makespan falls monotonically as more of them go.  Bisect on how
+        # many to drop rather than simulating once per drop.
         started = perf_counter()
         costs = np.asarray(table.resources.sum(0)).ravel()
-        drop = max(selected, key=lambda i: (
-            costs[i] / max(table.candidates[i].credit, 1e-12), i,
-        ))
-        selected.remove(drop)
-        assignment.pop(drop)
-        moved = [table.sessions[table.candidates[i].session].session_id for i in selected]
+        order = sorted(selected, key=lambda i: (
+            costs[i] / max(table.candidates[i].credit, 1e-12), i), reverse=True)
+        low, high, best = 1, len(order), None
+        while low <= high:
+            middle = (low + high) // 2
+            outcome = attempt(frozenset(order[:middle]))
+            if fits(outcome[3]):
+                best, high = outcome, middle - 1
+            else:
+                low = middle + 1
+        if best is None:
+            best = attempt(frozenset(order))
+        chosen, picks, moves, expected = best
+        deadline_repairs = len(selected) - len(chosen)
+        selected.intersection_update(chosen)
+        assignment.clear()
+        assignment.update(picks)
+        moved = [table.sessions[table.candidates[i].session].session_id
+                 for i in selected]
         planned = source_power(selection_scenario, profile, moved, case_id)
-        deadline_repairs += 1
         deadline_repair_s += perf_counter() - started
     if power.case.phase_power is not None and solver not in {
             "greedy_lagrangian", *MAX_SHED_SOLVERS, "lp_power_blind"}:
