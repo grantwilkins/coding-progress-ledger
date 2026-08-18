@@ -51,6 +51,35 @@ def test_envelope_uses_the_last_passing_rate_and_flags_censoring():
     assert "pooled-p90-tpot" in str(campaign.ENVELOPE)
 
 
+def test_envelope_stops_at_the_first_violating_rate(monkeypatch, tmp_path):
+    # A non-monotone curve: 6 RPS violates, 7 RPS passes again.  Taking a global
+    # maximum over passing rates would wrongly certify 7.
+    artifact = tmp_path / "summary.json"
+    artifact.write_text(json.dumps({
+        "schema": campaign.ENVELOPE_SCHEMA,
+        "models": {campaign.MODEL_ID: {
+            "slo": {"p90_ttft_s": 2.0, "p90_tpot_s": 0.1},
+            "curve": [
+                {"offered_rps": r, "p90_ttft_s_median": t,
+                 "p90_tpot_s_median": 0.03}
+                for r, t in ((1.0, 0.5), (5.0, 1.4), (6.0, 2.9), (7.0, 1.9))],
+        }},
+    }))
+    monkeypatch.setattr(campaign, "ENVELOPE", artifact)
+
+    assert campaign.envelope_rps(2.0) == (5.0, False)
+
+
+def test_envelope_rejects_the_disqualified_schema(monkeypatch, tmp_path):
+    artifact = tmp_path / "summary.json"
+    artifact.write_text(json.dumps({"schema": "queue-haul-agentic-rps-sweep-v2",
+                                    "models": {}}))
+    monkeypatch.setattr(campaign, "ENVELOPE", artifact)
+
+    with pytest.raises(RuntimeError, match="expected"):
+        campaign.envelope_rps(2.0)
+
+
 def test_service_bound_matches_the_profile_rate_limit_conversion(profile):
     case = profile.case()
     bound = 5.0 * campaign.request_work(case).sum()
@@ -106,7 +135,9 @@ def test_every_row_requests_an_attainable_fraction_not_the_idle_floor():
 
     assert rows and len({row["row_id"] for row in rows}) == len(rows)
     assert {row["requested_fraction"] for row in rows} == set(campaign.TARGETS)
-    assert all(0 < row["requested_fraction"] <= 1 for row in rows)
+    # Requesting the whole removable band puts the limit at the idle floor,
+    # which is the infeasible-fallback case this campaign exists to avoid.
+    assert max(row["requested_fraction"] for row in rows) < 1.0
     assert {row["policy"] for row in rows} == set(campaign.POLICIES)
     # The target-first LP is only meaningful against an attainable request.
     assert campaign.POLICIES["queue_haul"] == "lp_work_first"

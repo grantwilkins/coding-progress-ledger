@@ -15,7 +15,7 @@ import numpy as np
 from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
                          DestinationArchitecture, DestinationPool, DestinationReplica,
                          DestinationType, FluidMigrationService, LoadedCoefficients,
-                         MigrationComponents, ProfileRateLimit)
+                         MigrationComponents)
 from migration_profiler import file_hash, stable_seed
 from planner import InstanceCapacity, plan, source_power
 from power_model import ExpectedPower
@@ -62,20 +62,31 @@ NORMAL_TTFT_SLO_S, EMERGENCY_TTFT_SLO_S = 2.0, 10.0
 WINDOW_S = 5
 SHARDS = 32
 SCHEMA = "queue-haul-fleet-shed-frontier-v1"
+ENVELOPE_SCHEMA = "queue-haul-agentic-rps-sweep-v3"
 
 
 def envelope_rps(slo_ttft_s: float) -> tuple[float, bool]:
-    """Largest measured offered RPS whose median p90 TTFT meets the SLO.
+    """Largest offered RPS below the first swept rate that violates the SLO.
 
+    Scans in rate order and stops at the first violation, so a single passing
+    repeat above a confirmed violation cannot raise the bound: the measured
+    median TTFT curve is not monotone.  Both measured SLO metrics are checked.
     Returns the rate and whether it is right-censored by the swept grid.
     """
     summary = json.loads(ENVELOPE.read_text())
-    curve = summary["models"][MODEL_ID]["curve"]
-    passing = [row for row in curve if row["p90_ttft_s_median"] <= slo_ttft_s]
-    if not passing:
-        raise RuntimeError(f"no measured rate meets a {slo_ttft_s} s TTFT SLO")
-    rate = max(row["offered_rps"] for row in passing)
-    return float(rate), rate == max(row["offered_rps"] for row in curve)
+    if summary["schema"] != ENVELOPE_SCHEMA:
+        raise RuntimeError(f"expected {ENVELOPE_SCHEMA}, got {summary['schema']}")
+    model = summary["models"][MODEL_ID]
+    tpot_slo = model["slo"]["p90_tpot_s"]
+    passing = 0.0
+    for row in sorted(model["curve"], key=lambda item: item["offered_rps"]):
+        if row["p90_ttft_s_median"] > slo_ttft_s \
+                or row["p90_tpot_s_median"] > tpot_slo:
+            if not passing:
+                raise RuntimeError(f"no measured rate meets {slo_ttft_s} s TTFT")
+            return passing, False
+        passing = float(row["offered_rps"])
+    return passing, True
 
 
 def request_work(case) -> np.ndarray:
@@ -117,8 +128,11 @@ def build_fleet(profile, workload, sessions: int, seed: int, deadline_s: float,
         expected_f / np.array([case.prefill.rate(int(t), 1) for t in ctx]),
         expected_g / np.array([case.decode.rate(int(t), 1) for t in ctx])], 1)
     ell = expected_f / case.F + expected_g / case.G
-    # The ell/work ratio spans 4x across the context grid, so neither the power
-    # calibration nor the service envelope dominates; provision on both.
+    # The ell/work ratio spans 8.7x across the measured context grid (2.246 at
+    # 4096 tokens down to 0.258 at 31562), so the power calibration binds on
+    # short contexts and the service envelope on long ones; provision on both.
+    # Summing per-session maxima bounds each component sum, so the packing is
+    # sound and at worst opens more replicas than exact 2-D vector packing.
     load = np.maximum(ell / profile.max_power_load, work.sum(1) / bound)
     capacity = InstanceCapacity([], [], 1.0, profile.kv_capacity_tokens)
     assignment = np.empty(sessions, int)
@@ -266,13 +280,26 @@ def run_row(row: dict, manifest: dict) -> dict:
     at_deadline = step_average(result.power, row["deadline_s"], WINDOW_S)
     realized = initial - at_deadline
     attained_at = attainment_time(result.power, limit, WINDOW_S, row["deadline_s"])
-    landed = sum(item.committed_s is not None for item in result.sessions)
-    offered = (row["rho"] * manifest["envelope"]["normal"]["rps"]
-               + landed * demand / manifest["sessions"]
-               / (len(REGIONS) * replicas) / request_work(case).sum())
+    committed = {item.session_id for item in result.sessions
+                 if item.committed_s is not None}
+    pool_of = {move.session_id: move.destination_pool for move in planned.moves}
+    landed_work = {}
+    for session in scenario.sessions:
+        if session.session_id not in committed:
+            continue
+        pool = pool_of[session.session_id]
+        landed_work[pool] = landed_work.get(pool, 0.0) + float(
+            session.expected_f / case.prefill.rate(session.context_tokens, 1)
+            + session.expected_g / case.decode.rate(session.context_tokens, 1))
+    baseline_rps = row["rho"] * manifest["envelope"]["normal"]["rps"]
+    per_request = request_work(case).sum()
+    # Worst pool decides compliance; the pools are not loaded symmetrically.
+    offered = max((baseline_rps + work / replicas / per_request
+                   for work in landed_work.values()), default=baseline_rps)
     return {
         **record, "realized_shed_w": realized,
         "realized_shed_fraction": realized / removable,
+        "landed_sessions": len(committed),
         "target_met": attained_at is not None,
         "attainment_s": attained_at if attained_at is not None else "",
         "destination_offered_rps": offered,
@@ -322,6 +349,9 @@ def write_csv(path: Path, rows) -> None:
 
 
 def prepare(out: Path) -> dict:
+    shape = json.loads(ENVELOPE.read_text())["request_shape"]
+    if (shape["prompt_tokens"], shape["output_tokens"]) != (PROMPT, OUTPUT):
+        raise RuntimeError("request shape does not match the measured envelope")
     normal_rps, normal_censored = envelope_rps(NORMAL_TTFT_SLO_S)
     emergency_rps, emergency_censored = envelope_rps(EMERGENCY_TTFT_SLO_S)
     if emergency_rps <= normal_rps:
@@ -436,7 +466,15 @@ def reduce(out: Path) -> dict:
             "The emergency envelope is right-censored: no swept rate violated "
             "the 10 s tier, so 8 RPS is a lower bound set by the grid.",
             "migration_headroom is derived from the admission arithmetic, not "
-            "measured; it is swept in sensitivity.csv.",
+            "measured; it is swept in sensitivity.csv. It scales a "
+            "replica-second migration budget by a fraction of the service "
+            "envelope, which is conservative only while that envelope "
+            "exceeds one concurrency-1 replica-second per second.",
+            "Destination pools use decoupled per-method migration budgets "
+            "(coupling=0), which the planner requires before a migration "
+            "headroom may be set; the hardware campaigns couple them.",
+            "The stable envelope is assumed equal to the emergency envelope; "
+            "no measurement separates them.",
             "The service envelope was measured on the source region's A100 and "
             "is applied to both destinations, assuming identical hardware.",
             "Summed per-session marginal power under-counts a concave curve, so "
