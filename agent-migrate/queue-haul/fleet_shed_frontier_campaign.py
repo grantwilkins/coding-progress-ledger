@@ -111,7 +111,7 @@ def migration_headroom(rho: float, demand: float, replicas: int,
     return headroom
 
 
-CALIBRATION_STEPS = 6
+CALIBRATION_STEPS = 12
 CALIBRATION_TOLERANCE = 0.01
 
 
@@ -138,9 +138,14 @@ def calibrated_plan(scenario, profile, architecture, solver, seed, mode, power,
             best = result, shed, ask
         if not shed or abs(shed - goal_w) <= CALIBRATION_TOLERANCE * goal_w:
             break
-        # A goal past what the fleet can shed never converges: asking for more
-        # returns the same plan, so stop instead of paying for the whole ladder.
-        if previous is not None and abs(shed - previous) <= 1e-9 * max(goal_w, 1.0):
+        # A goal past what the fleet can shed never converges, but that is
+        # only certain once the ask is the whole initial power and the answer
+        # still did not move.  Equal outcomes inside a finite bracket are a
+        # local step of the policy's answer, so keep bisecting through them:
+        # stopping there marks reachable targets missed.
+        if previous is not None \
+                and abs(shed - previous) <= 1e-9 * max(goal_w, 1.0) \
+                and high == float("inf") and ask >= initial - 1e-9:
             break
         previous = shed
         low, high = (ask, high) if shed < goal_w else (low, ask)

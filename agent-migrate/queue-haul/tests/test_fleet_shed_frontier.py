@@ -206,3 +206,35 @@ def test_calibration_delivers_the_requested_shed(profile, workload):
     assert 1 <= steps <= campaign.CALIBRATION_STEPS
     # The uncalibrated request would have been answered with a different shed.
     assert ask != pytest.approx(goal, rel=1e-6) or steps == 1
+
+
+def test_calibration_bisects_through_a_local_plateau(monkeypatch):
+    """Two equal outcomes inside the ladder are a step of the policy's answer,
+    not proof the goal is unreachable; stopping there marks a reachable target
+    missed while a higher request would still pass."""
+    from dataclasses import dataclass
+    from types import SimpleNamespace
+
+    @dataclass
+    class Snapshot:
+        power_limit_w: float
+
+    def stepped(scenario, *args, **kwargs):
+        ask = 100.0 - scenario.power_limit_w
+        shed = 0 if ask < 10 else 48 if ask < 60 else 50
+        return SimpleNamespace(
+            moves=tuple(SimpleNamespace(session_id=str(k))
+                        for k in range(shed)))
+
+    monkeypatch.setattr(campaign, "plan", stepped)
+    power = SimpleNamespace(drain_gain=lambda ids: float(len(list(ids))))
+
+    _, shed, ask, steps = campaign.calibrated_plan(
+        Snapshot(0.0), None, None, "greedy", 1, "normal", power, 100.0, 50.0)
+    assert shed == 50.0 and ask >= 60
+    assert steps <= campaign.CALIBRATION_STEPS
+
+    # An unreachable goal still exits early once the ask hits the ceiling.
+    _, shed, _, steps = campaign.calibrated_plan(
+        Snapshot(0.0), None, None, "greedy", 1, "normal", power, 100.0, 80.0)
+    assert shed == 50.0 and steps < campaign.CALIBRATION_STEPS
