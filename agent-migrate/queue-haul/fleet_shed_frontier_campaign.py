@@ -26,8 +26,6 @@ from simulated_pareto_campaign import attainment_time
 
 ROOT = Path(__file__).parent
 MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
-PHASE = (ROOT / "outputs/azure-compact-calibration-20260813"
-         / "gpt_oss_20b_a100_tp1_azure_300w_phase.json")
 WORKLOAD = ROOT / "profiles/agentic_rps_shape.json"
 ENVELOPE = ROOT / "outputs/agentic-rps-sweep-a100-pooled-p90-tpot-20260817/summary.json"
 TIMING = ROOT / "outputs/timing-power-validation-20260814/timing-summary.json"
@@ -41,6 +39,7 @@ SOURCE_SITE = "swedencentral"
 DEADLINES_S = (30, 60, 120, 180, 300, 450, 600, 900)
 POLICIES = {
     "queue_haul": "lp_work_first", "greedy": "greedy",
+    "greedy_lagrangian": "greedy_lagrangian",
     "isolated_fastest": "isolated_fastest", "kv_only": "kv_only",
     "replay_only": "replay_only",
 }
@@ -65,35 +64,6 @@ WINDOW_S = 5
 SHARDS = 32
 SCHEMA = "queue-haul-fleet-shed-frontier-v1"
 ENVELOPE_SCHEMA = "queue-haul-agentic-rps-sweep-v3"
-# The phase fit's validity hull tops out at 369 decode tokens/s, about 14x below
-# the measured offered-RPS envelope this campaign admits against.  Shed is priced
-# on the phase curve and admission on the RPS envelope, so the hull is widened
-# far enough not to bind and every row is flagged as extrapolated.
-HULL_EXTRAPOLATION = 64.0
-
-
-def phase_profile():
-    """A100 phase profile widened to this fleet's operating point.
-
-    ``z = a*f + b*g`` is linear in the workload, so per-instance load is additive
-    and ``P(z) = p0 + delta*z/(1+z)`` inverts in closed form: the chord that
-    prices a fleet is exact at an empty and at a full instance.  The calibrated
-    hull covers only a small, prefill-leaning corner of that space, so it is
-    scaled out of the way here and the extrapolation is recorded rather than
-    hidden.
-    """
-    profile = ModelProfile.load(PHASE)
-    case = profile.case()
-    phase = case.phase_power
-    if phase is None:
-        raise RuntimeError("phase profile has no phase_power block")
-    widened = replace(phase, valid_hull=tuple(
-        (f * HULL_EXTRAPOLATION, g * HULL_EXTRAPOLATION)
-        for f, g in phase.valid_hull))
-    return replace(
-        profile, max_power_load=profile.max_power_load * HULL_EXTRAPOLATION,
-        cases={**profile.cases,
-               "central": replace(case, phase_power=widened)})
 
 
 def envelope_rps(slo_ttft_s: float) -> tuple[float, bool]:
@@ -297,7 +267,7 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
 
 
 def run_row(row: dict, manifest: dict) -> dict:
-    profile = phase_profile()
+    profile = ModelProfile.load(MODEL)
     workload = WorkloadProfile.load(WORKLOAD)
     for path, digest in manifest["inputs"].items():
         if file_hash(ROOT / path) != digest:
@@ -452,9 +422,8 @@ def prepare(out: Path) -> dict:
                           "ttft_slo_s": EMERGENCY_TTFT_SLO_S,
                           "right_censored": emergency_censored},
         },
-        "hull_extrapolation": HULL_EXTRAPOLATION,
         "inputs": {str(path.relative_to(ROOT)): file_hash(path)
-                   for path in (PHASE, WORKLOAD, ENVELOPE, TIMING, LOADED)},
+                   for path in (MODEL, WORKLOAD, ENVELOPE, TIMING, LOADED)},
         "git_sha": git,
         "rows": manifest_rows(),
     }
@@ -564,8 +533,21 @@ def reduce(out: Path) -> dict:
             "They dip below a per-replica prefill-throughput estimate at 16384 "
             "tokens; a scalar floor was tried and rejected because it tripled "
             "the error against that same evidence file.",
-            "Summed per-session marginal power under-counts a concave curve, so "
-            "the target-first LP is not an upper bound on exact nonlinear shed.",
+            "Sessions are priced by the chord of the measured power curve, "
+            "which sums to "
+            "exactly the removable power but majorises the concave gain, so a "
+            "plan can certify watts it does not deliver. The LP objective is "
+            "modular and true shed is supermodular, so no per-session price can "
+            "make the last session on an instance worth more than the first.",
+            "queue_haul is the target-first LP and reaches about 0.96 of a "
+            "requested shed where queue_haul_lagrangian, which scores prefixes "
+            "on the exact joint gain, reaches 1.00. The gap is the linear "
+            "proxy, not the resource model, and is reported rather than tuned "
+            "away.",
+            "Source packing is descending-load first-fit, which gives each "
+            "instance near-identical sessions and so flatters any credit-ordered "
+            "selector; an arrival-order fleet is a harder case and is not swept "
+            "here.",
         ],
     }
     (out / "summary.json").write_text(
