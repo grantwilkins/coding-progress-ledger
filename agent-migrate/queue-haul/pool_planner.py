@@ -547,13 +547,19 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
         add(("kv", p), len(pool.replicas)
             * (q.kv_capacity_tokens // q.kv_block_tokens) - pool_kv[p],
             f"kv:{pool.pool_id}", "blocks")
-        for method in pool.methods:
-            service = pool.fluid_migration
-            capacity = len(pool.replicas) * migration_horizon \
-                * (pool.migration_headroom or {}).get(method, 1)
-            add(("migration", p, method), capacity,
-                f"migration:{pool.pool_id}:{method}",
-                "replica-s")
+        if pool.fluid_migration and pool.migration_headroom:
+            # A migration headroom is one shared replica reservation: both
+            # methods draw the same budget the executor serves at
+            # replicas x headroom, so a mixed plan cannot book the slack twice.
+            add(("migration", p), len(pool.replicas) * migration_horizon
+                * next(iter(pool.migration_headroom.values())),
+                f"migration:{pool.pool_id}", "replica-s")
+        else:
+            for method in pool.methods:
+                add(("migration", p, method), len(pool.replicas)
+                    * migration_horizon
+                    * (pool.migration_headroom or {}).get(method, 1),
+                    f"migration:{pool.pool_id}:{method}", "replica-s")
 
     options = sorted([
         (p, method) for p, pool in enumerate(architecture.pools)
@@ -592,7 +598,8 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                 debt[1:3], debt[5:7] = migration_horizon * np.asarray(normal), normal
                 emit(("debt", p, facet), debt)
         emit(("kv", p), unit[3])
-        emit(("migration", p, method), unit[4])
+        emit(("migration", p) if pool.fluid_migration and pool.migration_headroom
+             else ("migration", p, method), unit[4])
         service = pool.fluid_migration
         if service and service.coupling:
             other = "kv_transfer" if method == "replay" else "replay"

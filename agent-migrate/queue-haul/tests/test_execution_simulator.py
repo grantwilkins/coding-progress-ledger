@@ -778,3 +778,23 @@ def test_move_method_must_match_gpu_residency(tmp_path, state, method):
 
     with pytest.raises(ValueError, match=f"invalid for a {state} session"):
         execute(scenario((session,)), model(tmp_path), (move,))
+
+
+# Claim: fluid_service_completion(rate_cap=r) is processor sharing where one
+# job never receives more than r capacity, while total service stays capacity.
+# Plausible wrong implementations: capping total capacity at r instead of each
+# job; letting idle capacity serve a lone job at the full pool rate.
+def test_rate_cap_bounds_each_job_without_capping_parallelism():
+    assert fluid_service_completion([1.0], 4, None, 1.0) == pytest.approx([1.0])
+    assert fluid_service_completion([1.0, 1.0], 4, None, 1.0) == pytest.approx(
+        [1.0, 1.0])
+    assert fluid_service_completion([1.0, 1.0], 4) == pytest.approx([.5, .5])
+    with pytest.raises(ValueError):
+        fluid_service_completion([1.0], 4, None, 0)
+
+
+def test_rate_cap_frees_capacity_to_late_arrivals():
+    # Job 0 alone runs at 1, not 2; after t=1 both run at 1: both end at 2.
+    # Capping the total instead would finish job 0 at 3.
+    assert fluid_service_completion([2.0, 1.0], 2, [0, 1], 1.0) == pytest.approx(
+        [2.0, 2.0])

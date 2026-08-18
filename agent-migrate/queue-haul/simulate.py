@@ -322,23 +322,30 @@ def step_average(points, end_s: float, window_s: float, column: int = 1) -> floa
     return (area + (end_s - cursor) * value) / window_s
 
 
-def fluid_service_completion(work, capacity, arrivals=None):
-    """Return processor-sharing completion times for divisible work."""
+def fluid_service_completion(work, capacity, arrivals=None, rate_cap=None):
+    """Return processor-sharing completion times for divisible work.
+
+    ``rate_cap`` bounds the service rate any single job receives, so idle
+    capacity cannot serve one job faster than one server.
+    """
     work = np.asarray(work, float)
     arrivals = np.zeros(len(work)) if arrivals is None else np.asarray(arrivals, float)
     if work.ndim != 1 or arrivals.shape != work.shape or capacity <= 0 \
-            or np.any(work < 0) or np.any(arrivals < 0):
+            or np.any(work < 0) or np.any(arrivals < 0) \
+            or rate_cap is not None and rate_cap <= 0:
         raise ValueError("invalid fluid service workload")
     order = np.argsort(arrivals, kind="stable")
     completed, active, cursor, virtual = np.empty(len(work)), [], 0, 0.0
     time = 0.0
     while cursor < len(work) or active:
         arrival = arrivals[order[cursor]] if cursor < len(work) else np.inf
-        finish = time + (active[0][0] - virtual) * len(active) / capacity \
+        rate = capacity if rate_cap is None \
+            else min(capacity, rate_cap * len(active)) if active else capacity
+        finish = time + (active[0][0] - virtual) * len(active) / rate \
             if active else np.inf
         next_time = min(arrival, finish)
         if active:
-            virtual += (next_time - time) * capacity / len(active)
+            virtual += (next_time - time) * rate / len(active)
         time = next_time
         if active and finish <= arrival:
             virtual = max(virtual, active[0][0])
@@ -1207,41 +1214,45 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
             ) / min(len(pool.replicas), len(members))
             switches = len(members) * case.switch_s \
                 / min(len(pool.replicas), len(members))
-            done = (max(network_done[members[0]], start + work)
-                    if service.route_overlap else network_done[members[0]] + work)
+            arrived = float(network_done[members].max())
+            done = (max(arrived, start + work)
+                    if service.route_overlap else arrived + work)
             done += switches
             commits[members] = done
             continue
-        if replay:
-            work = np.array([
-                factor(i) * sessions[moves[i].session_id].context_tokens
-                / replay_rate(i)
-                for i in replay
-            ])
-            # Idle replicas cannot accelerate a job that is not there: cap the
-            # pool at the number of migrations actually in flight so no single
-            # one is served faster than one replica.
-            capacity = min(len(pool.replicas), len(replay)) \
-                * service.replay_speedup
-            streamed = np.full(len(replay), max(
-                network_done[replay[0]], start + work.sum() / capacity,
-            ))
-            done = fluid_service_completion(
-                np.array([factor(i) * case.replay_completion_s for i in replay]),
-                capacity, streamed,
-            )
-            commits[replay] = done + case.switch_s
-        if kv:
-            factors = np.array([factor(i) for i in kv])
-            ingested = np.full(len(kv), max(
-                network_done[kv[0]], start + np.sum(
-                    factors * route_bytes[kv]
-                ) / (min(len(pool.replicas), len(kv))
-                     * service.kv_ingest_bytes_per_s),
-            ))
-            residual = q.migration["kv_transfer"].residual_s \
-                if q.migration else case.kv_transfer.initial_completion_s
-            commits[kv] = ingested + factors * residual + case.switch_s
+        # One contention model, shared with the planner: migration work is
+        # priced in replica-seconds, no single migration runs faster than one
+        # replica, and a declared migration_headroom is one replica reservation
+        # shared by both methods; without one each method draws on the whole
+        # pool independently, exactly as the per-method planner budgets allow.
+        # Stream work overlaps its own network transfer; the tail runs after
+        # both, through the same finite capacity.
+        residual = q.migration["kv_transfer"].residual_s \
+            if q.migration else case.kv_transfer.initial_completion_s
+        capacity = len(pool.replicas) * (
+            next(iter(pool.migration_headroom.values()))
+            if pool.migration_headroom else 1.0)
+        for group in ([members] if pool.migration_headroom else [replay, kv]):
+            if not group:
+                continue
+            stream, tail = np.empty(len(group)), np.empty(len(group))
+            for k, i in enumerate(group):
+                scale = factor(i)
+                if moves[i].method == "replay":
+                    tokens = sessions[moves[i].session_id].context_tokens
+                    stream[k] = scale * tokens / replay_rate(i) \
+                        / service.replay_speedup
+                    tail[k] = scale * case.replay_completion_s \
+                        / service.replay_speedup
+                else:
+                    stream[k] = scale * route_bytes[i] \
+                        / service.kv_ingest_bytes_per_s
+                    tail[k] = scale * residual
+            streamed = np.maximum(fluid_service_completion(
+                stream, capacity, np.full(len(group), float(start)), 1.0,
+            ), network_done[group])
+            done = fluid_service_completion(tail, capacity, streamed, 1.0)
+            commits[group] = done + case.switch_s
 
     power_model = ExpectedPower(scenario, profile, case_id)
     power = [(0.0, power_model.power(True), power_model.power(False))]

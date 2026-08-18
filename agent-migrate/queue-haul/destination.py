@@ -273,7 +273,11 @@ class DestinationPool:
                            for value in self.migration_headroom.values())) \
                 or self.fluid_migration is not None \
                 and self.fluid_migration.coupling \
-                and self.migration_headroom:
+                and self.migration_headroom \
+                or self.fluid_migration is not None \
+                and self.migration_headroom is not None \
+                and (set(self.migration_headroom) != set(self.methods)
+                     or len(set(self.migration_headroom.values())) > 1):
             raise ValueError("invalid destination pool")
 
 

@@ -2767,3 +2767,136 @@ def test_execution_independently_rejects_stable_overflow():
 
     with pytest.raises(ValueError, match="stable envelope"):
         validate_destination_execution(problem(), arch, (move,))
+
+
+# Claims under test for the fluid executor and the shared migration headroom:
+# a commit can never precede its own network transfer; residual work is served
+# by finite replica capacity; migration_headroom is one replica reservation
+# shared by both methods, identically in the planner budget and the executed
+# service rate.  Plausible wrong implementations: scheduling every pool member
+# from the first member's network completion; adding residuals in parallel
+# regardless of replicas; charging replay and kv_transfer each a full headroom
+# budget; an executor that serves migrations from the whole pool while the
+# planner budgets replicas x horizon x headroom.
+def _decoupled_service(ingest, **kwargs):
+    return FluidMigrationService(
+        1, ingest, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand", 0, True, **kwargs,
+    )
+
+
+def test_fluid_commit_waits_for_its_own_bytes(tmp_path):
+    arch = architecture(
+        normal=1, emergency=1, stable=2, baselines=((0, 0),),
+        routes=(("wan",),), fluid=_decoupled_service(1e9),
+    )
+    scenario = replace(problem(), sessions=(
+        SimSession("a", "s0", 10, 25, 0, 100),
+        SimSession("b", "s1", 100, 25, 0, 100),
+    ))
+    profile = model(tmp_path, switch=0, tp=1)
+    moves = tuple(PlannedMove(s, "t0", "kv_transfer", order, ("wan",),
+                              destination_pool="p0")
+                  for order, s in enumerate("ab"))
+
+    result = execute(scenario, profile, moves, destination=arch)
+
+    ends = {row.session_id: row.end_s for row in result.network}
+    commits = {row.session_id: row.committed_s for row in result.sessions}
+    # Fair-shared 100 B/s link, 100 and 1000 bytes: a's bytes land at 2 s and
+    # b's at 11 s; ingest is instant, so the commits are the arrivals.
+    assert ends["a"] == pytest.approx(2) and ends["b"] == pytest.approx(11)
+    assert commits["a"] == pytest.approx(2)
+    assert commits["b"] == pytest.approx(11)
+    assert all(commits[s] >= ends[s] for s in commits)
+
+
+def test_fluid_residuals_contend_for_replicas(tmp_path):
+    service = _decoupled_service(100)
+    base = architecture(
+        normal=1, emergency=1, stable=2, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    components = MigrationComponents((1, 1000), (1, 1000), "hand", 1, 3, 100)
+    arch = replace(base, types=(replace(
+        base.types[0],
+        migration={m: components for m in ("replay", "kv_transfer")},
+    ),), pools=(replace(
+        base.pools[0], replicas=(DestinationReplica("t0", (0, 0)),
+                                 DestinationReplica("t1", (0, 0))),
+    ),))
+    scenario = replace(problem(), sessions=tuple(
+        SimSession(s, "s0", 10, 25, 0, 100) for s in "abcd"))
+    profile = model(tmp_path, switch=0, tp=1)
+    moves = tuple(PlannedMove(s, replica, "kv_transfer", order, ("wan",),
+                              destination_pool="p0")
+                  for order, (s, replica) in enumerate(
+                      zip("abcd", ("t0", "t0", "t1", "t1"))))
+
+    result = execute(scenario, profile, moves, destination=arch)
+
+    # Bytes all land at 4 s; four 3 s residuals through two replicas need six
+    # more seconds, not three: 12 replica-seconds cannot finish before 10 s.
+    assert result.migration_makespan_s == pytest.approx(10)
+
+
+def test_executor_serves_migrations_at_the_headroom_reservation(tmp_path):
+    def build(headroom):
+        base = architecture(
+            normal=1, emergency=1, stable=2, baselines=((0, 0),),
+            routes=(("wan",),), fluid=_decoupled_service(100),
+        )
+        return replace(base, pools=(replace(
+            base.pools[0], migration_headroom=headroom,
+            replicas=(DestinationReplica("t0", (0, 0)),
+                      DestinationReplica("t1", (0, 0))),
+        ),))
+    scenario = replace(problem(), links=(NetworkLink("wan", 1000),))
+    profile = model(tmp_path, switch=0, tp=1)
+    moves = tuple(PlannedMove(s, replica, "kv_transfer", order, ("wan",),
+                              destination_pool="p0")
+                  for order, (s, replica) in enumerate(zip("ab", ("t0", "t1"))))
+
+    reserved = execute(scenario, profile, moves, destination=build(
+        {"replay": .5, "kv_transfer": .5}))
+    whole = execute(scenario, profile, moves, destination=build(None))
+
+    # Two 1 s ingests: half of two replicas serves them in 2 s, the whole pool
+    # in 1 s.  2 replica-seconds over capacity 2 x 0.5 is the planner budget.
+    assert reserved.migration_makespan_s == pytest.approx(2)
+    assert whole.migration_makespan_s == pytest.approx(1)
+
+
+def test_headroom_is_one_shared_budget_row(tmp_path):
+    base = architecture(
+        normal=1, emergency=1, stable=2, baselines=((0, 0),),
+        routes=(("wan",),), fluid=_decoupled_service(100),
+    )
+    arch = replace(base, pools=(replace(
+        base.pools[0], migration_headroom={"replay": .5, "kv_transfer": .5},
+    ),))
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+
+    assert "migration:p0" in table.resource_names
+    assert not any(name.startswith("migration:p0:")
+                   for name in table.resource_names)
+    row = table.resource_names.index("migration:p0")
+    assert table.resource_capacities[row] == pytest.approx(
+        len(arch.pools[0].replicas) * table.migration_horizon_s * .5)
+    charges = table.resources.toarray()[row]
+    for method in ("replay", "kv_transfer"):
+        assert any(charges[i] > 0 for i, c in enumerate(table.candidates)
+                   if c.method == method)
+
+
+def test_fluid_headroom_must_cover_every_method_equally():
+    replicas = (DestinationReplica("t0", (0, 0)),)
+    for headroom in ({"replay": .5}, {"replay": .5, "kv_transfer": .4}):
+        with pytest.raises(ValueError, match="invalid destination pool"):
+            DestinationPool("p0", "q", replicas, "r0", ("wan",),
+                            migration_headroom=headroom,
+                            fluid_migration=_decoupled_service(100))
