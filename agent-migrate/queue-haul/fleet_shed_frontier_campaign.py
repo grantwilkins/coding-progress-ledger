@@ -451,7 +451,7 @@ def prepare(out: Path) -> dict:
     return manifest
 
 
-def run_shard(out: Path, shard: int) -> int:
+def run_shard(out: Path, shard: int, subset: str = "all") -> int:
     manifest = json.loads((out / "plan.json").read_text())
     if manifest["schema"] != SCHEMA:
         raise RuntimeError("unexpected plan schema")
@@ -460,10 +460,12 @@ def run_shard(out: Path, shard: int) -> int:
     if git != manifest["git_sha"]:
         raise RuntimeError(f"shard {shard} would run on {git[:12]}, "
                            f"manifest is {manifest['git_sha'][:12]}")
-    rows = [row for row in manifest["rows"] if row["row_id"] % SHARDS == shard]
+    rows = [row for row in manifest["rows"] if row["row_id"] % SHARDS == shard
+            and (subset == "all" or row["headline"] == (subset == "headline"))]
     if not rows:
         raise RuntimeError(f"shard {shard} is empty")
-    write_csv(out / f"shard-{shard:02d}.csv",
+    suffix = "" if subset == "all" else f"-{subset}"
+    write_csv(out / f"shard-{shard:02d}{suffix}.csv",
               [run_row(row, manifest) for row in rows])
     return len(rows)
 
@@ -493,8 +495,14 @@ def reduce(out: Path) -> dict:
                  if row[key] != str(expected[i][key])]
         if stale:
             raise RuntimeError(f"row {i} does not match the manifest: {stale}")
-    if seen != set(expected):
-        raise RuntimeError("reduce requires every manifest row exactly once")
+    # The frontier claim needs every headline row; the sensitivity block may
+    # be reduced later, but never partially.
+    headline_ids = {row["row_id"] for row in manifest["rows"] if row["headline"]}
+    if headline_ids - seen:
+        raise RuntimeError("reduce requires every headline row exactly once")
+    missing = set(expected) - headline_ids - seen
+    if missing and missing != set(expected) - headline_ids:
+        raise RuntimeError("sensitivity shards are incomplete")
     headline = [row for row in rows if row["headline"] == "True"]
     envelope = manifest["envelope"]["normal"]["rps"]
 
@@ -651,12 +659,15 @@ def main() -> None:
         item.add_argument("--out", type=Path, default=OUT)
         if name == "run-shard":
             item.add_argument("--shard", type=int, required=True)
+            item.add_argument("--subset", default="all",
+                              choices=("all", "headline", "sensitivity"))
     args = parser.parse_args()
     if args.command == "prepare":
         manifest = prepare(args.out)
         print(f"rows={len(manifest['rows'])} out={args.out}")
     elif args.command == "run-shard":
-        print(f"rows={run_shard(args.out, args.shard)} shard={args.shard}")
+        print(f"rows={run_shard(args.out, args.shard, args.subset)} "
+              f"shard={args.shard}")
     else:
         summary = reduce(args.out)
         print(f"rows={summary['rows']} breaches="

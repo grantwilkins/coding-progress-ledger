@@ -258,7 +258,8 @@ def _mini_campaign(tmp_path, rows):
         "rows": [{"row_id": i, "deadline_s": 300.0, "policy": "greedy",
                   "requested_fraction": row["requested_fraction"],
                   "mode": "normal", "tier": "natural", "rho": 0.45,
-                  "seed": row["seed"], "headline": True}
+                  "seed": row["seed"],
+                  "headline": row.get("headline", True)}
                  for i, row in enumerate(rows)],
     }
     (tmp_path / "plan.json").write_text(json.dumps(manifest))
@@ -314,9 +315,32 @@ def test_reduce_rejects_stale_or_mixed_shards(tmp_path):
         campaign.reduce(tmp_path)
 
     shard.write_text("\n".join(lines[:-1]) + "\n")
-    with pytest.raises(RuntimeError, match="every manifest row"):
+    with pytest.raises(RuntimeError, match="every headline row"):
         campaign.reduce(tmp_path)
 
     shard.write_text(good.replace("greedy", "queue_haul"))
     with pytest.raises(RuntimeError, match="match the manifest"):
+        campaign.reduce(tmp_path)
+
+
+def test_reduce_accepts_absent_but_not_partial_sensitivity(tmp_path):
+    rows = [
+        {"seed": 1, "requested_fraction": 0.5, "realized_shed_fraction": 0.5,
+         "target_met": True, "within_envelope": True},
+        {"seed": 1, "requested_fraction": 0.25, "realized_shed_fraction": 0.2,
+         "target_met": True, "within_envelope": True, "headline": False},
+        {"seed": 1, "requested_fraction": 0.75, "realized_shed_fraction": 0.6,
+         "target_met": True, "within_envelope": True, "headline": False},
+    ]
+    _mini_campaign(tmp_path, rows)
+    shard = tmp_path / "shard-00.csv"
+    lines = shard.read_text().splitlines()
+
+    # Headline complete, sensitivity absent: a valid first phase.
+    shard.write_text("\n".join(lines[:2]) + "\n")
+    assert campaign.reduce(tmp_path)["rows"] == 1
+
+    # One of two sensitivity rows is a mixed, partial reduction.
+    shard.write_text("\n".join(lines[:3]) + "\n")
+    with pytest.raises(RuntimeError, match="sensitivity"):
         campaign.reduce(tmp_path)
