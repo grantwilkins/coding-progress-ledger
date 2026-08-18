@@ -95,6 +95,22 @@ def request_work(case) -> np.ndarray:
                      OUTPUT / case.decode.rate(REF_CONTEXT, 1)])
 
 
+def prefill_floor_factor(case, contexts) -> float:
+    """Smallest replay completion factor that respects prefill throughput.
+
+    Replay re-prefills the whole context, so its destination compute cannot run
+    faster than the engine's own measured prefill rate over those tokens.  The
+    regional completion factors are fitted end to end on low-concurrency
+    migrations and can dip below that on this context grid; taking them at face
+    value would let a saturated pool re-prefill faster than it can prefill.
+    """
+    return max(
+        (tokens / case.prefill.rate(tokens, 1))
+        / (tokens / case.replay.conservative_rate(tokens, 1)
+           + case.replay_completion_s)
+        for tokens in contexts)
+
+
 def migration_headroom(rho: float, demand: float, replicas: int,
                        bound: float) -> float:
     """Destination envelope left free for migration ingest.
@@ -169,8 +185,9 @@ def build_fleet(profile, workload, sessions: int, seed: int, deadline_s: float,
 
 
 def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
-                       headroom: float) -> DestinationArchitecture:
+                       headroom: float, contexts) -> DestinationArchitecture:
     case = profile.case()
+    floor = prefill_floor_factor(case, contexts)
     fingerprint = CompatibilityFingerprint(profile.model, "gpt-oss-pinned",
                                            "source-dc-log", "lmcache-mp-v7")
 
@@ -187,10 +204,17 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
     types, pools = [], []
     for region in REGIONS:
         raw = fits[region]["migration_components"]
+        factors = {
+            method: max(value.get("compute_completion_factor", 1),
+                        floor if method == "replay" else 0.0)
+            for method, value in raw.items()}
         migration = {method: MigrationComponents(
             tuple(value["context_range"]),
-            tuple(value["bandwidth_range_bytes_per_s"]), value["provenance"],
-            value.get("compute_completion_factor", 1), value.get("residual_s", 0),
+            tuple(value["bandwidth_range_bytes_per_s"]),
+            f"{value['provenance']}; replay floored at measured prefill throughput"
+            if method == "replay" and factors[method]
+            > value.get("compute_completion_factor", 1) else value["provenance"],
+            factors[method], value.get("residual_s", 0),
             value.get("kv_ingest_bytes_per_s"))
             for method, value in raw.items()}
         loaded = {method: LoadedCoefficients(
@@ -215,7 +239,7 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
             migration_headroom={method: headroom
                                 for method in ("replay", "kv_transfer")},
             fluid_migration=FluidMigrationService(
-                1 / fits[region]["replay_compute_completion_factor"],
+                1 / factors["replay"],
                 fits[region]["kv_ingest_lower_bound_bytes_per_s"],
                 source_action, sink_action,
                 f"{TIMING.relative_to(ROOT)} regional pipelined timing fit",
@@ -237,10 +261,11 @@ def run_row(row: dict, manifest: dict) -> dict:
     scenario, replicas, demand, fits = build_fleet(
         profile, workload, manifest["sessions"], row["seed"], row["deadline_s"],
         bounds["normal"], row["tier"])
+    contexts = sorted({record.context_tokens for record in workload.records})
     headroom = migration_headroom(row["rho"], demand, replicas, bounds["normal"])
     absorbed = 1.0 - row["rho"] - headroom
     architecture = build_architecture(profile, replicas, bounds, fits, row["rho"],
-                                      headroom)
+                                      headroom, contexts)
     power = ExpectedPower(scenario, profile)
     initial = power.power(True)
     idle = source_power(scenario, profile,
@@ -477,6 +502,10 @@ def reduce(out: Path) -> dict:
             "no measurement separates them.",
             "The service envelope was measured on the source region's A100 and "
             "is applied to both destinations, assuming identical hardware.",
+            "Replay completion factors are floored so replay compute never "
+            "undercuts the measured prefill throughput for the tokens it "
+            "re-prefills; the regional end-to-end fits dip below that floor on "
+            "this context grid.",
             "Summed per-session marginal power under-counts a concave curve, so "
             "the target-first LP is not an upper bound on exact nonlinear shed.",
         ],

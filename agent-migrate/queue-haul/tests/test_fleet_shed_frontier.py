@@ -16,6 +16,9 @@ Plausible wrong implementations:
 - Request the idle floor instead of an attainable fraction, which drives the
   target-first LP into its infeasible fallback.
 - Derive migration headroom without subtracting the load the pools absorb.
+- Take the regional replay completion factor at face value, letting a
+  saturated pool re-prefill a context faster than it can prefill it.
+- Apply the prefill floor to KV transfer, which does no prefill.
 """
 
 from __future__ import annotations
@@ -80,13 +83,14 @@ def test_envelope_rejects_the_disqualified_schema(monkeypatch, tmp_path):
         campaign.envelope_rps(2.0)
 
 
-def test_service_bound_matches_the_profile_rate_limit_conversion(profile):
+def test_service_bound_matches_the_profile_rate_limit_conversion(profile, workload):
     case = profile.case()
+    contexts = sorted({record.context_tokens for record in workload.records})
     bound = 5.0 * campaign.request_work(case).sum()
     fits = json.loads(campaign.TIMING.read_text())["fits"]
     architecture = campaign.build_architecture(
         profile, 1, {"normal": bound, "emergency": bound, "stable": bound},
-        fits, campaign.RHO_DEST, 0.05)
+        fits, campaign.RHO_DEST, 0.05, contexts)
     limit = ProfileRateLimit(
         f"{campaign.MODEL_ID}-a100-tp1/east", campaign.REF_CONTEXT,
         campaign.PROMPT, campaign.OUTPUT, campaign.RHO_DEST * 5.0, 5.0)
@@ -151,3 +155,27 @@ def test_migration_headroom_subtracts_both_baseline_and_absorbed_load():
     assert headroom == pytest.approx(1.0 - 0.45 - 0.4)
     with pytest.raises(RuntimeError, match="cannot absorb"):
         campaign.migration_headroom(0.45, 44.0, 10, 2.0)
+
+
+def test_replay_never_undercuts_measured_prefill_throughput(profile, workload):
+    case = profile.case()
+    contexts = sorted({record.context_tokens for record in workload.records})
+    fits = json.loads(campaign.TIMING.read_text())["fits"]
+    bound = 5.0 * campaign.request_work(case).sum()
+
+    architecture = campaign.build_architecture(
+        profile, 1, {"normal": bound, "emergency": bound, "stable": bound},
+        fits, campaign.RHO_DEST, 0.05, contexts)
+
+    for destination_type in architecture.types:
+        replay = destination_type.migration["replay"]
+        for tokens in contexts:
+            compute = replay.compute_completion_factor * (
+                tokens / case.replay.conservative_rate(tokens, 1)
+                + case.replay_completion_s)
+            assert compute >= tokens / case.prefill.rate(tokens, 1) - 1e-9
+        # The floor binds on both regions, and KV transfer does no prefill.
+        assert replay.compute_completion_factor > max(
+            fits[region]["replay_compute_completion_factor"]
+            for region in campaign.REGIONS)
+        assert destination_type.migration["kv_transfer"].compute_completion_factor == 1
