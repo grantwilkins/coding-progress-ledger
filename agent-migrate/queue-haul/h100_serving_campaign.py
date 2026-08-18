@@ -88,7 +88,7 @@ def config(model: str) -> testbed.Config:
 
 def trace(plan: dict, model: str, cell: dict) -> list[dict]:
     return [{
-        "offset_s": 0,
+        "offset_s": 0, "population": "prefill",
         "prepared": serving.prepare_issue(
             serving.Session(
                 f"prefill-{cell['cell_id']}-{index}", 1,
