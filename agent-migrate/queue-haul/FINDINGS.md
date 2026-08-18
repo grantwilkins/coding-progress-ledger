@@ -474,3 +474,47 @@ the DES caps its fluid server at `min(replicas, in-flight jobs)`.
 12,336 rows commit more than 100 replay migrations in under 5 s, and its
 smallest is 558 replays in 0.209 s. Its `policy_summary.csv` policy ranking
 should not be cited until the campaign is rerun.
+
+## The fluid executor broke causality and the frontier scored a threshold search (2026-08-18)
+
+Audit of `fleet_shed_frontier_campaign` found, and this commit series fixes,
+five defects that invalidate every fluid-destination shard produced before it.
+
+The fluid executor scheduled each pool batch from the first member's network
+completion, so migrations committed before their own bytes arrived (in
+2,000-session probes, 113 of a 300 s KV plan's commits were early, worst by
+55.6 s; 964 of a 3,600 s plan's, worst by 1,291 s), and KV residuals were added
+in parallel regardless of replicas (four 3 s residuals on two replicas
+"finished" in 3.4 s where 12 replica-seconds need 6 s). The planner budgeted
+migration at replicas x horizon x headroom while the executor served the whole
+pool and never read headroom (a 74.7 s planner estimate executed in 8.96 s,
+ratio 1/headroom), and the same headroom was booked once per method. Migration
+work is now priced in replica-seconds, served by processor sharing with a
+per-job cap of one replica, streams overlap only their own transfer, and
+migration_headroom is one shared reservation in both planner and executor.
+
+Packing and deadline repairs were destructive - a cut candidate was gone for
+good, so a 900 s greedy plan executed 97.2% where the 300 s plan's moves
+re-executed at 900 s gave 100%. Both repairs now reoptimize: packing cuts are
+banned and the target topped back up; deadline drops are rerouted through the
+methods and pools the policy may still use.
+
+isolated_fastest retained one exact candidate per session, sending every probe
+to one destination; it now fixes each session's fastest method but keeps every
+destination offering it. The destination-locked variant survives as
+isolated_myopic, the deliberately weak baseline of network_campaign's
+separation cells; "True Greedy" results in pinned outputs used the locked
+behavior.
+
+The frontier itself scored a coarse threshold search: calibration stopped on
+two identical outcomes (a 400-session KV probe at 600 s reached 48.98% in six
+steps and 50.08% at step seven, so a 50% request failed while 90% passed), the
+target grid ended at 0.90 (the reported plateau), and the reduction took the
+largest target met by any row across seeds. The headline is now each seed's
+largest executed, envelope-compliant shed attained by the deadline, median
+over seeds, the grid runs to 0.99, target_met requires planner feasibility
+and envelope compliance, and reduction rejects stale or mixed shards by git
+SHA and exact row identity.
+
+No shard produced before these fixes should be cited; the campaign output
+directory moved to `outputs/fleet-shed-frontier-a100-20260818`.
