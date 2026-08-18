@@ -52,7 +52,13 @@ def write(curves: dict, out: Path, removable_kw: float | None = None) -> None:
              ylabel="Accelerator Power Shed (kW)")
     ticks = next(iter(curves.values()))[0]
     axis.set_xticks(ticks)
-    axis.set_xticklabels([f"{value:g}" for value in ticks])
+    # Label a readable subset: adjacent log-spaced deadlines collide otherwise.
+    keep, last = [], 0.0
+    for value in ticks:
+        keep.append(f"{value:g}" if value / max(last, 1e-9) >= 1.7 else "")
+        if keep[-1]:
+            last = value
+    axis.set_xticklabels(keep)
     axis.xaxis.set_minor_formatter(NullFormatter())
     axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
     axis.xaxis.label.set_size(plot_style.COLUMN_FONT_SIZE)

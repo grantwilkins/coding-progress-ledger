@@ -34,6 +34,9 @@ Plausible wrong implementations:
 - Prune an action by total resource use even though it trades one resource for another.
 - Drop the tighter of two nested resource limits while simplifying the maximum-shed MILP.
 - Apply one additive phase-load target across multiple source instances.
+- Price a multi-source fleet with initial marginals, which undercount the
+  concave curve and make attainable targets look infeasible, instead of the
+  chord whose credits sum to exactly the removable power.
 - Correct the LP power target but leave fixed-action baselines on marginal watts.
 - Assign every Lagrangian prefix member to the same cheap pool and fail concrete packing.
 - Serialize replay and KV work despite having separate measured aggregate caps.
@@ -152,14 +155,24 @@ def test_phase_power_target_uses_exact_removed_load_for_all_power_aware_policies
     assert initial - result.planned_source_power_w >= 30
 
 
-def test_phase_power_target_rejects_multiple_source_instances(tmp_path):
+def test_phase_power_target_prices_many_sources_by_the_chord(tmp_path):
     profile, scenario, _ = _phase_target_case(tmp_path, split_sources=True)
+    power = ExpectedPower(scenario, profile)
+    sessions = tuple(s for s in scenario.sessions if s.state == "active")
 
-    with pytest.raises(ValueError, match="one source instance"):
-        plan(
-            scenario, profile, PATHS, "lp_highs", destination=architecture(),
-            admission_mode="normal",
-        )
+    credits, target, source = pool_planner._phase_power_target(power, sessions, 7.0)
+
+    # No single additive load target exists across sources, so the target stays
+    # in watts and each session is priced on its own instance's chord.
+    assert source is None and target == 7.0
+    removable = sum(
+        pool_planner._source_removed_gain(power, instance, load)
+        for instance, load in (
+            (i, sum(power.ell[s.session_id] for s in sessions
+                    if power.route[s.session_id] == i))
+            for i in {power.route[s.session_id] for s in sessions}))
+    assert sum(credits) == pytest.approx(removable)
+    assert sum(power.marginal(s.session_id) for s in sessions) < removable
 
 
 def test_fractional_phase_opportunity_reports_joint_nonlinear_watts(tmp_path):

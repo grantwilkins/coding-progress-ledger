@@ -981,6 +981,30 @@ def _source_removed_gain(power, source, removed_load):
     )
 
 
+def _chord_credits(power, session_ids):
+    """Concave-envelope watts price for a fleet of source instances.
+
+    Removing load ``r`` from an instance holding ``L`` frees a gain that is
+    convex in ``r``, so the chord ``g(L)/L`` is its least concave majorant:
+    tight at ``r = 0`` and at ``r = L``, which is the drain-fully-or-not-at-all
+    shape the exact optimum takes.  These credits sum to exactly the fleet's
+    removable power, where initial marginals undercount it several-fold and so
+    make attainable targets look infeasible.  ``_phase_power_target`` inverts
+    the curve exactly for a single source; across many sources the chord is the
+    cheap generalisation.
+    """
+    loads = {}
+    for session_id in session_ids:
+        source = power.route[session_id]
+        loads[source] = loads.get(source, 0.0) + power.ell[session_id]
+    prices = {
+        source: _source_removed_gain(power, source, load) / load if load else 0.0
+        for source, load in loads.items()
+    }
+    return tuple(power.ell[session_id] * prices[power.route[session_id]]
+                 for session_id in session_ids)
+
+
 def _phase_power_target(power, sessions, target_w):
     """Convert one-source nonlinear watts into an exact additive load target."""
     if power.case.phase_power is None:
@@ -990,7 +1014,9 @@ def _phase_power_target(power, sessions, target_w):
         return (), target_w, None
     sources = {power.route[session_id] for session_id in session_ids}
     if len(sources) != 1:
-        raise ValueError("phase-aware additive planning requires one source instance")
+        # Many sources: no single additive load target exists, so price the
+        # chord and keep the target in watts.
+        return _chord_credits(power, session_ids), target_w, None
     source = sources.pop()
     credits = tuple(power.ell[session_id] for session_id in session_ids)
     maximum_load = sum(credits)
@@ -2678,11 +2704,17 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         deadline_repair_s += perf_counter() - started
     if power.case.phase_power is not None and solver not in {
             "greedy_lagrangian", *MAX_SHED_SOLVERS, "lp_power_blind"}:
-        _, required_load, _ = _phase_power_target(power, table.sessions, target)
-        credited_load = sum(table.candidates[i].credit for i in selected)
-        if (credited_load >= required_load - 1e-9) != \
-                (planned <= scenario.power_limit_w + 1e-8):
-            raise RuntimeError("phase-load target disagrees with exact source power")
+        _, required, phase_source = _phase_power_target(power, table.sessions, target)
+        credited = sum(table.candidates[i].credit for i in selected)
+        if phase_source is not None:
+            # One source: additive removed load is equivalent to exact watts.
+            if (credited >= required - 1e-9) != \
+                    (planned <= scenario.power_limit_w + 1e-8):
+                raise RuntimeError("phase-load target disagrees with exact source power")
+        elif credited < power.power(True) - planned - 1e-6:
+            # Many sources: credits are chords, which majorise the concave gain,
+            # so they can never certify less than the plan actually sheds.
+            raise RuntimeError("chord credit is below the exact source shed")
     shortfall = max(0.0, planned - scenario.power_limit_w)
     shortfall = 0.0 if shortfall <= 1e-8 else shortfall
     debt_rows = _selected_service_debt(

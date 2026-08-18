@@ -26,6 +26,8 @@ from simulated_pareto_campaign import attainment_time
 
 ROOT = Path(__file__).parent
 MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
+PHASE = (ROOT / "outputs/azure-compact-calibration-20260813"
+         / "gpt_oss_20b_a100_tp1_azure_300w_phase.json")
 WORKLOAD = ROOT / "profiles/agentic_rps_shape.json"
 ENVELOPE = ROOT / "outputs/agentic-rps-sweep-a100-pooled-p90-tpot-20260817/summary.json"
 TIMING = ROOT / "outputs/timing-power-validation-20260814/timing-summary.json"
@@ -63,6 +65,35 @@ WINDOW_S = 5
 SHARDS = 32
 SCHEMA = "queue-haul-fleet-shed-frontier-v1"
 ENVELOPE_SCHEMA = "queue-haul-agentic-rps-sweep-v3"
+# The phase fit's validity hull tops out at 369 decode tokens/s, about 14x below
+# the measured offered-RPS envelope this campaign admits against.  Shed is priced
+# on the phase curve and admission on the RPS envelope, so the hull is widened
+# far enough not to bind and every row is flagged as extrapolated.
+HULL_EXTRAPOLATION = 64.0
+
+
+def phase_profile():
+    """A100 phase profile widened to this fleet's operating point.
+
+    ``z = a*f + b*g`` is linear in the workload, so per-instance load is additive
+    and ``P(z) = p0 + delta*z/(1+z)`` inverts in closed form: the chord that
+    prices a fleet is exact at an empty and at a full instance.  The calibrated
+    hull covers only a small, prefill-leaning corner of that space, so it is
+    scaled out of the way here and the extrapolation is recorded rather than
+    hidden.
+    """
+    profile = ModelProfile.load(PHASE)
+    case = profile.case()
+    phase = case.phase_power
+    if phase is None:
+        raise RuntimeError("phase profile has no phase_power block")
+    widened = replace(phase, valid_hull=tuple(
+        (f * HULL_EXTRAPOLATION, g * HULL_EXTRAPOLATION)
+        for f, g in phase.valid_hull))
+    return replace(
+        profile, max_power_load=profile.max_power_load * HULL_EXTRAPOLATION,
+        cases={**profile.cases,
+               "central": replace(case, phase_power=widened)})
 
 
 def envelope_rps(slo_ttft_s: float) -> tuple[float, bool]:
@@ -109,6 +140,42 @@ def migration_headroom(rho: float, demand: float, replicas: int,
     if headroom <= 0:
         raise RuntimeError("destination pools cannot absorb the source fleet")
     return headroom
+
+
+CALIBRATION_STEPS = 6
+CALIBRATION_TOLERANCE = 0.01
+
+
+def calibrated_plan(scenario, profile, architecture, solver, seed, mode, power,
+                    initial: float, goal_w: float):
+    """Plan for the credit target whose plan actually sheds ``goal_w``.
+
+    The planner selects against summed per-session marginal power, which
+    undercuts the concave curve about threefold, so requesting a fraction of
+    removable power directly over-sheds by roughly that factor.  Realised shed
+    is close to linear in the credit target, so scaling the request by the
+    observed miss converges in two or three solves.
+    """
+    # Greedy policies answer a credit target with a step function, so bracket
+    # the request and bisect once the proportional step has straddled the goal.
+    ask, best, iterations = goal_w, None, 0
+    low, high = 0.0, float("inf")
+    for iterations in range(1, CALIBRATION_STEPS + 1):
+        result = plan(replace(scenario, power_limit_w=initial - ask), profile, {},
+                      solver, seed=seed, destination=architecture,
+                      admission_mode=mode)
+        shed = power.drain_gain([move.session_id for move in result.moves])
+        if best is None or abs(shed - goal_w) < abs(best[1] - goal_w):
+            best = result, shed, ask
+        if not shed or abs(shed - goal_w) <= CALIBRATION_TOLERANCE * goal_w:
+            break
+        low, high = (ask, high) if shed < goal_w else (low, ask)
+        scaled = ask * goal_w / shed
+        ask = (low + high) / 2 if low < scaled < high and high < float("inf") \
+            else min(max(scaled, 1e-9), initial)
+        if ask <= low or ask >= high:
+            ask = (low + min(high, initial)) / 2
+    return (*best, iterations)
 
 
 def build_fleet(profile, workload, sessions: int, seed: int, deadline_s: float,
@@ -230,7 +297,7 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
 
 
 def run_row(row: dict, manifest: dict) -> dict:
-    profile = ModelProfile.load(MODEL)
+    profile = phase_profile()
     workload = WorkloadProfile.load(WORKLOAD)
     for path, digest in manifest["inputs"].items():
         if file_hash(ROOT / path) != digest:
@@ -252,12 +319,14 @@ def run_row(row: dict, manifest: dict) -> dict:
     idle = source_power(scenario, profile,
                         [s.session_id for s in scenario.sessions])
     removable = initial - idle
-    limit = initial - row["requested_fraction"] * removable
-    scenario = replace(scenario, power_limit_w=limit)
+    goal = row["requested_fraction"] * removable
     seed = stable_seed(row["policy"], row["deadline_s"], row["mode"], row["tier"],
                        row["rho"], row["requested_fraction"], row["seed"])
-    planned = plan(scenario, profile, {}, POLICIES[row["policy"]], seed=seed,
-                   destination=architecture, admission_mode=row["mode"])
+    planned, certified, ask, steps = calibrated_plan(
+        scenario, profile, architecture, POLICIES[row["policy"]], seed,
+        row["mode"], power, initial, goal)
+    limit = initial - ask
+    scenario = replace(scenario, power_limit_w=limit)
     shed = initial - planned.planned_source_power_w
     methods = {method: sum(m.method == method for m in planned.moves)
                for method in ("replay", "kv_transfer")}
@@ -269,9 +338,12 @@ def run_row(row: dict, manifest: dict) -> dict:
         "migration_headroom": headroom, "absorbed_fraction": absorbed,
         "initial_source_power_w": initial, "idle_source_power_w": idle,
         "removable_power_w": removable,
-        "requested_power_w": initial - limit,
+        "requested_power_w": goal, "credit_target_w": ask,
+        "calibration_steps": steps,
+        "certified_shed_fraction": certified / removable,
         "planned_shed_w": shed, "planned_shed_fraction": shed / removable,
-        "planned_target_met": shed >= row["requested_fraction"] * removable - 1e-8,
+        "planned_target_met":
+            certified >= goal * (1 - CALIBRATION_TOLERANCE) - 1e-8,
         "moves": len(planned.moves), "replay_moves": methods["replay"],
         "kv_moves": methods["kv_transfer"], "solve_s": planned.solve_s,
         "feasible": planned.feasible, "failure_reason": planned.failure_reason or "",
@@ -285,7 +357,9 @@ def run_row(row: dict, manifest: dict) -> dict:
     result = execute(scenario, profile, planned.moves, destination=architecture)
     at_deadline = step_average(result.power, row["deadline_s"], WINDOW_S)
     realized = initial - at_deadline
-    attained_at = attainment_time(result.power, limit, WINDOW_S, row["deadline_s"])
+    attained_at = attainment_time(
+        result.power, initial - goal * (1 - CALIBRATION_TOLERANCE), WINDOW_S,
+        row["deadline_s"])
     committed = {item.session_id for item in result.sessions
                  if item.committed_s is not None}
     pool_of = {move.session_id: move.destination_pool for move in planned.moves}
@@ -378,8 +452,9 @@ def prepare(out: Path) -> dict:
                           "ttft_slo_s": EMERGENCY_TTFT_SLO_S,
                           "right_censored": emergency_censored},
         },
+        "hull_extrapolation": HULL_EXTRAPOLATION,
         "inputs": {str(path.relative_to(ROOT)): file_hash(path)
-                   for path in (MODEL, WORKLOAD, ENVELOPE, TIMING, LOADED)},
+                   for path in (PHASE, WORKLOAD, ENVELOPE, TIMING, LOADED)},
         "git_sha": git,
         "rows": manifest_rows(),
     }
