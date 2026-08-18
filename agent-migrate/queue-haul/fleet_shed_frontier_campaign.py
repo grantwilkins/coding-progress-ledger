@@ -30,7 +30,7 @@ WORKLOAD = ROOT / "profiles/agentic_rps_shape.json"
 ENVELOPE = ROOT / "outputs/agentic-rps-sweep-a100-pooled-p90-tpot-20260817/summary.json"
 TIMING = ROOT / "outputs/timing-power-validation-20260814/timing-summary.json"
 LOADED = ROOT / "outputs/loaded-service-model-20260815/model.json"
-OUT = ROOT / "outputs/fleet-shed-frontier-a100-20260817"
+OUT = ROOT / "outputs/fleet-shed-frontier-a100-20260818"
 
 MODEL_ID = "openai/gpt-oss-20b"
 REGIONS = ("east", "germany")
