@@ -95,22 +95,6 @@ def request_work(case) -> np.ndarray:
                      OUTPUT / case.decode.rate(REF_CONTEXT, 1)])
 
 
-def prefill_floor_factor(case, contexts) -> float:
-    """Smallest replay completion factor that respects prefill throughput.
-
-    Replay re-prefills the whole context, so its destination compute cannot run
-    faster than the engine's own measured prefill rate over those tokens.  The
-    regional completion factors are fitted end to end on low-concurrency
-    migrations and can dip below that on this context grid; taking them at face
-    value would let a saturated pool re-prefill faster than it can prefill.
-    """
-    return max(
-        (tokens / case.prefill.rate(tokens, 1))
-        / (tokens / case.replay.conservative_rate(tokens, 1)
-           + case.replay_completion_s)
-        for tokens in contexts)
-
-
 def migration_headroom(rho: float, demand: float, replicas: int,
                        bound: float) -> float:
     """Destination envelope left free for migration ingest.
@@ -187,7 +171,6 @@ def build_fleet(profile, workload, sessions: int, seed: int, deadline_s: float,
 def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
                        headroom: float, contexts) -> DestinationArchitecture:
     case = profile.case()
-    floor = prefill_floor_factor(case, contexts)
     fingerprint = CompatibilityFingerprint(profile.model, "gpt-oss-pinned",
                                            "source-dc-log", "lmcache-mp-v7")
 
@@ -204,16 +187,11 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
     types, pools = [], []
     for region in REGIONS:
         raw = fits[region]["migration_components"]
-        factors = {
-            method: max(value.get("compute_completion_factor", 1),
-                        floor if method == "replay" else 0.0)
-            for method, value in raw.items()}
+        factors = {method: value.get("compute_completion_factor", 1)
+                   for method, value in raw.items()}
         migration = {method: MigrationComponents(
             tuple(value["context_range"]),
-            tuple(value["bandwidth_range_bytes_per_s"]),
-            f"{value['provenance']}; replay floored at measured prefill throughput"
-            if method == "replay" and factors[method]
-            > value.get("compute_completion_factor", 1) else value["provenance"],
+            tuple(value["bandwidth_range_bytes_per_s"]), value["provenance"],
             factors[method], value.get("residual_s", 0),
             value.get("kv_ingest_bytes_per_s"))
             for method, value in raw.items()}
@@ -505,10 +483,11 @@ def reduce(out: Path) -> dict:
             "no measurement separates them.",
             "The service envelope was measured on the source region's A100 and "
             "is applied to both destinations, assuming identical hardware.",
-            "Replay completion factors are floored so replay compute never "
-            "undercuts the measured prefill throughput for the tokens it "
-            "re-prefills; the regional end-to-end fits dip below that floor on "
-            "this context grid.",
+            "Replay uses the fitted regional completion factors, which "
+            "reproduce the measured concurrency-1 commits to about 16% MAPE. "
+            "They dip below a per-replica prefill-throughput estimate at 16384 "
+            "tokens; a scalar floor was tried and rejected because it tripled "
+            "the error against that same evidence file.",
             "Summed per-session marginal power under-counts a concave curve, so "
             "the target-first LP is not an upper bound on exact nonlinear shed.",
         ],

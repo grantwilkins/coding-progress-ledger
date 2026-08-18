@@ -1141,7 +1141,15 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
     for path in paths:
         members = [i for i, move in enumerate(moves) if move.path == path]
         bandwidth = min((links[link] for link in path), default=np.inf)
-        network_done[members] = start + route_bytes[members].sum() / bandwidth
+        # Fair-share the link rather than holding every transfer until the
+        # whole batch has drained: a small shipment completes early and the
+        # last one still lands at sum(bytes)/bandwidth.  Charging every member
+        # the batch total pushed each commit to the horizon, so any plan that
+        # used KV transfer was cut back by the deadline repair loop while a
+        # replay-only plan, whose route bytes are just the durable log, was not.
+        network_done[members] = fluid_service_completion(
+            route_bytes[members] / bandwidth, 1.0,
+            np.full(len(members), float(start)))
     commits = np.empty(len(moves))
     for pool_id, pool in pools.items():
         service = pool.fluid_migration
