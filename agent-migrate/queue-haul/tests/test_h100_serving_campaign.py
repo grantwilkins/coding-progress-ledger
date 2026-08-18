@@ -54,6 +54,11 @@ def test_power_command_is_model_specific_and_optimized():
     assert "--enforce-eager" not in command
     assert "--gpu-memory-utilization .9" in text
 
+    gemma = " ".join(power.server_command(SimpleNamespace(
+        model="google/gemma-4-26B-A4B-it", vllm="vllm",
+        host="127.0.0.1", port=8100)))
+    assert "allow_global_per_layer_attribute_access" in gemma
+
 
 def test_prefill_summary_rejects_cached_or_incomplete_work():
     plan = campaign.make_plan()
