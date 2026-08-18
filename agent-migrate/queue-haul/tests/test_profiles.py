@@ -250,5 +250,5 @@ def test_checked_in_profiles_load_with_uncertainty_and_provenance():
     model = models[0]
     assert model.sources["transitions"].kind == "assumed"
     assert {w.records[0].job_type for w in workloads} == {
-        "interactive_coding", "coding", "agentic_tool_loop"
+        "interactive_coding", "coding", "agentic_tool_loop", "agentic_rps_shape"
     }
