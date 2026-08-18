@@ -18,7 +18,7 @@ import plot_style
 
 
 def test_policy_styles_are_stable_and_unique():
-    assert plot_style.POLICY_NAMES["isolated_fastest"] == "True Greedy"
+    assert plot_style.POLICY_NAMES["isolated_fastest"] == "Isolated Fastest"
     assert plot_style.COMPACT_POLICY_NAMES["kv_only"] == "KV Migrate"
     assert plot_style.COMPACT_POLICY_NAMES["replay_only"] == "Replay Context"
     assert [matplotlib.colors.to_hex(plot_style.POLICY_COLORS[policy])

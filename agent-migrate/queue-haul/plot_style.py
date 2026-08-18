@@ -27,7 +27,7 @@ POLICIES = (
 )
 POLICY_NAMES = dict(zip(POLICIES, (
     "Queue-Haul LP", "Queue-Haul Greedy", "Queue-Haul Lagrangian Greedy",
-    "True Greedy", "KV Migrate Only", "Replay Context Only",
+    "Isolated Fastest", "KV Migrate Only", "Replay Context Only",
     "Queue-Haul Power Blind", "Queue-Haul Deadline Blind",
 )))
 COMPACT_POLICY_NAMES = {

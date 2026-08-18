@@ -1359,11 +1359,18 @@ only when its one-pass choice misses an integrally feasible target. Regenerate i
 | `queue_haul` | Queue-Haul LP | `#0072B2` | solid |
 | `greedy` | Queue-Haul Greedy | `#E69F00` | dashed |
 | `greedy_lagrangian` | Queue-Haul Lagrangian Greedy | `#F0E442` | dash-dot-dot |
-| `isolated_fastest` | True Greedy | `#D55E00` | long dash |
+| `isolated_fastest` | Isolated Fastest | `#D55E00` | long dash |
 | `kv_only` | KV Migrate Only | `#56B4E9` | dash-dot |
 | `replay_only` | Replay Context Only | `#CC79A7` | dotted |
 | `queue_haul_power_blind` | Queue-Haul Power Blind | `#009E73` | short dash |
 | `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | `#000000` | fine dotted |
+
+`isolated_fastest` picks each session's fastest method in isolation but may
+route to any destination offering it; the older destination-locked variant is
+`isolated_myopic` (displayed as "Myopic fastest (method+route)"), which the
+network campaign's separation cells keep as their deliberately weak baseline.
+Results labeled "True Greedy" in pinned outputs predate this split and used
+the destination-locked behavior.
 
 Stress-frontier figures omit the modeled MILP reference and normalize every
 displayed policy to the shared maximum 90%-coverage attainment. They include
