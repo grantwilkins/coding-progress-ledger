@@ -441,6 +441,11 @@ def run_specs(plan: dict, model: str, specs: list[dict], root: Path) -> None:
         stack_root = root / "stacks" / slug(model) / f"restart-{restart:03d}"
         restart += 1
         with capacity.engine_stack(cfg, stack_root, identity, commands) as stack:
+            if plan["hardware"] == "h100":
+                testbed.validate_h100_optimized_runtime(
+                    testbed.shell(commands["vllm"]),
+                    testbed.read_text(stack.log),
+                )
             write_json(stack_root / "runtime-identity.json", identity)
             for cell in list(pending):
                 testbed.reset_vllm_caches(cfg, (stack.log,), ports=(stack.port,))
