@@ -127,7 +127,7 @@ def calibrated_plan(scenario, profile, architecture, solver, seed, mode, power,
     """
     # Greedy policies answer a credit target with a step function, so bracket
     # the request and bisect once the proportional step has straddled the goal.
-    ask, best, iterations = goal_w, None, 0
+    ask, best, iterations, previous = goal_w, None, 0, None
     low, high = 0.0, float("inf")
     for iterations in range(1, CALIBRATION_STEPS + 1):
         result = plan(replace(scenario, power_limit_w=initial - ask), profile, {},
@@ -138,6 +138,11 @@ def calibrated_plan(scenario, profile, architecture, solver, seed, mode, power,
             best = result, shed, ask
         if not shed or abs(shed - goal_w) <= CALIBRATION_TOLERANCE * goal_w:
             break
+        # A goal past what the fleet can shed never converges: asking for more
+        # returns the same plan, so stop instead of paying for the whole ladder.
+        if previous is not None and abs(shed - previous) <= 1e-9 * max(goal_w, 1.0):
+            break
+        previous = shed
         low, high = (ask, high) if shed < goal_w else (low, ask)
         scaled = ask * goal_w / shed
         ask = (low + high) / 2 if low < scaled < high and high < float("inf") \

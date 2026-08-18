@@ -35,7 +35,7 @@ def read(path: Path, mode: str = "normal") -> dict:
             raise RuntimeError(f"frontier is missing policy {policy!r}")
         curves[policy] = (
             np.array([float(row["deadline_s"]) for row in selected]),
-            np.array([float(row["attainment_rate"]) for row in selected]),
+            np.array([float(row["max_requested_met"]) for row in selected]),
         )
     return curves
 
@@ -46,7 +46,7 @@ def write(curves: dict, out: Path) -> None:
         axis.plot(deadlines, shed, **plot_style.policy_style(policy))
     axis.set(xscale="log", ylim=(-.02, 1.02),
              xlabel="Demand-Response Notice (s)",
-             ylabel="Requests Attained by Deadline")
+             ylabel="Shed Attained by Deadline")
     ticks = next(iter(curves.values()))[0]
     axis.set_xticks(ticks)
     # Label a readable subset: adjacent log-spaced deadlines collide otherwise.
