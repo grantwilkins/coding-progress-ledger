@@ -442,10 +442,15 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                             stream_work *= factor
                             tail_work *= factor
                             migration_work = stream_work + tail_work
+                            # One migration runs on one replica: the pool's
+                            # aggregate capacity limits how MANY migrations fit
+                            # (the migration row below is replicas x horizon),
+                            # not how fast a single one runs.  Measured replay
+                            # never completes under 0.84 s, and co-tenancy makes
+                            # each one linearly slower, not faster.
                             duration = max(
-                                route_bytes[method] / bandwidth,
-                                stream_work / replicas,
-                            ) + tail_work / replicas + case.switch_s
+                                route_bytes[method] / bandwidth, stream_work,
+                            ) + tail_work + case.switch_s
                         else:
                             tail_work = components.residual_s if components else \
                                 case.kv_transfer.initial_completion_s
@@ -461,10 +466,15 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                             stream_work *= factor
                             tail_work *= factor
                             migration_work = stream_work + tail_work
+                            # One migration runs on one replica: the pool's
+                            # aggregate capacity limits how MANY migrations fit
+                            # (the migration row below is replicas x horizon),
+                            # not how fast a single one runs.  Measured replay
+                            # never completes under 0.84 s, and co-tenancy makes
+                            # each one linearly slower, not faster.
                             duration = max(
-                                route_bytes[method] / bandwidth,
-                                stream_work / replicas,
-                            ) + tail_work / replicas + case.switch_s
+                                route_bytes[method] / bandwidth, stream_work,
+                            ) + tail_work + case.switch_s
                         if service.coupling:
                             migration_work += case.switch_s
                             if not service.route_overlap:

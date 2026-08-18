@@ -445,3 +445,32 @@ boundary. Compute normal, emergency, and stability from every physical run.
 The current vLLM 0.22.0 MP source and sink each report 963,152 KV tokens at
 `gpu_memory_utilization=0.75`. The earlier checked-in 1,214,544-token value came
 from a vLLM 0.10.1.1 configuration and is not capacity evidence for v7.
+
+## Whole-pool migration duration, corrected 2026-08-18
+
+The fluid destination path divided a single migration's duration by its pool's
+replica count, in the planner (`pool_planner._candidate_oracle`) and in the DES
+(`simulate.execute`). One replay on a 1,876-replica pool therefore completed in
+milliseconds.
+
+Across 7,740 measured replay migrations in ten hardware artifacts the minimum is
+0.840 s, the median 5.35 s and the maximum 118.7 s; none is below 0.1 s. The
+sign is also wrong: at 16,384 tokens a replay takes 9.6 s alone, 18.1 s with one
+co-tenant and 43.8 s with four, so sharing a destination makes each migration
+linearly slower. `max_destination_replays: 1` in every A100 profile says the
+same thing. The undivided form reproduces hardware to about 6%.
+
+The divisor was invisible because every campaign checked against hardware places
+exactly one replica in a pool (`network_campaign.py:1734`,
+`workload_adaptation_campaign.py:358`), which makes it an identity, and
+`network_campaign` never builds a `FluidMigrationService` at all. It was only
+reachable from `dedicated_sink_architecture` with many replicas.
+
+A pool of R replicas now supplies R x horizon replica-seconds of aggregate
+capacity, limiting how many migrations fit rather than how fast one runs, and
+the DES caps its fluid server at `min(replicas, in-flight jobs)`.
+
+`outputs/simulated-pareto-v5-20260803` predates this and is stale: 2,528 of its
+12,336 rows commit more than 100 replay migrations in under 5 s, and its
+smallest is 558 replays in 0.209 s. Its `policy_summary.csv` policy ranking
+should not be cited until the campaign is rerun.

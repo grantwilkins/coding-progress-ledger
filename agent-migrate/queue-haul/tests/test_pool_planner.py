@@ -41,6 +41,9 @@ Plausible wrong implementations:
 - Choose one cheap action per session before exploring feasible mixed-method patterns.
 - Materialize every source prefix even though recovery retains a bounded frontier.
 - Reverse or mis-scale the HiGHS target row or skip maximum-gain fallback.
+- Spread one migration across every replica in its pool, so a single replay
+  finishes faster the larger the destination fleet is. Measured replay never
+  completes under 0.84 s and co-tenancy makes each one linearly slower.
 - Leave an integrally feasible target unmet after fractional LP rounding.
 - Leave an integrally feasible target unmet after greedy selection.
 - Route the existing `lp` solver through HiGHS instead of keeping it additive.
@@ -1372,7 +1375,7 @@ def test_migration_headroom_scales_only_its_pool_method_window(tmp_path):
         capacities["route:wan"])
 
 
-def test_fluid_execution_uses_whole_pool_and_fitted_action_power(tmp_path):
+def test_fluid_execution_serves_one_migration_at_one_replica(tmp_path):
     service = FluidMigrationService(
         4, 100, {"replay": 5, "kv_transfer": 1},
         {"replay": 7, "kv_transfer": 1}, "hand",
@@ -1397,7 +1400,9 @@ def test_fluid_execution_uses_whole_pool_and_fitted_action_power(tmp_path):
     planned = next(candidate for candidate in table.candidates
                    if candidate.session == 0 and candidate.method == "replay")
 
-    assert result.sessions[0].committed_s == pytest.approx(1 + 2 / 8)
+    # One move cannot use both replicas: the 2 s tail is served at the
+    # single-replica rate of replay_speedup=4, not at the pool rate of 8.
+    assert result.sessions[0].committed_s == pytest.approx(1 + 2 / 4)
     assert planned.duration_s == pytest.approx(result.sessions[0].committed_s)
     assert result.power[0][1:] == pytest.approx((baseline.power(True), baseline.power(False)))
     assert result.power[1][1:] == pytest.approx(

@@ -1196,8 +1196,9 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
             work = max(
                 replay_work + service.coupling * kv_work,
                 service.coupling * replay_work + kv_work,
-            ) / len(pool.replicas)
-            switches = len(members) * case.switch_s / len(pool.replicas)
+            ) / min(len(pool.replicas), len(members))
+            switches = len(members) * case.switch_s \
+                / min(len(pool.replicas), len(members))
             done = (max(network_done[members[0]], start + work)
                     if service.route_overlap else network_done[members[0]] + work)
             done += switches
@@ -1209,7 +1210,11 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
                 / replay_rate(i)
                 for i in replay
             ])
-            capacity = len(pool.replicas) * service.replay_speedup
+            # Idle replicas cannot accelerate a job that is not there: cap the
+            # pool at the number of migrations actually in flight so no single
+            # one is served faster than one replica.
+            capacity = min(len(pool.replicas), len(replay)) \
+                * service.replay_speedup
             streamed = np.full(len(replay), max(
                 network_done[replay[0]], start + work.sum() / capacity,
             ))
@@ -1223,7 +1228,8 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
             ingested = np.full(len(kv), max(
                 network_done[kv[0]], start + np.sum(
                     factors * route_bytes[kv]
-                ) / (len(pool.replicas) * service.kv_ingest_bytes_per_s),
+                ) / (min(len(pool.replicas), len(kv))
+                     * service.kv_ingest_bytes_per_s),
             ))
             residual = q.migration["kv_transfer"].residual_s \
                 if q.migration else case.kv_transfer.initial_completion_s
