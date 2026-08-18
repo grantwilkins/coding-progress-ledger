@@ -16,6 +16,8 @@ Plausible wrong implementations:
 - Request the idle floor instead of an attainable fraction, which drives the
   target-first LP into its infeasible fallback.
 - Derive migration headroom without subtracting the load the pools absorb.
+- Take the requested fraction as the planner's credit target, so a request
+  is answered with whatever shed that credit model happens to imply.
 - Override the fitted regional replay factors with a scalar floor, which
   triples the prediction error against the artifact they were fitted on.
 """
@@ -27,6 +29,8 @@ import json
 import pytest
 
 import fleet_shed_frontier_campaign as campaign
+from planner import source_power
+from power_model import ExpectedPower
 from destination import ProfileRateLimit
 from profiles import ModelProfile, WorkloadProfile
 
@@ -173,3 +177,32 @@ def test_replay_uses_the_fitted_regional_completion_factors(profile, workload):
         assert destination_type.migration["replay"].compute_completion_factor \
             == pytest.approx(fits[region]["replay_compute_completion_factor"])
         assert destination_type.migration["kv_transfer"].compute_completion_factor == 1
+
+
+def test_calibration_delivers_the_requested_shed(profile, workload):
+    """A request is answered with that much power, not with whatever the
+    credit target happens to imply."""
+    case = profile.case()
+    bound = 5.0 * campaign.request_work(case).sum()
+    contexts = sorted({record.context_tokens for record in workload.records})
+    scenario, replicas, demand, fits = campaign.build_fleet(
+        profile, workload, 400, 1001, 600.0, bound, "natural")
+    architecture = campaign.build_architecture(
+        profile, replicas, {"normal": bound, "emergency": bound, "stable": bound},
+        fits, campaign.RHO_DEST,
+        campaign.migration_headroom(campaign.RHO_DEST, demand, replicas, bound),
+        contexts)
+    power = ExpectedPower(scenario, profile)
+    initial = power.power(True)
+    removable = initial - source_power(
+        scenario, profile, [s.session_id for s in scenario.sessions])
+    goal = 0.25 * removable
+
+    _, certified, ask, steps = campaign.calibrated_plan(
+        scenario, profile, architecture, "lp_work_first", 1, "normal", power,
+        initial, goal)
+
+    assert certified == pytest.approx(goal, rel=campaign.CALIBRATION_TOLERANCE)
+    assert 1 <= steps <= campaign.CALIBRATION_STEPS
+    # The uncalibrated request would have been answered with a different shed.
+    assert ask != pytest.approx(goal, rel=1e-6) or steps == 1

@@ -11,7 +11,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import NullFormatter
+from matplotlib.ticker import NullFormatter, PercentFormatter
 import numpy as np
 
 import plot_style
@@ -35,21 +35,18 @@ def read(path: Path, mode: str = "normal") -> dict:
             raise RuntimeError(f"frontier is missing policy {policy!r}")
         curves[policy] = (
             np.array([float(row["deadline_s"]) for row in selected]),
-            np.array([float(row["median_realized_shed_kw"]) for row in selected]),
+            np.array([float(row["attainment_rate"]) for row in selected]),
         )
     return curves
 
 
-def write(curves: dict, out: Path, removable_kw: float | None = None) -> None:
+def write(curves: dict, out: Path) -> None:
     figure, axis = plt.subplots(figsize=plot_style.COLUMN_FIGSIZE)
     for policy, (deadlines, shed) in curves.items():
         axis.plot(deadlines, shed, **plot_style.policy_style(policy))
-    if removable_kw is not None:
-        axis.axhline(removable_kw, color="black", linestyle="--", linewidth=1.2)
-        axis.text(axis.get_xlim()[1], removable_kw, " full shed", va="center",
-                  fontstyle="italic", fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE)
-    axis.set(xscale="log", xlabel="Demand-Response Notice (s)",
-             ylabel="Accelerator Power Shed (kW)")
+    axis.set(xscale="log", ylim=(-.02, 1.02),
+             xlabel="Demand-Response Notice (s)",
+             ylabel="Requests Attained by Deadline")
     ticks = next(iter(curves.values()))[0]
     axis.set_xticks(ticks)
     # Label a readable subset: adjacent log-spaced deadlines collide otherwise.
@@ -63,6 +60,7 @@ def write(curves: dict, out: Path, removable_kw: float | None = None) -> None:
     axis.tick_params(labelsize=plot_style.COLUMN_FONT_SIZE)
     axis.xaxis.label.set_size(plot_style.COLUMN_FONT_SIZE)
     axis.yaxis.label.set_size(plot_style.COLUMN_FONT_SIZE)
+    axis.yaxis.set_major_formatter(PercentFormatter(xmax=1))
     axis.grid(alpha=.25)
     axis.legend(loc="upper left", frameon=False,
                 fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE)

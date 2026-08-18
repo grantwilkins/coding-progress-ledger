@@ -506,6 +506,7 @@ def reduce(out: Path) -> dict:
             "deadline_s": deadline, "policy": policy, "mode": mode,
             "cases": len(group),
             "attained_requests": len(met),
+            "attainment_rate": len(met) / len(group),
             "max_requested_met": max(met, default=0.0),
             "median_realized_shed_fraction": float(np.median(realized)),
             "max_realized_shed_fraction": max(realized, default=0.0),
