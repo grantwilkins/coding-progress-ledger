@@ -145,6 +145,18 @@ def test_native_runtime_rejects_legacy_and_unknown_modes(monkeypatch):
         s.runtime_mode()
 
 
+def test_native_runtime_versions_can_be_pinned_per_campaign(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setenv("QH_NATIVE_RUNTIME_VERSIONS", "0.24.0,0.5.1")
+
+    assert s.expected_runtime_versions() == ("0.24.0", "0.5.1")
+
+    monkeypatch.setenv("QH_NATIVE_RUNTIME_VERSIONS", "0.24.0")
+    with pytest.raises(ValueError, match="vllm,lmcache"):
+        s.expected_runtime_versions()
+
+
 def test_native_preflight_requires_host_commands_and_pinned_versions(monkeypatch, tmp_path):
     monkeypatch.setenv("QH_RUNTIME", "native")
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")

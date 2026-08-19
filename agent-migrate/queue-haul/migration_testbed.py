@@ -60,6 +60,12 @@ def runtime_mode() -> str:
 
 def expected_runtime_versions() -> tuple[str, str]:
     if runtime_mode() == "native":
+        versions = os.environ.get("QH_NATIVE_RUNTIME_VERSIONS")
+        if versions:
+            parsed = tuple(versions.split(","))
+            if len(parsed) != 2 or not all(parsed):
+                raise ValueError("QH_NATIVE_RUNTIME_VERSIONS must be vllm,lmcache")
+            return parsed
         return NATIVE_RUNTIME_VERSIONS
     return MP_RUNTIME_VERSIONS if lmcache_mode() == "mp" else RUNTIME_VERSIONS
 
