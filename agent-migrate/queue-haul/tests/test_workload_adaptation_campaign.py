@@ -137,7 +137,7 @@ def test_one_paired_draw_conserves_sessions_and_target():
                    for row in checks)
 
 
-def test_oat_axes_are_absolute_and_reproduce_factorial_endpoints():
+def test_oat_axes_are_absolute_and_contain_factorial_endpoints():
     profile = ModelProfile.load(campaign.PROFILE)
     templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
     pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 4, 3))
@@ -146,30 +146,24 @@ def test_oat_axes_are_absolute_and_reproduce_factorial_endpoints():
         campaign.oat_design(profile, levels=5)
 
     assert bandwidths == pytest.approx(np.linspace(
-        campaign.BANDWIDTH_BOTTLENECK_MBPS,
+        campaign.OAT_BANDWIDTH_LOWER_MBPS,
         max(campaign.physical_route_mbps().values()), 5))
     assert prefills == pytest.approx(np.linspace(
-        .05 * rate, .75 * rate, 5))
+        (1 - campaign.OAT_DEST_COMPUTE[1]) * rate,
+        (1 - campaign.OAT_DEST_COMPUTE[0]) * rate, 5))
     assert fixed_bandwidth == pytest.approx(np.median(bandwidths))
     assert fixed_prefill == pytest.approx(np.median(prefills))
+    loads = campaign.LEVELS["dest_compute"]
+    assert bandwidths[0] < campaign.BANDWIDTH_BOTTLENECK_MBPS
+    assert bandwidths[-1] >= max(campaign.physical_route_mbps().values()) - 1e-6
+    assert prefills[0] < (1 - loads[1]) * rate
+    assert prefills[-1] > (1 - loads[0]) * rate
 
-    for point, constraints in (
-        ((bandwidths[0], prefills[0]),
-         frozenset(("bandwidth", "dest_compute"))),
-        ((bandwidths[-1], prefills[-1]), frozenset()),
-    ):
-        swept = campaign.build_problem(
+    for point in ((bandwidths[0], prefills[0]), (bandwidths[-1], prefills[-1])):
+        campaign.build_problem(
             profile, pack, frozenset(), 2 / 3, fits,
             bandwidth_mbps=point[0], prefill_tps=point[1],
         )
-        factorial = campaign.build_problem(
-            profile, pack, constraints, 2 / 3, fits)
-        assert {link.link_id: link.bytes_per_s for link in swept[0].links} \
-            == pytest.approx({link.link_id: link.bytes_per_s
-                              for link in factorial[0].links})
-        for left, right in zip(swept[1].pools, factorial[1].pools):
-            assert left.replicas[0].baseline_work \
-                == pytest.approx(right.replicas[0].baseline_work)
 
 
 def test_oat_varies_one_axis_and_conserves_session_actions():

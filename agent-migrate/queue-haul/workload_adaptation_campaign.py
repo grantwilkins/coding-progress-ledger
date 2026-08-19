@@ -80,6 +80,8 @@ POWER_TOLERANCE_W = 1e-6
 MIGRATION_HORIZON_S = 25
 BANDWIDTH_BOTTLENECK_MBPS = 1000
 PREFILL_REFERENCE_TOKENS = 7680
+OAT_BANDWIDTH_LOWER_MBPS = 100
+OAT_DEST_COMPUTE = (0.05, 0.99)
 SOURCE_LOAD = .4
 DEFAULT_SEED = 1001
 plot_style.apply()
@@ -276,14 +278,16 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
         pipeline_bandwidths = {region: fits[region]["effective_pipeline_mbps"][
             timing_condition] * 125_000 for region in REGIONS}
     else:
-        if constraints or not BANDWIDTH_BOTTLENECK_MBPS <= bandwidth_mbps \
-                <= max(physical.values()):
-            raise ValueError("invalid absolute bandwidth sweep point")
+        if constraints:
+            raise ValueError("absolute bandwidth with factorial constraints")
+        if bandwidth_mbps <= 0:
+            raise ValueError("bandwidth must be positive")
         physical_bandwidths, pipeline_bandwidths = {}, {}
         for region in REGIONS:
             cap = min(bandwidth_mbps, physical[region])
-            fraction = (cap - BANDWIDTH_BOTTLENECK_MBPS) / (
-                physical[region] - BANDWIDTH_BOTTLENECK_MBPS)
+            fraction = np.clip(
+                (cap - BANDWIDTH_BOTTLENECK_MBPS) / (
+                    physical[region] - BANDWIDTH_BOTTLENECK_MBPS), 0, 1)
             rates = fits[region]["effective_pipeline_mbps"]
             physical_bandwidths[region] = cap * 125_000
             pipeline_bandwidths[region] = (
@@ -323,8 +327,8 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
     if prefill_tps is not None:
         rate = q.prefill.at(PREFILL_REFERENCE_TOKENS)
         values["dest_compute"] = 1 - prefill_tps / rate
-        if not LEVELS["dest_compute"][0] - 1e-12 \
-                <= values["dest_compute"] <= LEVELS["dest_compute"][1] + 1e-12:
+        if not OAT_DEST_COMPUTE[0] - 1e-12 \
+                <= values["dest_compute"] <= OAT_DEST_COMPUTE[1] + 1e-12:
             raise ValueError("invalid absolute prefill sweep point")
     demand = sum((q.work(
         session.expected_f, session.expected_g, session.context_tokens, True,
@@ -622,16 +626,17 @@ def oat_design(profile, levels=20):
         raise ValueError("OAT sweep requires at least two levels")
     q = dedicated_sink_architecture(profile, REGIONS[0], ("link/east",)).types[0]
     rate = q.prefill.at(PREFILL_REFERENCE_TOKENS)
-    loads = LEVELS["dest_compute"]
     bandwidths = np.linspace(
-        BANDWIDTH_BOTTLENECK_MBPS, max(physical_route_mbps().values()), levels)
-    prefills = np.linspace((1 - loads[1]) * rate, (1 - loads[0]) * rate, levels)
+        OAT_BANDWIDTH_LOWER_MBPS, max(physical_route_mbps().values()), levels)
+    prefills = np.linspace(
+        (1 - OAT_DEST_COMPUTE[1]) * rate,
+        (1 - OAT_DEST_COMPUTE[0]) * rate, levels)
     return bandwidths, prefills, float(np.median(bandwidths)), \
         float(np.median(prefills)), rate
 
 
 def simulate_oat(samples=1000, seed=DEFAULT_SEED, sessions=28,
-                 target_fraction=2 / 3, levels=20, profile_path=PROFILE,
+                 target_fraction=1.0, levels=20, profile_path=PROFILE,
                  manifest_path=MANIFEST):
     if samples < levels or samples % levels:
         raise ValueError("OAT samples must be a multiple of levels")
@@ -1084,7 +1089,7 @@ def plot_oat(rows, path):
             artist.set_linewidth(.6)
         axis.plot(x, [row["target_met_rate"] for row in points], color="black",
                   marker="o", markersize=3, linewidth=1.5,
-                  label="67% target attained")
+                  label="Full-shed target attained")
         fixed = points[0]["prefill_available_tps"] / 1000 \
             if sweep == "bandwidth" else points[0]["bandwidth_cap_gbps"]
         axis.set(
@@ -1131,7 +1136,7 @@ def main():
         loaded_context_only=True,
     )
     oat_rows, oat_design_metadata = simulate_oat(
-        args.samples, args.seed, args.sessions, args.target,
+        args.samples, args.seed, args.sessions, 1.0,
     )
     if any((row["replicate"], row["case_id"], row["timing_fit_sha256"],
             row["power_bootstrap_index"]) !=
