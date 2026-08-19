@@ -414,8 +414,7 @@ def bundle_summary(paths: list[Path]) -> dict:
                         "timing_gate_passed": timing["timing_gate_passed"],
                         "held_out_migration_gate_passed": timing["migration_gate_passed"]},
         "pareto": {"states": len(stress["states"]), "deadlines_s": stress["deadlines_s"],
-                   "points": len(frontier["frontier"]),
-                   "reference_label": frontier["reference_label"]},
+                   "points": len(frontier["frontier"])},
         "artifacts": {str(path): hashlib.sha256(path.read_bytes()).hexdigest()
                       for path in paths},
     }

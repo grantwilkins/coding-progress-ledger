@@ -1751,9 +1751,7 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
     return problem, architecture, routes, requested_shed_w
 
 
-def joint_solver(policy: str, objective: str | None = None) -> str:
-    if policy == "queue_haul" and objective == "max_shed":
-        return "max_shed"
+def joint_solver(policy: str) -> str:
     return {
         "queue_haul": "lp_work_first", "greedy": "greedy",
         "greedy_lagrangian": "greedy_lagrangian", "random": "random",
@@ -1776,7 +1774,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     partial = scenario.get("design") in {
         "frontier", "constraint", "separation", "hardware_gap"}
     deadline_blind = scenario["policy"] == DEADLINE_BLIND_POLICY
-    solver = joint_solver(scenario["policy"], scenario.get("objective"))
+    solver = joint_solver(scenario["policy"])
     planning_problem = replace(
         problem, deadline_s=DEADLINE_BLIND_HORIZON_S,
         end_s=max(problem.end_s, DEADLINE_BLIND_HORIZON_S),
@@ -2788,8 +2786,7 @@ def simulate_constraint(plan_path: Path, out: Path) -> dict:
         problem, architecture, routes, requested = joint_problem(
             scenario, snapshots, profile, demand)
         result = solve(
-            problem, profile, routes, joint_solver(
-                scenario["policy"], scenario.get("objective")),
+            problem, profile, routes, joint_solver(scenario["policy"]),
             seed=scenario["planner_seed"], destination=architecture,
         )
         counts = _constraint_action_counts(result.moves)
@@ -3016,7 +3013,7 @@ def simulate_separation(plan_path: Path, out: Path) -> dict:
         ) if scenario["policy"] == DEADLINE_BLIND_POLICY else problem
         result = solve(
             planning, profile, routes,
-            joint_solver(scenario["policy"], scenario.get("objective")),
+            joint_solver(scenario["policy"]),
             seed=scenario["planner_seed"], destination=architecture,
         )
         actual = replace(
@@ -3919,7 +3916,7 @@ def simulate_hardware_gap(plan_path: Path, out: Path) -> dict:
             else:
                 result = solve(
                     problem, profile, routes,
-                    joint_solver(policy, scenario["objective"]),
+                    joint_solver(policy),
                     seed=scenario["planner_seed"], destination=architecture,
                     admission_mode=scenario["admission_mode"],
                 )

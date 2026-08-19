@@ -1,12 +1,11 @@
 """
 Claim:
-The stress-frontier plot scales every non-reference policy by their shared
-maximum and omits the exact MILP reference.
+The stress-frontier plot scales every policy by their shared maximum, and
+Queue-Haul plans with the LP rather than an exact MILP.
 
 Plausible wrong implementations:
 - Normalize each policy independently.
-- Include the omitted MILP reference in the denominator.
-- Plot the MILP reference after excluding it from normalization.
+- Resolve the Queue-Haul policy to the exact max-shed MILP.
 """
 
 from types import SimpleNamespace
@@ -40,7 +39,7 @@ def test_reduction_labels_unpromoted_frontier_as_modeled(tmp_path, monkeypatch):
     rows = [{"deadline_s": deadline, "policy": policy,
              "shed_by_deadline_w": state}
             for deadline in campaign.DEADLINES
-            for policy in (*campaign.POLICIES, campaign.REFERENCE)
+            for policy in campaign.POLICIES
             for state in range(40)]
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0])
@@ -53,12 +52,11 @@ def test_reduction_labels_unpromoted_frontier_as_modeled(tmp_path, monkeypatch):
         "modeled stress-suite sensitivity"}
 
 
-def test_plot_normalizes_to_non_milp_maximum(tmp_path, monkeypatch):
+def test_plot_normalizes_to_the_shared_maximum(tmp_path, monkeypatch):
     values = range(2, 2 * len(campaign.POLICIES) + 1, 2)
     rows = [{"deadline_s": 10, "policy": policy,
              "coverage_90_shed_w": value}
-            for policy, value in zip((*campaign.POLICIES, campaign.REFERENCE),
-                                     (*values, 100))]
+            for policy, value in zip(campaign.POLICIES, values)]
     lines = []
     monkeypatch.setattr(campaign.plot_style, "policy_style", lambda policy: {})
     import matplotlib.axes
@@ -68,6 +66,7 @@ def test_plot_normalizes_to_non_milp_maximum(tmp_path, monkeypatch):
     assert lines == [[value / max(values)] for value in values]
 
 
-def test_stress_frontier_compares_both_greedy_algorithms():
+def test_stress_frontier_plans_queue_haul_with_the_lp():
+    assert campaign.network.joint_solver("queue_haul") == "lp_work_first"
     assert "greedy" in campaign.POLICIES
-    assert "greedy_lagrangian" in campaign.POLICIES
+    assert not {"greedy_lagrangian", "exact_modeled_milp_optimum"} & set(campaign.POLICIES)

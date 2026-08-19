@@ -1025,11 +1025,12 @@ uv run python testbed_calibration_campaign.py prepare --parent outputs/east-germ
 `realized_shed_w` hardware-gap fields are cataloged as `model_credited`;
 `trailing-power` separately derives direct five-second Sweden power windows.
 The final `stress_frontier_campaign.py` plan contains 40 equal-weight states and
-runs Queue-Haul, six baselines, and the exact modeled MILP optimum independently
-at 10--60 second deadlines. Reduction uses the fifth-smallest of 40 values and
-automatically retains the title “Modeled stress-suite sensitivity” until every
-power, timing, correctness, provenance, transition, and hardware-window gate
-passes.
+runs the Queue-Haul LP and its six baselines independently at 10--60 second
+deadlines. Queue-Haul plans this suite with `lp_work_first`, the same LP every
+other campaign uses; the campaign no longer reports an exact max-shed MILP.
+Reduction uses the fifth-smallest of 40 values and automatically retains the
+title “Modeled stress-suite sensitivity” until every power, timing, correctness,
+provenance, transition, and hardware-window gate passes.
 
 ```bash
 uv run python stress_frontier_campaign.py prepare --parent outputs/east-germany-separation-20260809/plan.json --profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --out outputs/azure-calibration/stress-plan.json

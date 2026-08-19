@@ -188,8 +188,7 @@ def test_bundle_summary_preserves_modeled_label_and_gates(tmp_path):
          "migration_gate_passed": False},
         {"schema": "queue-haul-stress-frontier-plan-v1", "states": [{}] * 40,
          "deadlines_s": [10, 15]},
-        {"schema": "queue-haul-stress-frontier-v1", "reference_label":
-         "exact modeled MILP optimum", "frontier": [{}] * 16},
+        {"schema": "queue-haul-stress-frontier-v1", "frontier": [{}] * 16},
     ]
     paths = []
     for index, value in enumerate(values):

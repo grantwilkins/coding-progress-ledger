@@ -1292,7 +1292,7 @@ def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
     # The separation baseline stays the myopic method-and-route policy; the
     # destination-free isolated_fastest would solve the separation cells.
     assert n.joint_solver("isolated_fastest") == "isolated_myopic"
-    assert n.joint_solver("queue_haul", "max_shed") == "max_shed"
+    assert n.joint_solver("queue_haul") == "lp_work_first"
 
 
 def test_frontier_planner_targets_power_and_does_not_force_evacuation(monkeypatch):

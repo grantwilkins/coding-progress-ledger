@@ -20,10 +20,9 @@ from simulate import predict
 
 
 SCHEMA = "queue-haul-stress-frontier-plan-v1"
-POLICIES = ("queue_haul", "greedy", "greedy_lagrangian", "replay_only",
-            "kv_only", "isolated_fastest", "queue_haul_power_blind",
+POLICIES = ("queue_haul", "greedy", "replay_only", "kv_only",
+            "isolated_fastest", "queue_haul_power_blind",
             network.DEADLINE_BLIND_POLICY)
-REFERENCE = plot_style.REFERENCE
 DEADLINES = tuple(range(10, 61, 5))
 REGIMES = (
     ("jointly-binding", .75, .90, "controlled_40"),
@@ -94,7 +93,7 @@ def prepare(parent_path: Path, profile_path: Path, out: Path, seed: int = 1) -> 
         "manifest": {"path": str(_resolve(parent["manifest"]["path"])),
                      "sha256": parent["manifest"]["sha256"]}, "template": template,
         "states": stress_states(profile, seed), "deadlines_s": list(DEADLINES),
-        "policies": list(POLICIES), "reference": REFERENCE,
+        "policies": list(POLICIES),
         "coverage": {"states": 40, "required": 36, "order_statistic": 5},
         "pack": "recorded-28-seed-8",
     }
@@ -203,12 +202,9 @@ def run(plan_path: Path, out: Path, shard: int = 0, shards: int = 1) -> list[dic
         problem, architecture, routes, _target = network.joint_problem(
             scenario, snapshots, profile, base_demand)
         initial = source_power(problem, profile)
-        policies = (*plan["policies"], *((plan.get("reference"),)
-                                         if plan.get("reference") else ()))
-        for policy in policies:
+        for policy in plan["policies"]:
             planning = problem
-            solver = "max_shed" if policy == REFERENCE else network.joint_solver(
-                policy, scenario["objective"])
+            solver = network.joint_solver(policy)
             if policy == network.DEADLINE_BLIND_POLICY:
                 planning = replace(problem, deadline_s=network.ORACLE_STALE_HORIZON_S,
                                    end_s=network.ORACLE_STALE_HORIZON_S)
@@ -271,7 +267,7 @@ def reduce(results_paths: list[Path], out: Path, promotion: dict | None = None) 
         grouped.setdefault((int(row["deadline_s"]), row["policy"]), []).append(
             float(row["shed_by_deadline_w"]))
     expected = {(deadline, policy) for deadline in DEADLINES
-                for policy in (*POLICIES, REFERENCE)}
+                for policy in POLICIES}
     if set(grouped) != expected:
         raise ValueError("incomplete stress frontier results")
     for deadline, policy in sorted(grouped):
@@ -281,7 +277,7 @@ def reduce(results_paths: list[Path], out: Path, promotion: dict | None = None) 
                                                   if empirical else
                                                   "modeled stress-suite sensitivity")})
     value = {"schema": "queue-haul-stress-frontier-v1", "empirical": empirical,
-             "reference_label": "exact modeled MILP optimum", "frontier": frontier}
+             "frontier": frontier}
     if promotion is not None:
         value["promotion"] = promotion
     out.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
