@@ -1066,6 +1066,8 @@ def plot_action_boxplot(rows, path):
 def plot_oat(rows, path):
     from matplotlib.ticker import PercentFormatter
 
+    fs = plot_style.HALF_COLUMN_FONT_SIZE
+    legend_fs = plot_style.HALF_COLUMN_LEGEND_FONT_SIZE
     col_w, col_h = 3.33, 2.0
     for sweep_i, sweep in enumerate(("bandwidth", "prefill")):
         fig, ax = plt.subplots(figsize=(col_w, col_h))
@@ -1096,14 +1098,15 @@ def plot_oat(rows, path):
         ax.margins(0)
         ax.set_ylabel("Sessions (%)")
         ax.yaxis.set_major_formatter(PercentFormatter(1))
-        ax.tick_params(labelsize=7)
-        ax.xaxis.label.set_size(8)
-        ax.yaxis.label.set_size(8)
+        plot_style.half_column(ax)
+        ax.xaxis.label.set_size(fs)
+        ax.yaxis.label.set_size(fs)
         if sweep_i == 1:
             handles, labels = ax.get_legend_handles_labels()
-            ax.legend(handles, labels, frameon=False, fontsize=5.5,
+            ax.legend(handles, labels, fontsize=legend_fs,
                       loc="center right", handlelength=1.2, handletextpad=.4,
-                      borderpad=.3, labelspacing=.3)
+                      borderpad=.4, labelspacing=.3,
+                      fancybox=False, edgecolor="black")
         fig.tight_layout(pad=.3)
         suffix = "bandwidth" if sweep == "bandwidth" else "prefill"
         fig.savefig(path.parent / f"action_choice_oat_{suffix}.png",
