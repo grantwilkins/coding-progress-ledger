@@ -1,25 +1,93 @@
 {
+  "action_boxplot_cases": [
+    "hbm",
+    "bandwidth",
+    "dest_compute",
+    "bandwidth-dest_compute-hbm",
+    "none"
+  ],
+  "action_boxplot_metric": "per-draw percentage of source sessions assigned to each action",
+  "action_boxplot_quantiles": [
+    0.05,
+    0.25,
+    0.5,
+    0.75,
+    0.95
+  ],
+  "activation_gated_factors": [
+    "hbm",
+    "bandwidth",
+    "dest_compute"
+  ],
+  "bandwidth_bottleneck": {
+    "natural_physical_route_mbps": {
+      "east": 2280.176174037911,
+      "germany": 8733.31359588583
+    },
+    "physical_route_mbps": 1000,
+    "pipeline_timing_condition": "controlled_40",
+    "selection_basis": "lowest bandwidth in the existing 1-10-Gbit/s A100 loaded-migration validation"
+  },
   "bandwidth_projection_region_rate": 0.115,
-  "claim": "conservative measurement-calibrated workload sensitivity",
+  "candidate_method_dominance": {
+    "candidate_equivalent": 0,
+    "candidate_incomparable": 97434,
+    "candidate_kv_dominates": 0,
+    "candidate_kv_only": 0,
+    "candidate_matched_pairs": 386692,
+    "candidate_neither": 61308,
+    "candidate_replay_dominates": 289258,
+    "candidate_replay_only": 0
+  },
+  "candidate_method_dominance_definition": {
+    "dominates": "weakly greater gain, weakly lower predicted duration, and no greater normalized LP resource coefficient",
+    "matched_pair_partition": [
+      "candidate_replay_dominates",
+      "candidate_kv_dominates",
+      "candidate_equivalent",
+      "candidate_incomparable"
+    ],
+    "slot_partition": [
+      "candidate_matched_pairs",
+      "candidate_replay_only",
+      "candidate_kv_only",
+      "candidate_neither"
+    ]
+  },
+  "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
   "cross_method_coupling": 1,
+  "factor_action_response_rate": {
+    "bandwidth-dest_compute-hbm/bandwidth": 1.0,
+    "bandwidth-dest_compute-hbm/dest_compute": 0.322,
+    "bandwidth-dest_compute-hbm/hbm": 0.564,
+    "bandwidth-dest_compute/bandwidth": 1.0,
+    "bandwidth-dest_compute/dest_compute": 0.607,
+    "bandwidth-hbm/bandwidth": 0.273,
+    "bandwidth-hbm/hbm": 0.407,
+    "bandwidth/bandwidth": 0.481,
+    "dest_compute-hbm/dest_compute": 0.997,
+    "dest_compute-hbm/hbm": 0.608,
+    "dest_compute/dest_compute": 0.997,
+    "hbm/hbm": 0.51
+  },
   "factor_activation_rate": {
-    "bandwidth-dest_compute-hbm/bandwidth": 0.265,
-    "bandwidth-dest_compute-hbm/dest_compute": 1.0,
-    "bandwidth-dest_compute-hbm/hbm": 0.42,
-    "bandwidth-dest_compute/bandwidth": 0.483,
+    "bandwidth-dest_compute-hbm/bandwidth": 0.0,
+    "bandwidth-dest_compute-hbm/dest_compute": 0.745,
+    "bandwidth-dest_compute-hbm/hbm": 0.905,
+    "bandwidth-dest_compute/bandwidth": 0.089,
     "bandwidth-dest_compute/dest_compute": 1.0,
-    "bandwidth-hbm/bandwidth": 0.875,
+    "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 1.0,
-    "dest_compute-hbm/dest_compute": 1.0,
-    "dest_compute-hbm/hbm": 0.445,
+    "bandwidth/bandwidth": 0.92,
+    "dest_compute-hbm/dest_compute": 0.744,
+    "dest_compute-hbm/hbm": 0.902,
     "dest_compute/dest_compute": 1.0,
     "hbm/hbm": 1.0
   },
   "factor_levels": {
     "bandwidth": [
       "natural",
-      "controlled_40"
+      "bottleneck_1g"
     ],
     "dest_compute": [
       0.25,
@@ -27,44 +95,238 @@
     ],
     "hbm": [
       0.0,
-      0.9
+      0.98
     ]
+  },
+  "factor_opportunity_reduction_rate": {
+    "bandwidth-dest_compute-hbm/bandwidth": 0.0,
+    "bandwidth-dest_compute-hbm/dest_compute": 0.5,
+    "bandwidth-dest_compute-hbm/hbm": 0.804,
+    "bandwidth-dest_compute/bandwidth": 0.089,
+    "bandwidth-dest_compute/dest_compute": 1.0,
+    "bandwidth-hbm/bandwidth": 0.0,
+    "bandwidth-hbm/hbm": 1.0,
+    "bandwidth/bandwidth": 0.92,
+    "dest_compute-hbm/dest_compute": 0.5,
+    "dest_compute-hbm/hbm": 0.804,
+    "dest_compute/dest_compute": 1.0,
+    "hbm/hbm": 1.0
+  },
+  "factor_resource_near_capacity_rate": {
+    "bandwidth-dest_compute-hbm/bandwidth": 0.0,
+    "bandwidth-dest_compute-hbm/dest_compute": 0.61,
+    "bandwidth-dest_compute-hbm/hbm": 0.58,
+    "bandwidth-dest_compute/bandwidth": 0.006,
+    "bandwidth-dest_compute/dest_compute": 0.816,
+    "bandwidth-hbm/bandwidth": 0.0,
+    "bandwidth-hbm/hbm": 0.716,
+    "bandwidth/bandwidth": 0.001,
+    "dest_compute-hbm/dest_compute": 0.603,
+    "dest_compute-hbm/hbm": 0.556,
+    "dest_compute/dest_compute": 0.814,
+    "hbm/hbm": 0.715
   },
   "inputs": {
     "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
     "outputs/coding-run/migrations.csv": "a3bfa6beb5f622d0d9f3f8e22cc1f362b44428d2817feaec3cbd8bc7281359af",
     "outputs/coding-run/scenarios.csv": "f6d8e8676c7ec0a2d491b41c8f629f4e65118ac08b39ff861bf571ab882c359c",
     "outputs/destination-v7-20260722/content-free-manifest.json": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
+    "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a",
+    "outputs/loaded-service-model-20260815/model.json": "bfc46e12992e3387d40c044f864a0e78f21d31210a1d930974daa2527b51bdac",
     "outputs/policy-hardware-width8-frontier-20260730/migration_stages.csv": "e5a9f6a128ea7358353d92d02120d69bba6c4591b4fb2306624ecade233fb531",
     "outputs/policy-hardware-width8-frontier-20260730/scenarios.csv": "222cfddfda665a6cf1ea2e521cb25ba23bf7930ad0727a0c99b044b43a8dc2b8",
     "outputs/timing-power-validation-20260814/migrations.csv": "04eec612a2082a528d8d94acec50a4f002065af988d44e39200b5023bbf19107",
     "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe",
     "outputs/timing-power-validation-20260814/timing-summary.json": "0f45a8d659aacf5d4af8bb04873795d3c9de092d1f2df15d969c8f469a8d9b1e"
   },
+  "oat_action_sweeps": {
+    "action_metric": "source-session share at each OAT level",
+    "bandwidth_cap_gbps": [
+      1.0,
+      8.733313595885829
+    ],
+    "fixed_bandwidth_cap_gbps": 4.866656797942914,
+    "fixed_prefill_available_tps": 2335.7636529710326,
+    "levels": 20,
+    "paired_draws": 50,
+    "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
+    "prefill_available_tps": [
+      291.9704566213793,
+      4379.556849320686
+    ],
+    "prefill_full_rate_tps": 5839.4091324275805,
+    "prefill_reference_tokens": 7680,
+    "samples_per_sweep": 1000,
+    "sessions_per_pack": 28
+  },
   "limitations": [
     "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
     "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
     "each sampled pack is normalized to the pooled campaign's 0.4 source load",
-    "destination compute pressure consumes shared prefill/decode service headroom; load-dependent migration slowdown is not modeled",
-    "route plus shared destination work is a conservative no-overlap envelope",
+    "the 0.4 source load is service-normalized load, not sampled phase-power load",
+    "phase-load action shares are additive optimizer weights, not a per-action attribution of nonlinear watts",
+    "reported shed is awake source-region power rather than net fleet power or energy",
+    "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
+    "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
+    "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
+    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases",
     "timing audits are grouped retrospective checks, not untouched validation sets",
     "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
+    "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
+    "the relative load factor was measured on a fixed width-eight pack; transport to regional concurrency-one timing and other contexts is a sensitivity",
+    "all uses outside the 2,048-14,336-token fit pack or 1-10-Gbit/s validation routes are counted, with a support-restricted workload sensitivity",
+    "the support-restricted workload resamples a narrower state population and is not a within-pack counterfactual",
+    "the action ensemble fixes the loaded-service slope at its central fit rather than propagating its bootstrap",
+    "the relative-factor check does not directly validate the deployed regional concurrency-one loaded model",
+    "the load campaign identifies prefill-heavy normalized load, not a separate decode-load coefficient",
+    "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
+    "the destination envelope combines measured timing with synthetic 98%-occupied HBM and service-pressure levels",
+    "the bandwidth state caps both physical destination routes at the predeclared 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
+    "the OAT action sweeps interpolate regional pipeline fits between the measured controlled-40 and natural endpoints; their action shares are modeled planner outcomes, not hardware action observations",
+    "East's fitted controlled pipeline remains below 1 Gbit/s, so its loaded-factor transport is counted outside the validation bandwidth range",
+    "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
     "each constraint state is planned independently; rounded-LP release regressions are reported",
     "fractional opportunity monotonicity does not prove integer packability",
     "controlled-40 timing draws above natural bandwidth are projected down; the rate is recorded"
   ],
+  "loaded_factor_transport": {
+    "bandwidth": {
+      "candidates": {
+        "above": 0,
+        "below": 193346,
+        "denominator": 773384,
+        "outside": 193346,
+        "outside_rate": 0.25
+      },
+      "pools": {
+        "above": 0,
+        "below": 4000,
+        "denominator": 16000,
+        "outside": 4000,
+        "outside_rate": 0.25
+      },
+      "selected": {
+        "above": 0,
+        "below": 8406,
+        "denominator": 73803,
+        "outside": 8406,
+        "outside_rate": 0.11389780903215316
+      }
+    },
+    "context": {
+      "candidates": {
+        "above": 223512,
+        "below": 78016,
+        "denominator": 773384,
+        "outside": 301528,
+        "outside_rate": 0.38988135260103646
+      },
+      "selected": {
+        "above": 4226,
+        "below": 16894,
+        "denominator": 73803,
+        "outside": 21120,
+        "outside_rate": 0.2861672289744319
+      },
+      "sessions": {
+        "above": 10787,
+        "below": 2438,
+        "denominator": 28000,
+        "outside": 13225,
+        "outside_rate": 0.47232142857142856
+      }
+    },
+    "selected_by_method": {
+      "kv_transfer": {
+        "bandwidth_outside": 0,
+        "bandwidth_outside_rate": 0.0,
+        "context_outside": 4466,
+        "context_outside_rate": 0.3493702573730736,
+        "denominator": 12783
+      },
+      "replay": {
+        "bandwidth_outside": 8406,
+        "bandwidth_outside_rate": 0.13775811209439529,
+        "context_outside": 16654,
+        "context_outside_rate": 0.27292690921009505,
+        "denominator": 61020
+      }
+    }
+  },
+  "loaded_service_model": {
+    "bootstrap_samples": 1000,
+    "bootstrap_seed": 1,
+    "equation": "endpoint_work(rho)=endpoint_work(0)*exp(beta_method*rho)",
+    "fit_context_tokens": [
+      2048,
+      14336
+    ],
+    "selected_commit_log_slope_per_rho": {
+      "kv_transfer": 0.0,
+      "replay": 0.2849634259872738
+    },
+    "slowdown_at_rho_0_95": {
+      "kv_transfer": 1.0,
+      "replay": 1.3109017441094115
+    },
+    "training_bandwidth_mbps": [
+      10000,
+      10000
+    ],
+    "validation_bandwidth_mbps": [
+      1000,
+      10000
+    ],
+    "width8_relative_factor_validation": {
+      "kv_transfer": {
+        "episodes": 220,
+        "false_feasible_25s": 0,
+        "false_infeasible_25s": 0,
+        "median_absolute_percentage_error": 0.028279343045033052,
+        "p90_absolute_error_s": 0.5384131217591783,
+        "p90_absolute_percentage_error": 0.11902462297834371
+      },
+      "replay": {
+        "episodes": 220,
+        "false_feasible_25s": 0,
+        "false_infeasible_25s": 0,
+        "median_absolute_percentage_error": 0.012270921736503543,
+        "p90_absolute_error_s": 0.1589513355972773,
+        "p90_absolute_percentage_error": 0.022747063365469618
+      }
+    }
+  },
+  "mean_phase_load_share": {
+    "kv_transfer": 0.1300837832910973,
+    "not_moved": 0.21678653561169664,
+    "replay": 0.653129681097206
+  },
   "migration_horizon_s": 25,
+  "minimum_single_factor_action_response_rate": 0.1,
+  "planner_objective_cost": "sum of isolated candidate durations; endpoint replica-seconds remain a separate physical capacity row",
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 292,
-    "shortfall_regression_max_w": 18.525070148034004,
-    "shortfall_regression_median_w": 2.259066222210407,
-    "shortfall_regression_p90_w": 10.684898497186282,
-    "shortfall_regression_rate": 0.024333333333333332,
-    "target_loss_count": 101,
-    "target_loss_rate": 0.008416666666666666
+    "shortfall_regression_count": 395,
+    "shortfall_regression_max_w": 17.68911389159618,
+    "shortfall_regression_median_w": 2.6499346720210326,
+    "shortfall_regression_p90_w": 8.683136633224832,
+    "shortfall_regression_rate": 0.032916666666666664,
+    "target_loss_count": 0,
+    "target_loss_rate": 0.0
   },
+  "plotted_constraint_states": [
+    "hbm",
+    "bandwidth",
+    "dest_compute",
+    "bandwidth-dest_compute-hbm",
+    "none"
+  ],
+  "power_scope": "steady awake source-region power; destination power excluded",
+  "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
+  "regional_timing_destination_prefill_loads": [
+    0.0
+  ],
   "regional_timing_validation": {
     "held_out": {
       "kv_transfer": {
@@ -88,62 +350,257 @@
     },
     "migration_gate_passed": true
   },
-  "route_compute_overlap": false,
+  "route_compute_overlap": true,
+  "route_endpoint_composition": "max(route time, fully shared Replay/KV endpoint work)",
   "samples": 1000,
-  "schema": "queue-haul-workload-adaptation-v1",
+  "schema": "queue-haul-workload-adaptation-v8",
   "seed": 1001,
+  "selected_session_totals": {
+    "kv_transfer": 12783,
+    "not_moved": 150197,
+    "replay": 61020
+  },
   "sessions_per_pack": 28,
   "source_load": 0.4,
+  "source_load_definition": "sum(f/F + g/G); distinct from sampled phase load z=af+bg",
+  "stacked_action_metric": "mean modeled source phase-load share across paired draws",
+  "support_restricted_workload_sensitivity": {
+    "comparison": "2,048-14,336-token workload resample with paired timing and power draws; not a within-pack counterfactual",
+    "loaded_factor_transport": {
+      "bandwidth": {
+        "candidates": {
+          "above": 0,
+          "below": 223568,
+          "denominator": 894272,
+          "outside": 223568,
+          "outside_rate": 0.25
+        },
+        "pools": {
+          "above": 0,
+          "below": 4000,
+          "denominator": 16000,
+          "outside": 4000,
+          "outside_rate": 0.25
+        },
+        "selected": {
+          "above": 0,
+          "below": 5752,
+          "denominator": 62446,
+          "outside": 5752,
+          "outside_rate": 0.09211158440892932
+        }
+      },
+      "context": {
+        "candidates": {
+          "above": 0,
+          "below": 0,
+          "denominator": 894272,
+          "outside": 0,
+          "outside_rate": 0.0
+        },
+        "selected": {
+          "above": 0,
+          "below": 0,
+          "denominator": 62446,
+          "outside": 0,
+          "outside_rate": 0.0
+        },
+        "sessions": {
+          "above": 0,
+          "below": 0,
+          "denominator": 28000,
+          "outside": 0,
+          "outside_rate": 0.0
+        }
+      },
+      "selected_by_method": {
+        "kv_transfer": {
+          "bandwidth_outside": 0,
+          "bandwidth_outside_rate": 0.0,
+          "context_outside": 0,
+          "context_outside_rate": 0.0,
+          "denominator": 12139
+        },
+        "replay": {
+          "bandwidth_outside": 5752,
+          "bandwidth_outside_rate": 0.11433796489554138,
+          "context_outside": 0,
+          "context_outside_rate": 0.0,
+          "denominator": 50307
+        }
+      }
+    },
+    "selected_session_totals": {
+      "kv_transfer": 12139,
+      "not_moved": 161554,
+      "replay": 50307
+    },
+    "target_met_rate": {
+      "All bound": 0.779,
+      "Bandwidth": 1.0,
+      "Bandwidth + compute": 0.864,
+      "Dest. compute": 0.864,
+      "HBM": 0.908,
+      "HBM + bandwidth": 0.908,
+      "HBM + compute": 0.779,
+      "None bound": 1.0
+    },
+    "workload": {
+      "excluded_states": 162,
+      "loaded_factor_context_only": true,
+      "loaded_factor_context_tokens": [
+        2048,
+        14336
+      ],
+      "loaded_factor_in_context_states": 1327,
+      "loaded_factor_in_context_templates": 62,
+      "loaded_factor_outside_context_states": 1694,
+      "manifest_templates": 72,
+      "phase_direction_excluded_states": 2,
+      "supported_states": 3021,
+      "supported_templates": 63,
+      "unselected_states": 1633
+    }
+  },
   "surface_validation": {
     "coding-c1-c4/development": {
-      "false_feasible_at_25s": 5,
-      "false_infeasible_at_25s": 1,
-      "median_predicted_over_measured": 1.0179210633199347,
-      "p90_absolute_relative_error": 0.46565521570665375,
+      "false_feasible_at_25s": 19,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.872177917467015,
+      "p90_absolute_relative_error": 0.42923939993387067,
       "scenarios": 96,
-      "underprediction_rate": 0.46875
+      "underprediction_rate": 0.7708333333333334
+    },
+    "coding-c1-c4/development/kv_transfer": {
+      "false_feasible_at_25s": 14,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.9109777718834491,
+      "p90_absolute_relative_error": 0.5628782021214593,
+      "scenarios": 48,
+      "underprediction_rate": 0.8125
+    },
+    "coding-c1-c4/development/replay": {
+      "false_feasible_at_25s": 5,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.7981070163695221,
+      "p90_absolute_relative_error": 0.42622753776595484,
+      "scenarios": 48,
+      "underprediction_rate": 0.7291666666666666
     },
     "coding-c1-c4/grouped-audit": {
-      "false_feasible_at_25s": 1,
-      "false_infeasible_at_25s": 2,
-      "median_predicted_over_measured": 0.9833209192383423,
-      "p90_absolute_relative_error": 0.42225706649023426,
+      "false_feasible_at_25s": 5,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.8859485281396715,
+      "p90_absolute_relative_error": 0.4232865104092367,
       "scenarios": 66,
-      "underprediction_rate": 0.5606060606060606
+      "underprediction_rate": 0.7272727272727273
+    },
+    "coding-c1-c4/grouped-audit/kv_transfer": {
+      "false_feasible_at_25s": 4,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.8642808630503208,
+      "p90_absolute_relative_error": 0.42453296454934847,
+      "scenarios": 33,
+      "underprediction_rate": 0.8181818181818182
+    },
+    "coding-c1-c4/grouped-audit/replay": {
+      "false_feasible_at_25s": 1,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.942285091552295,
+      "p90_absolute_relative_error": 0.39010918034922876,
+      "scenarios": 33,
+      "underprediction_rate": 0.6363636363636364
     },
     "width8/development": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 100,
-      "median_predicted_over_measured": 1.8359805238649998,
-      "p90_absolute_relative_error": 1.294635352490699,
+      "false_infeasible_at_25s": 2,
+      "median_predicted_over_measured": 1.1162476020523169,
+      "p90_absolute_relative_error": 0.6444812323198056,
       "scenarios": 208,
-      "underprediction_rate": 0.1778846153846154
+      "underprediction_rate": 0.38461538461538464
+    },
+    "width8/development/kv_transfer": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 0.9824064137365617,
+      "p90_absolute_relative_error": 0.4239861590570746,
+      "scenarios": 56,
+      "underprediction_rate": 0.5
+    },
+    "width8/development/mixed": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 1.328307247112302,
+      "p90_absolute_relative_error": 0.7827685629702292,
+      "scenarios": 100,
+      "underprediction_rate": 0.15
+    },
+    "width8/development/replay": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 2,
+      "median_predicted_over_measured": 0.9830643603183712,
+      "p90_absolute_relative_error": 0.1562407373160577,
+      "scenarios": 52,
+      "underprediction_rate": 0.7115384615384616
     },
     "width8/grouped-audit": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 33,
-      "median_predicted_over_measured": 1.7825266119916228,
-      "p90_absolute_relative_error": 1.35683233864098,
+      "false_infeasible_at_25s": 1,
+      "median_predicted_over_measured": 1.1302760726762007,
+      "p90_absolute_relative_error": 0.7069079558187432,
       "scenarios": 80,
-      "underprediction_rate": 0.125
+      "underprediction_rate": 0.3375
+    },
+    "width8/grouped-audit/kv_transfer": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 1.0459792786518525,
+      "p90_absolute_relative_error": 0.3824603486284667,
+      "scenarios": 20,
+      "underprediction_rate": 0.5
+    },
+    "width8/grouped-audit/mixed": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 0,
+      "median_predicted_over_measured": 1.2797168246556816,
+      "p90_absolute_relative_error": 0.8586826773084703,
+      "scenarios": 40,
+      "underprediction_rate": 0.175
+    },
+    "width8/grouped-audit/replay": {
+      "false_feasible_at_25s": 0,
+      "false_infeasible_at_25s": 1,
+      "median_predicted_over_measured": 0.9993428284597472,
+      "p90_absolute_relative_error": 0.17073219904112594,
+      "scenarios": 20,
+      "underprediction_rate": 0.5
     }
   },
   "target_fraction": 0.6666666666666666,
   "target_met_rate": {
-    "All bound": 0.339,
-    "Bandwidth": 0.989,
-    "Bandwidth + compute": 0.339,
-    "Dest. compute": 0.353,
-    "HBM": 0.983,
-    "HBM + bandwidth": 0.982,
-    "HBM + compute": 0.349,
-    "None bound": 0.991
+    "All bound": 0.47,
+    "Bandwidth": 0.996,
+    "Bandwidth + compute": 0.618,
+    "Dest. compute": 0.618,
+    "HBM": 0.603,
+    "HBM + bandwidth": 0.603,
+    "HBM + compute": 0.47,
+    "None bound": 0.996
   },
   "unique_timing_draws": 1000,
   "workload": {
     "excluded_states": 162,
+    "loaded_factor_context_only": false,
+    "loaded_factor_context_tokens": [
+      2048,
+      14336
+    ],
+    "loaded_factor_in_context_states": 1327,
+    "loaded_factor_in_context_templates": 62,
+    "loaded_factor_outside_context_states": 1694,
     "manifest_templates": 72,
-    "supported_states": 3023,
+    "phase_direction_excluded_states": 2,
+    "supported_states": 3021,
     "supported_templates": 63,
     "unselected_states": 1633
   }

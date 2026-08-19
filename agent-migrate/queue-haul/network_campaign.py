@@ -1758,7 +1758,10 @@ def joint_solver(policy: str, objective: str | None = None) -> str:
         "queue_haul": "lp_work_first", "greedy": "greedy",
         "greedy_lagrangian": "greedy_lagrangian", "random": "random",
         "kv_only": "kv_only", "replay_only": "replay_only",
-        "isolated_fastest": "isolated_fastest",
+        # The separation cells are built to punish route lock-in, so this
+        # baseline stays the myopic method-and-route policy and is labeled as
+        # such; the destination-free isolated_fastest would solve them.
+        "isolated_fastest": "isolated_myopic",
         "queue_haul_power_blind": "lp_power_blind",
         DEADLINE_BLIND_POLICY: "lp_work_first",
     }[policy]
@@ -2646,7 +2649,7 @@ def plot_constraint(rows: list[dict], duals: list[dict], out: Path) -> None:
     policy_labels = {
         "queue_haul": "Queue-Haul exact max", "greedy": "Queue-Haul greedy",
         "kv_only": "KV only", "replay_only": "Replay only",
-        "isolated_fastest": "Per-session fastest",
+        "isolated_fastest": "Myopic fastest (method+route)",
         "queue_haul_power_blind": "Power blind",
     }
     action_labels = {
@@ -2883,7 +2886,7 @@ def plot_separation(rows: list[dict], resources: list[dict], out: Path) -> None:
     labels = {
         "queue_haul": "Queue-Haul", "greedy": "Greedy",
         "kv_only": "KV only", "replay_only": "Replay only",
-        "isolated_fastest": "Isolated fastest",
+        "isolated_fastest": "Myopic fastest (method+route)",
         "queue_haul_power_blind": "Power blind",
         DEADLINE_BLIND_POLICY: "Deadline blind",
     }

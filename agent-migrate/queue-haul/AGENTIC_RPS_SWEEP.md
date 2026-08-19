@@ -102,10 +102,13 @@ uv run python plot_agentic_rps_sweep.py \
   outputs/agentic-rps-sweep
 ```
 
-The plot command writes one aligned two-panel PDF and PNG. Both panels use raw
-seconds and a conventional linear RPS axis; each contains one canonical model
-curve, model-colored SLO lines, first-confirmed-violation markers, and min-max
-whiskers at repeated boundary rates.
+Pass `--h100-summary outputs/agentic-rps-sweep-h100-vllm019-20260817/summary.json`
+to compare the workload-matched vLLM 0.19 H100 curve against the same fixed
+paper-reference SLOs: 1.0 s TTFT and 50 ms TPOT.
+
+The plot command writes a compact, side-by-side PDF and PNG sized for one NSDI
+column. Both panels use an increasing linear RPS axis, with hardware curves and
+a black dotted SLO line.
 
 ## H100 GPT-OSS result
 

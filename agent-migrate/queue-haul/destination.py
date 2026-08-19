@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -158,6 +159,60 @@ class DestinationType:
 
 
 @dataclass(frozen=True)
+class ProfileRateLimit:
+    """Opt-in conversion of one measured profile-RPS boundary."""
+
+    destination_type_id: str
+    context_tokens: int
+    input_tokens: int
+    output_tokens: int
+    baseline_rps: float
+    safe_total_rps: float
+
+    def __post_init__(self):
+        rates = (self.baseline_rps, self.safe_total_rps)
+        if not self.destination_type_id \
+                or min(self.context_tokens, self.input_tokens,
+                       self.output_tokens) <= 0 \
+                or not all(map(math.isfinite, rates)) \
+                or not 0 <= self.baseline_rps <= self.safe_total_rps:
+            raise ValueError("invalid profile RPS limit")
+
+    def _request_work(self, destination_type: DestinationType) -> np.ndarray:
+        if destination_type.type_id != self.destination_type_id:
+            raise ValueError("profile RPS limit has a different destination type")
+        return destination_type.work(
+            self.input_tokens, self.output_tokens, self.context_tokens,
+        )
+
+    def conversion(self, destination_type: DestinationType) -> dict:
+        work = self._request_work(destination_type)
+        added_rps = self.safe_total_rps - self.baseline_rps
+        return {
+            "normal": (1.0, 1.0),
+            "service_work_per_request": tuple(work),
+            "baseline_work": tuple(self.baseline_rps * work),
+            "safe_service_bound": float(self.safe_total_rps * work.sum()),
+            "safe_added_rps": added_rps,
+        }
+
+    def check(self, destination_type: DestinationType, expected_f: float,
+              expected_g: float, context_tokens: int) -> float:
+        self._request_work(destination_type)
+        if context_tokens != self.context_tokens or min(expected_f, expected_g) < 0:
+            raise ValueError("demand is outside the measured profile RPS class")
+        rates = (expected_f / self.input_tokens,
+                 expected_g / self.output_tokens)
+        if not math.isclose(*rates, rel_tol=1e-9, abs_tol=1e-12):
+            raise ValueError("demand is outside the measured profile RPS ray")
+        rate = sum(rates) / 2
+        if rate > self.safe_total_rps and not math.isclose(
+                rate, self.safe_total_rps, rel_tol=1e-9, abs_tol=1e-12):
+            raise ValueError("demand exceeds the measured profile RPS limit")
+        return rate
+
+
+@dataclass(frozen=True)
 class DestinationReplica:
     replica_id: str
     baseline_work: tuple[float, float] = (0.0, 0.0)
@@ -203,6 +258,11 @@ class DestinationPool:
     service_debt_fraction: float = 0.0
     fluid_migration: FluidMigrationService | None = None
     migration_headroom: dict[str, float] | None = None
+    # Source instances allowed to reach this pool.  A fleet whose nodes each
+    # own their egress pipe is modeled as one pool per (region, source node):
+    # the route is a property of the pool, so a session may only use the pools
+    # its own node can actually reach.  None means every source may reach it.
+    source_affinity: tuple[str, ...] | None = None
 
     def __post_init__(self):
         if not self.pool_id or not self.type_id or not self.replicas or not self.route_id \
@@ -218,7 +278,14 @@ class DestinationPool:
                            for value in self.migration_headroom.values())) \
                 or self.fluid_migration is not None \
                 and self.fluid_migration.coupling \
-                and self.migration_headroom:
+                and self.migration_headroom \
+                or self.fluid_migration is not None \
+                and self.migration_headroom is not None \
+                and (set(self.migration_headroom) != set(self.methods)
+                     or len(set(self.migration_headroom.values())) > 1) \
+                or self.source_affinity is not None \
+                and (not self.source_affinity
+                     or len(set(self.source_affinity)) != len(self.source_affinity)):
             raise ValueError("invalid destination pool")
 
 
@@ -232,18 +299,28 @@ class DestinationArchitecture:
 
     def __post_init__(self):
         type_ids = [q.type_id for q in self.types]
+        types = {q.type_id: q for q in self.types}
         pool_ids = [p.pool_id for p in self.pools]
         replicas = [r.replica_id for p in self.pools for r in p.replicas]
         serial = [i for i, pool in enumerate(self.pools)
                   if pool.fluid_migration is not None
                   and not pool.fluid_migration.route_overlap]
+        loaded_debt = any(
+            pool.fluid_migration is not None
+            and pool.event_flex_fraction is not None
+            and any(value.baseline_factor != 1
+                    or any(factor != 1 for factor in value.slowdown)
+                    for value in types[pool.type_id].loaded.values())
+            for pool in self.pools if pool.type_id in types
+        )
         if self.schema != DESTINATION_SCHEMA or not self.types or not self.pools \
                 or len(set(type_ids)) != len(type_ids) or len(set(pool_ids)) != len(pool_ids) \
                 or len(set(replicas)) != len(replicas) \
                 or not set(p.type_id for p in self.pools) <= set(type_ids) \
                 or self.residency_horizon_s is not None and self.residency_horizon_s < 0 \
                 or any(set(self.pools[i].route) & set(pool.route)
-                       for i in serial for j, pool in enumerate(self.pools) if i != j):
+                       for i in serial for j, pool in enumerate(self.pools) if i != j) \
+                or loaded_debt:
             raise ValueError("invalid destination architecture")
 
     @classmethod
@@ -295,6 +372,8 @@ class DestinationArchitecture:
             FluidMigrationService(**item["fluid_migration"])
             if "fluid_migration" in item else None,
             item.get("migration_headroom"),
+            None if item.get("source_affinity") is None
+            else tuple(item["source_affinity"]),
         ) for item in raw["pools"])
         return cls(raw["schema"], fingerprint(raw["source_compatibility"]),
                    tuple(types), pools, raw.get("residency_horizon_s"))

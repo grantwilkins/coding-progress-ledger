@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Silently style an unknown policy or fail to apply the documented font sizes.
 - Reuse an action hatch so grayscale action segments become ambiguous.
 - Change a model's identity between architecture-campaign panels.
+- Leave Bandwidth visually conflated with None bound in the pooled frontier.
 """
 
 import matplotlib
@@ -17,7 +18,9 @@ import plot_style
 
 
 def test_policy_styles_are_stable_and_unique():
-    assert plot_style.POLICY_NAMES["isolated_fastest"] == "True Greedy"
+    assert plot_style.POLICY_NAMES["isolated_fastest"] == "Isolated Fastest"
+    assert plot_style.COMPACT_POLICY_NAMES["kv_only"] == "KV Migrate"
+    assert plot_style.COMPACT_POLICY_NAMES["replay_only"] == "Replay Context"
     assert [matplotlib.colors.to_hex(plot_style.POLICY_COLORS[policy])
             for policy in plot_style.POLICIES] == [
         "#0072b2", "#e69f00", "#f0e442", "#d55e00",
@@ -47,7 +50,7 @@ def test_selected_actions_have_unique_hatches():
 
 def test_repair_comparison_has_canonical_policy_and_event_styles():
     assert plot_style.SCHEDULE_COMPARISON_NAMES == {
-        "replan": "QH replan", "no_replan": "No replan"}
+        "replan": "Queue-Haul replan", "no_replan": "No replan"}
     assert plot_style.SCHEDULE_COMPARISON_COLORS["replan"] \
         == plot_style.POLICY_COLORS["queue_haul"]
     assert set(plot_style.EVENT_NAMES) == {
@@ -89,3 +92,20 @@ def test_service_directions_have_one_canonical_visual_identity():
         plot_style.SERVICE_DIRECTION_MARKERS)
     assert len(set(plot_style.SERVICE_DIRECTION_MARKERS.values())) \
         == len(plot_style.SERVICE_DIRECTIONS)
+
+
+def test_agentic_hardware_has_one_canonical_visual_identity():
+    assert set(plot_style.AGENTIC_HARDWARE) == set(
+        plot_style.AGENTIC_HARDWARE_NAMES) == set(
+        plot_style.AGENTIC_HARDWARE_COLORS) == set(
+        plot_style.AGENTIC_HARDWARE_MARKERS)
+
+
+def test_displayed_resource_states_have_distinct_canonical_colors():
+    states = ("hbm", "bandwidth", "dest_compute",
+              "bandwidth-dest_compute-hbm", "none")
+    colors = [matplotlib.colors.to_hex(plot_style.RESOURCE_STATE_COLORS[state])
+              for state in states]
+
+    assert plot_style.RESOURCE_STATE_COLORS["bandwidth"] == "#CC79A7"
+    assert len(set(colors)) == len(states)

@@ -1,3 +1,14 @@
+"""
+Claim:
+The stress-frontier plot scales every non-reference policy by their shared
+maximum and omits the exact MILP reference.
+
+Plausible wrong implementations:
+- Normalize each policy independently.
+- Include the omitted MILP reference in the denominator.
+- Plot the MILP reference after excluding it from normalization.
+"""
+
 from types import SimpleNamespace
 import csv
 
@@ -40,3 +51,23 @@ def test_reduction_labels_unpromoted_frontier_as_modeled(tmp_path, monkeypatch):
     assert {row["coverage_90_shed_w"] for row in result["frontier"]} == {4}
     assert {row["claim"] for row in result["frontier"]} == {
         "modeled stress-suite sensitivity"}
+
+
+def test_plot_normalizes_to_non_milp_maximum(tmp_path, monkeypatch):
+    values = range(2, 2 * len(campaign.POLICIES) + 1, 2)
+    rows = [{"deadline_s": 10, "policy": policy,
+             "coverage_90_shed_w": value}
+            for policy, value in zip((*campaign.POLICIES, campaign.REFERENCE),
+                                     (*values, 100))]
+    lines = []
+    monkeypatch.setattr(campaign.plot_style, "policy_style", lambda policy: {})
+    import matplotlib.axes
+    monkeypatch.setattr(matplotlib.axes.Axes, "plot",
+                        lambda self, x, y, **kwargs: lines.append(y))
+    campaign._plot(rows, tmp_path / "frontier", False)
+    assert lines == [[value / max(values)] for value in values]
+
+
+def test_stress_frontier_compares_both_greedy_algorithms():
+    assert "greedy" in campaign.POLICIES
+    assert "greedy_lagrangian" in campaign.POLICIES

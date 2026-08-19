@@ -445,3 +445,76 @@ boundary. Compute normal, emergency, and stability from every physical run.
 The current vLLM 0.22.0 MP source and sink each report 963,152 KV tokens at
 `gpu_memory_utilization=0.75`. The earlier checked-in 1,214,544-token value came
 from a vLLM 0.10.1.1 configuration and is not capacity evidence for v7.
+
+## Whole-pool migration duration, corrected 2026-08-18
+
+The fluid destination path divided a single migration's duration by its pool's
+replica count, in the planner (`pool_planner._candidate_oracle`) and in the DES
+(`simulate.execute`). One replay on a 1,876-replica pool therefore completed in
+milliseconds.
+
+Across 7,740 measured replay migrations in ten hardware artifacts the minimum is
+0.840 s, the median 5.35 s and the maximum 118.7 s; none is below 0.1 s. The
+sign is also wrong: at 16,384 tokens a replay takes 9.6 s alone, 18.1 s with one
+co-tenant and 43.8 s with four, so sharing a destination makes each migration
+linearly slower. `max_destination_replays: 1` in every A100 profile says the
+same thing. The undivided form reproduces hardware to about 6%.
+
+The divisor was invisible because every campaign checked against hardware places
+exactly one replica in a pool (`network_campaign.py:1734`,
+`workload_adaptation_campaign.py:358`), which makes it an identity, and
+`network_campaign` never builds a `FluidMigrationService` at all. It was only
+reachable from `dedicated_sink_architecture` with many replicas.
+
+A pool of R replicas now supplies R x horizon replica-seconds of aggregate
+capacity, limiting how many migrations fit rather than how fast one runs, and
+the DES caps its fluid server at `min(replicas, in-flight jobs)`.
+
+`outputs/simulated-pareto-v5-20260803` predates this and is stale: 2,528 of its
+12,336 rows commit more than 100 replay migrations in under 5 s, and its
+smallest is 558 replays in 0.209 s. Its `policy_summary.csv` policy ranking
+should not be cited until the campaign is rerun.
+
+## The fluid executor broke causality and the frontier scored a threshold search (2026-08-18)
+
+Audit of `fleet_shed_frontier_campaign` found, and this commit series fixes,
+five defects that invalidate every fluid-destination shard produced before it.
+
+The fluid executor scheduled each pool batch from the first member's network
+completion, so migrations committed before their own bytes arrived (in
+2,000-session probes, 113 of a 300 s KV plan's commits were early, worst by
+55.6 s; 964 of a 3,600 s plan's, worst by 1,291 s), and KV residuals were added
+in parallel regardless of replicas (four 3 s residuals on two replicas
+"finished" in 3.4 s where 12 replica-seconds need 6 s). The planner budgeted
+migration at replicas x horizon x headroom while the executor served the whole
+pool and never read headroom (a 74.7 s planner estimate executed in 8.96 s,
+ratio 1/headroom), and the same headroom was booked once per method. Migration
+work is now priced in replica-seconds, served by processor sharing with a
+per-job cap of one replica, streams overlap only their own transfer, and
+migration_headroom is one shared reservation in both planner and executor.
+
+Packing and deadline repairs were destructive - a cut candidate was gone for
+good, so a 900 s greedy plan executed 97.2% where the 300 s plan's moves
+re-executed at 900 s gave 100%. Both repairs now reoptimize: packing cuts are
+banned and the target topped back up; deadline drops are rerouted through the
+methods and pools the policy may still use.
+
+isolated_fastest retained one exact candidate per session, sending every probe
+to one destination; it now fixes each session's fastest method but keeps every
+destination offering it. The destination-locked variant survives as
+isolated_myopic, the deliberately weak baseline of network_campaign's
+separation cells; "True Greedy" results in pinned outputs used the locked
+behavior.
+
+The frontier itself scored a coarse threshold search: calibration stopped on
+two identical outcomes (a 400-session KV probe at 600 s reached 48.98% in six
+steps and 50.08% at step seven, so a 50% request failed while 90% passed), the
+target grid ended at 0.90 (the reported plateau), and the reduction took the
+largest target met by any row across seeds. The headline is now each seed's
+largest executed, envelope-compliant shed attained by the deadline, median
+over seeds, the grid runs to 0.99, target_met requires planner feasibility
+and envelope compliance, and reduction rejects stale or mixed shards by git
+SHA and exact row identity.
+
+No shard produced before these fixes should be cited; the campaign output
+directory moved to `outputs/fleet-shed-frontier-a100-20260818`.

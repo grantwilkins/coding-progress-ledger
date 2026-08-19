@@ -1,0 +1,83 @@
+{
+  "schema": "queue-haul-repair-attainment-cdf-v1",
+  "claim_scope": "simulator-generated interventions where repair produced a different feasible residual plan, selected without reference to completion time; both schedules use identical degraded timing; target nonattainment is right-censored and retained",
+  "target_fraction": 0.5,
+  "population": "applied",
+  "workload_packs": 4096,
+  "fault_axes": [
+    "bandwidth",
+    "joint",
+    "prefill"
+  ],
+  "paired_interventions": 2061,
+  "migration_cutoff_s": 25.0,
+  "observation_horizon_s": 120.0,
+  "replan": {
+    "attained_by_25s": 602,
+    "attainment_rate_by_25s": 0.29209121785541,
+    "attained_by_120s": 2061,
+    "attainment_rate_by_120s": 1.0
+  },
+  "no_replan": {
+    "attained_by_25s": 0,
+    "attainment_rate_by_25s": 0.0,
+    "attained_by_120s": 1694,
+    "attainment_rate_by_120s": 0.8219311014070839
+  },
+  "by_axis": {
+    "bandwidth": {
+      "paired_interventions": 1728,
+      "replan_attained_by_25s": 539,
+      "no_replan_attained_by_25s": 0
+    },
+    "joint": {
+      "paired_interventions": 169,
+      "replan_attained_by_25s": 34,
+      "no_replan_attained_by_25s": 0
+    },
+    "prefill": {
+      "paired_interventions": 164,
+      "replan_attained_by_25s": 29,
+      "no_replan_attained_by_25s": 0
+    }
+  },
+  "repair_outcomes": {
+    "applied": 2061,
+    "unchanged": 0,
+    "revised_maximum": 0
+  },
+  "source": {
+    "path": "outputs/repair-attainment-simulation-20260817/population.json",
+    "sha256": "d6ca0defa1be8c7e120b99dc29742986eb1987813cbd4612dc2d7d42629c2152",
+    "schema": "queue-haul-repair-attainment-population-v1"
+  },
+  "source_interventions": 12288,
+  "source_outcomes": {
+    "applied": 2061,
+    "unchanged": 2485,
+    "revised_maximum": 7742
+  },
+  "inputs": {
+    "base_plan": {
+      "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/repair-scheduled-hardware-20260814/plan.json",
+      "sha256": "8d5df680c1deeeea74277a31c9fe6743907b758f623c76c46818456f0ea2d275"
+    },
+    "timing": {
+      "path": "/datadrive/queue-haul-repair-20260814-r3/calibration/summary.json",
+      "schema": "queue-haul-repair-10x-timing-fit-v3",
+      "sha256": "00c6daa3f42089d3fccd587ea41d58e6babbf3003385dac55c19a2b4fdd63158"
+    },
+    "parent": {
+      "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/timing-power-validation-20260814/separation-regional-timing-v2.json",
+      "sha256": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe"
+    },
+    "manifest": {
+      "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/coding-manifest.json",
+      "sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435"
+    },
+    "model_profile": {
+      "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/gpt_oss_20b_a100_tp1_azure_300w.json",
+      "sha256": "b837fac06c63b002be84579e1e1be2159e8efdc65c45817ebf92737ae9cd5d58"
+    }
+  }
+}
