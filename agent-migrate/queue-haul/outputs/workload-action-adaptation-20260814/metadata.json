@@ -58,29 +58,29 @@
   "cross_method_coupling": 1,
   "factor_action_response_rate": {
     "bandwidth-dest_compute-hbm/bandwidth": 1.0,
-    "bandwidth-dest_compute-hbm/dest_compute": 0.376,
-    "bandwidth-dest_compute-hbm/hbm": 0.63,
+    "bandwidth-dest_compute-hbm/dest_compute": 0.322,
+    "bandwidth-dest_compute-hbm/hbm": 0.564,
     "bandwidth-dest_compute/bandwidth": 1.0,
-    "bandwidth-dest_compute/dest_compute": 0.651,
-    "bandwidth-hbm/bandwidth": 0.272,
-    "bandwidth-hbm/hbm": 0.444,
+    "bandwidth-dest_compute/dest_compute": 0.607,
+    "bandwidth-hbm/bandwidth": 0.273,
+    "bandwidth-hbm/hbm": 0.407,
     "bandwidth/bandwidth": 0.481,
     "dest_compute-hbm/dest_compute": 0.997,
-    "dest_compute-hbm/hbm": 0.66,
-    "dest_compute/dest_compute": 0.998,
-    "hbm/hbm": 0.544
+    "dest_compute-hbm/hbm": 0.608,
+    "dest_compute/dest_compute": 0.997,
+    "hbm/hbm": 0.51
   },
   "factor_activation_rate": {
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
-    "bandwidth-dest_compute-hbm/dest_compute": 0.737,
-    "bandwidth-dest_compute-hbm/hbm": 0.919,
+    "bandwidth-dest_compute-hbm/dest_compute": 0.745,
+    "bandwidth-dest_compute-hbm/hbm": 0.905,
     "bandwidth-dest_compute/bandwidth": 0.089,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
     "bandwidth/bandwidth": 0.92,
-    "dest_compute-hbm/dest_compute": 0.737,
-    "dest_compute-hbm/hbm": 0.913,
+    "dest_compute-hbm/dest_compute": 0.744,
+    "dest_compute-hbm/hbm": 0.902,
     "dest_compute/dest_compute": 1.0,
     "hbm/hbm": 1.0
   },
@@ -114,17 +114,17 @@
   },
   "factor_resource_near_capacity_rate": {
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
-    "bandwidth-dest_compute-hbm/dest_compute": 0.582,
-    "bandwidth-dest_compute-hbm/hbm": 0.615,
+    "bandwidth-dest_compute-hbm/dest_compute": 0.61,
+    "bandwidth-dest_compute-hbm/hbm": 0.58,
     "bandwidth-dest_compute/bandwidth": 0.006,
-    "bandwidth-dest_compute/dest_compute": 0.813,
+    "bandwidth-dest_compute/dest_compute": 0.816,
     "bandwidth-hbm/bandwidth": 0.0,
-    "bandwidth-hbm/hbm": 0.718,
+    "bandwidth-hbm/hbm": 0.716,
     "bandwidth/bandwidth": 0.001,
-    "dest_compute-hbm/dest_compute": 0.58,
-    "dest_compute-hbm/hbm": 0.586,
-    "dest_compute/dest_compute": 0.813,
-    "hbm/hbm": 0.717
+    "dest_compute-hbm/dest_compute": 0.603,
+    "dest_compute-hbm/hbm": 0.556,
+    "dest_compute/dest_compute": 0.814,
+    "hbm/hbm": 0.715
   },
   "inputs": {
     "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
@@ -138,6 +138,22 @@
     "outputs/timing-power-validation-20260814/migrations.csv": "04eec612a2082a528d8d94acec50a4f002065af988d44e39200b5023bbf19107",
     "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe",
     "outputs/timing-power-validation-20260814/timing-summary.json": "0f45a8d659aacf5d4af8bb04873795d3c9de092d1f2df15d969c8f469a8d9b1e"
+  },
+  "joint_action_plane": {
+    "action_metric": "one equally weighted source-session choice",
+    "bandwidth_cap_gbps": [
+      1.0,
+      8.733313595885829
+    ],
+    "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
+    "prefill_available_tps": [
+      291.9704566213793,
+      4379.556849320686
+    ],
+    "prefill_full_rate_tps": 5839.4091324275805,
+    "prefill_reference_tokens": 7680,
+    "samples": 1000,
+    "sessions_per_pack": 28
   },
   "limitations": [
     "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
@@ -162,6 +178,7 @@
     "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
     "the destination envelope combines measured timing with synthetic 98%-occupied HBM and service-pressure levels",
     "the bandwidth state caps both physical destination routes at the predeclared 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
+    "the joint action plane interpolates regional pipeline fits between the measured controlled-40 and natural endpoints; its action densities are modeled planner outcomes, not hardware action observations",
     "East's fitted controlled pipeline remains below 1 Gbit/s, so its loaded-factor transport is counted outside the validation bandwidth range",
     "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
     "each constraint state is planned independently; rounded-LP release regressions are reported",
@@ -186,10 +203,10 @@
       },
       "selected": {
         "above": 0,
-        "below": 8769,
-        "denominator": 75622,
-        "outside": 8769,
-        "outside_rate": 0.11595831900769617
+        "below": 8406,
+        "denominator": 73803,
+        "outside": 8406,
+        "outside_rate": 0.11389780903215316
       }
     },
     "context": {
@@ -201,11 +218,11 @@
         "outside_rate": 0.38988135260103646
       },
       "selected": {
-        "above": 4499,
-        "below": 16999,
-        "denominator": 75622,
-        "outside": 21498,
-        "outside_rate": 0.2842823516965962
+        "above": 4226,
+        "below": 16894,
+        "denominator": 73803,
+        "outside": 21120,
+        "outside_rate": 0.2861672289744319
       },
       "sessions": {
         "above": 10787,
@@ -219,16 +236,16 @@
       "kv_transfer": {
         "bandwidth_outside": 0,
         "bandwidth_outside_rate": 0.0,
-        "context_outside": 4582,
-        "context_outside_rate": 0.3528415216386878,
-        "denominator": 12986
+        "context_outside": 4466,
+        "context_outside_rate": 0.3493702573730736,
+        "denominator": 12783
       },
       "replay": {
-        "bandwidth_outside": 8769,
-        "bandwidth_outside_rate": 0.1399993613896162,
-        "context_outside": 16916,
-        "context_outside_rate": 0.2700683313110671,
-        "denominator": 62636
+        "bandwidth_outside": 8406,
+        "bandwidth_outside_rate": 0.13775811209439529,
+        "context_outside": 16654,
+        "context_outside_rate": 0.27292690921009505,
+        "denominator": 61020
       }
     }
   },
@@ -276,9 +293,9 @@
     }
   },
   "mean_phase_load_share": {
-    "kv_transfer": 0.1300007207417278,
-    "not_moved": 0.2210251216190015,
-    "replay": 0.6489741576392707
+    "kv_transfer": 0.1300837832910973,
+    "not_moved": 0.21678653561169664,
+    "replay": 0.653129681097206
   },
   "migration_horizon_s": 25,
   "minimum_single_factor_action_response_rate": 0.1,
@@ -286,13 +303,13 @@
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 537,
-    "shortfall_regression_max_w": 18.571725774189346,
-    "shortfall_regression_median_w": 2.4264440338940005,
-    "shortfall_regression_p90_w": 9.244228640654109,
-    "shortfall_regression_rate": 0.04475,
-    "target_loss_count": 62,
-    "target_loss_rate": 0.005166666666666667
+    "shortfall_regression_count": 395,
+    "shortfall_regression_max_w": 17.68911389159618,
+    "shortfall_regression_median_w": 2.6499346720210326,
+    "shortfall_regression_p90_w": 8.683136633224832,
+    "shortfall_regression_rate": 0.032916666666666664,
+    "target_loss_count": 0,
+    "target_loss_rate": 0.0
   },
   "plotted_constraint_states": [
     "hbm",
@@ -335,9 +352,9 @@
   "schema": "queue-haul-workload-adaptation-v8",
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 12986,
-    "not_moved": 148378,
-    "replay": 62636
+    "kv_transfer": 12783,
+    "not_moved": 150197,
+    "replay": 61020
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
@@ -363,10 +380,10 @@
         },
         "selected": {
           "above": 0,
-          "below": 6232,
-          "denominator": 64172,
-          "outside": 6232,
-          "outside_rate": 0.09711400610858319
+          "below": 5752,
+          "denominator": 62446,
+          "outside": 5752,
+          "outside_rate": 0.09211158440892932
         }
       },
       "context": {
@@ -380,7 +397,7 @@
         "selected": {
           "above": 0,
           "below": 0,
-          "denominator": 64172,
+          "denominator": 62446,
           "outside": 0,
           "outside_rate": 0.0
         },
@@ -398,30 +415,30 @@
           "bandwidth_outside_rate": 0.0,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 12249
+          "denominator": 12139
         },
         "replay": {
-          "bandwidth_outside": 6232,
-          "bandwidth_outside_rate": 0.12002388151686151,
+          "bandwidth_outside": 5752,
+          "bandwidth_outside_rate": 0.11433796489554138,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 51923
+          "denominator": 50307
         }
       }
     },
     "selected_session_totals": {
-      "kv_transfer": 12249,
-      "not_moved": 159828,
-      "replay": 51923
+      "kv_transfer": 12139,
+      "not_moved": 161554,
+      "replay": 50307
     },
     "target_met_rate": {
-      "All bound": 0.623,
+      "All bound": 0.779,
       "Bandwidth": 1.0,
-      "Bandwidth + compute": 0.813,
-      "Dest. compute": 0.813,
-      "HBM": 0.769,
-      "HBM + bandwidth": 0.768,
-      "HBM + compute": 0.633,
+      "Bandwidth + compute": 0.864,
+      "Dest. compute": 0.864,
+      "HBM": 0.908,
+      "HBM + bandwidth": 0.908,
+      "HBM + compute": 0.779,
       "None bound": 1.0
     },
     "workload": {
@@ -557,14 +574,14 @@
   },
   "target_fraction": 0.6666666666666666,
   "target_met_rate": {
-    "All bound": 0.377,
-    "Bandwidth": 0.993,
-    "Bandwidth + compute": 0.52,
-    "Dest. compute": 0.523,
-    "HBM": 0.529,
-    "HBM + bandwidth": 0.529,
-    "HBM + compute": 0.378,
-    "None bound": 0.995
+    "All bound": 0.47,
+    "Bandwidth": 0.996,
+    "Bandwidth + compute": 0.618,
+    "Dest. compute": 0.618,
+    "HBM": 0.603,
+    "HBM + bandwidth": 0.603,
+    "HBM + compute": 0.47,
+    "None bound": 0.996
   },
   "unique_timing_draws": 1000,
   "workload": {

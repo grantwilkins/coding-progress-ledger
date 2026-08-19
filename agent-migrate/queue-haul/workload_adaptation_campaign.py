@@ -1055,7 +1055,8 @@ def plot_joint_plane(rows, path):
     from matplotlib.lines import Line2D
 
     data = pd.DataFrame(rows)
-    x, y = "bandwidth_cap_gbps", "prefill_available_tps"
+    data["prefill_available_ktps"] = data["prefill_available_tps"] / 1000
+    x, y = "bandwidth_cap_gbps", "prefill_available_ktps"
     palette = {action: plot_style.ACTION_COLORS[action] for action in ACTIONS}
     clip = ((data[x].min(), data[x].max()), (data[y].min(), data[y].max()))
     grid = sns.JointGrid(data=data, x=x, y=y, height=4.8, ratio=4, space=.05)
@@ -1081,16 +1082,22 @@ def plot_joint_plane(rows, path):
     )
     grid.ax_joint.set(
         xlabel="Shared bandwidth cap (Gbit/s)",
-        ylabel=(f"Available prefill throughput at {PREFILL_REFERENCE_TOKENS:,} "
-                "tokens\n(tokens/s per destination)"),
+        ylabel=("Available prefill throughput (ktoken/s)\n"
+                f"per destination at {PREFILL_REFERENCE_TOKENS:,} tokens"),
     )
+    grid.ax_joint.tick_params(labelsize=10)
+    grid.ax_joint.xaxis.label.set_size(11)
+    grid.ax_joint.yaxis.label.set_size(11)
     grid.ax_joint.grid(alpha=.15)
-    grid.ax_joint.legend(handles=[
+    handles = [
         *(Line2D([], [], color=palette[action], linewidth=2,
                  label=plot_style.ACTION_NAMES[action]) for action in ACTIONS),
         Line2D([], [], color="black", marker="x", linestyle="none",
                label="67% target missed"),
-    ], frameon=False, fontsize=plot_style.LEGEND_FONT_SIZE, loc="best")
+    ]
+    grid.figure.legend(handles=handles, frameon=False, ncol=2,
+                       fontsize=9, loc="lower center", bbox_to_anchor=(.5, .01))
+    grid.figure.subplots_adjust(left=.19, bottom=.2)
     grid.figure.savefig(path.with_suffix(".png"), dpi=plot_style.SAVE_DPI,
                         bbox_inches="tight")
     grid.figure.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
