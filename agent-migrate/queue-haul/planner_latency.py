@@ -1,10 +1,12 @@
 """Selection latency for the pure LP and the pure greedy against fleet size.
 
-Times only the selection step.  A whole ``plan`` call is dominated by work
-both policies share -- building the candidate table, packing replicas, and the
-deadline repair, which simulates the plan once per bisection probe -- so an
-end-to-end timing hides the solver difference entirely and can even invert it
-when one policy happens to select fewer moves.
+Times only the selection step.  A whole ``plan`` call is dominated by work both
+policies share: at 50,000 sessions it costs about 40 s, of which selection is
+4.5 s, while the single simulation run to check the plan against its deadline
+takes 23.5 s, the candidate table 5.8 s and replica packing 4.1 s.  An
+end-to-end timing therefore hides the solver difference and can invert it -- the
+LP measures 38.7 s against the greedy's 42.4 s purely because it selected 192
+fewer moves for that shared simulation to execute.
 
 Both solvers are held to their pure form.  The greedy runs without its integral
 repair, so it never reaches for the exact MILP, and the target is one both can

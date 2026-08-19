@@ -1618,11 +1618,14 @@ uv run python planner_latency.py                      # 28 .. 100k sessions
 uv run python planner_latency.py --sessions 28 50000  # one point at each end
 ```
 
-A whole `plan` call is the wrong quantity here: building the candidate table,
-packing replicas, and the deadline repair, which simulates the plan once per
-bisection probe, are shared by both policies and dominate the total, so an
-end-to-end timing hides the solver difference and can invert it when one policy
-selects fewer moves. Both solvers are held to their pure form: the greedy runs
+A whole `plan` call is the wrong quantity here. At 50,000 sessions it costs
+about 40 s, of which the selection is 4.5 s: the rest is work both policies pay
+alike, and is dominated by the single simulation `plan_destination` runs to
+check the plan against the deadline (23.5 s for 26,209 moves), then the
+candidate table (5.8 s for 200,000 candidates) and replica packing (4.1 s).
+End-to-end timing therefore hides the solver difference and can invert it: the
+LP measures 38.7 s against the greedy's 42.4 s only because it selected 192
+fewer moves and so made the shared simulation cheaper. Both solvers are held to their pure form: the greedy runs
 without its integral repair, so it never reaches for the exact MILP, and the
 target is one both can attain, so the LP runs its target-first solve instead of
 the max-shed fallback the two share on an impossible target. A selection that
