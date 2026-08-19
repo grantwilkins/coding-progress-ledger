@@ -152,6 +152,14 @@ def test_scarcity_grid_is_the_headline_axis_and_stays_admissible(profile,
     # the claim is never read off a workload chosen after seeing the gap.
     assert {row["workload"] for row in headline} == {campaign.HEADLINE_WORKLOAD}
     assert {row["workload"] for row in rows} == set(campaign.WORKLOADS)
+    # Executed shed is invariant above a few thousand sessions because packing
+    # pins the sessions per node pipe, so the headline runs on that plateau and
+    # a sensitivity block re-measures the same cells at the full fleet.
+    assert {row["sessions"] for row in headline} == {campaign.SESSIONS}
+    invariance = [row for row in rows
+                  if row["sessions"] == campaign.INVARIANCE_SESSIONS]
+    assert invariance and not any(row["headline"] for row in invariance)
+    assert {row["policy"] for row in invariance} == set(campaign.POLICIES)
     assert len(headline) == (len(campaign.DEADLINES_S) * len(campaign.POLICIES)
                              * len(campaign.RHOS) * len(campaign.SEEDS))
     assert campaign.POLICIES["queue_haul"] == "lp_work_first"
@@ -302,6 +310,7 @@ def _mini_campaign(tmp_path, rows):
                   "policy": row.get("policy", "greedy"),
                   "mode": "normal", "tier": "natural",
                   "workload": campaign.HEADLINE_WORKLOAD,
+                  "sessions": campaign.SESSIONS,
                   "rho": row.get("rho", 0.45), "seed": row["seed"],
                   "headline": row.get("headline", True)}
                  for i, row in enumerate(rows)],

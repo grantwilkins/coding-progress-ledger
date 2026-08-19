@@ -43,7 +43,11 @@ MODEL_ID = "openai/gpt-oss-20b"
 REGIONS = ("east", "germany")
 SITES = {"east": "eastus2", "germany": "germanywestcentral"}
 SOURCE_SITE = "swedencentral"
-DEADLINES_S = (30, 60, 120, 180, 300, 450, 600, 900)
+# Dense through 180-900 s, where four of the five rho knees and the whole
+# multi-action band sit, and extended to 2700 s so the scarcest rho reaches its
+# convergence knee (~2200 s) inside the grid rather than being right-censored
+# by it.  Below 120 s every policy is replay-only, so resolution buys nothing.
+DEADLINES_S = (30, 60, 120, 180, 240, 300, 375, 450, 600, 750, 900, 1800, 2700)
 POLICIES = {
     "queue_haul": "lp_work_first", "greedy": "greedy",
     "isolated_fastest": "isolated_fastest", "kv_only": "kv_only",
@@ -71,7 +75,14 @@ ADMISSION_MODES = ("normal", "emergency")
 # mixture, so the same rho leaves less migration headroom.  prepare() rechecks.
 RHOS = (0.20, 0.30, 0.38, 0.44, 0.48)
 SEEDS = (1001, 1002, 1003)
-SESSIONS = 50_000
+# The mechanism is per node: source packing pins ~158 sessions to each node's
+# egress pipe regardless of fleet size, so executed shed is invariant above a
+# few thousand sessions (measured 0.742 at 3k, 0.742 at 6k, 0.741 at 50k, with
+# the KV share steady at 45-47%) while cost per cell grows ~24x over that
+# range.  The headline runs at a size on that plateau and INVARIANCE_SESSIONS
+# carries the fleet-scale check.
+SESSIONS = 12_000
+INVARIANCE_SESSIONS = 50_000
 TIERS = ("natural", "controlled_80", "controlled_40")
 PROMPT, OUTPUT, REF_CONTEXT = 3920, 1024, 3920
 NORMAL_TTFT_SLO_S, EMERGENCY_TTFT_SLO_S = 2.0, 10.0
@@ -299,7 +310,7 @@ def run_row(row: dict, manifest: dict) -> dict:
               for mode in ("normal", "emergency")}
     bounds["stable"] = bounds["emergency"]
     scenario, replicas, demand, fits = build_fleet(
-        profile, workload, manifest["sessions"], row["seed"], row["deadline_s"],
+        profile, workload, row["sessions"], row["seed"], row["deadline_s"],
         bounds["normal"], row["tier"])
     contexts = sorted({record.context_tokens for record in workload.records})
     headroom = migration_headroom(row["rho"], demand, replicas, bounds["normal"])
@@ -405,7 +416,7 @@ def manifest_rows() -> list[dict]:
     rows = [{
         "deadline_s": float(deadline), "policy": policy, "rho": rho,
         "mode": "normal", "tier": "natural", "workload": HEADLINE_WORKLOAD,
-        "seed": seed, "headline": True,
+        "sessions": SESSIONS, "seed": seed, "headline": True,
     } for deadline in DEADLINES_S for policy in POLICIES for rho in RHOS
         for seed in SEEDS]
     # Sensitivity: the other admission mode, the throttled bandwidth tiers, and
@@ -414,12 +425,19 @@ def manifest_rows() -> list[dict]:
     rows += [{
         "deadline_s": float(deadline), "policy": policy, "rho": RHOS[2],
         "mode": mode, "tier": tier, "workload": workload,
-        "seed": SEEDS[0], "headline": False,
+        "sessions": SESSIONS, "seed": SEEDS[0], "headline": False,
     } for deadline in DEADLINES_S for policy in POLICIES
         for mode, tier, workload in
         [(m, "natural", HEADLINE_WORKLOAD) for m in ADMISSION_MODES[1:]]
         + [("normal", t, HEADLINE_WORKLOAD) for t in TIERS[1:]]
         + [("normal", "natural", w) for w in WORKLOADS if w != HEADLINE_WORKLOAD]]
+    # Fleet-scale check: the same cells at the full fleet, so the headline's
+    # smaller fleet is justified by measurement rather than assumed.
+    rows += [{
+        "deadline_s": float(deadline), "policy": policy, "rho": RHOS[2],
+        "mode": "normal", "tier": "natural", "workload": HEADLINE_WORKLOAD,
+        "sessions": INVARIANCE_SESSIONS, "seed": SEEDS[0], "headline": False,
+    } for deadline in (300.0, 600.0) for policy in POLICIES]
     return [{**row, "row_id": i} for i, row in enumerate(rows)]
 
 
@@ -517,7 +535,8 @@ def reduce(out: Path) -> dict:
             raise RuntimeError(f"row {i} was produced by commit "
                                f"{row['git_sha'][:12]}, not the manifest's")
         stale = [key for key in ("deadline_s", "policy", "mode", "tier",
-                                 "rho", "workload", "seed", "headline")
+                                 "rho", "workload", "sessions", "seed",
+                                 "headline")
                  if row[key] != str(expected[i][key])]
         if stale:
             raise RuntimeError(f"row {i} does not match the manifest: {stale}")
@@ -603,6 +622,29 @@ def reduce(out: Path) -> dict:
         write_csv(out / "multi_action_advantage.csv", advantage)
     write_csv(out / "frontier.csv", frontier)
     write_csv(out / "slo_compliance.csv", compliance)
+    # The headline runs a smaller fleet than the invariance block; state the
+    # agreement rather than leaving the reader to derive it.
+    invariance = []
+    for row in rows:
+        if int(row["sessions"]) != INVARIANCE_SESSIONS:
+            continue
+        match = [other for other in headline
+                 if (other["policy"], float(other["deadline_s"]),
+                     float(other["rho"]), other["seed"])
+                 == (row["policy"], float(row["deadline_s"]),
+                     float(row["rho"]), row["seed"])]
+        if match:
+            invariance.append({
+                "deadline_s": float(row["deadline_s"]), "policy": row["policy"],
+                "headline_sessions": int(match[0]["sessions"]),
+                "headline_shed": float(match[0]["executed_shed_fraction"]),
+                "fleet_sessions": int(row["sessions"]),
+                "fleet_shed": float(row["executed_shed_fraction"]),
+                "delta": float(row["executed_shed_fraction"])
+                - float(match[0]["executed_shed_fraction"]),
+            })
+    if invariance:
+        write_csv(out / "fleet_invariance.csv", invariance)
     sensitivity = [row for row in rows if row["headline"] == "False"]
     if sensitivity:
         write_csv(out / "sensitivity.csv", sensitivity)
@@ -612,6 +654,10 @@ def reduce(out: Path) -> dict:
         "sessions": manifest["sessions"], "envelope": manifest["envelope"],
         "rows": len(rows), "headline_rows": len(headline),
         "rho_grid": list(RHOS),
+        "headline_sessions": SESSIONS,
+        "fleet_invariance_sessions": INVARIANCE_SESSIONS,
+        "max_fleet_invariance_delta": max(
+            (abs(row["delta"]) for row in invariance), default=None),
         "max_multi_action_gain": max(
             (row["multi_action_gain"] for row in advantage), default=0.0),
         "normal_mode_envelope_breaches": len(breaches),
