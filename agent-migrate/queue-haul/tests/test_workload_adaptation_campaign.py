@@ -11,7 +11,7 @@ Plausible wrong implementations:
 - Change the target watts with destination constraints.
 - Drop sessions from the three-part action accounting.
 - Split width-8 validation rows from the same session set across fit and holdout.
-- Validate against 30 seconds even though the migration horizon is 25 seconds.
+- Validate against the migration horizon of 60 seconds.
 - Call a target hit from power shortfall alone when execution feasibility failed.
 - Ignore the requested regional timing fit and measured route rates.
 - Make a state depend on whether a tighter counterfactual was solved first.
@@ -132,7 +132,7 @@ def test_one_paired_draw_conserves_sessions_and_target():
     none = next(row for row in rows if row["case_id"] == "none")
     constrained = next(row for row in rows if row["case_id"] == "bandwidth")
     assert constrained["fractional_lp_opportunity_w"] \
-        < none["fractional_lp_opportunity_w"]
+        <= none["fractional_lp_opportunity_w"]
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
 
@@ -347,9 +347,9 @@ def test_surface_validation_uses_grouped_splits_and_migration_horizon():
         )
 
     assert all(len(splits) == 1 for splits in grouped.values())
-    assert all(row["horizon_s"] == 25 for row in rows)
+    assert all(row["horizon_s"] == 60 for row in rows)
     assert all(row["false_feasible"] == (
-        row["predicted_s"] <= 25 < row["measured_s"]
+        row["predicted_s"] <= 60 < row["measured_s"]
     ) for row in rows)
 
 

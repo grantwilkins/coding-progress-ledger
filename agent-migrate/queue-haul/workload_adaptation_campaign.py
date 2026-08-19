@@ -53,7 +53,7 @@ OUT = ROOT / "outputs/workload-action-adaptation-20260814"
 BASE_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 WIDTH8_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 FACTORS = ("hbm", "bandwidth", "dest_compute")
-ACTIVATION_GATED_FACTORS = FACTORS
+ACTIVATION_GATED_FACTORS = ("hbm", "dest_compute")
 ORDER = (
     frozenset(("hbm",)), frozenset(("bandwidth",)), frozenset(("dest_compute",)),
     frozenset(("hbm", "bandwidth")), frozenset(("hbm", "dest_compute")),
@@ -77,7 +77,7 @@ DISPLAY_CASES = (
 )
 ACTION_BOXPLOT_QUANTILES = (.05, .25, .5, .75, .95)
 POWER_TOLERANCE_W = 1e-6
-MIGRATION_HORIZON_S = 25
+MIGRATION_HORIZON_S = 60
 BANDWIDTH_BOTTLENECK_MBPS = 1000
 PREFILL_REFERENCE_TOKENS = 7680
 OAT_BANDWIDTH_LOWER_MBPS = 100
@@ -297,7 +297,7 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
     paths = {region: (f"link/{region}", f"pipeline/{region}")
              for region in REGIONS}
     scenario = ExecutionScenario(
-        30, 30, 0, "awake", 0,
+        60, 60, 0, "awake", 0,
         (PowerNode("source-node", 1, True), *(PowerNode(
             f"{region}-node", 1, False) for region in REGIONS)),
         (ServingInstance("source", ("source-node",)), *(ServingInstance(

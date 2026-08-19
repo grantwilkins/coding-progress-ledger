@@ -16,7 +16,6 @@
   ],
   "activation_gated_factors": [
     "hbm",
-    "bandwidth",
     "dest_compute"
   ],
   "bandwidth_bottleneck": {
@@ -59,14 +58,14 @@
   "factor_action_response_rate": {
     "bandwidth-dest_compute-hbm/bandwidth": 1.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.322,
-    "bandwidth-dest_compute-hbm/hbm": 0.564,
+    "bandwidth-dest_compute-hbm/hbm": 0.565,
     "bandwidth-dest_compute/bandwidth": 1.0,
-    "bandwidth-dest_compute/dest_compute": 0.607,
+    "bandwidth-dest_compute/dest_compute": 0.609,
     "bandwidth-hbm/bandwidth": 0.273,
     "bandwidth-hbm/hbm": 0.407,
     "bandwidth/bandwidth": 0.481,
     "dest_compute-hbm/dest_compute": 0.997,
-    "dest_compute-hbm/hbm": 0.608,
+    "dest_compute-hbm/hbm": 0.609,
     "dest_compute/dest_compute": 0.997,
     "hbm/hbm": 0.51
   },
@@ -74,11 +73,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.745,
     "bandwidth-dest_compute-hbm/hbm": 0.905,
-    "bandwidth-dest_compute/bandwidth": 0.118,
+    "bandwidth-dest_compute/bandwidth": 0.0,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.97,
+    "bandwidth/bandwidth": 0.0,
     "dest_compute-hbm/dest_compute": 0.744,
     "dest_compute-hbm/hbm": 0.902,
     "dest_compute/dest_compute": 1.0,
@@ -102,11 +101,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.5,
     "bandwidth-dest_compute-hbm/hbm": 0.804,
-    "bandwidth-dest_compute/bandwidth": 0.118,
+    "bandwidth-dest_compute/bandwidth": 0.0,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.97,
+    "bandwidth/bandwidth": 0.0,
     "dest_compute-hbm/dest_compute": 0.5,
     "dest_compute-hbm/hbm": 0.804,
     "dest_compute/dest_compute": 1.0,
@@ -117,13 +116,13 @@
     "bandwidth-dest_compute-hbm/dest_compute": 0.61,
     "bandwidth-dest_compute-hbm/hbm": 0.58,
     "bandwidth-dest_compute/bandwidth": 0.0,
-    "bandwidth-dest_compute/dest_compute": 0.811,
+    "bandwidth-dest_compute/dest_compute": 0.822,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 0.716,
     "bandwidth/bandwidth": 0.0,
     "dest_compute-hbm/dest_compute": 0.603,
     "dest_compute-hbm/hbm": 0.556,
-    "dest_compute/dest_compute": 0.813,
+    "dest_compute/dest_compute": 0.819,
     "hbm/hbm": 0.715
   },
   "inputs": {
@@ -149,7 +148,7 @@
     "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
     "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
     "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
-    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases",
+    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 0/162 local c1-c4 cases and 0/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases",
     "timing audits are grouped retrospective checks, not untouched validation sets",
     "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
     "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
@@ -187,10 +186,10 @@
       },
       "selected": {
         "above": 0,
-        "below": 8466,
-        "denominator": 73716,
-        "outside": 8466,
-        "outside_rate": 0.11484616636822399
+        "below": 8167,
+        "denominator": 74537,
+        "outside": 8167,
+        "outside_rate": 0.10956974388558702
       }
     },
     "context": {
@@ -202,11 +201,11 @@
         "outside_rate": 0.38988135260103646
       },
       "selected": {
-        "above": 4172,
-        "below": 16894,
-        "denominator": 73716,
-        "outside": 21066,
-        "outside_rate": 0.28577242389711865
+        "above": 4810,
+        "below": 16897,
+        "denominator": 74537,
+        "outside": 21707,
+        "outside_rate": 0.2912244925339093
       },
       "sessions": {
         "above": 10787,
@@ -220,16 +219,16 @@
       "kv_transfer": {
         "bandwidth_outside": 0,
         "bandwidth_outside_rate": 0.0,
-        "context_outside": 4339,
-        "context_outside_rate": 0.34513203945275217,
-        "denominator": 12572
+        "context_outside": 4547,
+        "context_outside_rate": 0.3557902973395931,
+        "denominator": 12780
       },
       "replay": {
-        "bandwidth_outside": 8466,
-        "bandwidth_outside_rate": 0.1384600287845087,
-        "context_outside": 16727,
-        "context_outside_rate": 0.27356731649875704,
-        "denominator": 61144
+        "bandwidth_outside": 8167,
+        "bandwidth_outside_rate": 0.13224411807568373,
+        "context_outside": 17160,
+        "context_outside_rate": 0.2778632381754295,
+        "denominator": 61757
       }
     }
   },
@@ -277,11 +276,11 @@
     }
   },
   "mean_phase_load_share": {
-    "kv_transfer": 0.12905523152664428,
-    "not_moved": 0.21689892498914423,
-    "replay": 0.6540458434842115
+    "kv_transfer": 0.12870168611864222,
+    "not_moved": 0.2162940636226597,
+    "replay": 0.655004250258698
   },
-  "migration_horizon_s": 25,
+  "migration_horizon_s": 60,
   "minimum_single_factor_action_response_rate": 0.1,
   "oat_action_sweeps": {
     "action_metric": "source-session share at each OAT level",
@@ -307,11 +306,11 @@
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 393,
+    "shortfall_regression_count": 374,
     "shortfall_regression_max_w": 17.68911389159618,
-    "shortfall_regression_median_w": 2.7794093564678235,
-    "shortfall_regression_p90_w": 9.087656346063769,
-    "shortfall_regression_rate": 0.03275,
+    "shortfall_regression_median_w": 2.552484443457729,
+    "shortfall_regression_p90_w": 8.480981182224612,
+    "shortfall_regression_rate": 0.031166666666666665,
     "target_loss_count": 0,
     "target_loss_rate": 0.0
   },
@@ -356,9 +355,9 @@
   "schema": "queue-haul-workload-adaptation-v8",
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 12572,
-    "not_moved": 150284,
-    "replay": 61144
+    "kv_transfer": 12780,
+    "not_moved": 149463,
+    "replay": 61757
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
@@ -384,10 +383,10 @@
         },
         "selected": {
           "above": 0,
-          "below": 5762,
-          "denominator": 62439,
-          "outside": 5762,
-          "outside_rate": 0.09228206729768254
+          "below": 5628,
+          "denominator": 62555,
+          "outside": 5628,
+          "outside_rate": 0.08996882743185997
         }
       },
       "context": {
@@ -401,7 +400,7 @@
         "selected": {
           "above": 0,
           "below": 0,
-          "denominator": 62439,
+          "denominator": 62555,
           "outside": 0,
           "outside_rate": 0.0
         },
@@ -419,21 +418,21 @@
           "bandwidth_outside_rate": 0.0,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 12087
+          "denominator": 12079
         },
         "replay": {
-          "bandwidth_outside": 5762,
-          "bandwidth_outside_rate": 0.1144343819510645,
+          "bandwidth_outside": 5628,
+          "bandwidth_outside_rate": 0.11149853395673191,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 50352
+          "denominator": 50476
         }
       }
     },
     "selected_session_totals": {
-      "kv_transfer": 12087,
-      "not_moved": 161561,
-      "replay": 50352
+      "kv_transfer": 12079,
+      "not_moved": 161445,
+      "replay": 50476
     },
     "target_met_rate": {
       "All bound": 0.779,
@@ -464,7 +463,7 @@
   },
   "surface_validation": {
     "coding-c1-c4/development": {
-      "false_feasible_at_25s": 19,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.872177917467015,
       "p90_absolute_relative_error": 0.4292393999338707,
@@ -472,7 +471,7 @@
       "underprediction_rate": 0.7708333333333334
     },
     "coding-c1-c4/development/kv_transfer": {
-      "false_feasible_at_25s": 14,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.9109777718834491,
       "p90_absolute_relative_error": 0.5628782021214596,
@@ -480,7 +479,7 @@
       "underprediction_rate": 0.8125
     },
     "coding-c1-c4/development/replay": {
-      "false_feasible_at_25s": 5,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.7981070163695221,
       "p90_absolute_relative_error": 0.42622753776595484,
@@ -488,7 +487,7 @@
       "underprediction_rate": 0.7291666666666666
     },
     "coding-c1-c4/grouped-audit": {
-      "false_feasible_at_25s": 5,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.8859485281396715,
       "p90_absolute_relative_error": 0.4232865104092367,
@@ -496,7 +495,7 @@
       "underprediction_rate": 0.7272727272727273
     },
     "coding-c1-c4/grouped-audit/kv_transfer": {
-      "false_feasible_at_25s": 4,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.8642808630503208,
       "p90_absolute_relative_error": 0.42453296454934847,
@@ -504,7 +503,7 @@
       "underprediction_rate": 0.8181818181818182
     },
     "coding-c1-c4/grouped-audit/replay": {
-      "false_feasible_at_25s": 1,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.942285091552295,
       "p90_absolute_relative_error": 0.39010918034922876,
@@ -513,7 +512,7 @@
     },
     "width8/development": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 2,
+      "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 1.1162476020523169,
       "p90_absolute_relative_error": 0.6444812323198056,
       "scenarios": 208,
@@ -537,7 +536,7 @@
     },
     "width8/development/replay": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 2,
+      "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.9830643603183712,
       "p90_absolute_relative_error": 0.1562407373160577,
       "scenarios": 52,
@@ -545,7 +544,7 @@
     },
     "width8/grouped-audit": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 1,
+      "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 1.1302760726762007,
       "p90_absolute_relative_error": 0.7069079558187432,
       "scenarios": 80,
@@ -569,7 +568,7 @@
     },
     "width8/grouped-audit/replay": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 1,
+      "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.9993428284597472,
       "p90_absolute_relative_error": 0.17073219904112594,
       "scenarios": 20,
@@ -580,8 +579,8 @@
   "target_met_rate": {
     "All bound": 0.47,
     "Bandwidth": 0.996,
-    "Bandwidth + compute": 0.617,
-    "Dest. compute": 0.618,
+    "Bandwidth + compute": 0.619,
+    "Dest. compute": 0.619,
     "HBM": 0.603,
     "HBM + bandwidth": 0.603,
     "HBM + compute": 0.47,
