@@ -1610,6 +1610,30 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 
 ## Measurement programs
 
+`h100_serving_campaign.py` coordinates optimized-H100 calibration for the
+pinned Qwen3.8-27B and Gemma-4-26B checkpoints, with GPT-OSS-20B accepted as an
+apples-to-apples prefill reference. Prefill, RPS/SLO, and power
+evidence all require native BF16 TP1 execution with compilation and CUDA graphs;
+the campaign hard-fails eager fallback or runtime drift. It retains raw evidence
+and reduced CSV/JSON only, without constructing a migration profile. The power
+fit exports its explicit saturating simulation envelope through `ell=16`, beyond
+the prior GPT-OSS campaign's measured overload extent of about 12.57.
+Set `QH_NATIVE_RUNTIME_VERSIONS=vllm,lmcache` only with an isolated native
+environment when a model requires a separately pinned runtime.
+Pass `prepare --hardware a100` to collect the identical optimized prefill grid
+on A100 without changing the default H100 plan.
+
+```bash
+uv run python h100_serving_campaign.py prepare --out runs/h100-serving/plan.json
+QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python h100_serving_campaign.py run-prefill --plan runs/h100-serving/plan.json --model MODEL --root /datadrive/h100-serving/MODEL/prefill
+QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python agentic_rps_sweep_campaign.py run --plan runs/h100-serving/rps-plan.json --model MODEL --run-root /datadrive/h100-serving/rps
+uv run python power_model_campaign.py --model MODEL --out /datadrive/h100-serving/MODEL/power
+```
+
+Run `reduce-prefill`, the agentic sweep's `reduce`, then `validate` to emit the
+final alignment record. Gemma uses 2 s TTFT/0.2 s TPOT; Qwen uses twice its
+0.125-RPS baseline. The older single-repeat H100 curves are reference-only.
+
 - `power_window_sensitivity.py` and `power_profile_reduce.py`: source power.
 - `migration_profiler.py` and `migration_profile_fit.py`: replay/KV handoff.
 - `destination_campaign.py` and `destination_runner.py`: targeted destination

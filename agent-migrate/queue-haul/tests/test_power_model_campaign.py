@@ -87,6 +87,10 @@ def test_fit_result_is_json_serializable():
 
     json.dumps(result)
     assert all(type(value) is bool for value in result["validation"]["gates"].values())
+    assert result["max_ell"] == 16
+    assert result["power_curve"][-1]["ell"] == 16
+    assert all(a["power_w"] <= b["power_w"] for a, b in zip(
+        result["power_curve"], result["power_curve"][1:]))
 
 
 def test_exponential_provisional_is_json_serializable():

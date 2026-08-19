@@ -60,6 +60,12 @@ def runtime_mode() -> str:
 
 def expected_runtime_versions() -> tuple[str, str]:
     if runtime_mode() == "native":
+        versions = os.environ.get("QH_NATIVE_RUNTIME_VERSIONS")
+        if versions:
+            parsed = tuple(versions.split(","))
+            if len(parsed) != 2 or not all(parsed):
+                raise ValueError("QH_NATIVE_RUNTIME_VERSIONS must be vllm,lmcache")
+            return parsed
         return NATIVE_RUNTIME_VERSIONS
     return MP_RUNTIME_VERSIONS if lmcache_mode() == "mp" else RUNTIME_VERSIONS
 
@@ -138,7 +144,8 @@ class ModelSpec:
 
 
 MODEL_SPECS = {
-    MODEL: ModelSpec(MODEL_REVISION),
+    MODEL: ModelSpec(MODEL_REVISION, vllm_args=(
+        "--hf-overrides", '{"allow_global_per_layer_attribute_access":true}')),
     "Qwen/Qwen3.8-27B": ModelSpec(
         "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0", 1567, 784,
         ("--language-model-only", "--mamba-cache-mode", "align"), 784, True),
@@ -230,6 +237,15 @@ def model_spec(model: str) -> ModelSpec:
     return MODEL_SPECS[model]
 
 
+def model_vllm_args(cfg: Config) -> tuple[str, ...]:
+    args = model_spec(cfg.model).vllm_args
+    if cfg.model == "google/gemma-4-26B-A4B-it" \
+            and expected_runtime_versions()[0] == "0.24.0":
+        args += ("--hf-overrides", json.dumps({"text_config": {
+            "allow_global_per_layer_attribute_access": True}}))
+    return args
+
+
 def model_path(cfg: Config) -> Path:
     return model_snapshot_dir(cfg.hf_home, cfg.model) / model_spec(cfg.model).revision
 
@@ -295,6 +311,19 @@ def validate_model_runtime_log(cfg: Config, text: str,
     if expected is not None and set(map(int, re.findall(
             r"attention block size to (\d+) tokens", text, re.IGNORECASE))) != {expected}:
         raise RuntimeError(f"runtime did not prove the {expected}-token unified block")
+
+
+def validate_optimized_runtime(command: str, text: str) -> None:
+    if "--enforce-eager" in command:
+        raise RuntimeError("optimized runtime cannot force eager execution")
+    if not re.search(r"(?:torch[ ._-]?compile|compil(?:e|ation|ing))", text,
+                     re.IGNORECASE) \
+            or not re.search(r"cuda[ _-]?graphs?", text, re.IGNORECASE):
+        raise RuntimeError("optimized runtime did not prove compilation and CUDA graphs")
+
+
+def validate_h100_optimized_runtime(command: str, text: str) -> None:
+    validate_optimized_runtime(command, text)
 
 
 def cache_dirs(cfg: Config, role: str) -> dict[str, Path]:
@@ -501,7 +530,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         cfg.max_num_seqs,
         "--max-num-batched-tokens",
         cfg.max_num_batched_tokens,
-        *(["--dtype", "bfloat16", *spec.vllm_args]
+        *(["--dtype", "bfloat16", *model_vllm_args(cfg)]
           if (cfg.architecture_campaign or cfg.capacity_discovery) else []),
         "--kv-cache-dtype",
         "auto",
