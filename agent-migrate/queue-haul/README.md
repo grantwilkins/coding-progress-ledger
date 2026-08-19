@@ -1608,6 +1608,29 @@ Stacked MP runs retain per-scenario byte, connection, and RESP traces.
 Re-submit after a time limit; the stable run root reuses its original port
 offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 
+## Planner selection latency
+
+`planner_latency.py` times the selection step alone against fleet size, for the
+pure LP and the pure greedy, and writes `outputs/planner-latency/`.
+
+```bash
+uv run python planner_latency.py                      # 28 .. 100k sessions
+uv run python planner_latency.py --sessions 28 50000  # one point at each end
+```
+
+A whole `plan` call is the wrong quantity here: building the candidate table,
+packing replicas, and the deadline repair, which simulates the plan once per
+bisection probe, are shared by both policies and dominate the total, so an
+end-to-end timing hides the solver difference and can invert it when one policy
+selects fewer moves. Both solvers are held to their pure form: the greedy runs
+without its integral repair, so it never reaches for the exact MILP, and the
+target is one both can attain, so the LP runs its target-first solve instead of
+the max-shed fallback the two share on an impossible target. A selection that
+misses the target hard-fails rather than reporting a fallback's timing, which is
+what makes `outputs/scaling_1_to_100k_20260720_greedy` unusable for this
+comparison: past 32 sessions its 50% request is out of reach and both policies
+return byte-identical plans from the same recovery.
+
 ## Measurement programs
 
 The focused GPT-OSS A100/H100 SLO curve, request-block error bars, standard
