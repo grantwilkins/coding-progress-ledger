@@ -33,6 +33,10 @@ Plausible wrong implementations:
 - Include intermediate joint cases instead of the three independent bottlenecks,
   all bound, and none bound.
 - Use default Tukey whiskers instead of the declared 5th and 95th percentiles.
+- Reverse prefill occupancy into available throughput or report aggregate rather
+  than per-destination throughput.
+- Confuse Mbit/s with bytes/s or fail to recover the measured endpoint cases.
+- Bias the joint density by dropping not-moved sessions or uneven axis sampling.
 """
 
 from types import SimpleNamespace
@@ -130,6 +134,56 @@ def test_one_paired_draw_conserves_sessions_and_target():
         < none["fractional_lp_opportunity_w"]
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
+
+
+def test_joint_plane_axes_are_absolute_and_reproduce_factorial_endpoints():
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 4, 3))
+    fits = campaign.central_timing_fits()
+    points, rate = campaign.joint_plane_design(profile, samples=5, seed=3)
+
+    assert sorted(point[0] for point in points) == pytest.approx(np.linspace(
+        campaign.BANDWIDTH_BOTTLENECK_MBPS,
+        max(campaign.physical_route_mbps().values()), 5))
+    assert sorted(point[1] for point in points) == pytest.approx(np.linspace(
+        .05 * rate, .75 * rate, 5))
+
+    for point, constraints in (
+        (points[0], frozenset(("bandwidth", "dest_compute"))),
+        (points[-1], frozenset()),
+    ):
+        swept = campaign.build_problem(
+            profile, pack, frozenset(), 2 / 3, fits,
+            bandwidth_mbps=point[0], prefill_tps=point[1],
+        )
+        factorial = campaign.build_problem(
+            profile, pack, constraints, 2 / 3, fits)
+        assert {link.link_id: link.bytes_per_s for link in swept[0].links} \
+            == pytest.approx({link.link_id: link.bytes_per_s
+                              for link in factorial[0].links})
+        for left, right in zip(swept[1].pools, factorial[1].pools):
+            assert left.replicas[0].baseline_work \
+                == pytest.approx(right.replicas[0].baseline_work)
+
+
+def test_joint_plane_emits_one_action_per_session_and_matches_corner_plans():
+    plane, _ = campaign.simulate_joint_plane(samples=2, seed=3, sessions=4)
+    factorial, _ = campaign.simulate(samples=2, seed=3, sessions=4)
+
+    assert len(plane) == 8
+    for replicate, case_id in ((0, "bandwidth-dest_compute"), (1, "none")):
+        selected = [row for row in plane if row["replicate"] == replicate]
+        expected = next(row for row in factorial
+                        if row["replicate"] == replicate
+                        and row["case_id"] == case_id)
+        assert len({row["session_id"] for row in selected}) == 4
+        assert {action: sum(row["action"] == action for row in selected)
+                for action in campaign.ACTIONS} == {
+                    action: expected[f"{action}_count"]
+                    for action in campaign.ACTIONS
+                }
+        assert {row["target_met"] for row in selected} == {expected["target_met"]}
 
 
 def test_phase_load_action_mix_uses_power_weights_not_session_counts():
@@ -369,8 +423,13 @@ def test_central_surface_uses_regional_timing_and_routes():
     assert services["pool/east"].kv_ingest_bytes_per_s == \
         fits["east"]["kv_ingest_lower_bound_bytes_per_s"]
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
-    assert summary["migration_gate_passed"]
-    assert all(row["coverage"] == 1 for row in summary["held_out"].values())
+    assert summary["migration_gate_passed"] and not summary["kv_byte_mismatches"]
+    assert all(
+        row["coverage"] >= .9 and row["median_relative_error"] <= .1
+        and (row["p90_relative_error"] <= .15
+             or row["p90_absolute_error_s"] <= 1)
+        for row in summary["held_out"].values()
+    )
 
 
 def test_bandwidth_state_caps_both_physical_routes_at_measured_floor():

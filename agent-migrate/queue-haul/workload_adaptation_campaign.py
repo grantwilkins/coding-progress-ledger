@@ -79,6 +79,7 @@ ACTION_BOXPLOT_QUANTILES = (.05, .25, .5, .75, .95)
 POWER_TOLERANCE_W = 1e-6
 MIGRATION_HORIZON_S = 25
 BANDWIDTH_BOTTLENECK_MBPS = 1000
+PREFILL_REFERENCE_TOKENS = 7680
 SOURCE_LOAD = .4
 DEFAULT_SEED = 1001
 plot_style.apply()
@@ -262,16 +263,33 @@ def sample_draw(profile, templates, timing_rows, parent, rng, replicate, seed,
             projected_regions)
 
 
-def build_problem(profile, sessions, constraints, target_fraction, fits):
+def build_problem(profile, sessions, constraints, target_fraction, fits, *,
+                  bandwidth_mbps=None, prefill_tps=None):
     values, case = state_values(constraints), profile.case()
     constrained = values["bandwidth"] == "bottleneck_1g"
     timing_condition = "controlled_40" if constrained else "natural"
     physical = physical_route_mbps()
-    physical_bandwidths = {region: (
-        BANDWIDTH_BOTTLENECK_MBPS if constrained else physical[region]
-    ) * 125_000 for region in REGIONS}
-    pipeline_bandwidths = {region: fits[region]["effective_pipeline_mbps"][
-        timing_condition] * 125_000 for region in REGIONS}
+    if bandwidth_mbps is None:
+        physical_bandwidths = {region: (
+            BANDWIDTH_BOTTLENECK_MBPS if constrained else physical[region]
+        ) * 125_000 for region in REGIONS}
+        pipeline_bandwidths = {region: fits[region]["effective_pipeline_mbps"][
+            timing_condition] * 125_000 for region in REGIONS}
+    else:
+        if constraints or not BANDWIDTH_BOTTLENECK_MBPS <= bandwidth_mbps \
+                <= max(physical.values()):
+            raise ValueError("invalid absolute bandwidth sweep point")
+        physical_bandwidths, pipeline_bandwidths = {}, {}
+        for region in REGIONS:
+            cap = min(bandwidth_mbps, physical[region])
+            fraction = (cap - BANDWIDTH_BOTTLENECK_MBPS) / (
+                physical[region] - BANDWIDTH_BOTTLENECK_MBPS)
+            rates = fits[region]["effective_pipeline_mbps"]
+            physical_bandwidths[region] = cap * 125_000
+            pipeline_bandwidths[region] = (
+                rates["controlled_40"]
+                + fraction * (rates["natural"] - rates["controlled_40"])
+            ) * 125_000
     paths = {region: (f"link/{region}", f"pipeline/{region}")
              for region in REGIONS}
     scenario = ExecutionScenario(
@@ -302,6 +320,12 @@ def build_problem(profile, sessions, constraints, target_fraction, fits):
         profile, REGIONS[0], (f"link/{REGIONS[0]}",),
     )
     q = architecture.types[0]
+    if prefill_tps is not None:
+        rate = q.prefill.at(PREFILL_REFERENCE_TOKENS)
+        values["dest_compute"] = 1 - prefill_tps / rate
+        if not LEVELS["dest_compute"][0] - 1e-12 \
+                <= values["dest_compute"] <= LEVELS["dest_compute"][1] + 1e-12:
+            raise ValueError("invalid absolute prefill sweep point")
     demand = sum((q.work(
         session.expected_f, session.expected_g, session.context_tokens, True,
     ) for session in sessions), start=np.zeros(2))
@@ -371,9 +395,11 @@ def build_problem(profile, sessions, constraints, target_fraction, fits):
 
 
 def run_case(profile, sessions, case_id, label, constraints, replicate,
-             target_fraction, fits, power_index, timing_hash, projected_regions):
+             target_fraction, fits, power_index, timing_hash, projected_regions,
+             *, bandwidth_mbps=None, prefill_tps=None, return_result=False):
     scenario, architecture, routes, target = build_problem(
         profile, sessions, constraints, target_fraction, fits,
+        bandwidth_mbps=bandwidth_mbps, prefill_tps=prefill_tps,
     )
     result = plan(
         scenario, profile, routes, "lp_highs", seed=replicate,
@@ -403,7 +429,7 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         sum(session.expected_g for session in remaining),
     ):
         raise RuntimeError("planned source state is outside phase-power support")
-    return {
+    row = {
         "case_id": case_id, "bound_constraint": label,
         "constraints": "+".join(sorted(constraints)) or "none",
         "replicate": replicate, "sessions": len(sessions), "target_w": target,
@@ -427,6 +453,7 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         "binding_resources": ";".join(result.binding_resources),
         "failure": result.failure_reason or "",
     }
+    return (row, result) if return_result else row
 
 
 def phase_load_shares(sessions, moves, power):
@@ -588,6 +615,75 @@ def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3
            for replicate in range(samples)):
         raise RuntimeError("factorial states do not share one timing draw")
     return rows, workload
+
+
+def joint_plane_design(profile, samples=1000, seed=DEFAULT_SEED):
+    if samples < 2:
+        raise ValueError("joint plane requires at least two draws")
+    q = dedicated_sink_architecture(profile, REGIONS[0], ("link/east",)).types[0]
+    rate = q.prefill.at(PREFILL_REFERENCE_TOKENS)
+    loads = LEVELS["dest_compute"]
+    bandwidths = np.linspace(
+        BANDWIDTH_BOTTLENECK_MBPS, max(physical_route_mbps().values()), samples)
+    prefills = np.linspace((1 - loads[1]) * rate, (1 - loads[0]) * rate, samples)
+    rng = np.random.default_rng(seed + 1)
+    bandwidths[1:-1] = rng.permutation(bandwidths[1:-1])
+    prefills[1:-1] = rng.permutation(prefills[1:-1])
+    return tuple(zip(bandwidths, prefills)), rate
+
+
+def simulate_joint_plane(samples=1000, seed=DEFAULT_SEED, sessions=28,
+                         target_fraction=2 / 3, profile_path=PROFILE,
+                         manifest_path=MANIFEST):
+    profile = ModelProfile.load(profile_path)
+    templates, _ = load_templates(manifest_path, profile)
+    timing_rows, parent = read_csv(TIMING), json.loads(TIMING_PARENT.read_text())
+    central_timing_fits()
+    points, rate = joint_plane_design(profile, samples, seed)
+    rng, rows = np.random.default_rng(seed), []
+    for replicate, (bandwidth, prefill) in enumerate(points):
+        sampled_profile, pack, fits, power_index, timing_hash, projected = \
+            sample_draw(profile, templates, timing_rows, parent, rng, replicate,
+                        seed, sessions)
+        result_row, result = run_case(
+            sampled_profile, pack, "joint_plane", "Bandwidth + prefill",
+            frozenset(), replicate, target_fraction, fits, power_index,
+            timing_hash, projected, bandwidth_mbps=bandwidth,
+            prefill_tps=prefill, return_result=True,
+        )
+        selected = {move.session_id: move.method for move in result.moves}
+        if len(selected) != len(result.moves):
+            raise RuntimeError("joint plane selected a session twice")
+        rows.extend({
+            "replicate": replicate, "session_id": session.session_id,
+            "context_tokens": session.context_tokens,
+            "bandwidth_cap_gbps": bandwidth / 1000,
+            "prefill_available_tps": prefill,
+            "action": selected.get(session.session_id, "not_moved"),
+            "target_met": result_row["target_met"],
+            "feasible": result_row["feasible"],
+            "target_w": result_row["target_w"],
+            "power_shortfall_w": result_row["power_shortfall_w"],
+            "predicted_migration_makespan_s":
+                result_row["predicted_migration_makespan_s"],
+            "power_bootstrap_index": power_index,
+            "timing_fit_sha256": timing_hash,
+        } for session in pack)
+    if len(rows) != samples * sessions or set(row["action"] for row in rows) \
+            - set(ACTIONS):
+        raise RuntimeError("joint plane action accounting is incomplete")
+    return rows, {
+        "samples": samples, "sessions_per_pack": sessions,
+        "prefill_reference_tokens": PREFILL_REFERENCE_TOKENS,
+        "prefill_full_rate_tps": rate,
+        "bandwidth_cap_gbps": [points[0][0] / 1000,
+                               max(point[0] for point in points) / 1000],
+        "prefill_available_tps": [min(point[1] for point in points),
+                                  max(point[1] for point in points)],
+        "action_metric": "one equally weighted source-session choice",
+        "pipeline_interpolation":
+            "regional controlled-40 to natural endpoint interpolation",
+    }
 
 
 def transport_summary(rows):
@@ -954,6 +1050,53 @@ def plot_action_boxplot(rows, path):
     plt.close(fig)
 
 
+def plot_joint_plane(rows, path):
+    import seaborn as sns
+    from matplotlib.lines import Line2D
+
+    data = pd.DataFrame(rows)
+    x, y = "bandwidth_cap_gbps", "prefill_available_tps"
+    palette = {action: plot_style.ACTION_COLORS[action] for action in ACTIONS}
+    clip = ((data[x].min(), data[x].max()), (data[y].min(), data[y].max()))
+    grid = sns.JointGrid(data=data, x=x, y=y, height=4.8, ratio=4, space=.05)
+    sns.kdeplot(
+        data=data, x=x, y=y, hue="action", hue_order=ACTIONS,
+        palette=palette, common_norm=True, levels=5, thresh=.03, cut=0,
+        clip=clip, linewidths=1.6, ax=grid.ax_joint, legend=False,
+    )
+    sns.kdeplot(
+        data=data, x=x, hue="action", hue_order=ACTIONS, palette=palette,
+        common_norm=True, cut=0, clip=clip[0], ax=grid.ax_marg_x,
+        legend=False,
+    )
+    sns.kdeplot(
+        data=data, y=y, hue="action", hue_order=ACTIONS, palette=palette,
+        common_norm=True, cut=0, clip=clip[1], ax=grid.ax_marg_y,
+        legend=False,
+    )
+    failed = data.loc[~data.target_met].drop_duplicates("replicate")
+    grid.ax_joint.scatter(
+        failed[x], failed[y], marker="x", color="black", s=16,
+        linewidth=.7, alpha=.55, zorder=5,
+    )
+    grid.ax_joint.set(
+        xlabel="Shared bandwidth cap (Gbit/s)",
+        ylabel=(f"Available prefill throughput at {PREFILL_REFERENCE_TOKENS:,} "
+                "tokens\n(tokens/s per destination)"),
+    )
+    grid.ax_joint.grid(alpha=.15)
+    grid.ax_joint.legend(handles=[
+        *(Line2D([], [], color=palette[action], linewidth=2,
+                 label=plot_style.ACTION_NAMES[action]) for action in ACTIONS),
+        Line2D([], [], color="black", marker="x", linestyle="none",
+               label="67% target missed"),
+    ], frameon=False, fontsize=plot_style.LEGEND_FONT_SIZE, loc="best")
+    grid.figure.savefig(path.with_suffix(".png"), dpi=plot_style.SAVE_DPI,
+                        bbox_inches="tight")
+    grid.figure.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+    plt.close(grid.figure)
+
+
 def file_hash(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -972,6 +1115,9 @@ def main():
     in_context_rows, in_context_workload = simulate(
         args.samples, args.seed, args.sessions, args.target,
         loaded_context_only=True,
+    )
+    joint_rows, joint_design = simulate_joint_plane(
+        args.samples, args.seed, args.sessions, args.target,
     )
     if any((row["replicate"], row["case_id"], row["timing_fit_sha256"],
             row["power_bootstrap_index"]) !=
@@ -1012,8 +1158,11 @@ def main():
               summarize(in_context_rows))
     write_csv(args.out / "surface_validation.csv", validation)
     write_csv(args.out / "factor_checks.csv", checks)
+    write_csv(args.out / "action_choice_bandwidth_prefill_joint.csv", joint_rows)
     plot(rows, args.out / "action_mix")
     plot_action_boxplot(rows, args.out / "action_mix_boxplot")
+    plot_joint_plane(
+        joint_rows, args.out / "action_choice_bandwidth_prefill_joint")
     timing_evidence = json.loads(TIMING_SUMMARY.read_text())
     loaded_evidence = loaded_service_model()
     timing_loads = sorted({float(row["destination_prefill_load"])
@@ -1036,6 +1185,7 @@ def main():
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
+        "joint_action_plane": joint_design,
         "source_load_definition": "sum(f/F + g/G); distinct from sampled phase load z=af+bg",
         "plotted_constraint_states": list(DISPLAY_CASES),
         "action_boxplot_cases": list(DISPLAY_CASES),
@@ -1187,6 +1337,7 @@ def main():
             "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
             "the destination envelope combines measured timing with synthetic 98%-occupied HBM and service-pressure levels",
             "the bandwidth state caps both physical destination routes at the predeclared 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
+            "the joint action plane interpolates regional pipeline fits between the measured controlled-40 and natural endpoints; its action densities are modeled planner outcomes, not hardware action observations",
             "East's fitted controlled pipeline remains below 1 Gbit/s, so its loaded-factor transport is counted outside the validation bandwidth range",
             "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
             "each constraint state is planned independently; rounded-LP release regressions are reported",

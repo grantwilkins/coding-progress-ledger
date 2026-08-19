@@ -888,6 +888,16 @@ constraints. Noisy bootstrap route draws
 are minimally projected to preserve natural bandwidth at or above the measured
 40%-route condition, and the projection rate is recorded.
 
+The same command writes `action_choice_bandwidth_prefill_joint.pdf`. Its 1,000
+stratified operating points span the existing 1-Gbit/s/95%-load and natural-
+route/25%-load endpoints. Each of the 28 sessions contributes one canonical
+Replay, KV-transfer, or not-moved observation. The axes report the shared route
+cap and per-destination prefill headroom at the measured 7,680-token context;
+black crosses mark plans that miss the 67% source-power target by 30 seconds.
+Regional pipeline timing is interpolated between the measured endpoint fits,
+so the timing holdout remains hardware checked while the action density is a
+modeled planner sensitivity.
+
 ```bash
 uv run python queue-haul/workload_adaptation_campaign.py
 ```

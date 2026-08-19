@@ -42,7 +42,7 @@ def profile():
 
 @pytest.fixture(scope="module")
 def workload():
-    return WorkloadProfile.load(campaign.WORKLOAD)
+    return WorkloadProfile.load(campaign.WORKLOADS[campaign.HEADLINE_WORKLOAD])
 
 
 def test_envelope_uses_the_last_passing_rate_and_flags_censoring():
@@ -148,6 +148,10 @@ def test_scarcity_grid_is_the_headline_axis_and_stays_admissible(profile,
     headline = [row for row in rows if row["headline"]]
     assert {row["rho"] for row in headline} == set(campaign.RHOS)
     assert {row["policy"] for row in headline} == set(campaign.POLICIES)
+    # The headline runs one workload; every other mixture is sensitivity, so
+    # the claim is never read off a workload chosen after seeing the gap.
+    assert {row["workload"] for row in headline} == {campaign.HEADLINE_WORKLOAD}
+    assert {row["workload"] for row in rows} == set(campaign.WORKLOADS)
     assert len(headline) == (len(campaign.DEADLINES_S) * len(campaign.POLICIES)
                              * len(campaign.RHOS) * len(campaign.SEEDS))
     assert campaign.POLICIES["queue_haul"] == "lp_work_first"
@@ -155,7 +159,9 @@ def test_scarcity_grid_is_the_headline_axis_and_stays_admissible(profile,
     case = profile.case()
     bound = 5.0 * campaign.request_work(case).sum()
     _, replicas, demand, _ = campaign.build_fleet(
-        profile, workload, 400, 1001, 300.0, bound, "natural")
+        profile, workload, 1500, 1001, 300.0, bound, "natural")
+    # Measured on the headline workload, whose long contexts absorb more
+    # destination capacity than a short mixture and so cap rho lower.
     headrooms = [campaign.migration_headroom(rho, demand, replicas, bound)
                  for rho in campaign.RHOS]
     # Every swept rho leaves room to migrate, and scarcity is monotone in rho.
@@ -295,6 +301,7 @@ def _mini_campaign(tmp_path, rows):
         "rows": [{"row_id": i, "deadline_s": 300.0,
                   "policy": row.get("policy", "greedy"),
                   "mode": "normal", "tier": "natural",
+                  "workload": campaign.HEADLINE_WORKLOAD,
                   "rho": row.get("rho", 0.45), "seed": row["seed"],
                   "headline": row.get("headline", True)}
                  for i, row in enumerate(rows)],

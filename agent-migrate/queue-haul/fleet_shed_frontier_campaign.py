@@ -25,7 +25,15 @@ from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance
 
 ROOT = Path(__file__).parent
 MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
-WORKLOAD = ROOT / "profiles/agentic_rps_shape.json"
+# The headline workload is the one whose context anchors straddle the measured
+# replay/KV crossover (~16-24k tokens on this profile): a third of its sessions
+# sit below it, where replay is the cheaper destination action, and two thirds
+# above it, where KV to the faster-ingesting region is.  A mixture skewed to
+# either side makes one action dominate and the action choice stops mattering,
+# which is what the sensitivity workloads show.
+WORKLOADS = {name: ROOT / f"profiles/{name}.json" for name in (
+    "agentic_tool_loop", "agentic_rps_shape", "interactive_coding", "coding")}
+HEADLINE_WORKLOAD = "agentic_tool_loop"
 ENVELOPE = ROOT / "outputs/agentic-rps-sweep-a100-pooled-p90-tpot-20260817/summary.json"
 TIMING = ROOT / "outputs/timing-power-validation-20260814/timing-summary.json"
 LOADED = ROOT / "outputs/loaded-service-model-20260815/model.json"
@@ -58,7 +66,10 @@ ADMISSION_MODES = ("normal", "emergency")
 # work at all.  The grid stops below the absorption cap, past which the pools
 # cannot hold the fleet in steady state and the scenario is infeasible by
 # construction rather than by policy.
-RHOS = (0.30, 0.40, 0.45, 0.50, 0.55)
+# Capped below the headline workload's absorption limit (rho 0.506 at fleet
+# scale): its long contexts occupy more destination capacity than a short
+# mixture, so the same rho leaves less migration headroom.  prepare() rechecks.
+RHOS = (0.20, 0.30, 0.38, 0.44, 0.48)
 SEEDS = (1001, 1002, 1003)
 SESSIONS = 50_000
 TIERS = ("natural", "controlled_80", "controlled_40")
@@ -279,7 +290,7 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
 
 def run_row(row: dict, manifest: dict) -> dict:
     profile = ModelProfile.load(MODEL)
-    workload = WorkloadProfile.load(WORKLOAD)
+    workload = WorkloadProfile.load(WORKLOADS[row["workload"]])
     for path, digest in manifest["inputs"].items():
         if file_hash(ROOT / path) != digest:
             raise RuntimeError(f"{path} changed after prepare")
@@ -393,15 +404,22 @@ def run_row(row: dict, manifest: dict) -> dict:
 def manifest_rows() -> list[dict]:
     rows = [{
         "deadline_s": float(deadline), "policy": policy, "rho": rho,
-        "mode": "normal", "tier": "natural", "seed": seed, "headline": True,
+        "mode": "normal", "tier": "natural", "workload": HEADLINE_WORKLOAD,
+        "seed": seed, "headline": True,
     } for deadline in DEADLINES_S for policy in POLICIES for rho in RHOS
         for seed in SEEDS]
+    # Sensitivity: the other admission mode, the throttled bandwidth tiers, and
+    # every other workload mixture, which is what decides whether choosing an
+    # action matters at all.
     rows += [{
         "deadline_s": float(deadline), "policy": policy, "rho": RHOS[2],
-        "mode": mode, "tier": tier, "seed": SEEDS[0], "headline": False,
+        "mode": mode, "tier": tier, "workload": workload,
+        "seed": SEEDS[0], "headline": False,
     } for deadline in DEADLINES_S for policy in POLICIES
-        for mode, tier in [(m, "natural") for m in ADMISSION_MODES[1:]]
-        + [("normal", t) for t in TIERS[1:]]]
+        for mode, tier, workload in
+        [(m, "natural", HEADLINE_WORKLOAD) for m in ADMISSION_MODES[1:]]
+        + [("normal", t, HEADLINE_WORKLOAD) for t in TIERS[1:]]
+        + [("normal", "natural", w) for w in WORKLOADS if w != HEADLINE_WORKLOAD]]
     return [{**row, "row_id": i} for i, row in enumerate(rows)]
 
 
@@ -421,6 +439,15 @@ def prepare(out: Path) -> dict:
     emergency_rps, emergency_censored = envelope_rps(EMERGENCY_TTFT_SLO_S)
     if emergency_rps <= normal_rps:
         raise RuntimeError("emergency envelope must exceed the normal envelope")
+    # Fail here, not hours into a shard: every swept rho must leave the
+    # headline workload room to migrate at all.
+    probe = ModelProfile.load(MODEL)
+    probe_bound = normal_rps * request_work(probe.case()).sum()
+    _, probe_replicas, probe_demand, _ = build_fleet(
+        probe, WorkloadProfile.load(WORKLOADS[HEADLINE_WORKLOAD]),
+        1500, SEEDS[0], float(DEADLINES_S[-1]), probe_bound, "natural")
+    for rho in RHOS:
+        migration_headroom(rho, probe_demand, probe_replicas, probe_bound)
     git = subprocess.run(("git", "rev-parse", "HEAD"), capture_output=True,
                          text=True, cwd=ROOT, check=True).stdout.strip()
     manifest = {
@@ -440,7 +467,8 @@ def prepare(out: Path) -> dict:
                           "right_censored": emergency_censored},
         },
         "inputs": {str(path.relative_to(ROOT)): file_hash(path)
-                   for path in (MODEL, WORKLOAD, ENVELOPE, TIMING, LOADED)},
+                   for path in (MODEL, ENVELOPE, TIMING, LOADED,
+                                *WORKLOADS.values())},
         "git_sha": git,
         "rows": manifest_rows(),
     }
@@ -489,7 +517,7 @@ def reduce(out: Path) -> dict:
             raise RuntimeError(f"row {i} was produced by commit "
                                f"{row['git_sha'][:12]}, not the manifest's")
         stale = [key for key in ("deadline_s", "policy", "mode", "tier",
-                                 "rho", "seed", "headline")
+                                 "rho", "workload", "seed", "headline")
                  if row[key] != str(expected[i][key])]
         if stale:
             raise RuntimeError(f"row {i} does not match the manifest: {stale}")
@@ -594,6 +622,27 @@ def reduce(out: Path) -> dict:
             "power is claimed.",
             "Sessions never end; the snapshot models an evacuation, not a "
             "drain-down.",
+            "The headline workload is agentic_tool_loop, whose source is "
+            "declared assumed with 50% relative error and which carries only "
+            "three context anchors (14042, 30785, 31547 tokens) sampled "
+            "uniformly. It was chosen because that mixture straddles the "
+            "measured replay/KV crossover, not because it maximises any "
+            "policy gap; sensitivity.csv reports every other workload, where "
+            "a mixture skewed to one side of the crossover makes a single "
+            "action dominate and the action choice stops mattering.",
+            "The replay/KV crossover is a property of the measured profile, "
+            "not of the planner: including the fitted per-migration residual "
+            "(east 2.03 s, germany 1.07 s), replay is the cheaper destination "
+            "action below about 16k tokens and KV to the faster-ingesting "
+            "region is cheaper above about 24k. East never favours KV "
+            "anywhere in the calibrated context range.",
+            "Each source node owns one egress pipe at the measured effective "
+            "pipeline rate and reaches only the destination pools on that "
+            "path. That rate was measured instance-to-instance, so pooling a "
+            "50k-session fleet onto one copy of it understates fleet egress "
+            "by the node count; per-node pipes keep every flow inside the "
+            "calibrated bandwidth band, which link-capacity scaling would "
+            "not.",
             "The 5 RPS normal envelope is the last swept rate whose median p90 "
             "TTFT meets the 2.0 s SLO; its worst repeat reached 2.0116 s.",
             "The emergency envelope is right-censored: no swept rate violated "
