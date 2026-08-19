@@ -1087,11 +1087,6 @@ def plot_oat(rows, path):
         for artist in artists:
             artist.set_edgecolor("white")
             artist.set_linewidth(.3)
-        ax.plot(x, [row["target_met_rate"] for row in points], color="white",
-                linewidth=2.4, zorder=4)
-        ax.plot(x, [row["target_met_rate"] for row in points], color="black",
-                marker="o", markersize=2.5, linewidth=1.0, zorder=5,
-                label="Target attained", linestyle="--")
         ax.set(
             xlabel=("Shared bandwidth cap (Gbit/s)" if sweep == "bandwidth"
                     else "Available prefill throughput (ktoken/s)"),
@@ -1108,8 +1103,7 @@ def plot_oat(rows, path):
             handles, labels = ax.get_legend_handles_labels()
             ax.legend(handles, labels, fontsize=legend_fs,
                       loc="center right", handlelength=1.2, handletextpad=.4,
-                      borderpad=.4, labelspacing=.3,
-                      fancybox=False, edgecolor="black")
+                      borderpad=.4, labelspacing=.3, frameon=False)
         fig.tight_layout(pad=.3)
         suffix = "bandwidth" if sweep == "bandwidth" else "prefill"
         fig.savefig(path.parent / f"action_choice_oat_{suffix}.png",
