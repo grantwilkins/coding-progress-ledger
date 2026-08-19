@@ -36,7 +36,8 @@ Plausible wrong implementations:
 - Reverse prefill occupancy into available throughput or report aggregate rather
   than per-destination throughput.
 - Confuse Mbit/s with bytes/s or fail to recover the measured endpoint cases.
-- Bias the joint density by dropping not-moved sessions or uneven axis sampling.
+- Resample OAT levels independently, vary both axes at once, drop not-moved
+  sessions, or weight feasibility by sessions instead of plans.
 """
 
 from types import SimpleNamespace
@@ -136,22 +137,26 @@ def test_one_paired_draw_conserves_sessions_and_target():
                    for row in checks)
 
 
-def test_joint_plane_axes_are_absolute_and_reproduce_factorial_endpoints():
+def test_oat_axes_are_absolute_and_reproduce_factorial_endpoints():
     profile = ModelProfile.load(campaign.PROFILE)
     templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
     pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 4, 3))
     fits = campaign.central_timing_fits()
-    points, rate = campaign.joint_plane_design(profile, samples=5, seed=3)
+    bandwidths, prefills, fixed_bandwidth, fixed_prefill, rate = \
+        campaign.oat_design(profile, levels=5)
 
-    assert sorted(point[0] for point in points) == pytest.approx(np.linspace(
+    assert bandwidths == pytest.approx(np.linspace(
         campaign.BANDWIDTH_BOTTLENECK_MBPS,
         max(campaign.physical_route_mbps().values()), 5))
-    assert sorted(point[1] for point in points) == pytest.approx(np.linspace(
+    assert prefills == pytest.approx(np.linspace(
         .05 * rate, .75 * rate, 5))
+    assert fixed_bandwidth == pytest.approx(np.median(bandwidths))
+    assert fixed_prefill == pytest.approx(np.median(prefills))
 
     for point, constraints in (
-        (points[0], frozenset(("bandwidth", "dest_compute"))),
-        (points[-1], frozenset()),
+        ((bandwidths[0], prefills[0]),
+         frozenset(("bandwidth", "dest_compute"))),
+        ((bandwidths[-1], prefills[-1]), frozenset()),
     ):
         swept = campaign.build_problem(
             profile, pack, frozenset(), 2 / 3, fits,
@@ -167,23 +172,25 @@ def test_joint_plane_axes_are_absolute_and_reproduce_factorial_endpoints():
                 == pytest.approx(right.replicas[0].baseline_work)
 
 
-def test_joint_plane_emits_one_action_per_session_and_matches_corner_plans():
-    plane, _ = campaign.simulate_joint_plane(samples=2, seed=3, sessions=4)
-    factorial, _ = campaign.simulate(samples=2, seed=3, sessions=4)
+def test_oat_varies_one_axis_and_conserves_session_actions():
+    rows, design = campaign.simulate_oat(
+        samples=4, levels=2, seed=3, sessions=4)
 
-    assert len(plane) == 8
-    for replicate, case_id in ((0, "bandwidth-dest_compute"), (1, "none")):
-        selected = [row for row in plane if row["replicate"] == replicate]
-        expected = next(row for row in factorial
-                        if row["replicate"] == replicate
-                        and row["case_id"] == case_id)
-        assert len({row["session_id"] for row in selected}) == 4
-        assert {action: sum(row["action"] == action for row in selected)
-                for action in campaign.ACTIONS} == {
-                    action: expected[f"{action}_count"]
-                    for action in campaign.ACTIONS
-                }
-        assert {row["target_met"] for row in selected} == {expected["target_met"]}
+    assert len(rows) == 2 * 2 * len(campaign.ACTIONS)
+    assert design["paired_draws"] == 2
+    for sweep in ("bandwidth", "prefill"):
+        for level in range(2):
+            selected = [row for row in rows
+                        if row["sweep"] == sweep and row["level"] == level]
+            assert sum(row["session_count"] for row in selected) == 8
+            assert sum(row["session_share"] for row in selected) \
+                == pytest.approx(1)
+            assert {row["plans"] for row in selected} == {2}
+            assert len({row["target_met_rate"] for row in selected}) == 1
+    assert len({row["prefill_available_tps"] for row in rows
+                if row["sweep"] == "bandwidth"}) == 1
+    assert len({row["bandwidth_cap_gbps"] for row in rows
+                if row["sweep"] == "prefill"}) == 1
 
 
 def test_phase_load_action_mix_uses_power_weights_not_session_counts():

@@ -617,70 +617,81 @@ def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3
     return rows, workload
 
 
-def joint_plane_design(profile, samples=1000, seed=DEFAULT_SEED):
-    if samples < 2:
-        raise ValueError("joint plane requires at least two draws")
+def oat_design(profile, levels=20):
+    if levels < 2:
+        raise ValueError("OAT sweep requires at least two levels")
     q = dedicated_sink_architecture(profile, REGIONS[0], ("link/east",)).types[0]
     rate = q.prefill.at(PREFILL_REFERENCE_TOKENS)
     loads = LEVELS["dest_compute"]
     bandwidths = np.linspace(
-        BANDWIDTH_BOTTLENECK_MBPS, max(physical_route_mbps().values()), samples)
-    prefills = np.linspace((1 - loads[1]) * rate, (1 - loads[0]) * rate, samples)
-    rng = np.random.default_rng(seed + 1)
-    bandwidths[1:-1] = rng.permutation(bandwidths[1:-1])
-    prefills[1:-1] = rng.permutation(prefills[1:-1])
-    return tuple(zip(bandwidths, prefills)), rate
+        BANDWIDTH_BOTTLENECK_MBPS, max(physical_route_mbps().values()), levels)
+    prefills = np.linspace((1 - loads[1]) * rate, (1 - loads[0]) * rate, levels)
+    return bandwidths, prefills, float(np.median(bandwidths)), \
+        float(np.median(prefills)), rate
 
 
-def simulate_joint_plane(samples=1000, seed=DEFAULT_SEED, sessions=28,
-                         target_fraction=2 / 3, profile_path=PROFILE,
-                         manifest_path=MANIFEST):
+def simulate_oat(samples=1000, seed=DEFAULT_SEED, sessions=28,
+                 target_fraction=2 / 3, levels=20, profile_path=PROFILE,
+                 manifest_path=MANIFEST):
+    if samples < levels or samples % levels:
+        raise ValueError("OAT samples must be a multiple of levels")
     profile = ModelProfile.load(profile_path)
     templates, _ = load_templates(manifest_path, profile)
     timing_rows, parent = read_csv(TIMING), json.loads(TIMING_PARENT.read_text())
     central_timing_fits()
-    points, rate = joint_plane_design(profile, samples, seed)
-    rng, rows = np.random.default_rng(seed), []
-    for replicate, (bandwidth, prefill) in enumerate(points):
+    bandwidths, prefills, fixed_bandwidth, fixed_prefill, rate = \
+        oat_design(profile, levels)
+    rng, cells = np.random.default_rng(seed), {}
+    for repeat in range(samples // levels):
         sampled_profile, pack, fits, power_index, timing_hash, projected = \
-            sample_draw(profile, templates, timing_rows, parent, rng, replicate,
+            sample_draw(profile, templates, timing_rows, parent, rng, repeat,
                         seed, sessions)
-        result_row, result = run_case(
-            sampled_profile, pack, "joint_plane", "Bandwidth + prefill",
-            frozenset(), replicate, target_fraction, fits, power_index,
-            timing_hash, projected, bandwidth_mbps=bandwidth,
-            prefill_tps=prefill, return_result=True,
-        )
-        selected = {move.session_id: move.method for move in result.moves}
-        if len(selected) != len(result.moves):
-            raise RuntimeError("joint plane selected a session twice")
-        rows.extend({
-            "replicate": replicate, "session_id": session.session_id,
-            "context_tokens": session.context_tokens,
-            "bandwidth_cap_gbps": bandwidth / 1000,
-            "prefill_available_tps": prefill,
-            "action": selected.get(session.session_id, "not_moved"),
-            "target_met": result_row["target_met"],
-            "feasible": result_row["feasible"],
-            "target_w": result_row["target_w"],
-            "power_shortfall_w": result_row["power_shortfall_w"],
-            "predicted_migration_makespan_s":
-                result_row["predicted_migration_makespan_s"],
-            "power_bootstrap_index": power_index,
-            "timing_fit_sha256": timing_hash,
-        } for session in pack)
-    if len(rows) != samples * sessions or set(row["action"] for row in rows) \
-            - set(ACTIONS):
-        raise RuntimeError("joint plane action accounting is incomplete")
+        for sweep, values in (("bandwidth", bandwidths), ("prefill", prefills)):
+            for level, value in enumerate(values):
+                bandwidth = value if sweep == "bandwidth" else fixed_bandwidth
+                prefill = fixed_prefill if sweep == "bandwidth" else value
+                row = run_case(
+                    sampled_profile, pack, f"oat_{sweep}", f"OAT {sweep}",
+                    frozenset(), repeat, target_fraction, fits, power_index,
+                    timing_hash, projected, bandwidth_mbps=bandwidth,
+                    prefill_tps=prefill,
+                )
+                cells.setdefault((sweep, level), []).append(row)
+    rows = []
+    for sweep, values in (("bandwidth", bandwidths), ("prefill", prefills)):
+        for level, value in enumerate(values):
+            selected = cells[sweep, level]
+            total = len(selected) * sessions
+            common = {
+                "sweep": sweep, "level": level,
+                "bandwidth_cap_gbps": (value if sweep == "bandwidth"
+                                        else fixed_bandwidth) / 1000,
+                "prefill_available_tps": (fixed_prefill if sweep == "bandwidth"
+                                           else value),
+                "plans": len(selected),
+                "target_met_rate": np.mean([row["target_met"] for row in selected]),
+            }
+            rows.extend({
+                **common, "action": action,
+                "session_count": int(sum(row[f"{action}_count"]
+                                         for row in selected)),
+                "session_share": sum(row[f"{action}_count"]
+                                     for row in selected) / total,
+            } for action in ACTIONS)
+    if any(not np.isclose(sum(row["session_share"] for row in rows
+                              if row["sweep"] == sweep and row["level"] == level), 1)
+           for sweep in ("bandwidth", "prefill") for level in range(levels)):
+        raise RuntimeError("OAT action shares do not conserve sessions")
     return rows, {
-        "samples": samples, "sessions_per_pack": sessions,
+        "samples_per_sweep": samples, "paired_draws": samples // levels,
+        "levels": levels, "sessions_per_pack": sessions,
         "prefill_reference_tokens": PREFILL_REFERENCE_TOKENS,
         "prefill_full_rate_tps": rate,
-        "bandwidth_cap_gbps": [points[0][0] / 1000,
-                               max(point[0] for point in points) / 1000],
-        "prefill_available_tps": [min(point[1] for point in points),
-                                  max(point[1] for point in points)],
-        "action_metric": "one equally weighted source-session choice",
+        "bandwidth_cap_gbps": [bandwidths[0] / 1000, bandwidths[-1] / 1000],
+        "fixed_bandwidth_cap_gbps": fixed_bandwidth / 1000,
+        "prefill_available_tps": [prefills[0], prefills[-1]],
+        "fixed_prefill_available_tps": fixed_prefill,
+        "action_metric": "source-session share at each OAT level",
         "pipeline_interpolation":
             "regional controlled-40 to natural endpoint interpolation",
     }
@@ -1050,58 +1061,54 @@ def plot_action_boxplot(rows, path):
     plt.close(fig)
 
 
-def plot_joint_plane(rows, path):
-    import seaborn as sns
-    from matplotlib.lines import Line2D
+def plot_oat(rows, path):
+    from matplotlib.ticker import PercentFormatter
 
-    data = pd.DataFrame(rows)
-    data["prefill_available_ktps"] = data["prefill_available_tps"] / 1000
-    x, y = "bandwidth_cap_gbps", "prefill_available_ktps"
-    palette = {action: plot_style.ACTION_COLORS[action] for action in ACTIONS}
-    clip = ((data[x].min(), data[x].max()), (data[y].min(), data[y].max()))
-    grid = sns.JointGrid(data=data, x=x, y=y, height=4.8, ratio=4, space=.05)
-    sns.kdeplot(
-        data=data, x=x, y=y, hue="action", hue_order=ACTIONS,
-        palette=palette, common_norm=True, levels=5, thresh=.03, cut=0,
-        clip=clip, linewidths=1.6, ax=grid.ax_joint, legend=False,
-    )
-    sns.kdeplot(
-        data=data, x=x, hue="action", hue_order=ACTIONS, palette=palette,
-        common_norm=True, cut=0, clip=clip[0], ax=grid.ax_marg_x,
-        legend=False,
-    )
-    sns.kdeplot(
-        data=data, y=y, hue="action", hue_order=ACTIONS, palette=palette,
-        common_norm=True, cut=0, clip=clip[1], ax=grid.ax_marg_y,
-        legend=False,
-    )
-    failed = data.loc[~data.target_met].drop_duplicates("replicate")
-    grid.ax_joint.scatter(
-        failed[x], failed[y], marker="x", color="black", s=16,
-        linewidth=.7, alpha=.55, zorder=5,
-    )
-    grid.ax_joint.set(
-        xlabel="Shared bandwidth cap (Gbit/s)",
-        ylabel=("Available prefill throughput (ktoken/s)\n"
-                f"per destination at {PREFILL_REFERENCE_TOKENS:,} tokens"),
-    )
-    grid.ax_joint.tick_params(labelsize=10)
-    grid.ax_joint.xaxis.label.set_size(11)
-    grid.ax_joint.yaxis.label.set_size(11)
-    grid.ax_joint.grid(alpha=.15)
-    handles = [
-        *(Line2D([], [], color=palette[action], linewidth=2,
-                 label=plot_style.ACTION_NAMES[action]) for action in ACTIONS),
-        Line2D([], [], color="black", marker="x", linestyle="none",
-               label="67% target missed"),
-    ]
-    grid.figure.legend(handles=handles, frameon=False, ncol=2,
-                       fontsize=9, loc="lower center", bbox_to_anchor=(.5, .01))
-    grid.figure.subplots_adjust(left=.19, bottom=.2)
-    grid.figure.savefig(path.with_suffix(".png"), dpi=plot_style.SAVE_DPI,
-                        bbox_inches="tight")
-    grid.figure.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
-    plt.close(grid.figure)
+    fig, axes = plt.subplots(1, 2, figsize=(8, 3.5), sharey=True)
+    for axis, sweep in zip(axes, ("bandwidth", "prefill")):
+        selected = [row for row in rows if row["sweep"] == sweep]
+        levels = sorted({row["level"] for row in selected})
+        by_action = {action: {row["level"]: row for row in selected
+                              if row["action"] == action} for action in ACTIONS}
+        points = [by_action[ACTIONS[0]][level] for level in levels]
+        x = [row["bandwidth_cap_gbps"] if sweep == "bandwidth"
+             else row["prefill_available_tps"] / 1000 for row in points]
+        artists = axis.stackplot(
+            x, *([by_action[action][level]["session_share"] for level in levels]
+                 for action in ACTIONS),
+            colors=[plot_style.ACTION_COLORS[action] for action in ACTIONS],
+            labels=[plot_style.ACTION_NAMES[action] for action in ACTIONS],
+        )
+        for artist in artists:
+            artist.set_edgecolor("white")
+            artist.set_linewidth(.6)
+        axis.plot(x, [row["target_met_rate"] for row in points], color="black",
+                  marker="o", markersize=3, linewidth=1.5,
+                  label="67% target attained")
+        fixed = points[0]["prefill_available_tps"] / 1000 \
+            if sweep == "bandwidth" else points[0]["bandwidth_cap_gbps"]
+        axis.set(
+            title=(f"Bandwidth sweep\nPrefill fixed at {fixed:.2f} ktoken/s"
+                   if sweep == "bandwidth" else
+                   f"Prefill sweep\nBandwidth fixed at {fixed:.2f} Gbit/s"),
+            xlabel=("Shared bandwidth cap (Gbit/s)" if sweep == "bandwidth"
+                    else "Available prefill throughput (ktoken/s)"),
+            ylim=(0, 1.02),
+        )
+        axis.yaxis.set_major_formatter(PercentFormatter(1))
+        axis.grid(axis="y", alpha=.2)
+        axis.tick_params(labelsize=9)
+        axis.title.set_size(10)
+        axis.xaxis.label.set_size(10)
+    axes[0].set_ylabel("Sessions / plans (%)")
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, ncol=2, loc="lower center",
+               bbox_to_anchor=(.5, .01), fontsize=9)
+    fig.subplots_adjust(left=.1, right=.99, bottom=.29, top=.82, wspace=.12)
+    fig.savefig(path.with_suffix(".png"), dpi=plot_style.SAVE_DPI,
+                bbox_inches="tight")
+    fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+    plt.close(fig)
 
 
 def file_hash(path):
@@ -1123,7 +1130,7 @@ def main():
         args.samples, args.seed, args.sessions, args.target,
         loaded_context_only=True,
     )
-    joint_rows, joint_design = simulate_joint_plane(
+    oat_rows, oat_design_metadata = simulate_oat(
         args.samples, args.seed, args.sessions, args.target,
     )
     if any((row["replicate"], row["case_id"], row["timing_fit_sha256"],
@@ -1165,11 +1172,10 @@ def main():
               summarize(in_context_rows))
     write_csv(args.out / "surface_validation.csv", validation)
     write_csv(args.out / "factor_checks.csv", checks)
-    write_csv(args.out / "action_choice_bandwidth_prefill_joint.csv", joint_rows)
+    write_csv(args.out / "action_choice_oat.csv", oat_rows)
     plot(rows, args.out / "action_mix")
     plot_action_boxplot(rows, args.out / "action_mix_boxplot")
-    plot_joint_plane(
-        joint_rows, args.out / "action_choice_bandwidth_prefill_joint")
+    plot_oat(oat_rows, args.out / "action_choice_oat")
     timing_evidence = json.loads(TIMING_SUMMARY.read_text())
     loaded_evidence = loaded_service_model()
     timing_loads = sorted({float(row["destination_prefill_load"])
@@ -1192,7 +1198,7 @@ def main():
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
         "source_load": SOURCE_LOAD,
-        "joint_action_plane": joint_design,
+        "oat_action_sweeps": oat_design_metadata,
         "source_load_definition": "sum(f/F + g/G); distinct from sampled phase load z=af+bg",
         "plotted_constraint_states": list(DISPLAY_CASES),
         "action_boxplot_cases": list(DISPLAY_CASES),
@@ -1344,7 +1350,7 @@ def main():
             "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
             "the destination envelope combines measured timing with synthetic 98%-occupied HBM and service-pressure levels",
             "the bandwidth state caps both physical destination routes at the predeclared 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
-            "the joint action plane interpolates regional pipeline fits between the measured controlled-40 and natural endpoints; its action densities are modeled planner outcomes, not hardware action observations",
+            "the OAT action sweeps interpolate regional pipeline fits between the measured controlled-40 and natural endpoints; their action shares are modeled planner outcomes, not hardware action observations",
             "East's fitted controlled pipeline remains below 1 Gbit/s, so its loaded-factor transport is counted outside the validation bandwidth range",
             "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
             "each constraint state is planned independently; rounded-LP release regressions are reported",

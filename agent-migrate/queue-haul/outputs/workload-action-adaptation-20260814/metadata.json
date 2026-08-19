@@ -139,12 +139,16 @@
     "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe",
     "outputs/timing-power-validation-20260814/timing-summary.json": "0f45a8d659aacf5d4af8bb04873795d3c9de092d1f2df15d969c8f469a8d9b1e"
   },
-  "joint_action_plane": {
-    "action_metric": "one equally weighted source-session choice",
+  "oat_action_sweeps": {
+    "action_metric": "source-session share at each OAT level",
     "bandwidth_cap_gbps": [
       1.0,
       8.733313595885829
     ],
+    "fixed_bandwidth_cap_gbps": 4.866656797942914,
+    "fixed_prefill_available_tps": 2335.7636529710326,
+    "levels": 20,
+    "paired_draws": 50,
     "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
     "prefill_available_tps": [
       291.9704566213793,
@@ -152,7 +156,7 @@
     ],
     "prefill_full_rate_tps": 5839.4091324275805,
     "prefill_reference_tokens": 7680,
-    "samples": 1000,
+    "samples_per_sweep": 1000,
     "sessions_per_pack": 28
   },
   "limitations": [
@@ -178,7 +182,7 @@
     "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
     "the destination envelope combines measured timing with synthetic 98%-occupied HBM and service-pressure levels",
     "the bandwidth state caps both physical destination routes at the predeclared 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
-    "the joint action plane interpolates regional pipeline fits between the measured controlled-40 and natural endpoints; its action densities are modeled planner outcomes, not hardware action observations",
+    "the OAT action sweeps interpolate regional pipeline fits between the measured controlled-40 and natural endpoints; their action shares are modeled planner outcomes, not hardware action observations",
     "East's fitted controlled pipeline remains below 1 Gbit/s, so its loaded-factor transport is counted outside the validation bandwidth range",
     "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
     "each constraint state is planned independently; rounded-LP release regressions are reported",
