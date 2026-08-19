@@ -1067,8 +1067,8 @@ def plot_oat(rows, path):
     from matplotlib.ticker import PercentFormatter
 
     fs, legend_fs = 8, 7
-    left, axes_w, axes_h, bottom, top = .42, .80, 1.05, .30, .06
-    legend_w, right = .68, .13
+    left, axes_w, axes_h, bottom, top = .39, .86, .98, .30, .06
+    legend_w, right = .69, .095
     for sweep in ("bandwidth", "prefill"):
         wide = sweep == "prefill"
         fig_w = left + axes_w + (legend_w if wide else right)
