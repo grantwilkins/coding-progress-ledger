@@ -1,0 +1,59 @@
+{
+  "claim": "deadline-to-shed frontier for one shedding source site and two equally sized destination sites held inside the measured offered-RPS service envelope; the headline is each seed's largest executed shed attained by the deadline, aggregated over seeds by the median",
+  "envelope": {
+    "emergency": {
+      "right_censored": true,
+      "rps": 8.0,
+      "ttft_slo_s": 10.0
+    },
+    "normal": {
+      "right_censored": false,
+      "rps": 5.0,
+      "ttft_slo_s": 2.0
+    }
+  },
+  "fleet_invariance_sessions": 50000,
+  "git_sha": "7f88b6550b2e1a028a5e525f3be22f4d40e1d62c",
+  "headline_rows": 975,
+  "headline_sessions": 12000,
+  "inputs": {
+    "outputs/agentic-rps-sweep-a100-pooled-p90-tpot-20260817/summary.json": "7b87cfa93c5ce3e1360c784685a79673964cb6726afd024f869711c4d9d88494",
+    "outputs/loaded-service-model-20260815/model.json": "bfc46e12992e3387d40c044f864a0e78f21d31210a1d930974daa2527b51bdac",
+    "outputs/timing-power-validation-20260814/timing-summary.json": "0f45a8d659aacf5d4af8bb04873795d3c9de092d1f2df15d969c8f469a8d9b1e",
+    "profiles/agentic_rps_shape.json": "976d21135cb89fb7650727f3b897e4b43aa20f183cc2c294711a71b0a1d8c974",
+    "profiles/agentic_tool_loop.json": "753d921af1461f5bc32d32e8ae0f93dab7293cac6ffc60aebc3eebc0881b855b",
+    "profiles/coding.json": "7d1001745a64d83f89995743525a1d7ad86f3009e3b26808b3e8423de854d17c",
+    "profiles/gpt_oss_20b_a100_tp1_azure_300w.json": "b837fac06c63b002be84579e1e1be2159e8efdc65c45817ebf92737ae9cd5d58",
+    "profiles/interactive_coding.json": "34a02cdd04042680db3fdd0cc73de36d2103e438a455a70cbfe3db9ec47de1e5"
+  },
+  "limitations": [
+    "Power is accelerator-scoped: the sum of a measured per-GPU curve over the modeled fleet. No PUE, node, cooling, host, or network power is claimed.",
+    "Sessions never end; the snapshot models an evacuation, not a drain-down.",
+    "The headline workload is agentic_tool_loop, whose source is declared assumed with 50% relative error and which carries only three context anchors (14042, 30785, 31547 tokens) sampled uniformly. It was chosen because that mixture straddles the measured replay/KV crossover, not because it maximises any policy gap; sensitivity.csv reports every other workload, where a mixture skewed to one side of the crossover makes a single action dominate and the action choice stops mattering.",
+    "The replay/KV crossover is a property of the measured profile, not of the planner: including the fitted per-migration residual (east 2.03 s, germany 1.07 s), replay is the cheaper destination action below about 16k tokens and KV to the faster-ingesting region is cheaper above about 24k. East never favours KV anywhere in the calibrated context range.",
+    "Each source node owns one egress pipe at the measured effective pipeline rate and reaches only the destination pools on that path. That rate was measured instance-to-instance, so pooling a 50k-session fleet onto one copy of it understates fleet egress by the node count; per-node pipes keep every flow inside the calibrated bandwidth band, which link-capacity scaling would not.",
+    "The 5 RPS normal envelope is the last swept rate whose median p90 TTFT meets the 2.0 s SLO; its worst repeat reached 2.0116 s.",
+    "The emergency envelope is right-censored: no swept rate violated the 10 s tier, so 8 RPS is a lower bound set by the grid.",
+    "migration_headroom is derived from the admission arithmetic, not measured; it is swept in sensitivity.csv. It scales a replica-second migration budget by a fraction of the service envelope, which is conservative only while that envelope exceeds one concurrency-1 replica-second per second.",
+    "Destination pools declare one migration headroom shared by both methods (coupling=0): the planner budgets and the executor serves replicas x headroom jointly, so a mixed plan cannot book the derived slack once per method.  The hardware campaigns couple per-method budgets instead.",
+    "The stable envelope is assumed equal to the emergency envelope; no measurement separates them.",
+    "The service envelope was measured on the source region's A100 and is applied to both destinations, assuming identical hardware.",
+    "Replay uses the fitted regional completion factors, which reproduce the measured concurrency-1 commits to about 16% MAPE. They dip below a per-replica prefill-throughput estimate at 16384 tokens; a scalar floor was tried and rejected because it tripled the error against that same evidence file.",
+    "This profile has no phase_power, so sessions are priced by their initial marginal power, which undercounts the concave removable power several-fold; the calibration ladder compensates by scaling the credit ask until the realised shed matches the request. The LP objective is modular and true shed is supermodular, so no per-session price can make the last session on an instance worth more than the first.",
+    "queue_haul is the target-first LP. In a separate spot check at a 300 s deadline and a 25% request it reached 0.96 of the requested shed where the Lagrangian greedy, which scores prefixes on the exact joint gain, reached 1.00. That solver is not swept here because its prefix scoring is superlinear and does not finish at fleet scale; the gap is the linear proxy, not the resource model.",
+    "Source packing is descending-load first-fit, which gives each instance near-identical sessions and so flatters any credit-ordered selector; an arrival-order fleet is a harder case and is not swept here."
+  ],
+  "max_fleet_invariance_delta": null,
+  "max_multi_action_gain": 0.10047587013899673,
+  "normal_mode_envelope_breaches": 0,
+  "rho_grid": [
+    0.2,
+    0.3,
+    0.38,
+    0.44,
+    0.48
+  ],
+  "rows": 975,
+  "schema": "queue-haul-fleet-shed-frontier-v2",
+  "sessions": 12000
+}

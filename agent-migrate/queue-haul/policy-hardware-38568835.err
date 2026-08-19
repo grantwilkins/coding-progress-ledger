@@ -1,0 +1,20 @@
+/bin/bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 2888, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 2871, in main
+    run_plan(
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1708, in run_plan
+    metadata = merge_run_metadata(metadata, previous, resume_from)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1680, in merge_run_metadata
+    raise RuntimeError("run metadata changed; resume requires the same plan, manifest, and settings")
+RuntimeError: run metadata changed; resume requires the same plan, manifest, and settings
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/policy_hardware_campaign.py", line 1544, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/policy_hardware_campaign.py", line 1538, in main
+    validate_run(args.run_root, args.expected_episodes, args.policies)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/policy_hardware_campaign.py", line 1199, in validate_run
+    raise RuntimeError("incomplete scenario {}".format(scenario["scenario_id"]))
+RuntimeError: incomplete scenario p-f7b3cda69a6227cb
