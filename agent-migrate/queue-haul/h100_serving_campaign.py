@@ -86,7 +86,8 @@ def read_plan(path: Path) -> dict:
 
 
 def config(model: str, hardware: str) -> testbed.Config:
-    return replace(rps.model_config(model, hardware), enforce_eager=False)
+    return replace(rps.model_config(model, hardware), enforce_eager=False,
+                   max_num_batched_tokens=8192, matched_prefill=True)
 
 
 def trace(plan: dict, model: str, cell: dict) -> list[dict]:

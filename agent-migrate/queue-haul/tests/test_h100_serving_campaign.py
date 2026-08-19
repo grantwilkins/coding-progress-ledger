@@ -41,6 +41,12 @@ def test_a100_prefill_plan_keeps_the_same_cells_and_optimized_runtime():
     assert not campaign.config(campaign.MODELS[0], "a100").enforce_eager
 
 
+def test_matched_prefill_uses_the_same_scheduler_budget_for_every_model():
+    assert all(campaign.config(model, hardware).max_num_batched_tokens == 8192
+               for model in campaign.PREFILL_MODELS
+               for hardware in ("a100", "h100"))
+
+
 def test_optimized_runtime_requires_compilation_and_cuda_graphs():
     testbed.validate_h100_optimized_runtime(
         "vllm serve model", "torch.compile finished; CUDA graphs captured")

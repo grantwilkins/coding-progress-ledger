@@ -1618,6 +1618,9 @@ the campaign hard-fails eager fallback or runtime drift. It retains raw evidence
 and reduced CSV/JSON only, without constructing a migration profile. The power
 fit exports its explicit saturating simulation envelope through `ell=16`, beyond
 the prior GPT-OSS campaign's measured overload extent of about 12.57.
+Matched prefill runs fix `max_num_batched_tokens=8192` for every model; older
+Qwen evidence collected with its 1,567-token architecture-campaign limit is not
+hardware-comparable.
 Set `QH_NATIVE_RUNTIME_VERSIONS=vllm,lmcache` only with an isolated native
 environment when a model requires a separately pinned runtime.
 Pass `prepare --hardware a100` to collect the identical optimized prefill grid

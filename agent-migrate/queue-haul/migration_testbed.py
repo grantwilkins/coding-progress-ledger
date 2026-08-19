@@ -178,6 +178,7 @@ class Config:
     max_num_batched_tokens: int = 8192
     architecture_campaign: bool = False
     capacity_discovery: bool = False
+    matched_prefill: bool = False
     enforce_eager: bool = True
 
 
@@ -264,6 +265,12 @@ def model_chunk_tokens(cfg: Config) -> int:
 
 
 def validate_model_runtime(cfg: Config) -> None:
+    if cfg.matched_prefill:
+        if cfg.max_model_len != 32768 or cfg.max_num_seqs != 256 \
+                or cfg.max_num_batched_tokens != 8192 \
+                or lmcache_mode() != "mp":
+            raise ValueError("matched-prefill runtime geometry changed")
+        return
     if cfg.architecture_campaign and cfg.capacity_discovery:
         raise ValueError("model runtime modes are mutually exclusive")
     if cfg.capacity_discovery:
