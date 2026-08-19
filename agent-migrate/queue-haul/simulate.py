@@ -1206,7 +1206,8 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
             residual = q.migration["kv_transfer"].residual_s \
                 if q.migration else case.kv_transfer.initial_completion_s
             kv_work = sum(factor(i) * (
-                route_bytes[i] / service.kv_ingest_bytes_per_s + residual
+                route_bytes[i] / min(links[link] for link in moves[i].path)
+                + residual
             ) for i in kv)
             work = max(
                 replay_work + service.coupling * kv_work,
@@ -1246,7 +1247,7 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
                         / service.replay_speedup
                 else:
                     stream[k] = scale * route_bytes[i] \
-                        / service.kv_ingest_bytes_per_s
+                        / min(links[link] for link in moves[i].path)
                     tail[k] = scale * residual
             streamed = np.maximum(fluid_service_completion(
                 stream, capacity, np.full(len(group), float(start)), 1.0,

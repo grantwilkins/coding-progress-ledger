@@ -290,7 +290,6 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
             # fill; coupling stays off because a migration headroom requires it.
                 fluid_migration=FluidMigrationService(
                     1 / factors["replay"],
-                    fits[region]["kv_ingest_lower_bound_bytes_per_s"],
                     source_action, sink_action,
                     f"{TIMING.relative_to(ROOT)} regional pipelined timing fit",
                     0, True),

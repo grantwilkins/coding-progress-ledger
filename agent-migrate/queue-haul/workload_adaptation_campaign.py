@@ -374,7 +374,6 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
         )
         service = FluidMigrationService(
             1 / fits[region]["replay_compute_completion_factor"],
-            fits[region]["kv_ingest_lower_bound_bytes_per_s"],
             source_action, sink_action,
             "regional-c1 timing; pipelined route and shared endpoint work",
             1, True,

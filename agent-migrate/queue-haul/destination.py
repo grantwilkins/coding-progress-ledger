@@ -226,7 +226,6 @@ class DestinationReplica:
 @dataclass(frozen=True)
 class FluidMigrationService:
     replay_speedup: float
-    kv_ingest_bytes_per_s: float
     source_power_w: dict[str, float]
     destination_power_w: dict[str, float]
     provenance: str
@@ -235,7 +234,7 @@ class FluidMigrationService:
 
     def __post_init__(self):
         methods = {"replay", "kv_transfer"}
-        if not 0 < self.replay_speedup <= 8 or self.kv_ingest_bytes_per_s <= 0 \
+        if not 0 < self.replay_speedup <= 8 \
                 or set(self.source_power_w) != methods \
                 or set(self.destination_power_w) != methods \
                 or min(*self.source_power_w.values(),
@@ -369,7 +368,8 @@ class DestinationArchitecture:
             tuple(item.get("methods", ("replay", "kv_transfer"))),
             item.get("event_flex_fraction"),
             item.get("service_debt_fraction", 0),
-            FluidMigrationService(**item["fluid_migration"])
+            FluidMigrationService(**{k: v for k, v in item["fluid_migration"].items()
+                                     if k != "kv_ingest_bytes_per_s"})
             if "fluid_migration" in item else None,
             item.get("migration_headroom"),
             None if item.get("source_affinity") is None

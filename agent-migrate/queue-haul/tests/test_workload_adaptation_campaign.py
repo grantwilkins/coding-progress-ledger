@@ -421,8 +421,8 @@ def test_central_surface_uses_regional_timing_and_routes():
                       (f"link/{region}", f"pipeline/{region}")
                       for region in campaign.REGIONS}
     assert all(service.route_overlap for service in services.values())
-    assert services["pool/east"].kv_ingest_bytes_per_s == \
-        fits["east"]["kv_ingest_lower_bound_bytes_per_s"]
+    assert services["pool/east"].replay_speedup == \
+        1 / fits["east"]["replay_compute_completion_factor"]
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
     assert summary["migration_gate_passed"] and not summary["kv_byte_mismatches"]
     assert all(
@@ -598,7 +598,7 @@ def test_single_factors_change_only_their_physical_columns():
     route = tables["none"].resource_names.index("route:link/east")
     route_bound = tables["bandwidth"].resource_names.index("route:link/east")
 
-    assert bandwidth_kv.migration_work_s == pytest.approx(base_kv.migration_work_s)
+    assert bandwidth_kv.migration_work_s > base_kv.migration_work_s
     assert bandwidth_kv.objective_cost_s > base_kv.objective_cost_s
     assert tables["bandwidth"].resources[route_bound, bandwidth_i] \
         > tables["none"].resources[route, base_i]
