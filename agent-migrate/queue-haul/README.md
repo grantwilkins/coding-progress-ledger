@@ -1509,6 +1509,8 @@ fit exports its explicit saturating simulation envelope through `ell=16`, beyond
 the prior GPT-OSS campaign's measured overload extent of about 12.57.
 Set `QH_NATIVE_RUNTIME_VERSIONS=vllm,lmcache` only with an isolated native
 environment when a model requires a separately pinned runtime.
+Pass `prepare --hardware a100` to collect the identical optimized prefill grid
+on A100 without changing the default H100 plan.
 
 ```bash
 uv run python h100_serving_campaign.py prepare --out runs/h100-serving/plan.json

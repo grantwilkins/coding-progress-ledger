@@ -1,4 +1,4 @@
-"""Calibrate optimized-H100 prefill, RPS/SLO, and power evidence."""
+"""Calibrate serving prefill, RPS/SLO, and power evidence."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import csv
 import json
 import statistics
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -45,21 +45,23 @@ def cells() -> list[dict]:
     ]
 
 
-def make_plan(seed: int = 1) -> dict:
-    plan = make_plan_unchecked(seed)
+def make_plan(seed: int = 1, hardware: str = "h100") -> dict:
+    plan = make_plan_unchecked(seed, hardware)
     validate_plan(plan)
     return plan
 
 
 def validate_plan(plan: dict) -> None:
     seed = plan.get("seed")
-    if not isinstance(seed, int) or plan != make_plan_unchecked(seed):
+    hardware = plan.get("hardware")
+    if not isinstance(seed, int) or hardware not in {"a100", "h100"} \
+            or plan != make_plan_unchecked(seed, hardware):
         raise ValueError("invalid H100 serving campaign plan")
 
 
-def make_plan_unchecked(seed: int) -> dict:
+def make_plan_unchecked(seed: int, hardware: str = "h100") -> dict:
     return {
-        "schema": SCHEMA, "hardware": "h100", "models": list(MODELS),
+        "schema": SCHEMA, "hardware": hardware, "models": list(MODELS),
         "model_revisions": {model: testbed.model_spec(model).revision
                             for model in MODELS},
         "runtime": {
@@ -70,7 +72,7 @@ def make_plan_unchecked(seed: int) -> dict:
             "enforce_eager": False,
         },
         "prefill": {"output_tokens": 1, "cells": cells()},
-        "rps_plan": rps.make_plan(seed, "h100"),
+        "rps_plan": rps.make_plan(seed, hardware),
         "power_cells": [asdict(cell) for cell in power.cells(seed)],
         "power_max_ell": power.MAX_ELL,
         "seed": seed,
@@ -83,8 +85,8 @@ def read_plan(path: Path) -> dict:
     return plan
 
 
-def config(model: str) -> testbed.Config:
-    return rps.model_config(model, "h100")
+def config(model: str, hardware: str) -> testbed.Config:
+    return replace(rps.model_config(model, hardware), enforce_eager=False)
 
 
 def trace(plan: dict, model: str, cell: dict) -> list[dict]:
@@ -130,12 +132,12 @@ def summarize(plan: dict, model: str, cell: dict, rows: list[dict],
 def run_prefill(plan: dict, model: str, root: Path) -> None:
     if model not in PREFILL_MODELS:
         raise ValueError("unsupported calibration model")
-    cfg = config(model)
+    cfg = config(model, plan["hardware"])
     commands = capacity.stack_commands(cfg)
     identity = rps.runtime_identity(plan, cfg, commands)
     stack_root = root / "stack"
     with capacity.engine_stack(cfg, stack_root, identity, commands) as stack:
-        testbed.validate_h100_optimized_runtime(
+        testbed.validate_optimized_runtime(
             testbed.shell(commands["vllm"]), testbed.read_text(stack.log))
         write_json(stack_root / "runtime-identity.json", identity)
         for cell in plan["prefill"]["cells"]:
@@ -236,6 +238,7 @@ def parse_args(argv=None):
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--out", type=Path, required=True)
     prepare.add_argument("--seed", type=int, default=1)
+    prepare.add_argument("--hardware", choices=("a100", "h100"), default="h100")
     for name in ("run-prefill", "reduce-prefill"):
         command = commands.add_parser(name)
         command.add_argument("--plan", type=Path, required=True)
@@ -254,7 +257,7 @@ def parse_args(argv=None):
 def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
-        plan = make_plan(args.seed)
+        plan = make_plan(args.seed, args.hardware)
         write_json(args.out, plan)
         write_json(args.out.with_name("rps-plan.json"), plan["rps_plan"])
         return

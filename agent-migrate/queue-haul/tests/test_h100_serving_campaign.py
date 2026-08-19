@@ -33,6 +33,14 @@ def test_plan_rejects_eager_or_revision_drift():
         campaign.validate_plan(plan)
 
 
+def test_a100_prefill_plan_keeps_the_same_cells_and_optimized_runtime():
+    plan = campaign.make_plan(7, "a100")
+
+    assert plan["hardware"] == plan["rps_plan"]["hardware"] == "a100"
+    assert plan["prefill"]["cells"] == campaign.make_plan(7)["prefill"]["cells"]
+    assert not campaign.config(campaign.MODELS[0], "a100").enforce_eager
+
+
 def test_optimized_runtime_requires_compilation_and_cuda_graphs():
     testbed.validate_h100_optimized_runtime(
         "vllm serve model", "torch.compile finished; CUDA graphs captured")

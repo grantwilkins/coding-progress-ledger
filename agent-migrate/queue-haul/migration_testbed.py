@@ -313,13 +313,17 @@ def validate_model_runtime_log(cfg: Config, text: str,
         raise RuntimeError(f"runtime did not prove the {expected}-token unified block")
 
 
-def validate_h100_optimized_runtime(command: str, text: str) -> None:
+def validate_optimized_runtime(command: str, text: str) -> None:
     if "--enforce-eager" in command:
-        raise RuntimeError("optimized H100 runtime cannot force eager execution")
+        raise RuntimeError("optimized runtime cannot force eager execution")
     if not re.search(r"(?:torch[ ._-]?compile|compil(?:e|ation|ing))", text,
                      re.IGNORECASE) \
             or not re.search(r"cuda[ _-]?graphs?", text, re.IGNORECASE):
-        raise RuntimeError("optimized H100 runtime did not prove compilation and CUDA graphs")
+        raise RuntimeError("optimized runtime did not prove compilation and CUDA graphs")
+
+
+def validate_h100_optimized_runtime(command: str, text: str) -> None:
+    validate_optimized_runtime(command, text)
 
 
 def cache_dirs(cfg: Config, role: str) -> dict[str, Path]:
