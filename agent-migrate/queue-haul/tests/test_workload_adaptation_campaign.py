@@ -131,8 +131,10 @@ def test_one_paired_draw_conserves_sessions_and_target():
     )
     none = next(row for row in rows if row["case_id"] == "none")
     constrained = next(row for row in rows if row["case_id"] == "bandwidth")
+    # Constraining a resource cannot raise the relaxation's value; the two
+    # agree to machine precision when the constraint is not binding.
     assert constrained["fractional_lp_opportunity_w"] \
-        <= none["fractional_lp_opportunity_w"]
+        <= none["fractional_lp_opportunity_w"] * (1 + 1e-12)
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
 

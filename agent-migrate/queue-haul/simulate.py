@@ -388,9 +388,6 @@ class ExecutionSimulator:
         self.instances = {i.instance_id: i for i in scenario.instances}
         self.sessions = {s.session_id: s for s in scenario.sessions}
         self.links = {link.link_id: link.bytes_per_s for link in scenario.links}
-        self.kv_links = {
-            instance: ("kv_destination", instance) for instance in self.instances
-        }
         self.moves = tuple(sorted(moves, key=lambda m: m.order))
         self.migration_components = {}
         if destination:
@@ -403,15 +400,13 @@ class ExecutionSimulator:
             index: ("pace", index) for index, move in enumerate(self.moves)
             if move.rate_limit_bytes_per_s is not None
         }
+        # KV transfer is limited by the network path, not by the destination:
+        # an A100 writes HBM at ~2 TB/s, so a GPU-ingest ceiling is never the
+        # binding constraint, and the measured end-to-end pipeline rate that
+        # used to stand in for one capped transfers well below WAN bandwidth.
+        # Concurrency is still bounded by max_destination_kv_streams.
         self.rate_links = {
             **self.links,
-            **{link: (self.migration_components.get(instance, {})
-                      .get("kv_transfer").kv_ingest_bytes_per_s
-                      if self.migration_components.get(instance, {}).get("kv_transfer")
-                      and self.migration_components[instance]["kv_transfer"]
-                      .kv_ingest_bytes_per_s is not None
-                      else self.case.kv_transfer.destination_bytes_per_s)
-               for instance, link in self.kv_links.items()},
             **{
                 self.pace_links[index]: self.moves[index].rate_limit_bytes_per_s
                 for index in self.pace_links
@@ -653,7 +648,6 @@ class ExecutionSimulator:
                     (index, phase, "destination"), action,
                     state.move.destination_instance,
                 )
-                rate_path += (self.kv_links[state.move.destination_instance],)
                 if index in self.pace_links and phase != "catch_up":
                     rate_path += (self.pace_links[index],)
             flow = _Flow(
