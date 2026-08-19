@@ -77,7 +77,7 @@ DISPLAY_CASES = (
 )
 ACTION_BOXPLOT_QUANTILES = (.05, .25, .5, .75, .95)
 POWER_TOLERANCE_W = 1e-6
-MIGRATION_HORIZON_S = 60
+MIGRATION_HORIZON_S = 41
 BANDWIDTH_BOTTLENECK_MBPS = 1000
 PREFILL_REFERENCE_TOKENS = 7680
 OAT_BANDWIDTH_LOWER_MBPS = 100
@@ -299,7 +299,7 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
     paths = {region: (f"link/{region}", f"pipeline/{region}")
              for region in REGIONS}
     scenario = ExecutionScenario(
-        60, 60, 0, "awake", 0,
+        41, 41, 0, "awake", 0,
         (PowerNode("source-node", 1, True), *(PowerNode(
             f"{region}-node", 1, False) for region in REGIONS)),
         (ServingInstance("source", ("source-node",)), *(ServingInstance(
