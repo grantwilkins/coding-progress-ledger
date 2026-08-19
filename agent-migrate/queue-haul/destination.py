@@ -258,6 +258,11 @@ class DestinationPool:
     service_debt_fraction: float = 0.0
     fluid_migration: FluidMigrationService | None = None
     migration_headroom: dict[str, float] | None = None
+    # Source instances allowed to reach this pool.  A fleet whose nodes each
+    # own their egress pipe is modeled as one pool per (region, source node):
+    # the route is a property of the pool, so a session may only use the pools
+    # its own node can actually reach.  None means every source may reach it.
+    source_affinity: tuple[str, ...] | None = None
 
     def __post_init__(self):
         if not self.pool_id or not self.type_id or not self.replicas or not self.route_id \
@@ -277,7 +282,10 @@ class DestinationPool:
                 or self.fluid_migration is not None \
                 and self.migration_headroom is not None \
                 and (set(self.migration_headroom) != set(self.methods)
-                     or len(set(self.migration_headroom.values())) > 1):
+                     or len(set(self.migration_headroom.values())) > 1) \
+                or self.source_affinity is not None \
+                and (not self.source_affinity
+                     or len(set(self.source_affinity)) != len(self.source_affinity)):
             raise ValueError("invalid destination pool")
 
 
@@ -364,6 +372,8 @@ class DestinationArchitecture:
             FluidMigrationService(**item["fluid_migration"])
             if "fluid_migration" in item else None,
             item.get("migration_headroom"),
+            None if item.get("source_affinity") is None
+            else tuple(item["source_affinity"]),
         ) for item in raw["pools"])
         return cls(raw["schema"], fingerprint(raw["source_compatibility"]),
                    tuple(types), pools, raw.get("residency_horizon_s"))

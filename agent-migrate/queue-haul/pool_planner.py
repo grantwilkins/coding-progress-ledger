@@ -341,9 +341,26 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                 pool.fluid_migration.route_overlap,
             ),
             tuple(sorted((pool.migration_headroom or {}).items())),
+            pool.source_affinity,
         )
         grouped.setdefault(key, []).append(p)
     pool_groups = tuple(map(tuple, grouped.values()))
+    # A session only ever prices the pools its own source may reach, so an
+    # affinity-partitioned fleet costs one group per source rather than one
+    # per pool: without this the candidate table grows by the pool count.
+    groups_for_source = {}
+    for g, group in enumerate(pool_groups):
+        affinity = architecture.pools[group[0]].source_affinity
+        for instance in (affinity if affinity is not None
+                         else (None,)):
+            groups_for_source.setdefault(instance, []).append(g)
+    shared_groups = groups_for_source.pop(None, [])
+
+    def session_groups(session):
+        if not groups_for_source:
+            return pool_groups
+        return tuple(pool_groups[g] for g in sorted(
+            shared_groups + groups_for_source.get(session.source_instance, [])))
 
     def records(j):
         session, values = sessions[j], []
@@ -354,7 +371,7 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
             "replay": _log_bytes(session, migration_tokens),
             "kv_transfer": case.kv_transfer.sealed_bytes(migration_tokens),
         }
-        for group in pool_groups:
+        for group in session_groups(session):
             p, pool = group[0], architecture.pools[group[0]]
             q = types[pool.type_id]
             bounds = _event_bounds(q, pool, mode)
@@ -2206,8 +2223,13 @@ def validate_destination_execution(scenario, architecture, moves):
     pools = {r.replica_id: architecture.type_by_id[p.type_id]
              for p in architecture.pools for r in p.replicas}
     sessions = {s.session_id: s for s in scenario.sessions}
+    affinity = {r.replica_id: p.source_affinity
+                for p in architecture.pools for r in p.replicas}
     for move in moves:
         q, s = pools[move.destination_instance], sessions[move.session_id]
+        allowed = affinity[move.destination_instance]
+        if allowed is not None and s.source_instance not in allowed:
+            raise ValueError("destination pool is not reachable from the source")
         work[move.destination_instance] += q.work(
             s.expected_f, s.expected_g, _resident_tokens(s, horizon),
             q.migration is not None,

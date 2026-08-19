@@ -93,16 +93,16 @@ def test_service_bound_matches_the_profile_rate_limit_conversion(profile, worklo
     fits = json.loads(campaign.TIMING.read_text())["fits"]
     architecture = campaign.build_architecture(
         profile, 1, {"normal": bound, "emergency": bound, "stable": bound},
-        fits, campaign.RHO_DEST, 0.05, contexts)
+        fits, campaign.RHOS[2], 0.05, contexts)
     limit = ProfileRateLimit(
         f"{campaign.MODEL_ID}-a100-tp1/east", campaign.REF_CONTEXT,
-        campaign.PROMPT, campaign.OUTPUT, campaign.RHO_DEST * 5.0, 5.0)
+        campaign.PROMPT, campaign.OUTPUT, campaign.RHOS[2] * 5.0, 5.0)
 
     conversion = limit.conversion(architecture.types[0])
 
     assert conversion["safe_service_bound"] == pytest.approx(bound)
     assert conversion["baseline_work"] == pytest.approx(
-        tuple(campaign.RHO_DEST * 5.0 * campaign.request_work(case)))
+        tuple(campaign.RHOS[2] * 5.0 * campaign.request_work(case)))
 
 
 def test_source_packing_respects_power_and_service_limits(profile, workload):
@@ -137,17 +137,32 @@ def test_sampled_contexts_stay_inside_the_measured_rate_curves(profile, workload
         case.replay.rate(record.context_tokens, 1)
 
 
-def test_every_row_requests_an_attainable_fraction_not_the_idle_floor():
+def test_scarcity_grid_is_the_headline_axis_and_stays_admissible(profile,
+                                                                 workload):
+    """rho sets how much room the destinations have to accept migration work at
+    all, so it is the axis the multi-action claim lives on; past the absorption
+    cap the scenario is infeasible by construction, not by policy."""
     rows = campaign.manifest_rows()
 
     assert rows and len({row["row_id"] for row in rows}) == len(rows)
-    assert {row["requested_fraction"] for row in rows} == set(campaign.TARGETS)
-    # Requesting the whole removable band puts the limit at the idle floor,
-    # which is the infeasible-fallback case this campaign exists to avoid.
-    assert max(row["requested_fraction"] for row in rows) < 1.0
-    assert {row["policy"] for row in rows} == set(campaign.POLICIES)
-    # The target-first LP is only meaningful against an attainable request.
+    headline = [row for row in rows if row["headline"]]
+    assert {row["rho"] for row in headline} == set(campaign.RHOS)
+    assert {row["policy"] for row in headline} == set(campaign.POLICIES)
+    assert len(headline) == (len(campaign.DEADLINES_S) * len(campaign.POLICIES)
+                             * len(campaign.RHOS) * len(campaign.SEEDS))
     assert campaign.POLICIES["queue_haul"] == "lp_work_first"
+
+    case = profile.case()
+    bound = 5.0 * campaign.request_work(case).sum()
+    _, replicas, demand, _ = campaign.build_fleet(
+        profile, workload, 400, 1001, 300.0, bound, "natural")
+    headrooms = [campaign.migration_headroom(rho, demand, replicas, bound)
+                 for rho in campaign.RHOS]
+    # Every swept rho leaves room to migrate, and scarcity is monotone in rho.
+    assert all(value > 0 for value in headrooms)
+    assert headrooms == sorted(headrooms, reverse=True)
+    with pytest.raises(RuntimeError, match="cannot absorb"):
+        campaign.migration_headroom(1.0, demand, replicas, bound)
 
 
 def test_migration_headroom_subtracts_both_baseline_and_absorbed_load():
@@ -168,7 +183,7 @@ def test_replay_uses_the_fitted_regional_completion_factors(profile, workload):
 
     architecture = campaign.build_architecture(
         profile, 1, {"normal": bound, "emergency": bound, "stable": bound},
-        fits, campaign.RHO_DEST, 0.05, contexts)
+        fits, campaign.RHOS[2], 0.05, contexts)
 
     # A scalar prefill floor was tried and rejected: it tripled the error
     # against outputs/timing-power-validation-20260814, the artifact these
@@ -179,39 +194,9 @@ def test_replay_uses_the_fitted_regional_completion_factors(profile, workload):
         assert destination_type.migration["kv_transfer"].compute_completion_factor == 1
 
 
-def test_calibration_delivers_the_requested_shed(profile, workload):
-    """A request is answered with that much power, not with whatever the
-    credit target happens to imply."""
-    case = profile.case()
-    bound = 5.0 * campaign.request_work(case).sum()
-    contexts = sorted({record.context_tokens for record in workload.records})
-    scenario, replicas, demand, fits = campaign.build_fleet(
-        profile, workload, 400, 1001, 600.0, bound, "natural")
-    architecture = campaign.build_architecture(
-        profile, replicas, {"normal": bound, "emergency": bound, "stable": bound},
-        fits, campaign.RHO_DEST,
-        campaign.migration_headroom(campaign.RHO_DEST, demand, replicas, bound),
-        contexts)
-    power = ExpectedPower(scenario, profile)
-    initial = power.power(True)
-    removable = initial - source_power(
-        scenario, profile, [s.session_id for s in scenario.sessions])
-    goal = 0.25 * removable
-
-    _, certified, ask, steps = campaign.calibrated_plan(
-        scenario, profile, architecture, "lp_work_first", 1, "normal", power,
-        initial, goal)
-
-    assert certified == pytest.approx(goal, rel=campaign.CALIBRATION_TOLERANCE)
-    assert 1 <= steps <= campaign.CALIBRATION_STEPS
-    # The uncalibrated request would have been answered with a different shed.
-    assert ask != pytest.approx(goal, rel=1e-6) or steps == 1
-
-
-def test_calibration_bisects_through_a_local_plateau(monkeypatch):
-    """Two equal outcomes inside the ladder are a step of the policy's answer,
-    not proof the goal is unreachable; stopping there marks a reachable target
-    missed while a higher request would still pass."""
+def test_max_shed_reports_the_largest_contract_respecting_shed(monkeypatch):
+    """A cell reports shed it actually executed inside every contract, not the
+    largest request some probe happened to meet."""
     from dataclasses import dataclass
     from types import SimpleNamespace
 
@@ -219,33 +204,85 @@ def test_calibration_bisects_through_a_local_plateau(monkeypatch):
     class Snapshot:
         power_limit_w: float
 
+    asks = []
+
     def stepped(scenario, *args, **kwargs):
-        ask = 100.0 - scenario.power_limit_w
-        shed = 0 if ask < 10 else 48 if ask < 60 else 50
-        return SimpleNamespace(
-            moves=tuple(SimpleNamespace(session_id=str(k))
-                        for k in range(shed)))
+        asks.append(100.0 - scenario.power_limit_w)
+        return SimpleNamespace(moves=())
 
     monkeypatch.setattr(campaign, "plan", stepped)
-    power = SimpleNamespace(drain_gain=lambda ids: float(len(list(ids))))
 
-    _, shed, ask, steps = campaign.calibrated_plan(
-        Snapshot(0.0), None, None, "greedy", 1, "normal", power, 100.0, 50.0)
-    assert shed == 50.0 and ask >= 60
-    assert steps <= campaign.CALIBRATION_STEPS
+    def evaluate(planned, ask):
+        # Shed tracks the ask, but past 60 W the plan misses its deadline, so
+        # the largest lawful shed is the one just below that edge.
+        return {"realized_shed_w": ask, "within_contract": ask <= 60.0}
 
-    # An unreachable goal still exits early once the ask hits the ceiling.
-    _, shed, _, steps = campaign.calibrated_plan(
-        Snapshot(0.0), None, None, "greedy", 1, "normal", power, 100.0, 80.0)
-    assert shed == 50.0 and steps < campaign.CALIBRATION_STEPS
+    _, outcome, ask, probes = campaign.max_shed_plan(
+        Snapshot(0.0), None, None, "greedy", 1, "normal", None, 100.0, evaluate)
+
+    assert outcome["within_contract"] and ask <= 60.0
+    assert outcome["realized_shed_w"] == pytest.approx(60.0, abs=100.0 / 2 ** 7)
+    assert probes == campaign.MAX_SHED_STEPS
+    assert max(asks) > 60.0, "the search must probe past the edge to find it"
 
 
-# Claims: the frontier headline is the median over seeds of each seed's
-# largest executed, envelope-compliant shed attained by the deadline, and the
-# reduction refuses stale or mixed shards.  Plausible wrong implementations:
-# taking the max over all rows so one lucky seed decides the headline;
-# counting envelope-breaching rows; accepting shards from another commit or
-# rows that disagree with the manifest.
+def test_max_shed_returns_the_last_probe_when_nothing_is_lawful(monkeypatch):
+    from dataclasses import dataclass
+    from types import SimpleNamespace
+
+    @dataclass
+    class Snapshot:
+        power_limit_w: float
+
+    monkeypatch.setattr(campaign, "plan",
+                        lambda *a, **k: SimpleNamespace(moves=()))
+    _, outcome, _, _ = campaign.max_shed_plan(
+        Snapshot(0.0), None, None, "greedy", 1, "normal", None, 100.0,
+        lambda planned, ask: {"realized_shed_w": ask, "within_contract": False})
+
+    assert not outcome["within_contract"]
+
+
+def test_source_nodes_own_their_egress_and_reach_only_their_pools(
+        profile, workload):
+    """One pipe per region starves a fleet by the node count: the measured rate
+    is instance-to-instance, so egress must scale with the fleet."""
+    case = profile.case()
+    bound = 5.0 * campaign.request_work(case).sum()
+    scenario, replicas, demand, fits = campaign.build_fleet(
+        profile, workload, 400, 1001, 300.0, bound, "natural")
+    architecture = campaign.build_architecture(
+        profile, replicas, {m: bound for m in ("normal", "emergency", "stable")},
+        fits, 0.45,
+        campaign.migration_headroom(0.45, demand, replicas, bound), None)
+
+    nodes = -(-replicas // profile.gpus_per_node)
+    assert len(architecture.pools) == nodes * len(campaign.REGIONS)
+    assert len(scenario.links) == nodes * len(campaign.REGIONS)
+    # Every pool is reachable only from its own node's source instances, and
+    # every source instance reaches exactly one pool per region.
+    reach = {}
+    for pool in architecture.pools:
+        assert pool.source_affinity
+        for instance in pool.source_affinity:
+            reach.setdefault(instance, []).append(pool.pool_id)
+    assert {len(v) for v in reach.values()} == {len(campaign.REGIONS)}
+    assert len(reach) == replicas
+    # Each pipe carries only its own node's sessions, so aggregate fleet egress
+    # scales with the node count rather than being pinned to one pipeline.
+    rates = {link.link_id: link.bytes_per_s for link in scenario.links}
+    for pool in architecture.pools:
+        assert rates[pool.route[0]] == pytest.approx(
+            fits[pool.pool_id.split("/")[1]]["effective_pipeline_mbps"]["natural"]
+            * 125_000)
+
+
+# Claims: each cell reports the largest shed executed inside every contract,
+# seeds aggregate by median, and the advantage table measures what multiple
+# actions buy over the best single-action baseline.  Plausible wrong
+# implementations: taking the max over seeds so one lucky seed decides the
+# headline; counting shed from rows that broke a contract; comparing the
+# flexible policy against the mean rather than the best single action.
 def _mini_campaign(tmp_path, rows):
     manifest = {
         "schema": campaign.SCHEMA, "claim": "test", "sessions": 4,
@@ -255,51 +292,68 @@ def _mini_campaign(tmp_path, rows):
                      "emergency": {"rps": 8.0, "ttft_slo_s": 10.0,
                                    "right_censored": True}},
         "inputs": {}, "git_sha": "cafe" * 10,
-        "rows": [{"row_id": i, "deadline_s": 300.0, "policy": "greedy",
-                  "requested_fraction": row["requested_fraction"],
-                  "mode": "normal", "tier": "natural", "rho": 0.45,
-                  "seed": row["seed"],
+        "rows": [{"row_id": i, "deadline_s": 300.0,
+                  "policy": row.get("policy", "greedy"),
+                  "mode": "normal", "tier": "natural",
+                  "rho": row.get("rho", 0.45), "seed": row["seed"],
                   "headline": row.get("headline", True)}
                  for i, row in enumerate(rows)],
     }
     (tmp_path / "plan.json").write_text(json.dumps(manifest))
     full = [{**manifest["rows"][i], "git_sha": manifest["git_sha"],
-             "realized_shed_w": 1000 * row["realized_shed_fraction"],
-             "destination_offered_rps": 4.0, **row}
+             "executed_shed_w": 1000 * row["executed_shed_fraction"],
+             "destination_offered_rps": 4.0, "within_envelope": True,
+             "committed_kv_fraction": row.get("committed_kv_fraction", 0.0),
+             **{f"{region}_{method}": 0 for region in campaign.REGIONS
+                for method in ("replay", "kv_transfer")},
+             **row}
             for i, row in enumerate(rows)]
     campaign.write_csv(tmp_path / "shard-00.csv", full)
     return manifest
 
 
-def test_reduce_medians_per_seed_executed_shed_not_the_lucky_seed(tmp_path):
+def test_reduce_medians_executed_shed_and_ignores_broken_contracts(tmp_path):
     _mini_campaign(tmp_path, [
-        {"seed": 1, "requested_fraction": 0.5, "realized_shed_fraction": 0.5,
-         "target_met": True, "within_envelope": True},
-        {"seed": 1, "requested_fraction": 0.95, "realized_shed_fraction": 0.95,
-         "target_met": False, "within_envelope": False},
-        {"seed": 2, "requested_fraction": 0.9, "realized_shed_fraction": 0.9,
-         "target_met": True, "within_envelope": True},
+        {"seed": 1, "executed_shed_fraction": 0.50, "within_contract": True},
+        {"seed": 2, "executed_shed_fraction": 0.90, "within_contract": True},
+        {"seed": 3, "executed_shed_fraction": 0.99, "within_contract": False},
     ])
 
     campaign.reduce(tmp_path)
 
-    frontier = campaign._csv(tmp_path / "frontier.csv")
-    assert len(frontier) == 1
-    row = frontier[0]
-    # Seed 1's compliant best is 0.5 (its 0.95 breached the envelope), seed
-    # 2's is 0.9: the headline is their median 0.7, not the 0.95 or the 0.9.
-    assert float(row["median_executed_shed_fraction"]) == pytest.approx(0.7)
-    assert float(row["min_executed_shed_fraction"]) == pytest.approx(0.5)
-    assert float(row["max_executed_shed_fraction"]) == pytest.approx(0.9)
-    assert float(row["median_max_requested_met"]) == pytest.approx(0.7)
+    row = campaign._csv(tmp_path / "frontier.csv")[0]
+    # Seed 3 broke a contract, so its 0.99 counts as nothing shed; the headline
+    # is the median of (0.50, 0.90, 0.00), never the 0.99.
+    assert float(row["median_executed_shed_fraction"]) == pytest.approx(0.50)
+    assert float(row["max_executed_shed_fraction"]) == pytest.approx(0.90)
+    assert int(row["contracts_met"]) == 2
+
+
+def test_reduce_scores_multi_action_against_the_best_single_action(tmp_path):
+    _mini_campaign(tmp_path, [
+        {"seed": 1, "policy": "queue_haul", "executed_shed_fraction": 0.70,
+         "within_contract": True, "committed_kv_fraction": 0.4},
+        {"seed": 1, "policy": "replay_only", "executed_shed_fraction": 0.53,
+         "within_contract": True},
+        {"seed": 1, "policy": "kv_only", "executed_shed_fraction": 0.58,
+         "within_contract": True},
+    ])
+
+    campaign.reduce(tmp_path)
+
+    row = campaign._csv(tmp_path / "multi_action_advantage.csv")[0]
+    # Gain is measured against the BEST single action (kv_only 0.58), not the
+    # weaker replay_only or an average of the two.
+    assert float(row["best_single_action"]) == pytest.approx(0.58)
+    assert float(row["best_flexible"]) == pytest.approx(0.70)
+    assert float(row["multi_action_gain"]) == pytest.approx(0.12)
+    assert row["best_flexible_policy"] == "queue_haul"
 
 
 def test_reduce_rejects_stale_or_mixed_shards(tmp_path):
     rows = [
-        {"seed": 1, "requested_fraction": 0.5, "realized_shed_fraction": 0.5,
-         "target_met": True, "within_envelope": True},
-        {"seed": 2, "requested_fraction": 0.5, "realized_shed_fraction": 0.4,
-         "target_met": False, "within_envelope": True},
+        {"seed": 1, "executed_shed_fraction": 0.5, "within_contract": True},
+        {"seed": 2, "executed_shed_fraction": 0.4, "within_contract": True},
     ]
     _mini_campaign(tmp_path, rows)
     shard = tmp_path / "shard-00.csv"
@@ -325,12 +379,11 @@ def test_reduce_rejects_stale_or_mixed_shards(tmp_path):
 
 def test_reduce_accepts_absent_but_not_partial_sensitivity(tmp_path):
     rows = [
-        {"seed": 1, "requested_fraction": 0.5, "realized_shed_fraction": 0.5,
-         "target_met": True, "within_envelope": True},
-        {"seed": 1, "requested_fraction": 0.25, "realized_shed_fraction": 0.2,
-         "target_met": True, "within_envelope": True, "headline": False},
-        {"seed": 1, "requested_fraction": 0.75, "realized_shed_fraction": 0.6,
-         "target_met": True, "within_envelope": True, "headline": False},
+        {"seed": 1, "executed_shed_fraction": 0.5, "within_contract": True},
+        {"seed": 1, "executed_shed_fraction": 0.2, "within_contract": True,
+         "headline": False},
+        {"seed": 1, "executed_shed_fraction": 0.6, "within_contract": True,
+         "headline": False},
     ]
     _mini_campaign(tmp_path, rows)
     shard = tmp_path / "shard-00.csv"

@@ -22,7 +22,6 @@ from power_model import ExpectedPower
 from profiles import ModelProfile, WorkloadProfile
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance,
                       SimSession, execute, step_average)
-from simulated_pareto_campaign import attainment_time
 
 ROOT = Path(__file__).parent
 MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
@@ -53,10 +52,15 @@ ADMISSION_MODES = ("normal", "emergency")
 # so that row alone lands back in the infeasible fallback and its attainment is
 # decided by float tolerance rather than by the plan.  It runs to 0.99 so the
 # frontier top is set by capacity, not by the grid.
-TARGETS = (0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99)
+# Destination scarcity is the headline axis: migration headroom is what is
+# left of a replica after its own baseline load and the source demand it must
+# absorb, so rho sets how much room the destinations have to accept migration
+# work at all.  The grid stops below the absorption cap, past which the pools
+# cannot hold the fleet in steady state and the scenario is infeasible by
+# construction rather than by policy.
+RHOS = (0.30, 0.40, 0.45, 0.50, 0.55)
 SEEDS = (1001, 1002, 1003)
 SESSIONS = 50_000
-RHO_DEST = 0.45
 TIERS = ("natural", "controlled_80", "controlled_40")
 PROMPT, OUTPUT, REF_CONTEXT = 3920, 1024, 3920
 NORMAL_TTFT_SLO_S, EMERGENCY_TTFT_SLO_S = 2.0, 10.0
@@ -112,50 +116,37 @@ def migration_headroom(rho: float, demand: float, replicas: int,
     return headroom
 
 
-CALIBRATION_STEPS = 12
-CALIBRATION_TOLERANCE = 0.01
+MAX_SHED_STEPS = 8
 
 
-def calibrated_plan(scenario, profile, architecture, solver, seed, mode, power,
-                    initial: float, goal_w: float):
-    """Plan for the credit target whose plan actually sheds ``goal_w``.
+def max_shed_plan(scenario, profile, architecture, solver, seed, mode, power,
+                  initial: float, evaluate):
+    """Largest executed shed a policy delivers inside every contract.
 
-    The planner selects against summed per-session marginal power, which
-    undercuts the concave curve about threefold, so requesting a fraction of
-    removable power directly over-sheds by roughly that factor.  Realised shed
-    is close to linear in the credit target, so scaling the request by the
-    observed miss converges in two or three solves.
+    The request grid it replaces was a coarse threshold search: it reported the
+    largest *asked* fraction some row happened to meet, not the shed the policy
+    can actually execute.  Here the credit ask is bisected directly and every
+    probe is executed, so the reported number is measured, not requested.
+    ``evaluate`` returns the executed outcome for one plan and decides whether
+    it honoured the deadline and the destination envelope.
     """
-    # Greedy policies answer a credit target with a step function, so bracket
-    # the request and bisect once the proportional step has straddled the goal.
-    ask, best, iterations, previous = goal_w, None, 0, None
-    low, high = 0.0, float("inf")
-    for iterations in range(1, CALIBRATION_STEPS + 1):
-        result = plan(replace(scenario, power_limit_w=initial - ask), profile, {},
-                      solver, seed=seed, destination=architecture,
-                      admission_mode=mode)
-        shed = power.drain_gain([move.session_id for move in result.moves])
-        if best is None or abs(shed - goal_w) < abs(best[1] - goal_w):
-            best = result, shed, ask
-        if not shed or abs(shed - goal_w) <= CALIBRATION_TOLERANCE * goal_w:
-            break
-        # A goal past what the fleet can shed never converges, but that is
-        # only certain once the ask is the whole initial power and the answer
-        # still did not move.  Equal outcomes inside a finite bracket are a
-        # local step of the policy's answer, so keep bisecting through them:
-        # stopping there marks reachable targets missed.
-        if previous is not None \
-                and abs(shed - previous) <= 1e-9 * max(goal_w, 1.0) \
-                and high == float("inf") and ask >= initial - 1e-9:
-            break
-        previous = shed
-        low, high = (ask, high) if shed < goal_w else (low, ask)
-        scaled = ask * goal_w / shed
-        ask = (low + high) / 2 if low < scaled < high and high < float("inf") \
-            else min(max(scaled, 1e-9), initial)
-        if ask <= low or ask >= high:
-            ask = (low + min(high, initial)) / 2
-    return (*best, iterations)
+    low, high, best, probes = 0.0, initial, None, 0
+    for probes in range(1, MAX_SHED_STEPS + 1):
+        ask = (low + high) / 2
+        planned = plan(replace(scenario, power_limit_w=initial - ask), profile,
+                       {}, solver, seed=seed, destination=architecture,
+                       admission_mode=mode)
+        outcome = evaluate(planned, ask)
+        if outcome["within_contract"]:
+            if best is None or outcome["realized_shed_w"] > best[1]["realized_shed_w"]:
+                best = planned, outcome, ask
+            low = ask
+        else:
+            high = ask
+    if best is None:
+        # Nothing the policy plans at any ask executes inside the contracts.
+        return planned, outcome, ask, probes
+    return (*best, probes)
 
 
 def build_fleet(profile, workload, sessions: int, seed: int, deadline_s: float,
@@ -206,10 +197,15 @@ def build_fleet(profile, workload, sessions: int, seed: int, deadline_s: float,
         float(expected_g[j]), records[j].log_bytes, (), True, 0.0, state="active",
         expected_growth_tokens_per_s=0.0) for j in range(sessions))
     fits = json.loads(TIMING.read_text())["fits"]
+    # The measured effective pipeline rate is an instance-to-instance figure,
+    # so one copy of it per region starves a 50k-session fleet by the node
+    # count and vetoes KV transfer outright.  Each source node owns its egress
+    # pipe at that measured rate, which keeps every flow inside the calibrated
+    # bandwidth band while letting fleet egress scale with the fleet.
     links = tuple(NetworkLink(
-        f"pipeline/{region}",
+        f"pipeline/{region}/node-{i}",
         fits[region]["effective_pipeline_mbps"][tier] * 125_000)
-        for region in REGIONS)
+        for region in REGIONS for i in range(node_count))
     scenario = ExecutionScenario(deadline_s, deadline_s, 0.0, "awake", 0.0,
                                  nodes, instances, sessions_tuple, links)
     return scenario, replicas, float(work.sum()), fits
@@ -217,7 +213,7 @@ def build_fleet(profile, workload, sessions: int, seed: int, deadline_s: float,
 
 def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
                        headroom: float, contexts) -> DestinationArchitecture:
-    case = profile.case()
+    case, per_node = profile.case(), profile.gpus_per_node
     fingerprint = CompatibilityFingerprint(profile.model, "gpt-oss-pinned",
                                            "source-dc-log", "lmcache-mp-v7")
 
@@ -256,22 +252,27 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
             f"{ENVELOPE.relative_to(ROOT)} measured offered-RPS envelope",
             True, case.kv_transfer.block_tokens, migration)
         types.append(destination_type)
-        pools.append(DestinationPool(
-            f"pool/{region}", destination_type.type_id,
-            tuple(DestinationReplica(f"{region}-{i}", baseline, 0)
-                  for i in range(replicas)),
-            f"route/{region}", (f"pipeline/{region}",),
-            migration_headroom={method: headroom
-                                for method in ("replay", "kv_transfer")},
+        for node in range(math.ceil(replicas / per_node)):
+            members = range(node * per_node,
+                            min((node + 1) * per_node, replicas))
+            pools.append(DestinationPool(
+                f"pool/{region}/node-{node}", destination_type.type_id,
+                tuple(DestinationReplica(f"{region}-{i}", baseline, 0)
+                      for i in members),
+                f"route/{region}/node-{node}",
+                (f"pipeline/{region}/node-{node}",),
+                migration_headroom={method: headroom
+                                    for method in ("replay", "kv_transfer")},
             # Now that one migration is served at one replica, the fluid service
             # is what applies the measured loaded-service slowdown as the pools
             # fill; coupling stays off because a migration headroom requires it.
-            fluid_migration=FluidMigrationService(
-                1 / factors["replay"],
-                fits[region]["kv_ingest_lower_bound_bytes_per_s"],
-                source_action, sink_action,
-                f"{TIMING.relative_to(ROOT)} regional pipelined timing fit",
-                0, True)))
+                fluid_migration=FluidMigrationService(
+                    1 / factors["replay"],
+                    fits[region]["kv_ingest_lower_bound_bytes_per_s"],
+                    source_action, sink_action,
+                    f"{TIMING.relative_to(ROOT)} regional pipelined timing fit",
+                    0, True),
+                source_affinity=tuple(f"source-{i}" for i in members)))
     return DestinationArchitecture(DESTINATION_SCHEMA, fingerprint, tuple(types),
                                    tuple(pools))
 
@@ -299,111 +300,108 @@ def run_row(row: dict, manifest: dict) -> dict:
     idle = source_power(scenario, profile,
                         [s.session_id for s in scenario.sessions])
     removable = initial - idle
-    goal = row["requested_fraction"] * removable
     seed = stable_seed(row["policy"], row["deadline_s"], row["mode"], row["tier"],
-                       row["rho"], row["requested_fraction"], row["seed"])
-    planned, certified, ask, steps = calibrated_plan(
+                       row["rho"], row["seed"])
+    pool_replicas = {pool.pool_id: len(pool.replicas)
+                     for pool in architecture.pools}
+    baseline_rps = row["rho"] * manifest["envelope"]["normal"]["rps"]
+    per_request = request_work(case).sum()
+    envelope = manifest["envelope"][row["mode"]]["rps"]
+    work_of = {s.session_id: float(
+        s.expected_f / case.prefill.rate(s.context_tokens, 1)
+        + s.expected_g / case.decode.rate(s.context_tokens, 1))
+        for s in scenario.sessions}
+
+    def evaluate(planned, ask):
+        result = execute(replace(scenario, power_limit_w=initial - ask),
+                         profile, planned.moves, destination=architecture)
+        realized = initial - step_average(result.power, row["deadline_s"],
+                                          WINDOW_S)
+        committed = {item.session_id for item in result.sessions
+                     if item.committed_s is not None}
+        landed = {}
+        for move in planned.moves:
+            if move.session_id in committed:
+                landed[move.destination_pool] = landed.get(
+                    move.destination_pool, 0.0) + work_of[move.session_id]
+        # Worst pool decides compliance; the pools are not loaded symmetrically.
+        offered = max((baseline_rps + work / pool_replicas[pool] / per_request
+                       for pool, work in landed.items()), default=baseline_rps)
+        makespan = result.migration_makespan_s
+        by_region = {}
+        for move in planned.moves:
+            if move.session_id in committed:
+                region = move.destination_pool.split("/")[1]
+                by_region[region, move.method] = \
+                    by_region.get((region, move.method), 0) + 1
+        return {
+            "realized_shed_w": realized,
+            "landed_sessions": len(committed),
+            "destination_offered_rps": offered,
+            "within_envelope": offered <= envelope + 1e-9,
+            "migration_makespan_s": makespan,
+            "by_region": by_region,
+            "within_contract": (
+                makespan is not None
+                and makespan <= row["deadline_s"] + 1e-9
+                and offered <= envelope + 1e-9
+                and all(item.within_contract for item in result.pool_service)),
+        }
+
+    planned, outcome, ask, probes = max_shed_plan(
         scenario, profile, architecture, POLICIES[row["policy"]], seed,
-        row["mode"], power, initial, goal)
-    limit = initial - ask
-    scenario = replace(scenario, power_limit_w=limit)
-    shed = initial - planned.planned_source_power_w
+        row["mode"], power, initial, evaluate)
     methods = {method: sum(m.method == method for m in planned.moves)
                for method in ("replay", "kv_transfer")}
     binding = max(planned.resource_uses, key=lambda r: r.utilization,
                   default=None)
-    record = {
+    committed_moves = sum(outcome["by_region"].values())
+    return {
         **row, "git_sha": manifest["git_sha"],
         "planner_seed": seed, "source_replicas": replicas,
         "destination_replicas": replicas * len(REGIONS),
+        "destination_pools": len(architecture.pools),
         "migration_headroom": headroom, "absorbed_fraction": absorbed,
         "initial_source_power_w": initial, "idle_source_power_w": idle,
-        "removable_power_w": removable,
-        "requested_power_w": goal, "credit_target_w": ask,
-        "calibration_steps": steps,
-        "certified_shed_fraction": certified / removable,
-        "planned_shed_w": shed, "planned_shed_fraction": shed / removable,
-        "planned_target_met":
-            certified >= goal * (1 - CALIBRATION_TOLERANCE) - 1e-8,
+        "removable_power_w": removable, "credit_target_w": ask,
+        "max_shed_probes": probes,
+        "planned_shed_w": initial - planned.planned_source_power_w,
         "moves": len(planned.moves), "replay_moves": methods["replay"],
         "kv_moves": methods["kv_transfer"], "solve_s": planned.solve_s,
         "feasible": planned.feasible, "failure_reason": planned.failure_reason or "",
         "binding_resource": binding.name if binding else "",
         "binding_utilization": binding.utilization if binding else 0.0,
-    }
-    if not row["headline"]:
-        return {**record, "realized_shed_w": "", "realized_shed_fraction": "",
-                "target_met": "", "attainment_s": "",
-                "destination_offered_rps": "", "destination_rho": ""}
-    result = execute(scenario, profile, planned.moves, destination=architecture)
-    at_deadline = step_average(result.power, row["deadline_s"], WINDOW_S)
-    realized = initial - at_deadline
-    attained_at = attainment_time(
-        result.power, initial - goal * (1 - CALIBRATION_TOLERANCE), WINDOW_S,
-        row["deadline_s"])
-    committed = {item.session_id for item in result.sessions
-                 if item.committed_s is not None}
-    pool_of = {move.session_id: move.destination_pool for move in planned.moves}
-    landed_work = {}
-    for session in scenario.sessions:
-        if session.session_id not in committed:
-            continue
-        pool = pool_of[session.session_id]
-        landed_work[pool] = landed_work.get(pool, 0.0) + float(
-            session.expected_f / case.prefill.rate(session.context_tokens, 1)
-            + session.expected_g / case.decode.rate(session.context_tokens, 1))
-    baseline_rps = row["rho"] * manifest["envelope"]["normal"]["rps"]
-    per_request = request_work(case).sum()
-    # Worst pool decides compliance; the pools are not loaded symmetrically.
-    offered = max((baseline_rps + work / replicas / per_request
-                   for work in landed_work.values()), default=baseline_rps)
-    within = offered <= manifest["envelope"][row["mode"]]["rps"] + 1e-9
-    return {
-        **record, "realized_shed_w": realized,
-        "realized_shed_fraction": realized / removable,
-        "landed_sessions": len(committed),
-        "attained": attained_at is not None,
-        "within_envelope": within,
-        # Met means legitimately met: the executed power reached the request
-        # by the deadline, the plan was feasible, and the destinations stayed
-        # inside the admission mode's measured envelope.
-        "target_met": attained_at is not None and within and planned.feasible,
-        "attainment_s": attained_at if attained_at is not None else "",
-        "destination_offered_rps": offered,
-        "destination_rho": offered / manifest["envelope"]["normal"]["rps"],
+        "executed_shed_w": outcome["realized_shed_w"],
+        "executed_shed_fraction": outcome["realized_shed_w"] / removable,
+        "landed_sessions": outcome["landed_sessions"],
+        "migration_makespan_s": outcome["migration_makespan_s"] or "",
+        "within_contract": outcome["within_contract"],
+        "within_envelope": outcome["within_envelope"],
+        "destination_offered_rps": outcome["destination_offered_rps"],
+        "destination_rho": outcome["destination_offered_rps"]
+        / manifest["envelope"]["normal"]["rps"],
+        "committed_kv_fraction": (
+            sum(n for (_, m), n in outcome["by_region"].items()
+                if m == "kv_transfer") / committed_moves
+            if committed_moves else 0.0),
+        **{f"{region}_{method}": outcome["by_region"].get((region, method), 0)
+           for region in REGIONS
+           for method in ("replay", "kv_transfer")},
     }
 
 
 def manifest_rows() -> list[dict]:
-    rows = []
-    for deadline in DEADLINES_S:
-        for policy in POLICIES:
-            for target in TARGETS:
-                for mode in ADMISSION_MODES:
-                    for seed in SEEDS:
-                        rows.append({
-                            "deadline_s": float(deadline), "policy": policy,
-                            "requested_fraction": target, "mode": mode,
-                            "tier": "natural", "rho": RHO_DEST, "seed": seed,
-                            "headline": True,
-                        })
-    for deadline in DEADLINES_S:
-        for policy in POLICIES:
-            for target in TARGETS:
-                for tier in TIERS[1:]:
-                    rows.append({
-                        "deadline_s": float(deadline), "policy": policy,
-                        "requested_fraction": target, "mode": "normal",
-                        "tier": tier, "rho": RHO_DEST, "seed": SEEDS[0],
-                        "headline": False,
-                    })
-                for rho in (0.30, 0.40, 0.50):
-                    rows.append({
-                        "deadline_s": float(deadline), "policy": policy,
-                        "requested_fraction": target, "mode": "normal",
-                        "tier": "natural", "rho": rho, "seed": SEEDS[0],
-                        "headline": False,
-                    })
+    rows = [{
+        "deadline_s": float(deadline), "policy": policy, "rho": rho,
+        "mode": "normal", "tier": "natural", "seed": seed, "headline": True,
+    } for deadline in DEADLINES_S for policy in POLICIES for rho in RHOS
+        for seed in SEEDS]
+    rows += [{
+        "deadline_s": float(deadline), "policy": policy, "rho": RHOS[2],
+        "mode": mode, "tier": tier, "seed": SEEDS[0], "headline": False,
+    } for deadline in DEADLINES_S for policy in POLICIES
+        for mode, tier in [(m, "natural") for m in ADMISSION_MODES[1:]]
+        + [("normal", t) for t in TIERS[1:]]]
     return [{**row, "row_id": i} for i, row in enumerate(rows)]
 
 
@@ -490,8 +488,8 @@ def reduce(out: Path) -> dict:
         if row["git_sha"] != manifest["git_sha"]:
             raise RuntimeError(f"row {i} was produced by commit "
                                f"{row['git_sha'][:12]}, not the manifest's")
-        stale = [key for key in ("deadline_s", "policy", "requested_fraction",
-                                 "mode", "tier", "rho", "seed", "headline")
+        stale = [key for key in ("deadline_s", "policy", "mode", "tier",
+                                 "rho", "seed", "headline")
                  if row[key] != str(expected[i][key])]
         if stale:
             raise RuntimeError(f"row {i} does not match the manifest: {stale}")
@@ -506,60 +504,75 @@ def reduce(out: Path) -> dict:
     headline = [row for row in rows if row["headline"] == "True"]
     envelope = manifest["envelope"]["normal"]["rps"]
 
-    # The headline is executed shed, per seed: for each seed the largest
-    # envelope-compliant shed actually attained by the deadline across the
-    # request grid, aggregated over seeds by the median (min/max kept as the
-    # spread).  No single lucky seed and no coarse threshold decides it.
+    # One executed number per (deadline, policy, rho): the median over seeds of
+    # the largest shed that policy actually delivered inside every contract.
     frontier, keys = [], []
     for row in headline:
-        key = (float(row["deadline_s"]), row["policy"], row["mode"])
+        key = (float(row["deadline_s"]), row["policy"], float(row["rho"]))
         if key not in keys:
             keys.append(key)
-    for deadline, policy, mode in sorted(keys):
+    for deadline, policy, rho in sorted(keys):
         group = [row for row in headline
-                 if (float(row["deadline_s"]), row["policy"], row["mode"])
-                 == (deadline, policy, mode)]
-        met = [float(row["requested_fraction"]) for row in group
-               if row["target_met"] == "True"]
-        shed_by_seed, met_by_seed = {}, {}
-        for row in group:
-            seed = int(row["seed"])
-            met_by_seed.setdefault(seed, [])
-            shed_by_seed.setdefault(seed, [(0.0, 0.0)])
-            if row["target_met"] == "True":
-                met_by_seed[seed].append(float(row["requested_fraction"]))
-            if row["within_envelope"] == "True":
-                # removable_power_w is per seed, so compare fractions and
-                # carry each seed's watts alongside.
-                shed_by_seed[seed].append((float(row["realized_shed_fraction"]),
-                                           float(row["realized_shed_w"])))
-        best = [max(values) for values in shed_by_seed.values()]
+                 if (float(row["deadline_s"]), row["policy"], float(row["rho"]))
+                 == (deadline, policy, rho)]
+        shed = [float(row["executed_shed_fraction"])
+                if row["within_contract"] == "True" else 0.0 for row in group]
+        kv = [float(row["committed_kv_fraction"]) for row in group]
         frontier.append({
-            "deadline_s": deadline, "policy": policy, "mode": mode,
-            "cases": len(group), "seeds": len(met_by_seed),
-            "attained_requests": len(met),
-            "attainment_rate": len(met) / len(group),
-            "median_max_requested_met": float(np.median(
-                [max(values, default=0.0) for values in met_by_seed.values()])),
-            "median_executed_shed_fraction": float(np.median(
-                [fraction for fraction, _ in best])),
-            "min_executed_shed_fraction": min(fraction for fraction, _ in best),
-            "max_executed_shed_fraction": max(fraction for fraction, _ in best),
+            "deadline_s": deadline, "policy": policy, "rho": rho,
+            "seeds": len(group),
+            "median_executed_shed_fraction": float(np.median(shed)),
+            "min_executed_shed_fraction": min(shed),
+            "max_executed_shed_fraction": max(shed),
             "median_executed_shed_kw": float(np.median(
-                [watts for _, watts in best])) / 1000,
+                [float(row["executed_shed_w"]) if row["within_contract"] == "True"
+                 else 0.0 for row in group])) / 1000,
+            "median_committed_kv_fraction": float(np.median(kv)),
+            "contracts_met": sum(row["within_contract"] == "True"
+                                 for row in group),
+            **{f"median_{region}_{method}": float(np.median(
+                [float(row[f"{region}_{method}"]) for row in group]))
+               for region in REGIONS
+               for method in ("replay", "kv_transfer")},
+        })
+
+    # The multi-action claim, measured: at each (deadline, rho) how much more
+    # the best flexible policy shed than the best single-action baseline.
+    SINGLE = ("kv_only", "replay_only")
+    advantage = []
+    for deadline, rho in sorted({(k[0], k[2]) for k in keys}):
+        cell = {row["policy"]: row for row in frontier
+                if (row["deadline_s"], row["rho"]) == (deadline, rho)}
+        if not set(SINGLE) <= set(cell):
+            continue
+        best_single = max(cell[p]["median_executed_shed_fraction"] for p in SINGLE)
+        flexible = {p: cell[p]["median_executed_shed_fraction"]
+                    for p in cell if p not in SINGLE}
+        best_flexible = max(flexible.values(), default=0.0)
+        advantage.append({
+            "deadline_s": deadline, "rho": rho,
+            "best_single_action": best_single,
+            "best_flexible": best_flexible,
+            "multi_action_gain": best_flexible - best_single,
+            "best_flexible_policy": max(flexible, key=flexible.get)
+            if flexible else "",
+            "best_flexible_kv_fraction": max(
+                (row["median_committed_kv_fraction"] for row in frontier
+                 if (row["deadline_s"], row["rho"]) == (deadline, rho)
+                 and row["policy"] not in SINGLE), default=0.0),
         })
 
     compliance = [{
         "deadline_s": float(row["deadline_s"]), "policy": row["policy"],
-        "mode": row["mode"], "requested_fraction": float(row["requested_fraction"]),
-        "seed": int(row["seed"]),
+        "mode": row["mode"], "rho": float(row["rho"]), "seed": int(row["seed"]),
         "destination_offered_rps": float(row["destination_offered_rps"]),
         "envelope_rps": manifest["envelope"][row["mode"]]["rps"],
         "within_envelope": row["within_envelope"] == "True",
     } for row in headline]
     breaches = [row for row in compliance
                 if row["mode"] == "normal" and not row["within_envelope"]]
-
+    if advantage:
+        write_csv(out / "multi_action_advantage.csv", advantage)
     write_csv(out / "frontier.csv", frontier)
     write_csv(out / "slo_compliance.csv", compliance)
     sensitivity = [row for row in rows if row["headline"] == "False"]
@@ -570,6 +583,9 @@ def reduce(out: Path) -> dict:
         "schema": SCHEMA, "claim": manifest["claim"],
         "sessions": manifest["sessions"], "envelope": manifest["envelope"],
         "rows": len(rows), "headline_rows": len(headline),
+        "rho_grid": list(RHOS),
+        "max_multi_action_gain": max(
+            (row["multi_action_gain"] for row in advantage), default=0.0),
         "normal_mode_envelope_breaches": len(breaches),
         "inputs": manifest["inputs"], "git_sha": manifest["git_sha"],
         "limitations": [
@@ -623,21 +639,29 @@ def reduce(out: Path) -> dict:
     (out / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n")
 
-    normal = [row for row in frontier if row["mode"] == "normal"]
+    headline_rho = RHOS[2]
+    shown = [row for row in frontier if row["rho"] == headline_rho]
     table = "\n".join(
         f"| {row['deadline_s']:.0f} | {row['policy']} | "
         f"{row['median_executed_shed_fraction']:.0%} | "
         f"{row['median_executed_shed_kw']:.1f} | "
-        f"{row['median_max_requested_met']:.0%} |" for row in normal)
+        f"{row['median_committed_kv_fraction']:.0%} |" for row in shown)
+    gains = "\n".join(
+        f"| {row['deadline_s']:.0f} | {row['rho']:.2f} | "
+        f"{row['best_single_action']:.0%} | {row['best_flexible']:.0%} | "
+        f"{row['multi_action_gain']:+.1%} |" for row in advantage
+        if row["rho"] == headline_rho)
     (out / "README.md").write_text(
         f"# Fleet shed frontier, {manifest['sessions']:,} sessions\n\n"
         f"One shedding source site ({manifest['source_site']}) and two equally "
         f"sized destination sites ({', '.join(manifest['sites'].values())}), "
-        f"gpt-oss-20b on A100. Each row requests a fraction of removable source "
-        f"power and is scored on whether it attained that request by the "
-        f"deadline; the headline is the median over seeds of each seed's "
-        f"largest executed shed attained by the deadline among "
-        f"envelope-compliant rows.\n\n"
+        f"gpt-oss-20b on A100. Each source node owns its egress pipe at the "
+        f"measured per-pipeline rate, and reaches only the destination pools "
+        f"its own path serves.\n\n"
+        f"Every cell reports the **largest shed the policy actually executed** "
+        f"inside every contract: committed by the deadline, destinations "
+        f"within the measured offered-RPS envelope, and pool service contracts "
+        f"honoured. Seeds are aggregated by the median.\n\n"
         f"Destination admission is capped at the measured "
         f"{envelope:g} offered RPS per replica, the last swept rate whose "
         f"median p90 TTFT meets the {manifest['envelope']['normal']['ttft_slo_s']} s "
@@ -645,9 +669,12 @@ def reduce(out: Path) -> dict:
         f"{len(breaches)} exceeded that envelope under normal admission.\n\n"
         f"Power is accelerator-scoped: the sum of a measured per-GPU curve over "
         f"the modeled fleet. No facility, cooling, or host power is claimed.\n\n"
+        f"## Executed shed at rho={headline_rho}\n\n"
         f"| Deadline (s) | Policy | Median executed shed | Median shed (kW) "
-        f"| Median max request met |\n"
-        f"|---|---|---|---|---|\n{table}\n")
+        f"| KV share of commits |\n|---|---|---|---|---|\n{table}\n\n"
+        f"## What multiple actions buy at rho={headline_rho}\n\n"
+        f"| Deadline (s) | rho | Best single action | Best flexible | Gain |\n"
+        f"|---|---|---|---|---|\n{gains}\n" if gains else "")
     return summary
 
 
