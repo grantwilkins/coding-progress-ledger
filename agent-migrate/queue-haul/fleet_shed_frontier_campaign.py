@@ -54,16 +54,6 @@ POLICIES = {
     "replay_only": "replay_only",
 }
 ADMISSION_MODES = ("normal", "emergency")
-# Requested fractions of removable source power.  Every campaign in this repo
-# asks for an attainable fraction and measures attainment; asking for the idle
-# floor instead drives the target-first LP into its infeasible fallback, where a
-# linear credit model over a concave curve has no reason to beat greedy.
-#
-# The grid stops below 1.00 deliberately: requesting the whole removable band
-# sets the limit exactly at the idle floor, which only a full evacuation reaches,
-# so that row alone lands back in the infeasible fallback and its attainment is
-# decided by float tolerance rather than by the plan.  It runs to 0.99 so the
-# frontier top is set by capacity, not by the grid.
 # Destination scarcity is the headline axis: migration headroom is what is
 # left of a replica after its own baseline load and the source demand it must
 # absorb, so rho sets how much room the destinations have to accept migration
