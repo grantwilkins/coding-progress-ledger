@@ -73,11 +73,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.745,
     "bandwidth-dest_compute-hbm/hbm": 0.905,
-    "bandwidth-dest_compute/bandwidth": 0.0,
+    "bandwidth-dest_compute/bandwidth": 0.031,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.0,
+    "bandwidth/bandwidth": 0.618,
     "dest_compute-hbm/dest_compute": 0.744,
     "dest_compute-hbm/hbm": 0.902,
     "dest_compute/dest_compute": 1.0,
@@ -101,11 +101,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.5,
     "bandwidth-dest_compute-hbm/hbm": 0.804,
-    "bandwidth-dest_compute/bandwidth": 0.0,
+    "bandwidth-dest_compute/bandwidth": 0.031,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.0,
+    "bandwidth/bandwidth": 0.618,
     "dest_compute-hbm/dest_compute": 0.5,
     "dest_compute-hbm/hbm": 0.804,
     "dest_compute/dest_compute": 1.0,
@@ -116,13 +116,13 @@
     "bandwidth-dest_compute-hbm/dest_compute": 0.61,
     "bandwidth-dest_compute-hbm/hbm": 0.58,
     "bandwidth-dest_compute/bandwidth": 0.0,
-    "bandwidth-dest_compute/dest_compute": 0.822,
+    "bandwidth-dest_compute/dest_compute": 0.817,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 0.716,
     "bandwidth/bandwidth": 0.0,
     "dest_compute-hbm/dest_compute": 0.603,
-    "dest_compute-hbm/hbm": 0.556,
-    "dest_compute/dest_compute": 0.819,
+    "dest_compute-hbm/hbm": 0.555,
+    "dest_compute/dest_compute": 0.818,
     "hbm/hbm": 0.715
   },
   "inputs": {
@@ -186,10 +186,10 @@
       },
       "selected": {
         "above": 0,
-        "below": 8167,
-        "denominator": 74537,
-        "outside": 8167,
-        "outside_rate": 0.10956974388558702
+        "below": 8328,
+        "denominator": 74430,
+        "outside": 8328,
+        "outside_rate": 0.11189036678758565
       }
     },
     "context": {
@@ -201,11 +201,11 @@
         "outside_rate": 0.38988135260103646
       },
       "selected": {
-        "above": 4810,
-        "below": 16897,
-        "denominator": 74537,
-        "outside": 21707,
-        "outside_rate": 0.2912244925339093
+        "above": 4727,
+        "below": 16895,
+        "denominator": 74430,
+        "outside": 21622,
+        "outside_rate": 0.29050114201262933
       },
       "sessions": {
         "above": 10787,
@@ -219,16 +219,16 @@
       "kv_transfer": {
         "bandwidth_outside": 0,
         "bandwidth_outside_rate": 0.0,
-        "context_outside": 4547,
-        "context_outside_rate": 0.3557902973395931,
-        "denominator": 12780
+        "context_outside": 4523,
+        "context_outside_rate": 0.354439307264321,
+        "denominator": 12761
       },
       "replay": {
-        "bandwidth_outside": 8167,
-        "bandwidth_outside_rate": 0.13224411807568373,
-        "context_outside": 17160,
-        "context_outside_rate": 0.2778632381754295,
-        "denominator": 61757
+        "bandwidth_outside": 8328,
+        "bandwidth_outside_rate": 0.13504353889312296,
+        "context_outside": 17099,
+        "context_outside_rate": 0.2772705897614685,
+        "denominator": 61669
       }
     }
   },
@@ -276,11 +276,11 @@
     }
   },
   "mean_phase_load_share": {
-    "kv_transfer": 0.12870168611864222,
-    "not_moved": 0.2162940636226597,
-    "replay": 0.655004250258698
+    "kv_transfer": 0.12882026147613002,
+    "not_moved": 0.21642634068491753,
+    "replay": 0.6547533978389525
   },
-  "migration_horizon_s": 60,
+  "migration_horizon_s": 41,
   "minimum_single_factor_action_response_rate": 0.1,
   "oat_action_sweeps": {
     "action_metric": "source-session share at each OAT level",
@@ -306,11 +306,11 @@
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 374,
+    "shortfall_regression_count": 379,
     "shortfall_regression_max_w": 17.68911389159618,
     "shortfall_regression_median_w": 2.552484443457729,
-    "shortfall_regression_p90_w": 8.480981182224612,
-    "shortfall_regression_rate": 0.031166666666666665,
+    "shortfall_regression_p90_w": 8.560202296090544,
+    "shortfall_regression_rate": 0.03158333333333333,
     "target_loss_count": 0,
     "target_loss_rate": 0.0
   },
@@ -355,9 +355,9 @@
   "schema": "queue-haul-workload-adaptation-v8",
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 12780,
-    "not_moved": 149463,
-    "replay": 61757
+    "kv_transfer": 12761,
+    "not_moved": 149570,
+    "replay": 61669
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
@@ -383,10 +383,10 @@
         },
         "selected": {
           "above": 0,
-          "below": 5628,
-          "denominator": 62555,
-          "outside": 5628,
-          "outside_rate": 0.08996882743185997
+          "below": 5645,
+          "denominator": 62550,
+          "outside": 5645,
+          "outside_rate": 0.09024780175859312
         }
       },
       "context": {
@@ -400,7 +400,7 @@
         "selected": {
           "above": 0,
           "below": 0,
-          "denominator": 62555,
+          "denominator": 62550,
           "outside": 0,
           "outside_rate": 0.0
         },
@@ -418,21 +418,21 @@
           "bandwidth_outside_rate": 0.0,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 12079
+          "denominator": 12078
         },
         "replay": {
-          "bandwidth_outside": 5628,
-          "bandwidth_outside_rate": 0.11149853395673191,
+          "bandwidth_outside": 5645,
+          "bandwidth_outside_rate": 0.11184419083848471,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 50476
+          "denominator": 50472
         }
       }
     },
     "selected_session_totals": {
-      "kv_transfer": 12079,
-      "not_moved": 161445,
-      "replay": 50476
+      "kv_transfer": 12078,
+      "not_moved": 161450,
+      "replay": 50472
     },
     "target_met_rate": {
       "All bound": 0.779,

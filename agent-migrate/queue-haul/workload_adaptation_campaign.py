@@ -1068,9 +1068,15 @@ def plot_oat(rows, path):
 
     fs = plot_style.HALF_COLUMN_FONT_SIZE
     legend_fs = plot_style.HALF_COLUMN_LEGEND_FONT_SIZE
-    col_w, col_h = 3.33, 2.2
-    for sweep_i, sweep in enumerate(("bandwidth", "prefill")):
-        fig, ax = plt.subplots(figsize=(col_w, col_h))
+    left, axes_w, axes_h, bottom, top = .47, .82, .92, .27, .06
+    legend_w, right = .64, .09
+    for sweep in ("bandwidth", "prefill"):
+        wide = sweep == "prefill"
+        fig_w = left + axes_w + (legend_w if wide else right)
+        fig_h = bottom + axes_h + top
+        fig = plt.figure(figsize=(fig_w, fig_h))
+        ax = fig.add_axes((left / fig_w, bottom / fig_h,
+                           axes_w / fig_w, axes_h / fig_h))
         selected = [row for row in rows if row["sweep"] == sweep]
         levels = sorted({row["level"] for row in selected})
         by_action = {action: {row["level"]: row for row in selected
@@ -1088,27 +1094,27 @@ def plot_oat(rows, path):
             artist.set_edgecolor("white")
             artist.set_linewidth(.3)
         ax.set(
-            xlabel=("Shared bandwidth cap (Gbit/s)" if sweep == "bandwidth"
-                    else "Available prefill throughput (ktoken/s)"),
+            xlabel=("Bandwidth (Gbit/s)" if sweep == "bandwidth"
+                    else "Prefill (k·token/s)"),
             xlim=(x[0], x[-1]), ylim=(0, 1),
         )
         ax.margins(0)
         ax.set_ylabel("Sessions (%)")
         ax.yaxis.set_major_formatter(PercentFormatter(1))
         ax.yaxis.set_major_locator(plt.MultipleLocator(.25))
+        ax.xaxis.set_major_locator(plt.MultipleLocator(5))
         plot_style.half_column(ax)
         ax.xaxis.label.set_size(fs)
         ax.yaxis.label.set_size(fs)
-        if sweep_i == 1:
-            handles, labels = ax.get_legend_handles_labels()
-            ax.legend(handles, labels, fontsize=legend_fs,
-                      loc="center right", handlelength=1.2, handletextpad=.4,
-                      borderpad=.4, labelspacing=.3, frameon=False)
-        fig.tight_layout(pad=.3)
-        suffix = "bandwidth" if sweep == "bandwidth" else "prefill"
-        fig.savefig(path.parent / f"action_choice_oat_{suffix}.png",
-                    dpi=plot_style.SAVE_DPI)
-        fig.savefig(path.parent / f"action_choice_oat_{suffix}.pdf")
+        ax.xaxis.labelpad = ax.yaxis.labelpad = 2
+        if wide:
+            ax.legend(*ax.get_legend_handles_labels(), fontsize=legend_fs,
+                      loc="center left", bbox_to_anchor=(1.02, .5),
+                      handlelength=.9, handletextpad=.3, labelspacing=.4,
+                      borderaxespad=0, borderpad=0, frameon=False)
+        for suffix in ("png", "pdf"):
+            fig.savefig(path.parent / f"action_choice_oat_{sweep}.{suffix}",
+                        dpi=plot_style.SAVE_DPI)
         plt.close(fig)
 
 
