@@ -139,26 +139,6 @@
     "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe",
     "outputs/timing-power-validation-20260814/timing-summary.json": "0f45a8d659aacf5d4af8bb04873795d3c9de092d1f2df15d969c8f469a8d9b1e"
   },
-  "oat_action_sweeps": {
-    "action_metric": "source-session share at each OAT level",
-    "bandwidth_cap_gbps": [
-      1.0,
-      8.733313595885829
-    ],
-    "fixed_bandwidth_cap_gbps": 4.866656797942914,
-    "fixed_prefill_available_tps": 2335.7636529710326,
-    "levels": 20,
-    "paired_draws": 50,
-    "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
-    "prefill_available_tps": [
-      291.9704566213793,
-      4379.556849320686
-    ],
-    "prefill_full_rate_tps": 5839.4091324275805,
-    "prefill_reference_tokens": 7680,
-    "samples_per_sweep": 1000,
-    "sessions_per_pack": 28
-  },
   "limitations": [
     "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
     "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
@@ -298,11 +278,31 @@
   },
   "mean_phase_load_share": {
     "kv_transfer": 0.1300837832910973,
-    "not_moved": 0.21678653561169664,
-    "replay": 0.653129681097206
+    "not_moved": 0.2167865356116966,
+    "replay": 0.6531296810972061
   },
   "migration_horizon_s": 25,
   "minimum_single_factor_action_response_rate": 0.1,
+  "oat_action_sweeps": {
+    "action_metric": "source-session share at each OAT level",
+    "bandwidth_cap_gbps": [
+      0.1,
+      8.733313595885829
+    ],
+    "fixed_bandwidth_cap_gbps": 4.416656797942915,
+    "fixed_prefill_available_tps": 2802.9163835652384,
+    "levels": 20,
+    "paired_draws": 50,
+    "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
+    "prefill_available_tps": [
+      58.394091324275855,
+      5547.438675806201
+    ],
+    "prefill_full_rate_tps": 5839.4091324275805,
+    "prefill_reference_tokens": 7680,
+    "samples_per_sweep": 1000,
+    "sessions_per_pack": 28
+  },
   "planner_objective_cost": "sum of isolated candidate durations; endpoint replica-seconds remain a separate physical capacity row",
   "planner_release_audit": {
     "comparisons": 12000,
@@ -467,7 +467,7 @@
       "false_feasible_at_25s": 19,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.872177917467015,
-      "p90_absolute_relative_error": 0.42923939993387067,
+      "p90_absolute_relative_error": 0.4292393999338707,
       "scenarios": 96,
       "underprediction_rate": 0.7708333333333334
     },
@@ -475,7 +475,7 @@
       "false_feasible_at_25s": 14,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.9109777718834491,
-      "p90_absolute_relative_error": 0.5628782021214593,
+      "p90_absolute_relative_error": 0.5628782021214596,
       "scenarios": 48,
       "underprediction_rate": 0.8125
     },
