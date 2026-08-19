@@ -31,12 +31,12 @@
   "bandwidth_projection_region_rate": 0.115,
   "candidate_method_dominance": {
     "candidate_equivalent": 0,
-    "candidate_incomparable": 97434,
+    "candidate_incomparable": 35963,
     "candidate_kv_dominates": 0,
     "candidate_kv_only": 0,
     "candidate_matched_pairs": 386692,
     "candidate_neither": 61308,
-    "candidate_replay_dominates": 289258,
+    "candidate_replay_dominates": 350729,
     "candidate_replay_only": 0
   },
   "candidate_method_dominance_definition": {
@@ -74,11 +74,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.745,
     "bandwidth-dest_compute-hbm/hbm": 0.905,
-    "bandwidth-dest_compute/bandwidth": 0.089,
+    "bandwidth-dest_compute/bandwidth": 0.118,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.92,
+    "bandwidth/bandwidth": 0.97,
     "dest_compute-hbm/dest_compute": 0.744,
     "dest_compute-hbm/hbm": 0.902,
     "dest_compute/dest_compute": 1.0,
@@ -102,11 +102,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.5,
     "bandwidth-dest_compute-hbm/hbm": 0.804,
-    "bandwidth-dest_compute/bandwidth": 0.089,
+    "bandwidth-dest_compute/bandwidth": 0.118,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.92,
+    "bandwidth/bandwidth": 0.97,
     "dest_compute-hbm/dest_compute": 0.5,
     "dest_compute-hbm/hbm": 0.804,
     "dest_compute/dest_compute": 1.0,
@@ -116,14 +116,14 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.61,
     "bandwidth-dest_compute-hbm/hbm": 0.58,
-    "bandwidth-dest_compute/bandwidth": 0.006,
-    "bandwidth-dest_compute/dest_compute": 0.816,
+    "bandwidth-dest_compute/bandwidth": 0.0,
+    "bandwidth-dest_compute/dest_compute": 0.811,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 0.716,
-    "bandwidth/bandwidth": 0.001,
+    "bandwidth/bandwidth": 0.0,
     "dest_compute-hbm/dest_compute": 0.603,
     "dest_compute-hbm/hbm": 0.556,
-    "dest_compute/dest_compute": 0.814,
+    "dest_compute/dest_compute": 0.813,
     "hbm/hbm": 0.715
   },
   "inputs": {
@@ -187,10 +187,10 @@
       },
       "selected": {
         "above": 0,
-        "below": 8406,
-        "denominator": 73803,
-        "outside": 8406,
-        "outside_rate": 0.11389780903215316
+        "below": 8466,
+        "denominator": 73716,
+        "outside": 8466,
+        "outside_rate": 0.11484616636822399
       }
     },
     "context": {
@@ -202,11 +202,11 @@
         "outside_rate": 0.38988135260103646
       },
       "selected": {
-        "above": 4226,
+        "above": 4172,
         "below": 16894,
-        "denominator": 73803,
-        "outside": 21120,
-        "outside_rate": 0.2861672289744319
+        "denominator": 73716,
+        "outside": 21066,
+        "outside_rate": 0.28577242389711865
       },
       "sessions": {
         "above": 10787,
@@ -220,16 +220,16 @@
       "kv_transfer": {
         "bandwidth_outside": 0,
         "bandwidth_outside_rate": 0.0,
-        "context_outside": 4466,
-        "context_outside_rate": 0.3493702573730736,
-        "denominator": 12783
+        "context_outside": 4339,
+        "context_outside_rate": 0.34513203945275217,
+        "denominator": 12572
       },
       "replay": {
-        "bandwidth_outside": 8406,
-        "bandwidth_outside_rate": 0.13775811209439529,
-        "context_outside": 16654,
-        "context_outside_rate": 0.27292690921009505,
-        "denominator": 61020
+        "bandwidth_outside": 8466,
+        "bandwidth_outside_rate": 0.1384600287845087,
+        "context_outside": 16727,
+        "context_outside_rate": 0.27356731649875704,
+        "denominator": 61144
       }
     }
   },
@@ -277,9 +277,9 @@
     }
   },
   "mean_phase_load_share": {
-    "kv_transfer": 0.1300837832910973,
-    "not_moved": 0.2167865356116966,
-    "replay": 0.6531296810972061
+    "kv_transfer": 0.12905523152664428,
+    "not_moved": 0.21689892498914423,
+    "replay": 0.6540458434842115
   },
   "migration_horizon_s": 25,
   "minimum_single_factor_action_response_rate": 0.1,
@@ -307,11 +307,11 @@
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 395,
+    "shortfall_regression_count": 393,
     "shortfall_regression_max_w": 17.68911389159618,
-    "shortfall_regression_median_w": 2.6499346720210326,
-    "shortfall_regression_p90_w": 8.683136633224832,
-    "shortfall_regression_rate": 0.032916666666666664,
+    "shortfall_regression_median_w": 2.7794093564678235,
+    "shortfall_regression_p90_w": 9.087656346063769,
+    "shortfall_regression_rate": 0.03275,
     "target_loss_count": 0,
     "target_loss_rate": 0.0
   },
@@ -356,9 +356,9 @@
   "schema": "queue-haul-workload-adaptation-v8",
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 12783,
-    "not_moved": 150197,
-    "replay": 61020
+    "kv_transfer": 12572,
+    "not_moved": 150284,
+    "replay": 61144
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
@@ -384,10 +384,10 @@
         },
         "selected": {
           "above": 0,
-          "below": 5752,
-          "denominator": 62446,
-          "outside": 5752,
-          "outside_rate": 0.09211158440892932
+          "below": 5762,
+          "denominator": 62439,
+          "outside": 5762,
+          "outside_rate": 0.09228206729768254
         }
       },
       "context": {
@@ -401,7 +401,7 @@
         "selected": {
           "above": 0,
           "below": 0,
-          "denominator": 62446,
+          "denominator": 62439,
           "outside": 0,
           "outside_rate": 0.0
         },
@@ -419,21 +419,21 @@
           "bandwidth_outside_rate": 0.0,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 12139
+          "denominator": 12087
         },
         "replay": {
-          "bandwidth_outside": 5752,
-          "bandwidth_outside_rate": 0.11433796489554138,
+          "bandwidth_outside": 5762,
+          "bandwidth_outside_rate": 0.1144343819510645,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 50307
+          "denominator": 50352
         }
       }
     },
     "selected_session_totals": {
-      "kv_transfer": 12139,
-      "not_moved": 161554,
-      "replay": 50307
+      "kv_transfer": 12087,
+      "not_moved": 161561,
+      "replay": 50352
     },
     "target_met_rate": {
       "All bound": 0.779,
@@ -580,7 +580,7 @@
   "target_met_rate": {
     "All bound": 0.47,
     "Bandwidth": 0.996,
-    "Bandwidth + compute": 0.618,
+    "Bandwidth + compute": 0.617,
     "Dest. compute": 0.618,
     "HBM": 0.603,
     "HBM + bandwidth": 0.603,
