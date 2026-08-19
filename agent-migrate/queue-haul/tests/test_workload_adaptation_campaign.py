@@ -147,17 +147,17 @@ def test_oat_axes_are_absolute_and_contain_factorial_endpoints():
 
     assert bandwidths == pytest.approx(np.linspace(
         campaign.OAT_BANDWIDTH_LOWER_MBPS,
-        max(campaign.physical_route_mbps().values()), 5))
+        campaign.OAT_BANDWIDTH_UPPER_MBPS, 5))
     assert prefills == pytest.approx(np.linspace(
         (1 - campaign.OAT_DEST_COMPUTE[1]) * rate,
-        (1 - campaign.OAT_DEST_COMPUTE[0]) * rate, 5))
+        campaign.OAT_PREFILL_UPPER_TPS, 5))
     assert fixed_bandwidth == pytest.approx(np.median(bandwidths))
     assert fixed_prefill == pytest.approx(np.median(prefills))
     loads = campaign.LEVELS["dest_compute"]
     assert bandwidths[0] < campaign.BANDWIDTH_BOTTLENECK_MBPS
-    assert bandwidths[-1] >= max(campaign.physical_route_mbps().values()) - 1e-6
+    assert bandwidths[-1] > max(campaign.physical_route_mbps().values())
     assert prefills[0] < (1 - loads[1]) * rate
-    assert prefills[-1] > (1 - loads[0]) * rate
+    assert prefills[-1] > rate
 
     for point in ((bandwidths[0], prefills[0]), (bandwidths[-1], prefills[-1])):
         campaign.build_problem(
