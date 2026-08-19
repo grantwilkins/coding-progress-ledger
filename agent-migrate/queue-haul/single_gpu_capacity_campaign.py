@@ -170,6 +170,9 @@ def gpu_snapshot(expected: str = "A100") -> dict:
 
 
 def stack_commands(cfg: testbed.Config) -> dict[str, list[str]]:
+    if cfg.matched_prefill:
+        return {"vllm": list(map(str, testbed.vllm_cmd(
+            cfg, "sink", [], gpu_index=0, kv_transfer=False)))}
     return {
         "redis": list(map(str, testbed.redis_cmd(cfg))),
         "cache": list(map(str, testbed.mp_server_cmd(
@@ -250,6 +253,26 @@ def engine_stack(cfg: testbed.Config, root: Path, identity: dict,
     if testbed.lmcache_mode() != "mp" or not testbed.prefix_caching():
         raise RuntimeError("capacity discovery requires the pinned MP/APC stack")
     testbed.preflight(cfg, required_gpus=1)
+    if cfg.matched_prefill:
+        if not testbed.port_free(cfg.host, cfg.sink_port):
+            raise RuntimeError(f"capacity-discovery port is busy: {cfg.sink_port}")
+        root.mkdir(parents=True, exist_ok=True)
+        engine = testbed.start_logged(commands["vllm"], root / "sink.log")
+        try:
+            testbed.wait_health_process(cfg.host, cfg.sink_port,
+                                        testbed.health_timeout(), engine,
+                                        root / "sink.log")
+            server_info = http_json(cfg.host, cfg.sink_port,
+                                    "/server_info?config_format=json")
+            write_json(root / "server-info.json", server_info)
+            testbed.validate_model_runtime_log(
+                cfg, testbed.read_text(root / "sink.log"), server_info)
+            yield SimpleNamespace(port=cfg.sink_port, engine=engine,
+                                  log=root / "sink.log",
+                                  server_info=server_info, identity=identity)
+        finally:
+            testbed.stop_proc(engine)
+        return
     for port in (cfg.sink_port, cfg.lmc_port, cfg.sink_lmc_port,
                  cfg.sink_lmc_http_port):
         if not testbed.port_free(cfg.host, port):

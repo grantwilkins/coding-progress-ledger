@@ -501,7 +501,8 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
 def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
              gpu_index: int | None = None,
              bind_host: str | None = None,
-             sleep_mode: bool | None = None) -> list[str]:
+             sleep_mode: bool | None = None,
+             kv_transfer: bool = True) -> list[str]:
     validate_model_runtime(cfg)
     reject_duplicate_extra(extra or [])
     if role == "source":
@@ -554,8 +555,8 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
            *([] if (cfg.architecture_campaign or cfg.capacity_discovery)
              else ["--disable-hybrid-kv-cache-manager"]),
            "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
-        "--kv-transfer-config",
-        kv_config(engine_id, kv_role, kv_port, rpc_port),
+        *(["--kv-transfer-config", kv_config(
+            engine_id, kv_role, kv_port, rpc_port)] if kv_transfer else []),
         *(extra or []),
     ]
     script = "\n".join([f"mkdir -p {dirs}", *vllm_exports(cfg, cache_role, remote_url), shell(serve)])

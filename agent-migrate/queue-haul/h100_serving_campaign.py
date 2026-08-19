@@ -69,7 +69,7 @@ def make_plan_unchecked(seed: int, hardware: str = "h100") -> dict:
             "kv_cache_dtype": "auto", "max_model_len": 32768,
             "max_num_seqs": 256, "gpu_memory_utilization": .9,
             "chunked_prefill": True, "prefix_caching": True,
-            "enforce_eager": False,
+            "enforce_eager": False, "kv_transfer": False,
         },
         "prefill": {"output_tokens": 1, "cells": cells()},
         "rps_plan": rps.make_plan(seed, hardware),

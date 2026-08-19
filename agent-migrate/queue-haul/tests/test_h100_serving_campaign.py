@@ -47,6 +47,14 @@ def test_matched_prefill_uses_the_same_scheduler_budget_for_every_model():
                for hardware in ("a100", "h100"))
 
 
+def test_matched_prefill_does_not_start_an_unused_kv_connector():
+    command = campaign.capacity.stack_commands(
+        campaign.config("Qwen/Qwen3.8-27B", "h100"))
+
+    assert set(command) == {"vllm"}
+    assert "--kv-transfer-config" not in " ".join(command["vllm"])
+
+
 def test_optimized_runtime_requires_compilation_and_cuda_graphs():
     testbed.validate_h100_optimized_runtime(
         "vllm serve model", "torch.compile finished; CUDA graphs captured")
