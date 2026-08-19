@@ -1068,7 +1068,7 @@ def plot_oat(rows, path):
 
     fs = plot_style.HALF_COLUMN_FONT_SIZE
     legend_fs = plot_style.HALF_COLUMN_LEGEND_FONT_SIZE
-    col_w, col_h = 3.33, 2.0
+    col_w, col_h = 3.33, 2.2
     for sweep_i, sweep in enumerate(("bandwidth", "prefill")):
         fig, ax = plt.subplots(figsize=(col_w, col_h))
         selected = [row for row in rows if row["sweep"] == sweep]
@@ -1086,10 +1086,12 @@ def plot_oat(rows, path):
         )
         for artist in artists:
             artist.set_edgecolor("white")
-            artist.set_linewidth(.4)
+            artist.set_linewidth(.3)
+        ax.plot(x, [row["target_met_rate"] for row in points], color="white",
+                linewidth=2.4, zorder=4)
         ax.plot(x, [row["target_met_rate"] for row in points], color="black",
-                marker="o", markersize=2, linewidth=1.2,
-                label="Full-shed target attained")
+                marker="o", markersize=2.5, linewidth=1.0, zorder=5,
+                label="Target attained", linestyle="--")
         ax.set(
             xlabel=("Shared bandwidth cap (Gbit/s)" if sweep == "bandwidth"
                     else "Available prefill throughput (ktoken/s)"),
@@ -1098,6 +1100,7 @@ def plot_oat(rows, path):
         ax.margins(0)
         ax.set_ylabel("Sessions (%)")
         ax.yaxis.set_major_formatter(PercentFormatter(1))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(.25))
         plot_style.half_column(ax)
         ax.xaxis.label.set_size(fs)
         ax.yaxis.label.set_size(fs)
