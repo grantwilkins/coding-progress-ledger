@@ -1066,10 +1066,9 @@ def plot_action_boxplot(rows, path):
 def plot_oat(rows, path):
     from matplotlib.ticker import PercentFormatter
 
-    fs = plot_style.HALF_COLUMN_FONT_SIZE
-    legend_fs = plot_style.HALF_COLUMN_LEGEND_FONT_SIZE
-    left, axes_w, axes_h, bottom, top = .47, .82, .92, .27, .06
-    legend_w, right = .64, .09
+    fs, legend_fs = 8, 7
+    left, axes_w, axes_h, bottom, top = .42, .80, 1.05, .30, .06
+    legend_w, right = .68, .13
     for sweep in ("bandwidth", "prefill"):
         wide = sweep == "prefill"
         fig_w = left + axes_w + (legend_w if wide else right)
@@ -1100,10 +1099,10 @@ def plot_oat(rows, path):
         )
         ax.margins(0)
         ax.set_ylabel("Sessions (%)")
-        ax.yaxis.set_major_formatter(PercentFormatter(1))
+        ax.yaxis.set_major_formatter(PercentFormatter(1, symbol=""))
         ax.yaxis.set_major_locator(plt.MultipleLocator(.25))
         ax.xaxis.set_major_locator(plt.MultipleLocator(5))
-        plot_style.half_column(ax)
+        ax.tick_params(labelsize=fs, length=2, pad=1)
         ax.xaxis.label.set_size(fs)
         ax.yaxis.label.set_size(fs)
         ax.xaxis.labelpad = ax.yaxis.labelpad = 2
