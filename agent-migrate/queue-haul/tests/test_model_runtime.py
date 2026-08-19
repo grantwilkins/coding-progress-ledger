@@ -43,6 +43,9 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
     assert {(cfg.max_model_len, cfg.max_num_seqs, cfg.architecture_campaign)
             for cfg in configs.values()} == {(32768, 8, True)}
 
+    assert testbed.model_spec("openai/gpt-oss-20b").vllm_args == (
+        "--hf-overrides", '{"allow_global_per_layer_attribute_access":true}')
+
     qwen = configs["Qwen/Qwen3.8-27B"]
     qwen_vllm = testbed.shell(testbed.vllm_cmd(qwen, "source"))
     qwen_cache = testbed.shell(testbed.mp_server_cmd(qwen, "source"))
