@@ -237,6 +237,15 @@ def model_spec(model: str) -> ModelSpec:
     return MODEL_SPECS[model]
 
 
+def model_vllm_args(cfg: Config) -> tuple[str, ...]:
+    args = model_spec(cfg.model).vllm_args
+    if cfg.model == "google/gemma-4-26B-A4B-it" \
+            and expected_runtime_versions()[0] == "0.24.0":
+        args += ("--hf-overrides", json.dumps({"text_config": {
+            "allow_global_per_layer_attribute_access": True}}))
+    return args
+
+
 def model_path(cfg: Config) -> Path:
     return model_snapshot_dir(cfg.hf_home, cfg.model) / model_spec(cfg.model).revision
 
@@ -517,7 +526,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         cfg.max_num_seqs,
         "--max-num-batched-tokens",
         cfg.max_num_batched_tokens,
-        *(["--dtype", "bfloat16", *spec.vllm_args]
+        *(["--dtype", "bfloat16", *model_vllm_args(cfg)]
           if (cfg.architecture_campaign or cfg.capacity_discovery) else []),
         "--kv-cache-dtype",
         "auto",

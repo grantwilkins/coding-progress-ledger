@@ -72,6 +72,19 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
         assert "speculative" not in command
 
 
+def test_gemma_024_compatibility_is_runtime_scoped(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    gemma = testbed.model_campaign_config("google/gemma-4-26B-A4B-it")
+    assert "allow_global_per_layer_attribute_access" not in testbed.shell(
+        testbed.vllm_cmd(gemma, "source"))
+
+    monkeypatch.setenv("QH_NATIVE_RUNTIME_VERSIONS", "0.24.0,0.5.1")
+    command = testbed.shell(testbed.vllm_cmd(gemma, "source"))
+    assert "allow_global_per_layer_attribute_access" in command
+    assert "text_config" in command
+
+
 def test_campaign_rejects_drift_before_launch():
     qwen = testbed.model_campaign_config("Qwen/Qwen3.8-27B")
 
