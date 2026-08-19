@@ -14,6 +14,7 @@ def test_plan_pins_target_models_three_prefill_repeats_and_h100_runtime():
     plan = campaign.make_plan(7)
 
     assert plan["models"] == list(campaign.MODELS)
+    assert "openai/gpt-oss-20b" in campaign.PREFILL_MODELS
     assert not plan["runtime"]["enforce_eager"]
     assert plan["rps_plan"]["hardware"] == "h100"
     assert len(plan["prefill"]["cells"]) == 27

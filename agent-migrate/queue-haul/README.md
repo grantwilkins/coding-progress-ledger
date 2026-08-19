@@ -1500,7 +1500,8 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 ## Measurement programs
 
 `h100_serving_campaign.py` coordinates optimized-H100 calibration for the
-pinned Qwen3.8-27B and Gemma-4-26B checkpoints. Prefill, RPS/SLO, and power
+pinned Qwen3.8-27B and Gemma-4-26B checkpoints, with GPT-OSS-20B accepted as an
+apples-to-apples prefill reference. Prefill, RPS/SLO, and power
 evidence all require native BF16 TP1 execution with compilation and CUDA graphs;
 the campaign hard-fails eager fallback or runtime drift. It retains raw evidence
 and reduced CSV/JSON only, without constructing a migration profile. The power

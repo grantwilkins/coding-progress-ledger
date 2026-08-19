@@ -23,6 +23,7 @@ import single_gpu_capacity_campaign as capacity
 
 SCHEMA = "queue-haul-h100-serving-calibration-v1"
 MODELS = ("Qwen/Qwen3.8-27B", "google/gemma-4-26B-A4B-it")
+PREFILL_MODELS = (*MODELS, "openai/gpt-oss-20b")
 CONTEXTS = (256, 1024, 4096, 8192, 16384, 24576, 28672, 32767)
 REPEATS = 3
 
@@ -127,7 +128,7 @@ def summarize(plan: dict, model: str, cell: dict, rows: list[dict],
 
 
 def run_prefill(plan: dict, model: str, root: Path) -> None:
-    if model not in MODELS:
+    if model not in PREFILL_MODELS:
         raise ValueError("unsupported calibration model")
     cfg = config(model)
     commands = capacity.stack_commands(cfg)
@@ -238,7 +239,7 @@ def parse_args(argv=None):
     for name in ("run-prefill", "reduce-prefill"):
         command = commands.add_parser(name)
         command.add_argument("--plan", type=Path, required=True)
-        command.add_argument("--model", choices=MODELS, required=True)
+        command.add_argument("--model", choices=PREFILL_MODELS, required=True)
         command.add_argument("--root", type=Path, required=True)
     align = commands.add_parser("validate")
     align.add_argument("--plan", type=Path, required=True)
