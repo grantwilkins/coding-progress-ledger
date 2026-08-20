@@ -1883,6 +1883,32 @@ uv run python model_architecture_campaign.py run-profile --plan PLAN.json --run-
 uv run python model_architecture_campaign.py freeze-profile --base-profile BASE.json --run-root RUN-full --smoke-root RUN-smoke --geometry kv_geometry.csv --out PROFILE.json
 ```
 
+`matched_action_campaign.py` is the narrow cross-hardware/cross-model decision
+demonstration. It freezes completed A100 East/Germany frontier scenario
+`4ce7626a1f20a5c3`: eight 16K sessions, 80% requested shed, a 30-second
+deadline, measured natural links, and zero destination background. The
+harmonized A100 solve must reproduce the executed eight-KV-to-Germany decision;
+the run then changes only the hardware arm or the H100 model timing/geometry.
+Atomic per-arm checkpoints make reruns resumable, and the GPT-OSS/H100
+checkpoint is shared by both comparisons.
+
+```bash
+uv run python matched_action_campaign.py
+```
+
+The pinned result is eight Germany KV moves for GPT-OSS/A100; five Germany plus
+one East Replay move for GPT-OSS/H100; six Germany KV moves for Qwen/H100; and
+six Germany Replay moves for Gemma/H100. Every arm reaches the target. The
+checked inputs are the three matched vLLM 0.24 H100 prefill curves and runtime
+KV capacities plus the BF16 analytic KV functions in
+`../kv-transfer-early-experiment/migration_ratio.py`.
+Only the archived A100 migration is physical; the four action bars are planner
+decisions, and predicted makespans omit endpoint residuals. This is a
+deterministic existence result, not a population estimate. Qwen and Gemma
+inherit the GPT-OSS H100 power, decode, action-power, concurrency, and KV ingest
+envelope, so the model contrast isolates measured prefill and analytic KV
+architecture rather than establishing full model-specific operating curves.
+
 Run the smoke command for all six arms before any full run. `BASE.json` must be
 the model/hardware arm's measured service and power profile. The geometry CSV
 has one row per context, repeat, and runtime-reported cache group with columns
