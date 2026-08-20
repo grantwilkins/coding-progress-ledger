@@ -85,7 +85,7 @@ def test_idle_anchor_rejects_work_and_persists_power(tmp_path, monkeypatch):
     monkeypatch.setattr(calibration.power_rate_sweep, "power",
                         lambda path, _stop, _interval: path.write_text(
                             "monotonic_ns,wall_ns,power_w,utilization_pct,memory_mib\n"
-                            + "".join(f"{i},0,100,0,1\n" for i in range(10))))
+                            + "".join(f"{i},0,100,0,1\n" for i in range(7))))
     ticks = iter((0, 10))
     monkeypatch.setattr(calibration.time, "monotonic_ns", lambda: next(ticks))
 

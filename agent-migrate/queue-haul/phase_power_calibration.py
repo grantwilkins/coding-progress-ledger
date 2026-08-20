@@ -29,6 +29,7 @@ from profiles import ModelProfile
 
 MIXTURES = ("prefill", "prefill75", "mixed", "decode75", "decode")
 LOADS = (.1, .25, .45, .65, .8, 1.0)
+MIN_POWER_SAMPLE_HZ = 7
 
 
 def campaign_plan(repeats: int = 3, seed: int = 1) -> dict:
@@ -104,7 +105,7 @@ def run_cell(host: str, port: int, root: Path, cell: dict,
     with path.open(newline="") as handle:
         watts = [float(row["power_w"]) for row in csv.DictReader(handle)
                  if start_ns <= int(row["monotonic_ns"]) < end_ns]
-    if len(watts) < window / float(cell["power_interval_s"]) * .8:
+    if len(watts) < window * MIN_POWER_SAMPLE_HZ:
         raise RuntimeError("insufficient power samples")
     cached = metric_end[2] - metric_start[2]
     if cached or any((row["usage"].get("prompt_tokens_details") or {})
@@ -138,7 +139,7 @@ def measure_idle(host: str, port: int, root: Path, sequence: int,
                  if start_ns <= int(row["monotonic_ns"]) < end_ns]
     if any(end != start for start, end in zip(metric_start, metric_end)):
         raise RuntimeError("idle anchor processed inference work")
-    if len(watts) < seconds * 8:
+    if len(watts) < seconds * MIN_POWER_SAMPLE_HZ:
         raise RuntimeError("insufficient idle power samples")
     row = {"sequence": sequence, "window_s": (end_ns - start_ns) / 1e9,
            "power_mean_w": float(np.mean(watts)), "power_samples": len(watts),

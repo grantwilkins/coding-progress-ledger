@@ -1645,6 +1645,7 @@ name the pinned model and same-stack prefill/decode capacities; resumable run
 metadata freezes those inputs.
 With `--vllm`, the runner owns the optimized server lifecycle and additionally
 pins its command, git revision, GPU UUID, and same-launch resident-idle anchors.
+Each power window must retain at least seven synchronized samples per second.
 
 ```bash
 uv run python phase_power_calibration.py prepare --out runs/h100-phase-power
