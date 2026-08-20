@@ -163,6 +163,14 @@ def calibration_target(profile_path: Path | None, model: str | None,
     return model, hardware, F, G
 
 
+def _write_json(path: Path, value: dict) -> None:
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("w") as handle:
+        handle.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
+        handle.flush(); os.fsync(handle.fileno())
+    temporary.replace(path)
+
+
 def run_plan(plan_path: Path, profile_path: Path | None, out: Path,
              host: str = "127.0.0.1", port: int = 8100,
              resume: bool = False, *, model: str | None = None,
@@ -186,7 +194,7 @@ def run_plan(plan_path: Path, profile_path: Path | None, out: Path,
         if json.loads(metadata_path.read_text()) != metadata:
             raise RuntimeError("phase power resume metadata changed")
     else:
-        metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+        _write_json(metadata_path, metadata)
     measurement_path = out / "measurements.csv"
     rows = []
     if resume and measurement_path.exists():
@@ -204,9 +212,12 @@ def run_plan(plan_path: Path, profile_path: Path | None, out: Path,
         if key in completed:
             continue
         rows.append(run_cell(host, port, out, cell, F, G, model))
-        with measurement_path.open("w", newline="") as handle:
+        temporary = measurement_path.with_suffix(".csv.tmp")
+        with temporary.open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=rows[0])
             writer.writeheader(); writer.writerows(rows)
+            handle.flush(); os.fsync(handle.fileno())
+        temporary.replace(measurement_path)
         print(json.dumps(rows[-1]), flush=True)
     if idle_s:
         measure_idle(host, port, out, sequence + 1, float(idle_s))
@@ -248,6 +259,48 @@ def run_with_server(plan_path: Path, out: Path, model: str, hardware: str,
         except subprocess.TimeoutExpired:
             server.kill(); server.wait()
         log.close()
+
+
+def run_suite(plan_path: Path, targets_path: Path, out: Path,
+              host: str = "127.0.0.1", port: int = 8100) -> None:
+    plan = json.loads(plan_path.read_text())
+    targets = json.loads(targets_path.read_text())
+    keys = {"name", "model", "hardware", "prefill_tps", "decode_tps", "vllm"}
+    if plan.get("schema") != "queue-haul-phase-power-plan-v1" \
+            or not isinstance(targets, list) or not targets \
+            or any(set(target) != keys or Path(target["name"]).name != target["name"]
+                   for target in targets) \
+            or len({target["name"] for target in targets}) != len(targets):
+        raise ValueError("invalid phase power suite")
+    digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    expected_cells = {(row["mixture"], float(row["target_service_load"]),
+                       int(row["repeat"])) for row in plan["cells"]}
+    for target in targets:
+        root, marker = out / target["name"], out / target["name"] / "complete.json"
+        if marker.exists():
+            complete = json.loads(marker.read_text())
+            metadata = json.loads((root / "metadata.json").read_text())
+            with (root / "measurements.csv").open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            measured = {(row["mixture"], float(row["target_service_load"]),
+                         int(row["repeat"])) for row in rows}
+            if complete != {"schema": "queue-haul-phase-power-complete-v1",
+                            "plan_sha256": digest} \
+                    or metadata["plan_sha256"] != digest \
+                    or metadata["model"] != target["model"] \
+                    or metadata["hardware"] != target["hardware"] \
+                    or metadata["F_prefill_tps"] != float(target["prefill_tps"]) \
+                    or metadata["G_decode_tps"] != float(target["decode_tps"]) \
+                    or measured != expected_cells or len(rows) != len(expected_cells) \
+                    or len((root / "idle.jsonl").read_text().splitlines()) < 2:
+                raise RuntimeError(f"invalid completed suite target {target['name']}")
+            continue
+        run_with_server(
+            plan_path, root, target["model"], target["hardware"],
+            float(target["prefill_tps"]), float(target["decode_tps"]),
+            target["vllm"], host, port, (root / "metadata.json").exists())
+        _write_json(marker, {"schema": "queue-haul-phase-power-complete-v1",
+                             "plan_sha256": digest})
 
 
 def _predict(parameters, f, g, p0):
@@ -406,6 +459,12 @@ def main() -> None:
     run_command.add_argument("--host", default="127.0.0.1")
     run_command.add_argument("--port", type=int, default=8100)
     run_command.add_argument("--resume", action="store_true")
+    suite = sub.add_parser("run-suite")
+    suite.add_argument("--plan", type=Path, required=True)
+    suite.add_argument("--targets", type=Path, required=True)
+    suite.add_argument("--out", type=Path, required=True)
+    suite.add_argument("--host", default="127.0.0.1")
+    suite.add_argument("--port", type=int, default=8100)
     augment = sub.add_parser("augment")
     augment.add_argument("--plan", type=Path, required=True)
     augment.add_argument("--summary", type=Path, required=True)
@@ -434,6 +493,8 @@ def main() -> None:
             run_plan(args.plan, args.profile, args.out, args.host, args.port, args.resume,
                      model=args.model, hardware=args.hardware,
                      F=args.prefill_tps, G=args.decode_tps)
+    elif args.command == "run-suite":
+        run_suite(args.plan, args.targets, args.out, args.host, args.port)
     elif args.command == "augment":
         args.out.write_text(json.dumps(adaptive_plan(
             json.loads(args.plan.read_text()), json.loads(args.summary.read_text())),

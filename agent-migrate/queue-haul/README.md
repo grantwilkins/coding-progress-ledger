@@ -1646,10 +1646,14 @@ metadata freezes those inputs.
 With `--vllm`, the runner owns the optimized server lifecycle and additionally
 pins its command, git revision, GPU UUID, and same-launch resident-idle anchors.
 Each power window must retain at least seven synchronized samples per second.
+`run-suite` consumes an ordered target JSON and writes a durable completion
+marker only after each optimized runtime validates. The supplied user unit
+restarts failures and resumes the suite after host reboots.
 
 ```bash
 uv run python phase_power_calibration.py prepare --out runs/h100-phase-power
 uv run python phase_power_calibration.py run --plan runs/h100-phase-power/plan.json --model MODEL --hardware h100 --prefill-tps F --decode-tps G --vllm VLLM --out /datadrive/h100-phase-power/MODEL
+systemctl --user enable --now "$(pwd)/queue-haul-phase-power.service"
 ```
 
 - `power_window_sensitivity.py` and `power_profile_reduce.py`: source power.

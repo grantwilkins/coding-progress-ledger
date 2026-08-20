@@ -95,6 +95,34 @@ def test_idle_anchor_rejects_work_and_persists_power(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "idle.jsonl").read_text())["sequence"] == 0
 
 
+def test_suite_checkpoints_and_skips_completed_target(tmp_path, monkeypatch):
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps({"schema": "queue-haul-phase-power-plan-v1",
+                                "cells": [{"mixture": "mixed",
+                                           "target_service_load": .5,
+                                           "repeat": 0}]}))
+    targets = tmp_path / "targets.json"
+    target = {"name": "model", "model": "model", "hardware": "h100",
+              "prefill_tps": 2, "decode_tps": 3, "vllm": "vllm"}
+    targets.write_text(json.dumps([target]))
+    calls = []
+    def run(_plan, out, model, hardware, F, G, vllm, host, port, resume):
+        calls.append(resume); out.mkdir(parents=True)
+        (out / "metadata.json").write_text(json.dumps({
+            "plan_sha256": calibration.hashlib.sha256(plan.read_bytes()).hexdigest(),
+            "model": model, "hardware": hardware,
+            "F_prefill_tps": F, "G_decode_tps": G}))
+        (out / "measurements.csv").write_text(
+            "mixture,target_service_load,repeat\nmixed,0.5,0\n")
+        (out / "idle.jsonl").write_text("{}\n{}\n")
+    monkeypatch.setattr(calibration, "run_with_server", run)
+
+    calibration.run_suite(plan, targets, tmp_path / "out")
+    calibration.run_suite(plan, targets, tmp_path / "out")
+
+    assert calls == [False]
+
+
 def test_fit_accepts_compact_identifiable_group_holdouts():
     compact = []
     for mixture, ratio in (("prefill75", .25), ("mixed", 1), ("decode", 4)):
