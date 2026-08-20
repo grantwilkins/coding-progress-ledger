@@ -516,7 +516,7 @@ def _csv(path: Path) -> list[dict]:
         return list(csv.DictReader(stream))
 
 
-def reduce(out: Path) -> dict:
+def reduce(out: Path, partial: bool = False) -> dict:
     manifest = json.loads((out / "plan.json").read_text())
     if manifest["schema"] != SCHEMA:
         raise RuntimeError("unexpected plan schema")
@@ -540,10 +540,14 @@ def reduce(out: Path) -> dict:
     # The frontier claim needs every headline row; the sensitivity block may
     # be reduced later, but never partially.
     headline_ids = {row["row_id"] for row in manifest["rows"] if row["headline"]}
-    if headline_ids - seen:
-        raise RuntimeError("reduce requires every headline row exactly once")
+    absent = sorted(headline_ids - seen)
+    if absent and not partial:
+        raise RuntimeError(
+            f"{len(absent)} of {len(headline_ids)} headline rows are missing; "
+            "rerun the incomplete shards, or pass --partial to reduce what "
+            "exists and record the gap")
     missing = set(expected) - headline_ids - seen
-    if missing and missing != set(expected) - headline_ids:
+    if not partial and missing and missing != set(expected) - headline_ids:
         raise RuntimeError("sensitivity shards are incomplete")
     headline = [row for row in rows if row["headline"] == "True"]
     envelope = manifest["envelope"]["normal"]["rps"]
@@ -650,6 +654,11 @@ def reduce(out: Path) -> dict:
         "schema": SCHEMA, "claim": manifest["claim"],
         "sessions": manifest["sessions"], "envelope": manifest["envelope"],
         "rows": len(rows), "headline_rows": len(headline),
+        # A partial reduction states its own coverage: a frontier with holes
+        # must not read as a complete one.
+        "partial": bool(absent),
+        "headline_rows_expected": len(headline_ids),
+        "missing_headline_rows": absent,
         "rho_grid": list(RHOS),
         "headline_sessions": SESSIONS,
         "fleet_invariance_sessions": INVARIANCE_SESSIONS,
@@ -745,6 +754,12 @@ def reduce(out: Path) -> dict:
         if row["rho"] == headline_rho)
     (out / "README.md").write_text(
         f"# Fleet shed frontier, {manifest['sessions']:,} sessions\n\n"
+        + (f"> **Partial run.** {len(headline)} of {len(headline_ids)} headline "
+           f"rows are present; {len(absent)} never completed. Cells whose seeds "
+           f"are missing are aggregated over fewer seeds, and any cell missing "
+           f"a single-action baseline is absent from the advantage table.\n\n"
+           if absent else "")
+        +
         f"One shedding source site ({manifest['source_site']}) and two equally "
         f"sized destination sites ({', '.join(manifest['sites'].values())}), "
         f"gpt-oss-20b on A100. Each source node owns its egress pipe at the "
@@ -764,9 +779,9 @@ def reduce(out: Path) -> dict:
         f"## Executed shed at rho={headline_rho}\n\n"
         f"| Deadline (s) | Policy | Median executed shed | Median shed (kW) "
         f"| KV share of commits |\n|---|---|---|---|---|\n{table}\n\n"
-        f"## What multiple actions buy at rho={headline_rho}\n\n"
-        f"| Deadline (s) | rho | Best single action | Best flexible | Gain |\n"
-        f"|---|---|---|---|---|\n{gains}\n" if gains else "")
+        + (f"## What multiple actions buy at rho={headline_rho}\n\n"
+           f"| Deadline (s) | rho | Best single action | Best flexible | Gain |\n"
+           f"|---|---|---|---|---|\n{gains}\n" if gains else ""))
     return summary
 
 
@@ -776,6 +791,8 @@ def main() -> None:
     for name in ("prepare", "run-shard", "reduce"):
         item = sub.add_parser(name)
         item.add_argument("--out", type=Path, default=OUT)
+        if name == "reduce":
+            item.add_argument("--partial", action="store_true")
         if name == "run-shard":
             item.add_argument("--shard", type=int, required=True)
             item.add_argument("--subset", default="all",
@@ -788,7 +805,7 @@ def main() -> None:
         print(f"rows={run_shard(args.out, args.shard, args.subset)} "
               f"shard={args.shard}")
     else:
-        summary = reduce(args.out)
+        summary = reduce(args.out, args.partial)
         print(f"rows={summary['rows']} breaches="
               f"{summary['normal_mode_envelope_breaches']} out={args.out}")
 

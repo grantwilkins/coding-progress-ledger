@@ -385,7 +385,7 @@ def test_reduce_rejects_stale_or_mixed_shards(tmp_path):
         campaign.reduce(tmp_path)
 
     shard.write_text("\n".join(lines[:-1]) + "\n")
-    with pytest.raises(RuntimeError, match="every headline row"):
+    with pytest.raises(RuntimeError, match="headline rows are missing"):
         campaign.reduce(tmp_path)
 
     shard.write_text(good.replace("greedy", "queue_haul"))
@@ -413,3 +413,35 @@ def test_reduce_accepts_absent_but_not_partial_sensitivity(tmp_path):
     shard.write_text("\n".join(lines[:3]) + "\n")
     with pytest.raises(RuntimeError, match="sensitivity"):
         campaign.reduce(tmp_path)
+
+
+def test_partial_reduction_is_refused_by_default_and_declares_its_gap(tmp_path):
+    """A frontier with holes must not read as a complete one."""
+    manifest = _mini_campaign(tmp_path, [
+        {"seed": 1, "executed_shed_fraction": 0.5, "within_contract": True},
+        {"seed": 2, "executed_shed_fraction": 0.9, "within_contract": True},
+    ])
+    shard = tmp_path / "shard-00.csv"
+    lines = shard.read_text().splitlines()
+    shard.write_text("\n".join(lines[:-1]) + "\n")
+
+    with pytest.raises(RuntimeError, match="missing"):
+        campaign.reduce(tmp_path)
+
+    summary = campaign.reduce(tmp_path, partial=True)
+
+    assert summary["partial"] is True
+    assert summary["headline_rows"] == 1
+    assert summary["headline_rows_expected"] == 2
+    assert summary["missing_headline_rows"] == [1]
+    assert "Partial run" in (tmp_path / "README.md").read_text()
+    # A complete reduction must not claim to be partial.
+    campaign.write_csv(tmp_path / "shard-00.csv", [
+        {**manifest["rows"][i], "git_sha": manifest["git_sha"],
+         "executed_shed_w": 500.0, "destination_offered_rps": 4.0,
+         "within_envelope": True, "within_contract": True,
+         "committed_kv_fraction": 0.0, "executed_shed_fraction": 0.5,
+         **{f"{r}_{m}": 0 for r in campaign.REGIONS
+            for m in ("replay", "kv_transfer")}}
+        for i in range(2)])
+    assert campaign.reduce(tmp_path)["partial"] is False
