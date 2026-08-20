@@ -35,6 +35,11 @@ def test_plan_is_balanced_minimum():
     assert plan["idle_measurement_s"] == 30
 
 
+def test_decode_load_is_paced_instead_of_batched():
+    _prompt, output_tokens, rate, batch = calibration._shape(0, .5, 1000, 400)
+    assert (output_tokens, rate, batch) == (512, 400 * .5 / 512, 0)
+
+
 def test_run_plan_resumes_completed_cells(tmp_path, monkeypatch):
     plan = tmp_path / "plan.json"
     plan.write_text(json.dumps({"schema": "queue-haul-phase-power-plan-v1", "cells": [

@@ -1646,6 +1646,8 @@ metadata freezes those inputs.
 With `--vllm`, the runner owns the optimized server lifecycle and additionally
 pins its command, git revision, GPU UUID, and same-launch resident-idle anchors.
 Each power window must retain at least seven synchronized samples per second.
+Decode-only cells pace 512-token requests so load changes offered work rather
+than saturated batch occupancy.
 `run-suite` consumes an ordered target JSON and writes a durable completion
 marker only after each optimized runtime validates. The supplied user unit
 restarts failures and resumes the suite after host reboots.

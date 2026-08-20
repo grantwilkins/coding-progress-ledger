@@ -62,8 +62,8 @@ def _metrics(host: str, port: int) -> tuple[float, float, float]:
 def _shape(fraction: float, load: float, F: float, G: float) -> tuple[str, int, float, int]:
     f, g = fraction * load * F, (1 - fraction) * load * G
     if fraction == 0:
-        prompt_tokens, output_tokens = 1, 4096
-        return "x", output_tokens, g / output_tokens, max(1, math.ceil(g * 40 / output_tokens))
+        output_tokens = 512
+        return "x", output_tokens, g / output_tokens, 0
     prompt_tokens = 4096 if fraction == 1 else 2048
     output_tokens = 1 if fraction == 1 else max(1, round(prompt_tokens * g / f))
     return "x " * prompt_tokens, output_tokens, f / prompt_tokens, 0
