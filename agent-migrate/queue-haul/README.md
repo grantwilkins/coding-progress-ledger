@@ -1026,16 +1026,24 @@ uv run python testbed_calibration_campaign.py prepare --parent outputs/east-germ
 `trailing-power` separately derives direct five-second Sweden power windows.
 The final `stress_frontier_campaign.py` plan contains 40 equal-weight states and
 runs the Queue-Haul LP and its six baselines independently at 10--60 second
-deadlines. Queue-Haul plans this suite with `lp_work_first`, the same LP every
-other campaign uses; the campaign no longer reports an exact max-shed MILP.
-Reduction uses the fifth-smallest of 40 values and automatically retains the
-title “Modeled stress-suite sensitivity” until every power, timing, correctness,
-provenance, transition, and hardware-window gate passes.
+deadlines. Queue-Haul plans this suite with `lp_work_first`, guarded by its
+MILP-free unrestricted greedy result after both are simulated to the deadline;
+an LP-infeasible target skips impossible integral recovery, so this campaign
+does not run a max-shed MILP.
+Reduction carries each state's tighter-deadline attainment forward, uses the
+fifth-smallest of 40 values, and automatically retains the title “Modeled
+stress-suite sensitivity” until every power, timing, correctness, provenance,
+transition, and hardware-window gate passes.
+
+The checked-in sensitivity uses the Azure-300W baseline-gated fixed-pack
+profile and its 200 whole-repeat bootstrap curves. Baseline gating improves the
+pack fit, but grouped-repeat validation still fails (12.76 W RMSE; 32.1% within
+5 W), so this artifact remains modeled and is not an empirical promotion.
 
 ```bash
-uv run python stress_frontier_campaign.py prepare --parent outputs/east-germany-separation-20260809/plan.json --profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --out outputs/azure-calibration/stress-plan.json
-uv run python stress_frontier_campaign.py run --plan outputs/azure-calibration/stress-plan.json --shard 0 --shards 40 --out outputs/azure-calibration/stress-00.csv
-uv run python stress_frontier_campaign.py reduce --results outputs/azure-calibration/stress-*.csv --profile profiles/gpt_oss_20b_a100_tp1_azure_300w_phase.json --power-summary outputs/azure-calibration/power-summary.json --destination-summary outputs/azure-calibration/destination-summary.json --trailing-power /datadrive/queue-haul-network/hardware-gap-001/trailing_power.csv --catalog /datadrive/queue-haul-network/evidence-catalog.json --out outputs/azure-calibration/frontier.json
+uv run python stress_frontier_campaign.py prepare --parent outputs/azure-compact-calibration-20260813/separation-calibrated.json --profile outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_pack_power_gated.json --out outputs/azure-compact-calibration-20260813/stress-pack-power-plan.json
+for shard in 0 1 2 3; do uv run python stress_frontier_campaign.py run --plan outputs/azure-compact-calibration-20260813/stress-pack-power-plan.json --shard "$shard" --shards 4 --out "outputs/azure-compact-calibration-20260813/stress-pack-power-$shard.csv"; done
+uv run python stress_frontier_campaign.py reduce --results outputs/azure-compact-calibration-20260813/stress-pack-power-{0,1,2,3}.csv --modeled-only --out outputs/azure-compact-calibration-20260813/frontier-pack-power.json
 ```
 
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West

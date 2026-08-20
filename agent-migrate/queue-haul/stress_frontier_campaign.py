@@ -24,6 +24,9 @@ POLICIES = ("queue_haul", "greedy", "replay_only", "kv_only",
             "isolated_fastest", "queue_haul_power_blind",
             network.DEADLINE_BLIND_POLICY)
 DEADLINES = tuple(range(10, 61, 5))
+GREEDY_SOLVER = "greedy_best_effort"
+LP_SOLVER = "lp_work_first_best_effort"
+POWER_BLIND_SOLVER = "lp_power_blind_best_effort"
 REGIMES = (
     ("jointly-binding", .75, .90, "controlled_40"),
     ("bandwidth-only", .25, 0, "controlled_40"),
@@ -54,7 +57,11 @@ def stress_states(profile: ModelProfile, seed: int = 1) -> list[dict]:
     phase = profile.case().phase_power
     if phase is None:
         raise ValueError("stress frontier requires a phase-aware profile")
-    rng, states = np.random.default_rng(seed), []
+    power_draws = max(len(getattr(phase, "measured_power_bootstrap", ())),
+                      len(phase.bootstrap))
+    if not power_draws:
+        raise ValueError("stress frontier requires power bootstrap draws")
+    rng, power_rng, states = np.random.default_rng(seed), np.random.default_rng(seed + 1), []
     errors = profile.sources
     for regime, germany, east_kv, bandwidth in REGIMES:
         axes = [_latin(rng, 8) for _ in range(4)]
@@ -70,9 +77,7 @@ def stress_states(profile: ModelProfile, seed: int = 1) -> list[dict]:
                 * (2 * axes[2][index] - 1),
                 "kv_multiplier": 1 + errors["kv_transfer"].relative_error
                 * (2 * axes[3][index] - 1),
-                "power_bootstrap_index": int(rng.integers(
-                    0, max(1, len(getattr(phase, "measured_power_bootstrap", ())),
-                           len(phase.bootstrap)))),
+                "power_bootstrap_index": int(power_rng.integers(power_draws)),
                 "weight": 1 / 40,
             })
     return states
@@ -147,6 +152,10 @@ def fifth_smallest(values) -> float:
     return values[4]
 
 
+def _best_outcome(outcomes):
+    return min(outcomes, key=lambda row: row[1].modeled_source_power_at_deadline_w)
+
+
 def _scenario(template: dict, state: dict, deadline: int, contract: dict) -> dict:
     bandwidth = network._bandwidths(contract, state["bandwidth"])
     bandwidth = {key: value * state["bandwidth_multiplier"]
@@ -204,15 +213,23 @@ def run(plan_path: Path, out: Path, shard: int = 0, shards: int = 1) -> list[dic
         initial = source_power(problem, profile)
         for policy in plan["policies"]:
             planning = problem
-            solver = network.joint_solver(policy)
+            solver = ({"queue_haul": LP_SOLVER, "greedy": GREEDY_SOLVER,
+                       "queue_haul_power_blind": POWER_BLIND_SOLVER,
+                       network.DEADLINE_BLIND_POLICY: LP_SOLVER}
+                      .get(policy, network.joint_solver(policy)))
             if policy == network.DEADLINE_BLIND_POLICY:
                 planning = replace(problem, deadline_s=network.ORACLE_STALE_HORIZON_S,
                                    end_s=network.ORACLE_STALE_HORIZON_S)
-            result = solve(planning, profile, routes, solver,
-                           seed=plan["seed"], destination=architecture,
-                           admission_mode="normal")
-            execution = predict(_expected_scenario(problem, result.moves),
-                                profile, result.moves, destination=architecture)
+            outcomes = []
+            for candidate_solver in ((solver, GREEDY_SOLVER)
+                                     if policy == "queue_haul" else (solver,)):
+                result = solve(planning, profile, routes, candidate_solver,
+                               seed=plan["seed"], destination=architecture,
+                               admission_mode="normal")
+                execution = predict(_expected_scenario(problem, result.moves),
+                                    profile, result.moves, destination=architecture)
+                outcomes.append((result, execution))
+            result, execution = _best_outcome(outcomes)
             rows.append({
                 "deadline_s": deadline, "state_id": state["state_id"],
                 "regime": state["regime"], "policy": policy,
@@ -261,11 +278,14 @@ def reduce(results_paths: list[Path], out: Path, promotion: dict | None = None) 
     for results_path in results_paths:
         with results_path.open(newline="") as handle:
             rows.extend(csv.DictReader(handle))
-    grouped, frontier = {}, []
+    grouped, frontier, best = {}, [], {}
     empirical = bool(promotion and promotion.get("passed"))
-    for row in rows:
-        grouped.setdefault((int(row["deadline_s"]), row["policy"]), []).append(
-            float(row["shed_by_deadline_w"]))
+    for row in sorted(rows, key=lambda value: int(value["deadline_s"])):
+        state = row["state_id"], row["policy"]
+        attained = max(float(row["shed_by_deadline_w"]),
+                       best.get(state, float("-inf")))
+        best[state] = attained
+        grouped.setdefault((int(row["deadline_s"]), row["policy"]), []).append(attained)
     expected = {(deadline, policy) for deadline in DEADLINES
                 for policy in POLICIES}
     if set(grouped) != expected:

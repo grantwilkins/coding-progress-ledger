@@ -1368,7 +1368,7 @@ def _greedy_lagrangian(
     )
 
 
-def _round_lp(table, target, values):
+def _round_lp(table, target, values, recover_target=True):
     n = len(table.candidates)
     gains = np.array([c.credit for c in table.candidates])
     work = np.array([c.objective_cost_s for c in table.candidates])
@@ -1397,14 +1397,14 @@ def _round_lp(table, target, values):
             sessions.add(c.session)
             usage[rows] += added
             gain += c.credit
-    if gain < target - 1e-8:
+    if recover_target and gain < target - 1e-8:
         recovered = _integral_target_recovery(table, target)
         if recovered is not None:
             return recovered
     return selected
 
 
-def _lp(table: CandidateTable, target: float, stats=None):
+def _lp(table: CandidateTable, target: float, stats=None, integral_recovery=True):
     if not table.candidates:
         return set()
     started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
@@ -1423,29 +1423,37 @@ def _lp(table: CandidateTable, target: float, stats=None):
         iterations += p.solver_stats.num_iters or 0
         solves += 1
         return p
+    def fallback():
+        return (_lp_highs(table, target, stats)
+                if integral_recovery else
+                _lp_highs(table, target, stats, False))
     problem = solve(work @ x, base + [gains @ x >= target])
+    recover_target = problem is not None and problem.status not in (
+        cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE)
     if problem is None:
-        return _lp_highs(table, target, stats)
+        return fallback()
     if problem.status in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE):
         problem = solve(gains @ x, base, True)
         if problem is None:
-            return _lp_highs(table, target, stats)
+            return fallback()
         best = float(problem.value)
         problem = solve(work @ x, base + [gains @ x >= best - 1e-7])
         if problem is None:
-            return _lp_highs(table, target, stats)
+            return fallback()
     values = None if x.value is None else np.asarray(x.value)
     if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) \
             or values is None or not np.isfinite(values).all():
-        return _lp_highs(table, target, stats)
-    selected = _round_lp(table, target, values)
+        return fallback()
+    selected = _round_lp(
+        table, target, values, integral_recovery and recover_target)
     if stats is not None:
         stats.update(wall_s=perf_counter() - started, native_s=native_s,
                      solves=solves, iterations=iterations)
     return selected
 
 
-def _lp_highs(table: CandidateTable, target: float, stats=None):
+def _lp_highs(table: CandidateTable, target: float, stats=None,
+              integral_recovery=True):
     if not table.candidates:
         return set()
     started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
@@ -1477,6 +1485,7 @@ def _lp_highs(table: CandidateTable, target: float, stats=None):
         return result
 
     result = solve(work / table.migration_horizon_s, target)
+    recover_target = result.status != 2
     if result.status == 2:
         maximum = solve(-gains / gain_scale)
         if maximum.status:
@@ -1488,7 +1497,8 @@ def _lp_highs(table: CandidateTable, target: float, stats=None):
         )
     if result.status:
         raise RuntimeError(f"HiGHS target LP failed: {result.message}")
-    selected = _round_lp(table, target, result.x)
+    selected = _round_lp(
+        table, target, result.x, integral_recovery and recover_target)
     if stats is not None:
         stats.update(wall_s=perf_counter() - started, native_s=native_s,
                      solves=solves, iterations=iterations)
@@ -2614,7 +2624,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
     streamed = solver in {"lp_column_generation_lazy", "lp_column_generation_native"}
     selection_credits = None
     if power is not None and solver not in {
-            "greedy_lagrangian", *MAX_SHED_SOLVERS, "lp_power_blind"}:
+            "greedy_lagrangian", *MAX_SHED_SOLVERS,
+            "lp_power_blind", "lp_power_blind_best_effort"}:
         sessions = tuple(s for s in _local_sessions(scenario) if s.state == "active")
         selection_credits, target, _ = _phase_power_target(
             power, sessions, target,
@@ -2633,7 +2644,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
         table = candidate_table(
             scenario, profile, architecture, mode, power, selection_credits,
         )
-        if solver == "lp_power_blind":
+        if solver in {"lp_power_blind", "lp_power_blind_best_effort"}:
             gain = power.drain_gain(session.session_id for session in table.sessions) \
                 / len(table.sessions)
             table = replace(table, candidates=tuple(
@@ -2649,8 +2660,12 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
         selected, assignment = _greedy_lagrangian(
             table, target, power, architecture, scenario, mode, True,
         )
-    elif solver == "greedy":
-        selected = _greedy(table, target, repair=True)
+    elif solver in {"greedy", "greedy_best_effort"}:
+        selected = _greedy(table, target, repair=solver == "greedy")
+    elif solver == "lp_work_first_best_effort":
+        selected = _lp(table, target, integral_recovery=False)
+    elif solver == "lp_power_blind_best_effort":
+        selected = _lp_highs(table, target, integral_recovery=False)
     elif solver in {"isolated_fastest", "isolated_myopic", "random",
                     "replay_only", "kv_only"}:
         selected = _baseline_policy(table, target, solver, seed)
@@ -2703,11 +2718,12 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture,
                      admission_mode=None):
-    if solver not in {"greedy", "greedy_lagrangian", *MAX_SHED_SOLVERS,
+    if solver not in {"greedy", "greedy_best_effort", "greedy_lagrangian", *MAX_SHED_SOLVERS,
                       "isolated_fastest", "isolated_myopic", "random",
                       "replay_only", "kv_only",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
-                      "lp_power_blind",
+                      "lp_power_blind", "lp_work_first_best_effort",
+                      "lp_power_blind_best_effort",
                       "lp_column_generation", "lp_column_generation_persistent",
                       "lp_column_generation_lazy", "lp_column_generation_native"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
@@ -2813,7 +2829,8 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         planned = source_power(selection_scenario, profile, moved, case_id)
         deadline_repair_s += perf_counter() - started
     if power.case.phase_power is not None and solver not in {
-            "greedy_lagrangian", *MAX_SHED_SOLVERS, "lp_power_blind"}:
+            "greedy_lagrangian", *MAX_SHED_SOLVERS,
+            "lp_power_blind", "lp_power_blind_best_effort"}:
         _, required, phase_source = _phase_power_target(power, table.sessions, target)
         credited = sum(table.candidates[i].credit for i in selected)
         if phase_source is not None:

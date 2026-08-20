@@ -129,13 +129,15 @@ def fit(profile_path: Path, root: Path, out_profile: Path, summary_path: Path,
     phase_raw["measured_power_curve"] = curve
     phase_raw["measured_power_bootstrap"] = bootstraps
     phase_raw["delta_w"] = far_power_w - phase.p0_w
+    phase_raw["grouped_cv_rmse_w"] = metrics["grouped_repeat_cv_rmse_w"]
+    phase_raw["within_5w_fraction"] = metrics["grouped_repeat_cv_within_5w_fraction"]
     phase_raw["bootstrap"] = []
     digest = hashlib.sha256((root / "trailing_power.csv").read_bytes()).hexdigest()
     phase_raw["provenance_sha256"] = digest
     raw["profile_id"] += "-pack-power-v1"
     raw["sources"]["power"] = {"kind": "measured", "reference": str(root / "trailing_power.csv"),
         "valid_range": [0, profile.max_power_load],
-        "relative_error": metrics["mae_w"] / (far_power_w - phase.p0_w)}
+        "relative_error": metrics["grouped_repeat_cv_mae_w"] / (far_power_w - phase.p0_w)}
     out_profile.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n")
     ModelProfile.load(out_profile)
     with points_path.open("w", newline="") as handle:

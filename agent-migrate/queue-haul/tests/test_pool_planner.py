@@ -48,7 +48,9 @@ Plausible wrong implementations:
   finishes faster the larger the destination fleet is. Measured replay never
   completes under 0.84 s and co-tenancy makes each one linearly slower.
 - Leave an integrally feasible target unmet after fractional LP rounding.
+- Run an integral recovery after the LP relaxation already proved the target impossible.
 - Leave an integrally feasible target unmet after greedy selection.
+- Hide a MILP recovery inside a policy labeled as best-effort greedy.
 - Route the existing `lp` solver through HiGHS instead of keeping it additive.
 - Charge migration work during shortfall minimization or omit the session dual.
 - Run Phase II at an infeasible requested target instead of maximum attainable gain.
@@ -258,19 +260,68 @@ def test_exact_max_shed_keeps_the_tighter_resource_row():
     assert len(pool_planner._max_shed(table, power, .0025)) == 1
 
 
-def test_highs_lp_recovers_an_integrally_feasible_target_after_rounding():
+def _rounding_recovery_table():
     sessions = tuple(SimpleNamespace(session_id=name) for name in "abc")
     candidates = tuple(
         Candidate(i, "replay", 0, gain, 1, duration, (), 0, (0, 0), 0)
         for i, (gain, duration) in enumerate(((6, 1), (5, 2), (5, 2)))
     )
-    table = CandidateTable(
+    return CandidateTable(
         sessions, candidates, csr_matrix(np.eye(3)),
         csr_matrix(np.array(((.6, .5, 0), (.6, 0, .5)))),
         ("route", "compute"), (1, 1), ("fraction", "fraction"), 10,
     )
 
-    assert _lp_highs(table, 10) == {1, 2}
+
+def test_highs_lp_recovers_an_integrally_feasible_target_after_rounding():
+    assert _lp_highs(_rounding_recovery_table(), 10) == {1, 2}
+
+
+@pytest.mark.parametrize("solver", (_lp, _lp_highs))
+def test_best_effort_lp_does_not_run_integral_recovery(monkeypatch, solver):
+    table = _rounding_recovery_table()
+    monkeypatch.setattr(
+        pool_planner, "_integral_target_recovery",
+        lambda *_: pytest.fail("best-effort LP invoked a MILP"),
+    )
+
+    selected = solver(table, 10, integral_recovery=False)
+
+    assert sum(table.candidates[i].credit for i in selected) < 10
+
+
+@pytest.mark.parametrize("solver", (_lp, _lp_highs))
+def test_lp_skips_integral_recovery_after_fractional_infeasibility(
+        monkeypatch, solver):
+    sessions = tuple(SimpleNamespace(session_id=name) for name in "ab")
+    candidates = tuple(
+        Candidate(i, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0)
+        for i in range(2)
+    )
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(2)), csr_matrix(np.eye(2)),
+        ("a", "b"), (1, 1), ("fraction", "fraction"), 1,
+    )
+    monkeypatch.setattr(
+        pool_planner, "_integral_target_recovery",
+        lambda *_: pytest.fail("integral recovery cannot beat the LP bound"),
+    )
+
+    assert solver(table, 3) == {0, 1}
+
+
+def test_best_effort_greedy_does_not_run_integral_recovery(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        pool_planner, "_integral_target_recovery",
+        lambda *_: pytest.fail("best-effort greedy invoked a MILP"),
+    )
+
+    result = plan(
+        problem(limit=0), model(tmp_path, switch=0, tp=1), PATHS,
+        "greedy_best_effort", destination=architecture(),
+    )
+
+    assert result.moves
 
 
 def test_greedy_repairs_an_integrally_feasible_target():
