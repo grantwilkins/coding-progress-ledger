@@ -1,10 +1,18 @@
 {
+  "confidence": {
+    "draws": 10000,
+    "level": 0.95,
+    "method": "regime-stratified trajectory bootstrap",
+    "seed": 1
+  },
   "empirical": false,
   "frontier": [
     {
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 45.305816879959536,
       "deadline_s": 10,
+      "normalized_coverage_90_ci_high": 0.4063542494891539,
+      "normalized_coverage_90_ci_low": 0.3233134110380357,
       "policy": "greedy",
       "states": 40
     },
@@ -26,6 +34,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 45.305816879959536,
       "deadline_s": 10,
+      "normalized_coverage_90_ci_high": 0.4063542494891539,
+      "normalized_coverage_90_ci_low": 0.3233134110380357,
       "policy": "queue_haul",
       "states": 40
     },
@@ -54,6 +64,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 80.16742569981591,
       "deadline_s": 15,
+      "normalized_coverage_90_ci_high": 0.7887205443443508,
+      "normalized_coverage_90_ci_low": 0.577955080132081,
       "policy": "greedy",
       "states": 40
     },
@@ -75,6 +87,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 80.16742569981591,
       "deadline_s": 15,
+      "normalized_coverage_90_ci_high": 0.7887205443443508,
+      "normalized_coverage_90_ci_low": 0.577955080132081,
       "policy": "queue_haul",
       "states": 40
     },
@@ -103,6 +117,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 104.55008333324966,
       "deadline_s": 20,
+      "normalized_coverage_90_ci_high": 0.9372015474149289,
+      "normalized_coverage_90_ci_low": 0.7460950137229712,
       "policy": "greedy",
       "states": 40
     },
@@ -124,6 +140,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 104.55008333324966,
       "deadline_s": 20,
+      "normalized_coverage_90_ci_high": 0.9377244153764193,
+      "normalized_coverage_90_ci_low": 0.7460950137229712,
       "policy": "queue_haul",
       "states": 40
     },
@@ -152,6 +170,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 108.60499999991757,
       "deadline_s": 25,
+      "normalized_coverage_90_ci_high": 0.9650774281542308,
+      "normalized_coverage_90_ci_low": 0.7750318926771457,
       "policy": "greedy",
       "states": 40
     },
@@ -173,6 +193,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 108.60499999991757,
       "deadline_s": 25,
+      "normalized_coverage_90_ci_high": 0.9650774281542308,
+      "normalized_coverage_90_ci_low": 0.7750318926771457,
       "policy": "queue_haul",
       "states": 40
     },
@@ -201,6 +223,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 108.60499999991757,
       "deadline_s": 30,
+      "normalized_coverage_90_ci_high": 0.9740935337876525,
+      "normalized_coverage_90_ci_low": 0.7750318926771457,
       "policy": "greedy",
       "states": 40
     },
@@ -222,6 +246,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 108.60499999991757,
       "deadline_s": 30,
+      "normalized_coverage_90_ci_high": 0.9740935337876525,
+      "normalized_coverage_90_ci_low": 0.7750318926771457,
       "policy": "queue_haul",
       "states": 40
     },
@@ -250,6 +276,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 108.60499999991757,
       "deadline_s": 35,
+      "normalized_coverage_90_ci_high": 0.9740935337876525,
+      "normalized_coverage_90_ci_low": 0.7750318926771457,
       "policy": "greedy",
       "states": 40
     },
@@ -271,6 +299,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 109.39974999991404,
       "deadline_s": 35,
+      "normalized_coverage_90_ci_high": 0.9740935337876525,
+      "normalized_coverage_90_ci_low": 0.7807034234234547,
       "policy": "queue_haul",
       "states": 40
     },
@@ -299,6 +329,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 109.39974999991404,
       "deadline_s": 40,
+      "normalized_coverage_90_ci_high": 0.9746019960994338,
+      "normalized_coverage_90_ci_low": 0.7750318926771457,
       "policy": "greedy",
       "states": 40
     },
@@ -320,6 +352,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 110.877023684113,
       "deadline_s": 40,
+      "normalized_coverage_90_ci_high": 0.9907441068843116,
+      "normalized_coverage_90_ci_low": 0.7956442228535506,
       "policy": "queue_haul",
       "states": 40
     },
@@ -348,6 +382,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 109.61394736832759,
       "deadline_s": 45,
+      "normalized_coverage_90_ci_high": 0.9852669109022671,
+      "normalized_coverage_90_ci_low": 0.7807034234234547,
       "policy": "greedy",
       "states": 40
     },
@@ -369,6 +405,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 120.90189715615136,
       "deadline_s": 45,
+      "normalized_coverage_90_ci_high": 1.0,
+      "normalized_coverage_90_ci_low": 0.8898271654957294,
       "policy": "queue_haul",
       "states": 40
     },
@@ -397,6 +435,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 109.61394736832759,
       "deadline_s": 50,
+      "normalized_coverage_90_ci_high": 0.9852669109022671,
+      "normalized_coverage_90_ci_low": 0.7807034234234547,
       "policy": "greedy",
       "states": 40
     },
@@ -418,6 +458,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 122.55926375368719,
       "deadline_s": 50,
+      "normalized_coverage_90_ci_high": 1.0,
+      "normalized_coverage_90_ci_low": 0.9234327002972395,
       "policy": "queue_haul",
       "states": 40
     },
@@ -446,6 +488,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 111.1342016098165,
       "deadline_s": 55,
+      "normalized_coverage_90_ci_high": 0.9928067553674954,
+      "normalized_coverage_90_ci_low": 0.7930808951234745,
       "policy": "greedy",
       "states": 40
     },
@@ -467,6 +511,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 122.55926375368719,
       "deadline_s": 55,
+      "normalized_coverage_90_ci_high": 1.0,
+      "normalized_coverage_90_ci_low": 0.9711759987951774,
       "policy": "queue_haul",
       "states": 40
     },
@@ -495,6 +541,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 111.49339999991511,
       "deadline_s": 60,
+      "normalized_coverage_90_ci_high": 0.9928067553674954,
+      "normalized_coverage_90_ci_low": 0.7956442228535506,
       "policy": "greedy",
       "states": 40
     },
@@ -516,6 +564,8 @@
       "claim": "modeled stress-suite sensitivity",
       "coverage_90_shed_w": 122.55926375368719,
       "deadline_s": 60,
+      "normalized_coverage_90_ci_high": 1.0,
+      "normalized_coverage_90_ci_low": 1.0,
       "policy": "queue_haul",
       "states": 40
     },

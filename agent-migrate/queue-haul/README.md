@@ -1392,7 +1392,8 @@ the destination-locked behavior.
 
 Stress-frontier figures omit the modeled MILP reference and normalize every
 displayed policy to the shared maximum 90%-coverage shed. The y-axis reports
-this quantity as normalized power shed.
+this quantity as normalized power shed; the LP and greedy curves carry
+unlabelled 95% regime-stratified trajectory-bootstrap confidence ribbons.
 
 Rebuild them with:
 

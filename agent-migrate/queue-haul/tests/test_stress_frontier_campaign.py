@@ -2,7 +2,9 @@
 Claim:
 The stress-frontier plot scales every policy by their shared maximum, and
 uses the hardware-attainment figure's canonical wide presentation without a
-title while naming the plotted quantity normalized power shed. Queue-Haul
+title while naming the plotted quantity normalized power shed. Its unlabelled
+95% confidence ribbons resample whole trajectories within each regime and
+renormalize every draw by its shared maximum. Queue-Haul
 plans with the LP rather than an exact MILP. Every state labeled as
 a power bootstrap samples a measured curve or a joint analytic parameter draw.
 The Queue-Haul row retains the better fully simulated LP or greedy deadline power.
@@ -11,6 +13,8 @@ Plausible wrong implementations:
 - Normalize each policy independently.
 - Retain the stale modeled title or label the y-axis as generic attainment.
 - Revert to a tall canvas, small type, or noncanonical policy colors.
+- Pool regimes, bootstrap means, or normalize confidence limits independently.
+- Add confidence ribbons to the legend.
 - Resolve the Queue-Haul policy to the exact max-shed MILP.
 - Silently reuse one central power curve for every bootstrap state.
 - Let power-bootstrap cardinality reshuffle the timing Latin hypercube.
@@ -59,10 +63,19 @@ def test_coverage_is_fifth_smallest_of_40():
         campaign.fifth_smallest(range(39))
 
 
+def test_confidence_intervals_stratify_fifth_smallest_and_shared_maximum():
+    regimes = [name for name, *_ in campaign.REGIMES for _ in range(8)]
+    values = [[value for value in (1, 100, 100, 100, 100) for _ in range(8)],
+              [2] * 40]
+    assert campaign.normalized_confidence_intervals(values, regimes, 100).tolist() \
+        == [[.5, .5], [1, 1]]
+
+
 def test_reduction_labels_unpromoted_frontier_as_modeled(tmp_path, monkeypatch):
     path = tmp_path / "results.csv"
     rows = [{"deadline_s": deadline, "policy": policy, "state_id": str(state),
-             "shed_by_deadline_w": state}
+             "regime": campaign.REGIMES[state // 8][0],
+             "shed_by_deadline_w": state + 1}
             for deadline in campaign.DEADLINES
             for policy in campaign.POLICIES
             for state in range(40)]
@@ -73,7 +86,7 @@ def test_reduction_labels_unpromoted_frontier_as_modeled(tmp_path, monkeypatch):
     monkeypatch.setattr(campaign, "_plot", lambda *_args: None)
     result = campaign.reduce([path], tmp_path / "frontier.json", {"passed": False})
     assert not result["empirical"]
-    assert {row["coverage_90_shed_w"] for row in result["frontier"]} == {4}
+    assert {row["coverage_90_shed_w"] for row in result["frontier"]} == {5}
     assert {row["claim"] for row in result["frontier"]} == {
         "modeled stress-suite sensitivity"}
 
@@ -81,6 +94,7 @@ def test_reduction_labels_unpromoted_frontier_as_modeled(tmp_path, monkeypatch):
 def test_reduction_carries_tighter_deadline_plans_forward(tmp_path, monkeypatch):
     path = tmp_path / "results.csv"
     rows = [{"deadline_s": deadline, "policy": policy, "state_id": str(state),
+             "regime": campaign.REGIMES[state // 8][0],
              "shed_by_deadline_w": 10 if policy == "queue_haul" and deadline == 10 else 0}
             for deadline in campaign.DEADLINES
             for policy in campaign.POLICIES
@@ -100,7 +114,10 @@ def test_reduction_carries_tighter_deadline_plans_forward(tmp_path, monkeypatch)
 def test_plot_normalizes_to_the_shared_maximum(tmp_path, monkeypatch):
     values = range(2, 2 * len(campaign.POLICIES) + 1, 2)
     rows = [{"deadline_s": 10, "policy": policy,
-             "coverage_90_shed_w": value}
+             "coverage_90_shed_w": value,
+             **({"normalized_coverage_90_ci_low": 0,
+                 "normalized_coverage_90_ci_high": 1}
+                if policy in campaign.CONFIDENCE_POLICIES else {})}
             for policy, value in zip(campaign.POLICIES, values)]
     lines = []
     monkeypatch.setattr(campaign.plot_style, "policy_style", lambda policy: {})
@@ -115,9 +132,14 @@ def test_plot_normalizes_to_the_shared_maximum(tmp_path, monkeypatch):
 def test_plot_matches_hardware_attainment_presentation(tmp_path, monkeypatch):
     import matplotlib.pyplot as plt
     monkeypatch.setattr(plt, "close", lambda _: None)
-    rows = [{"deadline_s": 10, "policy": policy,
-             "coverage_90_shed_w": value}
-            for value, policy in enumerate(campaign.POLICIES, 1)]
+    rows = []
+    for value, policy in enumerate(campaign.POLICIES, 1):
+        row = {"deadline_s": 10, "policy": policy,
+               "coverage_90_shed_w": value}
+        if policy in campaign.CONFIDENCE_POLICIES:
+            row.update(normalized_coverage_90_ci_low=.1,
+                       normalized_coverage_90_ci_high=.9)
+        rows.append(row)
 
     campaign._plot(rows, tmp_path / "frontier")
 
@@ -131,6 +153,8 @@ def test_plot_matches_hardware_attainment_presentation(tmp_path, monkeypatch):
     assert ax.xaxis.label.get_fontsize() == campaign.plot_style.LARGE_FONT_SIZE
     assert [line.get_color() for line in ax.lines] == [
         campaign.plot_style.POLICY_COLORS[policy] for policy in campaign.POLICIES]
+    assert len(ax.collections) == 2
+    assert all(collection.get_label().startswith("_") for collection in ax.collections)
     assert legend._loc == 4
     assert legend._ncols == 1
     assert legend.get_frame().get_alpha() == 1

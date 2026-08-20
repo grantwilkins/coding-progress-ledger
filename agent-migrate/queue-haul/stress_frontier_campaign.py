@@ -27,6 +27,9 @@ DEADLINES = tuple(range(10, 61, 5))
 GREEDY_SOLVER = "greedy_best_effort"
 LP_SOLVER = "lp_work_first_best_effort"
 POWER_BLIND_SOLVER = "lp_power_blind_best_effort"
+CONFIDENCE_DRAWS = 10_000
+CONFIDENCE_SEED = 1
+CONFIDENCE_POLICIES = ("queue_haul", "greedy")
 REGIMES = (
     ("jointly-binding", .75, .90, "controlled_40"),
     ("bandwidth-only", .25, 0, "controlled_40"),
@@ -150,6 +153,24 @@ def fifth_smallest(values) -> float:
     if len(values) != 40:
         raise ValueError("90% suite coverage requires exactly 40 states")
     return values[4]
+
+
+def normalized_confidence_intervals(values, regimes, draws=CONFIDENCE_DRAWS):
+    values, regimes = np.asarray(values, float), np.asarray(regimes)
+    groups = [np.flatnonzero(regimes == name) for name, *_ in REGIMES]
+    if values.ndim != 2 or values.shape[1] != 40 \
+            or any(len(group) != 8 for group in groups) or draws < 1:
+        raise ValueError("confidence intervals require eight states per regime")
+    rng = np.random.default_rng(CONFIDENCE_SEED)
+    samples = np.concatenate([
+        group[rng.integers(0, len(group), size=(draws, len(group)))]
+        for group in groups
+    ], axis=1)
+    bootstrap = np.partition(values[:, samples], 4, axis=2)[:, :, 4]
+    maximum = bootstrap.max(axis=0)
+    if np.any(maximum <= 0):
+        raise ValueError("confidence intervals require positive attainment")
+    return np.quantile(bootstrap / maximum, (.025, .975), axis=1).T
 
 
 def _best_outcome(outcomes):
@@ -278,25 +299,43 @@ def reduce(results_paths: list[Path], out: Path, promotion: dict | None = None) 
     for results_path in results_paths:
         with results_path.open(newline="") as handle:
             rows.extend(csv.DictReader(handle))
-    grouped, frontier, best = {}, [], {}
+    grouped, attained_by_state, regimes, frontier, best = {}, {}, {}, [], {}
     empirical = bool(promotion and promotion.get("passed"))
     for row in sorted(rows, key=lambda value: int(value["deadline_s"])):
-        state = row["state_id"], row["policy"]
+        state_id, policy = row["state_id"], row["policy"]
+        if state_id in regimes and regimes[state_id] != row["regime"]:
+            raise ValueError("a stress state changed regime")
+        regimes[state_id] = row["regime"]
+        state = state_id, policy
         attained = max(float(row["shed_by_deadline_w"]),
                        best.get(state, float("-inf")))
         best[state] = attained
-        grouped.setdefault((int(row["deadline_s"]), row["policy"]), []).append(attained)
+        cell = int(row["deadline_s"]), policy
+        grouped.setdefault(cell, []).append(attained)
+        attained_by_state[cell + (state_id,)] = attained
     expected = {(deadline, policy) for deadline in DEADLINES
                 for policy in POLICIES}
     if set(grouped) != expected:
         raise ValueError("incomplete stress frontier results")
-    for deadline, policy in sorted(grouped):
-        frontier.append({"deadline_s": deadline, "policy": policy,
-                         "coverage_90_shed_w": fifth_smallest(grouped[deadline, policy]),
-                         "states": 40, "claim": ("empirical deadline-shed frontier"
-                                                  if empirical else
-                                                  "modeled stress-suite sensitivity")})
+    states, cells = sorted(regimes), sorted(grouped)
+    intervals = dict(zip(cells, normalized_confidence_intervals(
+        [[attained_by_state[cell + (state,)] for state in states] for cell in cells],
+        [regimes[state] for state in states],
+    )))
+    for deadline, policy in cells:
+        row = {"deadline_s": deadline, "policy": policy,
+               "coverage_90_shed_w": fifth_smallest(grouped[deadline, policy]),
+               "states": 40, "claim": ("empirical deadline-shed frontier"
+                                        if empirical else
+                                        "modeled stress-suite sensitivity")}
+        if policy in CONFIDENCE_POLICIES:
+            row["normalized_coverage_90_ci_low"], \
+                row["normalized_coverage_90_ci_high"] = intervals[deadline, policy]
+        frontier.append(row)
     value = {"schema": "queue-haul-stress-frontier-v1", "empirical": empirical,
+             "confidence": {"level": .95, "draws": CONFIDENCE_DRAWS,
+                            "method": "regime-stratified trajectory bootstrap",
+                            "seed": CONFIDENCE_SEED},
              "frontier": frontier}
     if promotion is not None:
         value["promotion"] = promotion
@@ -315,7 +354,15 @@ def _plot(frontier: list[dict], stem: Path) -> None:
                   if row["policy"] in POLICIES)
     for policy in POLICIES:
         selected = [row for row in frontier if row["policy"] == policy]
-        ax.plot([row["deadline_s"] for row in selected],
+        deadlines = [row["deadline_s"] for row in selected]
+        if policy in CONFIDENCE_POLICIES:
+            ax.fill_between(
+                deadlines,
+                [row["normalized_coverage_90_ci_low"] for row in selected],
+                [row["normalized_coverage_90_ci_high"] for row in selected],
+                color=plot_style.POLICY_COLORS[policy], alpha=.15, linewidth=0,
+            )
+        ax.plot(deadlines,
                 [row["coverage_90_shed_w"] / maximum for row in selected],
                 **plot_style.policy_style(policy))
     ax.set(xlabel="Deadline (s)", ylabel="Normalized Power Shed", ylim=(0, 1.02))
