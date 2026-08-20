@@ -1,12 +1,16 @@
 """
 Claim:
 The stress-frontier plot scales every policy by their shared maximum, and
-Queue-Haul plans with the LP rather than an exact MILP. Every state labeled as
+uses the hardware-attainment figure's canonical wide presentation without a
+title while naming the plotted quantity normalized power shed. Queue-Haul
+plans with the LP rather than an exact MILP. Every state labeled as
 a power bootstrap samples a measured curve or a joint analytic parameter draw.
 The Queue-Haul row retains the better fully simulated LP or greedy deadline power.
 
 Plausible wrong implementations:
 - Normalize each policy independently.
+- Retain the stale modeled title or label the y-axis as generic attainment.
+- Revert to a tall canvas, small type, or noncanonical policy colors.
 - Resolve the Queue-Haul policy to the exact max-shed MILP.
 - Silently reuse one central power curve for every bootstrap state.
 - Let power-bootstrap cardinality reshuffle the timing Latin hypercube.
@@ -103,8 +107,34 @@ def test_plot_normalizes_to_the_shared_maximum(tmp_path, monkeypatch):
     import matplotlib.axes
     monkeypatch.setattr(matplotlib.axes.Axes, "plot",
                         lambda self, x, y, **kwargs: lines.append(y))
-    campaign._plot(rows, tmp_path / "frontier", False)
+    monkeypatch.setattr(matplotlib.axes.Axes, "legend", lambda *args, **kwargs: None)
+    campaign._plot(rows, tmp_path / "frontier")
     assert lines == [[value / max(values)] for value in values]
+
+
+def test_plot_matches_hardware_attainment_presentation(tmp_path, monkeypatch):
+    import matplotlib.pyplot as plt
+    monkeypatch.setattr(plt, "close", lambda _: None)
+    rows = [{"deadline_s": 10, "policy": policy,
+             "coverage_90_shed_w": value}
+            for value, policy in enumerate(campaign.POLICIES, 1)]
+
+    campaign._plot(rows, tmp_path / "frontier")
+
+    figure = plt.gcf()
+    ax = figure.axes[0]
+    legend = ax.get_legend()
+    assert tuple(figure.get_size_inches()) == campaign.plot_style.WIDE_FIGSIZE
+    assert ax.get_title() == ""
+    assert ax.get_ylabel() == "Normalized Power Shed"
+    assert ax.get_ylim() == (0, 1.02)
+    assert ax.xaxis.label.get_fontsize() == campaign.plot_style.LARGE_FONT_SIZE
+    assert [line.get_color() for line in ax.lines] == [
+        campaign.plot_style.POLICY_COLORS[policy] for policy in campaign.POLICIES]
+    assert legend._loc == 4
+    assert legend._ncols == 1
+    assert legend.get_frame().get_alpha() == 1
+    assert ax.get_xgridlines()[0].get_alpha() == .25
 
 
 def test_stress_frontier_plans_queue_haul_with_the_lp():

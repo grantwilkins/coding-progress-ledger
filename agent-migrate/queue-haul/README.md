@@ -1031,9 +1031,8 @@ MILP-free unrestricted greedy result after both are simulated to the deadline;
 an LP-infeasible target skips impossible integral recovery, so this campaign
 does not run a max-shed MILP.
 Reduction carries each state's tighter-deadline attainment forward, uses the
-fifth-smallest of 40 values, and automatically retains the title “Modeled
-stress-suite sensitivity” until every power, timing, correctness, provenance,
-transition, and hardware-window gate passes.
+fifth-smallest of 40 values, and keeps modeled-versus-empirical status in the
+reduced JSON rather than a figure title.
 
 The checked-in sensitivity uses the Azure-300W baseline-gated fixed-pack
 profile and its 200 whole-repeat bootstrap curves. Baseline gating improves the
@@ -1392,8 +1391,8 @@ Results labeled "True Greedy" in pinned outputs predate this split and used
 the destination-locked behavior.
 
 Stress-frontier figures omit the modeled MILP reference and normalize every
-displayed policy to the shared maximum 90%-coverage attainment. They include
-static and Lagrangian greedy so their LP tracking can be compared directly.
+displayed policy to the shared maximum 90%-coverage shed. The y-axis reports
+this quantity as normalized power shed.
 
 Rebuild them with:
 

@@ -301,16 +301,16 @@ def reduce(results_paths: list[Path], out: Path, promotion: dict | None = None) 
     if promotion is not None:
         value["promotion"] = promotion
     out.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
-    _plot(frontier, out.with_suffix(""), empirical)
+    _plot(frontier, out.with_suffix(""))
     return value
 
 
-def _plot(frontier: list[dict], stem: Path, empirical: bool) -> None:
+def _plot(frontier: list[dict], stem: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     plot_style.apply()
-    fig, ax = plt.subplots(figsize=(8.4, 5.4))
+    fig, ax = plt.subplots(figsize=plot_style.WIDE_FIGSIZE)
     maximum = max(row["coverage_90_shed_w"] for row in frontier
                   if row["policy"] in POLICIES)
     for policy in POLICIES:
@@ -318,11 +318,13 @@ def _plot(frontier: list[dict], stem: Path, empirical: bool) -> None:
         ax.plot([row["deadline_s"] for row in selected],
                 [row["coverage_90_shed_w"] / maximum for row in selected],
                 **plot_style.policy_style(policy))
-    ax.set(xlabel="Deadline (s)", ylabel="Normalized 90%-coverage attainment",
-           title=("Empirical deadline–shed frontier" if empirical else
-                  "Modeled stress-suite sensitivity"))
-    ax.grid(True, alpha=.3)
-    ax.legend(frameon=False, fontsize=8, ncol=2)
+    ax.set(xlabel="Deadline (s)", ylabel="Normalized Power Shed", ylim=(0, 1.02))
+    ax.tick_params(labelsize=plot_style.LARGE_FONT_SIZE)
+    ax.xaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
+    ax.yaxis.label.set_size(plot_style.LARGE_FONT_SIZE)
+    ax.grid(alpha=.25)
+    ax.legend(loc="lower right", framealpha=1, facecolor="white",
+              edgecolor="none", fontsize=plot_style.LARGE_LEGEND_FONT_SIZE)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(stem.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
