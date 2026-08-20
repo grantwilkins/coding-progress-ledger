@@ -29,7 +29,6 @@ LP_SOLVER = "lp_work_first_best_effort"
 POWER_BLIND_SOLVER = "lp_power_blind_best_effort"
 CONFIDENCE_DRAWS = 10_000
 CONFIDENCE_SEED = 1
-CONFIDENCE_POLICIES = ("queue_haul", "greedy")
 REGIMES = (
     ("jointly-binding", .75, .90, "controlled_40"),
     ("bandwidth-only", .25, 0, "controlled_40"),
@@ -328,9 +327,8 @@ def reduce(results_paths: list[Path], out: Path, promotion: dict | None = None) 
                "states": 40, "claim": ("empirical deadline-shed frontier"
                                         if empirical else
                                         "modeled stress-suite sensitivity")}
-        if policy in CONFIDENCE_POLICIES:
-            row["normalized_coverage_90_ci_low"], \
-                row["normalized_coverage_90_ci_high"] = intervals[deadline, policy]
+        row["normalized_coverage_90_ci_low"], \
+            row["normalized_coverage_90_ci_high"] = intervals[deadline, policy]
         frontier.append(row)
     value = {"schema": "queue-haul-stress-frontier-v1", "empirical": empirical,
              "confidence": {"level": .95, "draws": CONFIDENCE_DRAWS,
@@ -355,13 +353,12 @@ def _plot(frontier: list[dict], stem: Path) -> None:
     for policy in POLICIES:
         selected = [row for row in frontier if row["policy"] == policy]
         deadlines = [row["deadline_s"] for row in selected]
-        if policy in CONFIDENCE_POLICIES:
-            ax.fill_between(
-                deadlines,
-                [row["normalized_coverage_90_ci_low"] for row in selected],
-                [row["normalized_coverage_90_ci_high"] for row in selected],
-                color=plot_style.POLICY_COLORS[policy], alpha=.15, linewidth=0,
-            )
+        ax.fill_between(
+            deadlines,
+            [row["normalized_coverage_90_ci_low"] for row in selected],
+            [row["normalized_coverage_90_ci_high"] for row in selected],
+            color=plot_style.POLICY_COLORS[policy], alpha=.1, linewidth=0,
+        )
         ax.plot(deadlines,
                 [row["coverage_90_shed_w"] / maximum for row in selected],
                 **plot_style.policy_style(policy))

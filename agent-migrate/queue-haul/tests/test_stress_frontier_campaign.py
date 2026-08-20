@@ -2,9 +2,9 @@
 Claim:
 The stress-frontier plot scales every policy by their shared maximum, and
 uses the hardware-attainment figure's canonical wide presentation without a
-title while naming the plotted quantity normalized power shed. Its unlabelled
-95% confidence ribbons resample whole trajectories within each regime and
-renormalize every draw by its shared maximum. Queue-Haul
+title while naming the plotted quantity normalized power shed. Every policy's
+unlabelled 95% confidence ribbon resamples whole trajectories within each
+regime and renormalizes every draw by its shared maximum. Queue-Haul
 plans with the LP rather than an exact MILP. Every state labeled as
 a power bootstrap samples a measured curve or a joint analytic parameter draw.
 The Queue-Haul row retains the better fully simulated LP or greedy deadline power.
@@ -115,9 +115,8 @@ def test_plot_normalizes_to_the_shared_maximum(tmp_path, monkeypatch):
     values = range(2, 2 * len(campaign.POLICIES) + 1, 2)
     rows = [{"deadline_s": 10, "policy": policy,
              "coverage_90_shed_w": value,
-             **({"normalized_coverage_90_ci_low": 0,
-                 "normalized_coverage_90_ci_high": 1}
-                if policy in campaign.CONFIDENCE_POLICIES else {})}
+             "normalized_coverage_90_ci_low": 0,
+             "normalized_coverage_90_ci_high": 1}
             for policy, value in zip(campaign.POLICIES, values)]
     lines = []
     monkeypatch.setattr(campaign.plot_style, "policy_style", lambda policy: {})
@@ -135,10 +134,9 @@ def test_plot_matches_hardware_attainment_presentation(tmp_path, monkeypatch):
     rows = []
     for value, policy in enumerate(campaign.POLICIES, 1):
         row = {"deadline_s": 10, "policy": policy,
-               "coverage_90_shed_w": value}
-        if policy in campaign.CONFIDENCE_POLICIES:
-            row.update(normalized_coverage_90_ci_low=.1,
-                       normalized_coverage_90_ci_high=.9)
+               "coverage_90_shed_w": value,
+               "normalized_coverage_90_ci_low": .1,
+               "normalized_coverage_90_ci_high": .9}
         rows.append(row)
 
     campaign._plot(rows, tmp_path / "frontier")
@@ -153,7 +151,7 @@ def test_plot_matches_hardware_attainment_presentation(tmp_path, monkeypatch):
     assert ax.xaxis.label.get_fontsize() == campaign.plot_style.LARGE_FONT_SIZE
     assert [line.get_color() for line in ax.lines] == [
         campaign.plot_style.POLICY_COLORS[policy] for policy in campaign.POLICIES]
-    assert len(ax.collections) == 2
+    assert len(ax.collections) == len(campaign.POLICIES)
     assert all(collection.get_label().startswith("_") for collection in ax.collections)
     assert legend._loc == 4
     assert legend._ncols == 1
