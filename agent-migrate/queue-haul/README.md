@@ -1643,10 +1643,12 @@ grid, grouped holdouts, and bootstrap fit distinguish offered service load from
 the saturated-kernel envelope measured by `power_model_campaign.py`. H100 runs
 name the pinned model and same-stack prefill/decode capacities; resumable run
 metadata freezes those inputs.
+With `--vllm`, the runner owns the optimized server lifecycle and additionally
+pins its command, git revision, GPU UUID, and same-launch resident-idle anchors.
 
 ```bash
 uv run python phase_power_calibration.py prepare --out runs/h100-phase-power
-uv run python phase_power_calibration.py run --plan runs/h100-phase-power/plan.json --model MODEL --hardware h100 --prefill-tps F --decode-tps G --out /datadrive/h100-phase-power/MODEL
+uv run python phase_power_calibration.py run --plan runs/h100-phase-power/plan.json --model MODEL --hardware h100 --prefill-tps F --decode-tps G --vllm VLLM --out /datadrive/h100-phase-power/MODEL
 ```
 
 - `power_window_sensitivity.py` and `power_profile_reduce.py`: source power.

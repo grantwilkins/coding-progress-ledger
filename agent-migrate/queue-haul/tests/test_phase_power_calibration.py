@@ -32,6 +32,7 @@ def test_plan_is_balanced_minimum():
     plan = calibration.campaign_plan()
     assert len(plan["cells"]) == 5 * 6 * 3
     assert {row["measurement_s"] for row in plan["cells"]} == {30}
+    assert plan["idle_measurement_s"] == 30
 
 
 def test_run_plan_resumes_completed_cells(tmp_path, monkeypatch):
@@ -75,6 +76,23 @@ def test_explicit_h100_target_is_frozen_in_metadata(tmp_path, monkeypatch):
     metadata = json.loads((tmp_path / "run/metadata.json").read_text())
     assert (metadata["model"], metadata["F_prefill_tps"],
             metadata["G_decode_tps"]) == ("model", 2, 3)
+
+
+def test_idle_anchor_rejects_work_and_persists_power(tmp_path, monkeypatch):
+    values = iter(((1, 2, 3), (1, 2, 3)))
+    monkeypatch.setattr(calibration, "_metrics", lambda *_: next(values))
+    monkeypatch.setattr(calibration.time, "sleep", lambda _: None)
+    monkeypatch.setattr(calibration.power_rate_sweep, "power",
+                        lambda path, _stop, _interval: path.write_text(
+                            "monotonic_ns,wall_ns,power_w,utilization_pct,memory_mib\n"
+                            + "".join(f"{i},0,100,0,1\n" for i in range(10))))
+    ticks = iter((0, 10))
+    monkeypatch.setattr(calibration.time, "monotonic_ns", lambda: next(ticks))
+
+    row = calibration.measure_idle("host", 1, tmp_path, 0, 1)
+
+    assert row["power_mean_w"] == 100
+    assert json.loads((tmp_path / "idle.jsonl").read_text())["sequence"] == 0
 
 
 def test_fit_accepts_compact_identifiable_group_holdouts():
