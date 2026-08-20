@@ -29,6 +29,7 @@ import json
 import pytest
 
 import fleet_shed_frontier_campaign as campaign
+import plot_fleet_shed_frontier as plot
 from planner import source_power
 from power_model import ExpectedPower
 from destination import ProfileRateLimit
@@ -208,9 +209,8 @@ def test_replay_uses_the_fitted_regional_completion_factors(profile, workload):
         assert destination_type.migration["kv_transfer"].compute_completion_factor == 1
 
 
-def test_max_shed_reports_the_largest_contract_respecting_shed(monkeypatch):
-    """A cell reports shed it actually executed inside every contract, not the
-    largest request some probe happened to meet."""
+def test_max_shed_probes_the_fixed_ladder_despite_nonmonotone_contracts(
+        monkeypatch):
     from dataclasses import dataclass
     from types import SimpleNamespace
 
@@ -220,24 +220,59 @@ def test_max_shed_reports_the_largest_contract_respecting_shed(monkeypatch):
 
     asks = []
 
-    def stepped(scenario, *args, **kwargs):
+    def stepped(scenario, profile, paths, solver, **kwargs):
         asks.append(100.0 - scenario.power_limit_w)
-        return SimpleNamespace(moves=())
+        return SimpleNamespace(moves=(), solver=solver)
 
     monkeypatch.setattr(campaign, "plan", stepped)
 
     def evaluate(planned, ask):
-        # Shed tracks the ask, but past 60 W the plan misses its deadline, so
-        # the largest lawful shed is the one just below that edge.
-        return {"realized_shed_w": ask, "within_contract": ask <= 60.0}
+        fraction = ask / 80.0
+        lawful = fraction in {campaign.ASK_FRACTIONS[0], .025, .50, .90}
+        # Equal maxima at separated asks exercise the lower-ask tie break.
+        shed = 70.0 if fraction in {.50, .90} else ask
+        return {"realized_shed_w": shed, "within_contract": lawful}
 
     _, outcome, ask, probes = campaign.max_shed_plan(
-        Snapshot(0.0), None, None, "greedy", 1, "normal", None, 100.0, evaluate)
+        Snapshot(0.0), None, None, ("greedy",), 1, "normal", 100.0, 80.0,
+        evaluate)
 
-    assert outcome["within_contract"] and ask <= 60.0
-    assert outcome["realized_shed_w"] == pytest.approx(60.0, abs=100.0 / 2 ** 7)
-    assert probes == campaign.MAX_SHED_STEPS
-    assert max(asks) > 60.0, "the search must probe past the edge to find it"
+    assert asks == pytest.approx([80.0 * f for f in campaign.ASK_FRACTIONS])
+    assert outcome == {"realized_shed_w": 70.0, "within_contract": True}
+    assert ask == pytest.approx(40.0)
+    assert probes == len(campaign.ASK_FRACTIONS)
+
+
+def test_max_shed_portfolio_retains_the_best_restricted_incumbent(monkeypatch):
+    from dataclasses import dataclass
+    from types import SimpleNamespace
+
+    @dataclass
+    class Snapshot:
+        power_limit_w: float
+
+    monkeypatch.setattr(campaign, "plan", lambda scenario, profile, paths, solver,
+                        **kwargs: SimpleNamespace(moves=(), solver=solver))
+    shed = {"lp_work_first": 50.0, "kv_only": 70.0, "replay_only": 60.0}
+
+    planned, outcome, _, probes = campaign.max_shed_plan(
+        Snapshot(0.0), None, None,
+        ("lp_work_first", "kv_only", "replay_only"), 1, "normal", 100.0,
+        80.0, lambda planned, ask: {
+            "realized_shed_w": shed[planned.solver], "within_contract": True})
+
+    assert planned.solver == "kv_only"
+    assert outcome["realized_shed_w"] == 70.0
+    assert probes == len(campaign.ASK_FRACTIONS) * 3
+
+def test_planner_seed_is_shared_by_matched_policies():
+    row = {"deadline_s": 300.0, "mode": "normal", "tier": "natural",
+           "rho": .38, "workload": campaign.HEADLINE_WORKLOAD,
+           "sessions": campaign.SESSIONS, "seed": 1001}
+
+    assert campaign._planner_seed({**row, "policy": "queue_haul"}) == \
+        campaign._planner_seed({**row, "policy": "kv_only"})
+
 
 
 def test_max_shed_returns_the_last_probe_when_nothing_is_lawful(monkeypatch):
@@ -249,9 +284,9 @@ def test_max_shed_returns_the_last_probe_when_nothing_is_lawful(monkeypatch):
         power_limit_w: float
 
     monkeypatch.setattr(campaign, "plan",
-                        lambda *a, **k: SimpleNamespace(moves=()))
+                        lambda *a, **k: SimpleNamespace(moves=(), solver="greedy"))
     _, outcome, _, _ = campaign.max_shed_plan(
-        Snapshot(0.0), None, None, "greedy", 1, "normal", None, 100.0,
+        Snapshot(0.0), None, None, ("greedy",), 1, "normal", 100.0, 80.0,
         lambda planned, ask: {"realized_shed_w": ask, "within_contract": False})
 
     assert not outcome["within_contract"]
@@ -306,11 +341,11 @@ def _mini_campaign(tmp_path, rows):
                      "emergency": {"rps": 8.0, "ttft_slo_s": 10.0,
                                    "right_censored": True}},
         "inputs": {}, "git_sha": "cafe" * 10,
-        "rows": [{"row_id": i, "deadline_s": 300.0,
+        "rows": [{"row_id": i, "deadline_s": row.get("deadline_s", 300.0),
                   "policy": row.get("policy", "greedy"),
                   "mode": "normal", "tier": "natural",
                   "workload": campaign.HEADLINE_WORKLOAD,
-                  "sessions": campaign.SESSIONS,
+                  "sessions": row.get("sessions", campaign.SESSIONS),
                   "rho": row.get("rho", 0.45), "seed": row["seed"],
                   "headline": row.get("headline", True)}
                  for i, row in enumerate(rows)],
@@ -330,9 +365,12 @@ def _mini_campaign(tmp_path, rows):
 
 def test_reduce_medians_executed_shed_and_ignores_broken_contracts(tmp_path):
     _mini_campaign(tmp_path, [
-        {"seed": 1, "executed_shed_fraction": 0.50, "within_contract": True},
-        {"seed": 2, "executed_shed_fraction": 0.90, "within_contract": True},
-        {"seed": 3, "executed_shed_fraction": 0.99, "within_contract": False},
+        {"seed": 1, "executed_shed_fraction": 0.50, "within_contract": True,
+         "committed_kv_fraction": .2, "east_kv_transfer": 10},
+        {"seed": 2, "executed_shed_fraction": 0.90, "within_contract": True,
+         "committed_kv_fraction": .4, "east_kv_transfer": 20},
+        {"seed": 3, "executed_shed_fraction": 0.99, "within_contract": False,
+         "committed_kv_fraction": .99, "east_kv_transfer": 99},
     ])
 
     campaign.reduce(tmp_path)
@@ -343,6 +381,8 @@ def test_reduce_medians_executed_shed_and_ignores_broken_contracts(tmp_path):
     assert float(row["median_executed_shed_fraction"]) == pytest.approx(0.50)
     assert float(row["max_executed_shed_fraction"]) == pytest.approx(0.90)
     assert int(row["contracts_met"]) == 2
+    assert float(row["median_committed_kv_fraction"]) == pytest.approx(.2)
+    assert float(row["median_east_kv_transfer"]) == pytest.approx(10)
 
 
 def test_reduce_scores_multi_action_against_the_best_single_action(tmp_path):
@@ -364,6 +404,84 @@ def test_reduce_scores_multi_action_against_the_best_single_action(tmp_path):
     assert float(row["best_flexible"]) == pytest.approx(0.70)
     assert float(row["multi_action_gain"]) == pytest.approx(0.12)
     assert row["best_flexible_policy"] == "queue_haul"
+
+
+def test_reduce_excludes_isolated_fastest_and_reports_the_winners_mix(tmp_path):
+    _mini_campaign(tmp_path, [
+        {"seed": 1, "policy": "queue_haul", "executed_shed_fraction": .70,
+         "within_contract": True, "committed_kv_fraction": .4},
+        {"seed": 1, "policy": "greedy", "executed_shed_fraction": .72,
+         "within_contract": True, "committed_kv_fraction": .1},
+        {"seed": 1, "policy": "isolated_fastest", "executed_shed_fraction": .95,
+         "within_contract": True, "committed_kv_fraction": .9},
+        {"seed": 1, "policy": "replay_only", "executed_shed_fraction": .53,
+         "within_contract": True},
+        {"seed": 1, "policy": "kv_only", "executed_shed_fraction": .58,
+         "within_contract": True},
+    ])
+
+    campaign.reduce(tmp_path)
+
+    row = campaign._csv(tmp_path / "multi_action_advantage.csv")[0]
+    assert float(row["best_flexible"]) == pytest.approx(.72)
+    assert row["best_flexible_policy"] == "greedy"
+    assert float(row["best_flexible_kv_fraction"]) == pytest.approx(.1)
+
+
+def test_reduce_rejects_single_action_dominance_and_deadline_regressions(tmp_path):
+    _mini_campaign(tmp_path, [
+        {"seed": 1, "policy": "queue_haul", "executed_shed_fraction": .4,
+         "within_contract": True},
+        {"seed": 1, "policy": "kv_only", "executed_shed_fraction": .6,
+         "within_contract": True},
+        {"seed": 1, "policy": "replay_only", "executed_shed_fraction": .5,
+         "within_contract": True},
+    ])
+    with pytest.raises(RuntimeError, match="dominated"):
+        campaign.reduce(tmp_path)
+
+    # The hard invariant is per matched seed, not only after medians hide a loss.
+    _mini_campaign(tmp_path, [
+        {"seed": 1, "policy": "queue_haul", "executed_shed_fraction": .4,
+         "within_contract": True},
+        {"seed": 1, "policy": "kv_only", "executed_shed_fraction": .6,
+         "within_contract": True},
+        {"seed": 2, "policy": "queue_haul", "executed_shed_fraction": .8,
+         "within_contract": True},
+        {"seed": 2, "policy": "kv_only", "executed_shed_fraction": .6,
+         "within_contract": True},
+    ])
+    with pytest.raises(RuntimeError, match="queue_haul is dominated"):
+        campaign.reduce(tmp_path)
+
+
+    _mini_campaign(tmp_path, [
+        {"seed": 1, "policy": "queue_haul", "deadline_s": 300,
+         "executed_shed_fraction": .7, "within_contract": True},
+        {"seed": 1, "policy": "queue_haul", "deadline_s": 600,
+         "executed_shed_fraction": .6, "within_contract": True},
+    ])
+    with pytest.raises(RuntimeError, match="decreases with deadline"):
+        campaign.reduce(tmp_path)
+
+
+def test_reduce_reports_contract_masked_invariance_by_policy(tmp_path):
+    _mini_campaign(tmp_path, [
+        {"seed": 1, "policy": "queue_haul", "executed_shed_fraction": .7,
+         "within_contract": True},
+        {"seed": 1, "policy": "queue_haul", "executed_shed_fraction": .9,
+         "within_contract": False, "headline": False,
+         "sessions": campaign.INVARIANCE_SESSIONS},
+    ])
+
+    summary = campaign.reduce(tmp_path)
+
+    row = campaign._csv(tmp_path / "fleet_invariance.csv")[0]
+    assert float(row["fleet_shed"]) == 0
+    assert float(row["delta"]) == pytest.approx(-.7)
+    assert summary["fleet_invariance_max_abs_delta_by_policy"] == {
+        "queue_haul": pytest.approx(.7)}
+    assert "max_fleet_invariance_delta" not in summary
 
 
 def test_reduce_rejects_stale_or_mixed_shards(tmp_path):
@@ -408,8 +526,27 @@ def test_reduce_accepts_absent_but_not_partial_sensitivity(tmp_path):
     # Headline complete, sensitivity absent: a valid first phase.
     shard.write_text("\n".join(lines[:2]) + "\n")
     assert campaign.reduce(tmp_path)["rows"] == 1
+    assert (tmp_path / "README.md").read_text().startswith("# Fleet shed frontier")
 
     # One of two sensitivity rows is a mixed, partial reduction.
     shard.write_text("\n".join(lines[:3]) + "\n")
     with pytest.raises(RuntimeError, match="sensitivity"):
         campaign.reduce(tmp_path)
+
+
+def test_plot_reads_exactly_one_rho_curve(tmp_path):
+    rows = [{
+        "deadline_s": deadline, "policy": policy, "rho": rho,
+        "median_executed_shed_fraction": rho,
+        "min_executed_shed_fraction": rho - .01,
+        "max_executed_shed_fraction": rho + .01,
+    } for policy in plot.POLICIES for rho in (.30, .38)
+        for deadline in (300, 600)]
+    campaign.write_csv(tmp_path / "frontier.csv", rows)
+
+    curves = plot.read(tmp_path / "frontier.csv", .38)
+
+    assert set(curves) == set(plot.POLICIES)
+    assert all(len(curve[0]) == 2 for curve in curves.values())
+    assert all(shed == pytest.approx([.38, .38])
+               for _, shed, _, _ in curves.values())

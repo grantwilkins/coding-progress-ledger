@@ -37,7 +37,7 @@ HEADLINE_WORKLOAD = "agentic_tool_loop"
 ENVELOPE = ROOT / "outputs/agentic-rps-sweep-a100-pooled-p90-tpot-20260817/summary.json"
 TIMING = ROOT / "outputs/timing-power-validation-20260814/timing-summary.json"
 LOADED = ROOT / "outputs/loaded-service-model-20260815/model.json"
-OUT = ROOT / "outputs/fleet-shed-frontier-a100-20260818"
+OUT = ROOT / "outputs/fleet-shed-frontier-a100-20260820"
 
 MODEL_ID = "openai/gpt-oss-20b"
 REGIONS = ("east", "germany")
@@ -53,17 +53,13 @@ POLICIES = {
     "isolated_fastest": "isolated_fastest", "kv_only": "kv_only",
     "replay_only": "replay_only",
 }
+SINGLE_ACTION_POLICIES = ("kv_only", "replay_only")
+FLEXIBLE_POLICIES = ("queue_haul", "greedy")
 ADMISSION_MODES = ("normal", "emergency")
-# Requested fractions of removable source power.  Every campaign in this repo
-# asks for an attainable fraction and measures attainment; asking for the idle
-# floor instead drives the target-first LP into its infeasible fallback, where a
-# linear credit model over a concave curve has no reason to beat greedy.
-#
-# The grid stops below 1.00 deliberately: requesting the whole removable band
-# sets the limit exactly at the idle floor, which only a full evacuation reaches,
-# so that row alone lands back in the infeasible fallback and its attainment is
-# decided by float tolerance rather than by the plan.  It runs to 0.99 so the
-# frontier top is set by capacity, not by the grid.
+# Outcome-independent asks cover low shed through near-full evacuation.  Search
+# must inspect all of them because planner composition makes contract satisfaction
+# non-monotone in the requested credit.
+ASK_FRACTIONS = (.005, .01, .025, .05, .10, .25, .50, .75, .90, .99)
 # Destination scarcity is the headline axis: migration headroom is what is
 # left of a replica after its own baseline load and the source demand it must
 # absorb, so rho sets how much room the destinations have to accept migration
@@ -88,7 +84,7 @@ PROMPT, OUTPUT, REF_CONTEXT = 3920, 1024, 3920
 NORMAL_TTFT_SLO_S, EMERGENCY_TTFT_SLO_S = 2.0, 10.0
 WINDOW_S = 5
 SHARDS = 32
-SCHEMA = "queue-haul-fleet-shed-frontier-v2"
+SCHEMA = "queue-haul-fleet-shed-frontier-v3"
 ENVELOPE_SCHEMA = "queue-haul-agentic-rps-sweep-v3"
 
 
@@ -121,6 +117,12 @@ def request_work(case) -> np.ndarray:
     return np.array([PROMPT / case.prefill.rate(REF_CONTEXT, 1),
                      OUTPUT / case.decode.rate(REF_CONTEXT, 1)])
 
+def _planner_seed(row: dict) -> int:
+    """Match solver randomness across policies in the same scenario."""
+    return stable_seed(row["deadline_s"], row["mode"], row["tier"], row["rho"],
+                       row["workload"], row["sessions"], row["seed"])
+
+
 
 def migration_headroom(rho: float, demand: float, replicas: int,
                        bound: float) -> float:
@@ -138,37 +140,26 @@ def migration_headroom(rho: float, demand: float, replicas: int,
     return headroom
 
 
-MAX_SHED_STEPS = 8
-
-
-def max_shed_plan(scenario, profile, architecture, solver, seed, mode, power,
-                  initial: float, evaluate):
-    """Largest executed shed a policy delivers inside every contract.
-
-    The request grid it replaces was a coarse threshold search: it reported the
-    largest *asked* fraction some row happened to meet, not the shed the policy
-    can actually execute.  Here the credit ask is bisected directly and every
-    probe is executed, so the reported number is measured, not requested.
-    ``evaluate`` returns the executed outcome for one plan and decides whether
-    it honoured the deadline and the destination envelope.
-    """
-    low, high, best, probes = 0.0, initial, None, 0
-    for probes in range(1, MAX_SHED_STEPS + 1):
-        ask = (low + high) / 2
-        planned = plan(replace(scenario, power_limit_w=initial - ask), profile,
-                       {}, solver, seed=seed, destination=architecture,
-                       admission_mode=mode)
-        outcome = evaluate(planned, ask)
-        if outcome["within_contract"]:
-            if best is None or outcome["realized_shed_w"] > best[1]["realized_shed_w"]:
-                best = planned, outcome, ask
-            low = ask
-        else:
-            high = ask
-    if best is None:
-        # Nothing the policy plans at any ask executes inside the contracts.
-        return planned, outcome, ask, probes
-    return (*best, probes)
+def max_shed_plan(scenario, profile, architecture, solvers, seed, mode,
+                  initial: float, removable: float, evaluate):
+    """Best lawful executed shed among fixed asks and solver incumbents."""
+    if not solvers:
+        raise ValueError("max-shed search requires a solver")
+    best, probes = None, 0
+    for fraction in ASK_FRACTIONS:
+        ask = fraction * removable
+        for solver in solvers:
+            probes += 1
+            planned = plan(
+                replace(scenario, power_limit_w=initial - ask), profile, {},
+                solver, seed=seed, destination=architecture,
+                admission_mode=mode)
+            outcome = evaluate(planned, ask)
+            rank = (outcome["realized_shed_w"], planned.solver == solvers[0],
+                    -ask)
+            if outcome["within_contract"] and (best is None or rank > best[3]):
+                best = planned, outcome, ask, rank
+    return (planned, outcome, ask, probes) if best is None else (*best[:3], probes)
 
 
 def build_fleet(profile, workload, sessions: int, seed: int, deadline_s: float,
@@ -321,8 +312,7 @@ def run_row(row: dict, manifest: dict) -> dict:
     idle = source_power(scenario, profile,
                         [s.session_id for s in scenario.sessions])
     removable = initial - idle
-    seed = stable_seed(row["policy"], row["deadline_s"], row["mode"], row["tier"],
-                       row["rho"], row["seed"])
+    seed = _planner_seed(row)
     pool_replicas = {pool.pool_id: len(pool.replicas)
                      for pool in architecture.pools}
     baseline_rps = row["rho"] * manifest["envelope"]["normal"]["rps"]
@@ -377,9 +367,12 @@ def run_row(row: dict, manifest: dict) -> dict:
                 and all(item.within_contract for item in result.pool_service)),
         }
 
+    native = POLICIES[row["policy"]]
+    solvers = (native, *(POLICIES[p] for p in SINGLE_ACTION_POLICIES)) \
+        if row["policy"] == "queue_haul" else (native,)
     planned, outcome, ask, probes = max_shed_plan(
-        scenario, profile, architecture, POLICIES[row["policy"]], seed,
-        row["mode"], power, initial, evaluate)
+        scenario, profile, architecture, solvers, seed, row["mode"], initial,
+        removable, evaluate)
     methods = {method: sum(m.method == method for m in planned.moves)
                for method in ("replay", "kv_transfer")}
     binding = max(planned.resource_uses, key=lambda r: r.utilization,
@@ -393,7 +386,9 @@ def run_row(row: dict, manifest: dict) -> dict:
         "migration_headroom": headroom, "absorbed_fraction": absorbed,
         "initial_source_power_w": initial, "idle_source_power_w": idle,
         "removable_power_w": removable, "credit_target_w": ask,
-        "max_shed_probes": probes,
+        "max_shed_asks": len(ASK_FRACTIONS), "max_shed_probes": probes,
+        "selected_solver": planned.solver,
+        "restricted_fallback": planned.solver != native,
         "planned_shed_w": initial - planned.planned_source_power_w,
         "moves": len(planned.moves), "replay_moves": methods["replay"],
         "kv_moves": methods["kv_transfer"], "solve_s": planned.solve_s,
@@ -477,11 +472,10 @@ def prepare(out: Path) -> dict:
                          text=True, cwd=ROOT, check=True).stdout.strip()
     manifest = {
         "schema": SCHEMA,
-        "claim": "deadline-to-shed frontier for one shedding source site and two "
-                 "equally sized destination sites held inside the measured "
-                 "offered-RPS service envelope; the headline is each seed's "
-                 "largest executed shed attained by the deadline, aggregated "
-                 "over seeds by the median",
+        "claim": "best contract-respecting executed shed over a fixed ask "
+                 "ladder for one source and two destinations; Queue-Haul is "
+                 "LP-led with KV-only and replay-only incumbents, and seeds are "
+                 "aggregated by the median",
         "sessions": SESSIONS, "shards": SHARDS, "window_s": WINDOW_S,
         "source_site": SOURCE_SITE, "sites": SITES,
         "envelope": {
@@ -526,6 +520,10 @@ def _csv(path: Path) -> list[dict]:
         return list(csv.DictReader(stream))
 
 
+def _lawful_value(row: dict, key: str) -> float:
+    return float(row[key]) if row["within_contract"] == "True" else 0.0
+
+
 def reduce(out: Path) -> dict:
     manifest = json.loads((out / "plan.json").read_text())
     if manifest["schema"] != SCHEMA:
@@ -557,6 +555,31 @@ def reduce(out: Path) -> dict:
         raise RuntimeError("sensitivity shards are incomplete")
     headline = [row for row in rows if row["headline"] == "True"]
     envelope = manifest["envelope"]["normal"]["rps"]
+    fields = ("deadline_s", "rho", "mode", "tier", "workload", "sessions", "seed")
+    cells = {}
+    for row in rows:
+        cells.setdefault(tuple(row[key] for key in fields), {})[row["policy"]] = row
+    for key, cell in cells.items():
+        if "queue_haul" not in cell:
+            continue
+        qh = _lawful_value(cell["queue_haul"], "executed_shed_fraction")
+        for policy in SINGLE_ACTION_POLICIES:
+            if policy in cell and qh + 1e-9 < _lawful_value(
+                    cell[policy], "executed_shed_fraction"):
+                raise RuntimeError(
+                    f"queue_haul is dominated by {policy} at {dict(zip(fields, key))}")
+    for policy, rho, seed in sorted({
+            (row["policy"], float(row["rho"]), row["seed"]) for row in headline}):
+        curve = sorted(
+            (row for row in headline
+             if (row["policy"], float(row["rho"]), row["seed"])
+             == (policy, rho, seed)),
+            key=lambda row: float(row["deadline_s"]))
+        for earlier, later in zip(curve, curve[1:]):
+            if _lawful_value(later, "executed_shed_fraction") + 1e-9 \
+                    < _lawful_value(earlier, "executed_shed_fraction"):
+                raise RuntimeError(
+                    f"{policy} at rho={rho}, seed={seed} decreases with deadline")
 
     # One executed number per (deadline, policy, rho): the median over seeds of
     # the largest shed that policy actually delivered inside every contract.
@@ -569,9 +592,8 @@ def reduce(out: Path) -> dict:
         group = [row for row in headline
                  if (float(row["deadline_s"]), row["policy"], float(row["rho"]))
                  == (deadline, policy, rho)]
-        shed = [float(row["executed_shed_fraction"])
-                if row["within_contract"] == "True" else 0.0 for row in group]
-        kv = [float(row["committed_kv_fraction"]) for row in group]
+        shed = [_lawful_value(row, "executed_shed_fraction")
+                for row in group]
         frontier.append({
             "deadline_s": deadline, "policy": policy, "rho": rho,
             "seeds": len(group),
@@ -579,41 +601,47 @@ def reduce(out: Path) -> dict:
             "min_executed_shed_fraction": min(shed),
             "max_executed_shed_fraction": max(shed),
             "median_executed_shed_kw": float(np.median(
-                [float(row["executed_shed_w"]) if row["within_contract"] == "True"
-                 else 0.0 for row in group])) / 1000,
-            "median_committed_kv_fraction": float(np.median(kv)),
+                [_lawful_value(row, "executed_shed_w") for row in group])) / 1000,
+            "median_committed_kv_fraction": float(np.median(
+                [_lawful_value(row, "committed_kv_fraction") for row in group])),
             "contracts_met": sum(row["within_contract"] == "True"
                                  for row in group),
+            "restricted_fallbacks": sum(
+                row.get("restricted_fallback") == "True" for row in group),
             **{f"median_{region}_{method}": float(np.median(
-                [float(row[f"{region}_{method}"]) for row in group]))
+                [_lawful_value(row, f"{region}_{method}") for row in group]))
                for region in REGIONS
                for method in ("replay", "kv_transfer")},
         })
 
-    # The multi-action claim, measured: at each (deadline, rho) how much more
-    # the best flexible policy shed than the best single-action baseline.
-    SINGLE = ("kv_only", "replay_only")
+    # Compare joint policies only with the two single-action restrictions.
     advantage = []
     for deadline, rho in sorted({(k[0], k[2]) for k in keys}):
         cell = {row["policy"]: row for row in frontier
                 if (row["deadline_s"], row["rho"]) == (deadline, rho)}
-        if not set(SINGLE) <= set(cell):
+        if not set(SINGLE_ACTION_POLICIES) <= set(cell):
             continue
-        best_single = max(cell[p]["median_executed_shed_fraction"] for p in SINGLE)
-        flexible = {p: cell[p]["median_executed_shed_fraction"]
-                    for p in cell if p not in SINGLE}
-        best_flexible = max(flexible.values(), default=0.0)
+        best_single = max(
+            cell[p]["median_executed_shed_fraction"]
+            for p in SINGLE_ACTION_POLICIES)
+        flexible = {
+            p: cell[p]["median_executed_shed_fraction"]
+            for p in FLEXIBLE_POLICIES if p in cell}
+        if not flexible:
+            continue
+        winner = max(flexible, key=flexible.get)
+        best_flexible = flexible[winner]
+        if best_flexible + 1e-9 < best_single:
+            raise RuntimeError(
+                f"flexible policies are dominated at deadline={deadline}, rho={rho}")
         advantage.append({
             "deadline_s": deadline, "rho": rho,
             "best_single_action": best_single,
             "best_flexible": best_flexible,
             "multi_action_gain": best_flexible - best_single,
-            "best_flexible_policy": max(flexible, key=flexible.get)
-            if flexible else "",
-            "best_flexible_kv_fraction": max(
-                (row["median_committed_kv_fraction"] for row in frontier
-                 if (row["deadline_s"], row["rho"]) == (deadline, rho)
-                 and row["policy"] not in SINGLE), default=0.0),
+            "best_flexible_policy": winner,
+            "best_flexible_kv_fraction":
+                cell[winner]["median_committed_kv_fraction"],
         })
 
     compliance = [{
@@ -641,14 +669,19 @@ def reduce(out: Path) -> dict:
                  == (row["policy"], float(row["deadline_s"]),
                      float(row["rho"]), row["seed"])]
         if match:
+            headline_shed = _lawful_value(
+                match[0], "executed_shed_fraction")
+            fleet_shed = _lawful_value(row, "executed_shed_fraction")
             invariance.append({
                 "deadline_s": float(row["deadline_s"]), "policy": row["policy"],
                 "headline_sessions": int(match[0]["sessions"]),
-                "headline_shed": float(match[0]["executed_shed_fraction"]),
+                "headline_shed": headline_shed,
+                "headline_within_contract":
+                    match[0]["within_contract"] == "True",
                 "fleet_sessions": int(row["sessions"]),
-                "fleet_shed": float(row["executed_shed_fraction"]),
-                "delta": float(row["executed_shed_fraction"])
-                - float(match[0]["executed_shed_fraction"]),
+                "fleet_shed": fleet_shed,
+                "fleet_within_contract": row["within_contract"] == "True",
+                "delta": fleet_shed - headline_shed,
             })
     if invariance:
         write_csv(out / "fleet_invariance.csv", invariance)
@@ -659,12 +692,17 @@ def reduce(out: Path) -> dict:
     summary = {
         "schema": SCHEMA, "claim": manifest["claim"],
         "sessions": manifest["sessions"], "envelope": manifest["envelope"],
-        "rows": len(rows), "headline_rows": len(headline),
+        "rows": len(rows), "planned_rows": len(expected),
+        "headline_rows": len(headline), "partial": len(seen) != len(expected),
+        "missing_row_ids": sorted(set(expected) - seen),
         "rho_grid": list(RHOS),
         "headline_sessions": SESSIONS,
         "fleet_invariance_sessions": INVARIANCE_SESSIONS,
-        "max_fleet_invariance_delta": max(
-            (abs(row["delta"]) for row in invariance), default=None),
+        "fleet_invariance_max_abs_delta_by_policy": {
+            policy: max(abs(row["delta"]) for row in invariance
+                        if row["policy"] == policy)
+            for policy in POLICIES
+            if any(row["policy"] == policy for row in invariance)},
         "max_multi_action_gain": max(
             (row["multi_action_gain"] for row in advantage), default=0.0),
         "normal_mode_envelope_breaches": len(breaches),
@@ -719,19 +757,16 @@ def reduce(out: Path) -> dict:
             "They dip below a per-replica prefill-throughput estimate at 16384 "
             "tokens; a scalar floor was tried and rejected because it tripled "
             "the error against that same evidence file.",
-            "This profile has no phase_power, so sessions are priced by "
-            "their initial marginal power, which undercounts the concave "
-            "removable power several-fold; the calibration ladder compensates "
-            "by scaling the credit ask until the realised shed matches the "
-            "request. The LP objective is modular and true shed is "
-            "supermodular, so no per-session price can make the last session "
-            "on an instance worth more than the first.",
-            "queue_haul is the target-first LP. In a separate spot check at a "
-            "300 s deadline and a 25% request it reached 0.96 of the requested "
-            "shed where the Lagrangian greedy, which scores prefixes on the "
-            "exact joint gain, reached 1.00. That solver is not swept here "
-            "because its prefix scoring is superlinear and does not finish at "
-            "fleet scale; the gap is the linear proxy, not the resource model.",
+            "This profile has no phase_power, so the modular credit model "
+            "does not exactly rank the supermodular executed shed. Every policy "
+            "therefore runs the same fixed ask ladder and is scored only on "
+            "contract-respecting executed shed; this is a sampled frontier, not "
+            "a proof of the global optimum between probes.",
+            "queue_haul is an LP-led portfolio: the unrestricted target-first "
+            "LP and the KV-only and replay-only incumbents are evaluated at "
+            "every ask, and selected_solver records the lawful winner. This "
+            "guarantees a tie or win over those single-action implementations; "
+            "strict gains come only from the unrestricted LP.",
             "Source packing is descending-load first-fit, which gives each "
             "instance near-identical sessions and so flatters any credit-ordered "
             "selector; an arrival-order fleet is a harder case and is not swept "
@@ -753,30 +788,44 @@ def reduce(out: Path) -> dict:
         f"{row['best_single_action']:.0%} | {row['best_flexible']:.0%} | "
         f"{row['multi_action_gain']:+.1%} |" for row in advantage
         if row["rho"] == headline_rho)
+    inv = "\n".join(
+        f"| {row['deadline_s']:.0f} | {row['policy']} | "
+        f"{row['headline_shed']:.4f} | {row['fleet_shed']:.4f} | "
+        f"{row['delta']:+.4f} | "
+        f"{row['headline_within_contract'] and row['fleet_within_contract']} |"
+        for row in invariance)
+    status = (f"Complete: {len(rows):,}/{len(expected):,} planned rows."
+              if len(rows) == len(expected) else
+              f"**Partial: {len(rows):,}/{len(expected):,} planned rows.**")
+    gains_section = (
+        f"## What multiple actions buy at rho={headline_rho}\n\n"
+        f"| Deadline (s) | rho | Best single action | Best flexible | Gain |\n"
+        f"|---|---|---|---|---|\n{gains}\n\n") if gains else ""
+    invariance_section = (
+        "## Fleet invariance\n\n"
+        "| Deadline (s) | Policy | Headline shed | Fleet shed | Delta | "
+        "Both lawful |\n|---|---|---|---|---|---|\n"
+        f"{inv}\n") if inv else (
+        "## Fleet invariance\n\nNot included in this reduction.\n")
     (out / "README.md").write_text(
         f"# Fleet shed frontier, {manifest['sessions']:,} sessions\n\n"
+        f"{status}\n\n"
         f"One shedding source site ({manifest['source_site']}) and two equally "
         f"sized destination sites ({', '.join(manifest['sites'].values())}), "
-        f"gpt-oss-20b on A100. Each source node owns its egress pipe at the "
-        f"measured per-pipeline rate, and reaches only the destination pools "
-        f"its own path serves.\n\n"
-        f"Every cell reports the **largest shed the policy actually executed** "
-        f"inside every contract: committed by the deadline, destinations "
-        f"within the measured offered-RPS envelope, and pool service contracts "
-        f"honoured. Seeds are aggregated by the median.\n\n"
-        f"Destination admission is capped at the measured "
-        f"{envelope:g} offered RPS per replica, the last swept rate whose "
-        f"median p90 TTFT meets the {manifest['envelope']['normal']['ttft_slo_s']} s "
-        f"SLO. Across {len(compliance):,} headline rows, "
-        f"{len(breaches)} exceeded that envelope under normal admission.\n\n"
-        f"Power is accelerator-scoped: the sum of a measured per-GPU curve over "
-        f"the modeled fleet. No facility, cooling, or host power is claimed.\n\n"
+        f"gpt-oss-20b on A100. Each source node owns its measured egress pipe.\n\n"
+        f"Every cell reports the best contract-respecting executed shed among "
+        f"the {len(ASK_FRACTIONS)} fixed asks "
+        f"({', '.join(f'{x:g}' for x in ASK_FRACTIONS)}) of removable power. "
+        f"All asks are evaluated; no monotonicity is assumed. Seeds aggregate "
+        f"by median. Queue-Haul is LP-led and retains KV-only and replay-only "
+        f"incumbents; selected_solver records any fallback.\n\n"
+        f"Destination admission is capped at {envelope:g} offered RPS per "
+        f"replica. Across {len(compliance):,} headline rows, {len(breaches)} "
+        f"exceeded that measured envelope. Power is accelerator-scoped.\n\n"
         f"## Executed shed at rho={headline_rho}\n\n"
         f"| Deadline (s) | Policy | Median executed shed | Median shed (kW) "
         f"| KV share of commits |\n|---|---|---|---|---|\n{table}\n\n"
-        f"## What multiple actions buy at rho={headline_rho}\n\n"
-        f"| Deadline (s) | rho | Best single action | Best flexible | Gain |\n"
-        f"|---|---|---|---|---|\n{gains}\n" if gains else "")
+        f"{gains_section}{invariance_section}")
     return summary
 
 

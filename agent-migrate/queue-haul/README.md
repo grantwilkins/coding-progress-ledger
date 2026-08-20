@@ -1172,6 +1172,16 @@ prefill/decode boundary. `pareto-hero.png` shows one explicitly scoped example:
 interactive-coding seed 1 at 10 Gb/s. Repeated identical frontier points are
 collapsed, and the endpoint shared by all four frontier policies is labeled.
 
+`fleet_shed_frontier_campaign.py` evaluates every policy on the same ten fixed
+fractions of removable power and selects the largest contract-respecting
+executed shed; it does not assume feasibility is monotone in the ask.
+`queue_haul` is an LP-led portfolio that retains the KV-only and replay-only
+plans with matched randomness, so the reducer hard-fails unless it ties or
+beats both in every matched scenario. Fleet invariance is reported per policy.
+Submit `fleet_shed_frontier.sbatch` as prepare, headline and sensitivity arrays,
+then reduce, with one shared `FRONTIER_OUT` and `afterok` dependencies.
+
+
 `requirement_frontier.py` computes destination requirements without constructing
 a destination inventory. `pool_planner.py` compares those requirements with
 concrete pool contracts and emits physical use/capacity rows. Pool admission

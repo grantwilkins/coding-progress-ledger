@@ -21,11 +21,12 @@ plot_style.apply()
 POLICIES = ("queue_haul", "greedy", "replay_only", "isolated_fastest", "kv_only")
 
 
-def read(path: Path, mode: str = "normal") -> dict:
+def read(path: Path, rho: float = .38) -> dict:
     with path.open(newline="") as stream:
-        rows = [row for row in csv.DictReader(stream) if row["mode"] == mode]
+        rows = [row for row in csv.DictReader(stream)
+                if np.isclose(float(row["rho"]), rho)]
     if not rows:
-        raise RuntimeError(f"no {mode!r} rows in {path}")
+        raise RuntimeError(f"no rho={rho:g} rows in {path}")
     curves = {}
     for policy in POLICIES:
         selected = sorted(
@@ -33,8 +34,11 @@ def read(path: Path, mode: str = "normal") -> dict:
             key=lambda row: float(row["deadline_s"]))
         if not selected:
             raise RuntimeError(f"frontier is missing policy {policy!r}")
+        deadlines = np.array([float(row["deadline_s"]) for row in selected])
+        if len(deadlines) != len(set(deadlines)):
+            raise RuntimeError(f"frontier repeats a deadline for {policy!r}")
         curves[policy] = (
-            np.array([float(row["deadline_s"]) for row in selected]),
+            deadlines,
             np.array([float(row["median_executed_shed_fraction"])
                       for row in selected]),
             np.array([float(row["min_executed_shed_fraction"])
@@ -83,13 +87,12 @@ def write(curves: dict, out: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("campaign", type=Path)
-    parser.add_argument("--mode", default="normal",
-                        choices=("normal", "emergency"))
+    parser.add_argument("--rho", type=float, default=.38)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
-    curves = read(args.campaign / "frontier.csv", args.mode)
+    curves = read(args.campaign / "frontier.csv", args.rho)
     summary = json.loads((args.campaign / "summary.json").read_text())
-    if summary["schema"] != "queue-haul-fleet-shed-frontier-v2":
+    if summary["schema"] != "queue-haul-fleet-shed-frontier-v3":
         raise RuntimeError("unexpected frontier schema")
     write(curves, args.out or args.campaign / "fleet-shed-frontier")
 
