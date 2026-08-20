@@ -41,7 +41,7 @@ def campaign_plan(repeats: int = 3, seed: int = 1) -> dict:
             "gates": {"grouped_cv_rmse_w": 5, "within_5w_fraction": .8}}
 
 
-def _metrics(host: str, port: int) -> tuple[float, float]:
+def _metrics(host: str, port: int) -> tuple[float, float, float]:
     text = urlopen(f"http://{host}:{port}/metrics", timeout=10).read().decode()
     def total(name):
         values = [float(match.group(1)) for match in re.finditer(
@@ -49,7 +49,8 @@ def _metrics(host: str, port: int) -> tuple[float, float]:
         if not values:
             raise RuntimeError(f"missing {name} counter")
         return sum(values)
-    return total("vllm:prompt_tokens_total"), total("vllm:generation_tokens_total")
+    return (total("vllm:prompt_tokens_total"), total("vllm:generation_tokens_total"),
+            total("vllm:prompt_tokens_cached_total"))
 
 
 def _shape(fraction: float, load: float, F: float, G: float) -> tuple[str, int, float, int]:
@@ -63,7 +64,8 @@ def _shape(fraction: float, load: float, F: float, G: float) -> tuple[str, int, 
 
 
 def run_cell(host: str, port: int, root: Path, cell: dict,
-             F: float, G: float, workers: int = 512) -> dict:
+             F: float, G: float, model: str = "openai/gpt-oss-20b",
+             workers: int = 512) -> dict:
     fraction, load = float(cell["prefill_fraction"]), float(cell["target_service_load"])
     prompt, output_tokens, rate, batch = _shape(fraction, load, F, G)
     warmup, window = float(cell["warmup_s"]), float(cell["measurement_s"])
@@ -82,7 +84,7 @@ def run_cell(host: str, port: int, root: Path, cell: dict,
                         time.sleep(delay)
                 return power_rate_sweep.request(
                     f"http://{host}:{port}/v1/completions", prompt,
-                    output_tokens, f"{label}:{request_id}")
+                    output_tokens, f"{label}:{request_id}", model)
             futures = [pool.submit(scheduled_request, request_id)
                        for request_id in range(count)]
             remaining = started + warmup - time.monotonic()
@@ -91,8 +93,7 @@ def run_cell(host: str, port: int, root: Path, cell: dict,
             metric_start, start_ns = _metrics(host, port), time.monotonic_ns()
             time.sleep(window)
             metric_end, end_ns = _metrics(host, port), time.monotonic_ns()
-            for future in futures:
-                future.result()
+            results = [future.result() for future in futures]
     finally:
         stop.set(); sampler.join()
     with path.open(newline="") as handle:
@@ -100,22 +101,57 @@ def run_cell(host: str, port: int, root: Path, cell: dict,
                  if start_ns <= int(row["monotonic_ns"]) < end_ns]
     if len(watts) < window / float(cell["power_interval_s"]) * .8:
         raise RuntimeError("insufficient power samples")
+    cached = metric_end[2] - metric_start[2]
+    if cached or any((row["usage"].get("prompt_tokens_details") or {})
+                     .get("cached_tokens", 0) for row in results):
+        raise RuntimeError("cached prompt tokens observed")
+    f, g = (metric_end[index] - metric_start[index] for index in (0, 1))
+    if min(f, g) < 0 or f + g <= 0:
+        raise RuntimeError("invalid realized token counters")
     return {"mixture": cell["mixture"], "repeat": cell["repeat"],
-            "target_service_load": load, "f_tps": (metric_end[0] - metric_start[0]) / window,
-            "g_tps": (metric_end[1] - metric_start[1]) / window,
+            "target_service_load": load, "f_tps": f / window,
+            "g_tps": g / window, "cached_prompt_tokens": 0,
             "power_mean_w": float(np.mean(watts)), "power_samples": len(watts),
             "start_ns": start_ns, "end_ns": end_ns, "power_path": str(path)}
 
 
-def run_plan(plan_path: Path, profile_path: Path, out: Path,
+def calibration_target(profile_path: Path | None, model: str | None,
+                       hardware: str | None, F: float | None,
+                       G: float | None) -> tuple[str, str, float, float]:
+    if profile_path is not None:
+        if any(value is not None for value in (model, hardware, F, G)):
+            raise ValueError("profile and explicit calibration target are mutually exclusive")
+        profile = ModelProfile.load(profile_path)
+        return profile.model, profile.hardware, profile.case().F, profile.case().G
+    if not model or hardware not in {"a100", "h100"} \
+            or F is None or G is None or min(F, G) <= 0:
+        raise ValueError("explicit target requires model, hardware, F, and G")
+    return model, hardware, F, G
+
+
+def run_plan(plan_path: Path, profile_path: Path | None, out: Path,
              host: str = "127.0.0.1", port: int = 8100,
-             resume: bool = False) -> list[dict]:
-    plan, profile = json.loads(plan_path.read_text()), ModelProfile.load(profile_path)
+             resume: bool = False, *, model: str | None = None,
+             hardware: str | None = None, F: float | None = None,
+             G: float | None = None) -> list[dict]:
+    plan = json.loads(plan_path.read_text())
     if plan.get("schema") not in {"queue-haul-phase-power-plan-v1",
                                   "queue-haul-phase-power-adaptive-plan-v1"}:
         raise ValueError("invalid phase power plan")
-    power_rate_sweep.validate_gpu("NVIDIA A100 80GB PCIe", 300)
+    model, hardware, F, G = calibration_target(profile_path, model, hardware, F, G)
+    expected_gpu = {"a100": ("NVIDIA A100 80GB PCIe", 300),
+                    "h100": ("NVIDIA H100 NVL", 400)}[hardware]
+    power_rate_sweep.validate_gpu(*expected_gpu)
     out.mkdir(parents=True, exist_ok=resume)
+    metadata = {"schema": "queue-haul-phase-power-run-v1", "model": model,
+                "hardware": hardware, "F_prefill_tps": F, "G_decode_tps": G,
+                "plan_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest()}
+    metadata_path = out / "metadata.json"
+    if resume:
+        if json.loads(metadata_path.read_text()) != metadata:
+            raise RuntimeError("phase power resume metadata changed")
+    else:
+        metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
     measurement_path = out / "measurements.csv"
     rows = []
     if resume and measurement_path.exists():
@@ -123,12 +159,11 @@ def run_plan(plan_path: Path, profile_path: Path, out: Path,
             rows = list(csv.DictReader(handle))
     completed = {(row["mixture"], float(row["target_service_load"]), int(row["repeat"]))
                  for row in rows}
-    case = profile.case()
     for cell in plan["cells"]:
         key = cell["mixture"], float(cell["target_service_load"]), int(cell["repeat"])
         if key in completed:
             continue
-        rows.append(run_cell(host, port, out, cell, case.F, case.G))
+        rows.append(run_cell(host, port, out, cell, F, G, model))
         with measurement_path.open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=rows[0])
             writer.writeheader(); writer.writerows(rows)
@@ -282,7 +317,11 @@ def main() -> None:
     prepare.add_argument("--seed", type=int, default=1)
     run_command = sub.add_parser("run")
     run_command.add_argument("--plan", type=Path, required=True)
-    run_command.add_argument("--profile", type=Path, required=True)
+    run_command.add_argument("--profile", type=Path)
+    run_command.add_argument("--model")
+    run_command.add_argument("--hardware", choices=("a100", "h100"))
+    run_command.add_argument("--prefill-tps", type=float)
+    run_command.add_argument("--decode-tps", type=float)
     run_command.add_argument("--out", type=Path, required=True)
     run_command.add_argument("--host", default="127.0.0.1")
     run_command.add_argument("--port", type=int, default=8100)
@@ -303,7 +342,9 @@ def main() -> None:
         (args.out / "plan.json").write_text(
             json.dumps(campaign_plan(args.repeats, args.seed), indent=2, sort_keys=True) + "\n")
     elif args.command == "run":
-        run_plan(args.plan, args.profile, args.out, args.host, args.port, args.resume)
+        run_plan(args.plan, args.profile, args.out, args.host, args.port, args.resume,
+                 model=args.model, hardware=args.hardware,
+                 F=args.prefill_tps, G=args.decode_tps)
     elif args.command == "augment":
         args.out.write_text(json.dumps(adaptive_plan(
             json.loads(args.plan.read_text()), json.loads(args.summary.read_text())),

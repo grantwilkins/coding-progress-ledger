@@ -39,22 +39,42 @@ def test_run_plan_resumes_completed_cells(tmp_path, monkeypatch):
     plan.write_text(json.dumps({"schema": "queue-haul-phase-power-plan-v1", "cells": [
         {"mixture": "prefill", "target_service_load": .1, "repeat": 0},
         {"mixture": "decode", "target_service_load": .2, "repeat": 0}]}))
-    profile = tmp_path / "profile.json"; profile.write_text("{}")
     out = tmp_path / "run"; out.mkdir()
+    (out / "metadata.json").write_text(json.dumps({
+        "schema": "queue-haul-phase-power-run-v1", "model": "model",
+        "hardware": "h100", "F_prefill_tps": 1, "G_decode_tps": 1,
+        "plan_sha256": calibration.hashlib.sha256(plan.read_bytes()).hexdigest(),
+    }, sort_keys=True))
     fields = ["mixture", "repeat", "target_service_load", "f_tps", "g_tps",
               "power_mean_w"]
     with (out / "measurements.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields); writer.writeheader()
         writer.writerow(dict(zip(fields, ("prefill", 0, .1, 1, 0, 100))))
-    monkeypatch.setattr(calibration.ModelProfile, "load", lambda _: type(
-        "P", (), {"case": lambda self: type("C", (), {"F": 1, "G": 1})()})())
     monkeypatch.setattr(calibration.power_rate_sweep, "validate_gpu", lambda *args: None)
-    monkeypatch.setattr(calibration, "run_cell", lambda host, port, root, cell, F, G: {
+    monkeypatch.setattr(calibration, "run_cell", lambda host, port, root, cell, F, G, model: {
         "mixture": cell["mixture"], "repeat": cell["repeat"],
         "target_service_load": cell["target_service_load"], "f_tps": 0,
         "g_tps": 1, "power_mean_w": 110})
-    result = calibration.run_plan(plan, profile, out, resume=True)
+    result = calibration.run_plan(plan, None, out, resume=True, model="model",
+                                  hardware="h100", F=1, G=1)
     assert [row["mixture"] for row in result] == ["prefill", "decode"]
+
+
+def test_explicit_h100_target_is_frozen_in_metadata(tmp_path, monkeypatch):
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps({"schema": "queue-haul-phase-power-plan-v1",
+                                "cells": []}))
+    seen = []
+    monkeypatch.setattr(calibration.power_rate_sweep, "validate_gpu",
+                        lambda *args: seen.append(args))
+
+    calibration.run_plan(plan, None, tmp_path / "run", model="model",
+                         hardware="h100", F=2, G=3)
+
+    assert seen == [("NVIDIA H100 NVL", 400)]
+    metadata = json.loads((tmp_path / "run/metadata.json").read_text())
+    assert (metadata["model"], metadata["F_prefill_tps"],
+            metadata["G_decode_tps"]) == ("model", 2, 3)
 
 
 def test_fit_accepts_compact_identifiable_group_holdouts():

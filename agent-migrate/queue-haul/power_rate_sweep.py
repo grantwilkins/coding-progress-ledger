@@ -42,9 +42,10 @@ def power(path: Path, stop: threading.Event, interval: float) -> None:
             stop.wait(interval)
 
 
-def request(url: str, prompt: str, output_tokens: int, request_id: str) -> dict:
+def request(url: str, prompt: str, output_tokens: int, request_id: str,
+            model: str = "openai/gpt-oss-20b") -> dict:
     nonce = hashlib.sha256(request_id.encode()).hexdigest()
-    body = json.dumps({"model": "openai/gpt-oss-20b", "prompt": f"{nonce} {prompt}",
+    body = json.dumps({"model": model, "prompt": f"{nonce} {prompt}",
                        "max_tokens": output_tokens, "ignore_eos": True,
                        "temperature": 0}).encode()
     started = time.monotonic_ns()
@@ -83,7 +84,8 @@ def reduce(out: Path, prefill_tps: float, decode_tps: float,
 
 
 def level(host: str, port: int, rate: float, window: float, warmup: float,
-          prompt: str, output_tokens: int, workers: int, out: Path) -> dict:
+          prompt: str, output_tokens: int, workers: int, out: Path,
+          model: str = "openai/gpt-oss-20b") -> dict:
     url = f"http://{host}:{port}/v1/completions"
     stop = threading.Event()
     label = f"{rate:g}".replace(".", "p")
@@ -100,7 +102,7 @@ def level(host: str, port: int, rate: float, window: float, warmup: float,
             if delay > 0:
                 time.sleep(delay)
             identity = f"{out}:{rate}:{request_id}"
-            futures.append(pool.submit(request, url, prompt, output_tokens, identity))
+            futures.append(pool.submit(request, url, prompt, output_tokens, identity, model))
         completed = [future.result() for future in futures]
     stop.set(); sampler.join()
     rows = [row for row in completed if measured_start <= row["start_ns"] < measured_end]
@@ -136,6 +138,7 @@ def main() -> None:
     parser.add_argument("--decode-capacity-tps", type=float)
     parser.add_argument("--idle-power-w", type=float)
     parser.add_argument("--curve-max-rate", type=float, default=12)
+    parser.add_argument("--model", default="openai/gpt-oss-20b")
     parser.add_argument("--rates", nargs="+", type=float,
                         default=(.25, .5, .75, 1, 1.5, 2, 3, 4, 5, 6, 7, 8,
                                  9, 10, 12, 14, 16, 20))
@@ -159,7 +162,7 @@ def main() -> None:
     for rate in args.rates:
         rows.append(level(args.host, args.port, rate, args.window_s,
                           args.warmup_s, prompt, args.output_tokens,
-                          args.workers, args.out))
+                          args.workers, args.out, args.model))
         (args.out / "levels.json").write_text(json.dumps(rows, indent=2) + "\n")
         print(json.dumps(rows[-1]), flush=True)
 
