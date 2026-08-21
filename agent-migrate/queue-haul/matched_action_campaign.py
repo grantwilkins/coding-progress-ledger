@@ -20,11 +20,11 @@ import network_campaign
 import plot_style
 from migration_profiler import file_hash, object_hash
 from planner import plan, source_power
-from profiles import ModelProfile, RateCurve
+from profiles import ModelProfile, PhasePower, RateCurve
 
 
 ROOT = Path(__file__).parent
-SCHEMA = "queue-haul-matched-action-campaign-v1"
+SCHEMA = "queue-haul-matched-action-campaign-v2"
 SCENARIO_ID = "4ce7626a1f20a5c3"
 PARENT = ROOT / "outputs/east-germany-frontier-20260808/pilot/plan.json"
 RESULTS = PARENT.with_name("results.csv")
@@ -34,6 +34,11 @@ CALIBRATIONS = {
     "openai/gpt-oss-20b": ROOT / "profiles/matched_action_h100_prefill/gpt-oss-20b.json",
     "Qwen/Qwen3.8-27B": ROOT / "profiles/matched_action_h100_prefill/qwen3.8-27b.json",
     "google/gemma-4-26B-A4B-it": ROOT / "profiles/matched_action_h100_prefill/gemma-4-26b.json",
+}
+POWER_CALIBRATIONS = {
+    "openai/gpt-oss-20b": ROOT / "profiles/matched_action_h100_power/gpt-oss-20b.json",
+    "Qwen/Qwen3.8-27B": ROOT / "profiles/matched_action_h100_power/qwen3.8-27b.json",
+    "google/gemma-4-26B-A4B-it": ROOT / "profiles/matched_action_h100_power/gemma-4-26b.json",
 }
 ARMS = (
     ("gpt_oss_20b_a100", "A100", "openai/gpt-oss-20b", "gpt-oss-20b"),
@@ -99,10 +104,21 @@ def load_inputs():
                 or len(summary.get("server_info_sha256", "")) != 64 \
                 or not any(row["context_tokens"] == 16_384 for row in summary["curve"]):
             raise ValueError(f"invalid H100 prefill calibration for {model}")
-    return parent, scenario, manifest, observed[0], observed_actions, summaries
+    powers = {model: json.loads(path.read_text())
+              for model, path in POWER_CALIBRATIONS.items()}
+    for model, power in powers.items():
+        phase = PhasePower.parse(power["phase_power"])
+        if power.get("schema") != "queue-haul-campaign-power-fit-v1" \
+                or power.get("model") != model or power.get("hardware") != "H100" \
+                or power.get("validation", {}).get("gate_passed") is not True \
+                or len(power.get("bootstrap_curve_counts", ())) \
+                != len(phase.measured_power_bootstrap) \
+                or sum(power["bootstrap_curve_counts"]) != 200:
+            raise ValueError(f"invalid H100 power calibration for {model}")
+    return parent, scenario, manifest, observed[0], observed_actions, summaries, powers
 
 
-def build_profiles(summaries: dict):
+def build_profiles(summaries: dict, powers: dict):
     bases = {
         "A100": ModelProfile.load(ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"),
         "H100": ModelProfile.load(ROOT / "profiles/gpt_oss_20b_h100_tp1.json"),
@@ -125,17 +141,22 @@ def build_profiles(summaries: dict):
             bytes_by_context=tuple((tokens, int(kv_model.kv_bytes(tokens)))
                                    for tokens in contexts),
         )
+        power = powers[model]
         case = replace(
             case,
-            F=(summary["saturated_8192_prefill_tps_median"]
-               if hardware == "H100" else case.F),
+            F=(power["F_prefill_tps"] if hardware == "H100" else case.F),
+            G=(power["G_decode_tps"] if hardware == "H100" else case.G),
             prefill=measured, replay=measured, replay_completion_s=0,
             kv_transfer=transfer,
+            phase_power=(PhasePower.parse(power["phase_power"])
+                         if hardware == "H100" else case.phase_power),
         )
         profiles[arm] = replace(
             base, profile_id=f"matched-action-{arm}", model=model,
             kv_capacity_tokens=(base.kv_capacity_tokens if hardware == "A100"
                                 else summary["kv_capacity_tokens"]),
+            max_power_load=(base.max_power_load if hardware == "A100"
+                            else power["max_power_load"]),
             cases={**base.cases, "central": case}, kv_geometry=None,
         )
     return profiles
@@ -149,6 +170,7 @@ def _input_identity(parent: dict, manifest_path: Path) -> tuple[str, dict]:
         "h100_profile": ROOT / "profiles/gpt_oss_20b_h100_tp1.json",
         "kv_model": KV_SOURCE, "campaign_code": Path(__file__),
         **{f"prefill_{model}": path for model, path in CALIBRATIONS.items()},
+        **{f"power_{model}": path for model, path in POWER_CALIBRATIONS.items()},
     }
     files = {name: {"path": str(path), "sha256": file_hash(path)}
              for name, path in paths.items()}
@@ -166,8 +188,6 @@ def _evaluate(arm: str, hardware: str, model: str, profile: ModelProfile,
         scenario, manifest, profile)
     result = plan(problem, profile, routes, "lp_work_first",
                   seed=scenario["planner_seed"], destination=architecture)
-    if not result.feasible:
-        raise RuntimeError(f"{arm} is infeasible: {result.failure_reason}")
     minimum = source_power(problem, profile,
                            (session.session_id for session in problem.sessions))
     removable = result.initial_source_power_w - minimum
@@ -193,8 +213,6 @@ def _evaluate(arm: str, hardware: str, model: str, profile: ModelProfile,
         "binding_resources": list(result.binding_resources),
         "moves": [asdict(move) for move in result.moves],
     }
-    if not row["target_met"]:
-        raise RuntimeError(f"{arm} missed the planned shed target")
     return row
 
 
@@ -230,6 +248,54 @@ def _write_csv(path: Path, arms: list[dict]) -> None:
     temporary.replace(path)
 
 
+def _bootstrap_profiles(profiles: dict, powers: dict, scenario: dict,
+                        manifest: dict, input_sha256: str) -> dict:
+    result = {}
+    for arm, hardware, model, _label in ARMS:
+        if hardware != "H100":
+            continue
+        profile, fit = profiles[arm], powers[model]
+        phase = profile.case().phase_power
+        outcomes = Counter()
+        for curve, count in zip(phase.measured_power_bootstrap,
+                                fit["bootstrap_curve_counts"]):
+            sampled = replace(phase, measured_power_curve=curve)
+            varied = replace(profile, cases={**profile.cases, "central": replace(
+                profile.case(), phase_power=sampled)})
+            row = _evaluate(arm, hardware, model, varied, scenario, manifest,
+                            input_sha256)
+            outcomes[(row["feasible"], row["target_met"], *(
+                row["action_counts"][action] for action in ACTIONS))] += count
+        result[arm] = {
+            "samples": sum(outcomes.values()), "unique_power_curves": len(
+                phase.measured_power_bootstrap),
+            "outcomes": [{"samples": count, "probability": count / sum(outcomes.values()),
+                          "feasible": counts[0], "target_met": counts[1],
+                          "action_counts": dict(zip(ACTIONS, counts[2:])),
+                          "method_counts": {
+                              method: sum(value for action, value in zip(ACTIONS, counts[2:])
+                                          if action.endswith(method))
+                              for method in ("replay", "kv_transfer")}}
+                         for counts, count in sorted(outcomes.items())],
+        }
+    return result
+
+
+def _write_bootstrap(path: Path, bootstrap: dict) -> None:
+    fields = ("arm_id", "samples", "probability", "feasible", "target_met",
+              *ACTIONS, "replay", "kv_transfer")
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for arm, summary in bootstrap.items():
+            for outcome in summary["outcomes"]:
+                writer.writerow({"arm_id": arm, "samples": outcome["samples"],
+                                 "probability": outcome["probability"],
+                                 "feasible": outcome["feasible"],
+                                 "target_met": outcome["target_met"],
+                                 **outcome["action_counts"], **outcome["method_counts"]})
+
+
 def _plot(path: Path, arms: list[dict]) -> None:
     plot_style.apply()
     fig, axis = plt.subplots(figsize=(10, 4.5))
@@ -243,7 +309,8 @@ def _plot(path: Path, arms: list[dict]) -> None:
                  label=plot_style.ACTION_NAMES[action])
         bottom = [old + value for old, value in zip(bottom, values)]
     axis.set_xticks(range(len(arms)), [
-        f"{plot_style.MODEL_NAMES[arm['model']]}\n{arm['hardware']}" for arm in arms
+        f"{plot_style.MODEL_NAMES[arm['model']]}\n{arm['hardware']}"
+        + ("\nTarget unmet" if not arm["target_met"] else "") for arm in arms
     ])
     axis.tick_params(axis="x", labelsize=12)
     axis.set(ylabel="Sessions", ylim=(0, 9.8), yticks=range(0, 9, 2),
@@ -256,8 +323,8 @@ def _plot(path: Path, arms: list[dict]) -> None:
 
 
 def run(out: Path) -> dict:
-    parent, scenario, manifest, observed, observed_actions, summaries = load_inputs()
-    profiles = build_profiles(summaries)
+    parent, scenario, manifest, observed, observed_actions, summaries, powers = load_inputs()
+    profiles = build_profiles(summaries, powers)
     input_sha256, identity = _input_identity(parent, _manifest_path(parent))
     out.mkdir(parents=True, exist_ok=True)
     arms = [_arm(out / "arms" / f"{arm}.json",
@@ -266,14 +333,23 @@ def run(out: Path) -> dict:
     by_id = {arm["arm_id"]: arm for arm in arms}
     a100, gpt_h100 = by_id["gpt_oss_20b_a100"], by_id["gpt_oss_20b_h100"]
     h100 = [arm for arm in arms if arm["hardware"] == "H100"]
+    bootstrap = _bootstrap_profiles(profiles, powers, scenario, manifest, input_sha256)
     gates = {
         "a100_model_reproduces_completed_action_mix":
-            a100["action_counts"] == {action: observed_actions[action] for action in ACTIONS},
+            a100["feasible"] and a100["target_met"]
+            and a100["action_counts"] == {
+                action: observed_actions[action] for action in ACTIONS},
         "hardware_changes_method_mix": a100["method_counts"] != gpt_h100["method_counts"],
         "models_change_method_mix": len({tuple(arm["method_counts"].values())
                                           for arm in h100}) > 1,
         "all_h100_model_action_mixes_distinct": len({
             tuple(arm["action_counts"].values()) for arm in h100}) == len(h100),
+        "all_model_power_repeat_gates_pass": all(
+            power["validation"]["gate_passed"] for power in powers.values()),
+        "all_h100_power_bootstraps_complete": all(
+            row["samples"] == 200 for row in bootstrap.values()),
+        "model_specific_power_changes_feasibility":
+            len({arm["feasible"] for arm in h100}) > 1,
     }
     if not all(gates.values()):
         raise RuntimeError(f"matched action gates failed: {gates}")
@@ -294,7 +370,7 @@ def run(out: Path) -> dict:
             "request_failures": int(observed["request_failures"]),
             "action_counts": {action: observed_actions[action] for action in ACTIONS},
         },
-        "arms": arms, "gates": gates,
+        "arms": arms, "power_bootstrap": bootstrap, "gates": gates,
         "comparisons": {
             "hardware": {"arms": [a100["arm_id"], gpt_h100["arm_id"]],
                          "gpt_h100_result_sha256": gpt_h100_sha256},
@@ -303,17 +379,18 @@ def run(out: Path) -> dict:
         },
         "inputs": identity,
         "scope": (
-            "Deterministic proof of action-selection sensitivity, not a population estimate. "
-            "H100 replay uses measured prefill TTFT rates; BF16 KV bytes are analytic and "
-            "endpoint residuals are zero. Qwen and Gemma inherit the GPT-OSS H100 power, "
-            "decode, action-power, concurrency, and KV-ingest envelope. Only the archived "
-            "A100 run is a physical migration; predicted makespans are scheduling diagnostics."
+            "Central action proof plus a 200-draw calibration bootstrap, not a workload "
+            "population estimate. Every H100 arm uses its own measured coding-path power, "
+            "prefill, and decode rates; BF16 KV bytes are analytic and endpoint residuals "
+            "are zero. Only the archived A100 run is a physical migration; predicted "
+            "makespans are scheduling diagnostics."
         ),
     }
     if summary["comparisons"]["hardware"]["gpt_h100_result_sha256"] \
             != summary["comparisons"]["models"]["gpt_h100_result_sha256"]:
         raise RuntimeError("GPT-OSS/H100 result was not reused")
     _write_csv(out / "action_mix.csv", arms)
+    _write_bootstrap(out / "bootstrap_action_mix.csv", bootstrap)
     _plot(out / "action_mix", arms)
     network_campaign.write_checkpoint(out / "summary.json", summary)
     return summary
@@ -322,7 +399,7 @@ def run(out: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path,
-                        default=ROOT / "outputs/matched-action-campaign-20260820")
+                        default=ROOT / "outputs/matched-action-campaign-power-20260821")
     summary = run(parser.parse_args().out)
     print(json.dumps({"status": summary["status"], "gates": summary["gates"]}, indent=2))
 

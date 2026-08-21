@@ -22,9 +22,10 @@ def test_matched_action_campaign_is_distinct_and_resumable(tmp_path):
     assert arms["gpt_oss_20b_h100"]["method_counts"] == {
         "replay": 6, "kv_transfer": 0}
     assert arms["qwen3_8_27b_h100"]["method_counts"] == {
-        "replay": 0, "kv_transfer": 6}
+        "replay": 0, "kv_transfer": 7}
     assert arms["gemma_4_26b_h100"]["method_counts"] == {
         "replay": 6, "kv_transfer": 0}
+    assert not arms["gemma_4_26b_h100"]["feasible"]
     checkpoints = sorted((tmp_path / "arms").glob("*.json"))
     before = {path: path.stat().st_mtime_ns for path in checkpoints}
     assert campaign.run(tmp_path)["input_sha256"] == summary["input_sha256"]
@@ -32,3 +33,6 @@ def test_matched_action_campaign_is_distinct_and_resumable(tmp_path):
     assert json.loads((tmp_path / "summary.json").read_text())["gates"] == summary["gates"]
     for suffix in ("csv", "png", "pdf"):
         assert (tmp_path / f"action_mix.{suffix}").is_file()
+    assert (tmp_path / "bootstrap_action_mix.csv").is_file()
+    assert all(row["samples"] == 200
+               for row in summary["power_bootstrap"].values())

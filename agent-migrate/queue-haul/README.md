@@ -1654,7 +1654,8 @@ restarts failures and resumes the suite after host reboots.
 
 `matched_power_fit.py` freezes non-monotone, model-specific H100 power curves
 for the matched East/Germany coding-session load path. It hard-gates repeat
-holdouts and carries 200 resampled measured curves into action simulations.
+holdouts and carries 200 resampled measured curves into action simulations;
+identical bootstrap curves are stored once with an explicit weight.
 
 ```bash
 uv run python phase_power_calibration.py prepare --out runs/h100-phase-power
@@ -1911,27 +1912,29 @@ uv run python model_architecture_campaign.py freeze-profile --base-profile BASE.
 demonstration. It freezes completed A100 East/Germany frontier scenario
 `4ce7626a1f20a5c3`: eight 16K sessions, 80% requested shed, a 30-second
 deadline, measured natural links, and zero destination background. The
-harmonized A100 solve must reproduce the executed eight-KV-to-Germany decision;
-the run then changes only the hardware arm or the H100 model timing/geometry.
-Atomic per-arm checkpoints make reruns resumable, and the GPT-OSS/H100
-checkpoint is shared by both comparisons.
+harmonized A100 solve must reproduce the executed eight-KV-to-Germany decision.
+Each H100 arm uses its own measured prefill, decode, and non-monotone
+coding-path power fit. Atomic per-arm checkpoints make reruns resumable, and
+the GPT-OSS/H100 checkpoint is shared by both comparisons.
 
 ```bash
 uv run python matched_action_campaign.py
 ```
 
 The pinned result is eight Germany KV moves for GPT-OSS/A100; five Germany plus
-one East Replay move for GPT-OSS/H100; six Germany KV moves for Qwen/H100; and
-six Germany Replay moves for Gemma/H100. Every arm reaches the target. The
-checked inputs are the three matched vLLM 0.24 H100 prefill curves and runtime
-KV capacities plus the BF16 analytic KV functions in
-`../kv-transfer-early-experiment/migration_ratio.py`.
-Only the archived A100 migration is physical; the four action bars are planner
-decisions, and predicted makespans omit endpoint residuals. This is a
-deterministic existence result, not a population estimate. Qwen and Gemma
-inherit the GPT-OSS H100 power, decode, action-power, concurrency, and KV ingest
-envelope, so the model contrast isolates measured prefill and analytic KV
-architecture rather than establishing full model-specific operating curves.
+one East Replay move for GPT-OSS/H100; seven Germany KV moves for Qwen/H100;
+and six Germany Replay moves for Gemma/H100. The first three reach the target.
+Gemma remains on its measured high-power plateau after the six admissible moves
+and therefore cannot meet the same 80% target. All 200 calibration-bootstrap
+draws reproduce each arm's central action mix and feasibility result.
+
+The H100 repeat-holdout RMSE is 2.73 W for GPT-OSS, 2.24 W for Qwen, and
+1.32 W for Gemma. GPT-OSS and Gemma use their completed 108-work-cell power
+runs; Qwen uses the 43 cells durably committed before the host reboot, of which
+eight cover the matched mixed-load path. Only the archived A100 migration is a
+physical migration. The H100 bars are planner decisions, BF16 KV bytes remain
+analytic, endpoint residuals are zero, and the bootstrap covers calibration
+uncertainty rather than workload-population uncertainty.
 
 Run the smoke command for all six arms before any full run. `BASE.json` must be
 the model/hardware arm's measured service and power profile. The geometry CSV

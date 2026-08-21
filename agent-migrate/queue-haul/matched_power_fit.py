@@ -7,6 +7,7 @@ import csv
 import hashlib
 import json
 import statistics
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -86,15 +87,18 @@ def fit_spec(spec: tuple, bootstrap_samples: int = 200, seed: int = 1) -> dict:
     curve = [[0., p0], *[[xs[group], statistics.median(row["power"] for row in rows)]
                           for group, rows in groups.items()]]
     rng = np.random.default_rng(seed)
-    bootstrap = [[[0., float(rng.choice(idle))],
-                  *[[xs[group], float(rng.choice([row["power"] for row in rows]))]
-                    for group, rows in groups.items()]] for _ in range(bootstrap_samples)]
+    sampled = [[[0., float(rng.choice(idle))],
+                *[[xs[group], float(rng.choice([row["power"] for row in rows]))]
+                  for group, rows in groups.items()]] for _ in range(bootstrap_samples)]
+    counts = Counter(tuple(tuple(point) for point in curve) for curve in sampled)
+    bootstrap = [[list(point) for point in curve] for curve in counts]
     validation = _validation(groups)
     digest = _digest(*evidence)
     phase = {
         "p0_w": p0, "delta_w": max(row[1] for row in curve) - p0,
         "a_s_per_prefill_token": 1 / F, "b_s_per_decode_token": 1 / G,
-        "valid_hull": _hull(all_rows),
+        "valid_hull": ([[0., 0.], [F, 0.], [0., G]]
+                       if kind == "phase" else _hull(all_rows)),
         "grouped_cv_rmse_w": validation["repeat_holdout_rmse_w"],
         "within_5w_fraction": validation["within_5w_fraction"], "bootstrap": [],
         "provenance_sha256": digest, "measured_power_curve": curve,
@@ -107,7 +111,7 @@ def fit_spec(spec: tuple, bootstrap_samples: int = 200, seed: int = 1) -> dict:
         "source": {"path": str(path), "sha256": digest, "kind": kind,
                    "observed_rows": len(all_rows), "selected_rows": len(chosen)},
         "validation": validation, "max_power_load": curve[-1][0],
-        "phase_power": phase,
+        "phase_power": phase, "bootstrap_curve_counts": list(counts.values()),
     }
 
 
