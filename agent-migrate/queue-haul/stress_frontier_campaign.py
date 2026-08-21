@@ -361,7 +361,7 @@ def _plot(frontier: list[dict], stem: Path) -> None:
         )
         ax.plot(deadlines,
                 [row["coverage_90_shed_w"] / maximum for row in selected],
-                **plot_style.policy_style(policy))
+                **plot_style.policy_style(policy, plot_style.STRESS_POLICY_NAMES))
     ax.set(xlabel="Deadline (s)", ylabel="Normalized Power Shed", ylim=(0, 1.02))
     ax.tick_params(labelsize=plot_style.LARGE_FONT_SIZE)
     ax.xaxis.label.set_size(plot_style.LARGE_FONT_SIZE)

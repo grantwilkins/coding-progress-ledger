@@ -13,6 +13,7 @@ Plausible wrong implementations:
 - Normalize each policy independently.
 - Retain the stale modeled title or label the y-axis as generic attainment.
 - Revert to a tall canvas, small type, or noncanonical policy colors.
+- Label the isolated-fastest stress baseline with anything but True Greedy.
 - Pool regimes, bootstrap means, or normalize confidence limits independently.
 - Add confidence ribbons to the legend.
 - Resolve the Queue-Haul policy to the exact max-shed MILP.
@@ -119,7 +120,8 @@ def test_plot_normalizes_to_the_shared_maximum(tmp_path, monkeypatch):
              "normalized_coverage_90_ci_high": 1}
             for policy, value in zip(campaign.POLICIES, values)]
     lines = []
-    monkeypatch.setattr(campaign.plot_style, "policy_style", lambda policy: {})
+    monkeypatch.setattr(campaign.plot_style, "policy_style",
+                        lambda policy, names=None: {})
     import matplotlib.axes
     monkeypatch.setattr(matplotlib.axes.Axes, "plot",
                         lambda self, x, y, **kwargs: lines.append(y))
@@ -153,6 +155,8 @@ def test_plot_matches_hardware_attainment_presentation(tmp_path, monkeypatch):
         campaign.plot_style.POLICY_COLORS[policy] for policy in campaign.POLICIES]
     assert len(ax.collections) == len(campaign.POLICIES)
     assert all(collection.get_label().startswith("_") for collection in ax.collections)
+    assert [text.get_text() for text in legend.texts][
+        campaign.POLICIES.index("isolated_fastest")] == "True Greedy"
     assert legend._loc == 4
     assert legend._ncols == 1
     assert legend.get_frame().get_alpha() == 1

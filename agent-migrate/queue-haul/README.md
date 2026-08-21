@@ -1384,11 +1384,12 @@ only when its one-pass choice misses an integrally feasible target. Regenerate i
 | `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | `#000000` | fine dotted |
 
 `isolated_fastest` picks each session's fastest method in isolation but may
-route to any destination offering it; the older destination-locked variant is
-`isolated_myopic` (displayed as "Myopic fastest (method+route)"), which the
-network campaign's separation cells keep as their deliberately weak baseline.
-Results labeled "True Greedy" in pinned outputs predate this split and used
-the destination-locked behavior.
+route to any destination offering it and is displayed as "True Greedy" in the
+stress frontier. The older destination-locked variant is `isolated_myopic`
+(displayed as "Myopic fastest (method+route)"), which the network campaign's
+separation cells keep as their deliberately weak baseline. Older pinned
+outputs may also use "True Greedy" for that destination-locked behavior; their
+policy IDs distinguish the two.
 
 Stress-frontier figures omit the modeled MILP reference and normalize every
 displayed policy to the shared maximum 90%-coverage shed. The y-axis reports

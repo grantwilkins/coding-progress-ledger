@@ -30,6 +30,7 @@ POLICY_NAMES = dict(zip(POLICIES, (
     "Isolated Fastest", "KV Migrate Only", "Replay Context Only",
     "Queue-Haul Power Blind", "Queue-Haul Deadline Blind",
 )))
+STRESS_POLICY_NAMES = {**POLICY_NAMES, "isolated_fastest": "True Greedy"}
 COMPACT_POLICY_NAMES = {
     **POLICY_NAMES, "kv_only": "KV Migrate", "replay_only": "Replay Context",
 }
