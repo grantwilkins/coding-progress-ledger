@@ -110,6 +110,20 @@ def test_phase_power_separates_service_and_power_load(tmp_path):
     assert case.power(.75) == pytest.approx(82.5)
 
 
+def test_phase_power_measured_curve_may_preserve_nonmonotone_gpu_power(tmp_path):
+    raw = profile()
+    raw.update(schema="queue-haul-model-profile-v5", max_power_load=1)
+    raw["cases"]["central"]["phase_power"] = {
+        "p0_w": 100, "delta_w": 200, "a_s_per_prefill_token": .01,
+        "b_s_per_decode_token": .1, "valid_hull": [[0, 0], [100, 0], [0, 10]],
+        "grouped_cv_rmse_w": 2, "within_5w_fraction": 1, "bootstrap": [],
+        "provenance_sha256": "a" * 64,
+        "measured_power_curve": [[0, 100], [.5, 300], [1, 250]],
+    }
+    case = ModelProfile.load(write(tmp_path, raw)).case()
+    assert case.power(.75) == pytest.approx(275)
+
+
 def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):
     case = ModelProfile.load(write(tmp_path, profile())).case()
     assert case.prefill.rate(500.5, 1) == pytest.approx(75)

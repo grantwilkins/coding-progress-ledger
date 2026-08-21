@@ -1652,6 +1652,10 @@ than saturated batch occupancy.
 marker only after each optimized runtime validates. The supplied user unit
 restarts failures and resumes the suite after host reboots.
 
+`matched_power_fit.py` freezes non-monotone, model-specific H100 power curves
+for the matched East/Germany coding-session load path. It hard-gates repeat
+holdouts and carries 200 resampled measured curves into action simulations.
+
 ```bash
 uv run python phase_power_calibration.py prepare --out runs/h100-phase-power
 uv run python phase_power_calibration.py run --plan runs/h100-phase-power/plan.json --model MODEL --hardware h100 --prefill-tps F --decode-tps G --vllm VLLM --out /datadrive/h100-phase-power/MODEL

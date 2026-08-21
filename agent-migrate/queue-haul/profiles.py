@@ -152,10 +152,10 @@ class PhasePower:
                 or len(value.provenance_sha256) != 64 \
                 or value.measured_power_curve and (curve.ndim != 2 or curve.shape[1] != 2
                     or curve[0, 0] != 0 or np.any(np.diff(curve[:, 0]) <= 0)
-                    or np.any(np.diff(curve[:, 1]) < 0)) \
+                    or np.any(curve[:, 1] < 0)) \
                 or any(item.ndim != 2 or item.shape[1] != 2 or item[0, 0] != 0
                        or np.any(np.diff(item[:, 0]) <= 0)
-                       or np.any(np.diff(item[:, 1]) < 0) for item in curves):
+                       or np.any(item[:, 1] < 0) for item in curves):
             raise ValueError("invalid phase-aware power calibration")
         return value
 
