@@ -87,6 +87,16 @@ def test_envelope_rejects_the_disqualified_schema(monkeypatch, tmp_path):
         campaign.envelope_rps(2.0)
 
 
+def test_prepare_refuses_an_existing_output_before_work(monkeypatch, tmp_path):
+    def unexpected(*args, **kwargs):
+        raise AssertionError("prepare did work before checking its output")
+
+    monkeypatch.setattr(campaign, "build_fleet", unexpected)
+
+    with pytest.raises(FileExistsError):
+        campaign.prepare(tmp_path)
+
+
 def test_service_bound_matches_the_profile_rate_limit_conversion(profile, workload):
     case = profile.case()
     contexts = sorted({record.context_tokens for record in workload.records})
@@ -217,6 +227,7 @@ def test_max_shed_probes_the_fixed_ladder_despite_nonmonotone_contracts(
     @dataclass
     class Snapshot:
         power_limit_w: float
+        deadline_s: float = 300.0
 
     asks = []
 
@@ -233,7 +244,7 @@ def test_max_shed_probes_the_fixed_ladder_despite_nonmonotone_contracts(
         shed = 70.0 if fraction in {.50, .90} else ask
         return {"realized_shed_w": shed, "within_contract": lawful}
 
-    _, outcome, ask, probes = campaign.max_shed_plan(
+    _, outcome, ask, probes, *_ = campaign.max_shed_plan(
         Snapshot(0.0), None, None, ("greedy",), 1, "normal", 100.0, 80.0,
         evaluate)
 
@@ -250,12 +261,13 @@ def test_max_shed_portfolio_retains_the_best_restricted_incumbent(monkeypatch):
     @dataclass
     class Snapshot:
         power_limit_w: float
+        deadline_s: float = 300.0
 
     monkeypatch.setattr(campaign, "plan", lambda scenario, profile, paths, solver,
                         **kwargs: SimpleNamespace(moves=(), solver=solver))
     shed = {"lp_work_first": 50.0, "kv_only": 70.0, "replay_only": 60.0}
 
-    planned, outcome, _, probes = campaign.max_shed_plan(
+    planned, outcome, _, probes, *_ = campaign.max_shed_plan(
         Snapshot(0.0), None, None,
         ("lp_work_first", "kv_only", "replay_only"), 1, "normal", 100.0,
         80.0, lambda planned, ask: {
@@ -265,6 +277,77 @@ def test_max_shed_portfolio_retains_the_best_restricted_incumbent(monkeypatch):
     assert outcome["realized_shed_w"] == 70.0
     assert probes == len(campaign.ASK_FRACTIONS) * 3
 
+
+def test_max_shed_reexecutes_the_shorter_deadline_incumbent(monkeypatch):
+    from dataclasses import dataclass
+    from types import SimpleNamespace
+
+    @dataclass
+    class Snapshot:
+        power_limit_w: float
+        deadline_s: float
+
+    shed = {"value": 70.0}
+    monkeypatch.setattr(
+        campaign, "plan",
+        lambda scenario, profile, paths, solver, **kwargs:
+        SimpleNamespace(moves=(), solver=solver, shed=shed["value"]))
+    evaluate = lambda planned, ask: {
+        "realized_shed_w": planned.shed, "within_contract": True}
+    first = campaign.max_shed_plan(
+        Snapshot(0, 60), None, None, ("kv_only",), 1, "normal", 100, 80,
+        evaluate)
+    shed["value"] = 20.0
+    second = campaign.max_shed_plan(
+        Snapshot(0, 120), None, None, ("kv_only",), 1, "normal", 100, 80,
+        evaluate, incumbents=first[4])
+
+    assert second[0] is first[0]
+    assert second[1]["realized_shed_w"] == 70
+    assert second[3] == len(campaign.ASK_FRACTIONS)
+    assert second[5:] == (60, 1)
+
+
+def test_max_shed_keeps_an_incumbent_per_solver(monkeypatch):
+    from dataclasses import dataclass
+    from types import SimpleNamespace
+
+    @dataclass
+    class Snapshot:
+        power_limit_w: float
+        deadline_s: float
+
+    phase = {"value": 1}
+
+    def fake_plan(scenario, profile, paths, solver, **kwargs):
+        return SimpleNamespace(
+            moves=(), solver=solver, planning_phase=phase["value"])
+
+    monkeypatch.setattr(campaign, "plan", fake_plan)
+
+    def evaluate(planned, ask):
+        if phase["value"] == 1:
+            shed = {"lp_work_first": 80, "kv_only": 70, "replay_only": 60}
+        elif planned.planning_phase == 1:
+            shed = {"lp_work_first": 80, "kv_only": 90, "replay_only": 65}
+        else:
+            shed = dict.fromkeys(("lp_work_first", "kv_only", "replay_only"), 50)
+        return {"realized_shed_w": shed[planned.solver],
+                "within_contract": True}
+
+    solvers = ("lp_work_first", "kv_only", "replay_only")
+    first = campaign.max_shed_plan(
+        Snapshot(0, 60), None, None, solvers, 1, "normal", 100, 80, evaluate)
+    phase["value"] = 2
+    second = campaign.max_shed_plan(
+        Snapshot(0, 120), None, None, solvers, 1, "normal", 100, 80,
+        evaluate, incumbents=first[4])
+
+    assert second[0].solver == "kv_only"
+    assert second[1]["realized_shed_w"] == 90
+
+
+    assert second[6] == 3
 def test_planner_seed_is_shared_by_matched_policies():
     row = {"deadline_s": 300.0, "mode": "normal", "tier": "natural",
            "rho": .38, "workload": campaign.HEADLINE_WORKLOAD,
@@ -274,6 +357,38 @@ def test_planner_seed_is_shared_by_matched_policies():
         campaign._planner_seed({**row, "policy": "kv_only"})
 
 
+def test_queue_haul_skips_the_pathological_lp_when_actions_cannot_diverge():
+    row = {"policy": "queue_haul", "deadline_s": 60.0}
+
+    assert campaign._policy_solvers(row) == ("replay_only", "kv_only")
+    assert campaign._policy_solvers({**row, "deadline_s": 120.0}) == (
+        "lp_work_first", "kv_only", "replay_only")
+    assert campaign._policy_solvers({**row, "policy": "greedy"}) == ("greedy",)
+
+
+def test_shard_assignment_keeps_curves_intact_and_deadlines_ordered():
+    base = {"rho": .38, "mode": "normal", "tier": "natural",
+            "workload": campaign.HEADLINE_WORKLOAD, "sessions": 12_000,
+            "seed": 1, "headline": True}
+    rows = [
+        {**base, "row_id": i, "policy": policy, "deadline_s": deadline}
+        for i, (policy, deadline) in enumerate((
+            ("queue_haul", 300), ("kv_only", 120), ("queue_haul", 60),
+            ("kv_only", 300), ("queue_haul", 120), ("kv_only", 60)))
+    ]
+    locations, seen = {}, []
+
+    for shard in range(campaign.SHARDS):
+        for curve in campaign._shard_curves(rows, shard):
+            key = campaign._curve_key(curve[0])
+            locations.setdefault(key, set()).add(shard)
+            seen.extend(row["row_id"] for row in curve)
+            deadlines = [row["deadline_s"] for row in curve]
+            assert deadlines == sorted(deadlines)
+
+    assert sorted(seen) == list(range(len(rows)))
+    assert all(len(shards) == 1 for shards in locations.values())
+
 
 def test_max_shed_returns_the_last_probe_when_nothing_is_lawful(monkeypatch):
     from dataclasses import dataclass
@@ -282,10 +397,11 @@ def test_max_shed_returns_the_last_probe_when_nothing_is_lawful(monkeypatch):
     @dataclass
     class Snapshot:
         power_limit_w: float
+        deadline_s: float = 300.0
 
     monkeypatch.setattr(campaign, "plan",
                         lambda *a, **k: SimpleNamespace(moves=(), solver="greedy"))
-    _, outcome, _, _ = campaign.max_shed_plan(
+    _, outcome, *_ = campaign.max_shed_plan(
         Snapshot(0.0), None, None, ("greedy",), 1, "normal", 100.0, 80.0,
         lambda planned, ask: {"realized_shed_w": ask, "within_contract": False})
 
@@ -428,7 +544,7 @@ def test_reduce_excludes_isolated_fastest_and_reports_the_winners_mix(tmp_path):
     assert float(row["best_flexible_kv_fraction"]) == pytest.approx(.1)
 
 
-def test_reduce_rejects_single_action_dominance_and_deadline_regressions(tmp_path):
+def test_reduce_rejects_dominance_and_uncarried_deadline_regressions(tmp_path):
     _mini_campaign(tmp_path, [
         {"seed": 1, "policy": "queue_haul", "executed_shed_fraction": .4,
          "within_contract": True},
@@ -460,6 +576,19 @@ def test_reduce_rejects_single_action_dominance_and_deadline_regressions(tmp_pat
          "executed_shed_fraction": .7, "within_contract": True},
         {"seed": 1, "policy": "queue_haul", "deadline_s": 600,
          "executed_shed_fraction": .6, "within_contract": True},
+    ])
+    with pytest.raises(RuntimeError, match="decreases with deadline"):
+        campaign.reduce(tmp_path)
+
+    _mini_campaign(tmp_path, [
+        {"seed": 1, "policy": "greedy", "deadline_s": 300,
+         "executed_shed_fraction": .5, "within_contract": True},
+        {"seed": 1, "policy": "kv_only", "deadline_s": 60,
+         "executed_shed_fraction": .7, "within_contract": True,
+         "headline": False},
+        {"seed": 1, "policy": "kv_only", "deadline_s": 120,
+         "executed_shed_fraction": .6, "within_contract": True,
+         "headline": False},
     ])
     with pytest.raises(RuntimeError, match="decreases with deadline"):
         campaign.reduce(tmp_path)

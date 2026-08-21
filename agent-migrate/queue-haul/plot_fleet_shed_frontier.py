@@ -92,7 +92,7 @@ def main() -> None:
     args = parser.parse_args()
     curves = read(args.campaign / "frontier.csv", args.rho)
     summary = json.loads((args.campaign / "summary.json").read_text())
-    if summary["schema"] != "queue-haul-fleet-shed-frontier-v3":
+    if summary["schema"] != "queue-haul-fleet-shed-frontier-v4":
         raise RuntimeError("unexpected frontier schema")
     write(curves, args.out or args.campaign / "fleet-shed-frontier")
 

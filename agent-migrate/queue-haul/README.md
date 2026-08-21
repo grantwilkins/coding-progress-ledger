@@ -1175,11 +1175,15 @@ collapsed, and the endpoint shared by all four frontier policies is labeled.
 `fleet_shed_frontier_campaign.py` evaluates every policy on the same ten fixed
 fractions of removable power and selects the largest contract-respecting
 executed shed; it does not assume feasibility is monotone in the ask.
-`queue_haul` is an LP-led portfolio that retains the KV-only and replay-only
-plans with matched randomness, so the reducer hard-fails unless it ties or
-beats both in every matched scenario. Fleet invariance is reported per policy.
-Submit `fleet_shed_frontier.sbatch` as prepare, headline and sensitivity arrays,
-then reduce, with one shared `FRONTIER_OUT` and `afterok` dependencies.
+`queue_haul` is an LP-led portfolio from 120 seconds onward and retains the
+KV-only and replay-only solvers with matched randomness. Complete curves stay
+on one shard in deadline order; each solver's best lawful concrete plan is
+re-executed at every longer deadline. The reducer hard-fails any deadline
+regression or matched Queue-Haul loss, including sensitivity rows, and reports
+fleet invariance per policy. Below 120 seconds the equivalent replay/KV
+portfolio skips the degenerate LP. Submit `fleet_shed_frontier.sbatch` as
+prepare, headline and sensitivity arrays, then reduce, with one fresh shared
+`FRONTIER_OUT` and `afterok` dependencies.
 
 
 `requirement_frontier.py` computes destination requirements without constructing

@@ -7,7 +7,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
+#SBATCH --mem=64G
 #SBATCH --time=16:00:00
 #SBATCH --output=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/fleet-frontier-%A_%a.out
 #SBATCH --error=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/fleet-frontier-%A_%a.err
@@ -20,7 +20,7 @@ cd "$REPO/queue-haul"
 # One core per rank: numpy threads would oversubscribe the array tasks.
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 RUN="uv run --project $REPO/.. python fleet_shed_frontier_campaign.py"
-OUT=${FRONTIER_OUT:-$REPO/queue-haul/outputs/fleet-shed-frontier-a100-20260820}
+OUT=${FRONTIER_OUT:-$REPO/queue-haul/outputs/fleet-shed-frontier-a100-20260820-v4}
 case "${PHASE:-shard}" in
   prepare) $RUN prepare --out "$OUT" ;;
   reduce)  $RUN reduce --out "$OUT"
