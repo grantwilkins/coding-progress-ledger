@@ -65,7 +65,7 @@ LABELS = {
     frozenset(("hbm", "bandwidth")): "HBM + bandwidth",
     frozenset(("hbm", "dest_compute")): "HBM + compute",
     frozenset(("bandwidth", "dest_compute")): "Bandwidth + compute",
-    frozenset(FACTORS): "All bound", frozenset(): "None bound",
+    frozenset(FACTORS): "All bottlenecked", frozenset(): "None bottlenecked",
 }
 LEVELS = {"hbm": (0.0, .98), "bandwidth": ("natural", "bottleneck_1g"),
           "dest_compute": (.25, .95)}
@@ -1035,8 +1035,8 @@ def plot_action_boxplot(rows, path):
             raise RuntimeError("boxplot omitted a constraint case")
     labels = {case_id: label for case_id, label, _ in factorial_cases()}
     tick_labels = [labels[case].replace("Dest. compute", "Dest.\ncompute")
-                   .replace("All bound", "All\nbound")
-                   .replace("None bound", "None\nbound")
+                   .replace("All bottlenecked", "All\nbottlenecked")
+                   .replace("None bottlenecked", "None\nbottlenecked")
                    for case in DISPLAY_CASES]
     axis.set(
         xticks=positions, xticklabels=tick_labels, xlim=(-.55, 4.55),

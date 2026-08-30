@@ -42,8 +42,8 @@ ACTION_MIX_CASES = (
     ("constraints/hbm-bandwidth", "HBM + bandwidth"),
     ("constraints/hbm-prefill", "HBM + prefill"),
     ("constraints/bandwidth-prefill", "Bandwidth + prefill"),
-    ("constraints/all", "All bound"),
-    ("constraints/none", "None bound"),
+    ("constraints/all", "All bottlenecked"),
+    ("constraints/none", "None bottlenecked"),
 )
 plot_style.apply()
 

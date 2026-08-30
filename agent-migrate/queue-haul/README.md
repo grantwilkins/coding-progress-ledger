@@ -806,7 +806,7 @@ uv run python queue-haul/plot_pooled_resource_pressure.py \
 
 The action-adaptation views use the same equal-case sweep. The primary chart
 shows Queue-Haul's total replay/KV composition for the three single bottlenecks,
-all bound, and none bound at a common 67% target. Gray reports
+all bottlenecked, and none bottlenecked at a common 67% target. Gray reports
 sessions left at the source, so every 100%-stacked bar accounts for the same
 28-session pack; destination identities are intentionally omitted. The raw
 tables retain all eight HBM/bandwidth/destination-compute combinations.
@@ -857,7 +857,7 @@ uses 98% baseline occupancy on both destinations; the producer rejects any
 single-factor label unless it activates in at least 90% of paired draws and at
 least 10% of paired plans respond.
 In the regenerated ensemble, the cap replaces the no-bound KV share with Replay;
-the source-power frontier stays close to none bound because Replay transfers
+the source-power frontier stays close to none bottlenecked because Replay transfers
 little network state. That is the modeled adaptation, not an inactive link.
 Background
 inference consumes shared prefill/decode destination-compute headroom. Replay
@@ -871,11 +871,11 @@ the base rate curve where available and its conservative minimum rate outside
 that narrower curve; candidate duration and shared migration work use the same
 timing components but retain distinct objective and capacity roles.
 The stacked chart and companion boxplot show the three single bottlenecks, all
-bound, and none bound; intermediate two-factor states remain in the raw tables.
+bottlenecked, and none bottlenecked; intermediate two-factor states remain in the raw tables.
 Each stacked bar is the mean modeled source phase-load share across paired
 draws, the additive quantity used by the exact nonlinear power target. The
 separate `action_mix_boxplot.pdf` shows session-count
-variation for HBM, bandwidth, destination compute, all bound, and none bound:
+variation for HBM, bandwidth, destination compute, all bottlenecked, and none bottlenecked:
 each x-position has Replay, KV-transfer, and not-moved boxes spanning the
 25th--75th percentiles, median lines, and 5th--95th-percentile whiskers. Raw
 session counts and count shares remain in the CSV; they intentionally differ
@@ -941,7 +941,7 @@ has a certified 0.25% relative gap; exact nonlinear source watts are evaluated
 after packing. A feasible result from a tighter paired state is retained after
 constraint release, so the reported capacity cannot physically decrease; an
 independent-solve inversion above 1% hard-fails. The figure shows the three
-single bottlenecks, all bound, and none bound, while the raw table retains all
+single bottlenecks, all bottlenecked, and none bottlenecked, while the raw table retains all
 eight states and every target-specific Queue-Haul LP solve. Watts are normalized
 by each draw's removable source power. The current phase profile is
 `outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json`;

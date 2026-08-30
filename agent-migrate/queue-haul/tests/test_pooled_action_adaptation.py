@@ -105,8 +105,8 @@ def test_constraint_scenarios_bind_each_requested_subset():
 def test_action_mix_uses_all_eight_constraint_combinations():
     assert len(ACTION_MIX_CASES) == 8
     assert ACTION_MIX_CASES[-2:] == (
-        ("constraints/all", "All bound"),
-        ("constraints/none", "None bound"),
+        ("constraints/all", "All bottlenecked"),
+        ("constraints/none", "None bottlenecked"),
     )
     assert all(case != "constraint/quota-30" for case, _ in ACTION_MIX_CASES)
     assert ACTION_MIX_FIGSIZE == (5.5, 3)

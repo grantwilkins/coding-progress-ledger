@@ -8,7 +8,7 @@ Plausible wrong implementations:
 - Silently style an unknown policy or fail to apply the documented font sizes.
 - Reuse an action hatch so grayscale action segments become ambiguous.
 - Change a model's identity between architecture-campaign panels.
-- Leave Bandwidth visually conflated with None bound in the pooled frontier.
+- Leave Bandwidth visually conflated with None bottlenecked in the pooled frontier.
 """
 
 import matplotlib
@@ -108,4 +108,7 @@ def test_displayed_resource_states_have_distinct_canonical_colors():
               for state in states]
 
     assert plot_style.RESOURCE_STATE_COLORS["bandwidth"] == "#CC79A7"
+    assert plot_style.RESOURCE_STATE_NAMES["none"] == "None bottlenecked"
+    assert plot_style.RESOURCE_STATE_NAMES["bandwidth-dest_compute-hbm"] \
+        == "All bottlenecked"
     assert len(set(colors)) == len(states)

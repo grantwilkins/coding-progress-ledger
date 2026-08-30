@@ -31,7 +31,7 @@ Plausible wrong implementations:
 - Lose phase-load conservation when assigning selected sessions to actions.
 - Use phase-load shares rather than session shares in the companion boxplot.
 - Include intermediate joint cases instead of the three independent bottlenecks,
-  all bound, and none bound.
+  all bottlenecked, and none bottlenecked.
 - Use default Tukey whiskers instead of the declared 5th and 95th percentiles.
 - Reverse prefill occupancy into available throughput or report aggregate rather
   than per-destination throughput.
