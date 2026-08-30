@@ -1180,7 +1180,8 @@ KV-only and replay-only solvers with matched randomness. Complete curves stay
 on one shard in deadline order; each solver's best lawful concrete plan is
 re-executed at every longer deadline. The reducer hard-fails any deadline
 regression or matched Queue-Haul loss, including sensitivity rows, and reports
-fleet invariance per policy. Below 120 seconds the equivalent replay/KV
+fleet invariance per policy. The greedy baseline never invokes exact integer
+recovery when it misses an ask. Below 120 seconds the equivalent replay/KV
 portfolio skips the degenerate LP. Submit `fleet_shed_frontier.sbatch` as
 prepare, headline and sensitivity arrays, then reduce, with one fresh shared
 `FRONTIER_OUT` and `afterok` dependencies.
@@ -1374,9 +1375,9 @@ trailing power window, and retains misses as missing CDF mass. Every policy
 appends the same relaxed-horizon
 independent-fastest tail for unadmitted sessions after the scoring deadline,
 analogous to the hardware campaign tail. Queue-Haul uses the target-aware
-HiGHS LP with integral target recovery; Queue-Haul Greedy shares that recovery
-only when its one-pass choice misses an integrally feasible target. Regenerate it with
-`uv run python plot_workload_policy_attainment.py`.
+HiGHS LP with integral target recovery; Queue-Haul Greedy remains a one-pass
+heuristic and reports a miss rather than invoking an exact solver. Regenerate
+it with `uv run python plot_workload_policy_attainment.py`.
 
 | Internal name | Display name | Okabe–Ito | Line |
 |---|---|---:|---|

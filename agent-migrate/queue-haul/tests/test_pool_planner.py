@@ -48,7 +48,7 @@ Plausible wrong implementations:
   finishes faster the larger the destination fleet is. Measured replay never
   completes under 0.84 s and co-tenancy makes each one linearly slower.
 - Leave an integrally feasible target unmet after fractional LP rounding.
-- Leave an integrally feasible target unmet after greedy selection.
+- Silently replace greedy with exact integer recovery when it misses a target.
 - Route the existing `lp` solver through HiGHS instead of keeping it additive.
 - Charge migration work during shortfall minimization or omit the session dual.
 - Run Phase II at an infeasible requested target instead of maximum attainable gain.
@@ -273,7 +273,7 @@ def test_highs_lp_recovers_an_integrally_feasible_target_after_rounding():
     assert _lp_highs(table, 10) == {1, 2}
 
 
-def test_greedy_repairs_an_integrally_feasible_target():
+def test_greedy_dispatch_never_invokes_exact_recovery(monkeypatch):
     sessions = tuple(SimpleNamespace(session_id=name) for name in "abc")
     candidates = tuple(
         Candidate(i, "replay", 0, gain, 1, duration, (), 0, (0, 0), 0)
@@ -285,7 +285,22 @@ def test_greedy_repairs_an_integrally_feasible_target():
         ("route",), (1,), ("fraction",), 10,
     )
 
-    assert _greedy(table, 10, repair=True) == {1, 2}
+    monkeypatch.setattr(pool_planner, "candidate_table", lambda *args: table)
+    monkeypatch.setattr(
+        pool_planner, "_integral_target_recovery",
+        lambda *args: pytest.fail("greedy invoked exact recovery"),
+    )
+    monkeypatch.setattr(
+        pool_planner, "_pack",
+        lambda _table, selected, *args, **kwargs:
+        ({i: None for i in selected}, set()),
+    )
+
+    _, selected, *_ = pool_planner._mode_plan(
+        None, None, None, "greedy", "normal", None, 10,
+    )
+
+    assert selected == {0}
 
 def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):
     scenario = replace(problem(), sessions=(
@@ -2912,7 +2927,7 @@ def test_fluid_headroom_must_cover_every_method_equally():
 # Plausible wrong implementations: cutting without refill (the selection only
 # ever shrinks); refilling with candidates the policy may not use; re-adding
 # the exact candidate the deadline already rejected.
-def test_packing_cut_refills_toward_the_target(tmp_path):
+def test_packing_cut_refills_toward_the_target(monkeypatch, tmp_path):
     base = architecture(
         normal=.5, emergency=.5, stable=1, baselines=((0, 0),),
         routes=(("wan",),), methods=("replay",),
@@ -2930,6 +2945,15 @@ def test_packing_cut_refills_toward_the_target(tmp_path):
     profile = model(tmp_path, switch=0, tp=1)
     power = ExpectedPower(scenario, profile)
     target = sum(power.marginal(s) for s in "abc")
+    greedy = pool_planner._greedy
+
+    def initial_selection(table, target, eligible=None, state=None):
+        if state is None:
+            return {i for i, candidate in enumerate(table.candidates)
+                    if table.sessions[candidate.session].session_id in {"a", "b", "c"}}
+        return greedy(table, target, eligible, state)
+
+    monkeypatch.setattr(pool_planner, "_greedy", initial_selection)
 
     table, selected, assignment, repairs, _ = pool_planner._mode_plan(
         scenario, profile, arch, "greedy", "normal", power, target, 0,

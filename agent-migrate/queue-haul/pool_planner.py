@@ -898,8 +898,7 @@ def _integral_target_recovery(table, target):
     return None
 
 
-def _greedy(table: CandidateTable, target: float, eligible=None, repair=False,
-            state=None):
+def _greedy(table: CandidateTable, target: float, eligible=None, state=None):
     matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
     eligible = tuple(range(len(table.candidates))) if eligible is None else tuple(eligible)
     prices, score = _scarcity_prices(table, matrix, eligible), []
@@ -927,10 +926,6 @@ def _greedy(table: CandidateTable, target: float, eligible=None, repair=False,
         sessions.add(c.session)
         usage[rows] += values
         gain += c.credit
-    if repair and gain < target - 1e-8:
-        recovered = _integral_target_recovery(table, target)
-        if recovered is not None:
-            return recovered
     return selected
 
 
@@ -2650,7 +2645,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
             table, target, power, architecture, scenario, mode, True,
         )
     elif solver == "greedy":
-        selected = _greedy(table, target, repair=True)
+        selected = _greedy(table, target)
     elif solver in {"isolated_fastest", "isolated_myopic", "random",
                     "replay_only", "kv_only"}:
         selected = _baseline_policy(table, target, solver, seed)
