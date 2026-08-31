@@ -61,6 +61,11 @@ def test_power_validation_methods_have_unique_markers():
     assert len(set(plot_style.POWER_VALIDATION_MARKERS.values())) == 5
 
 
+def test_scaling_outcomes_have_distinct_canonical_markers():
+    assert set(plot_style.SCALING_OUTCOME_NAMES) == {"timeout", "oom"}
+    assert len(set(plot_style.SCALING_OUTCOME_MARKERS.values())) == 2
+
+
 def test_power_families_have_shared_names_colors_and_markers():
     assert set(plot_style.POWER_FAMILY_NAMES) == {"idle", "sessions"}
     assert set(plot_style.POWER_FAMILY_NAMES) == set(plot_style.POWER_FAMILY_COLORS) \
