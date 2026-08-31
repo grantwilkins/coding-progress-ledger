@@ -420,7 +420,10 @@ fixed aggregate planner used by the existing hardware path ranks sessions by
 their best candidate score and, for each session, tries replay and KV transfer
 in score order. It stops after exact recomputation reaches the power limit or no
 more candidates fit. Neither implementation recomputes scarcity prices after
-an acceptance. Ties are resolved by stable integer/session order.
+an acceptance. The primary pass resolves ties by stable integer/session order.
+If it misses the target, footprint-first and then gain-first greedy scans reuse
+the same fixed prices; a retry replaces the primary result only if it reaches
+the target. Greedy never invokes an LP or MILP.
 
 ### Lagrangian greedy
 

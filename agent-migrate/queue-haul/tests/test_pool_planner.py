@@ -310,7 +310,8 @@ def test_lp_skips_integral_recovery_after_fractional_infeasibility(
     assert solver(table, 3) == {0, 1}
 
 
-def test_best_effort_greedy_does_not_run_integral_recovery(tmp_path, monkeypatch):
+@pytest.mark.parametrize("solver", ("greedy", "greedy_best_effort"))
+def test_greedy_does_not_run_integral_recovery(tmp_path, monkeypatch, solver):
     monkeypatch.setattr(
         pool_planner, "_integral_target_recovery",
         lambda *_: pytest.fail("best-effort greedy invoked a MILP"),
@@ -318,13 +319,13 @@ def test_best_effort_greedy_does_not_run_integral_recovery(tmp_path, monkeypatch
 
     result = plan(
         problem(limit=0), model(tmp_path, switch=0, tp=1), PATHS,
-        "greedy_best_effort", destination=architecture(),
+        solver, destination=architecture(),
     )
 
     assert result.moves
 
 
-def test_greedy_repairs_an_integrally_feasible_target():
+def test_greedy_retry_reaches_an_integrally_feasible_target_without_milp(monkeypatch):
     sessions = tuple(SimpleNamespace(session_id=name) for name in "abc")
     candidates = tuple(
         Candidate(i, "replay", 0, gain, 1, duration, (), 0, (0, 0), 0)
@@ -336,7 +337,43 @@ def test_greedy_repairs_an_integrally_feasible_target():
         ("route",), (1,), ("fraction",), 10,
     )
 
-    assert _greedy(table, 10, repair=True) == {1, 2}
+    monkeypatch.setattr(
+        pool_planner, "_integral_target_recovery",
+        lambda *_: pytest.fail("greedy invoked a MILP"),
+    )
+
+    assert _greedy(table, 10) == {1, 2}
+    assert _greedy(table, 6) == {0}
+
+
+def test_greedy_scarcity_counts_one_cheapest_option_per_session():
+    candidates = tuple(
+        Candidate(session, method, 0, 1, 1, 1, (), 0, (0, 0), 0)
+        for session in range(2) for method in ("replay", "kv_transfer")
+    )
+    table = CandidateTable(
+        tuple(SimpleNamespace(session_id=str(i)) for i in range(2)), candidates,
+        csr_matrix(np.array(((1, 1, 0, 0), (0, 0, 1, 1)))),
+        csr_matrix(np.array(((.9, 0, .9, 0), (0, .8, 0, .8)))),
+        ("a", "b"), (1, 1), ("fraction", "fraction"), 1,
+    )
+
+    assert _greedy(table, 2) == {0, 3}
+
+
+def test_greedy_respects_cross_resource_capacity():
+    candidates = tuple(
+        Candidate(i, "replay", 0, gain, 1, 1, (), 0, (0, 0), 0)
+        for i, gain in enumerate((6, 5, 5))
+    )
+    table = CandidateTable(
+        tuple(SimpleNamespace(session_id=str(i)) for i in range(3)), candidates,
+        csr_matrix(np.eye(3)),
+        csr_matrix(np.array(((.6, .5, 0), (.6, 0, .5)))),
+        ("a", "b"), (1, 1), ("fraction", "fraction"), 1,
+    )
+
+    assert _greedy(table, 10) == {1, 2}
 
 def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_path):
     scenario = replace(problem(), sessions=(
@@ -346,9 +383,9 @@ def test_pool_power_blind_lp_uses_uniform_pack_average_gains(monkeypatch, tmp_pa
     profile, seen = model(tmp_path, tp=1), []
     original = pool_planner._lp_highs
 
-    def capture(table, target):
+    def capture(table, target, stats=None):
         seen.append([candidate.gain_w for candidate in table.candidates])
-        return original(table, target)
+        return original(table, target, stats)
 
     monkeypatch.setattr(pool_planner, "_lp_highs", capture)
     plan(scenario, profile, PATHS, "lp_power_blind", destination=architecture())
@@ -1592,8 +1629,8 @@ def test_fluid_deadline_repair_is_separate_and_recomputes_shortfall(
     result = plan(problem(), model(tmp_path, switch=0, tp=1), PATHS, "greedy",
                   destination=arch)
 
-    # One selection pack, plus one refill probe that the deadline rejects.
-    assert len(calls) == 2
+    # Compact selection pack, exhaustive repair expansion, then refill probe.
+    assert len(calls) == 3
     assert len(result.moves) == 1
     assert result.deadline_repair_count == 1
     assert result.packing_repair_count == 0
@@ -2373,6 +2410,75 @@ def test_native_pricing_requires_complete_nonoverlapping_chunks():
     assert native.price(1, 1, np.zeros(1), np.zeros(2), 1, 0)[
         "evaluated_choices"
     ] == 2
+
+
+def test_native_greedy_accepts_boundaries_and_preserves_state():
+    candidates = tuple(
+        Candidate(session, "replay", 0, gain, 1, 1, (), 0, (0, 0), 0)
+        for session, gain in enumerate((4, 3, 2))
+    )
+    table = CandidateTable(
+        tuple(SimpleNamespace(session_id=str(i)) for i in range(3)), candidates,
+        csr_matrix(np.eye(3)), csr_matrix(np.array(((.5, .5, .50000002),))),
+        ("route",), (1,), ("fraction",), 1,
+    )
+
+    assert _greedy(table, 7) == {0, 1}
+    assert _greedy(table, 9, eligible=(1, 2), state={0}) == {0, 1}
+
+
+def test_compact_greedy_materializes_only_exact_selected_candidates(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    arch = architecture(normal=1, emergency=1, stable=1)
+    power = ExpectedPower(scenario, profile)
+    oracle = _candidate_oracle(scenario, profile, arch, "normal", power)
+    compact, selected, _, _ = pool_planner._compact_greedy(oracle, 1)
+    exhaustive = candidate_table(scenario, profile, arch, "normal", power)
+
+    assert len(compact.candidates) < len(exhaustive.candidates)
+    assert tuple(compact.candidates) == tuple(
+        exhaustive.candidates[i] for i in compact.candidate_ids
+    )
+    assert all(
+        oracle.column(compact.candidates[i])
+        == oracle.column(exhaustive.candidates[original])
+        for i, original in enumerate(compact.candidate_ids)
+    )
+    assert selected == set(range(len(compact.candidates)))
+
+
+def test_compact_greedy_has_no_sixteen_option_limit():
+    from _queue_haul_native import greedy_compact
+
+    options = 17
+    coefficients = np.zeros((options, 7))
+    coefficients[:, 0] = 1
+
+    selected = greedy_compact(
+        1, 1, 1, np.zeros(options, np.int32), np.arange(options, dtype=np.int32),
+        np.ones(1), np.ones((options, 7)).ravel(),
+        np.arange(options + 1, dtype=np.int32), np.zeros(options, np.int32),
+        coefficients.ravel(),
+    )
+
+    assert selected.tolist() == [0]
+
+
+def test_production_greedy_skips_full_candidate_materialization(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        pool_planner, "candidate_table",
+        lambda *_: pytest.fail("greedy eagerly materialized every candidate"),
+    )
+
+    result = plan(
+        problem(limit=0), model(tmp_path, switch=0, tp=1), PATHS, "greedy",
+        destination=architecture(normal=1, emergency=1, stable=1),
+    )
+
+    assert result.moves and result.candidate_generation_s > 0
+    assert result.selection_s > 0 and result.milp_recovery_s == 0
+    assert result.packing_s > 0 and result.validation_s > 0
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):

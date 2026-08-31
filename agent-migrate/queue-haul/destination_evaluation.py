@@ -231,6 +231,10 @@ def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
                 "migration_s": result.predicted_migration_makespan_s,
                 "bottleneck": result.bottleneck, "packing_repairs": result.packing_repair_count,
                 "runtime_s": result.solve_s, "memory_bytes": result.planner_memory_bytes,
+                "candidate_generation_s": result.candidate_generation_s,
+                "selection_s": result.selection_s,
+                "milp_recovery_s": result.milp_recovery_s,
+                "packing_s": result.packing_s, "validation_s": result.validation_s,
                 "achieved_headroom": effective_headroom(architecture, reference[0])
                 if reference else None,
                 })

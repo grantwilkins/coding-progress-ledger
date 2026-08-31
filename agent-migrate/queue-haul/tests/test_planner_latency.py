@@ -8,10 +8,9 @@ Plausible wrong implementations:
 - Time the whole plan() call, so the shared table build, packing and deadline
   repair swamp the solver difference and can even invert it.
 - Include the candidate-table build in the selection timing.
-- Call the greedy with repair=True, so it answers with the exact MILP and is
-  not the greedy at all.
-- Ask for a target neither can reach, so the LP answers from the max-shed
-  fallback it shares with the greedy and the two look identical.
+- Hide an exact MILP behind the greedy name.
+- Ask for a target neither can reach, so the LP answers from its max-shed
+  fallback and the comparison no longer measures the requested policies.
 - Report the timing anyway when the selection missed the target.
 - Report the first sample or the mean instead of the median over repeats.
 """
@@ -51,16 +50,10 @@ def test_selection_timing_is_the_selection(monkeypatch):
 
 
 def test_greedy_never_reaches_for_the_exact_milp(monkeypatch):
-    repairs, greedy = [], pool_planner._greedy
-    monkeypatch.setattr(pool_planner, "_greedy", lambda table, target, eligible=None,
-                        repair=False, state=None: repairs.append(repair)
-                        or greedy(table, target, eligible, repair, state))
     monkeypatch.setattr(pool_planner, "_integral_target_recovery",
                         lambda *a: pytest.fail("the greedy used the exact MILP"))
 
     planner_latency.measure(28, repeats=1)
-
-    assert repairs and not any(repairs)
 
 
 def test_a_selection_that_misses_the_target_is_refused(monkeypatch):

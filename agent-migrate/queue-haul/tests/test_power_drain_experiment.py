@@ -247,5 +247,7 @@ def test_worker_processes_preserve_scenario_order_and_results():
     assert [run.run_id for run in parallel] == [run.run_id for run in serial]
     for expected, actual in zip(serial, parallel):
         assert actual.scenario == expected.scenario
-        assert replace(actual.plan, solve_s=0) == replace(expected.plan, solve_s=0)
+        timings = dict(solve_s=0, candidate_generation_s=0, selection_s=0,
+                       milp_recovery_s=0, packing_s=0, validation_s=0)
+        assert replace(actual.plan, **timings) == replace(expected.plan, **timings)
         assert actual.result == expected.result

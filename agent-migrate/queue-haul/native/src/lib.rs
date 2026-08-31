@@ -8,6 +8,357 @@ use pyo3::types::PyDict;
 
 const FEATURES: usize = 7;
 
+fn greedy_order(costs: &[f64], gains: &[f64], candidates: &[usize], recovery: u8) -> Vec<usize> {
+    let mut order = candidates.to_vec();
+    order.sort_unstable_by(|a, b| {
+        (recovery == 2)
+            .then(|| gains[*b].total_cmp(&gains[*a]))
+            .unwrap_or(Ordering::Equal)
+            .then((gains[*b] / costs[*b].max(1e-12)).total_cmp(&(gains[*a] / costs[*a].max(1e-12))))
+            .then_with(|| {
+                (recovery == 1)
+                    .then(|| costs[*a].total_cmp(&costs[*b]))
+                    .unwrap_or(Ordering::Equal)
+            })
+            .then(a.cmp(b))
+    });
+    order
+}
+
+fn greedy_scan<F>(
+    target: f64,
+    session_count: usize,
+    resource_count: usize,
+    sessions: &[i32],
+    gains: &[f64],
+    order: &[usize],
+    state: &[usize],
+    mut column: F,
+) -> (Vec<usize>, f64)
+where
+    F: FnMut(usize, &mut dyn FnMut(usize, f64)),
+{
+    let mut usage = vec![0.0; resource_count];
+    let mut taken = vec![false; session_count];
+    let mut selected = state.to_vec();
+    let mut gain = 0.0;
+    for candidate in state {
+        taken[sessions[*candidate] as usize] = true;
+        gain += gains[*candidate];
+        column(*candidate, &mut |row, value| usage[row] += value);
+    }
+    for candidate in order {
+        if gain >= target - 1e-8 {
+            break;
+        }
+        let session = sessions[*candidate] as usize;
+        let mut fits = !taken[session];
+        column(*candidate, &mut |row, value| {
+            fits &= usage[row] + value <= 1.0 + 1e-8
+        });
+        if !fits {
+            continue;
+        }
+        column(*candidate, &mut |row, value| usage[row] += value);
+        taken[session] = true;
+        gain += gains[*candidate];
+        selected.push(*candidate);
+    }
+    (selected, gain)
+}
+
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn greedy_compact<'py>(
+    py: Python<'py>,
+    session_count: usize,
+    resource_count: usize,
+    target: f64,
+    sessions: PyReadonlyArray1<'_, i32>,
+    options: PyReadonlyArray1<'_, i32>,
+    session_gains: PyReadonlyArray1<'_, f64>,
+    features: PyReadonlyArray1<'_, f64>,
+    option_starts: PyReadonlyArray1<'_, i32>,
+    resource_rows: PyReadonlyArray1<'_, i32>,
+    coefficients: PyReadonlyArray1<'_, f64>,
+) -> PyResult<Bound<'py, PyArray1<i64>>> {
+    let sessions = sessions.as_slice()?;
+    let options = options.as_slice()?;
+    let session_gains = session_gains.as_slice()?;
+    let features = features.as_slice()?;
+    let option_starts = option_starts.as_slice()?;
+    let resource_rows = resource_rows.as_slice()?;
+    let coefficients = coefficients.as_slice()?;
+    let candidates = sessions.len();
+    let option_count = option_starts.len().saturating_sub(1);
+    if !target.is_finite()
+        || target < 0.0
+        || options.len() != candidates
+        || features.len() != candidates.checked_mul(FEATURES).unwrap_or(usize::MAX)
+        || session_gains.len() != session_count
+        || resource_rows.len().checked_mul(FEATURES) != Some(coefficients.len())
+        || option_starts.first().copied() != Some(0)
+        || option_starts
+            .windows(2)
+            .any(|window| window[0] < 0 || window[0] > window[1])
+        || option_starts.last().copied() != Some(resource_rows.len() as i32)
+        || sessions
+            .iter()
+            .any(|value| *value < 0 || *value as usize >= session_count)
+        || options
+            .iter()
+            .any(|value| *value < 0 || *value as usize >= option_count)
+        || resource_rows
+            .iter()
+            .any(|value| *value < 0 || *value as usize >= resource_count)
+        || !session_gains.iter().all(|value| value.is_finite())
+        || !features.iter().all(|value| value.is_finite())
+        || !coefficients
+            .iter()
+            .all(|value| value.is_finite() && *value >= 0.0)
+    {
+        return Err(PyValueError::new_err("invalid compact greedy problem"));
+    }
+    let value = |candidate: usize, entry: usize| {
+        (0..FEATURES)
+            .map(|feature| {
+                features[candidate * FEATURES + feature] * coefficients[entry * FEATURES + feature]
+            })
+            .sum::<f64>()
+    };
+    for option in 0..option_count {
+        let rows =
+            &resource_rows[option_starts[option] as usize..option_starts[option + 1] as usize];
+        if rows
+            .iter()
+            .enumerate()
+            .any(|(i, row)| rows[i + 1..].contains(row))
+        {
+            return Err(PyValueError::new_err(
+                "compact greedy option repeats a resource",
+            ));
+        }
+    }
+    for candidate in 0..candidates {
+        let option = options[candidate] as usize;
+        for entry in option_starts[option] as usize..option_starts[option + 1] as usize {
+            let resource = value(candidate, entry);
+            if !resource.is_finite() || resource < 0.0 {
+                return Err(PyValueError::new_err(
+                    "invalid compact greedy resource value",
+                ));
+            }
+        }
+    }
+    let visit = |candidate: usize, emit: &mut dyn FnMut(usize, f64)| {
+        let option = options[candidate] as usize;
+        for entry in option_starts[option] as usize..option_starts[option + 1] as usize {
+            emit(resource_rows[entry] as usize, value(candidate, entry));
+        }
+    };
+    let mut cheapest: Vec<Option<(f64, usize)>> = vec![None; session_count];
+    for candidate in 0..candidates {
+        let mut demand = 0.0;
+        visit(candidate, &mut |_row, value| demand += value);
+        let session = sessions[candidate] as usize;
+        if cheapest[session].is_none_or(|current| (demand, candidate) < current) {
+            cheapest[session] = Some((demand, candidate));
+        }
+    }
+    let mut prices = vec![0.0_f64; resource_count];
+    for (_, candidate) in cheapest.into_iter().flatten() {
+        visit(candidate, &mut |row, value| prices[row] += value);
+    }
+    prices.iter_mut().for_each(|price| *price = price.max(1.0));
+    let gains: Vec<_> = sessions
+        .iter()
+        .map(|session| session_gains[*session as usize])
+        .collect();
+    let costs: Vec<_> = (0..candidates)
+        .map(|candidate| {
+            let mut cost = 0.0;
+            visit(candidate, &mut |row, value| cost += prices[row] * value);
+            cost
+        })
+        .collect();
+    let indices: Vec<_> = (0..candidates).collect();
+    let original = greedy_order(&costs, &gains, &indices, 0);
+    let (mut selected, mut gain) = greedy_scan(
+        target,
+        session_count,
+        resource_count,
+        sessions,
+        &gains,
+        &original,
+        &[],
+        visit,
+    );
+    if gain < target - 1e-8 {
+        let retry = greedy_order(&costs, &gains, &indices, 1);
+        let (alternative, alternative_gain) = greedy_scan(
+            target,
+            session_count,
+            resource_count,
+            sessions,
+            &gains,
+            &retry,
+            &[],
+            visit,
+        );
+        if alternative_gain >= target - 1e-8 {
+            selected = alternative;
+            gain = alternative_gain;
+        }
+    }
+    if gain < target - 1e-8 {
+        let retry = greedy_order(&costs, &gains, &indices, 2);
+        let (alternative, alternative_gain) = greedy_scan(
+            target,
+            session_count,
+            resource_count,
+            sessions,
+            &gains,
+            &retry,
+            &[],
+            visit,
+        );
+        if alternative_gain >= target - 1e-8 {
+            selected = alternative;
+        }
+    }
+    Ok(PyArray1::from_vec(
+        py,
+        selected.into_iter().map(|value| value as i64).collect(),
+    ))
+}
+
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn greedy_csc<'py>(
+    py: Python<'py>,
+    session_count: usize,
+    resource_count: usize,
+    target: f64,
+    sessions: PyReadonlyArray1<'_, i32>,
+    gains: PyReadonlyArray1<'_, f64>,
+    starts: PyReadonlyArray1<'_, i32>,
+    rows: PyReadonlyArray1<'_, i32>,
+    values: PyReadonlyArray1<'_, f64>,
+    eligible: PyReadonlyArray1<'_, i64>,
+    state: PyReadonlyArray1<'_, i64>,
+) -> PyResult<Bound<'py, PyArray1<i64>>> {
+    let sessions = sessions.as_slice()?;
+    let gains = gains.as_slice()?;
+    let starts = starts.as_slice()?;
+    let rows = rows.as_slice()?;
+    let values = values.as_slice()?;
+    let eligible = eligible.as_slice()?;
+    let state = state.as_slice()?;
+    let candidates = sessions.len();
+    if !target.is_finite()
+        || target < 0.0
+        || gains.len() != candidates
+        || starts.len() != candidates + 1
+        || starts.first().copied() != Some(0)
+        || starts
+            .windows(2)
+            .any(|window| window[0] < 0 || window[0] > window[1])
+        || starts.last().copied() != Some(rows.len() as i32)
+        || rows.len() != values.len()
+        || sessions
+            .iter()
+            .any(|value| *value < 0 || *value as usize >= session_count)
+        || rows
+            .iter()
+            .any(|value| *value < 0 || *value as usize >= resource_count)
+        || eligible
+            .iter()
+            .chain(state)
+            .any(|value| *value < 0 || *value as usize >= candidates)
+        || !gains.iter().all(|value| value.is_finite())
+        || !values
+            .iter()
+            .all(|value| value.is_finite() && *value >= 0.0)
+    {
+        return Err(PyValueError::new_err("invalid sparse greedy problem"));
+    }
+    let eligible: Vec<_> = eligible.iter().map(|value| *value as usize).collect();
+    let state: Vec<_> = state.iter().map(|value| *value as usize).collect();
+    let visit = |candidate: usize, emit: &mut dyn FnMut(usize, f64)| {
+        for entry in starts[candidate] as usize..starts[candidate + 1] as usize {
+            emit(rows[entry] as usize, values[entry]);
+        }
+    };
+    let mut cheapest: Vec<Option<(f64, usize)>> = vec![None; session_count];
+    for candidate in &eligible {
+        let mut demand = 0.0;
+        visit(*candidate, &mut |_row, value| demand += value);
+        let session = sessions[*candidate] as usize;
+        if cheapest[session].is_none_or(|current| (demand, *candidate) < current) {
+            cheapest[session] = Some((demand, *candidate));
+        }
+    }
+    let mut prices = vec![0.0_f64; resource_count];
+    for (_, candidate) in cheapest.into_iter().flatten() {
+        visit(candidate, &mut |row, value| prices[row] += value);
+    }
+    prices.iter_mut().for_each(|price| *price = price.max(1.0));
+    let mut costs = vec![0.0; candidates];
+    for candidate in &eligible {
+        visit(*candidate, &mut |row, value| {
+            costs[*candidate] += prices[row] * value
+        });
+    }
+    let original = greedy_order(&costs, gains, &eligible, 0);
+    let (mut selected, mut gain) = greedy_scan(
+        target,
+        session_count,
+        resource_count,
+        sessions,
+        gains,
+        &original,
+        &state,
+        visit,
+    );
+    if gain < target - 1e-8 {
+        let retry = greedy_order(&costs, gains, &eligible, 1);
+        let (alternative, alternative_gain) = greedy_scan(
+            target,
+            session_count,
+            resource_count,
+            sessions,
+            gains,
+            &retry,
+            &state,
+            visit,
+        );
+        if alternative_gain >= target - 1e-8 {
+            selected = alternative;
+            gain = alternative_gain;
+        }
+    }
+    if gain < target - 1e-8 {
+        let retry = greedy_order(&costs, gains, &eligible, 2);
+        let (alternative, alternative_gain) = greedy_scan(
+            target,
+            session_count,
+            resource_count,
+            sessions,
+            gains,
+            &retry,
+            &state,
+            visit,
+        );
+        if alternative_gain >= target - 1e-8 {
+            selected = alternative;
+        }
+    }
+    Ok(PyArray1::from_vec(
+        py,
+        selected.into_iter().map(|value| value as i64).collect(),
+    ))
+}
+
 #[derive(Clone)]
 struct Winner {
     reduced: f64,
@@ -571,5 +922,8 @@ impl PricingOracle {
 
 #[pymodule]
 fn _queue_haul_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_class::<PricingOracle>()
+    module.add_class::<PricingOracle>()?;
+    module.add_function(wrap_pyfunction!(greedy_compact, module)?)?;
+    module.add_function(wrap_pyfunction!(greedy_csc, module)?)?;
+    Ok(())
 }

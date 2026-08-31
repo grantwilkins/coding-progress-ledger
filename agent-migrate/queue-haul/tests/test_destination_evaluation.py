@@ -206,9 +206,11 @@ def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
         return SimpleNamespace(
             feasible=feasible, initial_source_power_w=2, planned_source_power_w=1,
             power_shortfall_w=0, admission_mode="normal", predicted_migration_makespan_s=1,
-            bottleneck="service:p0", packing_repair_count=0, solve_s=0,
-            planner_memory_bytes=1, failure_reason=None,
-        )
+                bottleneck="service:p0", packing_repair_count=0, solve_s=0,
+                planner_memory_bytes=1, failure_reason=None,
+                candidate_generation_s=0, selection_s=0, milp_recovery_s=0,
+                packing_s=0, validation_s=0,
+            )
     monkeypatch.setattr(destination_evaluation, "plan", fake_plan)
     cell = SweepCell(.8, 1, 1, .1, .05)
 

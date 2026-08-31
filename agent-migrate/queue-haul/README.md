@@ -1221,6 +1221,13 @@ rustup Cargo must precede any system Cargo, and the toolchain is pinned under
 baseline, bounds, and methods are exactly equal; variables and capacity rows
 remain pool-specific. Indexed replica placement and a compact execution verifier are still
 required for million-session operation.
+Static greedy uses a separate uncapped compact boundary: Python emits numeric
+session/option features without constructing every `Candidate`, Rust computes
+fixed scarcity prices and runs the dependent feasibility scans, and Python
+materializes only selected moves. Packing or deadline cuts expand the exhaustive
+table only on that repair path. `PlanResult` reports candidate generation,
+selection, MILP recovery, packing, and validation time separately; greedy's
+MILP recovery time is always zero.
 `outputs/native-lp-scale-20260801/one-million.json` records the post-optimization
 one-seed 1M-session LP/rounding sensitivity and its hashes; it explicitly excludes
 replica packing, DES, prediction, and execution validation.
@@ -1368,8 +1375,9 @@ trailing power window, and retains misses as missing CDF mass. Every policy
 appends the same relaxed-horizon
 independent-fastest tail for unadmitted sessions after the scoring deadline,
 analogous to the hardware campaign tail. Queue-Haul uses the target-aware
-HiGHS LP with integral target recovery; Queue-Haul Greedy shares that recovery
-only when its one-pass choice misses an integrally feasible target. Regenerate it with
+HiGHS LP with integral target recovery. Queue-Haul Greedy uses only
+deterministic fixed-price scans and reports a miss if none reaches the target.
+Regenerate it with
 `uv run python plot_workload_policy_attainment.py`.
 
 | Internal name | Display name | Okabe–Ito | Line |
@@ -1635,14 +1643,13 @@ check the plan against the deadline (23.5 s for 26,209 moves), then the
 candidate table (5.8 s for 200,000 candidates) and replica packing (4.1 s).
 End-to-end timing therefore hides the solver difference and can invert it: the
 LP measures 38.7 s against the greedy's 42.4 s only because it selected 192
-fewer moves and so made the shared simulation cheaper. Both solvers are held to their pure form: the greedy runs
-without its integral repair, so it never reaches for the exact MILP, and the
-target is one both can attain, so the LP runs its target-first solve instead of
-the max-shed fallback the two share on an impossible target. A selection that
+fewer moves and so made the shared simulation cheaper. Both solvers are held to
+their pure form: greedy has no integral recovery, and the target is one both can
+attain, so the LP runs its target-first solve instead of its max-shed fallback.
+A selection that
 misses the target hard-fails rather than reporting a fallback's timing, which is
 what makes `outputs/scaling_1_to_100k_20260720_greedy` unusable for this
-comparison: past 32 sessions its 50% request is out of reach and both policies
-return byte-identical plans from the same recovery.
+comparison: past 32 sessions its 50% request is out of reach.
 
 ## Measurement programs
 

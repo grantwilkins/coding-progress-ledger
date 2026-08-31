@@ -8,11 +8,10 @@ end-to-end timing therefore hides the solver difference and can invert it -- the
 LP measures 38.7 s against the greedy's 42.4 s purely because it selected 192
 fewer moves for that shared simulation to execute.
 
-Both solvers are held to their pure form.  The greedy runs without its integral
-repair, so it never reaches for the exact MILP, and the target is one both can
-attain, so the LP runs its target-first solve rather than the max-shed fallback
-it shares with the greedy on an impossible target.  Each selection must reach
-the target or the run fails: a policy scored in its fallback is not the policy.
+Both solvers are held to their pure form.  Greedy has no integral recovery, and
+the target is one both can attain, so the LP runs its target-first solve rather
+than its maximum-shed fallback.  Each selection must reach the target or the run
+fails: an unattainable request is not a useful policy comparison.
 """
 
 from __future__ import annotations

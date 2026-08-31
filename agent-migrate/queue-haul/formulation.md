@@ -517,7 +517,10 @@ preserves every remaining capacity. Greedy has no cut awareness — cuts exist
 only in the packing repair loop after selection. The legacy path stops on exact
 modeled power; the pool-aware path stops on accumulated conservative gain. Both
 reevaluate exact source power after integer selection. Prices and scores are
-computed once, before the loop, and are never recomputed as rows saturate.
+computed once, before the loop, and are never recomputed as rows saturate. If
+the stable-order pass misses the target, footprint-first and gain-first scans
+reuse those prices; a retry is accepted only if it reaches the target. No
+greedy path invokes an LP or MILP.
 
 This approximates LP dual pricing while remaining approximately
 \(O(N\log N)\). `formulation_nsdi.md` §C.3 derives what it is approximating and

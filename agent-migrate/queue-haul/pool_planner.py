@@ -75,6 +75,8 @@ class CandidateTable:
     resource_capacities: tuple[float, ...]
     resource_units: tuple[str, ...]
     migration_horizon_s: float
+    candidate_ids: tuple[int, ...] = ()
+    compact_bytes: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +89,14 @@ class PricingSoA:
     resource_rows: np.ndarray
     resource_coefficients: np.ndarray
     session_ranks: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class GreedySoA:
+    sessions: np.ndarray
+    options: np.ndarray
+    durations: np.ndarray
+    features: np.ndarray
 
 
 def _baseline(scenario: ExecutionScenario, architecture: DestinationArchitecture,
@@ -661,12 +671,12 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
     return SimpleNamespace(
         sessions=sessions, migration_horizon_s=migration_horizon,
         pools=architecture.pools, gains=gains, marginal_gains=marginal_gains,
-        specs=tuple(specs), choices=choices,
+        specs=tuple(specs), records=records, choices=choices,
         column=column, feature=feature, options=tuple(options),
         pricing=pricing,
         signatures=tuple(signatures), option_signatures=option_signatures,
         templates=tuple(templates), option_for=option_for,
-        pool_groups=pool_groups,
+        pool_groups=pool_groups, selection_credits=selection_credits,
     )
 
 
@@ -699,6 +709,73 @@ def _pricing_ranks(oracle):
     ranks = np.empty(len(order), np.uint32)
     ranks[order] = np.arange(len(order), dtype=np.uint32)
     return ranks
+
+
+def _greedy_soa(oracle):
+    sessions, options, durations, features = [], [], [], []
+    for j in range(len(oracle.sessions)):
+        for method, pool, duration, migration_work, _route, route_bytes, demand, resident, transition \
+                in oracle.records(j):
+            sessions.append(j)
+            options.append(oracle.option_for[pool, method])
+            durations.append(duration)
+            features.append((route_bytes, *demand, resident, migration_work, *transition))
+    return GreedySoA(
+        np.asarray(sessions, np.int32), np.asarray(options, np.int32),
+        np.asarray(durations), np.asarray(features).reshape(-1, 7),
+    )
+
+
+def _compact_greedy(oracle, target):
+    from _queue_haul_native import greedy_compact
+
+    if oracle.migration_horizon_s <= 0:
+        return CandidateTable(
+            oracle.sessions, (), csr_matrix((len(oracle.sessions), 0)),
+            csr_matrix((0, 0)), (), (), (), oracle.migration_horizon_s,
+        ), set(), 0.0, 0.0
+    started = perf_counter()
+    soa = _greedy_soa(oracle)
+    option_signatures, starts, rows, coefficients = _pricing_layout(oracle)
+    generation_s = perf_counter() - started
+    started = perf_counter()
+    selected = greedy_compact(
+        len(oracle.sessions), len(oracle.specs), target,
+        soa.sessions, soa.options, np.asarray(oracle.gains), soa.features.ravel(),
+        starts, rows, np.ascontiguousarray(coefficients.ravel()),
+    )
+    selection_s = perf_counter() - started
+    compact_bytes = sum(
+        value.nbytes for value in (
+            soa.sessions, soa.options, soa.durations, soa.features,
+            option_signatures, starts, rows, coefficients,
+        )
+    )
+    started = perf_counter()
+    table = _materialize_greedy(
+        oracle, soa, set(map(int, selected)), compact_bytes,
+    )
+    return table, set(range(len(table.candidates))), \
+        generation_s + perf_counter() - started, selection_s
+
+
+def _materialize_greedy(oracle, soa, selected, compact_bytes):
+    ids = tuple(sorted(selected))
+    candidates = []
+    for i in ids:
+        session, option = int(soa.sessions[i]), int(soa.options[i])
+        pool, method = oracle.options[option]
+        values = soa.features[i]
+        candidates.append(Candidate(
+            session, method, pool, oracle.marginal_gains[session], values[4],
+            soa.durations[i], oracle.pools[pool].route, values[0],
+            tuple(values[1:3]), int(values[3]), tuple(values[5:7]),
+            None if oracle.selection_credits is None else oracle.gains[session],
+        ))
+    return replace(
+        _materialize_candidates(oracle, candidates),
+        candidate_ids=ids, compact_bytes=compact_bytes,
+    )
 
 
 def _pricing_soa(oracle):
@@ -877,13 +954,14 @@ def _scarcity_prices(table, matrix, eligible=None):
     return np.maximum(demand, 1)
 
 
-def _integral_target_recovery(table, target):
+def _integral_target_recovery(table, target, stats=None):
     n = len(table.candidates)
     if not n:
         return None
     gains = np.array([c.credit for c in table.candidates])
     work = np.array([c.objective_cost_s for c in table.candidates])
     matrix = vstack((table.incidence, table.resources), format="csr")
+    started = perf_counter()
     result = milp(
         work / table.migration_horizon_s, integrality=np.ones(n),
         bounds=Bounds(0, 1), constraints=(
@@ -891,6 +969,9 @@ def _integral_target_recovery(table, target):
             LinearConstraint(gains, target - 1e-8, np.inf),
         ),
     )
+    if stats is not None:
+        stats["milp_recovery_s"] = stats.get("milp_recovery_s", 0.0) \
+            + perf_counter() - started
     if result.success:
         return set(np.flatnonzero(result.x > .5))
     if result.status != 2:
@@ -898,40 +979,22 @@ def _integral_target_recovery(table, target):
     return None
 
 
-def _greedy(table: CandidateTable, target: float, eligible=None, repair=False,
-            state=None):
-    matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
-    eligible = tuple(range(len(table.candidates))) if eligible is None else tuple(eligible)
-    prices, score = _scarcity_prices(table, matrix, eligible), []
-    for i in eligible:
-        c = table.candidates[i]
-        sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
-        rows, values = matrix.indices[sl], matrix.data[sl]
-        score.append((c.credit / max(values @ prices[rows], 1e-12), i))
-    sessions, gain = set(), 0.0
-    if state:
-        selected = set(state)
-        sessions = {table.candidates[i].session for i in selected}
-        gain = sum(table.candidates[i].credit for i in selected)
-        usage = np.asarray(
-            table.resources[:, sorted(selected)].sum(axis=1)).ravel()
-    for _, i in sorted(score, key=lambda row: (-row[0], row[1])):
-        c = table.candidates[i]
-        if gain >= target - 1e-8:
-            break
-        sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
-        rows, values = matrix.indices[sl], matrix.data[sl]
-        if c.session in sessions or np.any(usage[rows] + values > 1 + 1e-8):
-            continue
-        selected.add(i)
-        sessions.add(c.session)
-        usage[rows] += values
-        gain += c.credit
-    if repair and gain < target - 1e-8:
-        recovered = _integral_target_recovery(table, target)
-        if recovered is not None:
-            return recovered
-    return selected
+def _greedy(table: CandidateTable, target: float, eligible=None, state=None):
+    from _queue_haul_native import greedy_csc
+
+    matrix = csc_matrix(table.resources)
+    eligible = range(len(table.candidates)) if eligible is None else eligible
+    selected = greedy_csc(
+        table.incidence.shape[0], matrix.shape[0], target,
+        np.fromiter((c.session for c in table.candidates), np.int32,
+                    len(table.candidates)),
+        np.fromiter((c.credit for c in table.candidates), float,
+                    len(table.candidates)),
+        np.asarray(matrix.indptr, np.int32), np.asarray(matrix.indices, np.int32),
+        matrix.data, np.asarray(tuple(eligible), np.int64),
+        np.asarray(tuple(sorted(state or ())), np.int64),
+    )
+    return set(map(int, selected))
 
 
 def _baseline_policy(table: CandidateTable, target: float, policy: str, seed: int):
@@ -1368,7 +1431,7 @@ def _greedy_lagrangian(
     )
 
 
-def _round_lp(table, target, values, recover_target=True):
+def _round_lp(table, target, values, recover_target=True, stats=None):
     n = len(table.candidates)
     gains = np.array([c.credit for c in table.candidates])
     work = np.array([c.objective_cost_s for c in table.candidates])
@@ -1398,7 +1461,7 @@ def _round_lp(table, target, values, recover_target=True):
             usage[rows] += added
             gain += c.credit
     if recover_target and gain < target - 1e-8:
-        recovered = _integral_target_recovery(table, target)
+        recovered = _integral_target_recovery(table, target, stats)
         if recovered is not None:
             return recovered
     return selected
@@ -1445,7 +1508,7 @@ def _lp(table: CandidateTable, target: float, stats=None, integral_recovery=True
             or values is None or not np.isfinite(values).all():
         return fallback()
     selected = _round_lp(
-        table, target, values, integral_recovery and recover_target)
+        table, target, values, integral_recovery and recover_target, stats)
     if stats is not None:
         stats.update(wall_s=perf_counter() - started, native_s=native_s,
                      solves=solves, iterations=iterations)
@@ -1498,7 +1561,7 @@ def _lp_highs(table: CandidateTable, target: float, stats=None,
     if result.status:
         raise RuntimeError(f"HiGHS target LP failed: {result.message}")
     selected = _round_lp(
-        table, target, result.x, integral_recovery and recover_target)
+        table, target, result.x, integral_recovery and recover_target, stats)
     if stats is not None:
         stats.update(wall_s=perf_counter() - started, native_s=native_s,
                      solves=solves, iterations=iterations)
@@ -2619,9 +2682,14 @@ def repair_destination(scenario, profile, architecture, request: RepairRequest,
     )
 
 
-def _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed=0):
+def _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed=0,
+               timings=None):
+    timings = {} if timings is None else timings
+    def add_time(name, value):
+        timings[name] = timings.get(name, 0.0) + value
     assignment = None
     streamed = solver in {"lp_column_generation_lazy", "lp_column_generation_native"}
+    compact = solver in {"greedy", "greedy_best_effort"}
     selection_credits = None
     if power is not None and solver not in {
             "greedy_lagrangian", *MAX_SHED_SOLVERS,
@@ -2633,23 +2701,41 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
     if streamed:
         solve = (_lp_column_generation_native if solver.endswith("native")
                  else _lp_column_generation_lazy)
+        started = perf_counter()
         oracle = _candidate_oracle(
             scenario, profile, architecture, mode, power,
         ) if selection_credits is None else _candidate_oracle(
             scenario, profile, architecture, mode, power,
             selection_credits=selection_credits,
         )
+        add_time("candidate_generation_s", perf_counter() - started)
+        started = perf_counter()
         table, selected = solve(oracle, target)
+        add_time("selection_s", perf_counter() - started)
+    elif compact:
+        started = perf_counter()
+        oracle = _candidate_oracle(
+            scenario, profile, architecture, mode, power,
+            selection_credits=selection_credits,
+        )
+        add_time("candidate_generation_s", perf_counter() - started)
+        table, selected, generation_s, selection_s = _compact_greedy(oracle, target)
+        add_time("candidate_generation_s", generation_s)
+        add_time("selection_s", selection_s)
     else:
+        started = perf_counter()
         table = candidate_table(
             scenario, profile, architecture, mode, power, selection_credits,
         )
+        add_time("candidate_generation_s", perf_counter() - started)
         if solver in {"lp_power_blind", "lp_power_blind_best_effort"}:
             gain = power.drain_gain(session.session_id for session in table.sessions) \
                 / len(table.sessions)
             table = replace(table, candidates=tuple(
                 replace(candidate, gain_w=gain) for candidate in table.candidates))
-    if streamed:
+    selection_stats = {}
+    started = perf_counter()
+    if streamed or compact:
         pass
     elif solver in MAX_SHED_SOLVERS:
         selected = _max_shed(
@@ -2660,12 +2746,10 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
         selected, assignment = _greedy_lagrangian(
             table, target, power, architecture, scenario, mode, True,
         )
-    elif solver in {"greedy", "greedy_best_effort"}:
-        selected = _greedy(table, target, repair=solver == "greedy")
     elif solver == "lp_work_first_best_effort":
-        selected = _lp(table, target, integral_recovery=False)
+        selected = _lp(table, target, selection_stats, False)
     elif solver == "lp_power_blind_best_effort":
-        selected = _lp_highs(table, target, integral_recovery=False)
+        selected = _lp_highs(table, target, selection_stats, False)
     elif solver in {"isolated_fastest", "isolated_myopic", "random",
                     "replay_only", "kv_only"}:
         selected = _baseline_policy(table, target, solver, seed)
@@ -2674,33 +2758,60 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
                     if solver == "lp_column_generation_persistent" else
                     _lp_column_generation(table, target)
                     if solver == "lp_column_generation" else
-                    _lp_highs(table, target)
+                    _lp_highs(table, target, selection_stats)
                     if solver in {"lp_highs", "lp_power_blind"} else
-                    _lp(table, target) if solver.startswith("lp") else
+                    _lp(table, target, selection_stats) if solver.startswith("lp") else
                     _greedy(table, target))
+    if not (streamed or compact):
+        milp_s = selection_stats.get("milp_recovery_s", 0.0)
+        add_time("milp_recovery_s", milp_s)
+        add_time("selection_s", perf_counter() - started - milp_s)
     repairs, repair_s = 0, 0.0
     if assignment is None:
         started = perf_counter()
         eligible = _policy_eligible(table, solver)
         banned = set()
         while True:
+            expanded = False
+            packed = perf_counter()
             assignment, cut = _pack(
                 table, selected, architecture, scenario, mode, repair=True,
             )
+            add_time("packing_s", perf_counter() - packed)
             if solver in MAX_SHED_SOLVERS and cut:
                 raise RuntimeError("maximum-shed set is not replica-packable")
             if not cut:
                 break
+            if table.candidate_ids:
+                selected = {table.candidate_ids[i] for i in selected}
+                cut = {table.candidate_ids[i] for i in cut}
+                compact_bytes = table.compact_bytes
+                expansion_started = perf_counter()
+                table = replace(
+                    candidate_table(
+                        scenario, profile, architecture, mode, power,
+                        selection_credits,
+                    ),
+                    compact_bytes=compact_bytes,
+                )
+                add_time("candidate_generation_s", perf_counter() - expansion_started)
+                eligible = _policy_eligible(table, solver)
+                assignment = None
+                expanded = True
             selected.difference_update(cut)
             banned.update(cut)
             repairs += len(cut)
             if sum(table.candidates[i].credit for i in selected) >= target - 1e-8:
+                if expanded:
+                    continue
                 break
+            selected_started = perf_counter()
             grown = _greedy(table, target, [
                 i for i in (range(len(table.candidates))
                             if eligible is None else eligible)
                 if i not in banned and i not in selected
             ], state=selected)
+            add_time("selection_s", perf_counter() - selected_started)
             if grown == selected:
                 break
             selected = grown
@@ -2735,6 +2846,10 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         scenario, final_state="awake", assumed_shutdown_s=None,
     )
     start, power = perf_counter(), ExpectedPower(selection_scenario, profile, case_id)
+    timings = {name: 0.0 for name in (
+        "candidate_generation_s", "selection_s", "milp_recovery_s",
+        "packing_s", "validation_s",
+    )}
     initial, target = power.power(True), max(0.0, power.power(True) - scenario.power_limit_w)
     chosen = None
     equal_modes = all(np.array_equal(
@@ -2742,7 +2857,10 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         _event_bounds(architecture.type_by_id[pool.type_id], pool, "emergency"),
     ) for pool in architecture.pools)
     for mode in ((admission_mode,) if admission_mode else ("normal", "emergency")):
-        result = _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed)
+        result = _mode_plan(
+            scenario, profile, architecture, solver, mode, power, target, seed,
+            timings,
+        )
         moved = [result[0].sessions[result[0].candidates[i].session].session_id for i in result[1]]
         planned = source_power(selection_scenario, profile, moved, case_id)
         chosen = mode, result, planned
@@ -2758,12 +2876,15 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
     deadline = scenario.controller_delay_s + table.migration_horizon_s
 
     def attempt(chosen, picks):
+        started = perf_counter()
         built = _moves(table, chosen, picks, architecture, scenario, profile)
         validate_destination_execution(scenario, architecture, built)
-        return chosen, picks, built, predict(
+        result = chosen, picks, built, predict(
             _expected_scenario(scenario, built), profile, built, case_id,
             architecture,
         )
+        timings["validation_s"] += perf_counter() - started
+        return result
 
     def without(dropped):
         chosen = set(selected) - dropped
@@ -2780,8 +2901,31 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         # the makespan falls monotonically as more of them go.  Bisect on how
         # many to drop rather than simulating once per drop.
         started = perf_counter()
+        if table.candidate_ids:
+            selected = {table.candidate_ids[i] for i in selected}
+            compact_bytes = table.compact_bytes
+            sessions = tuple(
+                session for session in _local_sessions(scenario)
+                if session.state == "active"
+            )
+            credits, _, _ = _phase_power_target(power, sessions, target)
+            expanded = perf_counter()
+            table = replace(
+                candidate_table(
+                    scenario, profile, architecture, mode, power, credits,
+                ),
+                compact_bytes=compact_bytes,
+            )
+            timings["candidate_generation_s"] += perf_counter() - expanded
+            packed = perf_counter()
+            assignment, cut = _pack(
+                table, selected, architecture, scenario, mode, repair=True,
+            )
+            timings["packing_s"] += perf_counter() - packed
+            if cut:
+                raise RuntimeError("compact greedy expansion changed replica packing")
         costs = np.asarray(table.resources.sum(0)).ravel()
-        ratio = lambda i: costs[i] / max(table.candidates[i].credit, 1e-12)
+        def ratio(i): return costs[i] / max(table.candidates[i].credit, 1e-12)
         order = sorted(selected, key=lambda i: (ratio(i), i), reverse=True)
         low, high, best = 1, len(order), None
         while low <= high:
@@ -2801,19 +2945,23 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         dropped = set(selected) - set(chosen)
         eligible = _policy_eligible(table, solver)
         taken = {table.candidates[i].session for i in chosen}
+        selected_started = perf_counter()
         extras = sorted(_greedy(table, target, [
             i for i in (range(len(table.candidates))
                         if eligible is None else eligible)
             if i not in dropped and i not in chosen
             and table.candidates[i].session not in taken
         ], state=chosen) - set(chosen), key=ratio)
+        timings["selection_s"] += perf_counter() - selected_started
         low, high = 1, len(extras)
         while low <= high:
             middle = (low + high) // 2
             trial = set(chosen) | set(extras[:middle])
+            packed = perf_counter()
             trial_picks, cut = _pack(
                 table, trial, architecture, scenario, mode, repair=True,
             )
+            timings["packing_s"] += perf_counter() - packed
             outcome = attempt(trial - set(cut), trial_picks)
             if fits(outcome[3]):
                 best, low = outcome, middle + 1
@@ -2878,9 +3026,12 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         [horizon * max(temporal, default=0)]
         + [table.candidates[i].duration_s for i in selected],
     ))
-    memory = sum(a.nbytes for a in (table.resources.data, table.resources.indices,
-                                   table.resources.indptr, table.incidence.data,
-                                   table.incidence.indices, table.incidence.indptr))
+    memory = table.compact_bytes + sum(
+        a.nbytes for a in (
+            table.resources.data, table.resources.indices, table.resources.indptr,
+            table.incidence.data, table.incidence.indices, table.incidence.indptr,
+        )
+    )
     return PlanResult(
         solver=solver, moves=moves, initial_source_power_w=initial,
         planned_source_power_w=planned,
@@ -2900,4 +3051,9 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture,
         planner_memory_bytes=memory, service_debt_replica_s=debt,
         required_recovery_s=recovery, binding_resources=binding,
         resource_uses=resources, service_debts=debt_rows,
+        candidate_generation_s=timings["candidate_generation_s"],
+        selection_s=timings["selection_s"],
+        milp_recovery_s=timings["milp_recovery_s"],
+        packing_s=timings["packing_s"],
+        validation_s=timings["validation_s"],
     )

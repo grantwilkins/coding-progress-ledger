@@ -319,6 +319,10 @@ def evaluate(profile: ModelProfile, sessions: tuple[SimSession, ...], replicas: 
         "bottleneck": result.bottleneck,
         "migration_makespan_s": result.predicted_migration_makespan_s,
         "packing_repairs": result.packing_repair_count, "runtime_s": result.solve_s,
+        "candidate_generation_s": result.candidate_generation_s,
+        "selection_s": result.selection_s,
+        "milp_recovery_s": result.milp_recovery_s,
+        "packing_s": result.packing_s, "validation_s": result.validation_s,
         "evidence_status": status, "extrapolation_reasons": reasons,
         "in_domain_fraction": in_domain,
     }

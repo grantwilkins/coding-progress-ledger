@@ -124,6 +124,11 @@ class PlanResult:
     binding_resources: tuple[str, ...] = ()
     resource_uses: tuple[ResourceUse, ...] = ()
     service_debts: tuple[ServiceDebtUse, ...] = ()
+    candidate_generation_s: float = 0.0
+    selection_s: float = 0.0
+    milp_recovery_s: float = 0.0
+    packing_s: float = 0.0
+    validation_s: float = 0.0
 
 
 def _ell(session: SimSession, case: ProfileCase) -> float:
