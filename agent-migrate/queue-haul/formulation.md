@@ -519,8 +519,10 @@ modeled power; the pool-aware path stops on accumulated conservative gain. Both
 reevaluate exact source power after integer selection. Prices and scores are
 computed once, before the loop, and are never recomputed as rows saturate. If
 the stable-order pass misses the target, footprint-first and gain-first scans
-reuse those prices; a retry is accepted only if it reaches the target. No
-greedy path invokes an LP or MILP.
+reuse those prices, followed by a session-gain scan that chooses each option by
+the lowest resulting peak utilization. The highest-gain miss is retained, while
+a successful stable-order result is never replaced. No greedy path invokes an
+LP or MILP.
 
 This approximates LP dual pricing while remaining approximately
 \(O(N\log N)\). `formulation_nsdi.md` §C.3 derives what it is approximating and

@@ -422,8 +422,10 @@ in score order. It stops after exact recomputation reaches the power limit or no
 more candidates fit. Neither implementation recomputes scarcity prices after
 an acceptance. The primary pass resolves ties by stable integer/session order.
 If it misses the target, footprint-first and then gain-first greedy scans reuse
-the same fixed prices; a retry replaces the primary result only if it reaches
-the target. Greedy never invokes an LP or MILP.
+the same fixed prices. A final session-gain scan dynamically chooses the option
+with the lowest resulting peak utilization. The highest-gain miss is retained,
+but a successful primary result is never replaced. Greedy never invokes an LP
+or MILP.
 
 ### Lagrangian greedy
 

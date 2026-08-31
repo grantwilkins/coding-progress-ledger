@@ -1224,8 +1224,10 @@ required for million-session operation.
 Static greedy uses a separate uncapped compact boundary: Python emits numeric
 session/option features without constructing every `Candidate`, Rust computes
 fixed scarcity prices and runs the dependent feasibility scans, and Python
-materializes only selected moves. Packing or deadline cuts expand the exhaustive
-table only on that repair path. `PlanResult` reports candidate generation,
+materializes only selected moves. A successful primary scan is unchanged; on a
+miss, footprint-first, gain-first, and dynamic least-peak option scans compete
+by achieved gain. Packing or deadline cuts expand the exhaustive table only on
+that repair path. `PlanResult` reports candidate generation,
 selection, MILP recovery, packing, and validation time separately; greedy's
 MILP recovery time is always zero.
 `outputs/native-lp-scale-20260801/one-million.json` records the post-optimization
@@ -1233,7 +1235,8 @@ one-seed 1M-session LP/rounding sensitivity and its hashes; it explicitly exclud
 replica packing, DES, prediction, and execution validation.
 `greedy_lagrangian_experiment.py` compares the two supported greedies on paired
 trace-derived targets; infeasible plans receive zero validated shed. Static
-`greedy` fixes one scarcity price and one global candidate order.
+`greedy` fixes one scarcity price; its extra orders run only after the primary
+order misses its target.
 `greedy_lagrangian` iterates aggregate-resource prices, retains a bounded set of
 exact nonlinear source prefixes, performs target-capped recovery, and packs the
 final set. Recovery caches sparse candidate columns and accumulates each retained
@@ -1636,20 +1639,28 @@ uv run python planner_latency.py                      # 28 .. 100k sessions
 uv run python planner_latency.py --sessions 28 50000  # one point at each end
 ```
 
-A whole `plan` call is the wrong quantity here. At 50,000 sessions it costs
-about 40 s, of which the selection is 4.5 s: the rest is work both policies pay
-alike, and is dominated by the single simulation `plan_destination` runs to
-check the plan against the deadline (23.5 s for 26,209 moves), then the
-candidate table (5.8 s for 200,000 candidates) and replica packing (4.1 s).
-End-to-end timing therefore hides the solver difference and can invert it: the
-LP measures 38.7 s against the greedy's 42.4 s only because it selected 192
-fewer moves and so made the shared simulation cheaper. Both solvers are held to
-their pure form: greedy has no integral recovery, and the target is one both can
-attain, so the LP runs its target-first solve instead of its max-shed fallback.
-A selection that
+A whole `plan` call includes candidate physics, packing, and execution-model
+validation. On the 100,000-session/400,000-candidate latency case, native greedy
+selection takes about 0.13 s versus 8.90 s for LP, while production compact
+candidate generation and selected-move materialization still take about 9.5 s.
+Both solvers are held to their pure form: greedy has no integral recovery, and
+the target is one both can attain, so the LP runs its target-first solve instead
+of its max-shed fallback. A selection that
 misses the target hard-fails rather than reporting a fallback's timing, which is
 what makes `outputs/scaling_1_to_100k_20260720_greedy` unusable for this
 comparison: past 32 sessions its 50% request is out of reach.
+
+`planner_quality.py` pairs full greedy and shipped LP plans over workload,
+fleet-size, deadline, destination-scarcity, seed, and target grids. It checks
+exact modeled power, packing, and deadlines, and separately solves an exact
+binary oracle for the aggregate candidate model. The oracle is not an
+integrated replica-packing or nonlinear-power optimum.
+
+```bash
+uv run python planner_quality.py --out outputs/planner-quality
+uv run python planner_quality.py --workloads agentic_tool_loop coding \
+  --target-basis removable --out outputs/planner-quality-operational
+```
 
 ## Measurement programs
 

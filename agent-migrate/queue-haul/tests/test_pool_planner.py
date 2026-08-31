@@ -344,6 +344,7 @@ def test_greedy_retry_reaches_an_integrally_feasible_target_without_milp(monkeyp
 
     assert _greedy(table, 10) == {1, 2}
     assert _greedy(table, 6) == {0}
+    assert _greedy(table, 11) == {1, 2}
 
 
 def test_greedy_scarcity_counts_one_cheapest_option_per_session():

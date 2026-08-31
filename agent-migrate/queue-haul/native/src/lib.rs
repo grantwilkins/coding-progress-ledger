@@ -67,6 +67,67 @@ where
     (selected, gain)
 }
 
+fn balanced_scan<F>(
+    target: f64,
+    session_count: usize,
+    resource_count: usize,
+    sessions: &[i32],
+    gains: &[f64],
+    candidates: &[usize],
+    state: &[usize],
+    mut column: F,
+) -> (Vec<usize>, f64)
+where
+    F: FnMut(usize, &mut dyn FnMut(usize, f64)),
+{
+    let mut usage = vec![0.0; resource_count];
+    let mut taken = vec![false; session_count];
+    let mut selected = state.to_vec();
+    let mut gain = 0.0;
+    for candidate in state {
+        taken[sessions[*candidate] as usize] = true;
+        gain += gains[*candidate];
+        column(*candidate, &mut |row, value| usage[row] += value);
+    }
+    let mut options = vec![Vec::new(); session_count];
+    for candidate in candidates {
+        options[sessions[*candidate] as usize].push(*candidate);
+    }
+    let mut order: Vec<_> = (0..session_count)
+        .filter(|session| !taken[*session] && !options[*session].is_empty())
+        .collect();
+    order.sort_unstable_by(|a, b| {
+        let gain = |session: usize| gains[options[session][0]];
+        gain(*b).total_cmp(&gain(*a)).then(a.cmp(b))
+    });
+    for session in order {
+        if gain >= target - 1e-8 {
+            break;
+        }
+        let mut best = None;
+        for candidate in &options[session] {
+            let (mut fits, mut peak, mut load) = (true, 0.0_f64, 0.0);
+            column(*candidate, &mut |row, value| {
+                let post = usage[row] + value;
+                fits &= post <= 1.0 + 1e-8;
+                peak = peak.max(post);
+                load += post * post - usage[row] * usage[row];
+            });
+            if fits
+                && best.is_none_or(|current: (f64, f64, usize)| (peak, load, *candidate) < current)
+            {
+                best = Some((peak, load, *candidate));
+            }
+        }
+        if let Some((_, _, candidate)) = best {
+            column(candidate, &mut |row, value| usage[row] += value);
+            selected.push(candidate);
+            gain += gains[candidate];
+        }
+    }
+    (selected, gain)
+}
+
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 fn greedy_compact<'py>(
@@ -205,7 +266,7 @@ fn greedy_compact<'py>(
             &[],
             visit,
         );
-        if alternative_gain >= target - 1e-8 {
+        if alternative_gain > gain {
             selected = alternative;
             gain = alternative_gain;
         }
@@ -222,7 +283,23 @@ fn greedy_compact<'py>(
             &[],
             visit,
         );
-        if alternative_gain >= target - 1e-8 {
+        if alternative_gain > gain {
+            selected = alternative;
+            gain = alternative_gain;
+        }
+    }
+    if gain < target - 1e-8 {
+        let (alternative, alternative_gain) = balanced_scan(
+            target,
+            session_count,
+            resource_count,
+            sessions,
+            &gains,
+            &indices,
+            &[],
+            visit,
+        );
+        if alternative_gain > gain {
             selected = alternative;
         }
     }
@@ -332,7 +409,7 @@ fn greedy_csc<'py>(
             &state,
             visit,
         );
-        if alternative_gain >= target - 1e-8 {
+        if alternative_gain > gain {
             selected = alternative;
             gain = alternative_gain;
         }
@@ -349,7 +426,23 @@ fn greedy_csc<'py>(
             &state,
             visit,
         );
-        if alternative_gain >= target - 1e-8 {
+        if alternative_gain > gain {
+            selected = alternative;
+            gain = alternative_gain;
+        }
+    }
+    if gain < target - 1e-8 {
+        let (alternative, alternative_gain) = balanced_scan(
+            target,
+            session_count,
+            resource_count,
+            sessions,
+            gains,
+            &eligible,
+            &state,
+            visit,
+        );
+        if alternative_gain > gain {
             selected = alternative;
         }
     }
