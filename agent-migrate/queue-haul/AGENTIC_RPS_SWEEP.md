@@ -1,142 +1,136 @@
-# Agentic RPS sweep
+# Agentic RPS SLO sweep
 
-This is a deliberately small, descriptive single-A100 experiment. It supports
-the claim:
+Schema v4 measures where the fixed GPT-OSS-20B OpenHands-shaped workload
+violates its 1 s P90 TTFT or 50 ms P90 TPOT SLO. H100 and A100 use the same
+code, model revision, request shape, seed, optimized native vLLM 0.22.0 /
+LMCache 0.5.1 stack, and statistical procedure. This is the replacement
+experiment for that optimized stack, not repeated vLLM 0.19.1 evidence. Its
+discarded preflight independently selects a focused formal grid on each GPU.
 
-> For this fixed agentic request shape on one A100, increasing offered rate
-> from X to Y RPS causes TTFT and/or TPOT to violate the declared SLO.
+The frozen ascending scout candidates are 0.03125, 0.0625, 0.125, 0.25, 0.5,
+1, 2, 4, 8, 10, 12, 16, 24, and 32 RPS. Each candidate uses a fresh warmed
+engine. Scouting stops only after the first observed SLO violation and the next
+two candidates also violate. All lower observations must be numeric SLO passes;
+a later pass after a violation hard-fails the scout. If the fixed candidates do
+not supply a pass, a violation, and both upper guards, make a new plan rather
+than adding rates to a live run.
 
-The design follows the serving convention used by
-[DistServe](https://arxiv.org/abs/2401.09670): sweep offered request rate and
-evaluate P90 TTFT and TPOT against explicit latency SLOs. Finite-rate
-[vLLM serving benchmarks](https://github.com/vllm-project/vllm/blob/main/docs/benchmarking/cli.md)
-also use open-loop Poisson arrivals by default and leave concurrency unlimited
-unless a limit is explicitly requested.
+The discarded scout fixes the formal grid before block 0: one lower scout guard
+when available, the observed pass/fail bracket divided into eight equal
+intervals, and the next two violating scout anchors. The immutable preflight
+record includes raw-evidence hashes, the exact selected rates, all 30 randomized
+block orders, and a selection hash. Every formal cell records that hash, and
+resume and reduction recompute the evidence record instead of trusting it.
 
-## Fixed experiment
+Each rate has 32 open-loop Poisson requests with 3,920 prompt and exactly 1,024
+output tokens. Twenty randomized complete blocks are primary; ten predeclared
+blocks are available only if the primary result is unresolved. Every block
+starts a fresh engine, performs a discarded 32-request warmup at 1 RPS, and
+resets and drains caches between rates. Shared A100/H100 rates have identical
+arrival and prompt seeds and identical relative order.
 
-- One A100 and one serving engine per model.
-- Models: GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B-it.
-- One compact OpenHands-derived shape: 3,920 prompt tokens and exactly 1,024
-  generated tokens (`ignore_eos=true`).
-- Seeded open-loop Poisson arrivals at the original 0.125, 0.25, 0.5, 1, 2,
-  4, and 8 RPS discovery points.
-- Predeclared dense refinement points at 3, 5, 6, and 7 RPS for GPT-OSS
-  and Gemma, and at 0.6, 0.7, 0.8, and 0.9 RPS for Qwen. These localize
-  each observed SLO knee without wasting Qwen cells deep in overload.
-- 32 requests at every rate, with no concurrency cap.
-- Every rate runs even after a violation. Failures and engine exits are data,
-  not campaign gates.
-- Repeat the first discovery violation and the preceding rate twice more. The
-  three boundary observations produce median curves and min-max whiskers.
+A numeric cell requires all 32 completions, 32 exact one-token streams, zero
+cache hits, complete telemetry, drain, correct token counts, and at most 50 ms
+send lateness. Telemetry must bracket the episode with no scrape gap over 1 s.
+Instrumentation or runtime failures stop the run and retain the failed attempt.
+Genuine service failures are retained as right-censored violations and are not
+retried. The 1-RPS warmup is a compilation warmup, not a claimed safe rate.
 
-The plan is schema v3. TPOT is the P90 over all exact post-first-token
-intervals in a cell, pooled across its 32 fixed-length requests. The earlier
-schema-v2 results used P90 over per-request mean TPOT and therefore cannot be
-used directly; they must be re-reduced from their retained token timestamps or
-rerun. The v3 `rps-sweep.csv` exports this pooled metric as `p90_tpot_s` and
-omits the diagnostic per-request-mean percentile.
+At every rate, the figure shows all block-level P90 values, their median, and
+an exact distribution-free median interval. The predeclared two-look rule uses
+the 5th through 16th observations at 20 blocks (98.818% coverage) and the 9th
+through 22nd at 30 (98.388%). A union bound gives at least 97.206% coverage for
+the interval selected by the optional second look. These are pointwise
+rate/metric error bars, not a simultaneous 95% band over both curves.
 
-Retained schema-v1/v2 request files can be pooled without rerunning inference:
+A boundary runs from the last clear pass to the first clear fail, allowing only
+indeterminate error bars between them. It must be no wider than four refined
+steps (half the scout bracket) and have another higher clear fail; any lower
+clear fail or higher clear pass makes it unresolved. Aggregate medians and
+intervals use offered RPS, faint raw dots use realized RPS, and the request-rate
+axis is logarithmic. This describes the finite 32-request episode, not
+stationary capacity.
+
+## Prepare the frozen plans
+
+The two plan files are committed. These commands reproduce them with the same
+explicit seed and should leave a clean checkout unchanged:
 
 ```bash
-uv run python agentic_rps_sweep_campaign.py rereduce \
-  --plan runs/agentic-rps-sweep-a100/plan.json \
-  --source-root /path/to/sweden/cells \
-  --source-root /path/to/east/cells \
-  --source-root /path/to/germany/cells \
-  --source-label swedencentral \
-  --source-label eastus2 \
-  --source-label germanywestcentral \
-  --source-origin /persistent/sweden/cells \
-  --source-origin /persistent/east/cells \
-  --source-origin /persistent/germany/cells \
-  --run-root runs/agentic-rps-sweep-a100-pooled \
-  --csv outputs/agentic-rps-sweep-a100-pooled/all-rereduced-cells.csv
+uv run python agentic_rps_sweep_campaign.py prepare --error-bars \
+  --seed 20260901 --hardware h100 \
+  --out runs/agentic-rps-sweep-h100-v4/plan.json
+uv run python agentic_rps_sweep_campaign.py prepare --error-bars \
+  --seed 20260901 --hardware a100 \
+  --out runs/agentic-rps-sweep-a100-v4/plan.json
+git diff --exit-code -- runs/agentic-rps-sweep-h100-v4/plan.json \
+  runs/agentic-rps-sweep-a100-v4/plan.json
 ```
 
-Each derived cell records hashes of its source result and raw request file.
+## Run on H100
 
-The fixed SLOs are 2.0 s TTFT / 0.1 s TPOT for GPT-OSS and 2.0 s TTFT /
-0.2 s TPOT for Gemma. Qwen uses twice its 0.125-RPS P90 baseline for each
-metric.
-
-## Run
-
-Prepare one immutable plan:
+Use the same clean pushed commit on both sites from
+`/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul`.
+The commands select GPU 0 on a plain node. Under a scheduler, use its existing
+single-device `CUDA_VISIBLE_DEVICES` value instead.
 
 ```bash
-uv run python agentic_rps_sweep_campaign.py prepare \
-  --hardware a100 \
-  --out runs/agentic-rps-sweep-a100/plan.json
-```
+CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
+QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
+uv run python agentic_rps_sweep_campaign.py preflight \
+  --plan runs/agentic-rps-sweep-h100-v4/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-h100-v4
 
-Use `--hardware h100` for the same workload on the optimized H100 runtime. It
-validates the visible GPU, leaves CUDA architecture selection to that GPU, and
-enables vLLM compilation and CUDA graphs; the A100 runtime remains eager.
-Runtime provenance allows up to three minutes for vLLM to serialize its full
-server configuration before failing the launch.
+CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
+QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
+uv run python agentic_rps_sweep_campaign.py run \
+  --plan runs/agentic-rps-sweep-h100-v4/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-h100-v4 \
+  --model openai/gpt-oss-20b --blocks 20
 
-Run one model per node. These commands are independent and can run in
-parallel:
-
-```bash
-HF_HOME=/datadrive uv run python agentic_rps_sweep_campaign.py run \
-  --plan runs/agentic-rps-sweep-a100/plan.json \
-  --run-root /datadrive/agentic-rps-sweep \
-  --model 'openai/gpt-oss-20b'
-```
-
-Use the corresponding model ID for Qwen or Gemma. Completed cells are skipped,
-so rerunning the same command resumes safely. After copying the three model
-cell directories into one run root, reduce and plot:
-
-```bash
 uv run python agentic_rps_sweep_campaign.py reduce \
-  --plan runs/agentic-rps-sweep-a100/plan.json \
-  --run-root /datadrive/agentic-rps-sweep \
-  --out outputs/agentic-rps-sweep/summary.json
-
-uv run python plot_agentic_rps_sweep.py \
-  outputs/agentic-rps-sweep/summary.json \
-  outputs/agentic-rps-sweep
+  --plan runs/agentic-rps-sweep-h100-v4/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-h100-v4 \
+  --blocks 20 \
+  --out /datadrive/agentic-rps-sweep-h100-v4/summary.json
 ```
 
-Pass `--h100-summary outputs/agentic-rps-sweep-h100-vllm019-20260817/summary.json`
-to compare the workload-matched vLLM 0.19 H100 curve against the same fixed
-paper-reference SLOs: 1.0 s TTFT and 50 ms TPOT.
+## Run on A100
 
-The plot command writes a compact, side-by-side PDF and PNG sized for one NSDI
-column. Both panels use an increasing linear RPS axis, with hardware curves and
-a black dotted SLO line.
+```bash
+CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
+QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
+uv run python agentic_rps_sweep_campaign.py preflight \
+  --plan runs/agentic-rps-sweep-a100-v4/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-a100-v4
 
-## H100 GPT-OSS result
+CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
+QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
+uv run python agentic_rps_sweep_campaign.py run \
+  --plan runs/agentic-rps-sweep-a100-v4/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-a100-v4 \
+  --model openai/gpt-oss-20b --blocks 20
 
-The workload-matched H100 run is retained in
-`outputs/agentic-rps-sweep-h100-vllm019-20260817`. It used the same model
-revision, 3,920/1,024-token request shape, Poisson seeds, rates, and 32 requests
-per cell as the A100 campaign. All 352 requests completed and neither SLO was
-violated through 8 RPS.
+uv run python agentic_rps_sweep_campaign.py reduce \
+  --plan runs/agentic-rps-sweep-a100-v4/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-a100-v4 \
+  --blocks 20 \
+  --out /datadrive/agentic-rps-sweep-a100-v4/summary.json
+```
 
-| RPS | P90 TTFT (s) | P90 TPOT (ms) |
-|---:|---:|---:|
-| 0.125 | 0.095 | 4.93 |
-| 0.25 | 0.095 | 5.27 |
-| 0.5 | 0.096 | 5.69 |
-| 1 | 0.105 | 6.01 |
-| 2 | 0.138 | 7.44 |
-| 3 | 0.173 | 8.40 |
-| 4 | 0.163 | 8.85 |
-| 5 | 0.194 | 8.86 |
-| 6 | 0.252 | 8.38 |
-| 7 | 0.274 | 8.41 |
-| 8 | 1.498 | 8.33 |
+If a 20-block summary says `extend_to_30`, rerun the same `run` and `reduce`
+commands with `--blocks 30`. Stop at 30 even if the result remains unresolved.
 
-These are workload-matched, not runtime-version-matched, results. The current
-vLLM 0.22 environment showed a severe GPT-OSS low/moderate-batch regression on
-H100 even with fresh SM90 caches, compilation, and both Triton and Marlin MXFP4
-backends. The retained result therefore uses an isolated vLLM 0.19.1 runtime
-with compilation and CUDA graphs. A 16-request diagnostic improved from about
-186 output tokens/s and 80 ms P90 TPOT on vLLM 0.22 to 2,050 output tokens/s
-and 5.94 ms on vLLM 0.19.1, confirming that the earlier inversion was a
-software-stack artifact rather than H100 performance.
+After copying both summaries to one checkout, plot them with:
+
+```bash
+uv run python plot_agentic_rps_sweep.py \
+  outputs/agentic-rps-sweep-v4/a100-summary.json \
+  outputs/agentic-rps-sweep-v4 \
+  --h100-summary outputs/agentic-rps-sweep-v4/h100-summary.json
+```
+
+The older schema-v3 campaign remains available through `prepare` without
+`--error-bars` for existing serving-calibration consumers. Its retained
+single-repeat vLLM 0.19.1 H100 curve is pilot evidence only and must not be
+pooled with v4.

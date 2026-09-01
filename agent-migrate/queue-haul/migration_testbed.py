@@ -362,6 +362,7 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
         return json.dumps({
             "kv_connector": "LMCacheMPConnector",
             "kv_connector_module_path": "connector_patch",
+            "engine_id": engine_id,
             "kv_role": kv_role,
             "kv_connector_extra_config": {
                 "lmcache.mp.host": "tcp://127.0.0.1",

@@ -169,17 +169,18 @@ def gpu_snapshot(expected: str = "A100") -> dict:
     return {"device": devices[0], **dict(zip(fields, values))}
 
 
-def stack_commands(cfg: testbed.Config) -> dict[str, list[str]]:
+def stack_commands(cfg: testbed.Config,
+                   extra: list[str] | None = None) -> dict[str, list[str]]:
     if cfg.matched_prefill:
         return {"vllm": list(map(str, testbed.vllm_cmd(
-            cfg, "sink", [], gpu_index=0, kv_transfer=False)))}
+            cfg, "sink", extra or [], gpu_index=0, kv_transfer=False)))}
     return {
         "redis": list(map(str, testbed.redis_cmd(cfg))),
         "cache": list(map(str, testbed.mp_server_cmd(
             cfg, "sink", l2_port=cfg.lmc_port,
         ))),
         "vllm": list(map(str, testbed.vllm_cmd(
-            cfg, "sink", [], gpu_index=0,
+            cfg, "sink", extra or [], gpu_index=0,
         ))),
     }
 
@@ -227,10 +228,12 @@ def failure_kind(text: str) -> str:
             "vllm serve: error: argument")):
         return "runtime_contract"
     if any(marker in lower for marker in ("nvrm: xid", "gpu has fallen off",
-                                          "preempted", "telemetry sampler",
+                                          "telemetry sampler",
                                           "metrics sampler", "power sampler",
                                           "can't start new thread",
-                                          "cannot schedule new futures")):
+                                          "cannot schedule new futures")) \
+            or re.search(r"\b(?:job|instance|vm|allocation) "
+                         r"(?:was )?preempted\b", lower):
         return "infrastructure"
     if re.search(r"out of memory|\boom\b|not enough memory|free memory on device",
                  text, re.IGNORECASE):

@@ -9,6 +9,7 @@ Plausible wrong implementations:
 """
 
 import matplotlib.pyplot as plt
+from matplotlib.container import ErrorbarContainer
 import pytest
 
 import plot_agentic_rps_sweep as plotter
@@ -107,3 +108,55 @@ def test_plot_rejects_mismatched_h100_request_shape(tmp_path):
 
     with pytest.raises(ValueError, match="request shape"):
         plotter.plot(summary, tmp_path, h100)
+
+
+def test_v4_plot_shows_raw_points_exact_intervals_and_summary_slo(
+        tmp_path, monkeypatch):
+    curve = [{
+        "offered_rps": rate, "realized_rps_median": rate + .1,
+        "p90_ttft_s_median": value, "p90_ttft_s_ci_low": value - .1,
+        "p90_ttft_s_ci_high": value + .1,
+        "p90_tpot_s_median": .02, "p90_tpot_s_ci_low": .015,
+        "p90_tpot_s_ci_high": .025,
+        "points": [
+            {"block": block, "realized_rps": rate + block / 100,
+             "status": "numeric", "p90_ttft_s": value + block / 100,
+             "p90_tpot_s": .02 + block / 10000}
+            for block in range(2)
+        ],
+    } for rate, value in ((10, 1.2), (1, .4))]
+    curve[0]["points"].append({
+        "block": 2, "realized_rps": 10.2, "status": "service_failure",
+        "p90_ttft_s": None, "p90_tpot_s": None,
+    })
+    summary = {
+        "schema": plotter.SLO_SCHEMA, "stage": "reduced",
+        "hardware": "h100", "comparison_sha256": "shared",
+        "shared_runtime_sha256": "runtime", "launch_git_sha": "git",
+        "models": {plotter.MODEL: {
+            "slo": {"p90_ttft_s": .9, "p90_tpot_s": .05,
+                    "source": "fixed-paper-reference"},
+            "curve": curve,
+        }},
+    }
+    monkeypatch.setattr(plt, "close", lambda figure: None)
+
+    plotter.plot(summary, tmp_path)
+    axis = plt.gcf().axes[0]
+    errorbar = next(container for container in axis.containers
+                    if isinstance(container, ErrorbarContainer))
+    slo = next(line for line in axis.lines if line.get_label() == "SLO")
+
+    assert list(errorbar.lines[0].get_xdata()) == [1, 10]
+    assert list(errorbar.lines[0].get_ydata()) == [.4, 1.2]
+    assert len(axis.collections[0].get_offsets()) == 4
+    failure = next(collection for collection in axis.collections
+                   if collection.get_label() ==
+                   "Censored service failure")
+    assert list(failure.get_offsets()[0]) == [10.2, 1.02]
+    assert set(slo.get_ydata()) == {.9}
+    assert axis.get_xlabel() == "Rate (req/s)"
+    assert axis.get_xscale() == "log"
+    assert axis.get_xlim()[0] < 1
+    assert axis.get_xlim()[1] > 10.2
+    plt.close("all")

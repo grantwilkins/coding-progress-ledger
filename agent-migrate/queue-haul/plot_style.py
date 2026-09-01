@@ -153,6 +153,8 @@ AGENTIC_HARDWARE = ("a100", "h100")
 AGENTIC_HARDWARE_NAMES = {"a100": "A100", "h100": "H100"}
 AGENTIC_HARDWARE_COLORS = {"a100": "#0072B2", "h100": "#D55E00"}
 AGENTIC_HARDWARE_MARKERS = {"a100": "o", "h100": "s"}
+AGENTIC_HARDWARE_LINESTYLES = {"a100": "-", "h100": "--"}
+SLO_NAME, SLO_COLOR, SLO_LINESTYLE = "SLO", "black", ":"
 REPAIR_NAMES = {
     "unchanged": "No repair needed",
     "applied": "Repair applied",

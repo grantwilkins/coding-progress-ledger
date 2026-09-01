@@ -1610,6 +1610,10 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 
 ## Measurement programs
 
+The publication GPT-OSS A100/H100 SLO error-bar campaign, including exact site
+commands and stopping rules, is in `AGENTIC_RPS_SWEEP.md`. It is separate from
+the legacy RPS plan embedded below for multi-model serving calibration.
+
 `h100_serving_campaign.py` coordinates optimized-H100 calibration for the
 pinned Qwen3.8-27B and Gemma-4-26B checkpoints, with GPT-OSS-20B accepted as an
 apples-to-apples prefill reference. Prefill, RPS/SLO, and power

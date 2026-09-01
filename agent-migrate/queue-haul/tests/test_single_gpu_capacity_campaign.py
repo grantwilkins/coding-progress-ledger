@@ -93,6 +93,10 @@ def test_runtime_contract_failure_is_not_a_capacity_kind():
         "attention KV tensor") == "runtime_contract"
     assert capacity.failure_kind(
         "ordinary log max_model_len=32768") == "service_error"
+    assert capacity.failure_kind(
+        "scheduler stats preempted_requests=0") == "service_error"
+    assert capacity.failure_kind("job was preempted by scheduler") == \
+        "infrastructure"
 
 
 def test_summary_distinguishes_completed_burst_and_true_concurrency():

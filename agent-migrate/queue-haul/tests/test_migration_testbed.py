@@ -104,6 +104,7 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     assert "lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif" in source
     assert "LMCacheMPConnector" in source
     assert "connector_patch" in source
+    assert '"engine_id":"s0"' in source
     assert "lmcache.mp.host" in source and "lmcache.mp.port" in source
     assert "engine_driven" in source
     assert "PYTHONPATH=" in source and "lmcache_compat" in source
