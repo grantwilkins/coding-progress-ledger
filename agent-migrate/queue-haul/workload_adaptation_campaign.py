@@ -1270,8 +1270,8 @@ def plot_oat(rows, path, sweep):
     x = [row["bandwidth_cap_gbps"] if sweep == "bandwidth" else
          row["prefill_available_tps"] / 1000 for row in points]
     fig, (mix, target) = plt.subplots(
-        2, 1, figsize=(4.6, 4), sharex=True,
-        gridspec_kw={"height_ratios": (3, 1.3)},
+        2, 1, figsize=(plot_style.HALF_COLUMN_FIGSIZE[0], 2.1), sharex=True,
+        gridspec_kw={"height_ratios": (2.5, 1.5)},
     )
     artists = mix.stackplot(
         x, *([by_action[action][level]["session_share"] for level in levels]
@@ -1288,8 +1288,8 @@ def plot_oat(rows, path, sweep):
     handles, labels = mix.get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, ncol=3, loc="upper center",
                bbox_to_anchor=(.5, .99),
-               fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE,
-               columnspacing=.8, handlelength=1, handletextpad=.3)
+               fontsize=5.5,
+               columnspacing=.55, handlelength=.8, handletextpad=.25)
     target.plot(x, [row["target_met_rate"] for row in points],
                 color=plot_style.OAT_TARGET_COLOR,
                 linestyle=plot_style.OAT_TARGET_LINESTYLE,
@@ -1303,11 +1303,13 @@ def plot_oat(rows, path, sweep):
         target.get_xticklabels()[-1].set_ha("right")
     target.yaxis.set_major_formatter(PercentFormatter(1, symbol=""))
     target.set_yticks((0, .5, 1))
+    mix.yaxis.set_label_coords(-.27, .6)
+    target.yaxis.set_label_coords(-.27, .4)
     for ax in (mix, target):
-        ax.tick_params(length=3, labelsize=plot_style.COLUMN_FONT_SIZE)
-        ax.xaxis.label.set_size(plot_style.COLUMN_FONT_SIZE)
-        ax.yaxis.label.set_size(plot_style.COLUMN_FONT_SIZE)
-    fig.subplots_adjust(left=.19, right=.98, bottom=.17, top=.85, hspace=.12)
+        ax.tick_params(length=2, labelsize=plot_style.HALF_COLUMN_FONT_SIZE)
+        ax.xaxis.label.set_size(plot_style.HALF_COLUMN_FONT_SIZE)
+        ax.yaxis.label.set_size(plot_style.HALF_COLUMN_FONT_SIZE)
+    fig.subplots_adjust(left=.27, right=.98, bottom=.16, top=.87, hspace=.14)
     for suffix in ("png", "pdf"):
         fig.savefig(path.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
