@@ -201,6 +201,93 @@ def plot(curve: list[dict], cutoff_s: float, horizon_s: float,
     plt.close(fig)
 
 
+def transition_summary(bundle: dict, target_fraction: float) -> list[dict]:
+    actions = tuple(plot_style.REPAIR_ACTION_NAMES)
+    rows = [row for row in bundle["cells"]
+            if row["target_fraction"] == target_fraction
+            and row["outcome"] == "applied"]
+    output = []
+    for axis in bundle["fault_axes"]:
+        selected = [row for row in rows if row["fault_axis"] == axis]
+        if not selected or any("transition_counts" not in row
+                               for row in selected):
+            raise RuntimeError("source lacks exact transition counts")
+        counts = {action: sum(row["transition_counts"][action]
+                              for row in selected) for action in actions}
+        pending = sum(row["transition_counts"]["pending"] for row in selected)
+        if sum(counts.values()) != pending:
+            raise RuntimeError("transition counts do not conserve pending actions")
+        output.append({
+            "fault_axis": axis, "replans": len(selected),
+            "pending_actions": pending,
+            **{action: counts[action] for action in actions},
+            **{f"{action}_fraction": counts[action] / pending
+               for action in actions},
+        })
+    return output
+
+
+def plot_combined(curve: list[dict], transitions: list[dict], cutoff_s: float,
+                  horizon_s: float, output: Path) -> None:
+    actions = tuple(plot_style.REPAIR_ACTION_NAMES)
+    fig, (cdf_axis, mix_axis) = plt.subplots(
+        1, 2, figsize=(3.35, 2.25), gridspec_kw={"width_ratios": (1.08, 1)})
+    for policy in POLICIES:
+        cdf_axis.step(
+            [row["time_s"] for row in curve],
+            [100 * row[f"{policy}_fraction"] for row in curve],
+            where="post", linewidth=1.4,
+            color=plot_style.SCHEDULE_COMPARISON_COLORS[policy],
+            linestyle=plot_style.SCHEDULE_COMPARISON_LINESTYLES[policy],
+            label=plot_style.SCHEDULE_COMPARISON_NAMES[policy])
+    cdf_axis.axvline(
+        cutoff_s, color=plot_style.EVENT_COLORS["shed_target"],
+        linestyle=plot_style.EVENT_LINESTYLES["repair_decision"],
+        linewidth=1, label="25 s cutoff")
+    cdf_axis.set(xlim=(0, horizon_s), ylim=(0, 100),
+                 xticks=(0, 25, 60, 120), yticks=(0, 50, 100),
+                 xlabel="Time (s)", ylabel="Target attainment (%)")
+    cdf_axis.grid(axis="y", alpha=.2)
+    ordered = [next(row for row in transitions
+                    if row["fault_axis"] == axis)
+               for axis in ("bandwidth", "prefill", "joint")]
+    left = [0.0] * len(ordered)
+    for action in actions:
+        values = [100 * row[f"{action}_fraction"] for row in ordered]
+        mix_axis.barh(
+            range(len(ordered)), values, left=left, height=.68,
+            color=plot_style.REPAIR_ACTION_COLORS[action],
+            hatch=plot_style.REPAIR_ACTION_HATCHES[action],
+            edgecolor="white", linewidth=.4,
+            label=plot_style.REPAIR_ACTION_SHORT_NAMES[action])
+        left = [old + value for old, value in zip(left, values)]
+    mix_axis.set(xlim=(0, 100), xticks=(0, 50, 100), xlabel="Pending actions (%)",
+                 yticks=range(len(ordered)),
+                 yticklabels=[plot_style.RESOURCE_FAULT_SHORT_NAMES[
+                     row["fault_axis"]] for row in ordered])
+    mix_axis.invert_yaxis()
+    mix_axis.grid(axis="x", alpha=.2)
+    for label, axis in zip(("(a)", "(b)"), (cdf_axis, mix_axis)):
+        plot_style.half_column(axis)
+        axis.text(-.18, .98, label, transform=axis.transAxes,
+                  fontsize=plot_style.HALF_COLUMN_FONT_SIZE,
+                  fontweight="bold", va="top")
+    handles_a, labels_a = cdf_axis.get_legend_handles_labels()
+    handles_b, labels_b = mix_axis.get_legend_handles_labels()
+    cdf_axis.legend(handles_a, labels_a, frameon=False, loc="lower right",
+                    fontsize=5.3, handlelength=1.5, borderpad=.1,
+                    labelspacing=.25)
+    fig.legend(handles_b, labels_b, frameon=False, ncol=2,
+               loc="lower center", bbox_to_anchor=(.67, -.005),
+               fontsize=5.5, handlelength=1.5, columnspacing=.9,
+               labelspacing=.25)
+    fig.subplots_adjust(left=.13, right=.96, bottom=.35, top=.98, wspace=.36)
+    for suffix in ("png", "pdf"):
+        fig.savefig(output.with_suffix(f".{suffix}"),
+                    dpi=plot_style.SAVE_DPI)
+    plt.close(fig)
+
+
 def run(source: Path, out: Path, target_fraction: float,
         population: str = "applied") -> dict:
     bundle = json.loads(source.read_text())
@@ -225,6 +312,12 @@ def run(source: Path, out: Path, target_fraction: float,
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     plot(curve, summary["migration_cutoff_s"],
          summary["observation_horizon_s"], out / "attainment_cdf")
+    if all("transition_counts" in row for row in bundle["cells"]):
+        transitions = transition_summary(bundle, target_fraction)
+        _write_csv(out / "plan_changes.csv", transitions)
+        plot_combined(curve, transitions, summary["migration_cutoff_s"],
+                      summary["observation_horizon_s"],
+                      out / "repair_response")
     (out / "README.md").write_text(
         "# Paired repair-attainment simulation\n\n"
         f"This artifact contains {summary['paired_interventions']:,} paired "

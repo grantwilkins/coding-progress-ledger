@@ -80,8 +80,13 @@ def plot_summary(summary: dict, output: Path) -> None:
                 )
         axis.set_xlabel("Total offered RPS")
         axis.set_ylabel(ylabel)
-        axis.set_xlim(0, max(campaign.RATES_RPS) + .15)
-        axis.set_xticks(range(0, int(max(campaign.RATES_RPS)) + 1))
+        maximum_rate = max(
+            row["offered_rps"]
+            for result in summary["models"].values()
+            for row in result["curve"]
+        )
+        axis.set_xlim(0, maximum_rate + .15)
+        axis.set_xticks(range(0, int(maximum_rate) + 1))
         axis.grid(alpha=.22)
     handles, labels = axes[0].get_legend_handles_labels()
     handles.extend([
@@ -89,9 +94,16 @@ def plot_summary(summary: dict, output: Path) -> None:
                linewidth=1.2, label="Model SLO"),
         Line2D([0], [0], marker="X", linestyle="none", color="#555555",
                markeredgecolor="white", markersize=7,
-               label="First confirmed violation"),
+               label=("First observed violation"
+                      if summary["schema"] == campaign.TAIL_SCHEMA
+                      else "First confirmed violation")),
     ])
-    labels.extend(["Model SLO", "First confirmed violation"])
+    labels.extend([
+        "Model SLO",
+        ("First observed violation"
+         if summary["schema"] == campaign.TAIL_SCHEMA
+         else "First confirmed violation"),
+    ])
     figure.legend(
         handles, labels, frameon=False,
         fontsize=plot_style.COLUMN_LEGEND_FONT_SIZE, ncol=3,
@@ -108,7 +120,9 @@ def plot_summary(summary: dict, output: Path) -> None:
 
 
 def plot(summary: dict, output_dir: Path) -> Path:
-    if summary.get("schema") != campaign.SCHEMA \
+    if summary.get("schema") not in {
+            campaign.SCHEMA, campaign.TAIL_SCHEMA, campaign.GPT_RETRY_SCHEMA,
+    } \
             or summary.get("stage") != "reduced":
         raise ValueError("agentic RPS summary is not reduced evidence")
     output = output_dir / "agentic-rps-sweep"

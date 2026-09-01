@@ -26,6 +26,7 @@ def test_plan_is_fixed_shape_open_loop_and_runs_every_rate():
         .125, .25, .5, .6, .7, .8, .9, 1, 2, 4, 8,
     ]
     assert plan["requests_per_point"] == 32
+    assert plan["client_shards"] == 8
     assert plan["semantics"]["open_loop_poisson"]
     assert plan["semantics"]["max_concurrency"] is None
     assert plan["semantics"]["run_all_rates_after_violation"]
@@ -67,6 +68,70 @@ def test_trace_forces_long_output_and_unique_private_prompts():
                for body in bodies)
     assert [row["offset_s"] for row in trace] == sorted(
         row["offset_s"] for row in trace)
+
+
+def test_sustained_tail_plan_has_128_requests_and_no_repeats():
+    plan = campaign.make_tail_plan(seed=9)
+
+    assert plan["schema"] == campaign.TAIL_SCHEMA
+    assert plan["requests_per_point"] == 128
+    assert plan["client_shards"] == 128
+    assert plan["boundary_repeats"] == []
+    assert plan["rates_rps_by_model"] == {
+        "openai/gpt-oss-20b": [4, 6, 8],
+        "Qwen/Qwen3.8-27B": [.7, 1, 2],
+        "google/gemma-4-26B-A4B-it": [4, 6, 8],
+    }
+    assert plan["request_shape"]["prompt_tokens"] == 3920
+    assert plan["request_shape"]["output_tokens"] == 1024
+    assert plan["semantics"]["max_concurrency"] is None
+    assert plan["semantics"]["sustained_tail_extension"]
+    assert plan["semantics"]["tpot_definition"] \
+        == "p90_of_all_client_observed_post_first_token_intervals"
+    assert plan["semantics"]["coalesced_tokens_share_arrival_timestamp"]
+    assert plan["slo"]["fixed"]["Qwen/Qwen3.8-27B"] == {
+        "p90_ttft_s": 6.964898975600001,
+        "p90_tpot_s": .163794359,
+    }
+
+
+def test_observed_tpot_keeps_zero_gap_tokens_from_coalesced_events():
+    row = {
+        "token_events": [
+            {"monotonic_ns": 1_000_000_000, "token_ids": [1]},
+            {"monotonic_ns": 1_030_000_000, "token_ids": [1, 1, 1]},
+            {"monotonic_ns": 1_050_000_000, "token_ids": [1]},
+        ],
+    }
+
+    assert campaign.observed_token_intervals(row) == [.03, 0, 0, .02]
+
+
+def test_tail_marks_first_predeclared_sustained_violation(tmp_path):
+    plan = campaign.make_tail_plan()
+    for model in campaign.MODELS:
+        for rate in plan["rates_rps_by_model"][model]:
+            cell = campaign.cell_spec(model, rate, 0)
+            write_result(tmp_path, {
+                "schema": campaign.TAIL_SCHEMA,
+                "plan_sha256": campaign.digest(plan),
+                **cell,
+                "status": "recorded",
+                "offered": 128,
+                "completed": 128,
+                "failed": 0,
+                "exact_timing": 128,
+                "p90_ttft_s": 10,
+                "p90_tpot_s": .05,
+            })
+
+    summary = campaign.reduce(plan, tmp_path)
+
+    for model, result in summary["models"].items():
+        assert result["first_confirmed_violation_rps"] \
+            == plan["rates_rps_by_model"][model][0]
+        assert result["violation_confirmation"] \
+            == "single_predeclared_sustained_point"
 
 
 def synthetic_result(plan, model, rate, repeat, ttft, tpot):

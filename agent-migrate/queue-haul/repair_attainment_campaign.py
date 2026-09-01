@@ -20,13 +20,41 @@ DEFAULT_SAMPLES = 4_096
 TARGET_FRACTION = .50
 
 
+def transition_counts(row: dict) -> dict[str, int]:
+    """Classify each original action still pending at the repair decision."""
+    original = {move["session_id"]: move for move in row["initial_moves"]}
+    repaired = {move["session_id"]: move for move in row["repair_moves"]}
+    locked = {
+        move["session_id"] for move in row["repair_schedule"]
+        if move["status"] in {"committed_before_event", "running_at_repair"}
+    }
+    pending = set(original) - locked
+    counts = {key: 0 for key in
+              ("retained", "method", "destination", "removed")}
+    for session_id in pending:
+        before, after = original[session_id], repaired.get(session_id)
+        if after is None:
+            category = "removed"
+        elif before["destination_instance"] != after["destination_instance"]:
+            category = "destination"
+        elif before["method"] != after["method"]:
+            category = "method"
+        else:
+            category = "retained"
+        counts[category] += 1
+    if sum(counts.values()) != len(pending):
+        raise RuntimeError("pending repair actions were not conserved")
+    return {"pending": len(pending), **counts}
+
+
 def _summary(row: dict) -> dict:
     omitted = {
         "initial_moves", "repair_moves", "stable_schedule",
         "repair_schedule", "control_schedule", "repair_curve",
         "control_curve", "repair_result",
     }
-    return {key: value for key, value in row.items() if key not in omitted}
+    return {**{key: value for key, value in row.items() if key not in omitted},
+            "transition_counts": transition_counts(row)}
 
 
 def run(base_plan_path: Path, timing_path: Path, out: Path,

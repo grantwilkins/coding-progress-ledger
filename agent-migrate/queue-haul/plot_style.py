@@ -158,6 +158,35 @@ EVENT_LINESTYLES = {
     "repair_decision": (0, (1, 1)),
     "shed_target": "--",
 }
+REPAIR_ACTION_NAMES = {
+    "retained": "Retained",
+    "method": "Changed method",
+    "destination": "Changed destination",
+    "removed": "Removed from plan",
+}
+REPAIR_ACTION_SHORT_NAMES = {
+    "retained": "Retained",
+    "method": "Method",
+    "destination": "Destination",
+    "removed": "Removed",
+}
+REPAIR_ACTION_COLORS = {
+    "retained": "#B3B3B3",
+    "method": POLICY_COLORS["queue_haul"],
+    "destination": "#E69F00",
+    "removed": "#555555",
+}
+REPAIR_ACTION_HATCHES = {
+    "retained": "",
+    "method": "xx",
+    "destination": "//",
+    "removed": "..",
+}
+RESOURCE_FAULT_SHORT_NAMES = {
+    "bandwidth": "BW",
+    "prefill": "PF",
+    "joint": "Both",
+}
 POWER_VALIDATION_METHODS = ("lp", "greedy", "milp", "power-unaware", "random")
 POWER_VALIDATION_NAMES = dict(zip(POWER_VALIDATION_METHODS, (
     "Queue-Haul LP", "Queue-Haul Greedy", "MILP", "Power unaware", "Random",

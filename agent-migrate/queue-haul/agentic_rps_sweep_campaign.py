@@ -27,12 +27,18 @@ import single_gpu_capacity_campaign as capacity
 
 
 SCHEMA = "queue-haul-agentic-rps-sweep-v3"
+TAIL_SCHEMA = "queue-haul-agentic-rps-tail-v2"
+GPT_RETRY_SCHEMA = "queue-haul-gpt-oss-width128-retry-v1"
+TAIL_ACQUISITION_SCHEMA = "queue-haul-agentic-rps-tail-v1"
+TAIL_ACQUISITION_PLAN_SHA256 = \
+    "511996215831bfecf1d950e318fcc1a3be09456c1303199178661b211290ec97"
 PARENT_SCHEMA = "queue-haul-agentic-rps-sweep-v2"
 PARENT_PLAN_SHA256 = "194ad7d6e376e903fb7ce3db7f40df925942f8cb21b91e2d6fb890a39825512d"
 HISTORICAL_RESULT_IDENTITIES = {
     ("queue-haul-agentic-rps-sweep-v1",
      "4709014a6cbaa32104531be1c9e0482094a4f3ac6d155fb44d015f13473b67ed"),
     (PARENT_SCHEMA, PARENT_PLAN_SHA256),
+    (TAIL_ACQUISITION_SCHEMA, TAIL_ACQUISITION_PLAN_SHA256),
 }
 MODELS = tuple(testbed.MODEL_SPECS)
 BASE_RATES_RPS = (.125, .25, .5, 1.0, 2.0, 4.0, 8.0)
@@ -53,11 +59,24 @@ OUTPUT_TOKENS = 1024
 REQUESTS_PER_POINT = 32
 BOUNDARY_REPEATS = (1, 2)
 REQUEST_TIMEOUT_S = 1800.0
+TAIL_REQUESTS_PER_POINT = 128
+TAIL_RATES_RPS_BY_MODEL = {
+    "openai/gpt-oss-20b": (4.0, 6.0, 8.0),
+    "Qwen/Qwen3.8-27B": (.7, 1.0, 2.0),
+    "google/gemma-4-26B-A4B-it": (4.0, 6.0, 8.0),
+}
 FIXED_SLOS = {
     "openai/gpt-oss-20b": {"p90_ttft_s": 2.0,
                             "p90_tpot_s": .1},
     "google/gemma-4-26B-A4B-it": {"p90_ttft_s": 2.0,
                                    "p90_tpot_s": .2},
+}
+TAIL_SLOS = {
+    **FIXED_SLOS,
+    "Qwen/Qwen3.8-27B": {
+        "p90_ttft_s": 6.964898975600001,
+        "p90_tpot_s": .163794359,
+    },
 }
 
 
@@ -112,6 +131,7 @@ def _plan(seed: int, hardware: str) -> dict:
                 Path(__file__).read_bytes()).hexdigest(),
         },
         "requests_per_point": REQUESTS_PER_POINT,
+        "client_shards": 8,
         "boundary_repeats": list(BOUNDARY_REPEATS),
         "request_timeout_s": REQUEST_TIMEOUT_S,
         "slo": {
@@ -138,8 +158,101 @@ def _plan(seed: int, hardware: str) -> dict:
     }
 
 
+<<<<<<< Updated upstream
 def make_plan(seed: int = 1, hardware: str = "a100") -> dict:
     plan = _plan(seed, hardware)
+=======
+def _tail_plan(seed: int) -> dict:
+    rates = sorted({rate for values in TAIL_RATES_RPS_BY_MODEL.values()
+                    for rate in values})
+    return {
+        "schema": TAIL_SCHEMA,
+        "campaign": "agentic_rps_sustained_tail",
+        "hardware": "a100",
+        "models": list(MODELS),
+        "model_revisions": {
+            model: testbed.model_spec(model).revision for model in MODELS
+        },
+        "request_shape": {
+            "prompt_tokens": PROMPT_TOKENS,
+            "output_tokens": OUTPUT_TOKENS,
+            "source": "fixed compact shape derived from the OpenHands coding trace",
+        },
+        "rates_rps": rates,
+        "rates_rps_by_model": {
+            model: list(TAIL_RATES_RPS_BY_MODEL[model]) for model in MODELS
+        },
+        "parent": {
+            "schema": TAIL_ACQUISITION_SCHEMA,
+            "plan_sha256": TAIL_ACQUISITION_PLAN_SHA256,
+            "relationship": (
+                "same raw cells; retain every client-observed token interval "
+                "when streamed token IDs are coalesced"
+            ),
+        },
+        "implementation": {
+            "campaign_source_sha256": hashlib.sha256(
+                Path(__file__).read_bytes()).hexdigest(),
+        },
+        "requests_per_point": TAIL_REQUESTS_PER_POINT,
+        "client_shards": TAIL_REQUESTS_PER_POINT,
+        "boundary_repeats": [],
+        "request_timeout_s": REQUEST_TIMEOUT_S,
+        "slo": {"fixed": TAIL_SLOS, "relative_models": []},
+        "runtime": capacity.make_runtime_contract(),
+        "semantics": {
+            "open_loop_poisson": True,
+            "max_concurrency": None,
+            "run_all_rates_after_violation": True,
+            "slo_is_control_flow": False,
+            "service_failures_are_outcomes": True,
+            "unique_private_prompts": True,
+            "forced_exact_output_length": True,
+            "one_engine_per_model_unless_service_restart_is_needed": True,
+            "tpot_definition": (
+                "p90_of_all_client_observed_post_first_token_intervals"
+            ),
+            "coalesced_tokens_share_arrival_timestamp": True,
+            "sustained_tail_extension": True,
+        },
+        "seed": seed,
+    }
+
+
+def make_plan(seed: int = 1) -> dict:
+    plan = _plan(seed)
+>>>>>>> Stashed changes
+    validate_plan(plan)
+    return plan
+
+
+def make_tail_plan(seed: int = 1) -> dict:
+    plan = _tail_plan(seed)
+    validate_plan(plan)
+    return plan
+
+
+def _gpt_retry_plan(seed: int = 1) -> dict:
+    """Dense GPT tail used to check whether TPOT is curve-comparable."""
+    plan = _tail_plan(seed)
+    plan["schema"] = GPT_RETRY_SCHEMA
+    plan["campaign"] = "gpt_oss_width128_tpot_retry"
+    plan["rates_rps"] = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+    plan["rates_rps_by_model"] = {
+        model: ([3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+                if model == "openai/gpt-oss-20b" else [])
+        for model in MODELS
+    }
+    plan["parent"] = {
+        "schema": TAIL_SCHEMA,
+        "relationship": "width-128 GPT TPOT comparability retry",
+    }
+    plan["semantics"]["dense_retry"] = True
+    return plan
+
+
+def make_gpt_retry_plan(seed: int = 1) -> dict:
+    plan = _gpt_retry_plan(seed)
     validate_plan(plan)
     return plan
 
@@ -149,7 +262,17 @@ def validate_plan(plan: dict) -> None:
     hardware = plan.get("hardware")
     if not isinstance(seed, int) or hardware not in {"a100", "h100"}:
         raise ValueError("invalid agentic RPS sweep plan")
+<<<<<<< Updated upstream
     if plan != _plan(seed, hardware):
+=======
+    if plan.get("schema") == TAIL_SCHEMA:
+        expected = _tail_plan(seed)
+    elif plan.get("schema") == GPT_RETRY_SCHEMA:
+        expected = _gpt_retry_plan(seed)
+    else:
+        expected = _plan(seed)
+    if plan != expected:
+>>>>>>> Stashed changes
         raise ValueError("invalid agentic RPS sweep plan")
 
 
@@ -247,6 +370,19 @@ def wait_for_drain(sampler: serving.MetricsSampler, engine) -> bool:
     return False
 
 
+def observed_token_intervals(row: dict) -> list[float]:
+    """Return client-observed per-token gaps, including zero-gap bursts."""
+    timestamps = [
+        int(event["monotonic_ns"])
+        for event in row.get("token_events", [])
+        for _ in event.get("token_ids", [])
+    ]
+    return [
+        (right - left) / 1e9
+        for left, right in zip(timestamps, timestamps[1:])
+    ]
+
+
 def summarize_cell(plan: dict, cell: dict, requests: list[dict],
                    metrics: list[dict], drained: bool,
                    client_error: Exception | None, engine_exited: bool,
@@ -255,10 +391,19 @@ def summarize_cell(plan: dict, cell: dict, requests: list[dict],
     exact = [row for row in completed if serving.exact_token_timing(row)]
     ttft = [float(row["ttft_s"]) for row in completed
             if row.get("ttft_s") is not None]
-    tpot = [float(value) for row in exact
-            for value in row.get("token_itls_s", [])]
-    request_mean_tpot = [float(row["mean_tpot_s"]) for row in exact
-                         if row.get("mean_tpot_s") is not None]
+    observed = plan["semantics"]["tpot_definition"] \
+        == "p90_of_all_client_observed_post_first_token_intervals"
+    metric_rows = completed if observed else exact
+    intervals = observed_token_intervals if observed \
+        else lambda row: row.get("token_itls_s", [])
+    tpot = [float(value) for row in metric_rows for value in intervals(row)]
+    request_mean_tpot = (
+        [float(statistics.mean(values)) for row in metric_rows
+         if (values := intervals(row))]
+        if observed else
+        [float(row["mean_tpot_s"]) for row in exact
+         if row.get("mean_tpot_s") is not None]
+    )
     scheduled = sorted(int(row["scheduled_ns"]) for row in requests)
     starts = sorted(int(row["start_ns"]) for row in requests)
     peak_running = max((row.get("vllm:num_requests_running", 0)
@@ -266,7 +411,7 @@ def summarize_cell(plan: dict, cell: dict, requests: list[dict],
     peak_waiting = max((row.get("vllm:num_requests_waiting", 0)
                         for row in metrics), default=None)
     return {
-        "schema": SCHEMA,
+        "schema": plan["schema"],
         "plan_sha256": digest(plan),
         **cell,
         "status": "recorded",
@@ -313,7 +458,7 @@ def run_cell(plan: dict, cell: dict, cfg: testbed.Config, stack,
     epoch = time.monotonic_ns() + 1_000_000_000
     requests, client_error = headroom.issue_async_trace(
         cfg.host, stack.port, trace, epoch, plan["request_timeout_s"],
-        shards=min(8, len(trace)),
+        shards=min(plan["client_shards"], len(trace)),
     )
     drained = wait_for_drain(sampler, stack.engine)
     sampler_error = sampler.error
@@ -338,7 +483,7 @@ def result_path(root: Path, cell: dict) -> Path:
 def read_result(plan: dict, cell: dict, path: Path) -> dict:
     result = json.loads(path.read_text())
     same_cell = all(result.get(key) == value for key, value in cell.items())
-    current = result.get("schema") == SCHEMA \
+    current = result.get("schema") == plan["schema"] \
         and result.get("plan_sha256") == digest(plan)
     if not same_cell or not current:
         raise RuntimeError(f"stale or invalid sweep result: {cell['cell_id']}")
@@ -459,8 +604,9 @@ def discovery_specs(plan: dict, model: str) -> list[dict]:
 
 
 def derive_slo(plan: dict, model: str, discovery: list[dict]) -> dict:
-    if model in FIXED_SLOS:
-        return {**FIXED_SLOS[model], "source": "fixed"}
+    fixed = plan["slo"]["fixed"]
+    if model in fixed:
+        return {**fixed[model], "source": "fixed"}
     baseline_rate = plan["slo"]["relative_baseline_rps"]
     baseline = next(row for row in discovery
                     if row["offered_rps"] == baseline_rate)
@@ -493,9 +639,10 @@ def boundary_rates(discovery: list[dict], slo: dict) -> tuple[float, ...]:
     return ()
 
 
-def boundary_specs(model: str, rates: tuple[float, ...]) -> list[dict]:
+def boundary_specs(plan: dict, model: str,
+                   rates: tuple[float, ...]) -> list[dict]:
     return [cell_spec(model, rate, repeat) for rate in rates
-            for repeat in BOUNDARY_REPEATS]
+            for repeat in plan["boundary_repeats"]]
 
 
 def load_specs(plan: dict, root: Path, specs: list[dict]) -> list[dict]:
@@ -507,11 +654,11 @@ def run_model(plan: dict, model: str, root: Path) -> None:
     run_specs(plan, model, discovery_cells, root)
     discovery = load_specs(plan, root, discovery_cells)
     slo = derive_slo(plan, model, discovery)
-    rates = boundary_rates(discovery, slo)
+    rates = boundary_rates(discovery, slo) if plan["boundary_repeats"] else ()
     write_json(root / "models" / slug(model) / "selection.json", {
         "model": model, "slo": slo, "repeated_boundary_rates": list(rates),
     })
-    run_specs(plan, model, boundary_specs(model, rates), root)
+    run_specs(plan, model, boundary_specs(plan, model, rates), root)
 
 
 def aggregate_rate(rows: list[dict], rate: float) -> dict:
@@ -536,14 +683,15 @@ def reduce_model(plan: dict, model: str, root: Path) -> tuple[list[dict], dict]:
     discovery_cells = discovery_specs(plan, model)
     discovery = load_specs(plan, root, discovery_cells)
     slo = derive_slo(plan, model, discovery)
-    rates = boundary_rates(discovery, slo)
-    extra_cells = boundary_specs(model, rates)
+    rates = boundary_rates(discovery, slo) if plan["boundary_repeats"] else ()
+    extra_cells = boundary_specs(plan, model, rates)
     rows = discovery + load_specs(plan, root, extra_cells)
     aggregated = [aggregate_rate(rows, rate)
                   for rate in model_rates(plan, model)]
+    minimum_repeats = 3 if plan["boundary_repeats"] else 1
     confirmed = next((
         row["offered_rps"] for row in aggregated
-        if row["repeats"] >= 3 and metric_violation({
+        if row["repeats"] >= minimum_repeats and metric_violation({
             "p90_ttft_s": row["p90_ttft_s_median"],
             "p90_tpot_s": row["p90_tpot_s_median"],
         }, slo)
@@ -554,6 +702,10 @@ def reduce_model(plan: dict, model: str, root: Path) -> tuple[list[dict], dict]:
         "slo": slo,
         "repeated_boundary_rates": list(rates),
         "first_confirmed_violation_rps": confirmed,
+        "violation_confirmation": (
+            "three_repeats" if plan["boundary_repeats"]
+            else "single_predeclared_sustained_point"
+        ),
         "curve": aggregated,
     }
 
@@ -565,7 +717,7 @@ def reduce(plan: dict, root: Path, models: tuple[str, ...] = MODELS) -> dict:
         rows.extend(model_rows)
         model_results[model] = result
     return {
-        "schema": SCHEMA,
+        "schema": plan["schema"],
         "stage": "reduced",
         "plan_sha256": digest(plan),
         "hardware": plan["hardware"],
@@ -608,7 +760,12 @@ def parse_args(argv=None):
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--out", type=Path, required=True)
     prepare.add_argument("--seed", type=int, default=1)
+<<<<<<< Updated upstream
     prepare.add_argument("--hardware", choices=("a100", "h100"), default="a100")
+=======
+    prepare.add_argument("--tail", action="store_true")
+    prepare.add_argument("--gpt-retry", action="store_true")
+>>>>>>> Stashed changes
     run = commands.add_parser("run")
     run.add_argument("--plan", type=Path, required=True)
     run.add_argument("--run-root", type=Path, required=True)
@@ -634,7 +791,17 @@ def parse_args(argv=None):
 def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
+<<<<<<< Updated upstream
         write_json(args.out, make_plan(args.seed, args.hardware))
+=======
+        if args.gpt_retry:
+            plan = make_gpt_retry_plan(args.seed)
+        elif args.tail:
+            plan = make_tail_plan(args.seed)
+        else:
+            plan = make_plan(args.seed)
+        write_json(args.out, plan)
+>>>>>>> Stashed changes
         return
     plan = read_plan(args.plan)
     if args.command == "run":
