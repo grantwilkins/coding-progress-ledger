@@ -17,6 +17,9 @@ def test_small_cells_are_paired_and_reach_the_target():
     assert greedy["selected_credit_w"] >= greedy["target_w"]
     assert lp["selected_credit_w"] >= lp["target_w"]
     assert greedy["milp_recovery_s"] == lp["milp_recovery_s"] == 0
+    assert greedy["candidate_universe_slots"] > 0
+    assert lp["materialized_candidates"] > 0
+    assert "candidate_slots" not in greedy | lp
 
 
 def test_plot_writes_both_formats_with_censored_markers(tmp_path, monkeypatch):

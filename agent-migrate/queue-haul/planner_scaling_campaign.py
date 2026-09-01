@@ -129,7 +129,8 @@ def measure_cell(sessions: int, solver: str, memory_gib=0, stage=None) -> dict:
         table, selected, generation_s, selection_s = \
             pool_planner._compact_greedy(oracle, target)
         candidate_generation_s = oracle_s + generation_s
-        candidate_slots = len(oracle.sessions) * len(oracle.options)
+        candidate_metric = {
+            "candidate_universe_slots": len(oracle.sessions) * len(oracle.options)}
     else:
         table = pool_planner.candidate_table(
             scenario, profile, architecture, "normal", power,
@@ -138,7 +139,7 @@ def measure_cell(sessions: int, solver: str, memory_gib=0, stage=None) -> dict:
         selected_started = perf_counter()
         selected = pool_planner._lp(table, target, stats, integral_recovery=False)
         selection_s = perf_counter() - selected_started
-        candidate_slots = len(table.candidates)
+        candidate_metric = {"materialized_candidates": len(table.candidates)}
         if stats.get("milp_recovery_s", 0):
             raise RuntimeError("scaling LP invoked MILP recovery")
     solve_s = perf_counter() - started
@@ -151,7 +152,7 @@ def measure_cell(sessions: int, solver: str, memory_gib=0, stage=None) -> dict:
         raise RuntimeError(f"{solver} returned an aggregate-infeasible selection")
     return {
         "status": "ok", "solver": solver, "sessions": sessions,
-        "candidate_slots": candidate_slots, "selected_moves": len(selected),
+        **candidate_metric, "selected_moves": len(selected),
         "source_replicas": replicas, "target_w": target,
         "selected_credit_w": credit, "build_s": build_s,
         "candidate_generation_s": candidate_generation_s,
