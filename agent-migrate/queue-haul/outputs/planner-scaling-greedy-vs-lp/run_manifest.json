@@ -1,0 +1,48 @@
+{
+  "schema": "queue-haul-planner-scaling-v1",
+  "code_sha256": "c9bf857792f243cef0a511eb06c0e93ec5b6ce8609240b0a21bf3331c5e3da3d",
+  "native_sha256": "01a8e95b0fd16900b25e9a8f384b8470bee9064982275af6289667d2ed431e38",
+  "input_sha256": "b16ae3c5b5d43a2758da8aba562a2151905ec41d0fd84fe0b0fef0c99e38ea8c",
+  "sessions": [
+    1000,
+    2000,
+    5000,
+    10000,
+    20000,
+    50000,
+    100000,
+    200000,
+    500000,
+    1000000,
+    2000000,
+    5000000,
+    10000000
+  ],
+  "solvers": [
+    "greedy",
+    "lp"
+  ],
+  "platform": "macOS-14.3.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "processor": "arm",
+  "logical_cpus": 10,
+  "python": "3.10.19",
+  "dependencies": {
+    "clarabel": "0.11.1",
+    "cvxpy": "1.7.5",
+    "highspy": "1.14.0",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3"
+  },
+  "repeats": 3,
+  "repeat_until": 100000,
+  "timeout_s": 1800,
+  "setup_timeout_s": 1800,
+  "memory_limit_gib": 24,
+  "scenario_seed": 1001,
+  "deadline_s": 600.0,
+  "rho": 0.38,
+  "target_fraction_of_removable_power": 0.25,
+  "lp_integral_recovery": false,
+  "timed_region": "candidate generation plus selection; excludes packing and DES"
+}

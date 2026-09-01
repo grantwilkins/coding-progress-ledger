@@ -1771,6 +1771,25 @@ misses the target hard-fails rather than reporting a fallback's timing, which is
 what makes `outputs/scaling_1_to_100k_20260720_greedy` unusable for this
 comparison: past 32 sessions its 50% request is out of reach.
 
+`planner_scaling_campaign.py` is the apples-to-apples production-front-end
+comparison. It gives LP and greedy the same deterministic fleet and attainable
+25% removable-power target, times candidate generation plus selection in fresh
+processes, disables LP integral recovery, and excludes common fleet setup,
+packing, and DES. Three repeats run through 100K sessions and one thereafter.
+
+```bash
+uv run python planner_scaling_campaign.py run
+```
+
+The pinned 24 GiB campaign in `outputs/planner-scaling-greedy-vs-lp/` records
+greedy/LP medians of 10.62/20.23 s at 100K and 106.90/196.47 s at 1M. At 2M,
+greedy takes 214.12 s versus LP's 546.80 s. Greedy remains nearly linear and
+finishes 5M in 537.21 s and 10M in 1,078.48 s; LP reaches the declared 1,800 s
+timeout at both sizes. Neither solver reaches the 24 GiB memory limit, so these
+points are timeouts, not OOMs. At 10M, greedy spends 936.30 s generating compact
+inputs and 142.14 s in native selection; dense Python input construction remains
+the dominant optimization target.
+
 `planner_quality.py` pairs full greedy and shipped LP plans over workload,
 fleet-size, deadline, destination-scarcity, seed, and target grids. It checks
 exact modeled power, packing, and deadlines, and separately solves an exact
