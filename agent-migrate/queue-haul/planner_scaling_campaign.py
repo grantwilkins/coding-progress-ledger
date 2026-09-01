@@ -304,7 +304,6 @@ def _identity(args) -> dict:
         "target_fraction_of_removable_power": TARGET_FRACTION,
         "lp_integral_recovery": False,
         "timed_region": "candidate generation plus selection; excludes packing and DES",
-        "plotted_metric": "selection_s for completed cells only",
     }
 
 
@@ -335,6 +334,7 @@ def run(args) -> list[dict]:
     _validate(rows)
     _write_csv(args.out / "results.csv", rows)
     metadata = {**identity,
+        "plotted_metric": "selection_s for completed cells; combined-path timeouts in outcome strip",
         "created_local": datetime.now().astimezone().isoformat(),
         "git_sha": subprocess.run(
             ("git", "rev-parse", "HEAD"), cwd=ROOT, check=True,
@@ -357,7 +357,7 @@ def plot(rows, output: Path) -> None:
     if not rows:
         raise ValueError("scaling rows must not be empty")
     plot_style.apply()
-    fig, axis = plt.subplots(figsize=plot_style.FIGSIZE)
+    fig, axis = plt.subplots(figsize=(6, 2.5))
     for solver, policy in (("lp", "queue_haul"), ("greedy", "greedy")):
         ok = [row for row in rows if row["solver"] == solver
               and row["status"] == "ok"]
@@ -373,10 +373,25 @@ def plot(rows, output: Path) -> None:
         if low != high:
             axis.fill_between(x, low, high, color=plot_style.POLICY_COLORS[policy],
                               alpha=.14)
+        timed_out = [row for row in rows if row["solver"] == solver
+                     and row["status"] == "timeout"]
+        if timed_out:
+            axis.scatter(
+                [row["sessions"] for row in timed_out], [.97] * len(timed_out),
+                transform=axis.get_xaxis_transform(),
+                marker=plot_style.SCALING_TIMEOUT_MARKER, s=110,
+                color=plot_style.POLICY_COLORS[policy], clip_on=False,
+            )
+    if any(row["status"] == "timeout" for row in rows):
+        axis.scatter([], [], marker=plot_style.SCALING_TIMEOUT_MARKER, s=90,
+                     color="black", label=plot_style.SCALING_TIMEOUT_NAME)
     axis.set(xscale="log", yscale="log", xlabel="Sessions",
              ylabel="Selection time (s)")
+    axis.tick_params(labelsize=10)
+    axis.xaxis.label.set_size(12)
+    axis.yaxis.label.set_size(12)
     axis.grid(True, which="both", alpha=.25)
-    axis.legend()
+    axis.legend(loc="upper left", fontsize=8, handlelength=2)
     fig.tight_layout()
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output.with_suffix(".pdf"))

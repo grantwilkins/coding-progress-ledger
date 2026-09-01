@@ -1802,8 +1802,9 @@ only. Greedy/LP selection medians are 1.25/9.05 s at 100K, 13.27/87.08 s at 1M,
 and 26.97/326.38 s at 2M. Greedy selection remains nearly linear at 70.14 s for
 5M and 142.14 s for 10M. LP's combined candidate-generation and selection arm
 reaches the declared 1,800 s timeout at both larger sizes, so no selection-only
-LP value or timeout marker is plotted there. No monitored 24 GiB breach was
-classified. At 10M, greedy also spends 936.30 s generating compact inputs, which
+LP value is plotted there. No monitored 24 GiB breach was classified. The figure
+marks those combined-path timeouts in a top outcome strip, not at a selection-time
+y-value. At 10M, greedy also spends 936.30 s generating compact inputs, which
 remains the dominant optimization target outside the plotted selection step.
 
 `planner_quality.py` pairs full greedy and shipped LP plans over workload,

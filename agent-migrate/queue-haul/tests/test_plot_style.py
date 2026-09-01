@@ -61,6 +61,11 @@ def test_power_validation_methods_have_unique_markers():
     assert len(set(plot_style.POWER_VALIDATION_MARKERS.values())) == 5
 
 
+def test_scaling_timeout_has_canonical_visual_identity():
+    assert plot_style.SCALING_TIMEOUT_NAME == "Combined timeout"
+    assert plot_style.SCALING_TIMEOUT_MARKER == "x"
+
+
 def test_power_families_have_shared_names_colors_and_markers():
     assert set(plot_style.POWER_FAMILY_NAMES) == {"idle", "sessions"}
     assert set(plot_style.POWER_FAMILY_NAMES) == set(plot_style.POWER_FAMILY_COLORS) \
