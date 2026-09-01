@@ -39,7 +39,9 @@ unknowable gaps are never synthesized. Telemetry must bracket the episode with
 no scrape gap over 1 s. Instrumentation or runtime failures stop the run and
 retain the failed attempt. At most one immediate validity-only retry is allowed.
 Genuine service failures and numeric SLO outcomes are never retried. The 1-RPS
-warmup is a compilation warmup, not a claimed safe rate.
+warmup is a compilation warmup, not a claimed safe rate. Cross-launch runtime
+fingerprints ignore only launch-local IDs, temporary PIDs, and Python object
+addresses embedded in otherwise identical server configuration values.
 
 At every rate, the figure shows all block-level P90 values, their median, and
 an exact distribution-free median interval. The predeclared two-look rule uses

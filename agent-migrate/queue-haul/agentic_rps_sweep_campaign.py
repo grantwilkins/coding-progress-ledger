@@ -88,7 +88,11 @@ def semantic_runtime_value(value):
     if isinstance(value, str):
         if value.startswith("CUDA_VISIBLE_DEVICES="):
             return "CUDA_VISIBLE_DEVICES=<allocated>"
-        return re.sub(r"(/tmp/qh-[^/\s\"']+)-\d+", r"\1-<pid>", value)
+        value = re.sub(r"(/tmp/qh-[^/\s\"']+)-\d+", r"\1-<pid>", value)
+        return re.sub(
+            r"(<[^<>]+ object at )0x[0-9a-fA-F]+(>)",
+            r"\1<object-address>\2", value,
+        )
     return value
 
 

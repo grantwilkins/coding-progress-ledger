@@ -579,6 +579,24 @@ def test_runtime_fingerprint_covers_commands_and_server_config(monkeypatch):
     )["fingerprint_sha256"] == campaign.finalize_runtime_identity(
         left, {"vllm_config": {"instance_id": "launch-b", "block_size": 16}}
     )["fingerprint_sha256"]
+    assert campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"quant_config": "<Q object at 0xabc>"}}
+    )["fingerprint_sha256"] == campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"quant_config": "<Q object at 0xdef>"}}
+    )["fingerprint_sha256"]
+    assert campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"quant_config": "<Q object at 0xabc>"}}
+    )["fingerprint_sha256"] != campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"quant_config": "<R object at 0xabc>"}}
+    )["fingerprint_sha256"]
+    assert campaign.semantic_runtime_value({"nested": ["<Q object at 0xabc>"]}) \
+        == {"nested": ["<Q object at <object-address>>"]}
+    assert campaign.semantic_runtime_value("value=0xabc") == "value=0xabc"
+    assert campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"value": "0xabc"}}
+    )["fingerprint_sha256"] != campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"value": "0xdef"}}
+    )["fingerprint_sha256"]
 
 
 def test_thirty_blocks_require_unresolved_primary_look(tmp_path, monkeypatch):
