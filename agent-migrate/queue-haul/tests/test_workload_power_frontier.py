@@ -122,6 +122,9 @@ def test_sampled_frontier_is_paired_normalized_and_monotone():
     assert len({row["timing_fit_sha256"] for row in rows}) == 1
     assert len({row["maximum_removable_w"] for row in rows}) == 1
     assert {row["capacity_solver"] for row in rows} == {CAPACITY_SOLVER}
+    assert {(row["scoring_deadline_s"], row["power_window_s"],
+             row["controller_delay_s"], row["migration_budget_s"])
+            for row in rows} == {(30, 5, 0, 25)}
     assert capacity_release_audit(rows)["violations"] == 0
     assert all(np.isclose(
         row["requested_shed_w"],

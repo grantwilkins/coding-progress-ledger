@@ -12,14 +12,15 @@
     "objective": "maximize removed z=sum(a*f+b*g) with integer session actions",
     "release_audit": {
       "comparisons": 1200,
-      "maximum_monotone_uplift_fraction": 0.004162285880763424,
-      "raw_solver_inversions": 55,
+      "maximum_monotone_uplift_fraction": 0.0024715045360483192,
+      "raw_solver_inversions": 32,
       "violations": 0
     },
     "solver": "max_shed_capacity"
   },
   "claim": "modeled source-power capacity distribution across regional constraint states using a certified integer maximum-phase-load reference",
   "constraint_style": "canonical color and line styles distinguish the five displayed constraint states",
+  "controller_delay_s": 0,
   "factor_levels": {
     "bandwidth": [
       "natural",
@@ -64,8 +65,9 @@
     "the loaded-service slope is fixed at its central fit rather than sampled from its bootstrap",
     "bandwidth-bound East routes fall below the load factor's 1-Gbit/s validation floor",
     "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
-    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases"
+    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at the 25 s migration budget, versus 0/288 width-8 cases"
   ],
+  "migration_budget_s": 25.0,
   "normalization": "safely attained watts / draw-specific removable watts",
   "plotted_constraint_states": [
     "hbm",
@@ -86,6 +88,7 @@
   },
   "power_scope": "steady awake source-region power; destination power excluded",
   "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
+  "power_window_s": 5.0,
   "regions": [
     "east",
     "germany"
@@ -103,7 +106,8 @@
     1.0
   ],
   "samples": 100,
-  "schema": "queue-haul-workload-power-frontier-v8",
+  "schema": "queue-haul-workload-power-frontier-v9",
+  "scoring_deadline_s": 30,
   "seed": 1001,
   "sessions_per_pack": 28,
   "solvers": {
@@ -112,113 +116,127 @@
   "source_load_definition": "sum(f/F + g/G)=0.4; distinct from sampled phase load z=af+bg",
   "surface_validation": {
     "coding-c1-c4/development": {
-      "false_feasible_at_25s": 19,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 19,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.872177917467015,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.42923939993387067,
       "scenarios": 96,
       "underprediction_rate": 0.7708333333333334
     },
     "coding-c1-c4/development/kv_transfer": {
-      "false_feasible_at_25s": 14,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 14,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.9109777718834491,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.5628782021214593,
       "scenarios": 48,
       "underprediction_rate": 0.8125
     },
     "coding-c1-c4/development/replay": {
-      "false_feasible_at_25s": 5,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 5,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.7981070163695221,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.42622753776595484,
       "scenarios": 48,
       "underprediction_rate": 0.7291666666666666
     },
     "coding-c1-c4/grouped-audit": {
-      "false_feasible_at_25s": 5,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 5,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.8859485281396715,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.4232865104092367,
       "scenarios": 66,
       "underprediction_rate": 0.7272727272727273
     },
     "coding-c1-c4/grouped-audit/kv_transfer": {
-      "false_feasible_at_25s": 4,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 4,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.8642808630503208,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.42453296454934847,
       "scenarios": 33,
       "underprediction_rate": 0.8181818181818182
     },
     "coding-c1-c4/grouped-audit/replay": {
-      "false_feasible_at_25s": 1,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 1,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.942285091552295,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.39010918034922876,
       "scenarios": 33,
       "underprediction_rate": 0.6363636363636364
     },
     "width8/development": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 2,
+      "false_feasible": 0,
+      "false_infeasible": 2,
       "median_predicted_over_measured": 1.1162476020523169,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.6444812323198056,
       "scenarios": 208,
       "underprediction_rate": 0.38461538461538464
     },
     "width8/development/kv_transfer": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.9824064137365617,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.4239861590570746,
       "scenarios": 56,
       "underprediction_rate": 0.5
     },
     "width8/development/mixed": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 1.328307247112302,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.7827685629702292,
       "scenarios": 100,
       "underprediction_rate": 0.15
     },
     "width8/development/replay": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 2,
+      "false_feasible": 0,
+      "false_infeasible": 2,
       "median_predicted_over_measured": 0.9830643603183712,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.1562407373160577,
       "scenarios": 52,
       "underprediction_rate": 0.7115384615384616
     },
     "width8/grouped-audit": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 1,
+      "false_feasible": 0,
+      "false_infeasible": 1,
       "median_predicted_over_measured": 1.1302760726762007,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.7069079558187432,
       "scenarios": 80,
       "underprediction_rate": 0.3375
     },
     "width8/grouped-audit/kv_transfer": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 1.0459792786518525,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.3824603486284667,
       "scenarios": 20,
       "underprediction_rate": 0.5
     },
     "width8/grouped-audit/mixed": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 1.2797168246556816,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.8586826773084703,
       "scenarios": 40,
       "underprediction_rate": 0.175
     },
     "width8/grouped-audit/replay": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 1,
+      "false_feasible": 0,
+      "false_infeasible": 1,
       "median_predicted_over_measured": 0.9993428284597472,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.17073219904112594,
       "scenarios": 20,
       "underprediction_rate": 0.5

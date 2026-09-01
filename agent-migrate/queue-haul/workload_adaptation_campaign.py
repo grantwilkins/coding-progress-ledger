@@ -49,11 +49,12 @@ TIMING_SUMMARY = ROOT / "outputs/timing-power-validation-20260814/timing-summary
 TIMING_PARENT = ROOT / "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json"
 LOADED_SERVICE = ROOT / "outputs/loaded-service-model-20260815/model.json"
 NETWORK_CALIBRATION = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
+PREFILL_ANCHORS = ROOT / "outputs/destination-anchor-baseline-20260722.json"
 OUT = ROOT / "outputs/workload-action-adaptation-20260814"
 BASE_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 WIDTH8_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 FACTORS = ("hbm", "bandwidth", "dest_compute")
-ACTIVATION_GATED_FACTORS = ("hbm", "dest_compute")
+ACTIVATION_GATED_FACTORS = FACTORS
 ORDER = (
     frozenset(("hbm",)), frozenset(("bandwidth",)), frozenset(("dest_compute",)),
     frozenset(("hbm", "bandwidth")), frozenset(("hbm", "dest_compute")),
@@ -77,7 +78,7 @@ DISPLAY_CASES = (
 )
 ACTION_BOXPLOT_QUANTILES = (.05, .25, .5, .75, .95)
 POWER_TOLERANCE_W = 1e-6
-MIGRATION_HORIZON_S = 41
+SCORING_DEADLINE_S = 30
 BANDWIDTH_BOTTLENECK_MBPS = 1000
 PREFILL_REFERENCE_TOKENS = 7680
 OAT_BANDWIDTH_LOWER_MBPS = 100
@@ -89,6 +90,13 @@ OAT_FAMILY = "agentic_tool_loop"
 SOURCE_LOAD = .4
 DEFAULT_SEED = 1001
 plot_style.apply()
+
+
+def migration_budget_s(profile):
+    budget = SCORING_DEADLINE_S - profile.power_window_s
+    if budget <= 0:
+        raise ValueError("deadline must exceed the power window")
+    return budget
 
 
 @dataclass(frozen=True)
@@ -320,7 +328,7 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
     paths = {region: (f"link/{region}", f"pipeline/{region}")
              for region in REGIONS}
     scenario = ExecutionScenario(
-        41, 41, 0, "awake", 0,
+        SCORING_DEADLINE_S, SCORING_DEADLINE_S, 0, "awake", 0,
         (PowerNode("source-node", 1, True), *(PowerNode(
             f"{region}-node", 1, False) for region in REGIONS)),
         (ServingInstance("source", ("source-node",)), *(ServingInstance(
@@ -462,6 +470,8 @@ def run_case(profile, sessions, case_id, label, constraints, replicate,
         "fractional_lp_opportunity_w": fractional_opportunity,
         "target_met": result.feasible and result.power_shortfall_w <= POWER_TOLERANCE_W,
         "feasible": result.feasible, "power_shortfall_w": result.power_shortfall_w,
+        "initial_source_power_w": result.initial_source_power_w,
+        "planned_source_power_w": result.planned_source_power_w,
         "planned_shed_w": result.initial_source_power_w - result.planned_source_power_w,
         "predicted_migration_makespan_s": result.predicted_migration_makespan_s,
         **loaded_transport_counts(scenario, architecture, table, result.moves),
@@ -641,34 +651,55 @@ def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3
 
 
 def oat_design(profile, levels=OAT_LEVELS):
-    if levels < 2:
-        raise ValueError("OAT sweep requires at least two levels")
+    if levels < 3:
+        raise ValueError("OAT sweep requires at least three levels")
     q = dedicated_sink_architecture(profile, REGIONS[0], ("link/east",)).types[0]
-    rate = q.prefill.at(PREFILL_REFERENCE_TOKENS)
+    observed = [float(row["tokens_per_s"]) for row in json.loads(
+        PREFILL_ANCHORS.read_text())["anchors"] if row["metric"] == "prefill"]
+    if not observed or min(observed) <= 0:
+        raise ValueError("invalid observed prefill anchors")
+    fixed_prefill, prefill_max = float(np.median(observed)), max(observed)
     natural_bandwidth = max(physical_route_mbps().values())
     bandwidths = np.linspace(
         OAT_BANDWIDTH_LOWER_MBPS, natural_bandwidth, levels)
-    prefills = np.linspace(
-        (1 - OAT_DEST_COMPUTE[1]) * rate, rate, levels)
-    return bandwidths, prefills, natural_bandwidth, rate, rate
+    lower = (1 - OAT_DEST_COMPUTE[1]) * prefill_max
+    below = min(levels - 2, max(1, round(
+        (fixed_prefill - lower) / (prefill_max - lower) * (levels - 1))))
+    prefills = np.r_[np.linspace(lower, fixed_prefill, below + 1),
+                     np.linspace(fixed_prefill, prefill_max,
+                                 levels - below)[1:]]
+    if len(np.unique(prefills)) != levels:
+        raise ValueError("OAT prefill levels are not unique")
+    return (bandwidths, prefills, natural_bandwidth, fixed_prefill,
+            prefill_max, q.prefill.at(PREFILL_REFERENCE_TOKENS))
 
 
 def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
                  target_fraction=1.0, levels=OAT_LEVELS, profile_path=PROFILE,
                  manifest_path=MANIFEST):
-    if packs < 1 or levels < 2:
+    if packs < 1 or levels < 3:
         raise ValueError("invalid OAT controls")
     if target_fraction != 1:
         raise ValueError("OAT target_fraction must remain 1.0")
     profile = ModelProfile.load(profile_path)
+    migration_budget = migration_budget_s(profile)
     templates, _ = load_templates(manifest_path, profile)
     manifest = json.loads(manifest_path.read_text())
     fits = central_timing_fits()
     timing_hash = hashlib.sha256(
         json.dumps(fits, sort_keys=True).encode()
     ).hexdigest()
-    bandwidths, prefills, fixed_bandwidth, fixed_prefill, rate = \
+    bandwidths, prefills, fixed_bandwidth, fixed_prefill, prefill_max, \
+        model_rate = \
         oat_design(profile, levels)
+    anchor_data = json.loads(PREFILL_ANCHORS.read_text())
+    anchor_rows = [row for row in anchor_data["anchors"]
+                   if row["metric"] == "prefill"]
+    contexts = sorted({int(row["context_tokens"]) for row in anchor_rows})
+    repeats = {context: sum(int(row["context_tokens"]) == context
+                            for row in anchor_rows) for context in contexts}
+    if len(set(repeats.values())) != 1:
+        raise ValueError("prefill anchor contexts are not equally repeated")
     pack_rows, raw = [], []
     for pack_id in range(1, packs + 1):
         pack_seed = seed + pack_id
@@ -691,23 +722,59 @@ def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
             for level, value in enumerate(values):
                 bandwidth = value if sweep == "bandwidth" else fixed_bandwidth
                 prefill = fixed_prefill if sweep == "bandwidth" else value
-                row = run_case(
-                    profile, pack, f"oat_{sweep}", f"OAT {sweep}",
-                    frozenset(), pack_id, target_fraction, fits, None,
-                    timing_hash, 0, bandwidth_mbps=bandwidth,
-                    prefill_tps=prefill,
-                )
+                try:
+                    row = run_case(
+                        profile, pack, f"oat_{sweep}", f"OAT {sweep}",
+                        frozenset(), pack_id, target_fraction, fits, None,
+                        timing_hash, 0, bandwidth_mbps=bandwidth,
+                        prefill_tps=prefill,
+                    )
+                except RuntimeError as error:
+                    raise RuntimeError(
+                        f"OAT failed at pack={pack_id}, sweep={sweep}, "
+                        f"level={level}, bandwidth_mbps={bandwidth}, "
+                        f"prefill_tps={prefill}"
+                    ) from error
                 raw.append({
                     "pack_id": pack_id, "sweep": sweep, "level": level,
                     "bandwidth_cap_gbps": bandwidth / 1000,
                     "prefill_available_tps": prefill,
+                    "scoring_deadline_s": SCORING_DEADLINE_S,
+                    "power_window_s": profile.power_window_s,
+                    "controller_delay_s": 0,
+                    "migration_budget_s": migration_budget,
                     "target_met": row["target_met"],
+                    "target_w": row["target_w"],
+                    "initial_source_power_w": row["initial_source_power_w"],
+                    "planned_source_power_w": row["planned_source_power_w"],
                     "planned_shed_w": row["planned_shed_w"],
                     "power_shortfall_w": row["power_shortfall_w"],
+                    "predicted_migration_makespan_s":
+                        row["predicted_migration_makespan_s"],
                     "failure": row["failure"],
                     **{f"{action}_count": row[f"{action}_count"]
                        for action in ACTIONS},
                 })
+    if any(row["target_met"] != (
+            row["replay_count"] + row["kv_transfer_count"] == sessions)
+           for row in raw):
+        raise RuntimeError("OAT full-target accounting is inconsistent")
+    if any(row["target_met"] and
+           row["predicted_migration_makespan_s"] > migration_budget + 1e-9
+           for row in raw):
+        raise RuntimeError("OAT target hit exceeds the migration budget")
+    overlap_level = int(np.flatnonzero(prefills == fixed_prefill)[0])
+    overlap_fields = ("target_met", "planned_shed_w", "power_shortfall_w",
+                      "failure", *(f"{action}_count" for action in ACTIONS))
+    for pack_id in range(1, packs + 1):
+        bandwidth = next(row for row in raw if row["pack_id"] == pack_id
+                         and row["sweep"] == "bandwidth"
+                         and row["level"] == levels - 1)
+        prefill = next(row for row in raw if row["pack_id"] == pack_id
+                       and row["sweep"] == "prefill"
+                       and row["level"] == overlap_level)
+        if any(bandwidth[key] != prefill[key] for key in overlap_fields):
+            raise RuntimeError("OAT shared operating point does not match")
     rows, distribution = [], []
     for sweep, values in (("bandwidth", bandwidths), ("prefill", prefills)):
         metric = "kv_transfer_count" if sweep == "bandwidth" \
@@ -719,6 +786,10 @@ def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
                 "sweep": sweep, "level": level,
                 "bandwidth_cap_gbps": selected[0]["bandwidth_cap_gbps"],
                 "prefill_available_tps": selected[0]["prefill_available_tps"],
+                "scoring_deadline_s": SCORING_DEADLINE_S,
+                "power_window_s": profile.power_window_s,
+                "controller_delay_s": 0,
+                "migration_budget_s": migration_budget,
                 "plans": packs,
                 "target_met_rate": float(np.mean([
                     row["target_met"] for row in selected
@@ -755,7 +826,7 @@ def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
         "levels_per_sweep": levels, "sessions_per_pack": sessions,
         "seed": seed, "pack_seed_range": [seed + 1, seed + packs],
         "target_fraction": target_fraction,
-        "target_definition": "100% of removable session-induced source power",
+        "target_definition": "100% of removable session-induced source power by the scoring deadline, including the trailing power window",
         "source_load": SOURCE_LOAD,
         "model": profile.model, "hardware": profile.hardware,
         "profile_sha256": hashlib.sha256(profile_path.read_bytes()).hexdigest(),
@@ -763,15 +834,37 @@ def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
         "input_sha256": {
             str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in (profile_path, manifest_path, TIMING, TIMING_SUMMARY,
-                         TIMING_PARENT, LOADED_SERVICE, NETWORK_CALIBRATION)
+                         TIMING_PARENT, LOADED_SERVICE, NETWORK_CALIBRATION,
+                         PREFILL_ANCHORS)
         },
-        "migration_horizon_s": MIGRATION_HORIZON_S,
+        "scoring_deadline_s": SCORING_DEADLINE_S,
+        "power_window_s": profile.power_window_s,
+        "controller_delay_s": 0,
+        "migration_budget_s": migration_budget,
         "calibration": "fixed central timing, phase-power, and loaded-service fits",
         "timing_fit_sha256": timing_hash,
         "resampling": "seeded Monte Carlo packs from the fixed empirical OpenHands trajectory/turn generator",
         "figure_distribution": "empirical pack frequencies without continuous kernel smoothing",
         "prefill_reference_tokens": PREFILL_REFERENCE_TOKENS,
-        "prefill_full_rate_tps": rate,
+        "prefill_model_rate_tps": model_rate,
+        "prefill_observations": {
+            "path": str(PREFILL_ANCHORS.relative_to(ROOT)),
+            "count": len(anchor_rows),
+            "context_tokens": contexts,
+            "repeats_per_context": next(iter(repeats.values())),
+            "protocol": anchor_data["source"]["protocol"],
+            "median_reducer": "pooled median across contexts and repeats",
+            "max_reducer": "raw maximum across contexts and repeats",
+            "median_tps": fixed_prefill,
+            "max_tps": prefill_max,
+            "median_fraction_of_model_rate": fixed_prefill / model_rate,
+            "median_implied_load_fraction": 1 - fixed_prefill / model_rate,
+            "max_fraction_of_model_rate": prefill_max / model_rate,
+            "max_implied_load_fraction": 1 - prefill_max / model_rate,
+            "max_observation": next(row for row in anchor_rows
+                                    if float(row["tokens_per_s"])
+                                    == prefill_max),
+        },
         "bandwidth_sweep": {
             "bandwidth_cap_gbps": [bandwidths[0] / 1000,
                                    bandwidths[-1] / 1000],
@@ -782,8 +875,16 @@ def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
             "prefill_available_tps": [prefills[0], prefills[-1]],
             "fixed_bandwidth_cap_gbps": fixed_bandwidth / 1000,
             "density_metric": "migrated-session count per eight-session pack",
+            "lower_bound": "synthetic 1% of the raw observed upper anchor",
         },
-        "action_metric": "source-session share at each OAT level",
+        "shared_operating_point": {
+            "bandwidth_cap_gbps": fixed_bandwidth / 1000,
+            "prefill_available_tps": fixed_prefill,
+            "bandwidth_level": levels - 1,
+            "prefill_level": overlap_level,
+        },
+        "action_metric": "Monte Carlo mean modeled source-session share at each OAT level",
+        "claim_scope": "conditional one-factor sensitivity; bandwidth-prefill interaction is not identified",
         "pipeline_interpolation":
             "regional controlled-40 to natural endpoint interpolation",
     }
@@ -899,7 +1000,8 @@ def summarize(rows):
     return result
 
 
-def _surface_row(source, split, scenario, replay_s, kv_s, route_s, coupling):
+def _surface_row(source, split, scenario, replay_s, kv_s, route_s, coupling,
+                 migration_budget_s):
     predicted = max(
         route_s,
         replay_s + coupling * kv_s,
@@ -908,19 +1010,21 @@ def _surface_row(source, split, scenario, replay_s, kv_s, route_s, coupling):
     measured = float(scenario.migration_s)
     return {
         "source": source, "split": split, "scenario_id": scenario.scenario_id,
-        "session_set": scenario.session_set, "horizon_s": MIGRATION_HORIZON_S,
+        "session_set": scenario.session_set,
+        "migration_budget_s": migration_budget_s,
         "method": scenario.method, "bandwidth_mbps": scenario.bandwidth_mbps,
         "concurrency": int(scenario.concurrency), "replay_work_s": replay_s,
         "kv_work_s": kv_s, "route_s": route_s, "predicted_s": predicted,
         "measured_s": measured, "predicted_over_measured": predicted / measured,
-        "false_feasible": predicted <= MIGRATION_HORIZON_S < measured,
-        "false_infeasible": measured <= MIGRATION_HORIZON_S < predicted,
+        "false_feasible": predicted <= migration_budget_s < measured,
+        "false_infeasible": measured <= migration_budget_s < predicted,
     }
 
 
 def validate_surface():
     rows = []
-    profile = ModelProfile.load(BASE_PROFILE).case()
+    model = ModelProfile.load(BASE_PROFILE)
+    profile, budget = model.case(), migration_budget_s(model)
     scenarios = pd.read_csv(LOCAL_TIMING / "scenarios.csv")
     migrations = pd.read_csv(LOCAL_TIMING / "migrations.csv")
     selected = scenarios[(scenarios.kind == "migration")
@@ -948,10 +1052,11 @@ def validate_surface():
         split = "grouped-audit" if digest % 3 == 0 else "development"
         rows.append(_surface_row(
             "coding-c1-c4", split, scenario, replay, kv,
-            route_bytes / (scenario.bandwidth_mbps * 125_000), 1,
+            route_bytes / (scenario.bandwidth_mbps * 125_000), 1, budget,
         ))
 
-    profile = ModelProfile.load(WIDTH8_PROFILE).case()
+    model = ModelProfile.load(WIDTH8_PROFILE)
+    profile, budget = model.case(), migration_budget_s(model)
     scenarios = pd.read_csv(WIDTH8_TIMING / "scenarios.csv")
     stages = pd.read_csv(WIDTH8_TIMING / "migration_stages.csv")
     selected = scenarios[(scenarios.kind == "migration")
@@ -976,6 +1081,7 @@ def validate_surface():
         rows.append(_surface_row(
             "width8", split, scenario, replay, kv,
             group.wire_bytes.sum() / (scenario.bandwidth_mbps * 125_000), 1,
+            budget,
         ))
     if any(row["predicted_s"] <= 0 or row["measured_s"] <= 0 for row in rows):
         raise RuntimeError("timing validation contains a nonpositive span")
@@ -997,15 +1103,15 @@ def validation_summary(rows):
             "scenarios": len(selected), "median_predicted_over_measured": float(np.median(ratio)),
             "p90_absolute_relative_error": float(np.quantile(abs(ratio - 1), .9)),
             "underprediction_rate": float(np.mean(ratio < 1)),
-            "false_feasible_at_25s": int(sum(row["false_feasible"]
-                                              for row in selected)),
-            "false_infeasible_at_25s": int(sum(row["false_infeasible"]
-                                                for row in selected)),
+            "migration_budget_s": selected[0]["migration_budget_s"],
+            "false_feasible": int(sum(row["false_feasible"] for row in selected)),
+            "false_infeasible": int(sum(row["false_infeasible"] for row in selected)),
         }
     return output
 
 
 def surface_scope_limitation(rows):
+    budget, = {row["migration_budget_s"] for row in rows}
     local = [row for row in rows if row["source"] == "coding-c1-c4"]
     grouped = [row for row in local if row["split"] == "grouped-audit"]
     width8 = [row for row in rows if row["source"] == "width8"]
@@ -1014,7 +1120,7 @@ def surface_scope_limitation(rows):
         f"deadline guarantee: {sum(row['false_feasible'] for row in local)}/"
         f"{len(local)} local c1-c4 cases and "
         f"{sum(row['false_feasible'] for row in grouped)}/{len(grouped)} grouped "
-        f"audit cases are false-feasible at 25 s, versus "
+        f"audit cases are false-feasible at the {budget:g} s migration budget, versus "
         f"{sum(row['false_feasible'] for row in width8)}/{len(width8)} width-8 cases"
     )
 
@@ -1189,8 +1295,24 @@ def plot_oat(rows, path, sweep):
                 linestyle=plot_style.OAT_TARGET_LINESTYLE,
                 linewidth=plot_style.OAT_TARGET_LINEWIDTH)
     target.set(xlabel=("Bandwidth cap (Gbit/s)" if sweep == "bandwidth"
-                       else "Available prefill (k token/s)"),
-               ylabel="Feasible\npacks (%)", ylim=(-.03, 1.03))
+                       else "Modeled prefill headroom at 7,680 tokens\n(k token/s)"),
+               ylabel="Deadline-Met\n(%)", ylim=(-.03, 1.03))
+    if sweep == "prefill":
+        shared = float(np.median([row["tokens_per_s"] for row in json.loads(
+            PREFILL_ANCHORS.read_text())["anchors"]
+            if row["metric"] == "prefill"])) / 1000
+        for ax in (mix, target):
+            ax.axvline(shared, color=plot_style.OAT_SHARED_COLOR,
+                       linestyle=plot_style.OAT_SHARED_LINESTYLE,
+                       linewidth=plot_style.OAT_SHARED_LINEWIDTH)
+        target.annotate(
+            f"{plot_style.OAT_SHARED_NAME} ({shared:.2f})", (shared, .04),
+            xycoords=target.get_xaxis_transform(),
+            ha="right", va="bottom", fontsize=8,
+        )
+        target.set_xticks((*range(1, 5), x[-1]),
+                          (*map(str, range(1, 5)), f"{x[-1]:.2f}"))
+        target.get_xticklabels()[-1].set_ha("right")
     target.yaxis.set_major_formatter(PercentFormatter(1, symbol=""))
     target.set_yticks((0, .5, 1))
     for ax in (mix, target):
@@ -1215,7 +1337,7 @@ def plot_oat_density(rows, path, sessions):
     for ax, sweep, metric, title, ylabel in (
         (axes[0], "bandwidth", "kv_transfer_count", "Bandwidth → KV choice",
          "KV transfers (of 8)"),
-        (axes[1], "prefill", "migrated_count", "Prefill → target feasibility",
+        (axes[1], "prefill", "migrated_count", "Prefill → deadline attainment",
          "Migrated sessions (of 8)"),
     ):
         selected = [row for row in rows
@@ -1239,8 +1361,23 @@ def plot_oat_density(rows, path, sessions):
         )
         ax.set(title=title, ylabel=ylabel, yticks=range(sessions + 1),
                xlabel=("Bandwidth cap (Gbit/s)" if sweep == "bandwidth"
-                       else "Available prefill (k token/s)"),
+                       else "Modeled prefill headroom at 7,680 tokens\n(k token/s)"),
                xlim=(x[0], x[-1]), ylim=(-.5, sessions + .5))
+        if sweep == "prefill":
+            shared = float(np.median([row["tokens_per_s"] for row in json.loads(
+                PREFILL_ANCHORS.read_text())["anchors"]
+                if row["metric"] == "prefill"])) / 1000
+            ax.axvline(shared, color=plot_style.OAT_SHARED_COLOR,
+                       linestyle=plot_style.OAT_SHARED_LINESTYLE,
+                       linewidth=plot_style.OAT_SHARED_LINEWIDTH)
+            ax.annotate(
+                f"{plot_style.OAT_SHARED_NAME} ({shared:.2f})", (shared, .02),
+                xycoords=ax.get_xaxis_transform(), rotation=90,
+                ha="right", va="bottom", fontsize=8,
+            )
+            ax.set_xticks((*range(1, 5), x[-1]),
+                          (*map(str, range(1, 5)), f"{x[-1]:.2f}"))
+            ax.get_xticklabels()[-1].set_ha("right")
         ax.title.set_size(12)
         ax.xaxis.label.set_size(plot_style.COLUMN_FONT_SIZE)
         ax.yaxis.label.set_size(plot_style.COLUMN_FONT_SIZE)
@@ -1372,8 +1509,9 @@ def main():
         row["planner_shortfall_change_w"] for row in checks
         if row["planner_shortfall_worsened_on_release"]
     ])
+    metadata_profile = ModelProfile.load(PROFILE)
     metadata = {
-        "schema": "queue-haul-workload-adaptation-v8",
+        "schema": "queue-haul-workload-adaptation-v9",
         "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
         "samples": args.samples, "sessions_per_pack": args.sessions,
         "seed": args.seed, "target_fraction": args.target,
@@ -1398,7 +1536,10 @@ def main():
             "max(route time, fully shared Replay/KV endpoint work)",
         "planner_objective_cost":
             "sum of isolated candidate durations; endpoint replica-seconds remain a separate physical capacity row",
-        "migration_horizon_s": MIGRATION_HORIZON_S,
+        "scoring_deadline_s": SCORING_DEADLINE_S,
+        "power_window_s": metadata_profile.power_window_s,
+        "controller_delay_s": 0,
+        "migration_budget_s": migration_budget_s(metadata_profile),
         "regional_timing_destination_prefill_loads": timing_loads,
         "selected_session_totals": selected,
         "mean_phase_load_share": {

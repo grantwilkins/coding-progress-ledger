@@ -16,6 +16,7 @@
   ],
   "activation_gated_factors": [
     "hbm",
+    "bandwidth",
     "dest_compute"
   ],
   "bandwidth_bottleneck": {
@@ -54,18 +55,19 @@
     ]
   },
   "claim": "modeled regional phase-load-weighted action mix and predicted target-attainment sensitivity with exact nonlinear one-source power targets",
+  "controller_delay_s": 0,
   "cross_method_coupling": 1,
   "factor_action_response_rate": {
     "bandwidth-dest_compute-hbm/bandwidth": 1.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.322,
-    "bandwidth-dest_compute-hbm/hbm": 0.565,
+    "bandwidth-dest_compute-hbm/hbm": 0.564,
     "bandwidth-dest_compute/bandwidth": 1.0,
-    "bandwidth-dest_compute/dest_compute": 0.609,
+    "bandwidth-dest_compute/dest_compute": 0.607,
     "bandwidth-hbm/bandwidth": 0.273,
     "bandwidth-hbm/hbm": 0.407,
     "bandwidth/bandwidth": 0.481,
     "dest_compute-hbm/dest_compute": 0.997,
-    "dest_compute-hbm/hbm": 0.609,
+    "dest_compute-hbm/hbm": 0.608,
     "dest_compute/dest_compute": 0.997,
     "hbm/hbm": 0.51
   },
@@ -73,11 +75,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.745,
     "bandwidth-dest_compute-hbm/hbm": 0.905,
-    "bandwidth-dest_compute/bandwidth": 0.031,
+    "bandwidth-dest_compute/bandwidth": 0.118,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.618,
+    "bandwidth/bandwidth": 0.97,
     "dest_compute-hbm/dest_compute": 0.744,
     "dest_compute-hbm/hbm": 0.902,
     "dest_compute/dest_compute": 1.0,
@@ -101,11 +103,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.5,
     "bandwidth-dest_compute-hbm/hbm": 0.804,
-    "bandwidth-dest_compute/bandwidth": 0.031,
+    "bandwidth-dest_compute/bandwidth": 0.118,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.618,
+    "bandwidth/bandwidth": 0.97,
     "dest_compute-hbm/dest_compute": 0.5,
     "dest_compute-hbm/hbm": 0.804,
     "dest_compute/dest_compute": 1.0,
@@ -116,13 +118,13 @@
     "bandwidth-dest_compute-hbm/dest_compute": 0.61,
     "bandwidth-dest_compute-hbm/hbm": 0.58,
     "bandwidth-dest_compute/bandwidth": 0.0,
-    "bandwidth-dest_compute/dest_compute": 0.817,
+    "bandwidth-dest_compute/dest_compute": 0.811,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 0.716,
     "bandwidth/bandwidth": 0.0,
     "dest_compute-hbm/dest_compute": 0.603,
-    "dest_compute-hbm/hbm": 0.555,
-    "dest_compute/dest_compute": 0.818,
+    "dest_compute-hbm/hbm": 0.556,
+    "dest_compute/dest_compute": 0.813,
     "hbm/hbm": 0.715
   },
   "inputs": {
@@ -148,7 +150,7 @@
     "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
     "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
     "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
-    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 0/162 local c1-c4 cases and 0/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases",
+    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at the 25 s migration budget, versus 0/288 width-8 cases",
     "timing audits are grouped retrospective checks, not untouched validation sets",
     "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
     "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
@@ -186,10 +188,10 @@
       },
       "selected": {
         "above": 0,
-        "below": 8328,
-        "denominator": 74430,
-        "outside": 8328,
-        "outside_rate": 0.11189036678758565
+        "below": 8466,
+        "denominator": 73716,
+        "outside": 8466,
+        "outside_rate": 0.11484616636822399
       }
     },
     "context": {
@@ -201,11 +203,11 @@
         "outside_rate": 0.38988135260103646
       },
       "selected": {
-        "above": 4727,
-        "below": 16895,
-        "denominator": 74430,
-        "outside": 21622,
-        "outside_rate": 0.29050114201262933
+        "above": 4172,
+        "below": 16894,
+        "denominator": 73716,
+        "outside": 21066,
+        "outside_rate": 0.28577242389711865
       },
       "sessions": {
         "above": 10787,
@@ -219,16 +221,16 @@
       "kv_transfer": {
         "bandwidth_outside": 0,
         "bandwidth_outside_rate": 0.0,
-        "context_outside": 4523,
-        "context_outside_rate": 0.354439307264321,
-        "denominator": 12761
+        "context_outside": 4338,
+        "context_outside_rate": 0.34505249761374485,
+        "denominator": 12572
       },
       "replay": {
-        "bandwidth_outside": 8328,
-        "bandwidth_outside_rate": 0.13504353889312296,
-        "context_outside": 17099,
-        "context_outside_rate": 0.2772705897614685,
-        "denominator": 61669
+        "bandwidth_outside": 8466,
+        "bandwidth_outside_rate": 0.1384600287845087,
+        "context_outside": 16728,
+        "context_outside_rate": 0.2735836713332461,
+        "denominator": 61144
       }
     }
   },
@@ -276,27 +278,30 @@
     }
   },
   "mean_phase_load_share": {
-    "kv_transfer": 0.12882026147613002,
-    "not_moved": 0.21642634068491753,
-    "replay": 0.6547533978389525
+    "kv_transfer": 0.12905521325014838,
+    "not_moved": 0.21689691860929494,
+    "replay": 0.6540478681405566
   },
-  "migration_horizon_s": 41,
+  "migration_budget_s": 25.0,
   "minimum_single_factor_action_response_rate": 0.1,
   "oat_action_sweeps": {
-    "action_metric": "source-session share at each OAT level",
+    "action_metric": "Monte Carlo mean modeled source-session share at each OAT level",
     "bandwidth_sweep": {
       "bandwidth_cap_gbps": [
         0.1,
         8.733313595885829
       ],
       "density_metric": "KV-transfer count per eight-session pack",
-      "fixed_prefill_available_tps": 5839.4091324275805
+      "fixed_prefill_available_tps": 5342.376350791121
     },
     "calibration": "fixed central timing, phase-power, and loaded-service fits",
+    "claim_scope": "conditional one-factor sensitivity; bandwidth-prefill interaction is not identified",
+    "controller_delay_s": 0,
     "figure_distribution": "empirical pack frequencies without continuous kernel smoothing",
     "hardware": "NVIDIA A100 80GB PCIe (Azure 300 W)",
     "input_sha256": {
       "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
+      "outputs/destination-anchor-baseline-20260722.json": "448e0a2271e54757bd1f20cce3effd0f7256aa0da800bb23f7c72d5be0969f68",
       "outputs/destination-v7-20260722/content-free-manifest.json": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
       "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a",
       "outputs/loaded-service-model-20260815/model.json": "bfc46e12992e3387d40c044f864a0e78f21d31210a1d930974daa2527b51bdac",
@@ -306,7 +311,7 @@
     },
     "levels_per_sweep": 50,
     "manifest_sha256": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
-    "migration_horizon_s": 41,
+    "migration_budget_s": 25.0,
     "model": "openai/gpt-oss-20b",
     "pack_seed_range": [
       1002,
@@ -315,23 +320,57 @@
     "packs": 1000,
     "paired_draws": 1000,
     "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
-    "prefill_full_rate_tps": 5839.4091324275805,
+    "power_window_s": 5.0,
+    "prefill_model_rate_tps": 5839.4091324275805,
+    "prefill_observations": {
+      "context_tokens": [
+        4096,
+        16384,
+        24576
+      ],
+      "count": 9,
+      "max_fraction_of_model_rate": 0.9744472854388956,
+      "max_implied_load_fraction": 0.025552714561104417,
+      "max_observation": {
+        "context_tokens": 4096,
+        "metric": "prefill",
+        "run_id": 2,
+        "tokens_per_s": 5690.196377661152
+      },
+      "max_reducer": "raw maximum across contexts and repeats",
+      "max_tps": 5690.196377661152,
+      "median_fraction_of_model_rate": 0.9148830351899265,
+      "median_implied_load_fraction": 0.08511696481007347,
+      "median_reducer": "pooled median across contexts and repeats",
+      "median_tps": 5342.376350791121,
+      "path": "outputs/destination-anchor-baseline-20260722.json",
+      "protocol": "uniform arrivals at twice the prior frozen rate",
+      "repeats_per_context": 3
+    },
     "prefill_reference_tokens": 7680,
     "prefill_sweep": {
       "density_metric": "migrated-session count per eight-session pack",
       "fixed_bandwidth_cap_gbps": 8.733313595885829,
+      "lower_bound": "synthetic 1% of the raw observed upper anchor",
       "prefill_available_tps": [
-        58.394091324275855,
-        5839.4091324275805
+        56.90196377661157,
+        5690.196377661152
       ]
     },
     "profile_sha256": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
     "resampling": "seeded Monte Carlo packs from the fixed empirical OpenHands trajectory/turn generator",
     "sampling": "uniform templates without replacement within each pack; uniform supported state within template",
+    "scoring_deadline_s": 30,
     "seed": 1001,
     "sessions_per_pack": 8,
+    "shared_operating_point": {
+      "bandwidth_cap_gbps": 8.733313595885829,
+      "bandwidth_level": 49,
+      "prefill_available_tps": 5342.376350791121,
+      "prefill_level": 46
+    },
     "source_load": 0.4,
-    "target_definition": "100% of removable session-induced source power",
+    "target_definition": "100% of removable session-induced source power by the scoring deadline, including the trailing power window",
     "target_fraction": 1.0,
     "timing_fit_sha256": "4571b4e80fc7b654e4261934c32543c73332e67bc01127adb645d819d0558dd7",
     "workload_family": "agentic_tool_loop"
@@ -340,11 +379,11 @@
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 379,
+    "shortfall_regression_count": 393,
     "shortfall_regression_max_w": 17.68911389159618,
-    "shortfall_regression_median_w": 2.552484443457729,
-    "shortfall_regression_p90_w": 8.560202296090544,
-    "shortfall_regression_rate": 0.03158333333333333,
+    "shortfall_regression_median_w": 2.7794093564678235,
+    "shortfall_regression_p90_w": 9.087656346063746,
+    "shortfall_regression_rate": 0.03275,
     "target_loss_count": 0,
     "target_loss_rate": 0.0
   },
@@ -357,6 +396,7 @@
   ],
   "power_scope": "steady awake source-region power; destination power excluded",
   "power_target": "invert sampled monotone phase power once and constrain additive removed phase load; verify exact nonlinear watts after packing",
+  "power_window_s": 5.0,
   "regional_timing_destination_prefill_loads": [
     0.0
   ],
@@ -386,12 +426,13 @@
   "route_compute_overlap": true,
   "route_endpoint_composition": "max(route time, fully shared Replay/KV endpoint work)",
   "samples": 1000,
-  "schema": "queue-haul-workload-adaptation-v8",
+  "schema": "queue-haul-workload-adaptation-v9",
+  "scoring_deadline_s": 30,
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 12761,
-    "not_moved": 149570,
-    "replay": 61669
+    "kv_transfer": 12572,
+    "not_moved": 150284,
+    "replay": 61144
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
@@ -417,10 +458,10 @@
         },
         "selected": {
           "above": 0,
-          "below": 5645,
-          "denominator": 62550,
-          "outside": 5645,
-          "outside_rate": 0.09024780175859312
+          "below": 5762,
+          "denominator": 62439,
+          "outside": 5762,
+          "outside_rate": 0.09228206729768254
         }
       },
       "context": {
@@ -434,7 +475,7 @@
         "selected": {
           "above": 0,
           "below": 0,
-          "denominator": 62550,
+          "denominator": 62439,
           "outside": 0,
           "outside_rate": 0.0
         },
@@ -452,31 +493,31 @@
           "bandwidth_outside_rate": 0.0,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 12078
+          "denominator": 12087
         },
         "replay": {
-          "bandwidth_outside": 5645,
-          "bandwidth_outside_rate": 0.11184419083848471,
+          "bandwidth_outside": 5762,
+          "bandwidth_outside_rate": 0.1144343819510645,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 50472
+          "denominator": 50352
         }
       }
     },
     "selected_session_totals": {
-      "kv_transfer": 12078,
-      "not_moved": 161450,
-      "replay": 50472
+      "kv_transfer": 12087,
+      "not_moved": 161561,
+      "replay": 50352
     },
     "target_met_rate": {
-      "All bound": 0.779,
+      "All bottlenecked": 0.779,
       "Bandwidth": 1.0,
       "Bandwidth + compute": 0.864,
       "Dest. compute": 0.864,
       "HBM": 0.908,
       "HBM + bandwidth": 0.908,
       "HBM + compute": 0.779,
-      "None bound": 1.0
+      "None bottlenecked": 1.0
     },
     "workload": {
       "excluded_states": 162,
@@ -497,113 +538,127 @@
   },
   "surface_validation": {
     "coding-c1-c4/development": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 19,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.872177917467015,
-      "p90_absolute_relative_error": 0.4292393999338707,
+      "migration_budget_s": 25.0,
+      "p90_absolute_relative_error": 0.42923939993387067,
       "scenarios": 96,
       "underprediction_rate": 0.7708333333333334
     },
     "coding-c1-c4/development/kv_transfer": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 14,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.9109777718834491,
-      "p90_absolute_relative_error": 0.5628782021214596,
+      "migration_budget_s": 25.0,
+      "p90_absolute_relative_error": 0.5628782021214593,
       "scenarios": 48,
       "underprediction_rate": 0.8125
     },
     "coding-c1-c4/development/replay": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 5,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.7981070163695221,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.42622753776595484,
       "scenarios": 48,
       "underprediction_rate": 0.7291666666666666
     },
     "coding-c1-c4/grouped-audit": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 5,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.8859485281396715,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.4232865104092367,
       "scenarios": 66,
       "underprediction_rate": 0.7272727272727273
     },
     "coding-c1-c4/grouped-audit/kv_transfer": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 4,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.8642808630503208,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.42453296454934847,
       "scenarios": 33,
       "underprediction_rate": 0.8181818181818182
     },
     "coding-c1-c4/grouped-audit/replay": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 1,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.942285091552295,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.39010918034922876,
       "scenarios": 33,
       "underprediction_rate": 0.6363636363636364
     },
     "width8/development": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 2,
       "median_predicted_over_measured": 1.1162476020523169,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.6444812323198056,
       "scenarios": 208,
       "underprediction_rate": 0.38461538461538464
     },
     "width8/development/kv_transfer": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 0.9824064137365617,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.4239861590570746,
       "scenarios": 56,
       "underprediction_rate": 0.5
     },
     "width8/development/mixed": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 1.328307247112302,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.7827685629702292,
       "scenarios": 100,
       "underprediction_rate": 0.15
     },
     "width8/development/replay": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 2,
       "median_predicted_over_measured": 0.9830643603183712,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.1562407373160577,
       "scenarios": 52,
       "underprediction_rate": 0.7115384615384616
     },
     "width8/grouped-audit": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 1,
       "median_predicted_over_measured": 1.1302760726762007,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.7069079558187432,
       "scenarios": 80,
       "underprediction_rate": 0.3375
     },
     "width8/grouped-audit/kv_transfer": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 1.0459792786518525,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.3824603486284667,
       "scenarios": 20,
       "underprediction_rate": 0.5
     },
     "width8/grouped-audit/mixed": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 0,
       "median_predicted_over_measured": 1.2797168246556816,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.8586826773084703,
       "scenarios": 40,
       "underprediction_rate": 0.175
     },
     "width8/grouped-audit/replay": {
-      "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 0,
+      "false_feasible": 0,
+      "false_infeasible": 1,
       "median_predicted_over_measured": 0.9993428284597472,
+      "migration_budget_s": 25.0,
       "p90_absolute_relative_error": 0.17073219904112594,
       "scenarios": 20,
       "underprediction_rate": 0.5
@@ -611,14 +666,14 @@
   },
   "target_fraction": 0.6666666666666666,
   "target_met_rate": {
-    "All bound": 0.47,
+    "All bottlenecked": 0.47,
     "Bandwidth": 0.996,
-    "Bandwidth + compute": 0.619,
-    "Dest. compute": 0.619,
+    "Bandwidth + compute": 0.617,
+    "Dest. compute": 0.618,
     "HBM": 0.603,
     "HBM + bandwidth": 0.603,
     "HBM + compute": 0.47,
-    "None bound": 0.996
+    "None bottlenecked": 0.996
   },
   "unique_timing_draws": 1000,
   "workload": {

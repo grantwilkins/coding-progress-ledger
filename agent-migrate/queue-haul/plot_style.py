@@ -60,6 +60,10 @@ OAT_DENSITY_COLOR = "#6A3D9A"
 OAT_TARGET_COLOR = "#222222"
 OAT_TARGET_LINESTYLE = "-"
 OAT_TARGET_LINEWIDTH = 2
+OAT_SHARED_NAME = "Pooled median"
+OAT_SHARED_COLOR = "#222222"
+OAT_SHARED_LINESTYLE = "--"
+OAT_SHARED_LINEWIDTH = 1
 TIMING_ACTION_NAMES = {"replay": ACTION_NAMES["replay"],
                        "kv_transfer": ACTION_NAMES["kv_transfer"],
                        "mixed": "Mixed"}

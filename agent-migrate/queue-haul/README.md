@@ -298,9 +298,10 @@ in East and Germany. For each of the `100 draws x 8 constraint states = 800`
 paired cases, Queue-Haul's HiGHS LP is evaluated at removable-power fractions
 `0, 1/8, 1/4, 3/8, 1/2, 5/8, 2/3, 3/4, 7/8, 1`, producing 8,000 raw rows. A
 separate integer maximum-shed solve supplies the capacity endpoint. Every point
-uses a 41-second modeled migration horizon. The retained CSV field
-`target_met_by_30s` is a legacy name and means target met by that 41-second
-scenario horizon for this output.
+uses a 30-second power deadline. The profile reserves its final five seconds for
+the trailing power window, leaving a 25-second migration budget. The retained
+CSV field `target_met_by_30s` therefore means target met by that 30-second
+scenario deadline.
 
 Power is steady awake **source** GPU power only; destination power and energy
 are excluded. Therefore the figure is a distribution across paired synthetic
@@ -1024,14 +1025,26 @@ The same command writes `action_choice_oat_bandwidth.pdf`,
 Each pack samples trajectories without replacement and then one supported turn
 per trajectory; that exact pack is planned at every resource level. Calibration
 and source load (0.4) remain fixed, and the planner must meet 100% of removable
-session-induced source power. The bandwidth sweep fixes prefill at its full
-modeled rate and ends at the largest natural route capacity. The prefill sweep
-fixes routes at natural capacity and spans 1%--100% of modeled prefill capacity.
+session-induced source power. The bandwidth sweep fixes prefill at the median
+of nine A100 saturation-throughput observations: three repeats at each of
+4,096, 16,384, and 24,576 context tokens. This pooled median
+(5,342.4 token/s) is a chosen scalar control equal to 91.5% of the modeled
+7,680-token rate, not a direct measurement at 7,680 tokens or an estimate of
+generic A100 capacity. The prefill sweep fixes routes at natural capacity,
+includes that exact shared operating point, and extends from a synthetic 1% of
+the raw observed upper anchor through that anchor (5,690.2 token/s). The upper
+anchor is one 4,096-token observation, not full A100 capacity. These are
+conditional one-factor sensitivities; they do not identify a
+bandwidth-by-prefill interaction or general main effects.
 
-The clean stacked plots report empirical action probabilities over 8,000
-session decisions at each resource level; their lower panels separately report
-the fraction of packs meeting the target. The density figure reports the
-discrete pack distributions that directly support the two claims:
+The clean stacked plots report Monte Carlo mean modeled session shares over
+8,000 dependent session decisions at each resource level; their lower panels
+report `Deadline-Met (%)`: the fraction of packs that attain the full 100%
+removable-power target by the 30-second deadline, including its trailing
+five-second power window, not merely the fraction whose admitted partial moves
+finish by the deadline. The density
+figure reports the discrete pack distributions that directly support the two
+claims:
 `P(KV count | bandwidth)` and `P(migrated count | prefill)`. Color, rather than
 a smoothed percentile ribbon, represents density. Pack definitions are in
 `action_choice_oat_packs.csv`, the 100,000 paired results are in

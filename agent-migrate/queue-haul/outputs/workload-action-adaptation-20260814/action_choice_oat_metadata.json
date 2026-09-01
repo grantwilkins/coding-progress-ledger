@@ -1,18 +1,21 @@
 {
-  "action_metric": "source-session share at each OAT level",
+  "action_metric": "Monte Carlo mean modeled source-session share at each OAT level",
   "bandwidth_sweep": {
     "bandwidth_cap_gbps": [
       0.1,
       8.733313595885829
     ],
     "density_metric": "KV-transfer count per eight-session pack",
-    "fixed_prefill_available_tps": 5839.4091324275805
+    "fixed_prefill_available_tps": 5342.376350791121
   },
   "calibration": "fixed central timing, phase-power, and loaded-service fits",
+  "claim_scope": "conditional one-factor sensitivity; bandwidth-prefill interaction is not identified",
+  "controller_delay_s": 0,
   "figure_distribution": "empirical pack frequencies without continuous kernel smoothing",
   "hardware": "NVIDIA A100 80GB PCIe (Azure 300 W)",
   "input_sha256": {
     "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
+    "outputs/destination-anchor-baseline-20260722.json": "448e0a2271e54757bd1f20cce3effd0f7256aa0da800bb23f7c72d5be0969f68",
     "outputs/destination-v7-20260722/content-free-manifest.json": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
     "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a",
     "outputs/loaded-service-model-20260815/model.json": "bfc46e12992e3387d40c044f864a0e78f21d31210a1d930974daa2527b51bdac",
@@ -22,7 +25,7 @@
   },
   "levels_per_sweep": 50,
   "manifest_sha256": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
-  "migration_horizon_s": 41,
+  "migration_budget_s": 25.0,
   "model": "openai/gpt-oss-20b",
   "pack_seed_range": [
     1002,
@@ -31,23 +34,57 @@
   "packs": 1000,
   "paired_draws": 1000,
   "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
-  "prefill_full_rate_tps": 5839.4091324275805,
+  "power_window_s": 5.0,
+  "prefill_model_rate_tps": 5839.4091324275805,
+  "prefill_observations": {
+    "context_tokens": [
+      4096,
+      16384,
+      24576
+    ],
+    "count": 9,
+    "max_fraction_of_model_rate": 0.9744472854388956,
+    "max_implied_load_fraction": 0.025552714561104417,
+    "max_observation": {
+      "context_tokens": 4096,
+      "metric": "prefill",
+      "run_id": 2,
+      "tokens_per_s": 5690.196377661152
+    },
+    "max_reducer": "raw maximum across contexts and repeats",
+    "max_tps": 5690.196377661152,
+    "median_fraction_of_model_rate": 0.9148830351899265,
+    "median_implied_load_fraction": 0.08511696481007347,
+    "median_reducer": "pooled median across contexts and repeats",
+    "median_tps": 5342.376350791121,
+    "path": "outputs/destination-anchor-baseline-20260722.json",
+    "protocol": "uniform arrivals at twice the prior frozen rate",
+    "repeats_per_context": 3
+  },
   "prefill_reference_tokens": 7680,
   "prefill_sweep": {
     "density_metric": "migrated-session count per eight-session pack",
     "fixed_bandwidth_cap_gbps": 8.733313595885829,
+    "lower_bound": "synthetic 1% of the raw observed upper anchor",
     "prefill_available_tps": [
-      58.394091324275855,
-      5839.4091324275805
+      56.90196377661157,
+      5690.196377661152
     ]
   },
   "profile_sha256": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
   "resampling": "seeded Monte Carlo packs from the fixed empirical OpenHands trajectory/turn generator",
   "sampling": "uniform templates without replacement within each pack; uniform supported state within template",
+  "scoring_deadline_s": 30,
   "seed": 1001,
   "sessions_per_pack": 8,
+  "shared_operating_point": {
+    "bandwidth_cap_gbps": 8.733313595885829,
+    "bandwidth_level": 49,
+    "prefill_available_tps": 5342.376350791121,
+    "prefill_level": 46
+  },
   "source_load": 0.4,
-  "target_definition": "100% of removable session-induced source power",
+  "target_definition": "100% of removable session-induced source power by the scoring deadline, including the trailing power window",
   "target_fraction": 1.0,
   "timing_fit_sha256": "4571b4e80fc7b654e4261934c32543c73332e67bc01127adb645d819d0558dd7",
   "workload_family": "agentic_tool_loop"

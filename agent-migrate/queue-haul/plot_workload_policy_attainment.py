@@ -39,7 +39,7 @@ def attainment_time(commits, shed, target, power_window_s):
     return None
 
 
-def execution_commits(primary, tail=(), deadline_s=30):
+def execution_commits(primary, tail=(), deadline_s=campaign.SCORING_DEADLINE_S):
     if any(row.committed_s is not None and row.committed_s <= deadline_s
            for row in tail):
         raise RuntimeError("post-deadline tail committed before the deadline")
@@ -82,7 +82,8 @@ def policy_moves(problem, profile, routes, architecture, solver, seed, horizon_s
     if not remaining:
         return result.moves, (), None, None
     tail_problem = replace(
-        problem, sessions=remaining, controller_delay_s=30,
+        problem, sessions=remaining,
+        controller_delay_s=campaign.SCORING_DEADLINE_S,
         deadline_s=horizon_s, end_s=horizon_s,
     )
     tail_problem = replace(tail_problem, power_limit_w=campaign.source_power(
@@ -101,7 +102,7 @@ def policy_moves(problem, profile, routes, architecture, solver, seed, horizon_s
 def attainment_rows(samples=1000, seed=campaign.DEFAULT_SEED, sessions=28,
                     target_fraction=2 / 3, horizon_s=90):
     if samples < 1 or sessions < 1 or not 0 < target_fraction <= 1 \
-            or horizon_s < 30:
+            or horizon_s < campaign.SCORING_DEADLINE_S:
         raise ValueError("invalid policy-attainment controls")
     profile = campaign.ModelProfile.load(campaign.PROFILE)
     templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
@@ -150,10 +151,15 @@ def attainment_rows(samples=1000, seed=campaign.DEFAULT_SEED, sessions=28,
                     "bound_constraint": label, "policy": policy,
                     "power_bootstrap_index": power_index,
                     "timing_fit_sha256": timing_hash, "target_w": target,
-                    "requested_fraction": target_fraction, "deadline_s": 30,
+                    "requested_fraction": target_fraction,
+                    "deadline_s": problem.deadline_s,
+                    "power_window_s": sampled_profile.power_window_s,
+                    "controller_delay_s": problem.controller_delay_s,
+                    "migration_budget_s": campaign.migration_budget_s(sampled_profile),
                     "horizon_s": horizon_s,
                     "attainment_time_s": "" if time_s is None else time_s,
-                    "target_met_by_30s": time_s is not None and time_s <= 30,
+                    "target_met_by_30s": time_s is not None
+                        and time_s <= campaign.SCORING_DEADLINE_S,
                 })
     return rows
 
@@ -169,9 +175,8 @@ def attainment_curve(rows, policy):
 
 
 def write_plot(rows, path):
-    deadline = 30
+    deadline = campaign.SCORING_DEADLINE_S
     horizon = max(float(row["horizon_s"]) for row in rows)
-    fraction = float(rows[0]["requested_fraction"])
     fig, axis = plt.subplots(figsize=FIGSIZE)
     for policy in POLICIES:
         x, y = attainment_curve(rows, policy)
@@ -181,7 +186,8 @@ def write_plot(rows, path):
                   ))
     axis.axvline(deadline, color="black", linestyle="--", linewidth=1.5)
     axis.text(
-        deadline, .4, "30 s deadline", transform=axis.get_xaxis_transform(),
+        deadline, .4, f"{deadline:g} s deadline",
+        transform=axis.get_xaxis_transform(),
         ha="center", va="center", rotation=90, fontstyle="italic",
         fontsize=LABEL_SIZE,
         bbox={"facecolor": "white", "edgecolor": "none", "pad": 1},

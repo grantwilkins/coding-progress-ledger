@@ -11,7 +11,8 @@ Plausible wrong implementations:
 - Change the target watts with destination constraints.
 - Drop sessions from the three-part action accounting.
 - Split width-8 validation rows from the same session set across fit and holdout.
-- Validate against the migration horizon of 41 seconds.
+- Validate migration timing against the 30-second outer deadline instead of
+  its 25-second usable budget after the power window.
 - Call a target hit from power shortfall alone when execution feasibility failed.
 - Ignore the requested regional timing fit and measured route rates.
 - Make a state depend on whether a tighter counterfactual was solved first.
@@ -40,6 +41,8 @@ Plausible wrong implementations:
   sessions, or weight feasibility by sessions instead of plans.
 """
 
+import hashlib
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -144,44 +147,72 @@ def test_oat_axes_cover_only_effective_resource_ranges():
     templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
     pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 4, 3))
     fits = campaign.central_timing_fits()
-    bandwidths, prefills, fixed_bandwidth, fixed_prefill, rate = \
-        campaign.oat_design(profile, levels=5)
+    bandwidths, prefills, fixed_bandwidth, fixed_prefill, prefill_max, \
+        model_rate = \
+        campaign.oat_design(profile, levels=50)
     natural_bandwidth = max(campaign.physical_route_mbps().values())
+    observed = [float(row["tokens_per_s"]) for row in json.loads(
+        campaign.PREFILL_ANCHORS.read_text())["anchors"]
+        if row["metric"] == "prefill"]
 
     assert bandwidths == pytest.approx(np.linspace(
-        campaign.OAT_BANDWIDTH_LOWER_MBPS, natural_bandwidth, 5))
-    assert prefills == pytest.approx(np.linspace(
-        (1 - campaign.OAT_DEST_COMPUTE[1]) * rate, rate, 5))
+        campaign.OAT_BANDWIDTH_LOWER_MBPS, natural_bandwidth, 50))
+    assert prefills[0] == pytest.approx(
+        (1 - campaign.OAT_DEST_COMPUTE[1]) * prefill_max)
     assert fixed_bandwidth == pytest.approx(natural_bandwidth)
-    assert fixed_prefill == pytest.approx(rate)
+    assert fixed_prefill == pytest.approx(np.median(observed))
+    assert prefill_max == pytest.approx(max(observed))
+    assert model_rate == pytest.approx(5839.4091324275805)
     assert bandwidths[0] < campaign.BANDWIDTH_BOTTLENECK_MBPS
     assert bandwidths[-1] == pytest.approx(natural_bandwidth)
-    assert prefills[0] < (1 - campaign.LEVELS["dest_compute"][1]) * rate
-    assert prefills[-1] == pytest.approx(rate)
+    assert fixed_prefill in prefills
+    assert prefills[-1] == pytest.approx(prefill_max)
+    assert min(np.diff(prefills)) > .9 * (prefills[-1] - prefills[0]) / 49
 
     for point in ((bandwidths[0], prefills[0]), (bandwidths[-1], prefills[-1])):
-        campaign.build_problem(
+        scenario, architecture, *_ = campaign.build_problem(
             profile, pack, frozenset(), 2 / 3, fits,
             bandwidth_mbps=point[0], prefill_tps=point[1],
         )
+        assert scenario.deadline_s == scenario.end_s \
+            == campaign.SCORING_DEADLINE_S == 30
+        assert scenario.controller_delay_s == 0
+        assert campaign.migration_budget_s(profile) == 25
+        assert campaign.candidate_table(
+            scenario, profile, architecture, "normal",
+            campaign.ExpectedPower(scenario, profile),
+        ).migration_horizon_s == 25
 
 
 def test_oat_pairs_seeded_openhands_packs_across_resource_levels():
     rows, packs, raw, distribution, design = campaign.simulate_oat(
-        packs=2, levels=2, seed=3, sessions=4)
+        packs=2, levels=3, seed=3, sessions=4)
 
-    assert len(rows) == 2 * 2 * len(campaign.ACTIONS)
+    assert len(rows) == 2 * 3 * len(campaign.ACTIONS)
     assert len(packs) == 2
-    assert len(raw) == 2 * 2 * 2
-    assert len(distribution) == 2 * 2 * 5
+    assert len(raw) == 2 * 2 * 3
+    assert len(distribution) == 2 * 3 * 5
     assert design["paired_draws"] == design["packs"] == 2
     assert (campaign.OAT_PACKS, campaign.OAT_SESSIONS,
             campaign.OAT_LEVELS) == (1000, 8, 50)
     assert design["sessions_per_pack"] == 4
     assert design["target_fraction"] == 1
     assert design["pack_seed_range"] == [4, 5]
+    assert (design["scoring_deadline_s"], design["power_window_s"],
+            design["migration_budget_s"]) == (30, 5, 25)
+    assert design["controller_delay_s"] == 0
+    assert {(row["scoring_deadline_s"], row["power_window_s"],
+             row["controller_delay_s"], row["migration_budget_s"])
+            for row in raw} == {(30, 5, 0, 25)}
+    assert design["prefill_observations"]["context_tokens"] \
+        == [4096, 16384, 24576]
+    assert design["prefill_observations"]["repeats_per_context"] == 3
+    assert design["prefill_observations"]["median_reducer"] \
+        == "pooled median across contexts and repeats"
+    assert design["prefill_observations"]["max_reducer"] \
+        == "raw maximum across contexts and repeats"
     for sweep in ("bandwidth", "prefill"):
-        for level in range(2):
+        for level in range(3):
             selected = [row for row in rows
                         if row["sweep"] == sweep and row["level"] == level]
             assert sum(row["session_count"] for row in selected) == 8
@@ -205,6 +236,7 @@ def test_oat_pairs_seeded_openhands_packs_across_resource_levels():
                 if row["sweep"] == "bandwidth"}) == 1
     assert len({row["bandwidth_cap_gbps"] for row in rows
                 if row["sweep"] == "prefill"}) == 1
+    shared = design["shared_operating_point"]
     for pack_id in (1, 2):
         selected = [row for row in raw if row["pack_id"] == pack_id]
         pack = next(row for row in packs if row["pack_id"] == pack_id)
@@ -216,15 +248,51 @@ def test_oat_pairs_seeded_openhands_packs_across_resource_levels():
         assert all(row["target_met"] == (row["replay_count"] +
                                          row["kv_transfer_count"] == 4)
                    for row in selected)
+        assert all(row["planned_shed_w"] == pytest.approx(
+            row["initial_source_power_w"] - row["planned_source_power_w"])
+                   for row in selected)
+        assert all(not row["target_met"] or
+                   row["predicted_migration_makespan_s"] <= 25
+                   for row in selected)
+        bandwidth = next(row for row in selected
+                         if row["sweep"] == "bandwidth"
+                         and row["level"] == shared["bandwidth_level"])
+        prefill = next(row for row in selected if row["sweep"] == "prefill"
+                       and row["level"] == shared["prefill_level"])
+        fields = ("target_met", "failure",
+                  *(f"{action}_count" for action in campaign.ACTIONS))
+        assert {key: bandwidth[key] for key in fields} == {
+            key: prefill[key] for key in fields}
     assert {row["metric"] for row in distribution
             if row["sweep"] == "bandwidth"} == {"kv_transfer_count"}
     assert {row["metric"] for row in distribution
             if row["sweep"] == "prefill"} == {"migrated_count"}
 
 
+def test_oat_publication_grid_avoids_highs_solve_error():
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    manifest = json.loads(campaign.MANIFEST.read_text())
+    unscaled, _ = campaign.sample_family_pack(
+        templates, manifest, campaign.OAT_FAMILY, 8,
+        campaign.DEFAULT_SEED + 325)
+    pack = campaign.normalize_pack(profile, unscaled)
+    fits = campaign.central_timing_fits()
+    timing_hash = hashlib.sha256(
+        json.dumps(fits, sort_keys=True).encode()).hexdigest()
+    _, prefills, bandwidth, _, _, _ = campaign.oat_design(profile)
+
+    row = campaign.run_case(
+        profile, pack, "oat_prefill", "OAT prefill", frozenset(), 325, 1,
+        fits, None, timing_hash, 0, bandwidth_mbps=bandwidth,
+        prefill_tps=prefills[8])
+
+    assert row["failure"] == "target_unmet"
+
+
 def test_oat_refuses_a_lower_target():
     with pytest.raises(ValueError, match="must remain 1.0"):
-        campaign.simulate_oat(packs=1, levels=2, sessions=4,
+        campaign.simulate_oat(packs=1, levels=3, sessions=4,
                               target_fraction=2 / 3)
 
 
@@ -379,7 +447,7 @@ def test_width8_validation_split_is_by_whole_session_set():
     assert all(len(values) == 1 for values in split.values())
 
 
-def test_surface_validation_uses_grouped_splits_and_migration_horizon():
+def test_surface_validation_uses_grouped_splits_and_migration_budget():
     rows = campaign.validate_surface()
     grouped = {}
     for row in rows:
@@ -388,9 +456,9 @@ def test_surface_validation_uses_grouped_splits_and_migration_horizon():
         )
 
     assert all(len(splits) == 1 for splits in grouped.values())
-    assert all(row["horizon_s"] == 41 for row in rows)
+    assert all(row["migration_budget_s"] == 25 for row in rows)
     assert all(row["false_feasible"] == (
-        row["predicted_s"] <= 41 < row["measured_s"]
+        row["predicted_s"] <= 25 < row["measured_s"]
     ) for row in rows)
 
 
@@ -402,11 +470,11 @@ def test_surface_validation_overlaps_route_with_shared_endpoint_work():
 
     route_bound = campaign._surface_row(
         "hand", "hand", scenario, replay_s=4, kv_s=3,
-        route_s=10, coupling=1,
+        route_s=10, coupling=1, migration_budget_s=25,
     )
     endpoint_bound = campaign._surface_row(
         "hand", "hand", scenario, replay_s=4, kv_s=3,
-        route_s=5, coupling=1,
+        route_s=5, coupling=1, migration_budget_s=25,
     )
 
     assert route_bound["predicted_s"] == 10
