@@ -268,6 +268,15 @@ context timing support or the phase-power direction support are rejected. The
 frozen metadata records 63 supported conversation templates and 3,021
 supported turn states.
 
+The evaluated OpenHands split has 24 sessions and 1,383 turns. Session turn
+counts have min/p25/median/p75/p95/max `35/52/55.5/67.25/77.95/81`; retained
+context across turns has the corresponding token distribution
+`0/8,455/15,258/21,591.5/28,855.4/32,415`. Session duration and inter-turn
+user/tool waits are not identifiable: all 1,383 selected rows have
+`time_s=null`, and the source trajectories provide roles and contents but no
+event timestamps. These timing distributions must not be inferred from the
+generated request schedule.
+
 For each of 100 draws, the sampler chooses 28 template IDs with replacement,
 then one supported turn state from each chosen template. It keeps the 28 raw
 contexts but rescales all prefill/decode rates by one common factor so
