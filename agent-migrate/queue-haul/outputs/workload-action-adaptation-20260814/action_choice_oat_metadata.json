@@ -1,0 +1,44 @@
+{
+  "action_metric": "source-session share at each OAT level",
+  "bandwidth_cap_gbps": [
+    0.1,
+    15.0
+  ],
+  "bootstrap": "1000 pack-resampled replicates for 95% confidence intervals of mean action shares",
+  "bootstrap_seed": 1001,
+  "calibration": "fixed central timing, phase-power, and loaded-service fits",
+  "figure_distribution": "5th-95th and 25th-75th pack percentiles with pack median at each cumulative action boundary",
+  "fixed_prefill_available_tps": 7529.197045662138,
+  "hardware": "NVIDIA A100 80GB PCIe (Azure 300 W)",
+  "input_sha256": {
+    "outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
+    "outputs/destination-v7-20260722/content-free-manifest.json": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
+    "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a",
+    "outputs/loaded-service-model-20260815/model.json": "bfc46e12992e3387d40c044f864a0e78f21d31210a1d930974daa2527b51bdac",
+    "outputs/timing-power-validation-20260814/migrations.csv": "04eec612a2082a528d8d94acec50a4f002065af988d44e39200b5023bbf19107",
+    "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe",
+    "outputs/timing-power-validation-20260814/timing-summary.json": "0f45a8d659aacf5d4af8bb04873795d3c9de092d1f2df15d969c8f469a8d9b1e"
+  },
+  "levels": 20,
+  "manifest_sha256": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
+  "migration_horizon_s": 41,
+  "model": "openai/gpt-oss-20b",
+  "pack_seed_range": [
+    1002,
+    2001
+  ],
+  "packs": 1000,
+  "paired_draws": 1000,
+  "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
+  "prefill_full_rate_tps": 5839.4091324275805,
+  "prefill_reference_tokens": 7680,
+  "profile_sha256": "f3a681a648c7860d5d0be2114c2c9a28351d8dedde5f1f75d0a6a8deba7ece59",
+  "sampling": "uniform templates without replacement within each pack; uniform supported state within template",
+  "seed": 1001,
+  "sessions_per_pack": 8,
+  "source_load": 0.4,
+  "target_definition": "100% of removable session-induced source power",
+  "target_fraction": 1.0,
+  "timing_fit_sha256": "4571b4e80fc7b654e4261934c32543c73332e67bc01127adb645d819d0558dd7",
+  "workload_family": "agentic_tool_loop"
+}

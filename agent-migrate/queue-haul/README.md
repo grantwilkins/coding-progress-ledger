@@ -1023,9 +1023,10 @@ bandwidth sweep uses 1,000 seeded packs of eight OpenHands sessions. Each pack
 samples templates without replacement and then samples one supported turn per
 template; that same pack is planned at every bandwidth. Calibration, source
 load (0.4), and per-destination prefill headroom are fixed, and the planner must
-meet the full 100% source-power target. Stacked bands show mean Replay,
-KV-transfer, and not-moved session shares; faint bands are whole-pack bootstrap
-95% intervals for the mean boundaries. `action_choice_oat_packs.csv` records
+meet 100% of removable session-induced source power. Stacked bands show mean
+Replay, KV-transfer, and not-moved session shares; white bands show the
+5th--95th and 25th--75th pack percentiles around each cumulative boundary, and
+the black line is the pack median. `action_choice_oat_packs.csv` records
 every sampled pack and plan. Regional pipeline timing is interpolated between
 the measured endpoint fits, so these distributions are modeled workload
 sensitivities rather than hardware action observations.
@@ -1035,11 +1036,13 @@ uv run python queue-haul/workload_adaptation_campaign.py
 uv run python queue-haul/workload_adaptation_campaign.py --oat-only
 ```
 
-The resulting 1,000 draws are a modeled calibration/workload sensitivity, not
-a confidence interval or 1,000 independent workloads. The regional single-move
-timing holdout passes its recorded gate; grouped local and width-8 timing audits
-remain retrospective. Route and endpoint work use the pipeline overlap already
-present in the calibrated effective rate; cross-method endpoint work remains
+The main factorial's 1,000 draws are a modeled calibration/workload
+sensitivity, not a confidence interval or 1,000 independent workloads. The
+OAT sweep instead fixes calibration across its 1,000 workload packs. The
+regional single-move timing holdout passes its recorded gate; grouped local
+and width-8 timing audits remain retrospective. Route and endpoint work use
+the pipeline overlap already present in the calibrated effective rate;
+cross-method endpoint work remains
 fully shared rather than fitting partial overlap from KV-heavy mixed evidence.
 The width-8 audit has zero false-feasible cases at the 25-second migration
 horizon. The separate local c1--c4 audit has 24/162 false-feasible cases,

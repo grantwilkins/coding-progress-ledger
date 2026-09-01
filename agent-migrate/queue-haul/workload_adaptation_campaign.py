@@ -84,6 +84,9 @@ OAT_BANDWIDTH_LOWER_MBPS = 100
 OAT_BANDWIDTH_UPPER_MBPS = 15_000
 OAT_PREFILL_UPPER_TPS = 15_000
 OAT_DEST_COMPUTE = (0.05, 0.99)
+OAT_PACKS = 1000
+OAT_SESSIONS = 8
+OAT_FAMILY = "agentic_tool_loop"
 SOURCE_LOAD = .4
 DEFAULT_SEED = 1001
 plot_style.apply()
@@ -168,6 +171,25 @@ def sample_pack(templates, count: int, seed: int):
             2 * shape.context_tokens,
         ))
     return tuple(sessions)
+
+
+def sample_family_pack(templates, manifest, family, count, seed):
+    ids = {
+        session_id for session_id in sum(
+            manifest["manifest"]["splits"][family].values(), []
+        ) if session_id in templates
+    }
+    if count < 1 or count > len(ids):
+        raise ValueError("invalid family pack width")
+    rng = np.random.default_rng(seed)
+    shapes = tuple(
+        templates[key][int(rng.integers(len(templates[key])))]
+        for key in rng.choice(sorted(ids), count, replace=False)
+    )
+    return tuple(SimSession(
+        f"pack-{seed}-{index}", "source", shape.context_tokens,
+        shape.prompt_tokens, shape.output_tokens, 2 * shape.context_tokens,
+    ) for index, shape in enumerate(shapes)), shapes
 
 
 def normalize_pack(profile, sessions, load=SOURCE_LOAD):
@@ -632,66 +654,122 @@ def oat_design(profile, levels=20):
         float(np.median(prefills)), rate
 
 
-def simulate_oat(samples=1000, seed=DEFAULT_SEED, sessions=28,
+def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
                  target_fraction=1.0, levels=20, profile_path=PROFILE,
-                 manifest_path=MANIFEST):
-    if samples < levels or samples % levels:
-        raise ValueError("OAT samples must be a multiple of levels")
+                 manifest_path=MANIFEST, bootstrap_replicates=1000):
+    if packs < 1 or levels < 2 or bootstrap_replicates < 1:
+        raise ValueError("invalid OAT controls")
+    if target_fraction != 1:
+        raise ValueError("OAT target_fraction must remain 1.0")
     profile = ModelProfile.load(profile_path)
     templates, _ = load_templates(manifest_path, profile)
-    timing_rows, parent = read_csv(TIMING), json.loads(TIMING_PARENT.read_text())
-    central_timing_fits()
-    bandwidths, prefills, fixed_bandwidth, fixed_prefill, rate = \
+    manifest = json.loads(manifest_path.read_text())
+    fits = central_timing_fits()
+    timing_hash = hashlib.sha256(
+        json.dumps(fits, sort_keys=True).encode()
+    ).hexdigest()
+    bandwidths, _prefills, _fixed_bandwidth, fixed_prefill, rate = \
         oat_design(profile, levels)
-    rng, cells = np.random.default_rng(seed), {}
-    for repeat in range(samples // levels):
-        sampled_profile, pack, fits, power_index, timing_hash, projected = \
-            sample_draw(profile, templates, timing_rows, parent, rng, repeat,
-                        seed, sessions)
-        for sweep, values in (("bandwidth", bandwidths), ("prefill", prefills)):
-            for level, value in enumerate(values):
-                bandwidth = value if sweep == "bandwidth" else fixed_bandwidth
-                prefill = fixed_prefill if sweep == "bandwidth" else value
-                row = run_case(
-                    sampled_profile, pack, f"oat_{sweep}", f"OAT {sweep}",
-                    frozenset(), repeat, target_fraction, fits, power_index,
-                    timing_hash, projected, bandwidth_mbps=bandwidth,
-                    prefill_tps=prefill,
-                )
-                cells.setdefault((sweep, level), []).append(row)
-    rows = []
-    for sweep, values in (("bandwidth", bandwidths), ("prefill", prefills)):
-        for level, value in enumerate(values):
-            selected = cells[sweep, level]
-            total = len(selected) * sessions
-            common = {
-                "sweep": sweep, "level": level,
-                "bandwidth_cap_gbps": (value if sweep == "bandwidth"
-                                        else fixed_bandwidth) / 1000,
-                "prefill_available_tps": (fixed_prefill if sweep == "bandwidth"
-                                           else value),
-                "plans": len(selected),
-                "target_met_rate": np.mean([row["target_met"] for row in selected]),
-            }
-            rows.extend({
+    raw = []
+    for pack_id in range(1, packs + 1):
+        pack_seed = seed + pack_id
+        unscaled, shapes = sample_family_pack(
+            templates, manifest, OAT_FAMILY, sessions, pack_seed,
+        )
+        pack = normalize_pack(profile, unscaled)
+        common = {
+            "pack_id": pack_id, "pack_seed": pack_seed,
+            "template_ids": ";".join(shape.template_id for shape in shapes),
+            "context_tokens": ";".join(str(shape.context_tokens)
+                                        for shape in shapes),
+            "prompt_tokens": ";".join(str(shape.prompt_tokens)
+                                       for shape in shapes),
+            "output_tokens": ";".join(str(shape.output_tokens)
+                                       for shape in shapes),
+        }
+        for level, bandwidth in enumerate(bandwidths):
+            row = run_case(
+                profile, pack, "oat_bandwidth", "OAT bandwidth", frozenset(),
+                pack_id, target_fraction, fits, None, timing_hash, 0,
+                bandwidth_mbps=bandwidth, prefill_tps=fixed_prefill,
+            )
+            raw.append({
+                **common, "level": level,
+                "bandwidth_cap_gbps": bandwidth / 1000,
+                "prefill_available_tps": fixed_prefill,
+                "target_met": row["target_met"],
+                "planned_shed_w": row["planned_shed_w"],
+                "power_shortfall_w": row["power_shortfall_w"],
+                "failure": row["failure"],
+                **{f"{action}_count": row[f"{action}_count"]
+                   for action in ACTIONS},
+            })
+    rng, rows = np.random.default_rng(seed), []
+    for level, bandwidth in enumerate(bandwidths):
+        selected = [row for row in raw if row["level"] == level]
+        common = {
+            "sweep": "bandwidth", "level": level,
+            "bandwidth_cap_gbps": bandwidth / 1000,
+            "prefill_available_tps": fixed_prefill, "plans": packs,
+            "target_met_rate": float(np.mean([
+                row["target_met"] for row in selected
+            ])),
+        }
+        for action in ACTIONS:
+            values = np.asarray([
+                row[f"{action}_count"] / sessions for row in selected
+            ])
+            cumulative = np.asarray([
+                sum(row[f"{candidate}_count"] for candidate in
+                    ACTIONS[:ACTIONS.index(action) + 1]) / sessions
+                for row in selected
+            ])
+            bootstrap = values[
+                rng.integers(0, packs, (bootstrap_replicates, packs))
+            ].mean(axis=1)
+            low, high = np.quantile(bootstrap, (.025, .975))
+            percentiles = np.quantile(cumulative, (.05, .25, .5, .75, .95))
+            rows.append({
                 **common, "action": action,
-                "session_count": int(sum(row[f"{action}_count"]
-                                         for row in selected)),
-                "session_share": sum(row[f"{action}_count"]
-                                     for row in selected) / total,
-            } for action in ACTIONS)
+                "session_count": int(sum(
+                    row[f"{action}_count"] for row in selected
+                )),
+                "session_share": float(values.mean()),
+                "bootstrap_ci_low": float(low),
+                "bootstrap_ci_high": float(high),
+                **{f"cumulative_pack_p{quantile:02d}": float(value)
+                   for quantile, value in zip((5, 25, 50, 75, 95), percentiles)},
+            })
     if any(not np.isclose(sum(row["session_share"] for row in rows
-                              if row["sweep"] == sweep and row["level"] == level), 1)
-           for sweep in ("bandwidth", "prefill") for level in range(levels)):
+                              if row["level"] == level), 1)
+           for level in range(levels)):
         raise RuntimeError("OAT action shares do not conserve sessions")
-    return rows, {
-        "samples_per_sweep": samples, "paired_draws": samples // levels,
+    return rows, raw, {
+        "workload_family": OAT_FAMILY,
+        "sampling": "uniform templates without replacement within each pack; uniform supported state within template",
+        "packs": packs, "paired_draws": packs,
         "levels": levels, "sessions_per_pack": sessions,
+        "seed": seed, "pack_seed_range": [seed + 1, seed + packs],
+        "bootstrap_seed": seed,
+        "target_fraction": target_fraction,
+        "target_definition": "100% of removable session-induced source power",
+        "source_load": SOURCE_LOAD,
+        "model": profile.model, "hardware": profile.hardware,
+        "profile_sha256": hashlib.sha256(profile_path.read_bytes()).hexdigest(),
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "input_sha256": {
+            str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in (profile_path, manifest_path, TIMING, TIMING_SUMMARY,
+                         TIMING_PARENT, LOADED_SERVICE, NETWORK_CALIBRATION)
+        },
+        "migration_horizon_s": MIGRATION_HORIZON_S,
+        "calibration": "fixed central timing, phase-power, and loaded-service fits",
+        "timing_fit_sha256": timing_hash,
+        "bootstrap": f"{bootstrap_replicates} pack-resampled replicates for 95% confidence intervals of mean action shares",
+        "figure_distribution": "5th-95th and 25th-75th pack percentiles with pack median at each cumulative action boundary",
         "prefill_reference_tokens": PREFILL_REFERENCE_TOKENS,
         "prefill_full_rate_tps": rate,
         "bandwidth_cap_gbps": [bandwidths[0] / 1000, bandwidths[-1] / 1000],
-        "fixed_bandwidth_cap_gbps": fixed_bandwidth / 1000,
-        "prefill_available_tps": [prefills[0], prefills[-1]],
         "fixed_prefill_available_tps": fixed_prefill,
         "action_metric": "source-session share at each OAT level",
         "pipeline_interpolation":
@@ -1066,55 +1144,70 @@ def plot_action_boxplot(rows, path):
 def plot_oat(rows, path):
     from matplotlib.ticker import PercentFormatter
 
-    fs, legend_fs = 8, 7
+    fs = 8
     left, axes_w, axes_h, bottom, top = .39, .86, .98, .30, .06
-    legend_w, right = .69, .095
-    for sweep in ("bandwidth", "prefill"):
-        wide = sweep == "prefill"
-        fig_w = left + axes_w + (legend_w if wide else right)
-        fig_h = bottom + axes_h + top
-        fig = plt.figure(figsize=(fig_w, fig_h))
-        ax = fig.add_axes((left / fig_w, bottom / fig_h,
-                           axes_w / fig_w, axes_h / fig_h))
-        selected = [row for row in rows if row["sweep"] == sweep]
-        levels = sorted({row["level"] for row in selected})
-        by_action = {action: {row["level"]: row for row in selected
-                              if row["action"] == action} for action in ACTIONS}
-        points = [by_action[ACTIONS[0]][level] for level in levels]
-        x = [row["bandwidth_cap_gbps"] if sweep == "bandwidth"
-             else row["prefill_available_tps"] / 1000 for row in points]
-        artists = ax.stackplot(
-            x, *([by_action[action][level]["session_share"] for level in levels]
-                 for action in ACTIONS),
-            colors=[plot_style.ACTION_COLORS[action] for action in ACTIONS],
-            labels=[plot_style.ACTION_NAMES[action] for action in ACTIONS],
-        )
-        for artist in artists:
-            artist.set_edgecolor("white")
-            artist.set_linewidth(.3)
-        ax.set(
-            xlabel=("Bandwidth (Gbit/s)" if sweep == "bandwidth"
-                    else "Prefill (k·token/s)"),
-            xlim=(x[0], x[-1]), ylim=(0, 1),
-        )
-        ax.margins(0)
-        ax.set_ylabel("Sessions (%)")
-        ax.yaxis.set_major_formatter(PercentFormatter(1, symbol=""))
-        ax.yaxis.set_major_locator(plt.MultipleLocator(.25))
-        ax.xaxis.set_major_locator(plt.MultipleLocator(5))
-        ax.tick_params(labelsize=fs, length=2, pad=1)
-        ax.xaxis.label.set_size(fs)
-        ax.yaxis.label.set_size(fs)
-        ax.xaxis.labelpad = ax.yaxis.labelpad = 2
-        if wide:
-            ax.legend(*ax.get_legend_handles_labels(), fontsize=legend_fs,
-                      loc="center left", bbox_to_anchor=(1.02, .5),
-                      handlelength=.9, handletextpad=.3, labelspacing=.4,
-                      borderaxespad=0, borderpad=0, frameon=False)
-        for suffix in ("png", "pdf"):
-            fig.savefig(path.parent / f"action_choice_oat_{sweep}.{suffix}",
-                        dpi=plot_style.SAVE_DPI)
-        plt.close(fig)
+    fig_w, fig_h = left + axes_w + .095, bottom + axes_h + top
+    fig = plt.figure(figsize=(fig_w, fig_h))
+    ax = fig.add_axes((left / fig_w, bottom / fig_h,
+                       axes_w / fig_w, axes_h / fig_h))
+    levels = sorted({row["level"] for row in rows})
+    by_action = {action: {row["level"]: row for row in rows
+                          if row["action"] == action} for action in ACTIONS}
+    points = [by_action[ACTIONS[0]][level] for level in levels]
+    x = [row["bandwidth_cap_gbps"] for row in points]
+    artists = ax.stackplot(
+        x, *([by_action[action][level]["session_share"] for level in levels]
+             for action in ACTIONS),
+        colors=[plot_style.ACTION_COLORS[action] for action in ACTIONS],
+        labels=[plot_style.ACTION_NAMES[action] for action in ACTIONS],
+    )
+    for artist in artists:
+        artist.set_edgecolor("white")
+        artist.set_linewidth(.3)
+    for action in ACTIONS[:-1]:
+        boundary = [by_action[action][level] for level in levels]
+        ax.fill_between(x, [row["cumulative_pack_p05"] for row in boundary],
+                        [row["cumulative_pack_p95"] for row in boundary],
+                        color="white", alpha=.35, linewidth=0)
+        ax.fill_between(x, [row["cumulative_pack_p25"] for row in boundary],
+                        [row["cumulative_pack_p75"] for row in boundary],
+                        color="white", alpha=.35, linewidth=0)
+        ax.plot(x, [row["cumulative_pack_p50"] for row in boundary],
+                color="black", linewidth=.5)
+    ax.set(xlabel="Bandwidth (Gbit/s)", xlim=(x[0], x[-1]), ylim=(0, 1),
+           ylabel="Sessions (%)")
+    ax.margins(0)
+    ax.yaxis.set_major_formatter(PercentFormatter(1, symbol=""))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(.25))
+    ax.xaxis.set_major_locator(plt.MultipleLocator(5))
+    ax.tick_params(labelsize=fs, length=2, pad=1)
+    ax.xaxis.label.set_size(fs)
+    ax.yaxis.label.set_size(fs)
+    ax.xaxis.labelpad = ax.yaxis.labelpad = 2
+    for suffix in ("png", "pdf"):
+        fig.savefig(path.parent / f"action_choice_oat_bandwidth.{suffix}",
+                    dpi=plot_style.SAVE_DPI)
+    plt.close(fig)
+
+
+def write_oat_outputs(out, rows, raw, metadata):
+    write_csv(out / "action_choice_oat.csv", rows)
+    write_csv(out / "action_choice_oat_packs.csv", raw)
+    plot_oat(rows, out / "action_choice_oat")
+    (out / "action_choice_oat_metadata.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n"
+    )
+    campaign_path = out / "metadata.json"
+    if campaign_path.exists():
+        campaign = json.loads(campaign_path.read_text())
+        campaign["oat_action_sweeps"] = metadata
+        campaign["limitations"] = [
+            "the OAT bandwidth sweep uses fixed central calibration and interpolates regional pipeline fits between the measured controlled-40 and natural endpoints; its action shares are modeled planner outcomes, not hardware action observations"
+            if limitation.startswith("the OAT action sweeps") else limitation
+            for limitation in campaign["limitations"]
+        ]
+        campaign_path.write_text(json.dumps(campaign, indent=2,
+                                            sort_keys=True) + "\n")
 
 
 def file_hash(path):
@@ -1124,11 +1217,19 @@ def file_hash(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--samples", type=int, default=1000)
+    parser.add_argument("--oat-packs", type=int, default=OAT_PACKS)
+    parser.add_argument("--oat-only", action="store_true")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--sessions", type=int, default=28)
     parser.add_argument("--target", type=float, default=2 / 3)
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
+    if args.oat_only:
+        oat_rows, oat_pack_rows, oat_metadata = simulate_oat(
+            args.oat_packs, args.seed, OAT_SESSIONS, 1.0,
+        )
+        write_oat_outputs(args.out, oat_rows, oat_pack_rows, oat_metadata)
+        return
     rows, workload = simulate(
         args.samples, args.seed, args.sessions, args.target,
     )
@@ -1136,8 +1237,8 @@ def main():
         args.samples, args.seed, args.sessions, args.target,
         loaded_context_only=True,
     )
-    oat_rows, oat_design_metadata = simulate_oat(
-        args.samples, args.seed, args.sessions, 1.0,
+    oat_rows, oat_pack_rows, oat_design_metadata = simulate_oat(
+        args.oat_packs, args.seed, OAT_SESSIONS, 1.0,
     )
     if any((row["replicate"], row["case_id"], row["timing_fit_sha256"],
             row["power_bootstrap_index"]) !=
@@ -1178,10 +1279,9 @@ def main():
               summarize(in_context_rows))
     write_csv(args.out / "surface_validation.csv", validation)
     write_csv(args.out / "factor_checks.csv", checks)
-    write_csv(args.out / "action_choice_oat.csv", oat_rows)
+    write_oat_outputs(args.out, oat_rows, oat_pack_rows, oat_design_metadata)
     plot(rows, args.out / "action_mix")
     plot_action_boxplot(rows, args.out / "action_mix_boxplot")
-    plot_oat(oat_rows, args.out / "action_choice_oat")
     timing_evidence = json.loads(TIMING_SUMMARY.read_text())
     loaded_evidence = loaded_service_model()
     timing_loads = sorted({float(row["destination_prefill_load"])
@@ -1356,7 +1456,7 @@ def main():
             "resume TTFT under loaded migration remains diagnostic because its 1-Gbit/s validation has false-feasible cases",
             "the destination envelope combines measured timing with synthetic 98%-occupied HBM and service-pressure levels",
             "the bandwidth state caps both physical destination routes at the predeclared 1-Gbit/s lower boundary of existing A100 loaded-migration validation",
-            "the OAT action sweeps interpolate regional pipeline fits between the measured controlled-40 and natural endpoints; their action shares are modeled planner outcomes, not hardware action observations",
+            "the OAT bandwidth sweep uses fixed central calibration and interpolates regional pipeline fits between the measured controlled-40 and natural endpoints; its action shares are modeled planner outcomes, not hardware action observations",
             "East's fitted controlled pipeline remains below 1 Gbit/s, so its loaded-factor transport is counted outside the validation bandwidth range",
             "HBM is method-independent because Replay and KV transfer leave the same resident KV state",
             "each constraint state is planned independently; rounded-LP release regressions are reported",
