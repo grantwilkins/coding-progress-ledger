@@ -135,10 +135,7 @@ def _destination_duration(session, method, case, path, links, horizon, component
         return route(_log_bytes(session, tokens)) \
             + components.compute_completion_factor * compute + case.switch_s
     size = case.kv_transfer.sealed_bytes(tokens)
-    ingest = components.kv_ingest_bytes_per_s \
-        or case.kv_transfer.destination_bytes_per_s
-    return max(route(size), size / ingest) \
-        + components.residual_s + _kv_catch_up_s(
+    return route(size) + components.residual_s + _kv_catch_up_s(
         session, tokens, case, horizon,
     )
 
@@ -333,7 +330,6 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
             tuple(_event_bounds(q, pool, mode)), pool.route, pool.methods,
             None if pool.fluid_migration is None else (
                 pool.fluid_migration.replay_speedup,
-                pool.fluid_migration.kv_ingest_bytes_per_s,
                 tuple(sorted(pool.fluid_migration.source_power_w.items())),
                 tuple(sorted(pool.fluid_migration.destination_power_w.items())),
                 pool.fluid_migration.provenance,
@@ -408,7 +404,6 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                     q.type_id, pool.route, method, rho, mode,
                     None if pool.fluid_migration is None else (
                         pool.fluid_migration.replay_speedup,
-                        pool.fluid_migration.kv_ingest_bytes_per_s,
                         pool.fluid_migration.coupling,
                         pool.fluid_migration.route_overlap,
                         len(pool.replicas),
@@ -471,8 +466,7 @@ def _candidate_oracle(scenario, profile, architecture, mode, power,
                         else:
                             tail_work = components.residual_s if components else \
                                 case.kv_transfer.initial_completion_s
-                            stream_work = route_bytes[method] \
-                                / service.kv_ingest_bytes_per_s
+                            stream_work = route_bytes[method] / bandwidth
                             try:
                                 factor = q.loaded[method].worst(
                                     rho, rho, migration_tokens, bandwidth,

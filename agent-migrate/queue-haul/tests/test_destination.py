@@ -34,13 +34,13 @@ from destination import (CompatibilityFingerprint, ContextRate, DestinationPool,
 def test_fluid_replay_factor_accepts_slowdown_but_requires_positive_capacity():
     values = ({"replay": 1, "kv_transfer": 1},) * 2
 
-    assert FluidMigrationService(.963, 1, *values, "hand").replay_speedup == .963
+    assert FluidMigrationService(.963, *values, "hand").replay_speedup == .963
     with pytest.raises(ValueError, match="fluid migration"):
-        FluidMigrationService(0, 1, *values, "hand")
+        FluidMigrationService(0, *values, "hand")
     with pytest.raises(ValueError, match="fluid migration"):
-        FluidMigrationService(1, 1, *values, "hand", route_overlap=1)
+        FluidMigrationService(1, *values, "hand", route_overlap=1)
     with pytest.raises(ValueError, match="fluid migration"):
-        FluidMigrationService(1, 1, *values, "hand", .5, False)
+        FluidMigrationService(1, *values, "hand", .5, False)
 
 
 def test_migration_headroom_is_method_scoped_and_bounded():

@@ -16,7 +16,6 @@
   ],
   "activation_gated_factors": [
     "hbm",
-    "bandwidth",
     "dest_compute"
   ],
   "bandwidth_bottleneck": {
@@ -31,12 +30,12 @@
   "bandwidth_projection_region_rate": 0.115,
   "candidate_method_dominance": {
     "candidate_equivalent": 0,
-    "candidate_incomparable": 97434,
+    "candidate_incomparable": 35963,
     "candidate_kv_dominates": 0,
     "candidate_kv_only": 0,
     "candidate_matched_pairs": 386692,
     "candidate_neither": 61308,
-    "candidate_replay_dominates": 289258,
+    "candidate_replay_dominates": 350729,
     "candidate_replay_only": 0
   },
   "candidate_method_dominance_definition": {
@@ -59,14 +58,14 @@
   "factor_action_response_rate": {
     "bandwidth-dest_compute-hbm/bandwidth": 1.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.322,
-    "bandwidth-dest_compute-hbm/hbm": 0.564,
+    "bandwidth-dest_compute-hbm/hbm": 0.565,
     "bandwidth-dest_compute/bandwidth": 1.0,
-    "bandwidth-dest_compute/dest_compute": 0.607,
+    "bandwidth-dest_compute/dest_compute": 0.609,
     "bandwidth-hbm/bandwidth": 0.273,
     "bandwidth-hbm/hbm": 0.407,
     "bandwidth/bandwidth": 0.481,
     "dest_compute-hbm/dest_compute": 0.997,
-    "dest_compute-hbm/hbm": 0.608,
+    "dest_compute-hbm/hbm": 0.609,
     "dest_compute/dest_compute": 0.997,
     "hbm/hbm": 0.51
   },
@@ -74,11 +73,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.745,
     "bandwidth-dest_compute-hbm/hbm": 0.905,
-    "bandwidth-dest_compute/bandwidth": 0.089,
+    "bandwidth-dest_compute/bandwidth": 0.031,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.92,
+    "bandwidth/bandwidth": 0.618,
     "dest_compute-hbm/dest_compute": 0.744,
     "dest_compute-hbm/hbm": 0.902,
     "dest_compute/dest_compute": 1.0,
@@ -102,11 +101,11 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.5,
     "bandwidth-dest_compute-hbm/hbm": 0.804,
-    "bandwidth-dest_compute/bandwidth": 0.089,
+    "bandwidth-dest_compute/bandwidth": 0.031,
     "bandwidth-dest_compute/dest_compute": 1.0,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 1.0,
-    "bandwidth/bandwidth": 0.92,
+    "bandwidth/bandwidth": 0.618,
     "dest_compute-hbm/dest_compute": 0.5,
     "dest_compute-hbm/hbm": 0.804,
     "dest_compute/dest_compute": 1.0,
@@ -116,14 +115,14 @@
     "bandwidth-dest_compute-hbm/bandwidth": 0.0,
     "bandwidth-dest_compute-hbm/dest_compute": 0.61,
     "bandwidth-dest_compute-hbm/hbm": 0.58,
-    "bandwidth-dest_compute/bandwidth": 0.006,
-    "bandwidth-dest_compute/dest_compute": 0.816,
+    "bandwidth-dest_compute/bandwidth": 0.0,
+    "bandwidth-dest_compute/dest_compute": 0.817,
     "bandwidth-hbm/bandwidth": 0.0,
     "bandwidth-hbm/hbm": 0.716,
-    "bandwidth/bandwidth": 0.001,
+    "bandwidth/bandwidth": 0.0,
     "dest_compute-hbm/dest_compute": 0.603,
-    "dest_compute-hbm/hbm": 0.556,
-    "dest_compute/dest_compute": 0.814,
+    "dest_compute-hbm/hbm": 0.555,
+    "dest_compute/dest_compute": 0.818,
     "hbm/hbm": 0.715
   },
   "inputs": {
@@ -139,26 +138,6 @@
     "outputs/timing-power-validation-20260814/separation-regional-timing-v2.json": "e90db248830860a96e772c148ee46755352fc1f8d98c63ad751191e8397bfbbe",
     "outputs/timing-power-validation-20260814/timing-summary.json": "0f45a8d659aacf5d4af8bb04873795d3c9de092d1f2df15d969c8f469a8d9b1e"
   },
-  "oat_action_sweeps": {
-    "action_metric": "source-session share at each OAT level",
-    "bandwidth_cap_gbps": [
-      1.0,
-      8.733313595885829
-    ],
-    "fixed_bandwidth_cap_gbps": 4.866656797942914,
-    "fixed_prefill_available_tps": 2335.7636529710326,
-    "levels": 20,
-    "paired_draws": 50,
-    "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
-    "prefill_available_tps": [
-      291.9704566213793,
-      4379.556849320686
-    ],
-    "prefill_full_rate_tps": 5839.4091324275805,
-    "prefill_reference_tokens": 7680,
-    "samples_per_sweep": 1000,
-    "sessions_per_pack": 28
-  },
   "limitations": [
     "workload packs resample measured conversation templates and are sensitivity draws, not independent observations",
     "two bytes per resident token and equal unnormalized turn opportunity are declared workload assumptions",
@@ -169,7 +148,7 @@
     "two timing-supported trace states are excluded because their prefill/decode direction falls outside the phase-power calibration cone",
     "Replay endpoint work uses a measured prefill-heavy relative load factor while the regional zero-load anchor is unchanged",
     "route and endpoint stages overlap under the calibrated effective pipeline rate; Replay and KV endpoint work remain fully shared",
-    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 24/162 local c1-c4 cases and 5/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases",
+    "route overlap is a regional modeled sensitivity, not a generic deadline guarantee: 0/162 local c1-c4 cases and 0/66 grouped audit cases are false-feasible at 25 s, versus 0/288 width-8 cases",
     "timing audits are grouped retrospective checks, not untouched validation sets",
     "mixed timing evidence is KV-majority, so partial Replay/KV overlap is not used",
     "short-context Replay inside regional support uses a constant minimum-base-rate sensitivity extension",
@@ -207,10 +186,10 @@
       },
       "selected": {
         "above": 0,
-        "below": 8406,
-        "denominator": 73803,
-        "outside": 8406,
-        "outside_rate": 0.11389780903215316
+        "below": 8328,
+        "denominator": 74430,
+        "outside": 8328,
+        "outside_rate": 0.11189036678758565
       }
     },
     "context": {
@@ -222,11 +201,11 @@
         "outside_rate": 0.38988135260103646
       },
       "selected": {
-        "above": 4226,
-        "below": 16894,
-        "denominator": 73803,
-        "outside": 21120,
-        "outside_rate": 0.2861672289744319
+        "above": 4727,
+        "below": 16895,
+        "denominator": 74430,
+        "outside": 21622,
+        "outside_rate": 0.29050114201262933
       },
       "sessions": {
         "above": 10787,
@@ -240,16 +219,16 @@
       "kv_transfer": {
         "bandwidth_outside": 0,
         "bandwidth_outside_rate": 0.0,
-        "context_outside": 4466,
-        "context_outside_rate": 0.3493702573730736,
-        "denominator": 12783
+        "context_outside": 4523,
+        "context_outside_rate": 0.354439307264321,
+        "denominator": 12761
       },
       "replay": {
-        "bandwidth_outside": 8406,
-        "bandwidth_outside_rate": 0.13775811209439529,
-        "context_outside": 16654,
-        "context_outside_rate": 0.27292690921009505,
-        "denominator": 61020
+        "bandwidth_outside": 8328,
+        "bandwidth_outside_rate": 0.13504353889312296,
+        "context_outside": 17099,
+        "context_outside_rate": 0.2772705897614685,
+        "denominator": 61669
       }
     }
   },
@@ -297,21 +276,41 @@
     }
   },
   "mean_phase_load_share": {
-    "kv_transfer": 0.1300837832910973,
-    "not_moved": 0.21678653561169664,
-    "replay": 0.653129681097206
+    "kv_transfer": 0.12882026147613002,
+    "not_moved": 0.21642634068491753,
+    "replay": 0.6547533978389525
   },
-  "migration_horizon_s": 25,
+  "migration_horizon_s": 41,
   "minimum_single_factor_action_response_rate": 0.1,
+  "oat_action_sweeps": {
+    "action_metric": "source-session share at each OAT level",
+    "bandwidth_cap_gbps": [
+      0.1,
+      15.0
+    ],
+    "fixed_bandwidth_cap_gbps": 7.55,
+    "fixed_prefill_available_tps": 7529.197045662138,
+    "levels": 20,
+    "paired_draws": 50,
+    "pipeline_interpolation": "regional controlled-40 to natural endpoint interpolation",
+    "prefill_available_tps": [
+      58.394091324275855,
+      15000.0
+    ],
+    "prefill_full_rate_tps": 5839.4091324275805,
+    "prefill_reference_tokens": 7680,
+    "samples_per_sweep": 1000,
+    "sessions_per_pack": 28
+  },
   "planner_objective_cost": "sum of isolated candidate durations; endpoint replica-seconds remain a separate physical capacity row",
   "planner_release_audit": {
     "comparisons": 12000,
     "fractional_opportunity_violation_count": 0,
-    "shortfall_regression_count": 395,
+    "shortfall_regression_count": 379,
     "shortfall_regression_max_w": 17.68911389159618,
-    "shortfall_regression_median_w": 2.6499346720210326,
-    "shortfall_regression_p90_w": 8.683136633224832,
-    "shortfall_regression_rate": 0.032916666666666664,
+    "shortfall_regression_median_w": 2.552484443457729,
+    "shortfall_regression_p90_w": 8.560202296090544,
+    "shortfall_regression_rate": 0.03158333333333333,
     "target_loss_count": 0,
     "target_loss_rate": 0.0
   },
@@ -356,9 +355,9 @@
   "schema": "queue-haul-workload-adaptation-v8",
   "seed": 1001,
   "selected_session_totals": {
-    "kv_transfer": 12783,
-    "not_moved": 150197,
-    "replay": 61020
+    "kv_transfer": 12761,
+    "not_moved": 149570,
+    "replay": 61669
   },
   "sessions_per_pack": 28,
   "source_load": 0.4,
@@ -384,10 +383,10 @@
         },
         "selected": {
           "above": 0,
-          "below": 5752,
-          "denominator": 62446,
-          "outside": 5752,
-          "outside_rate": 0.09211158440892932
+          "below": 5645,
+          "denominator": 62550,
+          "outside": 5645,
+          "outside_rate": 0.09024780175859312
         }
       },
       "context": {
@@ -401,7 +400,7 @@
         "selected": {
           "above": 0,
           "below": 0,
-          "denominator": 62446,
+          "denominator": 62550,
           "outside": 0,
           "outside_rate": 0.0
         },
@@ -419,21 +418,21 @@
           "bandwidth_outside_rate": 0.0,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 12139
+          "denominator": 12078
         },
         "replay": {
-          "bandwidth_outside": 5752,
-          "bandwidth_outside_rate": 0.11433796489554138,
+          "bandwidth_outside": 5645,
+          "bandwidth_outside_rate": 0.11184419083848471,
           "context_outside": 0,
           "context_outside_rate": 0.0,
-          "denominator": 50307
+          "denominator": 50472
         }
       }
     },
     "selected_session_totals": {
-      "kv_transfer": 12139,
-      "not_moved": 161554,
-      "replay": 50307
+      "kv_transfer": 12078,
+      "not_moved": 161450,
+      "replay": 50472
     },
     "target_met_rate": {
       "All bound": 0.779,
@@ -464,23 +463,23 @@
   },
   "surface_validation": {
     "coding-c1-c4/development": {
-      "false_feasible_at_25s": 19,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.872177917467015,
-      "p90_absolute_relative_error": 0.42923939993387067,
+      "p90_absolute_relative_error": 0.4292393999338707,
       "scenarios": 96,
       "underprediction_rate": 0.7708333333333334
     },
     "coding-c1-c4/development/kv_transfer": {
-      "false_feasible_at_25s": 14,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.9109777718834491,
-      "p90_absolute_relative_error": 0.5628782021214593,
+      "p90_absolute_relative_error": 0.5628782021214596,
       "scenarios": 48,
       "underprediction_rate": 0.8125
     },
     "coding-c1-c4/development/replay": {
-      "false_feasible_at_25s": 5,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.7981070163695221,
       "p90_absolute_relative_error": 0.42622753776595484,
@@ -488,7 +487,7 @@
       "underprediction_rate": 0.7291666666666666
     },
     "coding-c1-c4/grouped-audit": {
-      "false_feasible_at_25s": 5,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.8859485281396715,
       "p90_absolute_relative_error": 0.4232865104092367,
@@ -496,7 +495,7 @@
       "underprediction_rate": 0.7272727272727273
     },
     "coding-c1-c4/grouped-audit/kv_transfer": {
-      "false_feasible_at_25s": 4,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.8642808630503208,
       "p90_absolute_relative_error": 0.42453296454934847,
@@ -504,7 +503,7 @@
       "underprediction_rate": 0.8181818181818182
     },
     "coding-c1-c4/grouped-audit/replay": {
-      "false_feasible_at_25s": 1,
+      "false_feasible_at_25s": 0,
       "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.942285091552295,
       "p90_absolute_relative_error": 0.39010918034922876,
@@ -513,7 +512,7 @@
     },
     "width8/development": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 2,
+      "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 1.1162476020523169,
       "p90_absolute_relative_error": 0.6444812323198056,
       "scenarios": 208,
@@ -537,7 +536,7 @@
     },
     "width8/development/replay": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 2,
+      "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.9830643603183712,
       "p90_absolute_relative_error": 0.1562407373160577,
       "scenarios": 52,
@@ -545,7 +544,7 @@
     },
     "width8/grouped-audit": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 1,
+      "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 1.1302760726762007,
       "p90_absolute_relative_error": 0.7069079558187432,
       "scenarios": 80,
@@ -569,7 +568,7 @@
     },
     "width8/grouped-audit/replay": {
       "false_feasible_at_25s": 0,
-      "false_infeasible_at_25s": 1,
+      "false_infeasible_at_25s": 0,
       "median_predicted_over_measured": 0.9993428284597472,
       "p90_absolute_relative_error": 0.17073219904112594,
       "scenarios": 20,
@@ -580,8 +579,8 @@
   "target_met_rate": {
     "All bound": 0.47,
     "Bandwidth": 0.996,
-    "Bandwidth + compute": 0.618,
-    "Dest. compute": 0.618,
+    "Bandwidth + compute": 0.619,
+    "Dest. compute": 0.619,
     "HBM": 0.603,
     "HBM + bandwidth": 0.603,
     "HBM + compute": 0.47,

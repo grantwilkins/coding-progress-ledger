@@ -215,11 +215,12 @@ def test_destination_kv_queue_blocks_bytes_until_slot_free(tmp_path):
         model(tmp_path, switch=0, destination_rate=100), moves,
     )
 
-    assert [(row.start_s, row.end_s) for row in result.network] == [(0, 1), (1, 2)]
+    assert [(row.start_s, row.end_s) for row in result.network] \
+        == pytest.approx([(0, .1), (.1, .2)])
     assert [(row.arrival_s, row.start_s, row.end_s, row.depth_at_arrival,
-             row.bytes_at_arrival) for row in result.queues] == [
-        (0, 0, 1, 0, 0), (0, 1, 2, 1, 100),
-    ]
+             row.bytes_at_arrival) for row in result.queues] == pytest.approx([
+        (0, 0, .1, 0, 0), (0, .1, .2, 1, 100),
+    ])
 
 
 def test_destination_kv_queue_refills_concurrency_two(tmp_path):
@@ -233,11 +234,12 @@ def test_destination_kv_queue_refills_concurrency_two(tmp_path):
         moves,
     )
 
-    assert [row.initial_ready_s for row in result.sessions] == pytest.approx([2, 2, 3])
+    assert [row.initial_ready_s for row in result.sessions] \
+        == pytest.approx([.2, .2, .3])
     assert [(row.session_id, row.start_s, row.depth_at_arrival, row.bytes_at_arrival)
-            for row in result.queues] == [
-        ("0", 0, 0, 0), ("1", 0, 0, 0), ("2", 2, 1, 100),
-    ]
+            for row in result.queues] == pytest.approx([
+        ("0", 0, 0, 0), ("1", 0, 0, 0), ("2", .2, 1, 100),
+    ])
 
 
 def test_kv_catch_up_waits_behind_an_earlier_destination_copy(tmp_path):
@@ -258,10 +260,10 @@ def test_kv_catch_up_waits_behind_an_earlier_destination_copy(tmp_path):
     append = next(row for row in result.queues if row.phase.startswith("append"))
     assert append.session_id == "growing"
     assert (append.arrival_s, append.start_s, append.depth_at_arrival) \
-        == pytest.approx((1, 2, 1))
+        == pytest.approx((.1, .2, 1))
 
 
-def test_configured_parallel_kv_copy_shares_destination_capacity(tmp_path):
+def test_configured_parallel_kv_copy_shares_network_capacity(tmp_path):
     sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(2))
     moves = tuple(
         PlannedMove(str(i), "dest", "kv_transfer", i, ("wan",)) for i in range(2)
@@ -271,7 +273,9 @@ def test_configured_parallel_kv_copy_shares_destination_capacity(tmp_path):
         model(tmp_path, switch=0, destination_rate=100, parallel_kv=2), moves,
     )
 
-    assert [row.initial_ready_s for row in result.sessions] == pytest.approx([2, 2])
+    # Both slots share the 1000 B/s route, not a destination ingest ceiling.
+    assert [row.initial_ready_s for row in result.sessions] \
+        == pytest.approx([.2, .2])
 
 
 def test_execution_uses_regional_migration_components(tmp_path):
@@ -298,7 +302,7 @@ def test_execution_uses_regional_migration_components(tmp_path):
                     destination_pool="dedicated-sink"),
     ), destination=architecture)
 
-    assert kv.sessions[0].committed_s == pytest.approx(5)
+    assert kv.sessions[0].committed_s == pytest.approx(3.1)
     assert replay.sessions[0].committed_s == pytest.approx(.201)
 
 

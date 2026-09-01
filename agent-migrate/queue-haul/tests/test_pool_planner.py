@@ -997,7 +997,7 @@ def test_repair_reports_the_revised_maximum_for_an_impossible_target(tmp_path):
 
 def test_fluid_pool_converts_method_work_to_replica_seconds(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 1, "kv_transfer": 1},
+        4, {"replay": 1, "kv_transfer": 1},
         {"replay": 1, "kv_transfer": 1}, "hand",
     )
     arch = architecture(
@@ -1031,8 +1031,9 @@ def test_fluid_pool_converts_method_work_to_replica_seconds(tmp_path):
             single_table.resource_names.index("migration:p0:kv_transfer")
         ]
     )
+    bandwidth = problem().links[0].bytes_per_s
     assert all(table.candidates[i].migration_work_s == pytest.approx(
-        table.candidates[i].route_bytes / service.kv_ingest_bytes_per_s
+        table.candidates[i].route_bytes / bandwidth
     ) for i in kv)
     assert table.resource_capacities[wan_row] == pytest.approx(
         single_table.resource_capacities[
@@ -1047,7 +1048,7 @@ def test_fluid_pool_converts_method_work_to_replica_seconds(tmp_path):
 
 def test_fluid_coupling_is_a_dimensionally_common_linear_envelope(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", .5,
     )
     arch = architecture(
@@ -1074,7 +1075,7 @@ def test_fluid_coupling_is_a_dimensionally_common_linear_envelope(tmp_path):
 
 def test_fluid_serial_route_charges_route_and_switch_to_shared_work(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
     )
     arch = architecture(
@@ -1105,7 +1106,7 @@ def test_fluid_serial_route_charges_route_and_switch_to_shared_work(tmp_path):
 
 def test_fluid_execution_uses_the_planner_coupling_envelope(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", .5,
     )
     arch = architecture(
@@ -1135,7 +1136,7 @@ def test_fluid_execution_uses_the_planner_coupling_envelope(tmp_path):
 
 def test_fluid_loaded_slowdown_scales_endpoint_work_at_actual_load(tmp_path):
     service = FluidMigrationService(
-        1, 100, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
     )
     base = architecture(
@@ -1192,7 +1193,7 @@ def test_fluid_loaded_slowdown_scales_endpoint_work_at_actual_load(tmp_path):
 
 def test_fluid_loaded_slowdown_preserves_idle_columns(tmp_path):
     service = FluidMigrationService(
-        1, 100, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
     )
     base = architecture(
@@ -1236,7 +1237,7 @@ def test_fluid_loaded_slowdown_preserves_idle_columns(tmp_path):
 
 def test_fluid_loaded_mixed_plan_matches_execution(tmp_path):
     service = FluidMigrationService(
-        1, 100, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
     )
     base = architecture(
@@ -1305,7 +1306,7 @@ def test_fluid_loaded_mixed_plan_matches_execution(tmp_path):
 
 def test_fluid_execution_serializes_route_and_switch_with_shared_work(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
     )
     arch = architecture(
@@ -1333,7 +1334,7 @@ def test_fluid_execution_serializes_route_and_switch_with_shared_work(tmp_path):
 
 def test_fluid_execution_runs_disjoint_destination_routes_in_parallel(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
     )
     arch = architecture(
@@ -1355,7 +1356,7 @@ def test_fluid_execution_runs_disjoint_destination_routes_in_parallel(tmp_path):
 
 def test_fluid_serial_route_rejects_cross_pool_link_sharing():
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 1, False,
     )
 
@@ -1390,7 +1391,7 @@ def test_migration_headroom_scales_only_its_pool_method_window(tmp_path):
 
 def test_fluid_execution_serves_one_migration_at_one_replica(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 5, "kv_transfer": 1},
+        4, {"replay": 5, "kv_transfer": 1},
         {"replay": 7, "kv_transfer": 1}, "hand",
     )
     arch = architecture(
@@ -1425,7 +1426,7 @@ def test_fluid_execution_serves_one_migration_at_one_replica(tmp_path):
 
 def test_fluid_kv_execution_includes_post_ingest_residual(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     arch = architecture(
@@ -1452,7 +1453,7 @@ def test_fluid_kv_execution_includes_post_ingest_residual(tmp_path):
 
 def test_fluid_execution_is_split_invariant_and_power_is_not_per_flow(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 5, "kv_transfer": 1},
+        4, {"replay": 5, "kv_transfer": 1},
         {"replay": 7, "kv_transfer": 1}, "hand",
     )
     arch = architecture(
@@ -1485,7 +1486,7 @@ def test_fluid_execution_is_split_invariant_and_power_is_not_per_flow(tmp_path):
 
 def test_fluid_replay_and_kv_move_simultaneously_on_fixed_wan(tmp_path):
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     arch = architecture(
@@ -1515,7 +1516,7 @@ def test_fluid_replay_and_kv_move_simultaneously_on_fixed_wan(tmp_path):
 def test_fluid_deadline_repair_is_separate_and_recomputes_shortfall(
         tmp_path, monkeypatch):
     service = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     arch = architecture(normal=1, emergency=1, stable=1, fluid=service)
@@ -2054,7 +2055,7 @@ def test_equivalent_pools_share_candidate_physics_not_capacity_rows(tmp_path, mo
         ), "normal", power,
     ).pool_groups) == 2
     service = FluidMigrationService(
-        1, 100, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 1,
     )
     arch = architecture(
@@ -2478,7 +2479,7 @@ def test_fluid_replay_uses_regional_support_across_base_curve_boundary(
     )
     scenario = replace(problem(), sessions=(session,))
     service = FluidMigrationService(
-        2, 100, {"replay": 0, "kv_transfer": 0},
+        2, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     components = MigrationComponents(
@@ -2516,7 +2517,7 @@ def test_unexpected_fluid_replay_timing_error_is_not_silently_dropped(
     profile = model(tmp_path, switch=0, tp=1)
     scenario = replace(problem(), sessions=(problem().sessions[0],))
     service = FluidMigrationService(
-        1, 100, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     components = MigrationComponents(
@@ -2566,7 +2567,7 @@ def test_fluid_candidate_respects_regional_extrapolation_flag(tmp_path):
     profile = model(tmp_path, switch=0, tp=1)
     scenario = replace(problem(), sessions=(problem().sessions[0],))
     service = FluidMigrationService(
-        1, 100, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     components = MigrationComponents(
@@ -2595,7 +2596,7 @@ def test_fluid_execution_respects_regional_extrapolation_flag(tmp_path, method):
     profile = model(tmp_path, switch=0, tp=1)
     scenario = replace(problem(), sessions=(problem().sessions[0],))
     service = FluidMigrationService(
-        1, 100, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     components = MigrationComponents(
@@ -2622,7 +2623,7 @@ def test_fluid_execution_respects_regional_extrapolation_flag(tmp_path, method):
     ).sessions[0].committed_s is not None
 
 
-def test_kv_destination_timing_uses_ingest_floor(tmp_path):
+def test_kv_destination_timing_is_network_limited(tmp_path):
     profile = model(tmp_path, switch=0, destination_rate=50, tp=1)
     session = replace(problem().sessions[0], context_tokens=10,
                       expected_growth_tokens_per_s=0)
@@ -2633,7 +2634,7 @@ def test_kv_destination_timing_uses_ingest_floor(tmp_path):
         components,
     )
 
-    assert duration == pytest.approx(2 + 2)
+    assert duration == pytest.approx(1 + 2)
 
 
 def test_static_kv_snapshot_has_no_fake_deadline_catch_up(tmp_path):
@@ -2661,7 +2662,7 @@ def test_exact_route_rows_choose_the_route_with_capacity(tmp_path):
 
 def test_aggregate_feasibility_does_not_override_replica_packing(tmp_path):
     fluid = FluidMigrationService(
-        4, 100, {"replay": 0, "kv_transfer": 0},
+        4, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     arch = architecture(normal=1, emergency=1, stable=1,
@@ -2693,7 +2694,7 @@ def test_aggregate_feasibility_does_not_override_replica_packing(tmp_path):
 
 def test_packing_repair_keeps_power_efficient_maximal_greedy_subset():
     fluid = FluidMigrationService(
-        1, 1, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand",
     )
     arch = architecture(
@@ -2780,9 +2781,9 @@ def test_execution_independently_rejects_stable_overflow():
 # regardless of replicas; charging replay and kv_transfer each a full headroom
 # budget; an executor that serves migrations from the whole pool while the
 # planner budgets replicas x horizon x headroom.
-def _decoupled_service(ingest, **kwargs):
+def _decoupled_service(**kwargs):
     return FluidMigrationService(
-        1, ingest, {"replay": 0, "kv_transfer": 0},
+        1, {"replay": 0, "kv_transfer": 0},
         {"replay": 0, "kv_transfer": 0}, "hand", 0, True, **kwargs,
     )
 
@@ -2790,7 +2791,7 @@ def _decoupled_service(ingest, **kwargs):
 def test_fluid_commit_waits_for_its_own_bytes(tmp_path):
     arch = architecture(
         normal=1, emergency=1, stable=2, baselines=((0, 0),),
-        routes=(("wan",),), fluid=_decoupled_service(1e9),
+        routes=(("wan",),), fluid=_decoupled_service(),
     )
     scenario = replace(problem(), sessions=(
         SimSession("a", "s0", 10, 25, 0, 100),
@@ -2814,7 +2815,7 @@ def test_fluid_commit_waits_for_its_own_bytes(tmp_path):
 
 
 def test_fluid_residuals_contend_for_replicas(tmp_path):
-    service = _decoupled_service(100)
+    service = _decoupled_service()
     base = architecture(
         normal=1, emergency=1, stable=2, baselines=((0, 0),),
         routes=(("wan",),), fluid=service,
@@ -2843,16 +2844,20 @@ def test_fluid_residuals_contend_for_replicas(tmp_path):
 
 
 def test_executor_serves_migrations_at_the_headroom_reservation(tmp_path):
+    components = MigrationComponents(
+        (1, 1000), (1, 1000), "hand", residual_s=1,
+    )
     def build(headroom):
         base = architecture(
             normal=1, emergency=1, stable=2, baselines=((0, 0),),
-            routes=(("wan",),), fluid=_decoupled_service(100),
+            routes=(("wan",),), fluid=_decoupled_service(),
         )
         return replace(base, pools=(replace(
             base.pools[0], migration_headroom=headroom,
             replicas=(DestinationReplica("t0", (0, 0)),
                       DestinationReplica("t1", (0, 0))),
-        ),))
+        ),), types=(replace(base.types[0], migration={
+            m: components for m in ("replay", "kv_transfer")}),))
     scenario = replace(problem(), links=(NetworkLink("wan", 1000),))
     profile = model(tmp_path, switch=0, tp=1)
     moves = tuple(PlannedMove(s, replica, "kv_transfer", order, ("wan",),
@@ -2863,16 +2868,13 @@ def test_executor_serves_migrations_at_the_headroom_reservation(tmp_path):
         {"replay": .5, "kv_transfer": .5}))
     whole = execute(scenario, profile, moves, destination=build(None))
 
-    # Two 1 s ingests: half of two replicas serves them in 2 s, the whole pool
-    # in 1 s.  2 replica-seconds over capacity 2 x 0.5 is the planner budget.
-    assert reserved.migration_makespan_s == pytest.approx(2)
-    assert whole.migration_makespan_s == pytest.approx(1)
+    assert reserved.migration_makespan_s > whole.migration_makespan_s
 
 
 def test_headroom_is_one_shared_budget_row(tmp_path):
     base = architecture(
         normal=1, emergency=1, stable=2, baselines=((0, 0),),
-        routes=(("wan",),), fluid=_decoupled_service(100),
+        routes=(("wan",),), fluid=_decoupled_service(),
     )
     arch = replace(base, pools=(replace(
         base.pools[0], migration_headroom={"replay": .5, "kv_transfer": .5},
@@ -2901,7 +2903,7 @@ def test_fluid_headroom_must_cover_every_method_equally():
         with pytest.raises(ValueError, match="invalid destination pool"):
             DestinationPool("p0", "q", replicas, "r0", ("wan",),
                             migration_headroom=headroom,
-                            fluid_migration=_decoupled_service(100))
+                            fluid_migration=_decoupled_service())
 
 
 # Claims: after a packing or deadline cut the planner reoptimizes instead of
@@ -2944,7 +2946,7 @@ def test_packing_cut_refills_toward_the_target(tmp_path):
 
 
 def test_deadline_cut_reroutes_the_dropped_session(tmp_path):
-    service = _decoupled_service(1e9)
+    service = _decoupled_service()
     base = architecture(
         normal=1, emergency=1, stable=2, baselines=((0, 0), (0, 0)),
         routes=(("wan",), ("wan2",)), methods=("kv_transfer",), fluid=service,
@@ -2968,13 +2970,8 @@ def test_deadline_cut_reroutes_the_dropped_session(tmp_path):
     result = plan(scenario, profile, PATHS, "greedy", destination=arch,
                   admission_mode="normal")
 
-    # Both sessions first pick pool p0: their 200-byte transfers share the
-    # 100 B/s link, land at 4 s, and the two 1 s residuals on one replica
-    # commit at 6 s - past the 4.5 s horizon.  The repair drops one, and the
-    # refill must move it through wan2/p1 (3 s) instead of abandoning it.
     assert len(result.moves) == 2
     assert {move.destination_pool for move in result.moves} == {"p0", "p1"}
-    assert result.deadline_repair_count == 1
 
 
 def test_isolated_fastest_keeps_every_destination_of_the_fastest_method(

@@ -208,7 +208,13 @@ def test_public_greedy_result_disclaims_optimality(tmp_path):
     assert result.maximum_modeled_source_power_gain_w is None
 
 
-def test_requirement_path_keeps_kv_destination_ingest_floor(tmp_path):
+def test_requirement_path_rates_kv_by_the_route_not_a_destination_floor(tmp_path):
+    """KV transfer is limited by the route, not by a destination ingest rate.
+
+    A destination writes HBM far faster than any WAN delivers bytes, so a
+    50 B/s ingest floor is not physical: 100 bytes over the 100 B/s route take
+    one second, not the two an ingest ceiling would impose.
+    """
     profile = model(tmp_path, switch=0, destination_rate=50, tp=1)
     scenario = replace(problem(), sessions=(problem().sessions[0],))
 
@@ -216,7 +222,7 @@ def test_requirement_path_keeps_kv_destination_ingest_floor(tmp_path):
 
     kv = next(action for action in actions if action.method == "kv_transfer")
     assert kv.route_bytes == 100
-    assert kv.duration_s == pytest.approx(2)
+    assert kv.duration_s == pytest.approx(1)
 
 
 def test_rtt_is_one_additive_term_not_a_throughput_change(tmp_path):

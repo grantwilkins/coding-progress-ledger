@@ -11,7 +11,7 @@ Plausible wrong implementations:
 - Change the target watts with destination constraints.
 - Drop sessions from the three-part action accounting.
 - Split width-8 validation rows from the same session set across fit and holdout.
-- Validate against 30 seconds even though the migration horizon is 25 seconds.
+- Validate against the migration horizon of 41 seconds.
 - Call a target hit from power shortfall alone when execution feasibility failed.
 - Ignore the requested regional timing fit and measured route rates.
 - Make a state depend on whether a tighter counterfactual was solved first.
@@ -131,13 +131,15 @@ def test_one_paired_draw_conserves_sessions_and_target():
     )
     none = next(row for row in rows if row["case_id"] == "none")
     constrained = next(row for row in rows if row["case_id"] == "bandwidth")
+    # Constraining a resource cannot raise the relaxation's value; the two
+    # agree to machine precision when the constraint is not binding.
     assert constrained["fractional_lp_opportunity_w"] \
-        < none["fractional_lp_opportunity_w"]
+        <= none["fractional_lp_opportunity_w"] * (1 + 1e-12)
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
 
 
-def test_oat_axes_are_absolute_and_reproduce_factorial_endpoints():
+def test_oat_axes_are_absolute_and_contain_factorial_endpoints():
     profile = ModelProfile.load(campaign.PROFILE)
     templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
     pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 4, 3))
@@ -146,30 +148,24 @@ def test_oat_axes_are_absolute_and_reproduce_factorial_endpoints():
         campaign.oat_design(profile, levels=5)
 
     assert bandwidths == pytest.approx(np.linspace(
-        campaign.BANDWIDTH_BOTTLENECK_MBPS,
-        max(campaign.physical_route_mbps().values()), 5))
+        campaign.OAT_BANDWIDTH_LOWER_MBPS,
+        campaign.OAT_BANDWIDTH_UPPER_MBPS, 5))
     assert prefills == pytest.approx(np.linspace(
-        .05 * rate, .75 * rate, 5))
+        (1 - campaign.OAT_DEST_COMPUTE[1]) * rate,
+        campaign.OAT_PREFILL_UPPER_TPS, 5))
     assert fixed_bandwidth == pytest.approx(np.median(bandwidths))
     assert fixed_prefill == pytest.approx(np.median(prefills))
+    loads = campaign.LEVELS["dest_compute"]
+    assert bandwidths[0] < campaign.BANDWIDTH_BOTTLENECK_MBPS
+    assert bandwidths[-1] > max(campaign.physical_route_mbps().values())
+    assert prefills[0] < (1 - loads[1]) * rate
+    assert prefills[-1] > rate
 
-    for point, constraints in (
-        ((bandwidths[0], prefills[0]),
-         frozenset(("bandwidth", "dest_compute"))),
-        ((bandwidths[-1], prefills[-1]), frozenset()),
-    ):
-        swept = campaign.build_problem(
+    for point in ((bandwidths[0], prefills[0]), (bandwidths[-1], prefills[-1])):
+        campaign.build_problem(
             profile, pack, frozenset(), 2 / 3, fits,
             bandwidth_mbps=point[0], prefill_tps=point[1],
         )
-        factorial = campaign.build_problem(
-            profile, pack, constraints, 2 / 3, fits)
-        assert {link.link_id: link.bytes_per_s for link in swept[0].links} \
-            == pytest.approx({link.link_id: link.bytes_per_s
-                              for link in factorial[0].links})
-        for left, right in zip(swept[1].pools, factorial[1].pools):
-            assert left.replicas[0].baseline_work \
-                == pytest.approx(right.replicas[0].baseline_work)
 
 
 def test_oat_varies_one_axis_and_conserves_session_actions():
@@ -353,9 +349,9 @@ def test_surface_validation_uses_grouped_splits_and_migration_horizon():
         )
 
     assert all(len(splits) == 1 for splits in grouped.values())
-    assert all(row["horizon_s"] == 25 for row in rows)
+    assert all(row["horizon_s"] == 41 for row in rows)
     assert all(row["false_feasible"] == (
-        row["predicted_s"] <= 25 < row["measured_s"]
+        row["predicted_s"] <= 41 < row["measured_s"]
     ) for row in rows)
 
 
@@ -427,8 +423,8 @@ def test_central_surface_uses_regional_timing_and_routes():
                       (f"link/{region}", f"pipeline/{region}")
                       for region in campaign.REGIONS}
     assert all(service.route_overlap for service in services.values())
-    assert services["pool/east"].kv_ingest_bytes_per_s == \
-        fits["east"]["kv_ingest_lower_bound_bytes_per_s"]
+    assert services["pool/east"].replay_speedup == \
+        1 / fits["east"]["replay_compute_completion_factor"]
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
     assert summary["migration_gate_passed"] and not summary["kv_byte_mismatches"]
     assert all(
@@ -604,7 +600,7 @@ def test_single_factors_change_only_their_physical_columns():
     route = tables["none"].resource_names.index("route:link/east")
     route_bound = tables["bandwidth"].resource_names.index("route:link/east")
 
-    assert bandwidth_kv.migration_work_s == pytest.approx(base_kv.migration_work_s)
+    assert bandwidth_kv.migration_work_s > base_kv.migration_work_s
     assert bandwidth_kv.objective_cost_s > base_kv.objective_cost_s
     assert tables["bandwidth"].resources[route_bound, bandwidth_i] \
         > tables["none"].resources[route, base_i]

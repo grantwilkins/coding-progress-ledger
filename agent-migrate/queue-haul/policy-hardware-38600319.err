@@ -1,0 +1,20 @@
+/bin/bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 2888, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 2871, in main
+    run_plan(
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1704, in run_plan
+    sha, dirty = git_state(allow_dirty)
+                 ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1662, in git_state
+    raise RuntimeError("formal runs require a clean worktree; pass --allow-dirty for development")
+RuntimeError: formal runs require a clean worktree; pass --allow-dirty for development
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/policy_hardware_campaign.py", line 1548, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/policy_hardware_campaign.py", line 1542, in main
+    validate_run(args.run_root, args.expected_episodes, args.policies)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/policy_hardware_campaign.py", line 1202, in validate_run
+    raise RuntimeError("incomplete scenario {}".format(scenario["scenario_id"]))
+RuntimeError: incomplete scenario p-f7b3cda69a6227cb

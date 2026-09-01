@@ -290,7 +290,6 @@ def build_architecture(profile, replicas: int, bounds: dict, fits, rho: float,
             # fill; coupling stays off because a migration headroom requires it.
                 fluid_migration=FluidMigrationService(
                     1 / factors["replay"],
-                    fits[region]["kv_ingest_lower_bound_bytes_per_s"],
                     source_action, sink_action,
                     f"{TIMING.relative_to(ROOT)} regional pipelined timing fit",
                     0, True),
@@ -364,7 +363,15 @@ def run_row(row: dict, manifest: dict) -> dict:
             "migration_makespan_s": makespan,
             "by_region": by_region,
             "within_contract": (
-                makespan is not None
+                # The plan must certify its own target, not merely survive
+                # execution.  Without this the ask climbs until the target is
+                # unattainable, where the deadline repair still trims the plan
+                # into a lawful makespan and every policy is scored in the
+                # target-first LP's fallback, which does not optimize shed --
+                # the regime that makes a single-action greedy look better than
+                # a policy whose action set strictly contains it.
+                planned.feasible
+                and makespan is not None
                 and makespan <= row["deadline_s"] + 1e-9
                 and offered <= envelope + 1e-9
                 and all(item.within_contract for item in result.pool_service)),

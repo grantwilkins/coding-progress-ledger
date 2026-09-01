@@ -53,7 +53,7 @@ OUT = ROOT / "outputs/workload-action-adaptation-20260814"
 BASE_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 WIDTH8_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 FACTORS = ("hbm", "bandwidth", "dest_compute")
-ACTIVATION_GATED_FACTORS = FACTORS
+ACTIVATION_GATED_FACTORS = ("hbm", "dest_compute")
 ORDER = (
     frozenset(("hbm",)), frozenset(("bandwidth",)), frozenset(("dest_compute",)),
     frozenset(("hbm", "bandwidth")), frozenset(("hbm", "dest_compute")),
@@ -77,9 +77,13 @@ DISPLAY_CASES = (
 )
 ACTION_BOXPLOT_QUANTILES = (.05, .25, .5, .75, .95)
 POWER_TOLERANCE_W = 1e-6
-MIGRATION_HORIZON_S = 25
+MIGRATION_HORIZON_S = 41
 BANDWIDTH_BOTTLENECK_MBPS = 1000
 PREFILL_REFERENCE_TOKENS = 7680
+OAT_BANDWIDTH_LOWER_MBPS = 100
+OAT_BANDWIDTH_UPPER_MBPS = 15_000
+OAT_PREFILL_UPPER_TPS = 15_000
+OAT_DEST_COMPUTE = (0.05, 0.99)
 SOURCE_LOAD = .4
 DEFAULT_SEED = 1001
 plot_style.apply()
@@ -276,14 +280,16 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
         pipeline_bandwidths = {region: fits[region]["effective_pipeline_mbps"][
             timing_condition] * 125_000 for region in REGIONS}
     else:
-        if constraints or not BANDWIDTH_BOTTLENECK_MBPS <= bandwidth_mbps \
-                <= max(physical.values()):
-            raise ValueError("invalid absolute bandwidth sweep point")
+        if constraints:
+            raise ValueError("absolute bandwidth with factorial constraints")
+        if bandwidth_mbps <= 0:
+            raise ValueError("bandwidth must be positive")
         physical_bandwidths, pipeline_bandwidths = {}, {}
         for region in REGIONS:
             cap = min(bandwidth_mbps, physical[region])
-            fraction = (cap - BANDWIDTH_BOTTLENECK_MBPS) / (
-                physical[region] - BANDWIDTH_BOTTLENECK_MBPS)
+            fraction = np.clip(
+                (cap - BANDWIDTH_BOTTLENECK_MBPS) / (
+                    physical[region] - BANDWIDTH_BOTTLENECK_MBPS), 0, 1)
             rates = fits[region]["effective_pipeline_mbps"]
             physical_bandwidths[region] = cap * 125_000
             pipeline_bandwidths[region] = (
@@ -293,7 +299,7 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
     paths = {region: (f"link/{region}", f"pipeline/{region}")
              for region in REGIONS}
     scenario = ExecutionScenario(
-        30, 30, 0, "awake", 0,
+        41, 41, 0, "awake", 0,
         (PowerNode("source-node", 1, True), *(PowerNode(
             f"{region}-node", 1, False) for region in REGIONS)),
         (ServingInstance("source", ("source-node",)), *(ServingInstance(
@@ -322,10 +328,7 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
     q = architecture.types[0]
     if prefill_tps is not None:
         rate = q.prefill.at(PREFILL_REFERENCE_TOKENS)
-        values["dest_compute"] = 1 - prefill_tps / rate
-        if not LEVELS["dest_compute"][0] - 1e-12 \
-                <= values["dest_compute"] <= LEVELS["dest_compute"][1] + 1e-12:
-            raise ValueError("invalid absolute prefill sweep point")
+        values["dest_compute"] = max(0, 1 - prefill_tps / rate)
     demand = sum((q.work(
         session.expected_f, session.expected_g, session.context_tokens, True,
     ) for session in sessions), start=np.zeros(2))
@@ -370,7 +373,6 @@ def build_problem(profile, sessions, constraints, target_fraction, fits, *,
         )
         service = FluidMigrationService(
             1 / fits[region]["replay_compute_completion_factor"],
-            fits[region]["kv_ingest_lower_bound_bytes_per_s"],
             source_action, sink_action,
             "regional-c1 timing; pipelined route and shared endpoint work",
             1, True,
@@ -622,16 +624,16 @@ def oat_design(profile, levels=20):
         raise ValueError("OAT sweep requires at least two levels")
     q = dedicated_sink_architecture(profile, REGIONS[0], ("link/east",)).types[0]
     rate = q.prefill.at(PREFILL_REFERENCE_TOKENS)
-    loads = LEVELS["dest_compute"]
     bandwidths = np.linspace(
-        BANDWIDTH_BOTTLENECK_MBPS, max(physical_route_mbps().values()), levels)
-    prefills = np.linspace((1 - loads[1]) * rate, (1 - loads[0]) * rate, levels)
+        OAT_BANDWIDTH_LOWER_MBPS, OAT_BANDWIDTH_UPPER_MBPS, levels)
+    prefills = np.linspace(
+        (1 - OAT_DEST_COMPUTE[1]) * rate, OAT_PREFILL_UPPER_TPS, levels)
     return bandwidths, prefills, float(np.median(bandwidths)), \
         float(np.median(prefills)), rate
 
 
 def simulate_oat(samples=1000, seed=DEFAULT_SEED, sessions=28,
-                 target_fraction=2 / 3, levels=20, profile_path=PROFILE,
+                 target_fraction=1.0, levels=20, profile_path=PROFILE,
                  manifest_path=MANIFEST):
     if samples < levels or samples % levels:
         raise ValueError("OAT samples must be a multiple of levels")
@@ -1064,8 +1066,16 @@ def plot_action_boxplot(rows, path):
 def plot_oat(rows, path):
     from matplotlib.ticker import PercentFormatter
 
-    fig, axes = plt.subplots(1, 2, figsize=(8, 3.5), sharey=True)
-    for axis, sweep in zip(axes, ("bandwidth", "prefill")):
+    fs, legend_fs = 8, 7
+    left, axes_w, axes_h, bottom, top = .39, .86, .98, .30, .06
+    legend_w, right = .69, .095
+    for sweep in ("bandwidth", "prefill"):
+        wide = sweep == "prefill"
+        fig_w = left + axes_w + (legend_w if wide else right)
+        fig_h = bottom + axes_h + top
+        fig = plt.figure(figsize=(fig_w, fig_h))
+        ax = fig.add_axes((left / fig_w, bottom / fig_h,
+                           axes_w / fig_w, axes_h / fig_h))
         selected = [row for row in rows if row["sweep"] == sweep]
         levels = sorted({row["level"] for row in selected})
         by_action = {action: {row["level"]: row for row in selected
@@ -1073,7 +1083,7 @@ def plot_oat(rows, path):
         points = [by_action[ACTIONS[0]][level] for level in levels]
         x = [row["bandwidth_cap_gbps"] if sweep == "bandwidth"
              else row["prefill_available_tps"] / 1000 for row in points]
-        artists = axis.stackplot(
+        artists = ax.stackplot(
             x, *([by_action[action][level]["session_share"] for level in levels]
                  for action in ACTIONS),
             colors=[plot_style.ACTION_COLORS[action] for action in ACTIONS],
@@ -1081,34 +1091,30 @@ def plot_oat(rows, path):
         )
         for artist in artists:
             artist.set_edgecolor("white")
-            artist.set_linewidth(.6)
-        axis.plot(x, [row["target_met_rate"] for row in points], color="black",
-                  marker="o", markersize=3, linewidth=1.5,
-                  label="67% target attained")
-        fixed = points[0]["prefill_available_tps"] / 1000 \
-            if sweep == "bandwidth" else points[0]["bandwidth_cap_gbps"]
-        axis.set(
-            title=(f"Bandwidth sweep\nPrefill fixed at {fixed:.2f} ktoken/s"
-                   if sweep == "bandwidth" else
-                   f"Prefill sweep\nBandwidth fixed at {fixed:.2f} Gbit/s"),
-            xlabel=("Shared bandwidth cap (Gbit/s)" if sweep == "bandwidth"
-                    else "Available prefill throughput (ktoken/s)"),
-            ylim=(0, 1.02),
+            artist.set_linewidth(.3)
+        ax.set(
+            xlabel=("Bandwidth (Gbit/s)" if sweep == "bandwidth"
+                    else "Prefill (k·token/s)"),
+            xlim=(x[0], x[-1]), ylim=(0, 1),
         )
-        axis.yaxis.set_major_formatter(PercentFormatter(1))
-        axis.grid(axis="y", alpha=.2)
-        axis.tick_params(labelsize=9)
-        axis.title.set_size(10)
-        axis.xaxis.label.set_size(10)
-    axes[0].set_ylabel("Sessions / plans (%)")
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, frameon=False, ncol=2, loc="lower center",
-               bbox_to_anchor=(.5, .01), fontsize=9)
-    fig.subplots_adjust(left=.1, right=.99, bottom=.29, top=.82, wspace=.12)
-    fig.savefig(path.with_suffix(".png"), dpi=plot_style.SAVE_DPI,
-                bbox_inches="tight")
-    fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
-    plt.close(fig)
+        ax.margins(0)
+        ax.set_ylabel("Sessions (%)")
+        ax.yaxis.set_major_formatter(PercentFormatter(1, symbol=""))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(.25))
+        ax.xaxis.set_major_locator(plt.MultipleLocator(5))
+        ax.tick_params(labelsize=fs, length=2, pad=1)
+        ax.xaxis.label.set_size(fs)
+        ax.yaxis.label.set_size(fs)
+        ax.xaxis.labelpad = ax.yaxis.labelpad = 2
+        if wide:
+            ax.legend(*ax.get_legend_handles_labels(), fontsize=legend_fs,
+                      loc="center left", bbox_to_anchor=(1.02, .5),
+                      handlelength=.9, handletextpad=.3, labelspacing=.4,
+                      borderaxespad=0, borderpad=0, frameon=False)
+        for suffix in ("png", "pdf"):
+            fig.savefig(path.parent / f"action_choice_oat_{sweep}.{suffix}",
+                        dpi=plot_style.SAVE_DPI)
+        plt.close(fig)
 
 
 def file_hash(path):
@@ -1131,7 +1137,7 @@ def main():
         loaded_context_only=True,
     )
     oat_rows, oat_design_metadata = simulate_oat(
-        args.samples, args.seed, args.sessions, args.target,
+        args.samples, args.seed, args.sessions, 1.0,
     )
     if any((row["replicate"], row["case_id"], row["timing_fit_sha256"],
             row["power_bootstrap_index"]) !=
