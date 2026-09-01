@@ -235,10 +235,6 @@ POWER_VALIDATION_COLORS = dict(zip(POWER_VALIDATION_METHODS, (
 )))
 POWER_VALIDATION_MARKERS = dict(zip(
     POWER_VALIDATION_METHODS, ("o", "s", "^", "D", "x")))
-SCALING_OUTCOME_NAMES = {
-    "timeout": "Timeout", "oom": "OOM / memory limit",
-}
-SCALING_OUTCOME_MARKERS = {"timeout": "x", "oom": "^"}
 
 
 def apply():

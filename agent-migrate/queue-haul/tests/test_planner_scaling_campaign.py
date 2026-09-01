@@ -22,16 +22,17 @@ def test_small_cells_are_paired_and_reach_the_target():
     assert "candidate_slots" not in greedy | lp
 
 
-def test_plot_writes_both_formats_with_censored_markers(tmp_path, monkeypatch):
+def test_plot_writes_selection_only_in_both_formats(tmp_path, monkeypatch):
     applied = []
     monkeypatch.setattr(plot_style, "apply", lambda: applied.append(True))
     rows = [
-        {"solver": "greedy", "sessions": 1_000, "status": "ok", "solve_s": .1},
-        {"solver": "greedy", "sessions": 10_000, "status": "ok", "solve_s": 1},
-        {"solver": "lp", "sessions": 1_000, "status": "ok", "solve_s": 1},
+        {"solver": "greedy", "sessions": 1_000, "status": "ok",
+         "selection_s": .1},
+        {"solver": "greedy", "sessions": 10_000, "status": "ok",
+         "selection_s": 1},
+        {"solver": "lp", "sessions": 1_000, "status": "ok", "selection_s": 1},
         {"solver": "lp", "sessions": 10_000, "status": "timeout",
          "time_limit_s": 10},
-        {"solver": "lp", "sessions": 100_000, "status": "oom"},
     ]
 
     scaling.plot(rows, tmp_path / "scaling")

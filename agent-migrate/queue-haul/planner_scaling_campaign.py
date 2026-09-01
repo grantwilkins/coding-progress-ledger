@@ -304,6 +304,7 @@ def _identity(args) -> dict:
         "target_fraction_of_removable_power": TARGET_FRACTION,
         "lp_integral_recovery": False,
         "timed_region": "candidate generation plus selection; excludes packing and DES",
+        "plotted_metric": "selection_s for completed cells only",
     }
 
 
@@ -358,8 +359,9 @@ def plot(rows, output: Path) -> None:
     plot_style.apply()
     fig, axis = plt.subplots(figsize=plot_style.FIGSIZE)
     for solver, policy in (("lp", "queue_haul"), ("greedy", "greedy")):
-        ok = [row for row in rows if row["solver"] == solver and row["status"] == "ok"]
-        grouped = {sessions: [row["solve_s"] for row in ok
+        ok = [row for row in rows if row["solver"] == solver
+              and row["status"] == "ok"]
+        grouped = {sessions: [row["selection_s"] for row in ok
                               if row["sessions"] == sessions]
                    for sessions in sorted({row["sessions"] for row in ok})}
         style = plot_style.policy_style(policy)
@@ -371,29 +373,8 @@ def plot(rows, output: Path) -> None:
         if low != high:
             axis.fill_between(x, low, high, color=plot_style.POLICY_COLORS[policy],
                               alpha=.14)
-        for status, marker in plot_style.SCALING_OUTCOME_MARKERS.items():
-            failed = [row for row in rows if row["solver"] == solver
-                      and row["status"] == status]
-            if failed:
-                if status == "timeout":
-                    axis.scatter(
-                        [row["sessions"] for row in failed],
-                        [row["time_limit_s"] for row in failed], marker=marker,
-                        s=110, color=plot_style.POLICY_COLORS[policy],
-                    )
-                else:
-                    axis.scatter(
-                        [row["sessions"] for row in failed], [.97] * len(failed),
-                        transform=axis.get_xaxis_transform(), marker=marker,
-                        s=110, color=plot_style.POLICY_COLORS[policy], clip_on=False,
-                    )
-    present = {row["status"] for row in rows}
-    for status, name in plot_style.SCALING_OUTCOME_NAMES.items():
-        if status in present:
-            axis.scatter([], [], marker=plot_style.SCALING_OUTCOME_MARKERS[status],
-                         s=90, color="black", label=name)
     axis.set(xscale="log", yscale="log", xlabel="Sessions",
-             ylabel="Candidate generation + selection (s)")
+             ylabel="Selection time (s)")
     axis.grid(True, which="both", alpha=.25)
     axis.legend()
     fig.tight_layout()
@@ -435,7 +416,7 @@ def main() -> None:
     else:
         with args.input.open() as stream:
             rows = list(csv.DictReader(stream))
-        numeric = {"sessions", "solve_s", "time_limit_s"}
+        numeric = {"sessions", "selection_s"}
         plot([{key: float(value) if key in numeric and value else value
                for key, value in row.items()} for row in rows], args.output)
 

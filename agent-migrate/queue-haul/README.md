@@ -1018,18 +1018,21 @@ constraints. Noisy bootstrap route draws
 are minimally projected to preserve natural bandwidth at or above the measured
 40%-route condition, and the projection rate is recorded.
 
-The same command writes `action_choice_oat.pdf`. Two paired one-at-a-time sweeps
-use 20 levels and 50 common workload/timing/power draws per level. The bandwidth
-sweep fixes per-destination prefill headroom at the midpoint of the measured
-7,680-token range; the prefill sweep fixes the shared route cap at the midpoint
-of the 1-Gbit/s-to-natural range. Stacked bands show Replay, KV-transfer, and
-not-moved session shares, while the black line shows plan-level attainment of
-the 67% source-power target by 30 seconds. Regional pipeline timing is
-interpolated between the measured endpoint fits, so the timing holdout remains
-hardware checked while the action distributions are modeled sensitivities.
+The same command writes `action_choice_oat_bandwidth.pdf`. Its 20-level
+bandwidth sweep uses 1,000 seeded packs of eight OpenHands sessions. Each pack
+samples templates without replacement and then samples one supported turn per
+template; that same pack is planned at every bandwidth. Calibration, source
+load (0.4), and per-destination prefill headroom are fixed, and the planner must
+meet the full 100% source-power target. Stacked bands show mean Replay,
+KV-transfer, and not-moved session shares; faint bands are whole-pack bootstrap
+95% intervals for the mean boundaries. `action_choice_oat_packs.csv` records
+every sampled pack and plan. Regional pipeline timing is interpolated between
+the measured endpoint fits, so these distributions are modeled workload
+sensitivities rather than hardware action observations.
 
 ```bash
 uv run python queue-haul/workload_adaptation_campaign.py
+uv run python queue-haul/workload_adaptation_campaign.py --oat-only
 ```
 
 The resulting 1,000 draws are a modeled calibration/workload sensitivity, not
@@ -1791,13 +1794,14 @@ uv run python planner_scaling_campaign.py run
 ```
 
 The pinned 24 GiB campaign in `outputs/planner-scaling-greedy-vs-lp/` records
-greedy/LP medians of 10.62/20.23 s at 100K and 106.90/196.47 s at 1M. At 2M,
-greedy takes 214.12 s versus LP's 546.80 s. Greedy remains nearly linear and
-finishes 5M in 537.21 s and 10M in 1,078.48 s; LP reaches the declared 1,800 s
-timeout at both sizes. Neither solver reaches the 24 GiB memory limit, so these
-points are timeouts, not OOMs. At 10M, greedy spends 936.30 s generating compact
-inputs and 142.14 s in native selection; dense Python input construction remains
-the dominant optimization target.
+both production-front-end and pure-selection time; its figure plots selection
+only. Greedy/LP selection medians are 1.25/9.05 s at 100K, 13.27/87.08 s at 1M,
+and 26.97/326.38 s at 2M. Greedy selection remains nearly linear at 70.14 s for
+5M and 142.14 s for 10M. LP's combined candidate-generation and selection arm
+reaches the declared 1,800 s timeout at both larger sizes, so no selection-only
+LP value or timeout marker is plotted there. No monitored 24 GiB breach was
+classified. At 10M, greedy also spends 936.30 s generating compact inputs, which
+remains the dominant optimization target outside the plotted selection step.
 
 `planner_quality.py` pairs full greedy and shipped LP plans over workload,
 fleet-size, deadline, destination-scarcity, seed, and target grids. It checks
