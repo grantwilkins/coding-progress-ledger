@@ -124,7 +124,3 @@ def test_oat_distribution_has_canonical_visual_identity():
     assert plot_style.OAT_TARGET_COLOR == "#222222"
     assert plot_style.OAT_TARGET_LINESTYLE == "-"
     assert plot_style.OAT_TARGET_LINEWIDTH == 2
-    assert plot_style.OAT_SHARED_NAME == "Pooled median"
-    assert plot_style.OAT_SHARED_COLOR == "#222222"
-    assert plot_style.OAT_SHARED_LINESTYLE == "--"
-    assert plot_style.OAT_SHARED_LINEWIDTH == 1

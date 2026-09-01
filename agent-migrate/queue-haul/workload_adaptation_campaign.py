@@ -1270,8 +1270,8 @@ def plot_oat(rows, path, sweep):
     x = [row["bandwidth_cap_gbps"] if sweep == "bandwidth" else
          row["prefill_available_tps"] / 1000 for row in points]
     fig, (mix, target) = plt.subplots(
-        2, 1, figsize=(4.6, 3.7), sharex=True,
-        gridspec_kw={"height_ratios": (3, 1)},
+        2, 1, figsize=(4.6, 4), sharex=True,
+        gridspec_kw={"height_ratios": (3, 1.3)},
     )
     artists = mix.stackplot(
         x, *([by_action[action][level]["session_share"] for level in levels]
@@ -1295,21 +1295,9 @@ def plot_oat(rows, path, sweep):
                 linestyle=plot_style.OAT_TARGET_LINESTYLE,
                 linewidth=plot_style.OAT_TARGET_LINEWIDTH)
     target.set(xlabel=("Bandwidth cap (Gbit/s)" if sweep == "bandwidth"
-                       else "Modeled prefill headroom at 7,680 tokens\n(k token/s)"),
-               ylabel="Deadline-Met\n(%)", ylim=(-.03, 1.03))
+                       else "Prefill Rate (k tok/s)"),
+               ylabel="Deadline-Met (%)", ylim=(-.03, 1.03))
     if sweep == "prefill":
-        shared = float(np.median([row["tokens_per_s"] for row in json.loads(
-            PREFILL_ANCHORS.read_text())["anchors"]
-            if row["metric"] == "prefill"])) / 1000
-        for ax in (mix, target):
-            ax.axvline(shared, color=plot_style.OAT_SHARED_COLOR,
-                       linestyle=plot_style.OAT_SHARED_LINESTYLE,
-                       linewidth=plot_style.OAT_SHARED_LINEWIDTH)
-        target.annotate(
-            f"{plot_style.OAT_SHARED_NAME} ({shared:.2f})", (shared, .04),
-            xycoords=target.get_xaxis_transform(),
-            ha="right", va="bottom", fontsize=8,
-        )
         target.set_xticks((*range(1, 5), x[-1]),
                           (*map(str, range(1, 5)), f"{x[-1]:.2f}"))
         target.get_xticklabels()[-1].set_ha("right")
@@ -1361,20 +1349,9 @@ def plot_oat_density(rows, path, sessions):
         )
         ax.set(title=title, ylabel=ylabel, yticks=range(sessions + 1),
                xlabel=("Bandwidth cap (Gbit/s)" if sweep == "bandwidth"
-                       else "Modeled prefill headroom at 7,680 tokens\n(k token/s)"),
+                       else "Prefill Rate (k tok/s)"),
                xlim=(x[0], x[-1]), ylim=(-.5, sessions + .5))
         if sweep == "prefill":
-            shared = float(np.median([row["tokens_per_s"] for row in json.loads(
-                PREFILL_ANCHORS.read_text())["anchors"]
-                if row["metric"] == "prefill"])) / 1000
-            ax.axvline(shared, color=plot_style.OAT_SHARED_COLOR,
-                       linestyle=plot_style.OAT_SHARED_LINESTYLE,
-                       linewidth=plot_style.OAT_SHARED_LINEWIDTH)
-            ax.annotate(
-                f"{plot_style.OAT_SHARED_NAME} ({shared:.2f})", (shared, .02),
-                xycoords=ax.get_xaxis_transform(), rotation=90,
-                ha="right", va="bottom", fontsize=8,
-            )
             ax.set_xticks((*range(1, 5), x[-1]),
                           (*map(str, range(1, 5)), f"{x[-1]:.2f}"))
             ax.get_xticklabels()[-1].set_ha("right")
