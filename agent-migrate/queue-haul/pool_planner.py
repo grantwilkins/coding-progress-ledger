@@ -692,15 +692,19 @@ def _pricing_chunk(oracle, start, stop):
     return features, feasible
 
 
-def _pricing_layout(oracle):
+def _resource_layout(oracle):
     starts, rows, coefficients = [0], [], []
     for template in oracle.templates:
         rows.extend(row for row, _ in template)
         coefficients.extend(value for _, value in template)
         starts.append(len(rows))
-    return (np.asarray(oracle.option_signatures, np.uint16),
-            np.asarray(starts, np.int32), np.asarray(rows, np.int32),
+    return (np.asarray(starts, np.int32), np.asarray(rows, np.int32),
             np.asarray(coefficients))
+
+
+def _pricing_layout(oracle):
+    return (np.asarray(oracle.option_signatures, np.uint16),
+            *_resource_layout(oracle))
 
 
 def _pricing_ranks(oracle):
@@ -736,7 +740,7 @@ def _compact_greedy(oracle, target):
         ), set(), 0.0, 0.0
     started = perf_counter()
     soa = _greedy_soa(oracle)
-    option_signatures, starts, rows, coefficients = _pricing_layout(oracle)
+    starts, rows, coefficients = _resource_layout(oracle)
     generation_s = perf_counter() - started
     started = perf_counter()
     selected = greedy_compact(
@@ -748,7 +752,7 @@ def _compact_greedy(oracle, target):
     compact_bytes = sum(
         value.nbytes for value in (
             soa.sessions, soa.options, soa.durations, soa.features,
-            option_signatures, starts, rows, coefficients,
+            starts, rows, coefficients,
         )
     )
     started = perf_counter()

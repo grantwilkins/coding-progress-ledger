@@ -2233,6 +2233,24 @@ def test_pricing_soa_reconstructs_every_candidate_column(tmp_path):
     ].tolist()
 
 
+def test_compact_greedy_supports_more_than_uint16_options(monkeypatch):
+    count = np.iinfo(np.uint16).max + 2
+    oracle = SimpleNamespace(
+        migration_horizon_s=1, sessions=(object(),), specs=(), gains=(1.,),
+        templates=((),) * count, option_signatures=tuple(range(count)),
+    )
+    monkeypatch.setattr(pool_planner, "_greedy_soa", lambda oracle:
+                        pool_planner.GreedySoA(
+                            np.zeros(1, np.int32), np.array([count - 1], np.int32),
+                            np.ones(1), np.zeros((1, 7))))
+    monkeypatch.setattr(pool_planner, "_materialize_greedy",
+                        lambda *args: SimpleNamespace(candidates=(object(),)))
+
+    _, selected, _, _ = pool_planner._compact_greedy(oracle, 1)
+
+    assert selected == {0}
+
+
 def test_native_pricing_matches_complete_python_sweep(tmp_path):
     scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
     oracle = _candidate_oracle(
