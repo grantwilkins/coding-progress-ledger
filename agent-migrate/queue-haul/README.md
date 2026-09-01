@@ -174,8 +174,129 @@ archived raw logs
 
 Every input and result must say whether it is measured, fitted, assumed, or
 simulated. Assumed values are sensitivities, never admission guarantees.
-The conversation workload pins ShareGPT artifact revision
+The destination campaign's ShareGPT-derived conversation profile pins revision
 `192ab2185289094fc556ec8ce5ce1e8e587154ca` and stores only token/turn shapes.
+
+## How to read a workload output
+
+An output directory name does not identify what ran. In particular, `8` and
+`28` mean sessions in one episode or modeled pack; they do not mean GPUs,
+models, repetitions, or total requests. Read the artifact in this order:
+
+1. `plan.json` defines a hardware campaign's model profile, session rows,
+   policies, deadlines, bandwidths, and scenario matrix. `run_metadata.json`
+   records the runtime that actually executed it: model, container, ports,
+   LMCache mode, Git commit, and other launch settings. Per-scenario results or
+   reduced migration CSVs establish what completed.
+2. A modeled sweep without `plan.json` uses its `*_metadata.json` as the
+   authority. Its `claim`, `inputs`, `limitations`, `sessions_per_pack`, and
+   input hashes distinguish modeled reuse of measurements from new model
+   execution.
+3. A `*-plan` directory is an unexecuted launch bundle. A `simulation/`
+   directory contains predictions. PNG/PDF/summary-only directories are
+   derived views. Do not promote any of these to hardware evidence merely
+   because they reuse a measured profile.
+
+"Workload" has three separate meanings that must not be collapsed:
+
+- **Shape source:** the dataset or manifest from which session identity and
+  token/turn counts came.
+- **Model payload:** the text or token IDs actually sent to the serving engine.
+- **Offered activity:** whether requests continue during migration, their
+  arrival schedule, and their concurrency.
+
+The two commonly confused outputs instantiate those layers differently.
+
+### `policy-hardware-width8-packing-20260730`: live two-A100 migration
+
+This is hardware timing evidence. Its frozen plan and run metadata say:
+
+| Dimension | What ran |
+|---|---|
+| Model/runtime | `openai/gpt-oss-20b`, BF16, TP=1, vLLM 0.22.0 and LMCache 0.5.1 MP in the pinned CUDA 12.9 container |
+| Hardware | one RAMR node with two A100 SXM4 80 GB GPUs: one source engine and one destination engine |
+| Sessions | the same eight coding-session identities from `outputs/coding-manifest.json` in every scenario |
+| Payload | deterministic synthetic calibration messages: a state-code system message, a labeled body of repeated `x` tokens sized from `initial_tokens`, and a state-code probe; the original coding text was not sent |
+| Pack shapes | `tiny=8x2048`, `small=8x4096`, `medium=8x8192`, `large=8x16384`, and `mixed=(2048,4096,4096,8192,8192,12288,12288,14336)` nominal context tokens |
+| Network/deadline cells | 1, 2.5, 5, and 10 Gbit/s crossed with 19- and 30-second scoring deadlines |
+| Policies | Queue-Haul LP, static greedy, KV-only, and replay-only, each paired with a no-migration control |
+| Repetition | three repeats per pack/bandwidth/deadline cell |
+| Activity | no appended requests and no destination background load during migration; the source and destination remain awake |
+| Concurrency | source warming is serialized; all eight migrations are then started in deterministic planned order with width-eight concurrency; destination continuation probes run concurrently |
+
+The matrix is `5 packs x 4 bandwidths x 2 scoring deadlines x 3 repeats =
+120` matched cells. Each cell has one control and four migration policies, for
+600 scenarios total. All 480 migration scenarios completed all eight moves,
+producing 3,840 measured migrations. The per-scenario `deadline_s=180` is the
+execution timeout; `required_deadline_s` is the 19- or 30-second value used for
+policy admission and scoring.
+
+Each scenario first warms GPT-OSS-20B on the source to materialize session KV.
+Replay sends the deterministic prompt to the destination while explicitly
+bypassing LMCache, so GPT-OSS recomputes it. KV transfer moves LMCache blocks
+and requires the destination request to prove the corresponding cache hits.
+After cutover, a continuation request verifies the committed state and route.
+The measured evidence is reconstruction, cutover, continuation, and GPU timing;
+the reported source-power attainment is projected from the pinned A100 power
+profile rather than obtained by keeping eight natural conversations active.
+
+The manifest's `claude:` and `codex:` IDs are labels and state-code seeds here.
+Because every plan row supplies `initial_tokens`, the trace's original turn
+contents and recorded turn sizes do not define the live prompt. The nominal
+pack size is retained in `policy_migrations.csv` as `context_tokens`; raw model
+usage at the original run root is the place to inspect tokenizer-reported
+prompt and completion counts.
+
+### `workload-power-frontier-20260814`: 28-session modeled sensitivity
+
+This output did not launch GPT-OSS-20B and did not run 28 live requests. It is
+a deterministic planner/model sweep whose metadata labels the claim
+`modeled`. GPT-OSS-20B enters in two ways: its pinned tokenizer produced the
+archived token shapes, and its fitted A100 PCIe 300 W service, migration, KV,
+and phase-power measurements parameterize the model.
+
+The content-free manifest combines three shape families:
+
+- coding sessions from `trace-commons/agent-traces`;
+- interactive coding conversations from `allenai/WildChat-1M`; and
+- agentic tool loops from NVIDIA SWE-Hero OpenHands trajectories.
+
+Only shapes are retained. For each eligible turn, the modeled state is
+`context = total input - newly appended input`, `prefill work = newly appended
+input`, and `decode work = output tokens`. States outside the 1,536--31,562
+context timing support or the phase-power direction support are rejected. The
+frozen metadata records 63 supported conversation templates and 3,021
+supported turn states.
+
+For each of 100 draws, the sampler chooses 28 template IDs with replacement,
+then one supported turn state from each chosen template. It keeps the 28 raw
+contexts but rescales all prefill/decode rates by one common factor so
+`sum(f/F + g/G)=0.4`. This is a simultaneous source-state pack, not a timed
+request trace: it has no arrivals, think time, prompt text, or generated model
+responses. A template can appear more than once in a pack.
+
+Each draw also selects one joint phase-power bootstrap tuple and refits the
+regional migration timing from a stratified bootstrap. That complete draw is
+then reused across all eight combinations of:
+
+- destination HBM occupancy: 0% or 98%;
+- route bandwidth: measured natural East/Germany rates (2.280/8.733 Gbit/s) or
+  a 1-Gbit/s cap on both; and
+- pre-existing destination compute: 25% or 95% of the modeled envelope.
+
+The virtual topology has one single-GPU source and single-GPU destination pools
+in East and Germany. For each of the `100 draws x 8 constraint states = 800`
+paired cases, Queue-Haul's HiGHS LP is evaluated at removable-power fractions
+`0, 1/8, 1/4, 3/8, 1/2, 5/8, 2/3, 3/4, 7/8, 1`, producing 8,000 raw rows. A
+separate integer maximum-shed solve supplies the capacity endpoint. Every point
+uses a 41-second modeled migration horizon. The retained CSV field
+`target_met_by_30s` is a legacy name and means target met by that 41-second
+scenario horizon for this output.
+
+Power is steady awake **source** GPU power only; destination power and energy
+are excluded. Therefore the figure is a distribution across paired synthetic
+workload/calibration draws, not a confidence interval, 800 hardware runs, or
+2,800 executed GPT-OSS sessions.
 
 ## Three-region Azure A100 campaign
 
