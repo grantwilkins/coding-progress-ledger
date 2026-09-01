@@ -1018,18 +1018,27 @@ constraints. Noisy bootstrap route draws
 are minimally projected to preserve natural bandwidth at or above the measured
 40%-route condition, and the projection rate is recorded.
 
-The same command writes `action_choice_oat_bandwidth.pdf`. Its 20-level
-bandwidth sweep uses 1,000 seeded packs of eight OpenHands sessions. Each pack
-samples templates without replacement and then samples one supported turn per
-template; that same pack is planned at every bandwidth. Calibration, source
-load (0.4), and per-destination prefill headroom are fixed, and the planner must
-meet 100% of removable session-induced source power. Stacked bands show mean
-Replay, KV-transfer, and not-moved session shares; white bands show the
-5th--95th and 25th--75th pack percentiles around each cumulative boundary, and
-the black line is the pack median. `action_choice_oat_packs.csv` records
-every sampled pack and plan. Regional pipeline timing is interpolated between
-the measured endpoint fits, so these distributions are modeled workload
-sensitivities rather than hardware action observations.
+The same command writes `action_choice_oat_bandwidth.pdf`,
+`action_choice_oat_prefill.pdf`, and `action_choice_oat_density.pdf`. Both
+50-level sweeps use the same 1,000 seeded packs of eight OpenHands sessions.
+Each pack samples trajectories without replacement and then one supported turn
+per trajectory; that exact pack is planned at every resource level. Calibration
+and source load (0.4) remain fixed, and the planner must meet 100% of removable
+session-induced source power. The bandwidth sweep fixes prefill at its full
+modeled rate and ends at the largest natural route capacity. The prefill sweep
+fixes routes at natural capacity and spans 1%--100% of modeled prefill capacity.
+
+The clean stacked plots report empirical action probabilities over 8,000
+session decisions at each resource level; their lower panels separately report
+the fraction of packs meeting the target. The density figure reports the
+discrete pack distributions that directly support the two claims:
+`P(KV count | bandwidth)` and `P(migrated count | prefill)`. Color, rather than
+a smoothed percentile ribbon, represents density. Pack definitions are in
+`action_choice_oat_packs.csv`, the 100,000 paired results are in
+`action_choice_oat_plans.csv`, and plotted frequencies are in
+`action_choice_oat_distribution.csv`. Regional pipeline timing is interpolated
+between measured endpoint fits, so these are modeled workload sensitivities
+rather than hardware action observations.
 
 ```bash
 uv run python queue-haul/workload_adaptation_campaign.py
@@ -1038,7 +1047,8 @@ uv run python queue-haul/workload_adaptation_campaign.py --oat-only
 
 The main factorial's 1,000 draws are a modeled calibration/workload
 sensitivity, not a confidence interval or 1,000 independent workloads. The
-OAT sweep instead fixes calibration across its 1,000 workload packs. The
+OAT sweeps instead fix calibration across 1,000 Monte Carlo workload packs from
+the 24 manifest-selected OpenHands trajectories. The
 regional single-move timing holdout passes its recorded gate; grouped local
 and width-8 timing audits remain retrospective. Route and endpoint work use
 the pipeline overlap already present in the calibrated effective rate;

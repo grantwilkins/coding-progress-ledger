@@ -117,3 +117,10 @@ def test_displayed_resource_states_have_distinct_canonical_colors():
     assert plot_style.RESOURCE_STATE_NAMES["bandwidth-dest_compute-hbm"] \
         == "All bottlenecked"
     assert len(set(colors)) == len(states)
+
+
+def test_oat_distribution_has_canonical_visual_identity():
+    assert plot_style.OAT_DENSITY_COLOR == "#6A3D9A"
+    assert plot_style.OAT_TARGET_COLOR == "#222222"
+    assert plot_style.OAT_TARGET_LINESTYLE == "-"
+    assert plot_style.OAT_TARGET_LINEWIDTH == 2

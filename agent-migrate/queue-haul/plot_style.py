@@ -56,6 +56,10 @@ ACTION_COLORS = {
     "east_kv_transfer": "#56B4E9", "germany_kv_transfer": "#0072B2",
     "not_moved": "#999999",
 }
+OAT_DENSITY_COLOR = "#6A3D9A"
+OAT_TARGET_COLOR = "#222222"
+OAT_TARGET_LINESTYLE = "-"
+OAT_TARGET_LINEWIDTH = 2
 TIMING_ACTION_NAMES = {"replay": ACTION_NAMES["replay"],
                        "kv_transfer": ACTION_NAMES["kv_transfer"],
                        "mixed": "Mixed"}

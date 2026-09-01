@@ -139,27 +139,25 @@ def test_one_paired_draw_conserves_sessions_and_target():
                    for row in checks)
 
 
-def test_oat_axes_are_absolute_and_contain_factorial_endpoints():
+def test_oat_axes_cover_only_effective_resource_ranges():
     profile = ModelProfile.load(campaign.PROFILE)
     templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
     pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 4, 3))
     fits = campaign.central_timing_fits()
     bandwidths, prefills, fixed_bandwidth, fixed_prefill, rate = \
         campaign.oat_design(profile, levels=5)
+    natural_bandwidth = max(campaign.physical_route_mbps().values())
 
     assert bandwidths == pytest.approx(np.linspace(
-        campaign.OAT_BANDWIDTH_LOWER_MBPS,
-        campaign.OAT_BANDWIDTH_UPPER_MBPS, 5))
+        campaign.OAT_BANDWIDTH_LOWER_MBPS, natural_bandwidth, 5))
     assert prefills == pytest.approx(np.linspace(
-        (1 - campaign.OAT_DEST_COMPUTE[1]) * rate,
-        campaign.OAT_PREFILL_UPPER_TPS, 5))
-    assert fixed_bandwidth == pytest.approx(np.median(bandwidths))
-    assert fixed_prefill == pytest.approx(np.median(prefills))
-    loads = campaign.LEVELS["dest_compute"]
+        (1 - campaign.OAT_DEST_COMPUTE[1]) * rate, rate, 5))
+    assert fixed_bandwidth == pytest.approx(natural_bandwidth)
+    assert fixed_prefill == pytest.approx(rate)
     assert bandwidths[0] < campaign.BANDWIDTH_BOTTLENECK_MBPS
-    assert bandwidths[-1] > max(campaign.physical_route_mbps().values())
-    assert prefills[0] < (1 - loads[1]) * rate
-    assert prefills[-1] > rate
+    assert bandwidths[-1] == pytest.approx(natural_bandwidth)
+    assert prefills[0] < (1 - campaign.LEVELS["dest_compute"][1]) * rate
+    assert prefills[-1] == pytest.approx(rate)
 
     for point in ((bandwidths[0], prefills[0]), (bandwidths[-1], prefills[-1])):
         campaign.build_problem(
@@ -168,41 +166,60 @@ def test_oat_axes_are_absolute_and_contain_factorial_endpoints():
         )
 
 
-def test_oat_pairs_seeded_openhands_packs_across_bandwidth_levels():
-    rows, raw, design = campaign.simulate_oat(
-        packs=2, levels=2, seed=3, sessions=4, bootstrap_replicates=10)
+def test_oat_pairs_seeded_openhands_packs_across_resource_levels():
+    rows, packs, raw, distribution, design = campaign.simulate_oat(
+        packs=2, levels=2, seed=3, sessions=4)
 
-    assert len(rows) == 2 * len(campaign.ACTIONS)
-    assert len(raw) == 4
+    assert len(rows) == 2 * 2 * len(campaign.ACTIONS)
+    assert len(packs) == 2
+    assert len(raw) == 2 * 2 * 2
+    assert len(distribution) == 2 * 2 * 5
     assert design["paired_draws"] == design["packs"] == 2
-    assert campaign.OAT_PACKS == 1000 and campaign.OAT_SESSIONS == 8
+    assert (campaign.OAT_PACKS, campaign.OAT_SESSIONS,
+            campaign.OAT_LEVELS) == (1000, 8, 50)
     assert design["sessions_per_pack"] == 4
     assert design["target_fraction"] == 1
     assert design["pack_seed_range"] == [4, 5]
-    for level in range(2):
-        selected = [row for row in rows if row["level"] == level]
-        assert sum(row["session_count"] for row in selected) == 8
-        assert sum(row["session_share"] for row in selected) == pytest.approx(1)
-        assert {row["plans"] for row in selected} == {2}
-        assert all(0 <= row["bootstrap_ci_low"] <= row["bootstrap_ci_high"] <= 1
-                   for row in selected)
-    assert len({row["prefill_available_tps"] for row in rows}) == 1
+    for sweep in ("bandwidth", "prefill"):
+        for level in range(2):
+            selected = [row for row in rows
+                        if row["sweep"] == sweep and row["level"] == level]
+            assert sum(row["session_count"] for row in selected) == 8
+            assert sum(row["session_share"] for row in selected) \
+                == pytest.approx(1)
+            assert {row["plans"] for row in selected} == {2}
+            density = [row for row in distribution
+                       if row["sweep"] == sweep and row["level"] == level]
+            assert sum(row["pack_count"] for row in density) == 2
+            assert sum(row["pack_share"] for row in density) == pytest.approx(1)
+            metric = "kv_transfer_count" if sweep == "bandwidth" \
+                else "migrated_count"
+            observed = [row["kv_transfer_count"] if sweep == "bandwidth" else
+                        row["replay_count"] + row["kv_transfer_count"]
+                        for row in raw
+                        if row["sweep"] == sweep and row["level"] == level]
+            assert {row["outcome"]: row["pack_count"] for row in density} == {
+                outcome: observed.count(outcome) for outcome in range(5)}
+            assert {row["metric"] for row in density} == {metric}
+    assert len({row["prefill_available_tps"] for row in rows
+                if row["sweep"] == "bandwidth"}) == 1
+    assert len({row["bandwidth_cap_gbps"] for row in rows
+                if row["sweep"] == "prefill"}) == 1
     for pack_id in (1, 2):
         selected = [row for row in raw if row["pack_id"] == pack_id]
-        assert len({tuple(row[key] for key in ("template_ids", "context_tokens",
-                                               "prompt_tokens", "output_tokens"))
-                    for row in selected}) == 1
-        ids = selected[0]["template_ids"].split(";")
+        pack = next(row for row in packs if row["pack_id"] == pack_id)
+        ids = pack["template_ids"].split(";")
         assert len(ids) == len(set(ids)) == 4
         assert all("openhands" in template_id.lower() for template_id in ids)
         assert all(sum(row[f"{action}_count"] for action in campaign.ACTIONS) == 4
                    for row in selected)
-    replay = next(row for row in rows
-                  if row["level"] == 1 and row["action"] == "replay")
-    expected = np.quantile([row["replay_count"] / 4 for row in raw
-                            if row["level"] == 1], (.05, .25, .5, .75, .95))
-    assert [replay[f"cumulative_pack_p{quantile:02d}"]
-            for quantile in (5, 25, 50, 75, 95)] == pytest.approx(expected)
+        assert all(row["target_met"] == (row["replay_count"] +
+                                         row["kv_transfer_count"] == 4)
+                   for row in selected)
+    assert {row["metric"] for row in distribution
+            if row["sweep"] == "bandwidth"} == {"kv_transfer_count"}
+    assert {row["metric"] for row in distribution
+            if row["sweep"] == "prefill"} == {"migrated_count"}
 
 
 def test_oat_refuses_a_lower_target():
