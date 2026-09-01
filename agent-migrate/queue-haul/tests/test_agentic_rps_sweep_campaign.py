@@ -69,6 +69,27 @@ def test_trace_forces_long_output_and_unique_private_prompts():
         row["offset_s"] for row in trace)
 
 
+def test_error_bar_trace_prestarts_one_thread_per_request(monkeypatch):
+    def issue(_host, _port, _model, prepared, scheduled_ns, _timeout, _bypass):
+        start_ns = campaign.time.monotonic_ns()
+        return {"request_index": prepared["index"],
+                "scheduled_ns": scheduled_ns, "start_ns": start_ns,
+                "send_lateness_s": (start_ns - scheduled_ns) / 1e9}
+
+    monkeypatch.setattr(campaign.serving, "issue_prepared", issue)
+    trace = [{"offset_s": .02, "population": "agentic",
+              "prepared": {"index": index}} for index in range(32)]
+
+    rows, error = campaign.issue_threaded_trace(
+        "127.0.0.1", 1, "model", trace, 1, .02,
+    )
+
+    assert error is None
+    assert len(rows) == 32
+    assert {row["request_index"] for row in rows} == set(range(32))
+    assert max(row["send_lateness_s"] for row in rows) < .05
+
+
 def synthetic_result(plan, model, rate, repeat, ttft, tpot):
     return {
         "schema": campaign.SCHEMA,
@@ -266,9 +287,16 @@ def test_error_bar_plans_freeze_shared_adaptive_protocol():
     assert not h100["runtime"]["enforce_eager"]
     assert h100["runtime"]["stream_interval"] == 1
     assert h100["warmup"]["rate_rps"] == 1
+    assert h100["collector"] == {
+        "request_driver": "one_ready_blocking_thread_per_request",
+        "dispatch_lead_s": 1,
+        "metrics_period_s": .25,
+    }
     assert h100["validity"]["max_metric_gap_s"] == 1
+    assert h100["validity"]["minimum_exact_tpot_interval_coverage"] == .99
+    assert h100["validity"]["maximum_attempts_per_cell"] == 2
     assert h100["statistics"]["per_look_minimum_confidence"] == .975
-    assert {"blocks", "validity", "statistics", "semantics",
+    assert {"blocks", "collector", "validity", "statistics", "semantics",
             "preflight", "selection", "implementation"} \
         <= h100["comparison"].keys()
     assert h100["comparison_sha256"] == a100["comparison_sha256"]
@@ -302,7 +330,7 @@ def slo_requests(exact=True):
     } for index in range(32)]
 
 
-def test_error_bar_cell_requires_complete_exact_uncached_measurement():
+def test_error_bar_cell_requires_complete_exact_interval_coverage():
     plan = campaign.make_slo_plan()
     cell = campaign.slo_cell_spec(7, 0)
     metrics = [{"monotonic_ns": index * 10**9,
@@ -317,6 +345,17 @@ def test_error_bar_cell_requires_complete_exact_uncached_measurement():
     inexact = campaign.summarize_slo_cell(
         plan, cell, slo_requests(False), metrics, True, None, False, None,
         None, runtime)
+    bundled = slo_requests()
+    bundled[0].update({
+        "exact_token_timestamps": False, "mean_tpot_s": None,
+        "token_itls_s": [],
+        "token_events": [
+            {"monotonic_ns": index * 10_000_000, "token_ids": [1]}
+            for index in range(1022)
+        ] + [{"monotonic_ns": 10_220_000_000, "token_ids": [1, 1]}],
+    })
+    observable = campaign.summarize_slo_cell(
+        plan, cell, bundled, metrics, True, None, False, None, None, runtime)
     incomplete = campaign.summarize_slo_cell(
         plan, cell, slo_requests(), metrics[:1], True, None, False, None,
         None, runtime)
@@ -330,8 +369,13 @@ def test_error_bar_cell_requires_complete_exact_uncached_measurement():
     assert numeric["exact_timing"] == 32
     assert numeric["tpot_samples"] == 32 * 1023
     assert numeric["realized_rps"] == 1
+    assert observable["status"] == "numeric"
+    assert observable["exact_timing"] == 31
+    assert observable["tpot_samples"] == 32 * 1023 - 2
+    assert observable["exact_tpot_interval_coverage"] == pytest.approx(
+        (32 * 1023 - 2) / (32 * 1023))
     assert inexact["status"] == "invalid"
-    assert inexact["validity_errors"] == ["exact_token_timing"]
+    assert inexact["validity_errors"] == ["exact_tpot_interval_coverage"]
     assert incomplete["validity_errors"] == ["telemetry"]
     assert failure["status"] == "service_failure"
     assert failure["slo_violation"]
@@ -347,6 +391,19 @@ def test_error_bar_cell_requires_complete_exact_uncached_measurement():
     assert crashed["validity_errors"] == []
     assert infrastructure["status"] == "invalid"
     assert infrastructure["validity_errors"] == ["infrastructure"]
+
+
+def test_error_bar_cell_allows_only_one_validity_retry(tmp_path):
+    plan = campaign.make_slo_plan()
+    cell = campaign.slo_cell_spec(.125, 0)
+    cell_root = tmp_path / "cells" / cell["cell_id"]
+    for attempt in range(2):
+        (cell_root / f"attempt-{attempt:03d}").mkdir(parents=True)
+
+    with pytest.raises(RuntimeError, match="retries exhausted"):
+        campaign.measure_slo_cell(
+            plan, cell, None, None, tmp_path, {}, "formal",
+        )
 
 
 def write_slo_scout(plan, root, rate, violation, status="numeric"):

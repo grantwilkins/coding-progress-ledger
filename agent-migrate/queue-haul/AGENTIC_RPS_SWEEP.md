@@ -27,14 +27,19 @@ output tokens. Twenty randomized complete blocks are primary; ten predeclared
 blocks are available only if the primary result is unresolved. Every block
 starts a fresh engine, performs a discarded 32-request warmup at 1 RPS, and
 resets and drains caches between rates. Shared A100/H100 rates have identical
-arrival and prompt seeds and identical relative order.
+arrival and prompt seeds and identical relative order. The collector prestarts
+one blocking client thread per request and samples engine telemetry every 250
+ms.
 
-A numeric cell requires all 32 completions, 32 exact one-token streams, zero
-cache hits, complete telemetry, drain, correct token counts, and at most 50 ms
-send lateness. Telemetry must bracket the episode with no scrape gap over 1 s.
-Instrumentation or runtime failures stop the run and retain the failed attempt.
-Genuine service failures are retained as right-censored violations and are not
-retried. The 1-RPS warmup is a compilation warmup, not a claimed safe rate.
+A numeric cell requires all 32 completions, at least 99% observable exact TPOT
+intervals, zero cache hits, complete telemetry, drain, correct token counts,
+and at most 50 ms send lateness. A TPOT interval is observable only between
+adjacent one-token SSE events; vLLM-merged events are retained but their
+unknowable gaps are never synthesized. Telemetry must bracket the episode with
+no scrape gap over 1 s. Instrumentation or runtime failures stop the run and
+retain the failed attempt. At most one immediate validity-only retry is allowed.
+Genuine service failures and numeric SLO outcomes are never retried. The 1-RPS
+warmup is a compilation warmup, not a claimed safe rate.
 
 At every rate, the figure shows all block-level P90 values, their median, and
 an exact distribution-free median interval. The predeclared two-look rule uses
