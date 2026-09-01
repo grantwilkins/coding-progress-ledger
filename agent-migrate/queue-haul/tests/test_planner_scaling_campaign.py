@@ -22,7 +22,7 @@ def test_small_cells_are_paired_and_reach_the_target():
     assert "candidate_slots" not in greedy | lp
 
 
-def test_plot_writes_selection_with_combined_timeout_outcomes(tmp_path, monkeypatch):
+def test_plot_writes_planning_time_with_dnf_outcomes(tmp_path, monkeypatch):
     applied = []
     monkeypatch.setattr(plot_style, "apply", lambda: applied.append(True))
     rows = [

@@ -62,7 +62,7 @@ def test_power_validation_methods_have_unique_markers():
 
 
 def test_scaling_timeout_has_canonical_visual_identity():
-    assert plot_style.SCALING_TIMEOUT_NAME == "Combined timeout"
+    assert plot_style.SCALING_TIMEOUT_NAME == "DNF"
     assert plot_style.SCALING_TIMEOUT_MARKER == "x"
 
 

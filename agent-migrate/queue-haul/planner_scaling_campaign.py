@@ -386,7 +386,7 @@ def plot(rows, output: Path) -> None:
         axis.scatter([], [], marker=plot_style.SCALING_TIMEOUT_MARKER, s=90,
                      color="black", label=plot_style.SCALING_TIMEOUT_NAME)
     axis.set(xscale="log", yscale="log", xlabel="Sessions",
-             ylabel="Selection time (s)")
+             ylabel="Planning Time (s)")
     axis.tick_params(labelsize=10)
     axis.xaxis.label.set_size(12)
     axis.yaxis.label.set_size(12)
@@ -394,8 +394,8 @@ def plot(rows, output: Path) -> None:
     axis.legend(loc="upper left", fontsize=8, handlelength=2)
     fig.tight_layout()
     output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output.with_suffix(".pdf"))
-    fig.savefig(output.with_suffix(".png"))
+    fig.savefig(output.with_suffix(".pdf"), bbox_inches="tight")
+    fig.savefig(output.with_suffix(".png"), bbox_inches="tight")
     plt.close(fig)
 
 
