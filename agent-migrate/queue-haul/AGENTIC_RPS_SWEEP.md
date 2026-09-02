@@ -7,12 +7,19 @@ GPT-OSS-20B agentic shape against the unchanged SLOs:
 - P90 TPOT must be at most 50 milliseconds.
 
 One warmed engine launch runs 50 uncached requests at each predeclared rate:
-0.0625, 0.125, 0.15625, 0.1875, 0.21875, 0.25, 0.5, 1, 2, 4, and 8 RPS. Rates
-run in a frozen randomized order, with a full cache reset and drain between
-them. A resume or engine failure may start another runtime-identical launch;
-each result records its launch path. The grid includes a safe H100 anchor,
-dense points around its observed boundary, and high-rate violations while
-remaining useful for the A100 site.
+0.5, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, and 24 RPS. Rates run in a
+frozen randomized order, with a full cache reset and drain between them. A
+resume or engine failure may start another runtime-identical launch; each
+result records its launch path. The grid covers the A100 transition around
+2--4 RPS and the corrected H100 transition above 10 RPS, with several upper
+violation points.
+
+Both sites explicitly use the vLLM `TRITON_ATTN` backend and disable async
+scheduling. This avoids the vLLM 0.22.0 H100 default-FA3 performance regression
+and preserves at least 99% directly observable singleton-token intervals with
+`stream_interval=1`. Startup evidence must confirm both settings. This is the
+quick-v2 runtime; quick-v1 results used a different backend and are not
+comparable.
 
 Each point is the measured P90. The error bar is the envelope of two pointwise
 95% circular moving-block bootstrap intervals, using adjacent-request blocks
@@ -38,12 +45,12 @@ The committed plans are reproducible with:
 
 ```bash
 uv run python quick_slo_sweep.py prepare --seed 20260902 --hardware h100 \
-  --out runs/agentic-rps-sweep-h100-quick-v1/plan.json
+  --out runs/agentic-rps-sweep-h100-quick-v2/plan.json
 uv run python quick_slo_sweep.py prepare --seed 20260902 --hardware a100 \
-  --out runs/agentic-rps-sweep-a100-quick-v1/plan.json
+  --out runs/agentic-rps-sweep-a100-quick-v2/plan.json
 git diff --exit-code -- \
-  runs/agentic-rps-sweep-h100-quick-v1/plan.json \
-  runs/agentic-rps-sweep-a100-quick-v1/plan.json
+  runs/agentic-rps-sweep-h100-quick-v2/plan.json \
+  runs/agentic-rps-sweep-a100-quick-v2/plan.json
 ```
 
 Both sites use the same clean commit and checkout path. They must use separate
@@ -57,12 +64,12 @@ From `/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul`:
 CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
 QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
 uv run python quick_slo_sweep.py run \
-  --plan runs/agentic-rps-sweep-h100-quick-v1/plan.json \
-  --run-root /datadrive/agentic-rps-sweep-h100-quick-v1
+  --plan runs/agentic-rps-sweep-h100-quick-v2/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-h100-quick-v2
 
 uv run python plot_agentic_rps_sweep.py \
-  /datadrive/agentic-rps-sweep-h100-quick-v1/summary.json \
-  /datadrive/agentic-rps-sweep-h100-quick-v1/figures
+  /datadrive/agentic-rps-sweep-h100-quick-v2/summary.json \
+  /datadrive/agentic-rps-sweep-h100-quick-v2/figures
 ```
 
 ## A100
@@ -71,19 +78,19 @@ uv run python plot_agentic_rps_sweep.py \
 CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
 QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
 uv run python quick_slo_sweep.py run \
-  --plan runs/agentic-rps-sweep-a100-quick-v1/plan.json \
-  --run-root /datadrive/agentic-rps-sweep-a100-quick-v1
+  --plan runs/agentic-rps-sweep-a100-quick-v2/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-a100-quick-v2
 ```
 
 After both summaries are available in one checkout, create the combined graph:
 
 ```bash
 uv run python plot_agentic_rps_sweep.py \
-  /datadrive/agentic-rps-sweep-a100-quick-v1/summary.json \
-  /datadrive/agentic-rps-sweep-quick-v1/figures \
-  --h100-summary /datadrive/agentic-rps-sweep-h100-quick-v1/summary.json
+  /datadrive/agentic-rps-sweep-a100-quick-v2/summary.json \
+  /datadrive/agentic-rps-sweep-quick-v2/figures \
+  --h100-summary /datadrive/agentic-rps-sweep-h100-quick-v2/summary.json
 ```
 
 Rerunning the same `run` command safely reuses completed cells. Do not share a
-run root between sites or combine quick-v1 results with the fresh-engine v4
-campaign.
+run root between sites or combine quick-v2 results with quick-v1 or the
+fresh-engine v4 campaign.

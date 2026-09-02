@@ -18,9 +18,9 @@ import migration_testbed as testbed
 import single_gpu_capacity_campaign as capacity
 
 
-SCHEMA = "queue-haul-quick-slo-sweep-v1"
+SCHEMA = "queue-haul-quick-slo-sweep-v2"
 MODEL = campaign.SLO_MODEL
-RATES = (.0625, .125, .15625, .1875, .21875, .25, .5, 1., 2., 4., 8.)
+RATES = (.5, 1., 2., 3., 4., 5., 6., 7., 8., 10., 12., 14., 16., 20., 24.)
 REQUESTS = 50
 BOOTSTRAP_DRAWS = 10_000
 BLOCK_LENGTHS = (5, 10)
@@ -41,6 +41,8 @@ def make_plan(seed: int = DEFAULT_SEED, hardware: str = "h100") -> dict:
         "mode": "native",
         "runtime_versions": list(testbed.NATIVE_RUNTIME_VERSIONS),
         "stream_interval": 1,
+        "attention_backend": "TRITON_ATTN",
+        "async_scheduling": False,
     }
     common = {
         "campaign": "agentic_rps_sweep",

@@ -11,7 +11,7 @@ def test_plan_is_shared_across_hardware_and_targets_the_boundary():
     a100 = sweep.make_plan(7, "a100")
 
     assert h100["rates_rps"] == [
-        .0625, .125, .15625, .1875, .21875, .25, .5, 1, 2, 4, 8,
+        .5, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24,
     ]
     assert h100["requests_per_point"] == 50
     assert h100["slo"] == {"p90_ttft_s": 1., "p90_tpot_s": .05}
@@ -20,6 +20,8 @@ def test_plan_is_shared_across_hardware_and_targets_the_boundary():
         "pointwise_conditional_on_each_rate_episode"
     assert h100["semantics"]["engine_reuse"] == \
         "one_warmed_launch_until_failure_or_resume"
+    assert h100["runtime"]["attention_backend"] == "TRITON_ATTN"
+    assert not h100["runtime"]["async_scheduling"]
     assert "one_warmed_engine" not in h100["semantics"]
     assert h100["comparison_sha256"] == a100["comparison_sha256"]
     assert h100["rate_order_rps"] == a100["rate_order_rps"]

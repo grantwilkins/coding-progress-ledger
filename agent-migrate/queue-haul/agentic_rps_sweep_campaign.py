@@ -1158,6 +1158,27 @@ def read_slo_preflight_record(plan: dict, root: Path, path: Path) -> dict:
     return result
 
 
+def slo_vllm_args(runtime: dict) -> list[str]:
+    args = ["--stream-interval", str(runtime["stream_interval"])]
+    if backend := runtime.get("attention_backend"):
+        args += ["--attention-backend", backend]
+    if (enabled := runtime.get("async_scheduling")) is not None:
+        args.append("--async-scheduling" if enabled else "--no-async-scheduling")
+    return args
+
+
+def validate_slo_runtime_log(runtime: dict, text: str) -> None:
+    backend = runtime.get("attention_backend")
+    if backend and not re.search(
+            rf"Using (?:AttentionBackendEnum\.)?{re.escape(backend)} "
+            r"(?:attention )?backend", text, re.IGNORECASE):
+        raise RuntimeError("SLO runtime did not prove its attention backend")
+    if (enabled := runtime.get("async_scheduling")) is not None \
+            and f"Asynchronous scheduling is " \
+            f"{'enabled' if enabled else 'disabled'}." not in text:
+        raise RuntimeError("SLO runtime did not prove its scheduling mode")
+
+
 def run_slo_block(plan: dict, root: Path, block: int,
                   rates: tuple[float, ...], stage: str,
                   expected_fingerprint: str | None = None,
@@ -1182,14 +1203,14 @@ def run_slo_block(plan: dict, root: Path, block: int,
     while pending:
         launch = len(list(launch_root.glob("launch-*")))
         stack_root = launch_root / f"launch-{launch:03d}"
-        commands = capacity.stack_commands(
-            cfg, ["--stream-interval", str(plan["runtime"]["stream_interval"])],
-        )
+        commands = capacity.stack_commands(cfg, slo_vllm_args(plan["runtime"]))
         identity = runtime_identity(plan, cfg, commands)
         with capacity.engine_stack(cfg, stack_root, identity, commands) as stack:
+            log = testbed.read_text(stack.log)
             testbed.validate_optimized_runtime(
-                testbed.shell(commands["vllm"]), testbed.read_text(stack.log),
+                testbed.shell(commands["vllm"]), log,
             )
+            validate_slo_runtime_log(plan["runtime"], log)
             identity = finalize_runtime_identity(identity, stack.server_info)
             fingerprint = fingerprint or identity["fingerprint_sha256"]
             if identity["fingerprint_sha256"] != fingerprint:

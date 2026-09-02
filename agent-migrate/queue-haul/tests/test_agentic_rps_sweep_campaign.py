@@ -537,6 +537,30 @@ def test_fresh_formal_block_accepts_preflight_fingerprint(tmp_path, monkeypatch)
             "selection")
 
 
+def test_slo_runtime_flags_and_observed_contract():
+    runtime = {
+        "stream_interval": 1,
+        "attention_backend": "TRITON_ATTN",
+        "async_scheduling": False,
+    }
+
+    assert campaign.slo_vllm_args(runtime) == [
+        "--stream-interval", "1", "--attention-backend", "TRITON_ATTN",
+        "--no-async-scheduling",
+    ]
+    campaign.validate_slo_runtime_log(
+        runtime,
+        "Using AttentionBackendEnum.TRITON_ATTN backend.\n"
+        "Asynchronous scheduling is disabled.\n",
+    )
+    with pytest.raises(RuntimeError, match="attention backend"):
+        campaign.validate_slo_runtime_log(
+            runtime, "Asynchronous scheduling is disabled.")
+    with pytest.raises(RuntimeError, match="scheduling mode"):
+        campaign.validate_slo_runtime_log(
+            runtime, "Using AttentionBackendEnum.TRITON_ATTN backend.")
+
+
 def test_runtime_fingerprint_covers_commands_and_server_config(monkeypatch):
     plan = campaign.make_slo_plan()
     monkeypatch.setattr(campaign.profiler, "git_state", lambda _: ("git", False))
