@@ -1,0 +1,133 @@
+{
+  "campaign": "agentic_rps_sweep",
+  "collector": {
+    "dispatch_lead_s": 1.0,
+    "metrics_period_s": 0.25,
+    "request_driver": "one_ready_blocking_thread_per_request"
+  },
+  "comparison_sha256": "b7b22991d6c541ab1fc7baf81a00d3aa80e50a2583af06cda616323bfe352091",
+  "hardware": "a100",
+  "implementation": {
+    "collector_source_sha256": "49a2262db19ed13a59b64d2906bca220fd9768d9211ee9e434fbb5d7341c1c9d",
+    "quick_source_sha256": "4225da486bd286bb1c319b9f6d77d063821ad3ddb705b5586567c94b82ddb4bf"
+  },
+  "model_revisions": {
+    "openai/gpt-oss-20b": "6cee5e81ee83917806bbde320786a8fb61efebee"
+  },
+  "models": [
+    "openai/gpt-oss-20b"
+  ],
+  "rate_order_rps": [
+    2.0,
+    0.5,
+    0.25,
+    0.1875,
+    1.0,
+    8.0,
+    0.21875,
+    0.0625,
+    4.0,
+    0.125,
+    0.15625
+  ],
+  "rates_rps": [
+    0.0625,
+    0.125,
+    0.15625,
+    0.1875,
+    0.21875,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0,
+    8.0
+  ],
+  "rates_rps_by_model": {
+    "openai/gpt-oss-20b": [
+      0.0625,
+      0.125,
+      0.15625,
+      0.1875,
+      0.21875,
+      0.25,
+      0.5,
+      1.0,
+      2.0,
+      4.0,
+      8.0
+    ]
+  },
+  "request_shape": {
+    "output_tokens": 1024,
+    "prompt_tokens": 3920
+  },
+  "request_timeout_s": 1800.0,
+  "requests_per_point": 50,
+  "runtime": {
+    "block_size": 16,
+    "chunked_prefill": true,
+    "dtype": "bfloat16",
+    "enforce_eager": false,
+    "gpu_count": 1,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "auto",
+    "lmcache_mode": "mp",
+    "max_model_len": 32768,
+    "max_num_batched_tokens": 8192,
+    "max_num_seqs": 256,
+    "mode": "native",
+    "prefix_caching": true,
+    "runtime_versions": [
+      "0.22.0",
+      "0.5.1"
+    ],
+    "stream_interval": 1,
+    "tensor_parallel_size": 1
+  },
+  "schema": "queue-haul-quick-slo-sweep-v1",
+  "seed": 20260902,
+  "semantics": {
+    "engine_reuse": "one_warmed_launch_until_failure_or_resume",
+    "forced_exact_output_length": true,
+    "max_concurrency": null,
+    "open_loop_poisson": true,
+    "reset_and_drain_between_rates": true,
+    "run_all_predeclared_rates": true,
+    "service_failures_are_violations": true,
+    "tpot_definition": "p90_of_observable_exact_singleton_token_intervals",
+    "uncached_unique_prompts": true
+  },
+  "slo": {
+    "p90_tpot_s": 0.05,
+    "p90_ttft_s": 1.0
+  },
+  "statistics": {
+    "bootstrap_draws": 10000,
+    "classification": "point_estimate",
+    "confidence": 0.95,
+    "interval": "circular_moving_request_block_bootstrap_envelope",
+    "point": "empirical_p90",
+    "request_block_lengths": [
+      5,
+      10
+    ],
+    "scope": "pointwise_conditional_on_each_rate_episode"
+  },
+  "study": "quick_gpt_oss_slo_error_bars",
+  "validity": {
+    "max_metric_gap_s": 1.0,
+    "max_send_lateness_s": 0.05,
+    "maximum_attempts_per_cell": 2,
+    "minimum_exact_tpot_interval_coverage": 0.99,
+    "require_drain": true,
+    "require_telemetry": true,
+    "required_cached_tokens": 0,
+    "required_completions": 50
+  },
+  "warmup": {
+    "discard": true,
+    "rate_rps": 1.0,
+    "requests": 50
+  }
+}

@@ -13,6 +13,7 @@ from matplotlib.container import ErrorbarContainer
 import pytest
 
 import plot_agentic_rps_sweep as plotter
+import plot_style
 
 
 def test_plot_selects_sorted_gpt_oss_curve_and_fixed_slos(tmp_path, monkeypatch):
@@ -159,4 +160,39 @@ def test_v4_plot_shows_raw_points_exact_intervals_and_summary_slo(
     assert axis.get_xscale() == "log"
     assert axis.get_xlim()[0] < 1
     assert axis.get_xlim()[1] > 10.2
+    plt.close("all")
+
+
+def test_quick_plot_marks_metric_violations(tmp_path, monkeypatch):
+    curve = [{
+        "offered_rps": rate, "realized_rps_median": rate,
+        "p90_ttft_s_median": ttft, "p90_ttft_s_ci_low": ttft - .1,
+        "p90_ttft_s_ci_high": ttft + .1,
+        "p90_tpot_s_median": tpot, "p90_tpot_s_ci_low": tpot - .005,
+        "p90_tpot_s_ci_high": tpot + .005,
+        "points": [{"status": "numeric", "realized_rps": rate,
+                    "p90_ttft_s": ttft, "p90_tpot_s": tpot}],
+    } for rate, ttft, tpot in ((.125, .8, .04), (.25, .8, .06))]
+    summary = {
+        "schema": plotter.QUICK_SCHEMA, "stage": "reduced",
+        "hardware": "h100", "comparison_sha256": "shared",
+        "shared_runtime_sha256": "runtime", "launch_git_sha": "git",
+        "models": {plotter.MODEL: {
+            "slo": {"p90_ttft_s": 1., "p90_tpot_s": .05},
+            "curve": curve,
+        }},
+    }
+    monkeypatch.setattr(plt, "close", lambda figure: None)
+
+    plotter.plot(summary, tmp_path)
+    figure = plt.gcf()
+    axis = figure.axes[1]
+    violations = next(collection for collection in axis.collections
+                      if collection.get_label() == plot_style.SLO_VIOLATION_NAME)
+
+    assert list(violations.get_offsets()[0]) == [.25, 60]
+    assert plot_style.SLO_VIOLATION_NAME in [
+        text.get_text() for text in figure.legends[0].get_texts()
+    ]
+    assert axis.get_xscale() == "log"
     plt.close("all")
