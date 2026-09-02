@@ -22,6 +22,7 @@ def test_plan_is_shared_across_hardware_and_targets_the_boundary():
         "one_warmed_launch_until_failure_or_resume"
     assert h100["runtime"]["attention_backend"] == "TRITON_ATTN"
     assert not h100["runtime"]["async_scheduling"]
+    assert not h100["runtime"]["server_info_system_probe"]
     assert "one_warmed_engine" not in h100["semantics"]
     assert h100["comparison_sha256"] == a100["comparison_sha256"]
     assert h100["rate_order_rps"] == a100["rate_order_rps"]

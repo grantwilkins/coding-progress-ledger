@@ -542,11 +542,13 @@ def test_slo_runtime_flags_and_observed_contract():
         "stream_interval": 1,
         "attention_backend": "TRITON_ATTN",
         "async_scheduling": False,
+        "server_info_system_probe": False,
     }
 
     assert campaign.slo_vllm_args(runtime) == [
         "--stream-interval", "1", "--attention-backend", "TRITON_ATTN",
-        "--no-async-scheduling",
+        "--no-async-scheduling", "--middleware",
+        "server_info_middleware.ConfigOnly",
     ]
     campaign.validate_slo_runtime_log(
         runtime,
@@ -559,6 +561,9 @@ def test_slo_runtime_flags_and_observed_contract():
     with pytest.raises(RuntimeError, match="scheduling mode"):
         campaign.validate_slo_runtime_log(
             runtime, "Using AttentionBackendEnum.TRITON_ATTN backend.")
+    campaign.validate_slo_server_info(runtime, {"system_env": {}})
+    with pytest.raises(RuntimeError, match="system probe"):
+        campaign.validate_slo_server_info(runtime, {"system_env": {"os": "slow"}})
 
 
 def test_runtime_fingerprint_covers_commands_and_server_config(monkeypatch):

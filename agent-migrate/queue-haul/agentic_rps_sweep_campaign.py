@@ -1164,6 +1164,8 @@ def slo_vllm_args(runtime: dict) -> list[str]:
         args += ["--attention-backend", backend]
     if (enabled := runtime.get("async_scheduling")) is not None:
         args.append("--async-scheduling" if enabled else "--no-async-scheduling")
+    if runtime.get("server_info_system_probe") is False:
+        args += ["--middleware", "server_info_middleware.ConfigOnly"]
     return args
 
 
@@ -1177,6 +1179,12 @@ def validate_slo_runtime_log(runtime: dict, text: str) -> None:
             and f"Asynchronous scheduling is " \
             f"{'enabled' if enabled else 'disabled'}." not in text:
         raise RuntimeError("SLO runtime did not prove its scheduling mode")
+
+
+def validate_slo_server_info(runtime: dict, server_info: dict) -> None:
+    if runtime.get("server_info_system_probe") is False \
+            and server_info.get("system_env") != {}:
+        raise RuntimeError("SLO server-info system probe was not disabled")
 
 
 def run_slo_block(plan: dict, root: Path, block: int,
@@ -1211,6 +1219,7 @@ def run_slo_block(plan: dict, root: Path, block: int,
                 testbed.shell(commands["vllm"]), log,
             )
             validate_slo_runtime_log(plan["runtime"], log)
+            validate_slo_server_info(plan["runtime"], stack.server_info)
             identity = finalize_runtime_identity(identity, stack.server_info)
             fingerprint = fingerprint or identity["fingerprint_sha256"]
             if identity["fingerprint_sha256"] != fingerprint:

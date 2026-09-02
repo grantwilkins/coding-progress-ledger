@@ -5,11 +5,12 @@
     "metrics_period_s": 0.25,
     "request_driver": "one_ready_blocking_thread_per_request"
   },
-  "comparison_sha256": "d6248445f53c018ea96883796bcd062bede3e9a163b49bee9386568c9b224fac",
+  "comparison_sha256": "eeeb20ff6a9c5c22be07a3c8a3453310a8b5540dc13c7126bd2c2c876416e35c",
   "hardware": "h100",
   "implementation": {
-    "collector_source_sha256": "1d5902b70b0eab7a6c1d3d19e05a05ef741f047eb2b8a75520ede1031e153dbf",
-    "quick_source_sha256": "0b2737a613a3e693a5aee3c4e2111b9cb589341825aa7c754aee0efaecda02e2"
+    "collector_source_sha256": "8091ddbc26dc37da0aea704679252cf92599662c8407038201cbe6e72eee0247",
+    "quick_source_sha256": "793258f2ed6042b95408c9babc814f61f0b6e23fb8678cd0a6fda259a19a1d20",
+    "server_info_middleware_source_sha256": "bc3f4cdfcb87d4fe87007dced603b939ead74648debff9aa4052fdfd8084d192"
   },
   "model_revisions": {
     "openai/gpt-oss-20b": "6cee5e81ee83917806bbde320786a8fb61efebee"
@@ -96,10 +97,11 @@
       "0.22.0",
       "0.5.1"
     ],
+    "server_info_system_probe": false,
     "stream_interval": 1,
     "tensor_parallel_size": 1
   },
-  "schema": "queue-haul-quick-slo-sweep-v2",
+  "schema": "queue-haul-quick-slo-sweep-v3",
   "seed": 20260902,
   "semantics": {
     "engine_reuse": "one_warmed_launch_until_failure_or_resume",

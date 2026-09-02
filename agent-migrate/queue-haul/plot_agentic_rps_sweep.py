@@ -15,7 +15,7 @@ plot_style.apply()
 MODEL = "openai/gpt-oss-20b"
 SCHEMA = "queue-haul-agentic-rps-sweep-v3"
 SLO_SCHEMA = "queue-haul-agentic-rps-sweep-v4"
-QUICK_SCHEMA = "queue-haul-quick-slo-sweep-v2"
+QUICK_SCHEMA = "queue-haul-quick-slo-sweep-v3"
 ERROR_BAR_SCHEMAS = {SLO_SCHEMA, QUICK_SCHEMA}
 METRICS = (
     ("p90_ttft_s", "P90 TTFT (s)", 1),

@@ -18,7 +18,7 @@ import migration_testbed as testbed
 import single_gpu_capacity_campaign as capacity
 
 
-SCHEMA = "queue-haul-quick-slo-sweep-v2"
+SCHEMA = "queue-haul-quick-slo-sweep-v3"
 MODEL = campaign.SLO_MODEL
 RATES = (.5, 1., 2., 3., 4., 5., 6., 7., 8., 10., 12., 14., 16., 20., 24.)
 REQUESTS = 50
@@ -43,6 +43,7 @@ def make_plan(seed: int = DEFAULT_SEED, hardware: str = "h100") -> dict:
         "stream_interval": 1,
         "attention_backend": "TRITON_ATTN",
         "async_scheduling": False,
+        "server_info_system_probe": False,
     }
     common = {
         "campaign": "agentic_rps_sweep",
@@ -93,6 +94,9 @@ def make_plan(seed: int = DEFAULT_SEED, hardware: str = "h100") -> dict:
         "implementation": {
             "quick_source_sha256": source_sha256(Path(__file__)),
             "collector_source_sha256": source_sha256(Path(campaign.__file__)),
+            "server_info_middleware_source_sha256": source_sha256(
+                Path(__file__).with_name("lmcache_compat") /
+                "server_info_middleware.py"),
         },
         "request_timeout_s": campaign.REQUEST_TIMEOUT_S,
         "seed": seed,

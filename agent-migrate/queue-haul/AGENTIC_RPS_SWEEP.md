@@ -18,7 +18,7 @@ Both sites explicitly use the vLLM `TRITON_ATTN` backend and disable async
 scheduling. This avoids the vLLM 0.22.0 H100 default-FA3 performance regression
 and preserves at least 99% directly observable singleton-token intervals with
 `stream_interval=1`. Startup evidence must confirm both settings. This is the
-quick-v2 runtime; quick-v1 results used a different backend and are not
+quick-v3 runtime; quick-v1 results used a different backend and are not
 comparable.
 
 Each point is the measured P90. The error bar is the envelope of two pointwise
@@ -45,18 +45,17 @@ The committed plans are reproducible with:
 
 ```bash
 uv run python quick_slo_sweep.py prepare --seed 20260902 --hardware h100 \
-  --out runs/agentic-rps-sweep-h100-quick-v2/plan.json
+  --out runs/agentic-rps-sweep-h100-quick-v3/plan.json
 uv run python quick_slo_sweep.py prepare --seed 20260902 --hardware a100 \
-  --out runs/agentic-rps-sweep-a100-quick-v2/plan.json
+  --out runs/agentic-rps-sweep-a100-quick-v3/plan.json
 git diff --exit-code -- \
-  runs/agentic-rps-sweep-h100-quick-v2/plan.json \
-  runs/agentic-rps-sweep-a100-quick-v2/plan.json
+  runs/agentic-rps-sweep-h100-quick-v3/plan.json \
+  runs/agentic-rps-sweep-a100-quick-v3/plan.json
 ```
 
 Both sites use the same clean commit and checkout path. They must use separate
-run roots. Run the campaign with the project interpreter directly: vLLM's
-provenance endpoint invokes `uv`, so nesting the live run under `uv run` can
-block on uv's environment lock.
+run roots. The quick runtime keeps vLLM's effective configuration in its
+provenance response but disables its unbounded OS-package inventory probe.
 
 ## H100
 
@@ -65,13 +64,13 @@ From `/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul`:
 ```bash
 CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
 QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
-../.venv/bin/python quick_slo_sweep.py run \
-  --plan runs/agentic-rps-sweep-h100-quick-v2/plan.json \
-  --run-root /datadrive/agentic-rps-sweep-h100-quick-v2
+uv run python quick_slo_sweep.py run \
+  --plan runs/agentic-rps-sweep-h100-quick-v3/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-h100-quick-v3
 
 uv run python plot_agentic_rps_sweep.py \
-  /datadrive/agentic-rps-sweep-h100-quick-v2/summary.json \
-  /datadrive/agentic-rps-sweep-h100-quick-v2/figures
+  /datadrive/agentic-rps-sweep-h100-quick-v3/summary.json \
+  /datadrive/agentic-rps-sweep-h100-quick-v3/figures
 ```
 
 ## A100
@@ -79,20 +78,20 @@ uv run python plot_agentic_rps_sweep.py \
 ```bash
 CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
 QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
-../.venv/bin/python quick_slo_sweep.py run \
-  --plan runs/agentic-rps-sweep-a100-quick-v2/plan.json \
-  --run-root /datadrive/agentic-rps-sweep-a100-quick-v2
+uv run python quick_slo_sweep.py run \
+  --plan runs/agentic-rps-sweep-a100-quick-v3/plan.json \
+  --run-root /datadrive/agentic-rps-sweep-a100-quick-v3
 ```
 
 After both summaries are available in one checkout, create the combined graph:
 
 ```bash
 uv run python plot_agentic_rps_sweep.py \
-  /datadrive/agentic-rps-sweep-a100-quick-v2/summary.json \
-  /datadrive/agentic-rps-sweep-quick-v2/figures \
-  --h100-summary /datadrive/agentic-rps-sweep-h100-quick-v2/summary.json
+  /datadrive/agentic-rps-sweep-a100-quick-v3/summary.json \
+  /datadrive/agentic-rps-sweep-quick-v3/figures \
+  --h100-summary /datadrive/agentic-rps-sweep-h100-quick-v3/summary.json
 ```
 
 Rerunning the same `run` command safely reuses completed cells. Do not share a
-run root between sites or combine quick-v2 results with quick-v1 or the
+run root between sites or combine quick-v3 results with earlier quick runs or the
 fresh-engine v4 campaign.
