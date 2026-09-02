@@ -90,8 +90,11 @@ After both summaries are available in one checkout, create the combined graph:
 uv run python plot_agentic_rps_sweep.py \
   /datadrive/agentic-rps-sweep-a100-quick-v4/summary.json \
   /datadrive/agentic-rps-sweep-quick-v4/figures \
-  --h100-summary /datadrive/agentic-rps-sweep-h100-quick-v4/summary.json
+  --h100-summary outputs/agentic-rps-sweep-h100-quick-v4-20260902/summary.json
 ```
+
+The accepted H100 quick-v4 summary, curve, runtime identity, and figures are in
+`outputs/agentic-rps-sweep-h100-quick-v4-20260902/`.
 
 Rerunning the same `run` command safely reuses completed cells. Do not share a
 run root between sites or combine quick-v4 results with earlier quick runs or the
