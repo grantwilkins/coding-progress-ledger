@@ -54,7 +54,9 @@ git diff --exit-code -- \
 ```
 
 Both sites use the same clean commit and checkout path. They must use separate
-run roots.
+run roots. Run the campaign with the project interpreter directly: vLLM's
+provenance endpoint invokes `uv`, so nesting the live run under `uv run` can
+block on uv's environment lock.
 
 ## H100
 
@@ -63,7 +65,7 @@ From `/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul`:
 ```bash
 CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
 QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
-uv run python quick_slo_sweep.py run \
+../.venv/bin/python quick_slo_sweep.py run \
   --plan runs/agentic-rps-sweep-h100-quick-v2/plan.json \
   --run-root /datadrive/agentic-rps-sweep-h100-quick-v2
 
@@ -77,7 +79,7 @@ uv run python plot_agentic_rps_sweep.py \
 ```bash
 CUDA_VISIBLE_DEVICES=0 QH_RUNTIME=native QH_LMCACHE_MODE=mp \
 QH_CACHE_ROOT=/datadrive/queue-haul-cache HF_HOME=/datadrive \
-uv run python quick_slo_sweep.py run \
+../.venv/bin/python quick_slo_sweep.py run \
   --plan runs/agentic-rps-sweep-a100-quick-v2/plan.json \
   --run-root /datadrive/agentic-rps-sweep-a100-quick-v2
 ```
