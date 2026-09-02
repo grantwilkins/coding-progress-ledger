@@ -129,6 +129,23 @@ def calibration():
     }
 
 
+def test_drain_calibration_must_match_formal_cluster(tmp_path):
+    allocation, raw = cluster(tmp_path), calibration()
+    raw.update(formal=True, hosts={node.id: {
+        "region": node.region, "private_ip": node.host,
+        "gpu": "NVIDIA A100 80GB PCIe",
+    } for node in (allocation.source, *allocation.destinations)})
+
+    n.validate_calibration_cluster(raw, allocation)
+    raw["hosts"]["east"]["region"] = "australiaeast"
+    with pytest.raises(ValueError, match="formal cluster"):
+        n.validate_calibration_cluster(raw, allocation)
+    raw["hosts"]["east"]["region"] = "eastus2"
+    raw["formal"] = False
+    with pytest.raises(ValueError, match="formal cluster"):
+        n.validate_calibration_cluster(raw, allocation)
+
+
 def campaign_manifest(tmp_path, count=12):
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps({
@@ -461,6 +478,35 @@ def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path)
     }
     with pytest.raises(ValueError, match="two destinations"):
         n.make_plan(path, contract, seed=7)
+
+
+def test_drain_plan_is_ten_matched_packs_in_five_fresh_blocks(tmp_path):
+    plan = n.make_plan(
+        campaign_manifest(tmp_path, 8), constraint_contract(), seed=7,
+        design="drain")
+
+    assert len(plan["scenarios"]) == 50
+    assert (plan["policies"], plan["repeats"],
+            plan["sessions_per_scenario"]) == (["greedy"], 5, 8)
+    assert [row["repeat"] for row in plan["scenarios"]] == [
+        repeat for repeat in range(5) for _ in range(10)]
+    for pack in range(10):
+        rows = [row for row in plan["scenarios"]
+                if row["condition_index"] == pack]
+        assert len(rows) == 5
+        assert len({tuple(item["initial_tokens"] for item in row["sessions"])
+                    for row in rows}) == 1
+        assert {row["repeat"] for row in rows} == set(range(5))
+        assert all(row["policy"] == "greedy"
+                   and row["requested_shed_fraction"] == 1
+                   and row["deadline_s"] == 30
+                   and row["stack_block"] == row["repeat"]
+                   and len(row["sessions"]) == 8 for row in rows)
+
+    changed = json.loads(json.dumps(plan))
+    changed["scenarios"][0]["deadline_s"] = 29
+    with pytest.raises(ValueError, match="drain scenario"):
+        n.validate_plan(changed)
 
 
 def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(
@@ -1320,6 +1366,32 @@ def test_frontier_planner_targets_power_and_does_not_force_evacuation(monkeypatc
     assert seen["problem"].power_limit_w > 0
 
 
+def test_drain_planner_rejects_a_partial_deadline_plan(monkeypatch):
+    move = SimpleNamespace(
+        session_id="s0", destination_instance="east",
+        destination_pool="pool/east", method="replay", order=0,
+        path=("link/east",), rate_limit_bytes_per_s=None, quiesce_s=None)
+    calls = []
+    monkeypatch.setattr(n, "solve", lambda problem, *_args, **_kwargs:
+                        calls.append(problem.deadline_s)
+                        or SimpleNamespace(moves=[move]))
+    scenario = {
+        "design": "drain", "policy": "greedy", "deadline_s": 30,
+        "requested_shed_fraction": 1, "source_load": .8,
+        "sessions": [{"session_id": session, "initial_tokens": 8192}
+                     for session in ("s0", "s1")],
+        "bandwidth_mbps": {"east": 1000, "west": 2000},
+        "background": {"east": (0, 0), "west": (0, 0)},
+    }
+
+    with pytest.raises(RuntimeError, match="cannot drain all sessions"):
+        n.plan_joint_scenario(
+            scenario, {node: {"kv_fraction": 0}
+                       for node in ("east", "west")},
+            n.ModelProfile.load(n.MODEL_PATH), 1)
+    assert calls == [30]
+
+
 def test_deadline_blind_planner_uses_nonbinding_horizon(monkeypatch):
     seen = {}
     monkeypatch.setattr(n, "solve", lambda problem, *_args, **_kwargs:
@@ -1538,7 +1610,11 @@ def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
         "status": "failed", "error": "Spot eviction"}))
     (second / "result.json").write_text(json.dumps({
         "status": "complete", "migration_s": 2, "deadline_met": True,
-        "wire_bytes": {}, "connections": []}))
+        "wire_bytes": {}, "connections": [], "requests": [{
+            "destination_instance": "west", "method": "replay",
+            "request": {"start_ns": 0, "first_byte_ns": 1_000_000_000,
+                        "end_ns": 4_000_000_000, "output_tokens": 4},
+        }]}))
 
     summary = n.reduce_run({"scenarios": [scenario]}, root)
 
@@ -1550,6 +1626,35 @@ def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
     with (root / "results.csv").open() as handle:
         row = next(csv.DictReader(handle))
     assert (row["scenario_id"], row["attempt"]) == ("s", "2")
+    assert (row["median_ttft_s"], row["p90_ttft_s"],
+            row["median_mean_tpot_s"], row["p90_mean_tpot_s"]) == \
+        ("1.0", "1.0", "1.0", "1.0")
+
+
+def test_interrupted_drain_attempt_keeps_its_planned_action(tmp_path):
+    scenario = {
+        "scenario_id": "s", "condition_index": 0, "repeat": 0,
+        "policy": "greedy", "workload": "agentic_tool_loop",
+        "bandwidth": "controlled_40", "background": {},
+        "deadline_s": 30, "source_load": .8, "sessions": [],
+    }
+    attempt = tmp_path / "scenarios/s/attempt-0001"
+    attempt.mkdir(parents=True)
+    (attempt / "decision.json").write_text(json.dumps({"moves": [{
+        "session_id": "s0", "destination_instance": "east",
+        "method": "replay"}]}))
+    n._seal_interrupted(tmp_path / "scenarios/s", "s")
+
+    summary = n.reduce_run({
+        "design": "drain", "manifest": {
+            "path": str(n.ROOT / "outputs/coding-manifest.json")},
+        "scenarios": [scenario]}, tmp_path)
+
+    with (tmp_path / "results.csv").open() as stream:
+        row = next(csv.DictReader(stream))
+    assert not summary["valid"] and summary["failed"] == 1
+    assert (row["failure_class"], row["east_replay"], row["east_kv_transfer"]) \
+        == ("interrupted", "1", "0")
 
 
 def test_constraint_reducer_hard_fails_semantically_invalid_evidence(
@@ -1627,8 +1732,10 @@ def test_progress_checkpoint_is_atomic_and_counts_latest_results(tmp_path):
 def test_chat_explicitly_probes_state_code(monkeypatch):
     seen = {}
 
-    def stream(_cfg, _port, messages, tokens, _hash, _timeout, bypass):
-        seen.update(messages=messages, tokens=tokens, bypass=bypass)
+    def stream(_cfg, _port, messages, tokens, _hash, _timeout, bypass,
+               **options):
+        seen.update(messages=messages, tokens=tokens, bypass=bypass,
+                    options=options)
         now = n.time.monotonic_ns()
         return n.profiler.RequestResult("r", 200, "", now, now), "CODE"
 
@@ -1640,10 +1747,23 @@ def test_chat_explicitly_probes_state_code(monkeypatch):
         {"role": "user", "content": "context"},
         {"role": "user", "content":
             "Reply only with session state code CODE."}], "tokens": 128,
-                    "bypass": False}
+                    "bypass": False, "options": {}}
 
     n._chat(object(), 1, [], "CODE", 1, True)
     assert seen["bypass"] is True
+
+    exact = {"status": 200, "first_ns": 2, "prompt_tokens": 3,
+             "output_tokens": 128, "recorded_output_tokens": 128,
+             "exact_token_timestamps": True, "done": True,
+             "finish_reason": "length"}
+    monkeypatch.setattr(n, "_completion", lambda *args: seen.update(
+        completion=args) or exact)
+    monkeypatch.setattr(n, "exact_completion", lambda row: row is exact)
+    cfg = SimpleNamespace(architecture_campaign=True, host="host", model="model")
+    result = n._chat(cfg, 1, [], "CODE", 1, prompt_ids=[1, 2, 3])
+    assert seen["completion"] == ("host", 1, "model", [1, 2, 3], 128,
+                                  16, 1, False)
+    assert result["first_byte_ns"] == 2
 
 
 def test_chat_retries_one_invalid_probe(monkeypatch):
@@ -1668,6 +1788,52 @@ def test_warm_waits_only_for_complete_lmcache_blocks(monkeypatch, tmp_path):
     n._warm(stack, [], "CODE", 1)
 
     assert seen == [(log, 0, 18944)]
+
+
+def test_warm_uses_model_specific_lmcache_chunks(monkeypatch, tmp_path):
+    log = tmp_path / "lmcache-source.log"
+    log.touch()
+    stack = SimpleNamespace(
+        cfg=testbed.model_campaign_config("Qwen/Qwen3.8-27B"),
+        run_root=tmp_path)
+    seen = []
+    monkeypatch.setattr(n, "_chat", lambda *_args: {"prompt_tokens": 19086})
+    monkeypatch.setattr(n.testbed, "mp_wait_stored",
+                        lambda *args: seen.append(args))
+
+    n._warm(stack, [], "CODE", 1)
+
+    assert seen == [(log, 0, 18816)]
+
+
+def test_drain_evidence_allows_deadline_misses_but_rejects_dispatch_skew():
+    sessions = [{"session_id": f"s{i}", "initial_tokens": 1024 + i}
+                for i in range(8)]
+    result = {
+        "requests": [{"session_id": row["session_id"], "method": "replay",
+                      "deadline_admitted": True,
+                      "destination_instance": "east", "request": {
+                          "exact_token_timestamps": True, "done": True,
+                          "finish_reason": "length",
+                          "recorded_output_tokens": 128,
+                          "prompt_tokens": row["initial_tokens"],
+                          "output_tokens": 128}}
+                     for row in sessions],
+        "background": {"east": {}, "germany": {}},
+        "request_failures": 0, "kv_evidence_warnings": 0,
+        "load_warnings": [], "dispatch_skew_s": .01,
+        "deadline_met": False,
+    }
+
+    assert n._valid_drain_evidence({"sessions": sessions}, result)
+    result["requests"][0].update(method="kv_transfer")
+    result["requests"][0]["request"]["cached_tokens"] = 1024
+    assert n._valid_drain_evidence({"sessions": sessions}, result)
+    result["requests"][0]["request"]["cached_tokens"] = 256
+    assert not n._valid_drain_evidence({"sessions": sessions}, result)
+    result["requests"][0]["request"]["cached_tokens"] = 1024
+    result["dispatch_skew_s"] = .101
+    assert not n._valid_drain_evidence({"sessions": sessions}, result)
 
 
 def test_resume_metadata_allows_audited_commit_change_but_pins_identity():

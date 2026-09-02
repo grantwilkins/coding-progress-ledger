@@ -2146,6 +2146,39 @@ uv run python model_architecture_campaign.py run-profile --plan PLAN.json --run-
 uv run python model_architecture_campaign.py freeze-profile --base-profile BASE.json --run-root RUN-full --smoke-root RUN-smoke --geometry kv_geometry.csv --out PROFILE.json
 ```
 
+`model_hardware_drain_campaign.py` reuses those frozen profiles and the Azure
+network executor for the repeated drain experiment. Each arm runs ten matched
+eight-session context packs five times: Queue-Haul greedy plans a complete
+30-second evacuation, then all eight actions are released together. The A100
+command runs GPT-OSS, Qwen, and Gemma end to end; H100 GPT-OSS is a separate
+command. Profiles must be repository-local so the same pinned file exists on
+every node; each must retain the adjacent passing `.gate.json` written by
+`freeze-profile`; both are snapshotted into the portable arm output. The
+calibration must be formal and match every cluster node's region, IP, and GPU.
+A100 model order rotates inside each of five fresh-stack blocks. The first
+pending episode in every block is a fail-fast smoke.
+Reconstruction forces 128 output tokens and records exact token-event TTFT and
+mean TPOT.
+
+```bash
+uv run python model_hardware_drain_campaign.py a100 --profiles A100_GPT.json A100_QWEN.json A100_GEMMA.json --cluster azure_network_cluster_east_germany.json --calibration A100_CALIBRATION.json --manifest MANIFEST.json --run-root /datadrive/model-hardware-drain-a100
+uv run python model_hardware_drain_campaign.py h100 --profile H100_GPT.json --cluster azure_network_cluster_australia_southcentral.json --calibration H100_CALIBRATION.json --manifest MANIFEST.json --run-root /datadrive/model-hardware-drain-h100
+uv run python model_hardware_drain_campaign.py reduce --run-root /datadrive/model-hardware-drain-a100 --run-root /datadrive/model-hardware-drain-h100 --out outputs/model-hardware-drain
+```
+
+Each arm retains raw requests and exact token timestamps, power and utilization
+samples, route bytes and TCP telemetry, planner decisions, and checkpoints.
+`results.csv` adds TTFT, mean TPOT, dispatch skew, four-way action counts, and
+modeled power-attainment time. Failures are never retried into successes: they
+remain immutable non-attainment observations with raw failure evidence, and
+interrupted attempts are sealed as failures on resume.
+Reduction writes the combined episode table with physical route regions,
+method mix, and deadline ECDF. Interpret arm differences as configuration
+effects: model/runtime geometry, compute, power, capacity, and the H100 routes
+all differ, so action mix alone does not isolate KV encoding.
+Raw GPU power traces are observational; shed and power-attainment fields are
+explicitly model-derived.
+
 `matched_action_campaign.py` is the narrow cross-hardware/cross-model decision
 demonstration. It freezes completed A100 East/Germany frontier scenario
 `4ce7626a1f20a5c3`: eight 16K sessions, 80% requested shed, a 30-second

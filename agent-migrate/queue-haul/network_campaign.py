@@ -27,7 +27,7 @@ from pathlib import Path
 import migration_testbed as testbed
 import migration_profiler as profiler
 import policy_hardware_campaign as policy_campaign
-from destination_runner import MetricsSampler
+from destination_runner import MetricsSampler, _completion, exact_completion
 from destination import (DestinationArchitecture, DestinationPool,
                          DestinationReplica, MigrationComponents,
                          dedicated_sink_architecture)
@@ -45,13 +45,16 @@ CALIBRATION_SCHEMA = "queue-haul-network-calibration-v1"
 PLAN_SCHEMA = "queue-haul-network-plan-v2"
 RESULT_SCHEMA = "queue-haul-network-result-v2"
 ROOT = Path(__file__).parent
-MODEL_PATH = ROOT / "profiles" / os.environ.get(
-    "QH_MODEL_PROFILE", "gpt_oss_20b_a100_tp1_azure_300w.json")
+_MODEL_PATH = Path(os.environ.get(
+    "QH_MODEL_PROFILE", "gpt_oss_20b_a100_tp1_azure_300w.json"))
+MODEL_PATH = _MODEL_PATH if _MODEL_PATH.is_absolute() else ROOT / (
+    _MODEL_PATH if len(_MODEL_PATH.parts) > 1 else Path("profiles") / _MODEL_PATH)
 H100_CAMPAIGN = "H100" in ModelProfile.load(MODEL_PATH).hardware
 CLOCK_LIMIT_MS = 2.0
 RESUME_DRIFT = .10
 REQUEST_TIMEOUT_S = 600.0
 REPEATS = 3
+DRAIN_PACKS, DRAIN_REPEATS, DRAIN_DISPATCH_SKEW_S = 10, 5, .1
 ISOLATED_PROMPT_HEADROOM_TOKENS = 512
 POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only",
@@ -206,7 +209,8 @@ HANDOFF_ENV = {
     "QH_LMCACHE_L1_GB": "33", "QH_PREFIX_CACHING": "off",
     "QH_REDIS_MAXMEMORY_GB": "32",
 }
-RUNTIME_ENV = (*HANDOFF_ENV, "QH_MODEL_PROFILE")
+RUNTIME_ENV = (*HANDOFF_ENV, "QH_MODEL_PROFILE", "QH_RUNTIME",
+               "QH_LMCACHE_MODE", "QH_NATIVE_RUNTIME_VERSIONS")
 
 
 def write_checkpoint(path: Path, value: dict) -> None:
@@ -296,6 +300,22 @@ def validate_calibration(raw: dict) -> None:
                    for row in raw["paths"].values()) \
             or not raw.get("aggregate_simultaneous_mbps"):
         raise ValueError("calibration is incomplete")
+
+
+def validate_calibration_cluster(raw: dict, cluster: Cluster) -> None:
+    validate_calibration(raw)
+    nodes = {node.id: node for node in (cluster.source, *cluster.destinations)}
+    hosts = raw.get("hosts", {})
+    hardware = "H100" if H100_CAMPAIGN else "A100"
+    if raw.get("formal") is not True or set(hosts) != set(nodes) \
+            or set(raw["paths"]) != {node.id for node in cluster.destinations} \
+            or set(raw["clock_uncertainty_ms"]) != set(nodes) \
+            or any(hosts[node_id].get("region", "").lower() \
+                   != node.region.lower()
+                   or hosts[node_id].get("private_ip") != node.host
+                   or hardware not in hosts[node_id].get("gpu", "")
+                   for node_id, node in nodes.items()):
+        raise ValueError("calibration does not match the formal cluster")
 
 
 def _rates(mbps: float) -> dict[str, int]:
@@ -602,17 +622,53 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
     profiler.validate_manifest(manifest)
     available = sorted(manifest["sessions"], key=lambda row: row["id"])
     if design == "joint" and not 0 < sessions <= len(available) \
-            or design == "isolated" and not available:
+            or design == "isolated" and not available \
+            or design == "drain" and sessions != 8:
         raise ValueError("invalid session count")
     scenarios = []
     destinations = tuple(sorted(contract["paths"]))
-    if design not in {"joint", "isolated", "frontier", "constraint", "separation"} \
+    if design not in {"joint", "isolated", "frontier", "constraint", "separation", "drain"} \
             or len(destinations) != (
-        2 if design in {"joint", "frontier", "constraint", "separation"} else 1
+        2 if design in {"joint", "frontier", "constraint", "separation", "drain"} else 1
     ):
         raise ValueError(f"{design} design requires "
-                         f"{'two destinations' if design in {'joint', 'frontier', 'constraint', 'separation'} else 'one destination'}")
-    if design == "frontier":
+                         f"{'two destinations' if design in {'joint', 'frontier', 'constraint', 'separation', 'drain'} else 'one destination'}")
+    drain_conditions = []
+    if design == "drain":
+        if len(available) != 8:
+            raise ValueError("drain design requires eight traces")
+        workload = WorkloadProfile.load(WORKLOAD_PATHS["agentic_tool_loop"])
+        for condition_index in range(DRAIN_PACKS):
+            rng = random.Random(profiler.stable_seed(seed, "drain", condition_index))
+            contexts = policy_campaign._context_tokens(
+                workload, "uniform_support", 8, rng)
+            session_rows = [{
+                "session_id": row["id"], "job_class": row["job_class"],
+                "turn_index": 0, "initial_tokens": contexts[index],
+                "order": index,
+            } for index, row in enumerate(available)]
+            drain_conditions.append({"pack": f"pack-{condition_index:02d}",
+                                     "contexts": contexts})
+            for repeat in range(DRAIN_REPEATS):
+                pack = f"pack-{condition_index:02d}"
+                scenarios.append({
+                    "scenario_id": _hash([
+                        design, condition_index, repeat, session_rows,
+                    ])[:16],
+                    "design": design, "condition_index": condition_index,
+                    "condition_id": pack, "repeat": repeat,
+                    "stack_block": repeat, "pack": pack, "policy": "greedy",
+                    "workload": "agentic_tool_loop",
+                    "bandwidth": "controlled_40",
+                    "bandwidth_mbps": _bandwidths(contract, "controlled_40"),
+                    "deadline_s": 30,
+                    "background": {node: (0, 0) for node in destinations},
+                    "source_load": .8, "requested_shed_fraction": 1.0,
+                    "planner_seed": profiler.stable_seed(
+                        seed, condition_index, repeat, "greedy"),
+                    "sessions": session_rows,
+                })
+    elif design == "frontier":
         if not available:
             raise ValueError("frontier design needs a manifest template")
         load_pairs = [(load, load) for load in FRONTIER_LOADS]
@@ -795,7 +851,13 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                         "sessions": session_rows,
                     })
     rng = random.Random(seed)
-    if design in {"constraint", "separation"}:
+    if design == "drain":
+        blocks = [[row for row in scenarios if row["repeat"] == repeat]
+                  for repeat in range(DRAIN_REPEATS)]
+        for block in blocks:
+            rng.shuffle(block)
+        scenarios = [row for block in blocks for row in block]
+    elif design in {"constraint", "separation"}:
         cells = CONSTRAINT_CELLS if design == "constraint" else SEPARATION_CELLS
         blocks = [[row for row in scenarios if row["condition_index"] == index
                    and (design == "constraint" or row["repeat"] == repeat)]
@@ -818,10 +880,12 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         "model_profile": {"path": str(MODEL_PATH),
                           "sha256": profiler.file_hash(MODEL_PATH)},
         "network_contract": contract,
-        "policies": list(FRONTIER_POLICIES if design == "frontier" else
+        "policies": list(["greedy"] if design == "drain" else
+                         FRONTIER_POLICIES if design == "frontier" else
                          CONSTRAINT_POLICIES if design == "constraint" else
                          SEPARATION_POLICIES if design == "separation" else POLICIES),
-        "conditions": target_conditions(destinations) if design == "joint" else
+        "conditions": drain_conditions if design == "drain" else
+            target_conditions(destinations) if design == "joint" else
             [{"condition_id": row[0], "deadline_s": row[1],
               "sessions": row[2], "context_seed": row[3],
               "requested_shed_fraction": row[4]}
@@ -832,7 +896,8 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
               "planning_deadline_s": SEPARATION_PLANNING_DEADLINE_S,
               "requested_shed_fraction": row[4]}
              for row in SEPARATION_CELLS] if design == "separation" else [],
-        "repeats": 1 if design in {"frontier", "constraint"} else
+        "repeats": DRAIN_REPEATS if design == "drain" else
+            1 if design in {"frontier", "constraint"} else
             SEPARATION_REPEATS if design == "separation" else REPEATS,
         "sessions_per_scenario": None if design in {"constraint", "separation"}
             else sessions,
@@ -853,6 +918,7 @@ def validate_plan(plan: dict) -> None:
     scenarios = plan.get("scenarios", [])
     design = plan.get("design")
     expected = 126 if design == "joint" else 54 if design == "isolated" \
+        else DRAIN_PACKS * DRAIN_REPEATS if design == "drain" \
         else ((sum(1 if pack[0] == "32x31k" else len(FRONTIER_LOADS)
                    for pack in FRONTIER_PACKS) + 7)
               * len(FRONTIER_POLICIES)
@@ -871,6 +937,44 @@ def validate_plan(plan: dict) -> None:
         if any(not row.get("moves") or row.get("load_normalization") != "destination_service"
                for row in scenarios):
             raise ValueError("calibration scenarios require fixed moves and service load")
+        return
+    if design == "drain":
+        contract = plan["network_contract"]
+        groups = {}
+        for row in scenarios:
+            groups.setdefault(row["condition_index"], set()).add(tuple(
+                (item["session_id"], item["initial_tokens"])
+                for item in row["sessions"]))
+            if row["scenario_id"] != _hash([
+                    design, row["condition_index"], row["repeat"],
+                    row["sessions"]])[:16] \
+                    or row["policy"] != "greedy" \
+                    or row["bandwidth"] != "controlled_40" \
+                    or row["bandwidth_mbps"] != _bandwidths(
+                        contract, "controlled_40") \
+                    or row["deadline_s"] != 30 \
+                    or row["requested_shed_fraction"] != 1 \
+                    or row["source_load"] != .8 \
+                    or row["stack_block"] != row["repeat"] \
+                    or len(row["sessions"]) != 8 \
+                    or [item["order"] for item in row["sessions"]] \
+                    != list(range(8)) \
+                    or any(any(value) for value in row["background"].values()) \
+                    or row["planner_seed"] != profiler.stable_seed(
+                        plan["seed"], row["condition_index"], row["repeat"],
+                        "greedy"):
+                raise ValueError("drain scenario contract changed")
+        expected_cells = {(pack, repeat) for pack in range(DRAIN_PACKS)
+                          for repeat in range(DRAIN_REPEATS)}
+        if set(contract["paths"]) != {"east", "germany"} \
+                or plan.get("policies") != ["greedy"] \
+                or {(row["condition_index"], row["repeat"])
+                    for row in scenarios} != expected_cells \
+                or any(len(signatures) != 1 for signatures in groups.values()) \
+                or [row["repeat"] for row in scenarios] != [
+                    repeat for repeat in range(DRAIN_REPEATS)
+                    for _ in range(DRAIN_PACKS)]:
+            raise ValueError("drain blocks are incomplete or unmatched")
         return
     if design == "frontier":
         contract = plan["network_contract"]
@@ -1252,10 +1356,11 @@ def vllm_kv_capacity(path: Path) -> int:
 
 def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
                run_root: Path, power_interval_s: float = .25,
-               kv_blocks: int | None = None) -> None:
+               kv_blocks: int | None = None, model: str | None = None) -> None:
     import migration_profiler
 
-    cfg = testbed.Config(host="127.0.0.1")
+    cfg = testbed.model_campaign_config(model) if model else testbed.Config(
+        host="127.0.0.1")
     testbed.preflight(cfg, 1)
     run_root.mkdir(parents=True, exist_ok=False)
     (run_root / "node-serve.pid").write_text(str(os.getpid()))
@@ -1408,11 +1513,13 @@ def _stop_remote(node: Node, key: Path, root: Path,
 def start_cluster(cluster: Cluster, key: Path, contract: dict,
                   bandwidth: str, run_root: Path,
                   power_interval_s: float = .25,
-                  kv_capacity_fraction: dict[str, float] | None = None
+                  kv_capacity_fraction: dict[str, float] | None = None,
+                  model: str | None = None,
                   ) -> ClusterStack:
     import migration_profiler
 
-    cfg = testbed.Config(host="127.0.0.1")
+    cfg = testbed.model_campaign_config(model) if model else testbed.Config(
+        host="127.0.0.1")
     testbed.preflight(cfg, 1)
     run_root.mkdir(parents=True, exist_ok=False)
     routes, ports = cluster_routes(cluster)
@@ -1468,6 +1575,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                 "--source-host", cluster.source.host, "--kv-port",
                 str(ports[node_id]["kv"]), "--run-root", str(remote_root),
                 "--power-interval-s", str(power_interval_s),
+                *(["--model", model] if model else []),
                 *(["--kv-blocks", str(round(
                     profile_capacity * fractions[node_id] / KV_BLOCK_SIZE))]
                   if fractions.get(node_id, 1) < 1 else []),
@@ -1584,11 +1692,26 @@ def _clear_cluster(stack: ClusterStack) -> None:
                            "POST", "/reset_prefix_cache")
 
 
+def _probe(cfg: testbed.Config, messages: list[dict], code: str) -> list[dict]:
+    return [*messages, {"role": "user", "content":
+            f"Reply {'with' if getattr(cfg, 'architecture_campaign', False) else 'only with'} session state code {code}."}]
+
+
 def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
           timeout_s: float, bypass_lmcache: bool = False,
-          prefill_class: str | None = None) -> dict:
-    messages = messages + [{"role": "user", "content":
-                            f"Reply only with session state code {code}."}]
+          prefill_class: str | None = None,
+          prompt_ids: list[int] | None = None) -> dict:
+    messages = _probe(cfg, messages, code)
+    if getattr(cfg, "architecture_campaign", False):
+        prompt_ids = prompt_ids or testbed.mp_chat_tokens(cfg, messages)
+        row = _completion(cfg.host, port, cfg.model, prompt_ids, 128, 16,
+                          timeout_s, bypass_lmcache)
+        if exact_completion(row) and row["prompt_tokens"] == len(prompt_ids):
+            return {**row, "status_code": row["status"],
+                    "first_byte_ns": row["first_ns"],
+                    "context_hash": profiler.messages_hash(messages),
+                    "probe_attempts": 1}
+        raise RuntimeError(f"exact reconstruction failed: {row}")
     for attempt in range(2):
         request_options = ({"request_headers": {
             "X-QH-Prefill-Class": prefill_class}}
@@ -1605,12 +1728,13 @@ def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
 
 
 def _warm(stack: ClusterStack, messages: list[dict], code: str,
-          timeout_s: float) -> dict:
+          timeout_s: float, prompt_ids: list[int] | None = None) -> dict:
     log = stack.run_root / "lmcache-source.log"
     offset = log.stat().st_size
-    result = _chat(stack.cfg, stack.cfg.src_port, messages, code, timeout_s)
-    testbed.mp_wait_stored(
-        log, offset, result["prompt_tokens"] // 256 * 256)
+    result = _chat(stack.cfg, stack.cfg.src_port, messages, code, timeout_s,
+                   False, None, prompt_ids)
+    chunk = testbed.model_chunk_tokens(stack.cfg)
+    testbed.mp_wait_stored(log, offset, result["prompt_tokens"] // chunk * chunk)
     return result
 
 
@@ -1787,6 +1911,8 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     planned = list(result.moves)
     admitted = {move.session_id for move in planned}
     missing = tuple(row for row in problem.sessions if row.session_id not in admitted)
+    if missing and scenario.get("design") == "drain":
+        raise RuntimeError("greedy plan cannot drain all sessions by 30 seconds")
     if missing and not partial:
         late = replace(problem, sessions=missing, deadline_s=600, end_s=600)
         planned.extend(replace(move, order=move.order + len(planned)) for move in solve(
@@ -2051,7 +2177,7 @@ def scenario_records(manifest: dict, scenario: dict) -> dict[str, dict]:
 def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                          root: Path, prefill_tps: float) -> dict:
     diagnostic = scenario["design"] in {
-        "frontier", "constraint", "separation", "hardware_gap"}
+        "frontier", "constraint", "separation", "hardware_gap", "drain"}
     root.mkdir(parents=True, exist_ok=False)
     (root / "scenario.json").write_text(
         json.dumps(scenario, indent=2, sort_keys=True) + "\n")
@@ -2060,9 +2186,16 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         raise RuntimeError("remote sink exited")
     _clear_cluster(stack)
     sessions = scenario_records(manifest, scenario)
-    messages = {row["session_id"]: profiler.calibration_messages(
-        sessions[row["session_id"]], row["initial_tokens"])
+    messages = {row["session_id"]: (
+        profiler.exact_calibration_messages(
+            stack.cfg, sessions[row["session_id"]], row["initial_tokens"])
+        if scenario["design"] == "drain" else profiler.calibration_messages(
+            sessions[row["session_id"]], row["initial_tokens"]))
         for row in scenario["sessions"]}
+    prompt_ids = ({session_id: testbed.mp_chat_tokens(
+        stack.cfg, _probe(stack.cfg, value, sessions[session_id]["state_code"]))
+        for session_id, value in messages.items()}
+        if scenario["design"] == "drain" else {})
     timeout, profile = REQUEST_TIMEOUT_S, ModelProfile.load(MODEL_PATH)
     service_load = scenario.get("load_normalization") == "destination_service"
     case = profile.case()
@@ -2080,7 +2213,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 root / f"sink_load_{node.id}.jsonl",
                 destination_rates[1] if service_load else None)
             loads[node.id].start()
-    if scenario.get("source_load"):
+    if scenario.get("source_load") and scenario["design"] != "drain":
         loads["source"] = SinkLoad(
             stack.cfg, stack.cfg.src_port, prefill_tps, scenario["source_load"],
             root / "source_load.jsonl")
@@ -2092,7 +2225,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             write_checkpoint(root / "decision.json", {"moves": moves})
         elif scenario["design"] in {
                 "joint", "frontier", "constraint", "separation",
-                "hardware_gap"}:
+                "hardware_gap", "drain"}:
             time.sleep(scenario.get("load_warmup_s", 5))
             nodes = stack.cluster.destinations
             def snapshot(node):
@@ -2128,26 +2261,30 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             moves = scenario["moves"]
         moves = sorted(moves, key=lambda row: row["order"])
         preparation_errors = {}
-        for move in moves:
-            if move["method"] == "kv_transfer":
-                row = sessions[move["session_id"]]
-                try:
-                    _warm(stack, messages[move["session_id"]],
-                          row["state_code"], timeout)
-                except Exception as exc:
-                    if not diagnostic:
-                        raise
-                    preparation_errors[move["session_id"]] = \
-                        f"{type(exc).__name__}: {exc}"
+        warm = (scenario["sessions"] if scenario["design"] == "drain" else
+                [move for move in moves if move["method"] == "kv_transfer"])
+        for item in warm:
+            session_id = item["session_id"]
+            row = sessions[session_id]
+            try:
+                _warm(stack, messages[session_id], row["state_code"], timeout,
+                      prompt_ids.get(session_id))
+            except Exception as exc:
+                if not diagnostic:
+                    raise
+                preparation_errors[session_id] = f"{type(exc).__name__}: {exc}"
     except BaseException:
         for load in loads.values():
             load.close()
         raise
     before = testbed.proxy_counts(stack.run_root / "proxy_bytes.csv")
-    start_ns = time.monotonic_ns()
+    start_ns, start_wall_ns = time.monotonic_ns(), time.time_ns()
     load_warnings = []
+    barrier = threading.Barrier(len(moves)) if scenario["design"] == "drain" else None
     try:
         def reconstruct(move):
+            if barrier:
+                barrier.wait()
             if move["session_id"] in preparation_errors:
                 return {**move, "error": preparation_errors[move["session_id"]]}
             session = sessions[move["session_id"]]
@@ -2156,7 +2293,8 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 return {**move, "request": _chat(
                     stack.cfg, stack.ports[destination]["api"],
                     messages[move["session_id"]], session["state_code"],
-                    timeout, move["method"] == "replay")}
+                    timeout, move["method"] == "replay",
+                    prompt_ids=prompt_ids.get(move["session_id"]))}
             except Exception as exc:
                 if not diagnostic:
                     raise
@@ -2167,7 +2305,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 results = list(pool.map(reconstruct, moves))
         else:
             results = []
-        end_ns = time.monotonic_ns()
+        end_ns, end_wall_ns = time.monotonic_ns(), time.time_ns()
     finally:
         for name, load in loads.items():
             try:
@@ -2179,13 +2317,12 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     if not diagnostic and any(row["method"] == "kv_transfer"
            and row["request"]["cached_tokens"] <= 0 for row in results):
         raise RuntimeError("KV reconstruction reported no cached tokens")
-    block_tokens = profile.case().kv_transfer.block_tokens
-    block_bytes = profile.case().kv_transfer.block_bytes
+    transfer = profile.case().kv_transfer
     for row in results:
         if row["method"] == "kv_transfer" and "request" in row:
             cached = int(row["request"].get("cached_tokens", 0))
-            row["request"]["logical_kv_bytes"] = cached // block_tokens * block_bytes
-            row["request"]["logical_kv_chunks"] = cached // block_tokens
+            row["request"]["logical_kv_bytes"] = transfer.sealed_bytes(cached)
+            row["request"]["logical_kv_chunks"] = transfer.sealed_blocks(cached)
     sleep_start_ns = sleep_end_ns = None
     if not diagnostic:
         testbed.set_source_sleep(stack.cfg, True)
@@ -2201,10 +2338,14 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     transfers = _csv_window(
         proxy.with_name("resp_transfers.csv"), start_ns, end_ns)
     elapsed = (end_ns - start_ns) / 1e9
+    request_starts = [row["request"]["start_ns"] for row in results
+                      if "request" in row]
     result = {
         "schema": RESULT_SCHEMA, "status": "complete",
         "scenario_id": scenario["scenario_id"], "started_ns": start_ns,
-        "ended_ns": end_ns, "migration_s": elapsed,
+        "ended_ns": end_ns, "started_wall_ns": start_wall_ns,
+        "ended_wall_ns": end_wall_ns, "migration_s": elapsed,
+        "stack_id": stack.run_root.name,
         "deadline_met": elapsed <= scenario["deadline_s"],
         "requests": results,
         "background": snapshots,
@@ -2212,12 +2353,20 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             before, testbed.proxy_counts(proxy)),
         "connections": connections, "resp_transfers": transfers,
         "source_sleep_ns": [sleep_start_ns, sleep_end_ns],
+        "dispatch_skew_s": ((max(request_starts) - min(request_starts)) / 1e9
+                            if request_starts else None),
     }
     if diagnostic:
         outcomes = diagnostic_outcomes(
             scenario, results, demand, profile, start_ns)
         result.update({
             **outcomes,
+            "modeled_power_attainment_s": (
+                outcomes["time_to_target_s"] + profile.power_window_s
+                if outcomes["time_to_target_s"] is not None else None),
+            "modeled_power_deadline_met": outcomes["time_to_target_s"] is not None
+            and outcomes["time_to_target_s"] + profile.power_window_s
+            <= scenario["deadline_s"],
             "request_failures": sum("error" in row for row in results),
             "kv_evidence_warnings": sum(
                 row["method"] == "kv_transfer" and "request" in row
@@ -2225,6 +2374,10 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
             "load_warnings": load_warnings,
             **decision,
         })
+    if scenario["design"] == "drain" and not _valid_drain_evidence(
+            scenario, result):
+        result.update(status="failed", error="invalid drain evidence",
+                      failure_class="evidence_gate")
     write_checkpoint(root / "result.json", result)
     return result
 
@@ -2548,6 +2701,17 @@ def _next_attempt(root: Path) -> int:
     attempts = [int(path.name.rsplit("-", 1)[-1])
                 for path in root.glob("attempt-*") if path.is_dir()]
     return max(attempts, default=0) + 1
+
+
+def _seal_interrupted(root: Path, scenario_id: str) -> None:
+    for attempt in root.glob("attempt-*"):
+        result = attempt / "result.json"
+        if attempt.is_dir() and not result.exists():
+            write_checkpoint(result, {
+                "schema": RESULT_SCHEMA, "status": "failed",
+                "scenario_id": scenario_id, "failure_class": "interrupted",
+                "error": "process interrupted before result checkpoint",
+            })
 
 
 def checkpoint_progress(plan: dict, run_root: Path) -> dict:
@@ -3996,6 +4160,35 @@ def _valid_constraint_evidence(scenario: dict, result: dict) -> bool:
         and not any(row.get("warning") for row in background.values())
 
 
+def _valid_drain_evidence(scenario: dict, result: dict) -> bool:
+    moves, background = result.get("requests", ()), result.get("background", {})
+    targets = {row["session_id"]: row["initial_tokens"]
+               for row in scenario["sessions"]}
+    profile = ModelProfile.load(MODEL_PATH)
+    chunk = testbed.model_chunk_tokens(
+        testbed.model_campaign_config(profile.model))
+    return len(moves) == len(targets) == 8 \
+        and {row["session_id"] for row in moves} == set(targets) \
+        and all(row.get("deadline_admitted") and "request" in row
+                and row["request"].get("exact_token_timestamps")
+                and row["request"].get("done")
+                and row["request"].get("finish_reason") == "length"
+                and row["request"].get("recorded_output_tokens") == 128
+                and row["request"].get("prompt_tokens") == targets[row["session_id"]]
+                and row["request"].get("output_tokens") == 128
+                and row["request"].get("cached_tokens", 0) == (
+                    targets[row["session_id"]] // chunk * chunk
+                    if row["method"] == "kv_transfer" else 0)
+                for row in moves) \
+        and result.get("request_failures") == 0 \
+        and result.get("kv_evidence_warnings") == 0 \
+        and not result.get("load_warnings") \
+        and set(background) == {"east", "germany"} \
+        and not any(row.get("warning") for row in background.values()) \
+        and result.get("dispatch_skew_s", float("inf")) \
+        <= DRAIN_DISPATCH_SKEW_S
+
+
 def _valid_separation_evidence(scenario: dict, result: dict) -> bool:
     background = result.get("background")
     if not all(key in result for key in (
@@ -4112,11 +4305,12 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
     constraint = plan.get("design") == "constraint"
     separation = plan.get("design") == "separation"
     hardware_gap = plan.get("design") == "hardware_gap"
+    drain = plan.get("design") == "drain"
     manifest = json.loads(Path(plan["manifest"]["path"]).read_text()) \
-        if separation or hardware_gap else None
+        if separation or hardware_gap or drain else None
     profile = ModelProfile.load(MODEL_PATH) \
-        if separation or hardware_gap else None
-    for scenario in plan["scenarios"]:
+        if separation or hardware_gap or drain else None
+    for plan_order, scenario in enumerate(plan["scenarios"]):
         latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None:
             missing += 1
@@ -4125,7 +4319,7 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             attempt, result = latest
             completed += result["status"] == "complete"
             failed += result["status"] == "failed"
-            if (separation or hardware_gap) \
+            if (separation or hardware_gap or drain) \
                     and result["status"] == "complete":
                 demand = agentic_demand(
                     scenario_records(manifest, scenario), scenario["sessions"],
@@ -4139,6 +4333,9 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
         if constraint and result.get("status") == "complete" \
                 and not _valid_constraint_evidence(scenario, result):
             invalid_evidence += 1
+        if drain and result.get("status") == "complete" \
+                and not _valid_drain_evidence(scenario, result):
+            invalid_evidence += 1
         if separation and result.get("status") == "complete" \
                 and not _valid_separation_evidence(scenario, result):
             invalid_evidence += 1
@@ -4149,10 +4346,29 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
         rtts = [float(row["target_rtt_us"]) / 1000 for row in connections
                 if row.get("target_rtt_us")]
         wire = result.get("wire_bytes", {})
+        moves = result.get("requests", ())
+        decision_path = run_root / "scenarios" / scenario["scenario_id"] \
+            / f"attempt-{attempt:04d}" / "decision.json"
+        if drain and not moves and decision_path.exists():
+            moves = json.loads(decision_path.read_text()).get("moves", ())
         destinations = sorted({request.get("destination_instance", "")
-                               for request in result.get("requests", [])} - {""})
+                               for request in moves} - {""})
+        requests = [row["request"] for row in moves if "request" in row]
+        ttft = [row["ttft_s"] if row.get("ttft_s") is not None else
+                (row["first_byte_ns"] - row["start_ns"]) / 1e9
+                for row in requests if row.get("ttft_s") is not None
+                or row.get("first_byte_ns") is not None]
+        tpot = [row["mean_tpot_s"] if row.get("mean_tpot_s") is not None else
+                (row["end_ns"] - row["first_byte_ns"]) / 1e9
+                / (row["output_tokens"] - 1) for row in requests
+                if row.get("mean_tpot_s") is not None
+                or row.get("first_byte_ns") is not None
+                and row.get("output_tokens", 0) > 1]
+        actions = (_constraint_action_counts(moves) if drain and moves
+                   else dict.fromkeys(CONSTRAINT_ACTIONS, ""))
         rows.append({
             "scenario_id": scenario["scenario_id"],
+            "plan_order": plan_order,
             "condition_index": scenario["condition_index"],
             "repeat": scenario["repeat"], "policy": scenario["policy"],
             "destination": ",".join(destinations) or scenario.get("destination", ""),
@@ -4161,10 +4377,16 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             "background": json.dumps(scenario.get("background", {}), sort_keys=True),
             "pack": scenario.get("pack", ""),
             "session_count": len(scenario.get("sessions", ())),
+            "context_tokens": json.dumps([
+                item.get("initial_tokens") for item in scenario.get("sessions", ())]),
             "movement_tokens": sum(item.get("initial_tokens", 0)
                                    for item in scenario.get("sessions", ())),
             "deadline_s": scenario["deadline_s"], "attempt": attempt,
+            "excluded_attempts": max(0, attempt - 1),
             "status": result["status"],
+            "stack_id": result.get("stack_id", ""),
+            "started_wall_ns": result.get("started_wall_ns", ""),
+            "ended_wall_ns": result.get("ended_wall_ns", ""),
             "migration_s": result.get("migration_s", ""),
             "deadline_met": result.get("deadline_met", ""),
             "requested_shed_w": result.get("requested_shed_w", ""),
@@ -4173,6 +4395,15 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             "eventual_shed_w": result.get("eventual_shed_w", ""),
             "eventual_target_met": result.get("eventual_target_met", ""),
             "time_to_target_s": result.get("time_to_target_s", ""),
+            "modeled_power_attainment_s": result.get(
+                "modeled_power_attainment_s", ""),
+            "modeled_power_deadline_met": result.get(
+                "modeled_power_deadline_met", ""),
+            "dispatch_skew_s": result.get("dispatch_skew_s", ""),
+            "median_ttft_s": statistics.median(ttft) if ttft else "",
+            "p90_ttft_s": profiler.quantile(ttft, .9) if ttft else "",
+            "median_mean_tpot_s": statistics.median(tpot) if tpot else "",
+            "p90_mean_tpot_s": profiler.quantile(tpot, .9) if tpot else "",
             "admission_rejected": result.get("admission_rejected", ""),
             "capacity_violations": json.dumps(
                 result.get("capacity_violations", ())),
@@ -4191,6 +4422,8 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             "median_tcp_rtt_ms": statistics.median(rtts) if rtts else "",
             "retransmissions": sum(int(row.get("target_total_retrans") or 0)
                                    for row in connections),
+            **actions,
+            "failure_class": result.get("failure_class", ""),
             "error": result.get("error", ""),
         })
     profiler.write_csv(run_root / "results.csv", rows)
@@ -4257,12 +4490,12 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
         "expected": len(plan["scenarios"]), "completed": completed,
         "failed": failed, "missing": missing,
         "valid": not missing and not (
-            (constraint or separation or hardware_gap)
+            (constraint or separation or hardware_gap or drain)
             and invalid_evidence) and (
             completed == len(plan["scenarios"]) if not frontier else
             failed / len(plan["scenarios"]) <= FRONTIER_FAILURE_GATE),
     }
-    if constraint or separation or hardware_gap:
+    if constraint or separation or hardware_gap or drain:
         summary["invalid_evidence"] = invalid_evidence
     (run_root / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n")
@@ -4291,16 +4524,25 @@ def merge_metadata(current: dict, previous: dict | None) -> dict:
 
 
 def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
-                 plan_path: Path, run_root: Path) -> dict:
+                 plan_path: Path, run_root: Path,
+                 stack_block: int | None = None) -> dict:
     plan = json.loads(plan_path.read_text())
     validate_plan(plan)
+    if stack_block is not None and (plan["design"] != "drain"
+                                    or stack_block not in range(DRAIN_REPEATS)):
+        raise ValueError("stack blocks are only valid for drain campaigns")
+    if plan["design"] == "drain":
+        os.environ.update(HANDOFF_ENV)
     if Cluster.parse(plan["cluster"]) != cluster:
         raise ValueError("run cluster differs from the prepared plan")
     if profiler.file_hash(Path(plan["manifest"]["path"])) \
             != plan["manifest"]["sha256"] \
             or profiler.file_hash(MODEL_PATH) != plan["model_profile"]["sha256"]:
         raise RuntimeError("pinned plan input changed")
-    current = freeze_contract(json.loads(current_calibration.read_text()))
+    current_raw = json.loads(current_calibration.read_text())
+    if plan["design"] == "drain":
+        validate_calibration_cluster(current_raw, cluster)
+    current = freeze_contract(current_raw)
     validate_resume(plan["network_contract"], current)
     reports = host_check(cluster, key)
     sha, dirty = profiler.git_state(False)
@@ -4313,6 +4555,9 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
         "schema": "queue-haul-network-run-v1",
         "plan_sha256": profiler.file_hash(plan_path), "git_sha": sha,
         "dirty": dirty,
+        **({"runtime_environment": {
+            name: os.environ[name] for name in RUNTIME_ENV if name in os.environ
+        }} if plan["design"] == "drain" else {}),
         "hosts": {node: {field: report.get(field) for field in identity_fields}
                   for node, report in reports.items()},
         "checks": [{"wall_ns": time.time_ns(), "hosts": reports,
@@ -4326,18 +4571,34 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
     metadata = merge_metadata(metadata, previous)
     write_checkpoint(metadata_path, metadata)
     write_checkpoint(run_root / "plan.json", plan)
+    if plan["design"] == "drain":
+        for scenario in plan["scenarios"]:
+            _seal_interrupted(
+                run_root / "scenarios" / scenario["scenario_id"],
+                scenario["scenario_id"])
     checkpoint_progress(plan, run_root)
     manifest = json.loads(Path(plan["manifest"]["path"]).read_text())
-    prefill_tps = ModelProfile.load(MODEL_PATH).case().F
+    profile = ModelProfile.load(MODEL_PATH)
+    prefill_tps = profile.case().F
+    model = profile.model if plan["design"] == "drain" else None
+    scenarios = [row for row in plan["scenarios"] if stack_block is None
+                 or row["stack_block"] == stack_block]
+    smoke_id = next((row["scenario_id"] for row in scenarios
+                     if not _latest_result(
+                         run_root / "scenarios" / row["scenario_id"])), None) \
+        if plan["design"] == "drain" else None
     stack, stack_key = None, None
     try:
-        for scenario in plan["scenarios"]:
+        for scenario in scenarios:
             scenario_root = run_root / "scenarios" / scenario["scenario_id"]
+            smoke = scenario["scenario_id"] == smoke_id
             latest = _latest_result(scenario_root)
-            if latest and latest[1].get("status") == "complete":
+            if latest and (latest[1].get("status") == "complete"
+                           or plan["design"] == "drain"):
                 continue
             wanted = (scenario["bandwidth"], tuple(sorted(
-                scenario.get("kv_capacity_fraction", {}).items())))
+                scenario.get("kv_capacity_fraction", {}).items())),
+                scenario.get("stack_block"))
             if stack and stack_key != wanted:
                 stop_cluster(stack)
                 stack = None
@@ -4350,30 +4611,38 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                     f"{scenario['bandwidth']}-{time.time_ns()}",
                     kv_capacity_fraction=scenario.get(
                         "kv_capacity_fraction"),
+                    model=model,
                 )
             attempt = _next_attempt(scenario_root)
             attempt_root = scenario_root / f"attempt-{attempt:04d}"
             try:
-                run_network_scenario(
+                result = run_network_scenario(
                     stack, manifest, scenario, attempt_root, prefill_tps)
+                if smoke and result["status"] != "complete":
+                    raise RuntimeError("drain smoke episode failed")
             except Exception as exc:
                 attempt_root.mkdir(parents=True, exist_ok=True)
-                write_checkpoint(attempt_root / "result.json", {
-                    "schema": RESULT_SCHEMA, "status": "failed",
-                    "scenario_id": scenario["scenario_id"],
-                    "error": f"{type(exc).__name__}: {exc}",
-                })
+                result_path = attempt_root / "result.json"
+                if not result_path.exists():
+                    write_checkpoint(result_path, {
+                        "schema": RESULT_SCHEMA, "status": "failed",
+                        "scenario_id": scenario["scenario_id"],
+                        "failure_class": "execution_exception",
+                        "error": f"{type(exc).__name__}: {exc}",
+                    })
                 stop_cluster(stack)
                 stack = None
                 checkpoint_progress(plan, run_root)
-                if plan["design"] not in {
+                if smoke or plan["design"] not in {
                         "frontier", "constraint", "separation",
-                        "hardware_gap"}:
+                        "hardware_gap", "drain"}:
                     raise
             checkpoint_progress(plan, run_root)
     finally:
         if stack:
             stop_cluster(stack)
+    if stack_block is not None:
+        return checkpoint_progress(plan, run_root)
     summary = reduce_run(plan, run_root)
     if not summary["valid"]:
         raise RuntimeError(
@@ -4388,6 +4657,8 @@ def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
             design: str = "joint") -> dict:
     cluster = Cluster.load(cluster_path)
     calibration = json.loads(calibration_path.read_text())
+    if design == "drain":
+        validate_calibration_cluster(calibration, cluster)
     plan = make_plan(manifest_path, freeze_contract(calibration), seed, sessions,
                      design)
     plan["cluster"] = cluster.as_dict()
@@ -4419,7 +4690,7 @@ def parse_args(argv=None):
     command.add_argument("--sessions", type=int, default=8)
     command.add_argument("--design",
                          choices=("joint", "isolated", "frontier", "constraint",
-                                  "separation"),
+                                  "separation", "drain"),
                          default="joint")
     command = sub.add_parser("check")
     command.add_argument("--cluster", type=Path, required=True)
@@ -4442,6 +4713,7 @@ def parse_args(argv=None):
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--power-interval-s", type=float, default=.25)
     command.add_argument("--kv-blocks", type=int)
+    command.add_argument("--model", choices=tuple(testbed.MODEL_SPECS))
     command = sub.add_parser("smoke")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -4458,6 +4730,7 @@ def parse_args(argv=None):
     command.add_argument("--current-calibration", type=Path, required=True)
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--stack-block", type=int)
     command = sub.add_parser("reduce")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
@@ -4520,7 +4793,7 @@ def main(argv=None) -> None:
     elif args.command == "node-serve":
         node_serve(args.node_id, args.bind_host, args.source_host,
                    args.kv_port, args.run_root, args.power_interval_s,
-                   args.kv_blocks)
+                   args.kv_blocks, args.model)
     elif args.command == "smoke":
         print(json.dumps(smoke(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
@@ -4531,6 +4804,7 @@ def main(argv=None) -> None:
         print(json.dumps(run_campaign(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
             args.current_calibration, args.plan, args.run_root,
+            args.stack_block,
         ), indent=2, sort_keys=True))
     elif args.command == "reduce":
         plan = json.loads(args.plan.read_text())
