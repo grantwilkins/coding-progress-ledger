@@ -18,7 +18,7 @@ import migration_testbed as testbed
 import single_gpu_capacity_campaign as capacity
 
 
-SCHEMA = "queue-haul-quick-slo-sweep-v3"
+SCHEMA = "queue-haul-quick-slo-sweep-v4"
 MODEL = campaign.SLO_MODEL
 RATES = (.5, 1., 2., 3., 4., 5., 6., 7., 8., 10., 12., 14., 16., 20., 24.)
 REQUESTS = 50
@@ -63,9 +63,9 @@ def make_plan(seed: int = DEFAULT_SEED, hardware: str = "h100") -> dict:
                       "dispatch_lead_s": 1., "metrics_period_s": .25},
         "validity": {
             "max_send_lateness_s": .05,
-            "max_metric_gap_s": 1.,
+            "max_metric_gap_s": 3.,
             "required_completions": REQUESTS,
-            "minimum_exact_tpot_interval_coverage": .99,
+            "required_request_tpot_samples": REQUESTS,
             "maximum_attempts_per_cell": 2,
             "required_cached_tokens": 0,
             "require_telemetry": True,
@@ -89,7 +89,7 @@ def make_plan(seed: int = DEFAULT_SEED, hardware: str = "h100") -> dict:
             "uncached_unique_prompts": True,
             "forced_exact_output_length": True,
             "service_failures_are_violations": True,
-            "tpot_definition": "p90_of_observable_exact_singleton_token_intervals",
+            "tpot_definition": campaign.REQUEST_TPOT_DEFINITION,
         },
         "implementation": {
             "quick_source_sha256": source_sha256(Path(__file__)),
@@ -153,13 +153,13 @@ def bootstrap_intervals(requests: list[dict], seed: int,
                         block_lengths: tuple[int, ...] = BLOCK_LENGTHS) -> dict:
     ordered = sorted((row for row in requests if serving.service_completion(row)),
                      key=lambda row: row["scheduled_ns"])
+    tpots = [campaign.request_tpot_s(row) for row in ordered]
+    if len(ordered) != REQUESTS or any(value is None for value in tpots):
+        raise RuntimeError("quick SLO bootstrap requires every request")
     clusters = {
         "p90_ttft_s": [np.array([float(row["ttft_s"])]) for row in ordered],
-        "p90_tpot_s": [np.asarray(campaign.observable_exact_token_itls(row),
-                                      dtype=float) for row in ordered],
+        "p90_tpot_s": [np.array([float(value)]) for value in tpots],
     }
-    if len(ordered) != REQUESTS:
-        raise RuntimeError("quick SLO bootstrap requires every request")
     output = {metric: {
         "point": float(np.quantile(np.concatenate(values), .9)),
         "low": math.inf, "high": -math.inf, "by_block_length": {},

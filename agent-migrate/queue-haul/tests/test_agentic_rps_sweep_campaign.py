@@ -325,7 +325,9 @@ def slo_requests(exact=True):
         "ttft_s": .8, "mean_tpot_s": .01,
         "token_itls_s": [.01] * 1023 if exact else [],
         "scheduled_ns": index * 10**9, "start_ns": index * 10**9,
-        "end_ns": index * 10**9 + 500_000_000,
+        "first_ns": index * 10**9 + 1_000_000,
+        "last_token_ns": index * 10**9 + 103_300_000,
+        "end_ns": index * 10**9 + 104_300_000,
         "send_lateness_s": 0,
     } for index in range(32)]
 
@@ -391,6 +393,34 @@ def test_error_bar_cell_requires_complete_exact_interval_coverage():
     assert crashed["validity_errors"] == []
     assert infrastructure["status"] == "invalid"
     assert infrastructure["validity_errors"] == ["infrastructure"]
+
+
+def test_request_tpot_accepts_bundled_streams():
+    plan = campaign.make_slo_plan()
+    plan["semantics"]["tpot_definition"] = campaign.REQUEST_TPOT_DEFINITION
+    plan["validity"]["required_request_tpot_samples"] = 32
+    del plan["validity"]["minimum_exact_tpot_interval_coverage"]
+    rows = slo_requests(False)
+    metrics = [{"monotonic_ns": index * 10**9,
+                "vllm:num_requests_running": 0,
+                "vllm:num_requests_waiting": 0} for index in range(33)]
+    runtime = {"fingerprint_sha256": "fp",
+               "shared_fingerprint_sha256": "shared", "git_sha": "git"}
+
+    result = campaign.summarize_slo_cell(
+        plan, campaign.slo_cell_spec(7, 0), rows, metrics, True, None,
+        False, None, None, runtime)
+
+    assert result["status"] == "numeric"
+    assert result["exact_timing"] == 0
+    assert result["tpot_samples"] == 32
+    assert result["p90_tpot_s"] == pytest.approx(.0001)
+
+    rows[0]["last_token_ns"] = None
+    result = campaign.summarize_slo_cell(
+        plan, campaign.slo_cell_spec(7, 0), rows, metrics, True, None,
+        False, None, None, runtime)
+    assert result["validity_errors"] == ["request_tpot"]
 
 
 def test_error_bar_cell_allows_only_one_validity_retry(tmp_path):

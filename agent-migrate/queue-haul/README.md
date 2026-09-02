@@ -1610,10 +1610,9 @@ offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 
 ## Measurement programs
 
-The focused GPT-OSS A100/H100 SLO curve, request-block error bars, pinned
-attention/scheduling runtime, exact site commands, and fresh-engine alternative
-are in `AGENTIC_RPS_SWEEP.md`. It is separate from the legacy RPS plan embedded
-below for multi-model calibration.
+The focused GPT-OSS A100/H100 SLO curve, request-block error bars, standard
+request-level TPOT, pinned runtime, and exact site commands are in
+`AGENTIC_RPS_SWEEP.md`. It is separate from the legacy RPS plan below.
 
 `h100_serving_campaign.py` coordinates optimized-H100 calibration for the
 pinned Qwen3.8-27B and Gemma-4-26B checkpoints, with GPT-OSS-20B accepted as an

@@ -60,6 +60,8 @@ FIXED_SLOS = {
 SLO_SCHEMA = "queue-haul-agentic-rps-sweep-v4"
 SLO_MODEL = "openai/gpt-oss-20b"
 SLO_TARGETS = {"p90_ttft_s": 1.0, "p90_tpot_s": .05}
+REQUEST_TPOT_DEFINITION = \
+    "p90_across_request_mean_post_first_token_latency"
 SLO_HARDWARE = ("a100", "h100")
 SLO_SCOUT_RATES_RPS = (
     .03125, .0625, .125, .25, .5, 1, 2, 4, 8, 10, 12, 16, 24, 32,
@@ -595,6 +597,16 @@ def observable_exact_token_itls(row: dict) -> list[float]:
     ]
 
 
+def request_tpot_s(row: dict) -> float | None:
+    first, last, tokens = (row.get(key) for key in (
+        "first_ns", "last_token_ns", "output_tokens"))
+    if not all(isinstance(value, int) and not isinstance(value, bool)
+               for value in (first, last, tokens)) \
+            or tokens <= 1 or last < first:
+        return None
+    return (last - first) / 1e9 / (tokens - 1)
+
+
 def run_cell(plan: dict, cell: dict, cfg: testbed.Config, stack,
              root: Path) -> dict:
     cell_root = root / "cells" / cell["cell_id"]
@@ -950,23 +962,30 @@ def summarize_slo_cell(plan: dict, cell: dict, requests: list[dict],
     exact_itls = [value for row in completed
                   for value in observable_exact_token_itls(row)]
     expected_itls = expected * (plan["request_shape"]["output_tokens"] - 1)
+    request_tpots = [value for row in completed
+                     if (value := request_tpot_s(row)) is not None]
+    request_metric = plan["semantics"].get("tpot_definition") == \
+        REQUEST_TPOT_DEFINITION
+    tpot = request_tpots if request_metric else exact_itls
+    expected_tpot = expected if request_metric else expected_itls
     result.update({
-        "p90_tpot_s": float(np.quantile(exact_itls, .9))
-        if exact_itls else None,
-        "tpot_samples": len(exact_itls),
-        "expected_tpot_samples": expected_itls,
+        "p90_tpot_s": float(np.quantile(tpot, .9)) if tpot else None,
+        "tpot_samples": len(tpot),
+        "expected_tpot_samples": expected_tpot,
         "exact_tpot_interval_coverage": len(exact_itls) / expected_itls,
     })
+    if request_metric:
+        result["diagnostic_p90_request_mean_tpot_s"] = result["p90_tpot_s"]
     timestamps = sorted(int(row["monotonic_ns"]) for row in metrics)
     gaps = [(right - left) / 1e9
             for left, right in zip(timestamps, timestamps[1:])]
+    max_gap = plan["validity"]["max_metric_gap_s"]
     telemetry_complete = bool(len(timestamps) >= 2 and requests
                               and timestamps[0] <= min(
                                   int(row["scheduled_ns"]) for row in requests)
                               and timestamps[-1] >= max(
                                   int(row["end_ns"]) for row in requests)
-                              and max(gaps) <=
-                              plan["validity"]["max_metric_gap_s"])
+                              and max(gaps) <= max_gap)
     errors = []
     if engine_failure_kind in {"infrastructure", "runtime_contract"}:
         errors.append(engine_failure_kind)
@@ -985,9 +1004,13 @@ def summarize_slo_cell(plan: dict, cell: dict, requests: list[dict],
            plan["request_shape"]["prompt_tokens"] for row in completed):
         errors.append("prompt_tokens")
     service_failure = engine_exited or not drained or len(completed) != expected
-    if not service_failure and result["exact_tpot_interval_coverage"] < \
-            plan["validity"]["minimum_exact_tpot_interval_coverage"]:
-        errors.append("exact_tpot_interval_coverage")
+    if not service_failure:
+        if request_metric and result["tpot_samples"] != \
+                plan["validity"]["required_request_tpot_samples"]:
+            errors.append("request_tpot")
+        elif not request_metric and result["exact_tpot_interval_coverage"] < \
+                plan["validity"]["minimum_exact_tpot_interval_coverage"]:
+            errors.append("exact_tpot_interval_coverage")
     status = "invalid" if errors else (
         "service_failure" if service_failure else "numeric")
     if status != "numeric":

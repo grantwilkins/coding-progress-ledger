@@ -18,6 +18,11 @@ def test_plan_is_shared_across_hardware_and_targets_the_boundary():
     assert h100["statistics"]["request_block_lengths"] == [5, 10]
     assert h100["statistics"]["scope"] == \
         "pointwise_conditional_on_each_rate_episode"
+    assert h100["semantics"]["tpot_definition"] == \
+        "p90_across_request_mean_post_first_token_latency"
+    assert h100["validity"]["required_request_tpot_samples"] == 50
+    assert h100["validity"]["max_metric_gap_s"] == 3
+    assert "minimum_exact_tpot_interval_coverage" not in h100["validity"]
     assert h100["semantics"]["engine_reuse"] == \
         "one_warmed_launch_until_failure_or_resume"
     assert h100["runtime"]["attention_backend"] == "TRITON_ATTN"
@@ -55,12 +60,13 @@ def test_weighted_p90_matches_expanded_request_clusters():
     assert observed == pytest.approx(expected)
 
 
-def test_bootstrap_keeps_each_requests_token_intervals_together():
+def test_bootstrap_resamples_request_tpot_with_request_order():
     requests = [{
         "scheduled_ns": index,
         "ttft_s": index / 100,
-        "token_itls_s": [index / 1000, (index + 1) / 1000],
-        "exact_token_timestamps": True,
+        "first_ns": 1,
+        "last_token_ns": 1 + index * 1_000_000,
+        "exact_token_timestamps": False,
         "status": 200,
         "done": True,
         "finish_reason": "length",
@@ -74,7 +80,7 @@ def test_bootstrap_keeps_each_requests_token_intervals_together():
     )
 
     assert intervals["p90_ttft_s"]["point"] == pytest.approx(.441)
-    assert intervals["p90_tpot_s"]["point"] == pytest.approx(.045)
+    assert intervals["p90_tpot_s"]["point"] == pytest.approx(.0441)
     for interval in intervals.values():
         assert interval["low"] <= interval["point"] <= interval["high"]
         assert set(interval["by_block_length"]) == {"5", "10"}
