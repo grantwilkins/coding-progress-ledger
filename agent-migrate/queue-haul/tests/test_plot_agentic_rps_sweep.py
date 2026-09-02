@@ -185,14 +185,20 @@ def test_quick_plot_marks_metric_violations(tmp_path, monkeypatch):
     }
     monkeypatch.setattr(plt, "close", lambda figure: None)
 
-    plotter.plot(summary, tmp_path)
+    plotter.plot(summary, tmp_path, ttft_slo_s=.7)
     figure = plt.gcf()
+    ttft_axis = figure.axes[0]
     axis = figure.axes[1]
     violations = next(collection for collection in axis.collections
                       if collection.get_label() == plot_style.SLO_VIOLATION_NAME)
     errorbar = next(container for container in axis.containers
                     if isinstance(container, ErrorbarContainer))
 
+    assert set(next(line for line in ttft_axis.lines
+                    if line.get_label() == "SLO").get_ydata()) == {.7}
+    assert len(next(collection for collection in ttft_axis.collections
+                    if collection.get_label() ==
+                    plot_style.SLO_VIOLATION_NAME).get_offsets()) == 2
     assert list(violations.get_offsets()[0]) == [.25, 60]
     assert errorbar.lines[0].get_marker() == "o"
     assert errorbar.lines[0].get_markevery() == [0]

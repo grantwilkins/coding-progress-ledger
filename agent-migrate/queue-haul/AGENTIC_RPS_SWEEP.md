@@ -98,6 +98,9 @@ figures are in `outputs/agentic-rps-sweep-a100-quick-v4-20260902/` and
 `outputs/agentic-rps-sweep-h100-quick-v4-20260902/`, respectively.
 The combined figure is in
 `outputs/agentic-rps-sweep-a100-h100-quick-v4-20260902/`.
+The plot-only 5-second TTFT sensitivity uses `--ttft-slo-s 5` and is in
+`outputs/agentic-rps-sweep-a100-h100-quick-v4-ttft5s-20260902/`; the summaries
+retain their measured 1-second contract.
 
 Rerunning the same `run` command safely reuses completed cells. Do not share a
 run root between sites or combine quick-v4 results with earlier quick runs or the

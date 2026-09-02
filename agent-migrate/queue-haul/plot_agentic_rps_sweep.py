@@ -24,13 +24,18 @@ METRICS = (
 SLOS = {"p90_ttft_s": 1.0, "p90_tpot_s": .05}
 
 
-def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
+def plot_summary(summary: dict, output: Path, h100: dict | None = None,
+                 ttft_slo_s: float | None = None) -> None:
     result = summary["models"][MODEL]
     schema = summary["schema"]
     hardware = summary.get("hardware", "a100")
     curves = {hardware: result["curve"]}
-    slos = (SLOS if schema == SCHEMA else
-            {field: result["slo"][field] for field, *_ in METRICS})
+    slos = dict(SLOS if schema == SCHEMA else
+                {field: result["slo"][field] for field, *_ in METRICS})
+    if ttft_slo_s is not None:
+        if not 0 < ttft_slo_s < float("inf"):
+            raise ValueError("TTFT SLO must be positive and finite")
+        slos["p90_ttft_s"] = ttft_slo_s
     if h100 is not None:
         if h100.get("schema") != schema or h100.get("stage") != "reduced" or \
                 summary.get("hardware") != "a100" or \
@@ -182,7 +187,8 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
     plt.close(figure)
 
 
-def plot(summary: dict, output_dir: Path, h100: dict | None = None) -> Path:
+def plot(summary: dict, output_dir: Path, h100: dict | None = None,
+         ttft_slo_s: float | None = None) -> Path:
     if summary.get("schema") not in {SCHEMA, *ERROR_BAR_SCHEMAS} \
             or summary.get("stage") != "reduced":
         raise ValueError("agentic RPS summary is not reduced evidence")
@@ -192,7 +198,7 @@ def plot(summary: dict, output_dir: Path, h100: dict | None = None) -> Path:
             )):
         raise ValueError("agentic SLO summary lacks runtime provenance")
     output = output_dir / "agentic-rps-sweep"
-    plot_summary(summary, output, h100)
+    plot_summary(summary, output, h100, ttft_slo_s)
     return output
 
 
@@ -201,10 +207,12 @@ def main(argv=None) -> None:
     parser.add_argument("summary", type=Path)
     parser.add_argument("output_dir", type=Path)
     parser.add_argument("--h100-summary", type=Path)
+    parser.add_argument("--ttft-slo-s", type=float)
     args = parser.parse_args(argv)
     h100 = json.loads(args.h100_summary.read_text()) \
         if args.h100_summary else None
-    plot(json.loads(args.summary.read_text()), args.output_dir, h100)
+    plot(json.loads(args.summary.read_text()), args.output_dir, h100,
+         args.ttft_slo_s)
 
 
 if __name__ == "__main__":
