@@ -1,0 +1,149 @@
+{
+  "campaign": "agentic_rps_sweep",
+  "collector": {
+    "dispatch_lead_s": 1.0,
+    "metrics_period_s": 0.25,
+    "request_driver": "one_ready_blocking_thread_per_request"
+  },
+  "comparison_sha256": "9d72425aed31f51175a1e92d915207831de3fe59198473ccccd00350eb13ac9c",
+  "hardware": "a100",
+  "implementation": {
+    "collector_source_sha256": "e8e99359aee2f1b488ba53c1f0090e349ad002cff02984c95678aa4d751b4bd8",
+    "quick_source_sha256": "c336fc8713feeda4521aa129f695178ba2ccda13da8cfdf64cc983db078372ad",
+    "server_info_middleware_source_sha256": "bc3f4cdfcb87d4fe87007dced603b939ead74648debff9aa4052fdfd8084d192"
+  },
+  "model_revisions": {
+    "openai/gpt-oss-20b": "6cee5e81ee83917806bbde320786a8fb61efebee"
+  },
+  "models": [
+    "openai/gpt-oss-20b"
+  ],
+  "rate_order_rps": [
+    2.0,
+    20.0,
+    24.0,
+    0.5,
+    1.0,
+    6.0,
+    14.0,
+    8.0,
+    3.0,
+    7.0,
+    5.0,
+    4.0,
+    12.0,
+    16.0,
+    10.0
+  ],
+  "rates_rps": [
+    0.5,
+    1.0,
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    7.0,
+    8.0,
+    10.0,
+    12.0,
+    14.0,
+    16.0,
+    20.0,
+    24.0
+  ],
+  "rates_rps_by_model": {
+    "openai/gpt-oss-20b": [
+      0.5,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0,
+      16.0,
+      20.0,
+      24.0
+    ]
+  },
+  "request_shape": {
+    "output_tokens": 1024,
+    "prompt_tokens": 3920
+  },
+  "request_timeout_s": 1800.0,
+  "requests_per_point": 50,
+  "runtime": {
+    "async_scheduling": false,
+    "attention_backend": "TRITON_ATTN",
+    "block_size": 16,
+    "chunked_prefill": true,
+    "dtype": "bfloat16",
+    "enforce_eager": false,
+    "gpu_count": 1,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "auto",
+    "lmcache_mode": "mp",
+    "max_model_len": 32768,
+    "max_num_batched_tokens": 8192,
+    "max_num_seqs": 256,
+    "mode": "native",
+    "prefix_caching": true,
+    "runtime_versions": [
+      "0.22.0",
+      "0.5.1"
+    ],
+    "server_info_system_probe": false,
+    "stream_interval": 1,
+    "tensor_parallel_size": 1
+  },
+  "schema": "queue-haul-quick-slo-sweep-v4",
+  "seed": 20260902,
+  "semantics": {
+    "engine_reuse": "one_warmed_launch_until_failure_or_resume",
+    "forced_exact_output_length": true,
+    "max_concurrency": null,
+    "open_loop_poisson": true,
+    "reset_and_drain_between_rates": true,
+    "run_all_predeclared_rates": true,
+    "service_failures_are_violations": true,
+    "tpot_definition": "p90_across_request_mean_post_first_token_latency",
+    "uncached_unique_prompts": true
+  },
+  "slo": {
+    "p90_tpot_s": 0.05,
+    "p90_ttft_s": 1.0
+  },
+  "statistics": {
+    "bootstrap_draws": 10000,
+    "classification": "point_estimate",
+    "confidence": 0.95,
+    "interval": "circular_moving_request_block_bootstrap_envelope",
+    "point": "empirical_p90",
+    "request_block_lengths": [
+      5,
+      10
+    ],
+    "scope": "pointwise_conditional_on_each_rate_episode"
+  },
+  "study": "quick_gpt_oss_slo_error_bars",
+  "validity": {
+    "max_metric_gap_s": 3.0,
+    "max_send_lateness_s": 0.05,
+    "maximum_attempts_per_cell": 2,
+    "require_drain": true,
+    "require_telemetry": true,
+    "required_cached_tokens": 0,
+    "required_completions": 50,
+    "required_request_tpot_samples": 50
+  },
+  "warmup": {
+    "discard": true,
+    "rate_rps": 1.0,
+    "requests": 50
+  }
+}
