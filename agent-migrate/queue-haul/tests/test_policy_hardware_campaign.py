@@ -621,7 +621,7 @@ def test_common_packing_chart_uses_120_matched_rows_and_five_point_band(
         "replay_only": (0, 120, 0),
     }
     labels = [row.get_text() for row in campaign.plt.gcf().axes[0].get_yticklabels()]
-    assert labels[2] == "True Greedy (n=120)"
+    assert labels[2] == "Isolated Fastest (n=120)"
     assert (out / "policy_hardware_common_packing.pdf").exists()
 
 
@@ -793,7 +793,7 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     assert CDF_COLORS is plot_style.POLICY_COLORS
     assert CDF_LABELS is plot_style.POLICY_NAMES
     assert CDF_LINESTYLES is plot_style.POLICY_LINESTYLES
-    assert CDF_LABELS["isolated_fastest"] == "True Greedy"
+    assert CDF_LABELS["isolated_fastest"] == "Isolated Fastest"
 
 
 def test_max_session_ttft_uses_slowest_session_in_each_complete_episode(

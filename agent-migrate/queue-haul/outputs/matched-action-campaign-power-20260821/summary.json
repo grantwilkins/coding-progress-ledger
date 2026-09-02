@@ -1,0 +1,647 @@
+{
+  "arms": [
+    {
+      "action_counts": {
+        "east_kv_transfer": 0,
+        "east_replay": 0,
+        "germany_kv_transfer": 8,
+        "germany_replay": 0
+      },
+      "arm_id": "gpt_oss_20b_a100",
+      "attained_fraction": 1.0,
+      "binding_resources": [],
+      "feasible": true,
+      "hardware": "A100",
+      "initial_source_power_w": 159.97286800437467,
+      "input_sha256": "8dd395eed5389ecc376c060a72d5409b98362cd7abe3daaf2a761d0a2e3b66db",
+      "kv_capacity_tokens": 963152,
+      "method_counts": {
+        "kv_transfer": 8,
+        "replay": 0
+      },
+      "model": "openai/gpt-oss-20b",
+      "move_count": 8,
+      "moves": [
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 0,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-f6"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 1,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-f5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 2,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-f2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-f4"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-f0"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-f7"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-f3"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 7,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-f1"
+        }
+      ],
+      "planned_source_power_w": 98.11623555,
+      "predicted_migration_makespan_s": 5.230946727900438,
+      "schema": "queue-haul-matched-action-campaign-v2",
+      "session_count": 8,
+      "target_met": true
+    },
+    {
+      "action_counts": {
+        "east_kv_transfer": 0,
+        "east_replay": 1,
+        "germany_kv_transfer": 0,
+        "germany_replay": 5
+      },
+      "arm_id": "gpt_oss_20b_h100",
+      "attained_fraction": 0.9178707243995358,
+      "binding_resources": [],
+      "feasible": true,
+      "hardware": "H100",
+      "initial_source_power_w": 157.7358950200577,
+      "input_sha256": "8dd395eed5389ecc376c060a72d5409b98362cd7abe3daaf2a761d0a2e3b66db",
+      "kv_capacity_tokens": 2377893,
+      "method_counts": {
+        "kv_transfer": 0,
+        "replay": 6
+      },
+      "model": "openai/gpt-oss-20b",
+      "move_count": 6,
+      "moves": [
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-f6"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-f5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-f0"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-f3"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-f2"
+        },
+        {
+          "destination_instance": "east",
+          "destination_pool": "pool/east",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/east"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-f7"
+        }
+      ],
+      "planned_source_power_w": 98.76534489496481,
+      "predicted_migration_makespan_s": 1.8371334527819367,
+      "schema": "queue-haul-matched-action-campaign-v2",
+      "session_count": 8,
+      "target_met": true
+    },
+    {
+      "action_counts": {
+        "east_kv_transfer": 0,
+        "east_replay": 0,
+        "germany_kv_transfer": 7,
+        "germany_replay": 0
+      },
+      "arm_id": "qwen3_8_27b_h100",
+      "attained_fraction": 0.8995785028642856,
+      "binding_resources": [],
+      "feasible": true,
+      "hardware": "H100",
+      "initial_source_power_w": 284.5154320987655,
+      "input_sha256": "8dd395eed5389ecc376c060a72d5409b98362cd7abe3daaf2a761d0a2e3b66db",
+      "kv_capacity_tokens": 427349,
+      "method_counts": {
+        "kv_transfer": 7,
+        "replay": 0
+      },
+      "model": "Qwen/Qwen3.8-27B",
+      "move_count": 7,
+      "moves": [
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 0,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-f6"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 1,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-f5"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 2,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-f2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-f0"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-f3"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-f7"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "kv_transfer",
+          "order": 6,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-f4"
+        }
+      ],
+      "planned_source_power_w": 115.99577241452624,
+      "predicted_migration_makespan_s": 12.108927353648046,
+      "schema": "queue-haul-matched-action-campaign-v2",
+      "session_count": 8,
+      "target_met": true
+    },
+    {
+      "action_counts": {
+        "east_kv_transfer": 0,
+        "east_replay": 0,
+        "germany_kv_transfer": 0,
+        "germany_replay": 6
+      },
+      "arm_id": "gemma_4_26b_h100",
+      "attained_fraction": 0.039535811043217954,
+      "binding_resources": [],
+      "feasible": false,
+      "hardware": "H100",
+      "initial_source_power_w": 394.8130132122014,
+      "input_sha256": "8dd395eed5389ecc376c060a72d5409b98362cd7abe3daaf2a761d0a2e3b66db",
+      "kv_capacity_tokens": 390231,
+      "method_counts": {
+        "kv_transfer": 0,
+        "replay": 6
+      },
+      "model": "google/gemma-4-26B-A4B-it",
+      "move_count": 6,
+      "moves": [
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 0,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-f2"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 1,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-f0"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 2,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-f3"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 3,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-f7"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 4,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-f4"
+        },
+        {
+          "destination_instance": "germany",
+          "destination_pool": "pool/germany",
+          "method": "replay",
+          "order": 5,
+          "path": [
+            "link/germany"
+          ],
+          "quiesce_s": null,
+          "rate_limit_bytes_per_s": null,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-f1"
+        }
+      ],
+      "planned_source_power_w": 383.66924566217665,
+      "predicted_migration_makespan_s": 2.7407446473383246,
+      "schema": "queue-haul-matched-action-campaign-v2",
+      "session_count": 8,
+      "target_met": false
+    }
+  ],
+  "campaign": {
+    "background": {
+      "east": [
+        0,
+        0
+      ],
+      "germany": [
+        0,
+        0
+      ]
+    },
+    "bandwidth_mbps": {
+      "east": 2280.176174037911,
+      "germany": 8733.31359588583
+    },
+    "context_tokens_per_session": 16384,
+    "deadline_s": 30,
+    "regions": [
+      "east",
+      "germany"
+    ],
+    "requested_shed_fraction": 0.8,
+    "scenario_id": "4ce7626a1f20a5c3",
+    "sessions": 8
+  },
+  "comparisons": {
+    "hardware": {
+      "arms": [
+        "gpt_oss_20b_a100",
+        "gpt_oss_20b_h100"
+      ],
+      "gpt_h100_result_sha256": "97d8cbc2c6e0450509872f39d13308b726ace410a76d915ad935f6134457c0ea"
+    },
+    "models": {
+      "arms": [
+        "gpt_oss_20b_h100",
+        "qwen3_8_27b_h100",
+        "gemma_4_26b_h100"
+      ],
+      "gpt_h100_result_sha256": "97d8cbc2c6e0450509872f39d13308b726ace410a76d915ad935f6134457c0ea"
+    }
+  },
+  "completed_a100_run": {
+    "action_counts": {
+      "east_kv_transfer": 0,
+      "east_replay": 0,
+      "germany_kv_transfer": 8,
+      "germany_replay": 0
+    },
+    "deadline_met": true,
+    "migration_s": 16.459174637,
+    "realized_shed_w": 61.856632454374676,
+    "request_failures": 0,
+    "requested_shed_w": 49.48530596349974,
+    "status": "complete",
+    "target_met": true
+  },
+  "gates": {
+    "a100_model_reproduces_completed_action_mix": true,
+    "all_h100_model_action_mixes_distinct": true,
+    "all_h100_power_bootstraps_complete": true,
+    "all_model_power_repeat_gates_pass": true,
+    "hardware_changes_method_mix": true,
+    "model_specific_power_changes_feasibility": true,
+    "models_change_method_mix": true
+  },
+  "input_sha256": "8dd395eed5389ecc376c060a72d5409b98362cd7abe3daaf2a761d0a2e3b66db",
+  "inputs": {
+    "files": {
+      "a100_profile": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/gpt_oss_20b_a100_tp1_azure_300w.json",
+        "sha256": "b837fac06c63b002be84579e1e1be2159e8efdc65c45817ebf92737ae9cd5d58"
+      },
+      "campaign_code": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/matched_action_campaign.py",
+        "sha256": "2ad3cb98a786c534985d9b27d2742cf93159d5676864666f0c313750d772eca9"
+      },
+      "campaign_decision": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-frontier-20260808/pilot/scenarios/4ce7626a1f20a5c3/attempt-0001/decision.json",
+        "sha256": "a0add3a6b13b90645d115487907decda5aa6a85fea31ed134532357b1e88cf0e"
+      },
+      "campaign_manifest": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/coding-manifest.json",
+        "sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435"
+      },
+      "campaign_plan": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-frontier-20260808/pilot/plan.json",
+        "sha256": "2d172410bf6074fa99f38f6dbf2e6fad50bbee570f2d204b016393e6db0642db"
+      },
+      "campaign_results": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-frontier-20260808/pilot/results.csv",
+        "sha256": "254c7a3a2a41c64444b63c88e3097f7fc8978b85abb73fa6068d0e43d3ba3840"
+      },
+      "h100_profile": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/gpt_oss_20b_h100_tp1.json",
+        "sha256": "9f18941768a3eb7854387685c7c2e17209bee30a3c269044ab33843222e5b5bf"
+      },
+      "kv_model": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/kv-transfer-early-experiment/migration_ratio.py",
+        "sha256": "bd8e69e24243b2c9586864155a651526bd54dbb425f6573a5c9b7c693c927792"
+      },
+      "power_Qwen/Qwen3.8-27B": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/matched_action_h100_power/qwen3.8-27b.json",
+        "sha256": "7cb0238eac51c123038ea403a5a787844550b1c5c85afccc435ff7139e1717d5"
+      },
+      "power_google/gemma-4-26B-A4B-it": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/matched_action_h100_power/gemma-4-26b.json",
+        "sha256": "15a6a91e5270f60aec073cec781dfb99f1d2e2909eaddb8dc167ddbefc820ae9"
+      },
+      "power_openai/gpt-oss-20b": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/matched_action_h100_power/gpt-oss-20b.json",
+        "sha256": "e2d2bf02b45ad8b50df7deff4fac53f86f1ce3cecbe6cc5d47000e34928ba387"
+      },
+      "prefill_Qwen/Qwen3.8-27B": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/matched_action_h100_prefill/qwen3.8-27b.json",
+        "sha256": "1d59e07ff6fc280409c912552f6dc2383d2a5ad670deb4a779fa57eeda323030"
+      },
+      "prefill_google/gemma-4-26B-A4B-it": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/matched_action_h100_prefill/gemma-4-26b.json",
+        "sha256": "70d6a6819ad9c1ea504caa1f1147376909265051ebcaf9ea9d26a17e2dec3681"
+      },
+      "prefill_openai/gpt-oss-20b": {
+        "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/matched_action_h100_prefill/gpt-oss-20b.json",
+        "sha256": "45e783f0213400ac329c6e04359fcd6806b7c8b2e7b559fe7c355089e7e2854e"
+      }
+    },
+    "kv_endpoint_residuals_s": 0,
+    "parent_manifest_sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435",
+    "planner": "lp_work_first",
+    "scenario_id": "4ce7626a1f20a5c3",
+    "schema": "queue-haul-matched-action-campaign-v2"
+  },
+  "power_bootstrap": {
+    "gemma_4_26b_h100": {
+      "outcomes": [
+        {
+          "action_counts": {
+            "east_kv_transfer": 0,
+            "east_replay": 0,
+            "germany_kv_transfer": 0,
+            "germany_replay": 6
+          },
+          "feasible": false,
+          "method_counts": {
+            "kv_transfer": 0,
+            "replay": 6
+          },
+          "probability": 1.0,
+          "samples": 200,
+          "target_met": false
+        }
+      ],
+      "samples": 200,
+      "unique_power_curves": 88
+    },
+    "gpt_oss_20b_h100": {
+      "outcomes": [
+        {
+          "action_counts": {
+            "east_kv_transfer": 0,
+            "east_replay": 1,
+            "germany_kv_transfer": 0,
+            "germany_replay": 5
+          },
+          "feasible": true,
+          "method_counts": {
+            "kv_transfer": 0,
+            "replay": 6
+          },
+          "probability": 1.0,
+          "samples": 200,
+          "target_met": true
+        }
+      ],
+      "samples": 200,
+      "unique_power_curves": 88
+    },
+    "qwen3_8_27b_h100": {
+      "outcomes": [
+        {
+          "action_counts": {
+            "east_kv_transfer": 0,
+            "east_replay": 0,
+            "germany_kv_transfer": 7,
+            "germany_replay": 0
+          },
+          "feasible": true,
+          "method_counts": {
+            "kv_transfer": 7,
+            "replay": 0
+          },
+          "probability": 1.0,
+          "samples": 200,
+          "target_met": true
+        }
+      ],
+      "samples": 200,
+      "unique_power_curves": 8
+    }
+  },
+  "schema": "queue-haul-matched-action-campaign-v2",
+  "scope": "Central action proof plus a 200-draw calibration bootstrap, not a workload population estimate. Every H100 arm uses its own measured coding-path power, prefill, and decode rates; BF16 KV bytes are analytic and endpoint residuals are zero. Only the archived A100 run is a physical migration; predicted makespans are scheduling diagnostics.",
+  "status": "complete"
+}

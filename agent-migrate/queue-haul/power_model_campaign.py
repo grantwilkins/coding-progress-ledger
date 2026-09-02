@@ -19,11 +19,14 @@ from urllib.request import Request, urlopen
 
 import numpy as np
 
+import migration_testbed as testbed
+
 PROMPT_COUNTER = "vllm:prompt_tokens_total"
 DECODE_COUNTER = "vllm:generation_tokens_total"
 CACHED_COUNTER = "vllm:prompt_tokens_cached_total"
 COUNTER_TOLERANCE_FRACTION = .001
 COUNTER_TOLERANCE_TOKENS = 1
+MAX_ELL = 16.0
 
 
 @dataclass(frozen=True)
@@ -177,11 +180,11 @@ def sample_power(path: Path, stop: threading.Event, errors: list[BaseException])
         stop.set()
 
 
-def completion(url: str, cell: Cell, request_id: int) -> dict:
+def completion(url: str, cell: Cell, request_id: int, model: str) -> dict:
     prompt = [17] * cell.prompt_tokens
     if prompt:
         prompt[0] = 100 + request_id % 1000
-    body = json.dumps({"model": "openai/gpt-oss-20b", "prompt": prompt,
+    body = json.dumps({"model": model, "prompt": prompt,
                        "max_tokens": cell.output_tokens, "ignore_eos": True,
                        "temperature": 0}).encode()
     start = time.monotonic_ns()
@@ -192,9 +195,9 @@ def completion(url: str, cell: Cell, request_id: int) -> dict:
             "usage": result["usage"]}
 
 
-def batch(url: str, cell: Cell, first_id: int) -> list[dict]:
+def batch(url: str, cell: Cell, first_id: int, model: str) -> list[dict]:
     with ThreadPoolExecutor(max_workers=cell.concurrency) as pool:
-        rows = list(pool.map(lambda i: completion(url, cell, first_id + i),
+        rows = list(pool.map(lambda i: completion(url, cell, first_id + i, model),
                              range(cell.concurrency)))
     if len(rows) != cell.concurrency:
         raise RuntimeError("incomplete synchronous batch")
@@ -233,7 +236,7 @@ def accounting(cell: Cell, requests: list[dict], batches: int,
 
 
 def run_cell(cell: Cell, base_url: str, out: Path, window_s: float,
-             cooldown_s: float, sequence: int) -> dict:
+             cooldown_s: float, sequence: int, model: str) -> dict:
     label = cell_label(sequence, cell)
     power_path = out / "power" / f"{label}.csv"
     stop = threading.Event()
@@ -244,14 +247,15 @@ def run_cell(cell: Cell, base_url: str, out: Path, window_s: float,
         url = f"{base_url}/v1/completions"
         first_id = sequence * 1_000_000
         if cell.concurrency:
-            batch(url, cell, first_id)
+            batch(url, cell, first_id, model)
         start_metrics, _ = metrics(f"{base_url}/metrics")
         start_ns = time.monotonic_ns()
         requests: list[dict] = []
         batches = 0
         if cell.concurrency:
             while (time.monotonic_ns() - start_ns) / 1e9 < window_s:
-                requests.extend(batch(url, cell, first_id + (batches + 1) * cell.concurrency))
+                requests.extend(batch(url, cell, first_id + (batches + 1) * cell.concurrency,
+                                      model))
                 batches += 1
         else:
             time.sleep(window_s)
@@ -366,6 +370,12 @@ def predict(row: dict, fit: dict) -> float:
     return fit["power_idle_w"] + fit["power_amplitude_w"] * z / (1 + z)
 
 
+def power_curve(fit: dict) -> list[dict]:
+    return [{"ell": ell, "power_w": fit["power_idle_w"]
+             + fit["power_amplitude_w"] * ell / (1 + ell)}
+            for ell in (0, .25, .5, 1, 2, 4, 8, MAX_ELL)]
+
+
 def validate(rows: list[dict], fit: dict) -> dict:
     held = [r for r in rows if r["stage"] == "confirmation"]
     errors = [abs(r["power_mean_w"] - predict(r, fit)) for r in held]
@@ -412,7 +422,8 @@ def fit_result(rows: list[dict]) -> dict:
     report = validate(rows, fit)
     return {"schema": "queue-haul-rational-power-fit-v1",
             "status": "calibrated" if report["passed"] else "holdout_failed",
-            "fit": fit, "interaction_diagnostic": interaction_diagnostic(rows, fit),
+            "fit": fit, "max_ell": MAX_ELL, "power_curve": power_curve(fit),
+            "interaction_diagnostic": interaction_diagnostic(rows, fit),
             "validation": report}
 
 
@@ -472,6 +483,7 @@ def followup_result(base: list[dict], rows: list[dict]) -> dict:
     passed = all(gates.values())
     return {"schema": "queue-haul-rational-power-followup-v1",
             "status": "calibrated" if passed else "holdout_failed", "fit": fit,
+            "max_ell": MAX_ELL, "power_curve": power_curve(fit),
             "validation": {"original_v5": original, "targeted": targeted,
                            "gates": gates, "passed": passed}}
 
@@ -531,6 +543,19 @@ def wait_ready(base_url: str, server: subprocess.Popen, timeout_s: float = 600) 
         except Exception:
             time.sleep(2)
     raise TimeoutError("vLLM did not become healthy")
+
+
+def server_command(args) -> list[str]:
+    spec = testbed.model_spec(args.model)
+    return [args.vllm, "serve", args.model, "--revision", spec.revision,
+            "--host", args.host, "--port", str(args.port),
+            "--served-model-name", args.model, "--tensor-parallel-size", "1",
+            "--max-model-len", "32768", "--max-num-seqs", "256",
+            "--max-num-batched-tokens", str(spec.batched_tokens),
+            "--dtype", "bfloat16", "--kv-cache-dtype", "auto",
+            "--block-size", "16", "--enable-chunked-prefill",
+            "--gpu-memory-utilization", ".9", "--no-enable-prefix-caching",
+            *spec.vllm_args]
 
 
 def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
@@ -606,6 +631,7 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
 def run(args) -> None:
     gpu = validate_gpu()
     plan = followup_cells(args.seed) if args.followup_base else cells(args.seed)
+    server_cmd = server_command(args)
     if args.followup_base:
         base_metadata = json.loads((args.followup_base / "metadata.json").read_text())
         if gpu != base_metadata["gpu"]:
@@ -622,6 +648,9 @@ def run(args) -> None:
         (args.out / "power").mkdir()
         metadata = {"started_wall_ns": time.time_ns(), "gpu": gpu,
                     "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+                    "model": args.model,
+                    "revision": testbed.model_spec(args.model).revision,
+                    "optimized_h100": True, "server_command": server_cmd,
                     "minimum_window_s": args.window_s, "warmup": "one complete batch",
                     "cooldown_s": args.cooldown_s, "seed": args.seed}
         if args.followup_base:
@@ -629,14 +658,6 @@ def run(args) -> None:
         (args.out / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
         rows, log_path = [], args.out / "server.log"
     server_log = log_path.open("x")
-    server_cmd = [args.vllm, "serve", str(args.model), "--host", args.host,
-                  "--port", str(args.port), "--served-model-name", "openai/gpt-oss-20b",
-                  "--tensor-parallel-size", "1", "--max-model-len", "32768",
-                  "--max-num-seqs", "256", "--max-num-batched-tokens", "8192",
-                  "--kv-cache-dtype", "auto", "--block-size", "16",
-                  "--enable-chunked-prefill", "--enforce-eager",
-                  "--gpu-memory-utilization", ".75", "--disable-hybrid-kv-cache-manager",
-                  "--no-enable-prefix-caching"]
     server = subprocess.Popen(server_cmd, stdout=server_log, stderr=subprocess.STDOUT)
     try:
         base_url = f"http://{args.host}:{args.port}"
@@ -644,10 +665,12 @@ def run(args) -> None:
         for sequence in range(len(rows), len(plan)):
             cell = plan[sequence]
             row = run_cell(cell, base_url, args.out, args.window_s,
-                           args.cooldown_s, sequence)
+                           args.cooldown_s, sequence, args.model)
             rows.append(row)
             append_jsonl(args.out / "cells.jsonl", [row])
             print(json.dumps(row), flush=True)
+        testbed.validate_h100_optimized_runtime(
+            " ".join(map(str, server_cmd)), log_path.read_text(errors="replace"))
         result = (followup_result(complete_rows(args.followup_base, args.seed), rows)
                   if args.followup_base else fit_result(rows))
         with (args.out / "fit.json").open("x") as handle:
@@ -668,7 +691,7 @@ def run(args) -> None:
 def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--model", type=Path, required=True)
+    parser.add_argument("--model", choices=tuple(testbed.MODEL_SPECS), required=True)
     parser.add_argument("--vllm", default="vllm")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8100)

@@ -27,9 +27,12 @@ POLICIES = (
 )
 POLICY_NAMES = dict(zip(POLICIES, (
     "Queue-Haul LP", "Queue-Haul Greedy", "Queue-Haul Lagrangian Greedy",
-    "True Greedy", "KV Migrate Only", "Replay Context Only",
+    "Isolated Fastest", "KV Migrate Only", "Replay Context Only",
     "Queue-Haul Power Blind", "Queue-Haul Deadline Blind",
 )))
+COMPACT_POLICY_NAMES = {
+    **POLICY_NAMES, "kv_only": "KV Migrate", "replay_only": "Replay Context",
+}
 SHORT_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "Queue-Haul"}
 POLICY_COLORS = dict(zip(POLICIES, (
     "#0072B2", "#E69F00", "#F0E442", "#D55E00",
@@ -106,6 +109,28 @@ ACTION_HATCHES = {
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "--",
 }
+RESOURCE_STATE_NAMES = {
+    "none": "None bound", "bandwidth": "Bandwidth",
+    "hbm": "HBM", "bandwidth-hbm": "HBM + bandwidth",
+    "dest_compute": "Dest. compute",
+    "bandwidth-dest_compute": "Bandwidth + compute",
+    "dest_compute-hbm": "HBM + compute",
+    "bandwidth-dest_compute-hbm": "All bound",
+}
+RESOURCE_STATE_COLORS = {
+    "none": POLICY_COLORS["queue_haul"],
+    "bandwidth": "#CC79A7",
+    "hbm": POLICY_COLORS["greedy"],
+    "bandwidth-hbm": POLICY_COLORS["greedy"],
+    "dest_compute": POLICY_COLORS["queue_haul_power_blind"],
+    "bandwidth-dest_compute": POLICY_COLORS["queue_haul_power_blind"],
+    "dest_compute-hbm": "#000000", "bandwidth-dest_compute-hbm": "#000000",
+}
+RESOURCE_STATE_LINESTYLES = {
+    "none": "-", "bandwidth": "--", "hbm": "-", "bandwidth-hbm": "--",
+    "dest_compute": "-", "bandwidth-dest_compute": "--",
+    "dest_compute-hbm": "-", "bandwidth-dest_compute-hbm": "--",
+}
 MODELS = ("openai/gpt-oss-20b", "Qwen/Qwen3.8-27B",
           "google/gemma-4-26B-A4B-it")
 MODEL_NAMES = dict(zip(MODELS, ("GPT-OSS-20B", "Qwen3.8-27B",
@@ -121,6 +146,15 @@ SERVICE_DIRECTION_COLORS = dict(zip(SERVICE_DIRECTIONS, (
 SERVICE_DIRECTION_LINESTYLES = dict(zip(SERVICE_DIRECTIONS, (
     ":", "-", "-.", "--")))
 SERVICE_DIRECTION_MARKERS = dict(zip(SERVICE_DIRECTIONS, ("D", "^", "s", "o")))
+AGENTIC_WORKLOAD_NAME = "OpenHands Agentic"
+AGENTIC_WORKLOAD_COLOR = MODEL_COLORS["openai/gpt-oss-20b"]
+AGENTIC_WORKLOAD_MARKER = "o"
+AGENTIC_HARDWARE = ("a100", "h100")
+AGENTIC_HARDWARE_NAMES = {"a100": "A100", "h100": "H100"}
+AGENTIC_HARDWARE_COLORS = {"a100": "#0072B2", "h100": "#D55E00"}
+AGENTIC_HARDWARE_MARKERS = {"a100": "o", "h100": "s"}
+AGENTIC_HARDWARE_LINESTYLES = {"a100": "-", "h100": "--"}
+SLO_NAME, SLO_COLOR, SLO_LINESTYLE = "SLO", "black", ":"
 REPAIR_NAMES = {
     "unchanged": "No repair needed",
     "applied": "Repair applied",
@@ -132,7 +166,7 @@ REPAIR_COLORS = {
     "revised_maximum": "#D55E00",
 }
 SCHEDULE_COMPARISON_NAMES = {
-    "replan": "QH replan",
+    "replan": "Queue-Haul replan",
     "no_replan": "No replan",
 }
 SCHEDULE_COMPARISON_COLORS = {
@@ -166,7 +200,7 @@ REPAIR_ACTION_NAMES = {
 }
 REPAIR_ACTION_SHORT_NAMES = {
     "retained": "Retained",
-    "method": "Method",
+    "method": "Diff. Action",
     "destination": "Destination",
     "removed": "Removed",
 }
@@ -185,6 +219,11 @@ REPAIR_ACTION_HATCHES = {
 RESOURCE_FAULT_SHORT_NAMES = {
     "bandwidth": "BW",
     "prefill": "PF",
+    "joint": "Both",
+}
+RESOURCE_FAULT_NAMES = {
+    "bandwidth": "Bandwidth",
+    "prefill": "Prefill",
     "joint": "Both",
 }
 POWER_VALIDATION_METHODS = ("lp", "greedy", "milp", "power-unaware", "random")

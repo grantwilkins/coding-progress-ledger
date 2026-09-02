@@ -7,12 +7,16 @@ import csv
 import hashlib
 import json
 import math
+import os
 import random
 import re
+import statistics
+import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.request import urlopen
 
 import numpy as np
@@ -25,6 +29,7 @@ from profiles import ModelProfile
 
 MIXTURES = ("prefill", "prefill75", "mixed", "decode75", "decode")
 LOADS = (.1, .25, .45, .65, .8, 1.0)
+MIN_POWER_SAMPLE_HZ = 7
 
 
 def campaign_plan(repeats: int = 3, seed: int = 1) -> dict:
@@ -38,10 +43,11 @@ def campaign_plan(repeats: int = 3, seed: int = 1) -> dict:
     random.Random(seed).shuffle(cells)
     return {"schema": "queue-haul-phase-power-plan-v1", "cells": cells,
             "repeats": repeats, "adaptive_repeats": 2, "seed": seed,
+            "idle_measurement_s": 30,
             "gates": {"grouped_cv_rmse_w": 5, "within_5w_fraction": .8}}
 
 
-def _metrics(host: str, port: int) -> tuple[float, float]:
+def _metrics(host: str, port: int) -> tuple[float, float, float]:
     text = urlopen(f"http://{host}:{port}/metrics", timeout=10).read().decode()
     def total(name):
         values = [float(match.group(1)) for match in re.finditer(
@@ -49,21 +55,23 @@ def _metrics(host: str, port: int) -> tuple[float, float]:
         if not values:
             raise RuntimeError(f"missing {name} counter")
         return sum(values)
-    return total("vllm:prompt_tokens_total"), total("vllm:generation_tokens_total")
+    return (total("vllm:prompt_tokens_total"), total("vllm:generation_tokens_total"),
+            total("vllm:prompt_tokens_cached_total"))
 
 
 def _shape(fraction: float, load: float, F: float, G: float) -> tuple[str, int, float, int]:
     f, g = fraction * load * F, (1 - fraction) * load * G
     if fraction == 0:
-        prompt_tokens, output_tokens = 1, 4096
-        return "x", output_tokens, g / output_tokens, max(1, math.ceil(g * 40 / output_tokens))
+        output_tokens = 512
+        return "x", output_tokens, g / output_tokens, 0
     prompt_tokens = 4096 if fraction == 1 else 2048
     output_tokens = 1 if fraction == 1 else max(1, round(prompt_tokens * g / f))
     return "x " * prompt_tokens, output_tokens, f / prompt_tokens, 0
 
 
 def run_cell(host: str, port: int, root: Path, cell: dict,
-             F: float, G: float, workers: int = 512) -> dict:
+             F: float, G: float, model: str = "openai/gpt-oss-20b",
+             workers: int = 512) -> dict:
     fraction, load = float(cell["prefill_fraction"]), float(cell["target_service_load"])
     prompt, output_tokens, rate, batch = _shape(fraction, load, F, G)
     warmup, window = float(cell["warmup_s"]), float(cell["measurement_s"])
@@ -82,7 +90,7 @@ def run_cell(host: str, port: int, root: Path, cell: dict,
                         time.sleep(delay)
                 return power_rate_sweep.request(
                     f"http://{host}:{port}/v1/completions", prompt,
-                    output_tokens, f"{label}:{request_id}")
+                    output_tokens, f"{label}:{request_id}", model)
             futures = [pool.submit(scheduled_request, request_id)
                        for request_id in range(count)]
             remaining = started + warmup - time.monotonic()
@@ -91,31 +99,102 @@ def run_cell(host: str, port: int, root: Path, cell: dict,
             metric_start, start_ns = _metrics(host, port), time.monotonic_ns()
             time.sleep(window)
             metric_end, end_ns = _metrics(host, port), time.monotonic_ns()
-            for future in futures:
-                future.result()
+            results = [future.result() for future in futures]
     finally:
         stop.set(); sampler.join()
     with path.open(newline="") as handle:
         watts = [float(row["power_w"]) for row in csv.DictReader(handle)
                  if start_ns <= int(row["monotonic_ns"]) < end_ns]
-    if len(watts) < window / float(cell["power_interval_s"]) * .8:
+    if len(watts) < window * MIN_POWER_SAMPLE_HZ:
         raise RuntimeError("insufficient power samples")
+    cached = metric_end[2] - metric_start[2]
+    if cached or any((row["usage"].get("prompt_tokens_details") or {})
+                     .get("cached_tokens", 0) for row in results):
+        raise RuntimeError("cached prompt tokens observed")
+    f, g = (metric_end[index] - metric_start[index] for index in (0, 1))
+    if min(f, g) < 0 or f + g <= 0:
+        raise RuntimeError("invalid realized token counters")
     return {"mixture": cell["mixture"], "repeat": cell["repeat"],
-            "target_service_load": load, "f_tps": (metric_end[0] - metric_start[0]) / window,
-            "g_tps": (metric_end[1] - metric_start[1]) / window,
+            "target_service_load": load, "f_tps": f / window,
+            "g_tps": g / window, "cached_prompt_tokens": 0,
             "power_mean_w": float(np.mean(watts)), "power_samples": len(watts),
             "start_ns": start_ns, "end_ns": end_ns, "power_path": str(path)}
 
 
-def run_plan(plan_path: Path, profile_path: Path, out: Path,
+def measure_idle(host: str, port: int, root: Path, sequence: int,
+                 seconds: float) -> dict:
+    path = root / f"power-idle-{sequence:03d}.csv"
+    stop = threading.Event()
+    sampler = threading.Thread(target=power_rate_sweep.power,
+                               args=(path, stop, .1))
+    sampler.start()
+    try:
+        metric_start, start_ns = _metrics(host, port), time.monotonic_ns()
+        time.sleep(seconds)
+        metric_end, end_ns = _metrics(host, port), time.monotonic_ns()
+    finally:
+        stop.set(); sampler.join()
+    with path.open(newline="") as handle:
+        watts = [float(row["power_w"]) for row in csv.DictReader(handle)
+                 if start_ns <= int(row["monotonic_ns"]) < end_ns]
+    if any(end != start for start, end in zip(metric_start, metric_end)):
+        raise RuntimeError("idle anchor processed inference work")
+    if len(watts) < seconds * MIN_POWER_SAMPLE_HZ:
+        raise RuntimeError("insufficient idle power samples")
+    row = {"sequence": sequence, "window_s": (end_ns - start_ns) / 1e9,
+           "power_mean_w": float(np.mean(watts)), "power_samples": len(watts),
+           "start_ns": start_ns, "end_ns": end_ns, "power_path": str(path)}
+    with (root / "idle.jsonl").open("a") as handle:
+        handle.write(json.dumps(row) + "\n"); handle.flush(); os.fsync(handle.fileno())
+    return row
+
+
+def calibration_target(profile_path: Path | None, model: str | None,
+                       hardware: str | None, F: float | None,
+                       G: float | None) -> tuple[str, str, float, float]:
+    if profile_path is not None:
+        if any(value is not None for value in (model, hardware, F, G)):
+            raise ValueError("profile and explicit calibration target are mutually exclusive")
+        profile = ModelProfile.load(profile_path)
+        return profile.model, profile.hardware, profile.case().F, profile.case().G
+    if not model or hardware not in {"a100", "h100"} \
+            or F is None or G is None or min(F, G) <= 0:
+        raise ValueError("explicit target requires model, hardware, F, and G")
+    return model, hardware, F, G
+
+
+def _write_json(path: Path, value: dict) -> None:
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("w") as handle:
+        handle.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
+        handle.flush(); os.fsync(handle.fileno())
+    temporary.replace(path)
+
+
+def run_plan(plan_path: Path, profile_path: Path | None, out: Path,
              host: str = "127.0.0.1", port: int = 8100,
-             resume: bool = False) -> list[dict]:
-    plan, profile = json.loads(plan_path.read_text()), ModelProfile.load(profile_path)
+             resume: bool = False, *, model: str | None = None,
+             hardware: str | None = None, F: float | None = None,
+             G: float | None = None, provenance: dict | None = None) -> list[dict]:
+    plan = json.loads(plan_path.read_text())
     if plan.get("schema") not in {"queue-haul-phase-power-plan-v1",
                                   "queue-haul-phase-power-adaptive-plan-v1"}:
         raise ValueError("invalid phase power plan")
-    power_rate_sweep.validate_gpu("NVIDIA A100 80GB PCIe", 300)
+    model, hardware, F, G = calibration_target(profile_path, model, hardware, F, G)
+    expected_gpu = {"a100": ("NVIDIA A100 80GB PCIe", 300),
+                    "h100": ("NVIDIA H100 NVL", 400)}[hardware]
+    power_rate_sweep.validate_gpu(*expected_gpu)
     out.mkdir(parents=True, exist_ok=resume)
+    metadata = {"schema": "queue-haul-phase-power-run-v1", "model": model,
+                "hardware": hardware, "F_prefill_tps": F, "G_decode_tps": G,
+                "plan_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest(),
+                **(provenance or {})}
+    metadata_path = out / "metadata.json"
+    if resume:
+        if json.loads(metadata_path.read_text()) != metadata:
+            raise RuntimeError("phase power resume metadata changed")
+    else:
+        _write_json(metadata_path, metadata)
     measurement_path = out / "measurements.csv"
     rows = []
     if resume and measurement_path.exists():
@@ -123,17 +202,105 @@ def run_plan(plan_path: Path, profile_path: Path, out: Path,
             rows = list(csv.DictReader(handle))
     completed = {(row["mixture"], float(row["target_service_load"]), int(row["repeat"]))
                  for row in rows}
-    case = profile.case()
+    idle_s = plan.get("idle_measurement_s")
+    if idle_s:
+        idle_path = out / "idle.jsonl"
+        sequence = len(idle_path.read_text().splitlines()) if idle_path.exists() else 0
+        measure_idle(host, port, out, sequence, float(idle_s))
     for cell in plan["cells"]:
         key = cell["mixture"], float(cell["target_service_load"]), int(cell["repeat"])
         if key in completed:
             continue
-        rows.append(run_cell(host, port, out, cell, case.F, case.G))
-        with measurement_path.open("w", newline="") as handle:
+        rows.append(run_cell(host, port, out, cell, F, G, model))
+        temporary = measurement_path.with_suffix(".csv.tmp")
+        with temporary.open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=rows[0])
             writer.writeheader(); writer.writerows(rows)
+            handle.flush(); os.fsync(handle.fileno())
+        temporary.replace(measurement_path)
         print(json.dumps(rows[-1]), flush=True)
+    if idle_s:
+        measure_idle(host, port, out, sequence + 1, float(idle_s))
     return rows
+
+
+def run_with_server(plan_path: Path, out: Path, model: str, hardware: str,
+                    F: float, G: float, vllm: str, host: str, port: int,
+                    resume: bool) -> list[dict]:
+    if hardware != "h100":
+        raise ValueError("managed phase-power server launch currently requires H100")
+    import power_model_campaign as power
+    gpu = power.validate_gpu()
+    args = SimpleNamespace(model=model, vllm=vllm, host=host, port=port)
+    command = power.server_command(args)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    prior = len(list(out.parent.glob(f"{out.name}-server*.log")))
+    suffix = "" if not prior else f"-resume-{prior:03d}"
+    log_path = out.parent / f"{out.name}-server{suffix}.log"
+    log = log_path.open("x")
+    server = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
+    try:
+        power.wait_ready(f"http://{host}:{port}", server)
+        rows = run_plan(
+            plan_path, None, out, host, port, resume, model=model,
+            hardware=hardware, F=F, G=G, provenance={
+                "gpu": gpu, "git_sha": subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], text=True).strip(),
+                "server_command": command,
+            })
+        log.flush()
+        power.testbed.validate_h100_optimized_runtime(
+            " ".join(command), log_path.read_text(errors="replace"))
+        return rows
+    finally:
+        server.terminate()
+        try:
+            server.wait(60)
+        except subprocess.TimeoutExpired:
+            server.kill(); server.wait()
+        log.close()
+
+
+def run_suite(plan_path: Path, targets_path: Path, out: Path,
+              host: str = "127.0.0.1", port: int = 8100) -> None:
+    plan = json.loads(plan_path.read_text())
+    targets = json.loads(targets_path.read_text())
+    keys = {"name", "model", "hardware", "prefill_tps", "decode_tps", "vllm"}
+    if plan.get("schema") != "queue-haul-phase-power-plan-v1" \
+            or not isinstance(targets, list) or not targets \
+            or any(set(target) != keys or Path(target["name"]).name != target["name"]
+                   for target in targets) \
+            or len({target["name"] for target in targets}) != len(targets):
+        raise ValueError("invalid phase power suite")
+    digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    expected_cells = {(row["mixture"], float(row["target_service_load"]),
+                       int(row["repeat"])) for row in plan["cells"]}
+    for target in targets:
+        root, marker = out / target["name"], out / target["name"] / "complete.json"
+        if marker.exists():
+            complete = json.loads(marker.read_text())
+            metadata = json.loads((root / "metadata.json").read_text())
+            with (root / "measurements.csv").open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            measured = {(row["mixture"], float(row["target_service_load"]),
+                         int(row["repeat"])) for row in rows}
+            if complete != {"schema": "queue-haul-phase-power-complete-v1",
+                            "plan_sha256": digest} \
+                    or metadata["plan_sha256"] != digest \
+                    or metadata["model"] != target["model"] \
+                    or metadata["hardware"] != target["hardware"] \
+                    or metadata["F_prefill_tps"] != float(target["prefill_tps"]) \
+                    or metadata["G_decode_tps"] != float(target["decode_tps"]) \
+                    or measured != expected_cells or len(rows) != len(expected_cells) \
+                    or len((root / "idle.jsonl").read_text().splitlines()) < 2:
+                raise RuntimeError(f"invalid completed suite target {target['name']}")
+            continue
+        run_with_server(
+            plan_path, root, target["model"], target["hardware"],
+            float(target["prefill_tps"]), float(target["decode_tps"]),
+            target["vllm"], host, port, (root / "metadata.json").exists())
+        _write_json(marker, {"schema": "queue-haul-phase-power-complete-v1",
+                             "plan_sha256": digest})
 
 
 def _predict(parameters, f, g, p0):
@@ -282,11 +449,22 @@ def main() -> None:
     prepare.add_argument("--seed", type=int, default=1)
     run_command = sub.add_parser("run")
     run_command.add_argument("--plan", type=Path, required=True)
-    run_command.add_argument("--profile", type=Path, required=True)
+    run_command.add_argument("--profile", type=Path)
+    run_command.add_argument("--model")
+    run_command.add_argument("--hardware", choices=("a100", "h100"))
+    run_command.add_argument("--prefill-tps", type=float)
+    run_command.add_argument("--decode-tps", type=float)
+    run_command.add_argument("--vllm")
     run_command.add_argument("--out", type=Path, required=True)
     run_command.add_argument("--host", default="127.0.0.1")
     run_command.add_argument("--port", type=int, default=8100)
     run_command.add_argument("--resume", action="store_true")
+    suite = sub.add_parser("run-suite")
+    suite.add_argument("--plan", type=Path, required=True)
+    suite.add_argument("--targets", type=Path, required=True)
+    suite.add_argument("--out", type=Path, required=True)
+    suite.add_argument("--host", default="127.0.0.1")
+    suite.add_argument("--port", type=int, default=8100)
     augment = sub.add_parser("augment")
     augment.add_argument("--plan", type=Path, required=True)
     augment.add_argument("--summary", type=Path, required=True)
@@ -296,21 +474,38 @@ def main() -> None:
     fit_command.add_argument("--measurements", type=Path, required=True)
     fit_command.add_argument("--out-profile", type=Path, required=True)
     fit_command.add_argument("--summary", type=Path, required=True)
-    fit_command.add_argument("--idle-power-w", type=float, required=True)
+    idle = fit_command.add_mutually_exclusive_group(required=True)
+    idle.add_argument("--idle-power-w", type=float)
+    idle.add_argument("--idle-measurements", type=Path)
     args = parser.parse_args()
     if args.command == "prepare":
         args.out.mkdir(parents=True, exist_ok=False)
         (args.out / "plan.json").write_text(
             json.dumps(campaign_plan(args.repeats, args.seed), indent=2, sort_keys=True) + "\n")
     elif args.command == "run":
-        run_plan(args.plan, args.profile, args.out, args.host, args.port, args.resume)
+        if args.vllm:
+            model, hardware, F, G = calibration_target(
+                args.profile, args.model, args.hardware,
+                args.prefill_tps, args.decode_tps)
+            run_with_server(args.plan, args.out, model, hardware, F, G,
+                            args.vllm, args.host, args.port, args.resume)
+        else:
+            run_plan(args.plan, args.profile, args.out, args.host, args.port, args.resume,
+                     model=args.model, hardware=args.hardware,
+                     F=args.prefill_tps, G=args.decode_tps)
+    elif args.command == "run-suite":
+        run_suite(args.plan, args.targets, args.out, args.host, args.port)
     elif args.command == "augment":
         args.out.write_text(json.dumps(adaptive_plan(
             json.loads(args.plan.read_text()), json.loads(args.summary.read_text())),
             indent=2, sort_keys=True) + "\n")
     else:
+        idle_power = args.idle_power_w
+        if args.idle_measurements:
+            idle_power = statistics.median(json.loads(line)["power_mean_w"]
+                                           for line in args.idle_measurements.read_text().splitlines())
         result = freeze_profile(args.base_profile, args.measurements,
-                                args.out_profile, args.idle_power_w)
+                                args.out_profile, idle_power)
         args.summary.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
 
 

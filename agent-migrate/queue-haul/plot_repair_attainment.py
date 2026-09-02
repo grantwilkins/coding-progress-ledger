@@ -23,6 +23,9 @@ SOURCE_SCHEMA = "queue-haul-repair-stress-multiaxis-preflight-v3"
 POPULATION_SCHEMA = "queue-haul-repair-attainment-population-v1"
 COMMON_PHASE = "common_workload_multiaxis"
 POLICIES = ("replan", "no_replan")
+PANEL_FIGSIZE = (3.25, 2.25)
+PANEL_FONT_SIZE = 9
+PANEL_LEGEND_FONT_SIZE = 7.5
 DEFAULT_SOURCE = Path(
     "outputs/repair-stress-multiaxis-hardware-20260814/preflight.json")
 DEFAULT_OUT = Path("outputs/repair-attainment-simulation-20260817")
@@ -169,9 +172,9 @@ def summarize(rows: list[dict], bundle: dict, target_fraction: float,
     }
 
 
-def plot(curve: list[dict], cutoff_s: float, horizon_s: float,
+def plot(curve: list[dict], _cutoff_s: float, horizon_s: float,
          output: Path) -> None:
-    fig, axis = plt.subplots(figsize=(5.5, 3))
+    fig, axis = plt.subplots(figsize=PANEL_FIGSIZE)
     for policy in POLICIES:
         axis.step(
             [row["time_s"] for row in curve],
@@ -182,19 +185,21 @@ def plot(curve: list[dict], cutoff_s: float, horizon_s: float,
             label=plot_style.SCHEDULE_COMPARISON_NAMES[policy],
         )
     axis.axvline(
-        cutoff_s, color=plot_style.EVENT_COLORS["shed_target"],
+        30, color=plot_style.EVENT_COLORS["shed_target"],
         linestyle=plot_style.EVENT_LINESTYLES["repair_decision"],
-        linewidth=1.5, label="25 s cutoff",
+        linewidth=1.5, label="30 s goal",
     )
     axis.set(xlim=(0, horizon_s), ylim=(0, 100),
-             xlabel="Time since migration start (s)",
-             ylabel="Target attainment (%)")
+             xticks=(0, 30, 60, 120), yticks=(0, 50, 100),
+             xlabel="Time (s)", ylabel="Target attainment (%)")
     axis.grid(axis="y", alpha=.2)
-    axis.tick_params(labelsize=11)
-    axis.xaxis.label.set_size(12)
-    axis.yaxis.label.set_size(12)
-    axis.legend(frameon=False, loc="lower right", fontsize=10)
-    fig.subplots_adjust(left=.18, right=.98, bottom=.2, top=.97)
+    axis.tick_params(labelsize=PANEL_FONT_SIZE)
+    axis.xaxis.label.set_size(PANEL_FONT_SIZE)
+    axis.yaxis.label.set_size(PANEL_FONT_SIZE)
+    axis.legend(frameon=False, loc="lower right",
+                fontsize=PANEL_LEGEND_FONT_SIZE, handlelength=1.5,
+                borderpad=.1, labelspacing=.25)
+    fig.subplots_adjust(left=.2, right=.97, bottom=.22, top=.97)
     for suffix in ("png", "pdf"):
         fig.savefig(output.with_suffix(f".{suffix}"),
                     dpi=plot_style.SAVE_DPI)
@@ -227,11 +232,10 @@ def transition_summary(bundle: dict, target_fraction: float) -> list[dict]:
     return output
 
 
-def plot_combined(curve: list[dict], transitions: list[dict], cutoff_s: float,
+def plot_response(curve: list[dict], transitions: list[dict], cutoff_s: float,
                   horizon_s: float, output: Path) -> None:
     actions = tuple(plot_style.REPAIR_ACTION_NAMES)
-    fig, (cdf_axis, mix_axis) = plt.subplots(
-        1, 2, figsize=(3.35, 2.25), gridspec_kw={"width_ratios": (1.08, 1)})
+    fig, cdf_axis = plt.subplots(figsize=PANEL_FIGSIZE)
     for policy in POLICIES:
         cdf_axis.step(
             [row["time_s"] for row in curve],
@@ -243,11 +247,23 @@ def plot_combined(curve: list[dict], transitions: list[dict], cutoff_s: float,
     cdf_axis.axvline(
         cutoff_s, color=plot_style.EVENT_COLORS["shed_target"],
         linestyle=plot_style.EVENT_LINESTYLES["repair_decision"],
-        linewidth=1, label="25 s cutoff")
+        linewidth=1, label="25 s goal")
     cdf_axis.set(xlim=(0, horizon_s), ylim=(0, 100),
                  xticks=(0, 25, 60, 120), yticks=(0, 50, 100),
                  xlabel="Time (s)", ylabel="Target attainment (%)")
     cdf_axis.grid(axis="y", alpha=.2)
+    cdf_axis.tick_params(labelsize=PANEL_FONT_SIZE)
+    cdf_axis.xaxis.label.set_size(PANEL_FONT_SIZE)
+    cdf_axis.yaxis.label.set_size(PANEL_FONT_SIZE)
+    cdf_axis.legend(frameon=False, loc="lower right",
+                    fontsize=PANEL_LEGEND_FONT_SIZE,
+                    handlelength=1.5, borderpad=.1, labelspacing=.25)
+    fig.subplots_adjust(left=.2, right=.97, bottom=.22, top=.97)
+    for suffix in ("png", "pdf"):
+        fig.savefig(output.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
+    plt.close(fig)
+
+    fig, mix_axis = plt.subplots(figsize=PANEL_FIGSIZE)
     ordered = [next(row for row in transitions
                     if row["fault_axis"] == axis)
                for axis in ("bandwidth", "prefill", "joint")]
@@ -261,29 +277,23 @@ def plot_combined(curve: list[dict], transitions: list[dict], cutoff_s: float,
             edgecolor="white", linewidth=.4,
             label=plot_style.REPAIR_ACTION_SHORT_NAMES[action])
         left = [old + value for old, value in zip(left, values)]
-    mix_axis.set(xlim=(0, 100), xticks=(0, 50, 100), xlabel="Pending actions (%)",
+    mix_axis.set(xlim=(0, 100), xticks=(0, 50, 100), xlabel="Actions (%)",
                  yticks=range(len(ordered)),
-                 yticklabels=[plot_style.RESOURCE_FAULT_SHORT_NAMES[
+                 yticklabels=[plot_style.RESOURCE_FAULT_NAMES[
                      row["fault_axis"]] for row in ordered])
     mix_axis.invert_yaxis()
     mix_axis.grid(axis="x", alpha=.2)
-    for label, axis in zip(("(a)", "(b)"), (cdf_axis, mix_axis)):
-        plot_style.half_column(axis)
-        axis.text(-.18, .98, label, transform=axis.transAxes,
-                  fontsize=plot_style.HALF_COLUMN_FONT_SIZE,
-                  fontweight="bold", va="top")
-    handles_a, labels_a = cdf_axis.get_legend_handles_labels()
-    handles_b, labels_b = mix_axis.get_legend_handles_labels()
-    cdf_axis.legend(handles_a, labels_a, frameon=False, loc="lower right",
-                    fontsize=5.3, handlelength=1.5, borderpad=.1,
-                    labelspacing=.25)
-    fig.legend(handles_b, labels_b, frameon=False, ncol=2,
-               loc="lower center", bbox_to_anchor=(.67, -.005),
-               fontsize=5.5, handlelength=1.5, columnspacing=.9,
+    mix_axis.tick_params(labelsize=PANEL_FONT_SIZE)
+    mix_axis.xaxis.label.set_size(PANEL_FONT_SIZE)
+    mix_axis.yaxis.label.set_size(PANEL_FONT_SIZE)
+    mix_axis.legend(frameon=False, ncol=2, loc="lower center",
+               bbox_to_anchor=(.5, -.62),
+               fontsize=PANEL_LEGEND_FONT_SIZE, handlelength=1.5,
+               columnspacing=.9,
                labelspacing=.25)
-    fig.subplots_adjust(left=.13, right=.96, bottom=.35, top=.98, wspace=.36)
+    fig.subplots_adjust(left=.24, right=.97, bottom=.42, top=.97)
     for suffix in ("png", "pdf"):
-        fig.savefig(output.with_suffix(f".{suffix}"),
+        fig.savefig(output.with_name("repair_actions").with_suffix(f".{suffix}"),
                     dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
@@ -315,9 +325,8 @@ def run(source: Path, out: Path, target_fraction: float,
     if all("transition_counts" in row for row in bundle["cells"]):
         transitions = transition_summary(bundle, target_fraction)
         _write_csv(out / "plan_changes.csv", transitions)
-        plot_combined(curve, transitions, summary["migration_cutoff_s"],
-                      summary["observation_horizon_s"],
-                      out / "repair_response")
+        plot_response(curve, transitions, summary["migration_cutoff_s"],
+                      summary["observation_horizon_s"], out / "repair_response")
     (out / "README.md").write_text(
         "# Paired repair-attainment simulation\n\n"
         f"This artifact contains {summary['paired_interventions']:,} paired "
@@ -327,7 +336,11 @@ def run(source: Path, out: Path, target_fraction: float,
         "10x resource drops. The original and repaired residual schedules are "
         "both replayed under the same degraded timing. Curves retain failures "
         "to attain the target by 120 s in the denominator; they are not "
-        "bootstrap replicas of the hardware cases.\n")
+        "bootstrap replicas of the hardware cases.\n\n"
+        "`repair_response.pdf` shows the paired attainment CDF. "
+        "`repair_actions.pdf` classifies each original pending action as "
+        "retained, changed, redirected, or removed. Exact pooled counts are "
+        "in `plan_changes.csv`.\n")
     return summary
 
 

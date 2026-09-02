@@ -1289,7 +1289,9 @@ def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
     assert {pool.pool_id: pool.migration_headroom
             for pool in seen["architecture"].pools} == {
                 "pool/east": None, "pool/west": {"replay": .25}}
-    assert n.joint_solver("isolated_fastest") == "isolated_fastest"
+    # The separation baseline stays the myopic method-and-route policy; the
+    # destination-free isolated_fastest would solve the separation cells.
+    assert n.joint_solver("isolated_fastest") == "isolated_myopic"
     assert n.joint_solver("queue_haul", "max_shed") == "max_shed"
 
 

@@ -272,9 +272,7 @@ def regional_timing_model(profile: ModelProfile, parent: dict, rows: list[dict],
             if row["method"] != "replay":
                 continue
             tokens = int(row["replay_tokens"])
-            x, rates = case.replay.by_concurrency[1]
-            rate = case.replay.rate(tokens, 1) if x[0] <= tokens <= x[-1] \
-                else float(min(rates))
+            rate = case.replay.conservative_rate(tokens, 1)
             base = tokens / rate + case.replay_completion_s
             observed = (int(row["commit_ns"]) - int(row["migration_start_ns"])) / 1e9
             replay_ratios.append(observed / base)
@@ -317,9 +315,7 @@ def regional_timing_model(profile: ModelProfile, parent: dict, rows: list[dict],
             else:
                 expected_bytes = 0
                 tokens = int(row["replay_tokens"])
-                x, rates = case.replay.by_concurrency[1]
-                rate = case.replay.rate(tokens, 1) if x[0] <= tokens <= x[-1] \
-                    else float(min(rates))
+                rate = case.replay.conservative_rate(tokens, 1)
                 predicted = replay_factor * (
                     tokens / rate + case.replay_completion_s) + case.switch_s
             predictions.append({

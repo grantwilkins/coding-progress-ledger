@@ -502,7 +502,7 @@ load-slowdown coefficient.
 Every cell runs exact maximum-shed Queue-Haul, Queue-Haul greedy, KV-only,
 replay-only, per-session-fastest, and power-blind Queue-Haul once. The exact
 binary solver jointly chooses sessions, methods, and destinations to maximize
-removed single-source load, then minimizes migration work at that optimum. In
+removed single-source load without a secondary tie-break. In
 the pinned simulation at `outputs/east-germany-constraint-20260808/`, it sheds
 49.25, 55.92, 60.48, and 51.69 W at 19, 30, 60, and quota-constrained 30
 seconds. Greedy reaches 46.99, 51.69, 60.48, and 51.69 W. The full-pack request
@@ -805,10 +805,11 @@ uv run python queue-haul/plot_pooled_resource_pressure.py \
 ```
 
 The action-adaptation views use the same equal-case sweep. The primary chart
-shows Queue-Haul's total replay/KV composition under all eight combinations of
-HBM, bandwidth, and prefill constraints at a common 67% target. Gray reports
+shows Queue-Haul's total replay/KV composition for the three single bottlenecks,
+all bound, and none bound at a common 67% target. Gray reports
 sessions left at the source, so every 100%-stacked bar accounts for the same
-28-session pack; destination identities are intentionally omitted.
+28-session pack; destination identities are intentionally omitted. The raw
+tables retain all eight HBM/bandwidth/destination-compute combinations.
 
 ```bash
 uv run python queue-haul/plot_pooled_action_adaptation.py \
@@ -842,19 +843,60 @@ normalizes the 28-session source pack to the
 campaign's 0.4 load, refits the balanced regional timing cells, and samples one
 joint phase-power bootstrap tuple. All eight HBM/bandwidth/destination-compute
 states share
-that draw. The planner uses measured East US 2 and Germany West Central routes
-and a conservative route-plus-shared-migration-work envelope; background
-inference consumes shared prefill/decode destination-compute headroom but does
-not assert an unmeasured load-dependent migration slowdown. Every enabled
+that draw. The planner separates each region's measured physical route from its
+calibrated effective migration pipeline. The bandwidth state caps both physical
+routes at 1 Gbit/s, the predeclared lower boundary of the existing A100 loaded-
+migration validation, and retains each region's controlled pipeline fit. Network
+transfer overlaps destination migration work,
+while Replay and KV endpoint work share one conservative capacity envelope;
+endpoint replica-seconds remain a physical capacity row while isolated
+candidate duration is the common action objective. Queue-Haul can therefore
+avoid route-heavy KV transfers and leave the physical route slack after the
+bottleneck has reduced the available opportunity. The HBM stress state
+uses 98% baseline occupancy on both destinations; the producer rejects any
+single-factor label unless it activates in at least 90% of paired draws and at
+least 10% of paired plans respond.
+In the regenerated ensemble, the cap replaces the no-bound KV share with Replay;
+the source-power frontier stays close to none bound because Replay transfers
+little network state. That is the modeled adaptation, not an inactive link.
+Background
+inference consumes shared prefill/decode destination-compute headroom. Replay
+endpoint work is multiplied by the measured relative factor
+`exp(0.284963 * rho)` at the incumbent normalized destination load; KV is
+load-neutral centrally because its paired bootstrap spans zero. The regional
+concurrency-one fit remains the exact rho=0 anchor. Every enabled
 factor is applied to both destinations, using region-specific route rates.
-Stacked boundaries are the median Replay and median total-moved shares, while
-black intervals show their 5--95% ranges. Target misses and one-factor-release
-checks remain in the output tables.
+Within the measured regional 1,536--32,256-token migration support, Replay uses
+the base rate curve where available and its conservative minimum rate outside
+that narrower curve; candidate duration and shared migration work use the same
+timing components but retain distinct objective and capacity roles.
+The stacked chart and companion boxplot show the three single bottlenecks, all
+bound, and none bound; intermediate two-factor states remain in the raw tables.
+Each stacked bar is the mean modeled source phase-load share across paired
+draws, the additive quantity used by the exact nonlinear power target. The
+separate `action_mix_boxplot.pdf` shows session-count
+variation for HBM, bandwidth, destination compute, all bound, and none bound:
+each x-position has Replay, KV-transfer, and not-moved boxes spanning the
+25th--75th percentiles, median lines, and 5th--95th-percentile whiskers. Raw
+session counts and count shares remain in the CSV; they intentionally differ
+from phase-load weighting because a few sessions can carry most of the load.
+Target misses and one-factor-release checks remain in the output tables.
 The eight states are independent branches. Their fractional LP opportunity
-sets must expand on every release; any rounded-planner regressions are reported
-rather than repaired with a counterfactual plan. Noisy bootstrap route draws
+sets must expand on every release. If greedy LP rounding misses the target, an
+integral recovery minimizes migration work under the same target and resource
+constraints. Noisy bootstrap route draws
 are minimally projected to preserve natural bandwidth at or above the measured
 40%-route condition, and the projection rate is recorded.
+
+The same command writes `action_choice_oat.pdf`. Two paired one-at-a-time sweeps
+use 20 levels and 50 common workload/timing/power draws per level. The bandwidth
+sweep fixes per-destination prefill headroom at the midpoint of the measured
+7,680-token range; the prefill sweep fixes the shared route cap at the midpoint
+of the 1-Gbit/s-to-natural range. Stacked bands show Replay, KV-transfer, and
+not-moved session shares, while the black line shows plan-level attainment of
+the 67% source-power target by 30 seconds. Regional pipeline timing is
+interpolated between the measured endpoint fits, so the timing holdout remains
+hardware checked while the action distributions are modeled sensitivities.
 
 ```bash
 uv run python queue-haul/workload_adaptation_campaign.py
@@ -863,18 +905,51 @@ uv run python queue-haul/workload_adaptation_campaign.py
 The resulting 1,000 draws are a modeled calibration/workload sensitivity, not
 a confidence interval or 1,000 independent workloads. The regional single-move
 timing holdout passes its recorded gate; grouped local and width-8 timing audits
-remain retrospective, and the no-overlap envelope intentionally overpredicts
-many width-8 makespans rather than extrapolating the KV-heavy mixed evidence to
-Replay-majority plans.
+remain retrospective. Route and endpoint work use the pipeline overlap already
+present in the calibrated effective rate; cross-method endpoint work remains
+fully shared rather than fitting partial overlap from KV-heavy mixed evidence.
+The width-8 audit has zero false-feasible cases at the 25-second migration
+horizon. The separate local c1--c4 audit has 24/162 false-feasible cases,
+including 5/66 in its grouped split, so the bars are a regional modeled action-
+mix sensitivity rather than a generic hardware deadline guarantee.
+Two otherwise timing-supported trace states are excluded
+because their prefill/decode direction lies outside the phase-power calibration
+cone; the output records that exclusion and retains a post-plan hull hard gate.
 
-`workload_power_frontier.py` carries 100 deterministic paired draws through the
-same seven-policy requested-shed frontier as the designed-case plot. The sweep
-reaches 100%, while the paper view retains the common 0--80% x-axis.
-Each workload-by-constraint state receives equal weight, and attained watts are
-normalized by that draw's removable power before pooling. The main CSV retains
-the normalized median/IQR; the companion `_power.csv` reports 5th, median, and
-95th percentile watts. These are modeled sensitivity ranges, not confidence
-intervals or new hardware observations.
+`loaded_service_model.py` fits that factor from 160 equal-cell-weighted,
+fixed-width forced-action A100 episodes. A 440-episode, 1--10-Gbit/s check
+validates the relative width-8 factor, not the deployed regional loaded model.
+At rho=.95, Replay endpoint work is 1.311x its idle value. The fitted width-8
+intercept is diagnostic and is never applied to regional timing. The loaded
+pack covers 2,048--14,336 tokens and is prefill-heavy, so context and load-shape
+transport remain explicit sensitivities. The output counts every selected,
+candidate, and sampled use outside that context range or the validated bandwidth
+range. A support-restricted table resamples only 2,048--14,336-token states with
+the same timing and power draws; because it changes the workload population, it
+is not a within-pack counterfactual. The action ensemble fixes the load slope at
+its central fit rather than propagating its bootstrap. Resume TTFT is retained
+as a diagnostic but is not a planner resource: its adverse 1-Gbit/s cells fail
+the prediction gate. The existing service-debt machinery remains disabled until
+a completed headroom campaign identifies an SLO budget. HBM remains
+method-independent because either method leaves the same resident KV state.
+
+`workload_power_frontier.py` carries 100 deterministic paired draws through all
+eight constraint states. For each draw and state, the main figure uses an
+integer MILP that maximizes removed phase load `sum(a*f + b*g)` under the same
+session, route, HBM, migration, and destination-compute constraints. The MILP
+has a certified 0.25% relative gap; exact nonlinear source watts are evaluated
+after packing. A feasible result from a tighter paired state is retained after
+constraint release, so the reported capacity cannot physically decrease; an
+independent-solve inversion above 1% hard-fails. The figure shows the three
+single bottlenecks, all bound, and none bound, while the raw table retains all
+eight states and every target-specific Queue-Haul LP solve. Watts are normalized
+by each draw's removable source power. The current phase profile is
+`outputs/azure-compact-calibration-20260813/gpt_oss_20b_a100_tp1_azure_300w_phase.json`;
+one joint `(p0, delta, a, b)` bootstrap tuple is shared by all eight states in a
+draw and recorded in every row. The companion `_power.csv` retains 5th, median,
+and 95th percentile watts. These are modeled sensitivity ranges, not confidence
+intervals or new hardware observations. The frontier and action-mix PDFs use
+compact canvases intended for side-by-side `0.49\\columnwidth` placement.
 
 ```bash
 uv run python queue-haul/workload_power_frontier.py
@@ -1109,7 +1184,8 @@ source for assumed paper operating points and their replacement evidence.
 The default pool LP remains the Clarabel implementation. The experimental
 `lp_highs` solver runs the same relaxation and rounder through SciPy/HiGHS;
 resource rows are assembled directly from candidate nonzeros, and maximum-gain
-fallback uses a scale-relative normalized feasibility margin.
+fallback uses a scale-relative normalized feasibility margin. Its rounder uses
+exact integral recovery only when its heuristic selection misses the target.
 `lp_column_generation` is a Phase-I/Phase-II prototype with a reported
 primal-dual certificate. It materializes the full candidate table and rebuilds
 restricted masters, so it is a correctness reference rather than the
@@ -1277,16 +1353,38 @@ labels, and ticks, 11-point legends and annotations, 3-point lines, and 220 DPI.
 Plot-specific layouts may use the shared compact size. New and modified plot
 producers must inherit it. Policy identities are:
 
+`plot_workload_policy_attainment.py` pools all eight constraint states and all
+paired workload, timing, and power draws into one modeled time-to-target CDF.
+It compares Queue-Haul with greedy and fixed-action policies, includes the
+trailing power window, and retains misses as missing CDF mass. Every policy
+appends the same relaxed-horizon
+independent-fastest tail for unadmitted sessions after the scoring deadline,
+analogous to the hardware campaign tail. Queue-Haul uses the target-aware
+HiGHS LP with integral target recovery; Queue-Haul Greedy shares that recovery
+only when its one-pass choice misses an integrally feasible target. Regenerate it with
+`uv run python plot_workload_policy_attainment.py`.
+
 | Internal name | Display name | Okabe–Ito | Line |
 |---|---|---:|---|
 | `queue_haul` | Queue-Haul LP | `#0072B2` | solid |
 | `greedy` | Queue-Haul Greedy | `#E69F00` | dashed |
 | `greedy_lagrangian` | Queue-Haul Lagrangian Greedy | `#F0E442` | dash-dot-dot |
-| `isolated_fastest` | True Greedy | `#D55E00` | long dash |
+| `isolated_fastest` | Isolated Fastest | `#D55E00` | long dash |
 | `kv_only` | KV Migrate Only | `#56B4E9` | dash-dot |
 | `replay_only` | Replay Context Only | `#CC79A7` | dotted |
 | `queue_haul_power_blind` | Queue-Haul Power Blind | `#009E73` | short dash |
 | `queue_haul_deadline_blind` | Queue-Haul Deadline Blind | `#000000` | fine dotted |
+
+`isolated_fastest` picks each session's fastest method in isolation but may
+route to any destination offering it; the older destination-locked variant is
+`isolated_myopic` (displayed as "Myopic fastest (method+route)"), which the
+network campaign's separation cells keep as their deliberately weak baseline.
+Results labeled "True Greedy" in pinned outputs predate this split and used
+the destination-locked behavior.
+
+Stress-frontier figures omit the modeled MILP reference and normalize every
+displayed policy to the shared maximum 90%-coverage attainment. They include
+static and Lagrangian greedy so their LP tracking can be compared directly.
 
 Rebuild them with:
 
@@ -1461,6 +1559,19 @@ with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
 weight using `plot-reduced --out <packing-results> --pooled-with
 <frontier-results>`; this pooling also applies to the maximum-session,
 maximum-session-per-watt, and existing per-watt CDFs.
+`workload_adaptation_campaign.py` resamples the measured coding templates and
+paired timing/power calibrations across the eight HBM, bandwidth, and
+destination-compute states. Its phase-aware planner is scoped to one awake
+source: it converts requested watts exactly into additive removed phase load,
+hard-fails multiple-source phase topologies, and verifies nonlinear source
+watts after packing. The fixed 0.4 workload normalization is service load
+`sum(f/F + g/G)`, not sampled phase load `af + bg`. The action and
+`workload_power_frontier.py` outputs report steady source-region power only;
+destination power and net fleet energy are outside their claim. The bandwidth
+state caps both physical destination routes at 1 Gbit/s while retaining the
+region-specific controlled effective-pipeline fits. Every single-factor state
+must activate in at least 90% of paired draws and change at least 10% of paired
+plans.
 `simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
 10K-session idle snapshots: three trace seeds for each workload and five
 trace-derived context anchors. It compares Queue-Haul, static and Lagrangian
@@ -1498,6 +1609,63 @@ Re-submit after a time limit; the stable run root reuses its original port
 offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 
 ## Measurement programs
+
+The publication GPT-OSS A100/H100 SLO error-bar campaign, including exact site
+commands and stopping rules, is in `AGENTIC_RPS_SWEEP.md`. It is separate from
+the legacy RPS plan embedded below for multi-model serving calibration.
+
+`h100_serving_campaign.py` coordinates optimized-H100 calibration for the
+pinned Qwen3.8-27B and Gemma-4-26B checkpoints, with GPT-OSS-20B accepted as an
+apples-to-apples prefill reference. Prefill, RPS/SLO, and power
+evidence all require native BF16 TP1 execution with compilation and CUDA graphs;
+the campaign hard-fails eager fallback or runtime drift. It retains raw evidence
+and reduced CSV/JSON only, without constructing a migration profile. The power
+fit exports its explicit saturating simulation envelope through `ell=16`, beyond
+the prior GPT-OSS campaign's measured overload extent of about 12.57.
+Matched prefill runs fix `max_num_batched_tokens=8192` for every model; older
+Qwen evidence collected with its 1,567-token architecture-campaign limit is not
+hardware-comparable. They omit the unused LMCache connector because Qwen's
+hybrid-state connector requires one 784-token cache block per scheduler step.
+Set `QH_NATIVE_RUNTIME_VERSIONS=vllm,lmcache` only with an isolated native
+environment when a model requires a separately pinned runtime.
+Pass `prepare --hardware a100` to collect the identical optimized prefill grid
+on A100 without changing the default H100 plan.
+
+```bash
+uv run python h100_serving_campaign.py prepare --out runs/h100-serving/plan.json
+QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python h100_serving_campaign.py run-prefill --plan runs/h100-serving/plan.json --model MODEL --root /datadrive/h100-serving/MODEL/prefill
+QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python agentic_rps_sweep_campaign.py run --plan runs/h100-serving/rps-plan.json --model MODEL --run-root /datadrive/h100-serving/rps
+uv run python power_model_campaign.py --model MODEL --out /datadrive/h100-serving/MODEL/power
+```
+
+Run `reduce-prefill`, the agentic sweep's `reduce`, then `validate` to emit the
+final alignment record. Gemma uses 2 s TTFT/0.2 s TPOT; Qwen uses twice its
+0.125-RPS baseline. The older single-repeat H100 curves are reference-only.
+
+Use `phase_power_calibration.py` for simulation power. Its open-loop five-ray
+grid, grouped holdouts, and bootstrap fit distinguish offered service load from
+the saturated-kernel envelope measured by `power_model_campaign.py`. H100 runs
+name the pinned model and same-stack prefill/decode capacities; resumable run
+metadata freezes those inputs.
+With `--vllm`, the runner owns the optimized server lifecycle and additionally
+pins its command, git revision, GPU UUID, and same-launch resident-idle anchors.
+Each power window must retain at least seven synchronized samples per second.
+Decode-only cells pace 512-token requests so load changes offered work rather
+than saturated batch occupancy.
+`run-suite` consumes an ordered target JSON and writes a durable completion
+marker only after each optimized runtime validates. The supplied user unit
+restarts failures and resumes the suite after host reboots.
+
+`matched_power_fit.py` freezes non-monotone, model-specific H100 power curves
+for the matched East/Germany coding-session load path. It hard-gates repeat
+holdouts and carries 200 resampled measured curves into action simulations;
+identical bootstrap curves are stored once with an explicit weight.
+
+```bash
+uv run python phase_power_calibration.py prepare --out runs/h100-phase-power
+uv run python phase_power_calibration.py run --plan runs/h100-phase-power/plan.json --model MODEL --hardware h100 --prefill-tps F --decode-tps G --vllm VLLM --out /datadrive/h100-phase-power/MODEL
+systemctl --user enable --now "$(pwd)/queue-haul-phase-power.service"
+```
 
 - `power_window_sensitivity.py` and `power_profile_reduce.py`: source power.
 - `migration_profiler.py` and `migration_profile_fit.py`: replay/KV handoff.
@@ -1592,12 +1760,21 @@ reports `planner_usable=false` and no supported scalar bound.
 Interpret `rho` only as offered normalized phase work,
 `rho_p + rho_d`, computed from exact offered tokens and isolated phase rates;
 it is not measured GPU utilization and is not composition-invariant. The main
-figure therefore plots TTFT against `rho_p` along the measured prefill sweep
-(`rho_d=0.19--0.23`) and TPOT against `rho_d` along the measured decode sweep
-(`rho_p=0.08--0.10`). It shows only the two median lines and their dotted SLOs;
-the held-out and restart-block details remain in the committed CSVs. These are
-two conditional slices, not a two-dimensional surface or estimates of
-independent partial effects.
+figure follows the prefill-heavy ray in two raw-latency panels: TTFT versus
+measured `rho_p` and TPOT versus measured `rho_d`. Total `rho` parameterizes
+both trajectories. Crosses and vertical projections mark the first measured
+misses, TPOT at `rho=0.85` and TTFT at `rho=1.10`. The phase figure and
+committed CSVs retain the other composition and restart-block detail, so this
+single ray is not a two-dimensional response model.
+
+New fixed-profile RPS sweeps can remain conventional at the paper boundary.
+`destination.ProfileRateLimit` converts a measured total-RPS limit into the
+existing `(1,1)` service facet, including baseline and added headroom, and
+checks the exact destination type, context, and prefill/decode ray. The helper
+is opt-in: it changes no destination schema, planner default, power model, or
+historical result. A different request class requires a different measured
+limit rather than extrapolation through the helper.
+
 At total `rho` near 0.70, held-out prefill-heavy, balanced, and decode-heavy P90
 TTFT/mean-TPOT medians are respectively 234.7/59.7 ms, 152.9/42.7 ms, and
 131.7/37.2 ms. This composition dependence proves that total work is not a
@@ -1734,6 +1911,34 @@ uv run python model_architecture_campaign.py run-profile --plan PLAN.json --run-
 uv run python model_architecture_campaign.py run-profile --plan PLAN.json --run-root RUN-full
 uv run python model_architecture_campaign.py freeze-profile --base-profile BASE.json --run-root RUN-full --smoke-root RUN-smoke --geometry kv_geometry.csv --out PROFILE.json
 ```
+
+`matched_action_campaign.py` is the narrow cross-hardware/cross-model decision
+demonstration. It freezes completed A100 East/Germany frontier scenario
+`4ce7626a1f20a5c3`: eight 16K sessions, 80% requested shed, a 30-second
+deadline, measured natural links, and zero destination background. The
+harmonized A100 solve must reproduce the executed eight-KV-to-Germany decision.
+Each H100 arm uses its own measured prefill, decode, and non-monotone
+coding-path power fit. Atomic per-arm checkpoints make reruns resumable, and
+the GPT-OSS/H100 checkpoint is shared by both comparisons.
+
+```bash
+uv run python matched_action_campaign.py
+```
+
+The pinned result is eight Germany KV moves for GPT-OSS/A100; five Germany plus
+one East Replay move for GPT-OSS/H100; seven Germany KV moves for Qwen/H100;
+and six Germany Replay moves for Gemma/H100. The first three reach the target.
+Gemma remains on its measured high-power plateau after the six admissible moves
+and therefore cannot meet the same 80% target. All 200 calibration-bootstrap
+draws reproduce each arm's central action mix and feasibility result.
+
+The H100 repeat-holdout RMSE is 2.73 W for GPT-OSS, 2.24 W for Qwen, and
+1.32 W for Gemma. GPT-OSS and Gemma use their completed 108-work-cell power
+runs; Qwen uses the 43 cells durably committed before the host reboot, of which
+eight cover the matched mixed-load path. Only the archived A100 migration is a
+physical migration. The H100 bars are planner decisions, BF16 KV bytes remain
+analytic, endpoint residuals are zero, and the bootstrap covers calibration
+uncertainty rather than workload-population uncertainty.
 
 Run the smoke command for all six arms before any full run. `BASE.json` must be
 the model/hardware arm's measured service and power profile. The geometry CSV

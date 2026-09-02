@@ -337,6 +337,13 @@ bound are inseparable from their measured prefill/decode rates and pinned
 serving stack; a bound must be rescaled or remeasured before use with another
 normalization.
 
+For a fixed request class, `ProfileRateLimit` performs the opt-in conversion
+from a measured total-rate boundary `Lambda_safe` to this existing row. It
+computes per-request work `e=(P/F_q(T),O/G_q(T))`, baseline `lambda_0 e`, and
+bound `Lambda_safe (e_f+e_g)`. It hard-fails another destination type, context,
+or prefill/decode ray. It does not alter destination schemas, planner rows, or
+historical profiles; callers must explicitly consume the returned conversion.
+
 For the completed 4K A100 service class, `W=0.50` is a tested safe floor under
 the campaign rates `F=16758.928` and `G=3597.591` tokens/s. The incumbent uses
 approximately `W_0=0.25`. Three mixes across three fresh restart blocks passed
@@ -523,20 +530,22 @@ table before candidates are built.
 
 ## LP
 
-The default LP minimizes migration work while meeting requested conservative
+The default LP minimizes predicted action duration while meeting requested conservative
 power reduction \(\Delta P\):
 
 \[
 \begin{aligned}
-\operatorname{minimize}\quad &\sum_c m_cx_c\\
+\operatorname{minimize}\quad &\sum_c t_cx_c\\
 \operatorname{subject\ to}\quad
 &\sum_c w_cx_c\ge\Delta P,\\
 &Ax\le\mathbf1,\quad Ux\le\mathbf1,\quad 0\le x\le1.
 \end{aligned}
 \]
 
+Endpoint replica-seconds remain in \(U\) as a physical capacity coefficient;
+they are not reused as the objective when route and endpoint stages overlap.
 If the target is infeasible, a separate solve maximizes conservative power
-shed. The pool-aware path then minimizes work at that maximum. The result is
+shed. The pool-aware path then minimizes duration at that maximum. The result is
 valid best effort with `failure_reason="target_unmet"` and an explicit watt
 shortfall, not successful curtailment. The `lp_peak_first` and `lp_work_first`
 variants retain alternative objective orders on the legacy path only; the pool

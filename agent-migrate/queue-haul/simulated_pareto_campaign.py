@@ -239,7 +239,7 @@ def _architecture(profile, scenario, fit):
     )
     architecture = dedicated_sink_architecture(profile, destinations, ("wan",))
     service = FluidMigrationService(
-        fit["replay_speedup"], profile.case().kv_transfer.destination_bytes_per_s,
+        fit["replay_speedup"],
         fit["source_power_w"], fit["destination_power_w"],
         "width8-10g-successful-replay-and-action-power",
     )

@@ -104,6 +104,7 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     assert "lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif" in source
     assert "LMCacheMPConnector" in source
     assert "connector_patch" in source
+    assert '"engine_id":"s0"' in source
     assert "lmcache.mp.host" in source and "lmcache.mp.port" in source
     assert "engine_driven" in source
     assert "PYTHONPATH=" in source and "lmcache_compat" in source
@@ -143,6 +144,18 @@ def test_native_runtime_rejects_legacy_and_unknown_modes(monkeypatch):
     monkeypatch.setenv("QH_RUNTIME", "other")
     with pytest.raises(ValueError, match="unknown QH_RUNTIME"):
         s.runtime_mode()
+
+
+def test_native_runtime_versions_can_be_pinned_per_campaign(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setenv("QH_NATIVE_RUNTIME_VERSIONS", "0.24.0,0.5.1")
+
+    assert s.expected_runtime_versions() == ("0.24.0", "0.5.1")
+
+    monkeypatch.setenv("QH_NATIVE_RUNTIME_VERSIONS", "0.24.0")
+    with pytest.raises(ValueError, match="vllm,lmcache"):
+        s.expected_runtime_versions()
 
 
 def test_native_preflight_requires_host_commands_and_pinned_versions(monkeypatch, tmp_path):

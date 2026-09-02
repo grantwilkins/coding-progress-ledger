@@ -1,9 +1,4 @@
-"""Collect simple single-A100 TTFT/TPOT curves under increasing agentic RPS.
-
-The sweep is deliberately descriptive.  Every configured rate runs, and SLO
-violations, request failures, and engine exits are recorded as outcomes rather
-than used as campaign gates.
-"""
+"""Collect legacy and replicated A100/H100 agentic TTFT/TPOT sweeps."""
 
 from __future__ import annotations
 
@@ -11,7 +6,9 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
+import re
 import statistics
 import time
 from dataclasses import replace
@@ -78,10 +75,36 @@ TAIL_SLOS = {
         "p90_tpot_s": .163794359,
     },
 }
+SLO_SCHEMA = "queue-haul-agentic-rps-sweep-v4"
+SLO_MODEL = "openai/gpt-oss-20b"
+SLO_TARGETS = {"p90_ttft_s": 1.0, "p90_tpot_s": .05}
+SLO_HARDWARE = ("a100", "h100")
+SLO_SCOUT_RATES_RPS = (
+    .03125, .0625, .125, .25, .5, 1, 2, 4, 8, 10, 12, 16, 24, 32,
+)
+SLO_PRIMARY_BLOCKS, SLO_MAX_BLOCKS = 20, 30
+SLO_WARMUP_RATE_RPS, SLO_MAX_SEND_LATENESS_S = 1, .05
+SLO_MAX_METRIC_GAP_S = 1
+SLO_DRAIN_TIMEOUT_S = 300
+SLO_REFINEMENT_INTERVALS = 8
+SLO_UPPER_SCOUT_GUARDS = 2
+SLO_MAX_BOUNDARY_STEPS = 4
 
 
 def digest(value) -> str:
     return profiler.object_hash(value)
+
+
+def semantic_runtime_value(value):
+    if isinstance(value, dict):
+        return {key: semantic_runtime_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [semantic_runtime_value(item) for item in value]
+    if isinstance(value, str):
+        if value.startswith("CUDA_VISIBLE_DEVICES="):
+            return "CUDA_VISIBLE_DEVICES=<allocated>"
+        return re.sub(r"(/tmp/qh-[^/\s\"']+)-\d+", r"\1-<pid>", value)
+    return value
 
 
 def slug(value: str) -> str:
@@ -158,10 +181,140 @@ def _plan(seed: int, hardware: str) -> dict:
     }
 
 
-<<<<<<< Updated upstream
-def make_plan(seed: int = 1, hardware: str = "a100") -> dict:
-    plan = _plan(seed, hardware)
-=======
+def slo_rate_order(seed: int, rates: tuple[float, ...],
+                   block: int) -> tuple[float, ...]:
+    plan = {"seed": seed}
+    return tuple(sorted(
+        rates,
+        key=lambda rate: stable_seed(plan, rate, block, "rate-order"),
+    ))
+
+
+def _slo_plan(seed: int, hardware: str) -> dict:
+    runtime = {
+        **capacity.make_runtime_contract(False),
+        "max_num_batched_tokens": testbed.model_spec(SLO_MODEL).batched_tokens,
+        "block_size": 16,
+        "mode": "native",
+        "runtime_versions": list(testbed.NATIVE_RUNTIME_VERSIONS),
+        "stream_interval": 1,
+    }
+    request_shape = {
+        "prompt_tokens": PROMPT_TOKENS,
+        "output_tokens": OUTPUT_TOKENS,
+        "source": "fixed compact shape derived from the OpenHands coding trace",
+    }
+    implementation = {"campaign_source_sha256": hashlib.sha256(
+        Path(__file__).read_bytes()).hexdigest()}
+    blocks = {
+        "primary": SLO_PRIMARY_BLOCKS,
+        "maximum": SLO_MAX_BLOCKS,
+        "stopping": "reduce_at_20; extend_to_30_only_if_unresolved",
+        "rate_order": "ascending_sha256(seed:rate:block:rate-order)",
+    }
+    warmup = {"rate_rps": SLO_WARMUP_RATE_RPS,
+              "requests": REQUESTS_PER_POINT, "discard": True}
+    validity = {
+        "max_send_lateness_s": SLO_MAX_SEND_LATENESS_S,
+        "max_metric_gap_s": SLO_MAX_METRIC_GAP_S,
+        "required_completions": REQUESTS_PER_POINT,
+        "required_exact_streams": REQUESTS_PER_POINT,
+        "required_cached_tokens": 0,
+        "require_telemetry": True,
+        "require_drain": True,
+    }
+    statistics = {
+        "cell": "p90",
+        "rate": "median_across_blocks",
+        "interval": "exact_binomial_order_statistic",
+        "per_look_minimum_confidence": .975,
+        "selected_interval_minimum_confidence": .95,
+        "scope": "pointwise_rate_metric",
+    }
+    preflight = {
+        "candidate_rates_rps": list(SLO_SCOUT_RATES_RPS),
+        "requests_per_cell": REQUESTS_PER_POINT,
+        "fresh_engine_per_cell": True,
+        "required_consecutive_violations": SLO_UPPER_SCOUT_GUARDS + 1,
+        "discard": True,
+    }
+    selection = {
+        "refinement_intervals": SLO_REFINEMENT_INTERVALS,
+        "lower_scout_guards": 1,
+        "upper_scout_guards": SLO_UPPER_SCOUT_GUARDS,
+        "maximum_clear_boundary_steps": SLO_MAX_BOUNDARY_STEPS,
+    }
+    semantics = {
+        "open_loop_poisson": True,
+        "max_concurrency": None,
+        "fresh_engine_per_block": True,
+        "randomized_complete_blocks": True,
+        "service_failures_are_violations": True,
+        "invalid_measurements_hard_fail": True,
+        "tpot_definition": "p90_of_all_exact_post_first_token_intervals",
+        "finite_episode_claim": True,
+        "boundary_rule": (
+            "last_clear_pass_to_first_clear_fail; no_lower_fail; "
+            "no_higher_pass; higher_clear_fail; width_within_tolerance"
+        ),
+    }
+    comparison = {
+        "model": SLO_MODEL,
+        "revision": testbed.model_spec(SLO_MODEL).revision,
+        "request_shape": request_shape,
+        "requests_per_cell": REQUESTS_PER_POINT,
+        "slo": SLO_TARGETS,
+        "runtime": runtime,
+        "blocks": blocks,
+        "warmup": warmup,
+        "validity": validity,
+        "statistics": statistics,
+        "preflight": preflight,
+        "selection": selection,
+        "semantics": semantics,
+        "implementation": implementation,
+        "seed": seed,
+        "statistical_unit": "fresh-engine-block-cell",
+    }
+    return {
+        "schema": SLO_SCHEMA,
+        "campaign": "agentic_rps_sweep",
+        "study": "gpt_oss_slo_error_bars",
+        "hardware": hardware,
+        "models": [SLO_MODEL],
+        "model_revisions": {SLO_MODEL: testbed.model_spec(SLO_MODEL).revision},
+        "request_shape": request_shape,
+        "requests_per_point": REQUESTS_PER_POINT,
+        "blocks": blocks,
+        "warmup": warmup,
+        "preflight": preflight,
+        "selection": selection,
+        "slo": {**SLO_TARGETS, "source": "fixed-paper-reference"},
+        "runtime": runtime,
+        "validity": validity,
+        "statistics": statistics,
+        "semantics": semantics,
+        "comparison": comparison,
+        "comparison_sha256": digest(comparison),
+        "implementation": implementation,
+        "request_timeout_s": REQUEST_TIMEOUT_S,
+        "seed": seed,
+    }
+
+
+def make_slo_plan(seed: int = 20260901, hardware: str = "h100") -> dict:
+    plan = _slo_plan(seed, hardware)
+    validate_slo_plan(plan)
+    return plan
+
+
+def validate_slo_plan(plan: dict) -> None:
+    seed, hardware = plan.get("seed"), plan.get("hardware")
+    if not isinstance(seed, int) or hardware not in SLO_HARDWARE \
+            or plan != _slo_plan(seed, hardware):
+        raise ValueError("invalid agentic SLO error-bar plan")
+
+
 def _tail_plan(seed: int) -> dict:
     rates = sorted({rate for values in TAIL_RATES_RPS_BY_MODEL.values()
                     for rate in values})
@@ -219,9 +372,8 @@ def _tail_plan(seed: int) -> dict:
     }
 
 
-def make_plan(seed: int = 1) -> dict:
-    plan = _plan(seed)
->>>>>>> Stashed changes
+def make_plan(seed: int = 1, hardware: str = "a100") -> dict:
+    plan = _plan(seed, hardware)
     validate_plan(plan)
     return plan
 
@@ -262,23 +414,20 @@ def validate_plan(plan: dict) -> None:
     hardware = plan.get("hardware")
     if not isinstance(seed, int) or hardware not in {"a100", "h100"}:
         raise ValueError("invalid agentic RPS sweep plan")
-<<<<<<< Updated upstream
-    if plan != _plan(seed, hardware):
-=======
     if plan.get("schema") == TAIL_SCHEMA:
         expected = _tail_plan(seed)
     elif plan.get("schema") == GPT_RETRY_SCHEMA:
         expected = _gpt_retry_plan(seed)
     else:
-        expected = _plan(seed)
+        expected = _plan(seed, hardware)
     if plan != expected:
->>>>>>> Stashed changes
         raise ValueError("invalid agentic RPS sweep plan")
 
 
 def read_plan(path: Path) -> dict:
     plan = json.loads(path.read_text())
-    validate_plan(plan)
+    (validate_slo_plan if plan.get("schema") == SLO_SCHEMA
+     else validate_plan)(plan)
     return plan
 
 
@@ -287,15 +436,20 @@ def stable_seed(plan: dict, rate: float, repeat: int, purpose: str) -> int:
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "little")
 
 
-def arrival_offsets(plan: dict, model: str, rate: float,
-                    repeat: int) -> tuple[float, ...]:
+def arrival_offsets(plan: dict, model: str, rate: float, repeat: int,
+                    purpose: str = "",
+                    allowed_rates: tuple[float, ...] | None = None
+                    ) -> tuple[float, ...]:
+    rates = (allowed_rates if plan.get("schema") == SLO_SCHEMA else
+             tuple(plan["rates_rps_by_model"].get(model, ())))
     if model not in MODELS \
-            or rate not in plan["rates_rps_by_model"][model] \
+            or rates is None or rate not in rates \
             or repeat < 0:
         raise ValueError("unsupported RPS cell")
     return serving.poisson_schedule(
         rate, plan["requests_per_point"],
-        stable_seed(plan, rate, repeat, "arrivals"),
+        stable_seed(plan, rate, repeat,
+                    f"{purpose}-arrivals" if purpose else "arrivals"),
     )
 
 
@@ -314,18 +468,24 @@ def cell_spec(model: str, rate: float, repeat: int) -> dict:
     }
 
 
-def prepared_trace(plan: dict, model: str, rate: float,
-                   repeat: int) -> list[dict]:
+def prepared_trace(plan: dict, model: str, rate: float, repeat: int,
+                   purpose: str = "",
+                   allowed_rates: tuple[float, ...] | None = None) -> list[dict]:
     rows = []
     for index, offset in enumerate(arrival_offsets(
-            plan, model, rate, repeat)):
+            plan, model, rate, repeat, purpose, allowed_rates)):
         session = serving.Session(
-            session_id=f"agentic-{slug(model)}-{rate:g}-{repeat}-{index}",
+            session_id=(f"agentic-{purpose}-{slug(model)}-{rate:g}-{repeat}-{index}"
+                        if purpose else
+                        f"agentic-{slug(model)}-{rate:g}-{repeat}-{index}"),
             prefix_tokens=1,
             append_tokens=plan["request_shape"]["prompt_tokens"] - 1,
             output_tokens=plan["request_shape"]["output_tokens"],
             vocabulary=1024,
-            seed=stable_seed(plan, rate, repeat, f"prompt-{index}"),
+            seed=stable_seed(
+                plan, rate, repeat,
+                f"{purpose}-prompt-{index}" if purpose else f"prompt-{index}",
+            ),
         )
         rows.append({
             "offset_s": offset,
@@ -342,7 +502,12 @@ def model_config(model: str, hardware: str = "a100") -> testbed.Config:
 
 
 def runtime_identity(plan: dict, cfg: testbed.Config, commands: dict) -> dict:
-    git_sha, dirty = profiler.git_state(True)
+    formal = plan.get("schema") == SLO_SCHEMA
+    git_sha, dirty = profiler.git_state(not formal)
+    mode, versions = testbed.runtime_mode(), testbed.runtime_versions(cfg)
+    if formal and (mode != plan["runtime"]["mode"]
+                   or list(versions) != plan["runtime"]["runtime_versions"]):
+        raise RuntimeError("runtime does not match the SLO plan")
     identity = {
         "plan_sha256": digest(plan),
         "git_sha": git_sha,
@@ -350,19 +515,52 @@ def runtime_identity(plan: dict, cfg: testbed.Config, commands: dict) -> dict:
         "model": cfg.model,
         "revision": testbed.model_spec(cfg.model).revision,
         "hardware": capacity.gpu_snapshot(plan["hardware"].upper()),
-        "runtime_mode": testbed.runtime_mode(),
-        "runtime_versions": testbed.runtime_versions(cfg),
+        "runtime_mode": mode,
+        "runtime_versions": versions,
+        "ambient_vllm_env": {key: value for key, value in sorted(os.environ.items())
+                              if key.startswith("VLLM_")},
         "scheduler": plan["runtime"],
         "commands": commands,
     }
+    shared = {key: identity[key] for key in (
+        "git_sha", "model", "revision", "runtime_mode", "runtime_versions",
+        "ambient_vllm_env", "scheduler",
+    )}
+    shared["commands"] = semantic_runtime_value(commands)
+    identity["shared_fingerprint_sha256"] = digest(shared)
+    identity["launch_fingerprint_sha256"] = digest({
+        "shared": identity["shared_fingerprint_sha256"],
+        "hardware": identity["hardware"],
+    })
     identity["sha256"] = digest(identity)
     return identity
 
 
-def wait_for_drain(sampler: serving.MetricsSampler, engine) -> bool:
+def finalize_runtime_identity(identity: dict, server_info: dict) -> dict:
+    config = server_info.get("vllm_config")
+    if not isinstance(config, dict):
+        raise RuntimeError("vLLM did not expose its effective server config")
+    semantic = semantic_runtime_value(config)
+    semantic.pop("instance_id", None)
+    result = {**identity, "server_config_sha256": digest(semantic)}
+    result["fingerprint_sha256"] = digest({
+        "launch": result["launch_fingerprint_sha256"],
+        "server_config": result["server_config_sha256"],
+    })
+    result["sha256"] = digest({key: value for key, value in result.items()
+                               if key != "sha256"})
+    return result
+
+
+def wait_for_drain(sampler: serving.MetricsSampler, engine,
+                   timeout_s: float | None = None,
+                   not_before_ns: int = 0) -> bool:
     """Wait for natural drain without turning a wall-time budget into a gate."""
-    while engine.poll() is None and not sampler.error:
-        if sampler.rows and not any(
+    deadline = time.monotonic() + timeout_s if timeout_s is not None else None
+    while engine.poll() is None and not sampler.error \
+            and (deadline is None or time.monotonic() < deadline):
+        if sampler.rows and sampler.rows[-1]["monotonic_ns"] >= not_before_ns \
+                and not any(
                 sampler.rows[-1].get(key, 0) for key in
                 ("vllm:num_requests_running", "vllm:num_requests_waiting")):
             return True
@@ -381,6 +579,38 @@ def observed_token_intervals(row: dict) -> list[float]:
         (right - left) / 1e9
         for left, right in zip(timestamps, timestamps[1:])
     ]
+
+
+def measure_trace(plan: dict, cell: dict, cfg: testbed.Config, stack,
+                  root: Path, purpose: str = "",
+                  drain_timeout_s: float | None = None,
+                  allowed_rates: tuple[float, ...] | None = None) -> tuple:
+    repeat = cell.get("block", cell.get("repeat"))
+    trace = prepared_trace(
+        plan, cfg.model, cell["offered_rps"], repeat, purpose, allowed_rates,
+    )
+    root.mkdir(parents=True, exist_ok=True)
+    sampler = serving.MetricsSampler(
+        cfg.host, stack.port, root / "engine.csv", period_s=.1,
+    )
+    sampler.start()
+    headroom.wait_sampler(sampler)
+    requests, client_error = headroom.issue_async_trace(
+        cfg.host, stack.port, trace, time.monotonic_ns() + 1_000_000_000,
+        plan["request_timeout_s"],
+        shards=min(plan.get("client_shards", 8), len(trace)),
+    )
+    drained = wait_for_drain(
+        sampler, stack.engine, drain_timeout_s,
+        max((int(row.get("end_ns", 0)) for row in requests), default=0),
+    )
+    sampler_error = sampler.error
+    try:
+        sampler.close()
+    except RuntimeError as exc:
+        sampler_error = sampler_error or exc
+    return (requests, sampler.rows, drained, client_error,
+            stack.engine.poll() is not None, sampler_error)
 
 
 def summarize_cell(plan: dict, cell: dict, requests: list[dict],
@@ -447,28 +677,11 @@ def summarize_cell(plan: dict, cell: dict, requests: list[dict],
 
 def run_cell(plan: dict, cell: dict, cfg: testbed.Config, stack,
              root: Path) -> dict:
-    trace = prepared_trace(plan, cfg.model, cell["offered_rps"], cell["repeat"])
     cell_root = root / "cells" / cell["cell_id"]
-    cell_root.mkdir(parents=True, exist_ok=True)
-    sampler = serving.MetricsSampler(
-        cfg.host, stack.port, cell_root / "engine.csv", period_s=.1,
-    )
-    sampler.start()
-    headroom.wait_sampler(sampler)
-    epoch = time.monotonic_ns() + 1_000_000_000
-    requests, client_error = headroom.issue_async_trace(
-        cfg.host, stack.port, trace, epoch, plan["request_timeout_s"],
-        shards=min(plan["client_shards"], len(trace)),
-    )
-    drained = wait_for_drain(sampler, stack.engine)
-    sampler_error = sampler.error
-    try:
-        sampler.close()
-    except RuntimeError as exc:
-        sampler_error = sampler_error or exc
-    engine_exited = stack.engine.poll() is not None
+    requests, metrics, drained, client_error, engine_exited, sampler_error = \
+        measure_trace(plan, cell, cfg, stack, cell_root)
     result = summarize_cell(
-        plan, cell, requests, sampler.rows, drained, client_error,
+        plan, cell, requests, metrics, drained, client_error,
         engine_exited, sampler_error,
     )
     write_json(cell_root / "requests.json", requests)
@@ -586,6 +799,11 @@ def run_specs(plan: dict, model: str, specs: list[dict], root: Path) -> None:
         stack_root = root / "stacks" / slug(model) / f"restart-{restart:03d}"
         restart += 1
         with capacity.engine_stack(cfg, stack_root, identity, commands) as stack:
+            if plan["hardware"] == "h100":
+                testbed.validate_h100_optimized_runtime(
+                    testbed.shell(commands["vllm"]),
+                    testbed.read_text(stack.log),
+                )
             write_json(stack_root / "runtime-identity.json", identity)
             for cell in list(pending):
                 testbed.reset_vllm_caches(cfg, (stack.log,), ports=(stack.port,))
@@ -754,28 +972,566 @@ def run_campaign(plan: dict, root: Path, models: tuple[str, ...]) -> dict | None
     return None
 
 
+def slo_cell_spec(rate: float, block: int, stage: str = "formal") -> dict:
+    rate_text = f"{rate:g}".replace(".", "p")
+    prefix = "" if stage == "formal" else f"{stage}-"
+    return {
+        "cell_id": f"{prefix}{slug(SLO_MODEL)}-rps{rate_text}-b{block:02d}",
+        "model": SLO_MODEL,
+        "revision": testbed.model_spec(SLO_MODEL).revision,
+        "offered_rps": rate,
+        "block": block,
+        "stage": stage,
+    }
+
+
+def slo_result_path(root: Path, cell: dict) -> Path:
+    return root / "cells" / cell["cell_id"] / "result.json"
+
+
+def valid_slo_outcome(plan: dict, result: dict) -> bool:
+    if result.get("status") == "service_failure":
+        return result.get("slo_violation") is True and all(
+            result.get(field) is None
+            for field in ("p90_ttft_s", "p90_tpot_s"))
+    values = [result.get(field) for field in ("p90_ttft_s", "p90_tpot_s")]
+    return all(isinstance(value, (int, float)) and not isinstance(value, bool)
+               and math.isfinite(value) for value in values) \
+        and result.get("slo_violation") == metric_violation(result, plan["slo"])
+
+
+def read_slo_result(plan: dict, cell: dict, path: Path,
+                    selection_sha256: str | None = None) -> dict:
+    result = json.loads(path.read_text())
+    if result.get("schema") != SLO_SCHEMA \
+            or result.get("plan_sha256") != digest(plan) \
+            or any(result.get(key) != value for key, value in cell.items()) \
+            or result.get("status") not in {"numeric", "service_failure"} \
+            or not isinstance(result.get("slo_violation"), bool) \
+            or not isinstance(result.get("evidence_path"), str) \
+            or not isinstance(result.get("stack_path"), str) \
+            or not valid_slo_outcome(plan, result) \
+            or (cell["stage"] == "formal" and (
+                not isinstance(selection_sha256, str)
+                or result.get("selection_sha256") != selection_sha256)) \
+            or any(not isinstance(result.get(key), str) for key in (
+                "runtime_fingerprint_sha256", "shared_runtime_sha256",
+                "launch_git_sha",
+            )):
+        raise RuntimeError(f"stale or invalid SLO result: {cell['cell_id']}")
+    return result
+
+
+def summarize_slo_cell(plan: dict, cell: dict, requests: list[dict],
+                       metrics: list[dict], drained: bool,
+                       client_error: Exception | None, engine_exited: bool,
+                       sampler_error: Exception | None,
+                       engine_failure_kind: str | None,
+                       runtime: dict) -> dict:
+    result = summarize_cell(
+        plan, cell, requests, metrics, drained, client_error, engine_exited,
+        sampler_error,
+    )
+    completed = [row for row in requests if serving.service_completion(row)]
+    expected = plan["requests_per_point"]
+    timestamps = sorted(int(row["monotonic_ns"]) for row in metrics)
+    gaps = [(right - left) / 1e9
+            for left, right in zip(timestamps, timestamps[1:])]
+    telemetry_complete = bool(len(timestamps) >= 2 and requests
+                              and timestamps[0] <= min(
+                                  int(row["scheduled_ns"]) for row in requests)
+                              and timestamps[-1] >= max(
+                                  int(row["end_ns"]) for row in requests)
+                              and max(gaps) <=
+                              plan["validity"]["max_metric_gap_s"])
+    errors = []
+    if engine_failure_kind in {"infrastructure", "runtime_contract"}:
+        errors.append(engine_failure_kind)
+    if (sampler_error or not telemetry_complete) and not engine_exited:
+        errors.append("telemetry")
+    if client_error or (len(requests) != expected and not engine_exited):
+        errors.append("client_trace")
+    if result["max_send_lateness_s"] is None or \
+            result["max_send_lateness_s"] > \
+            plan["validity"]["max_send_lateness_s"]:
+        errors.append("send_lateness")
+    if any(row.get("cached_tokens", 0) != 0 for row in completed):
+        errors.append("cache_hit")
+    if any(row.get("prompt_tokens") != plan["request_shape"]["prompt_tokens"]
+           or row.get("planned_prompt_tokens") !=
+           plan["request_shape"]["prompt_tokens"] for row in completed):
+        errors.append("prompt_tokens")
+    service_failure = engine_exited or not drained or len(completed) != expected
+    if not service_failure and (result["exact_timing"] != expected or
+            result["tpot_samples"] != expected *
+            (plan["request_shape"]["output_tokens"] - 1)):
+        errors.append("exact_token_timing")
+    status = "invalid" if errors else (
+        "service_failure" if service_failure else "numeric")
+    if status != "numeric":
+        result["p90_ttft_s"] = result["p90_tpot_s"] = None
+    span = result["scheduled_span_s"]
+    result.update({
+        "schema": SLO_SCHEMA,
+        "status": status,
+        "validity_errors": errors,
+        "runtime_fingerprint_sha256": runtime["fingerprint_sha256"],
+        "shared_runtime_sha256": runtime["shared_fingerprint_sha256"],
+        "launch_git_sha": runtime["git_sha"],
+        "engine_failure_kind": engine_failure_kind,
+        "telemetry_complete": telemetry_complete,
+        "max_metric_gap_s": max(gaps, default=None),
+        "realized_rps": ((len(requests) - 1) / span
+                         if len(requests) > 1 and span > 0 else None),
+        "slo_violation": status == "service_failure" or (
+            status == "numeric" and metric_violation(result, plan["slo"])),
+    })
+    return result
+
+
+def measure_slo_cell(plan: dict, cell: dict, cfg: testbed.Config, stack,
+                     root: Path, runtime: dict,
+                     purpose: str, group: str = "cells",
+                     allowed_rates: tuple[float, ...] | None = None,
+                     selection_sha256: str | None = None) -> dict:
+    cell_root = root / group / cell["cell_id"]
+    attempt = len(list(cell_root.glob("attempt-*")))
+    attempt_root = cell_root / f"attempt-{attempt:03d}"
+    measured = measure_trace(
+        plan, cell, cfg, stack, attempt_root, purpose, SLO_DRAIN_TIMEOUT_S,
+        allowed_rates,
+    )
+    failure_kind = (capacity.failure_kind(testbed.read_text(stack.log))
+                    if measured[4] else None)
+    result = summarize_slo_cell(
+        plan, cell, *measured, failure_kind, runtime,
+    )
+    result["evidence_path"] = str(attempt_root.relative_to(root))
+    result["stack_path"] = str(stack.log.parent.relative_to(root))
+    if selection_sha256 is not None:
+        result["selection_sha256"] = selection_sha256
+    write_json(attempt_root / "requests.json", measured[0])
+    write_json(attempt_root / "result.json", result)
+    if result["status"] == "invalid":
+        raise RuntimeError(
+            f"invalid SLO measurement {cell['cell_id']}: "
+            f"{', '.join(result['validity_errors'])}")
+    write_json(cell_root / "result.json", result)
+    return result
+
+
+def freeze_plan(root: Path, plan: dict) -> None:
+    path = root / "plan.json"
+    if path.exists() and json.loads(path.read_text()) != plan:
+        raise RuntimeError(f"run root contains a different plan: {path}")
+    if not path.exists():
+        write_json(path, plan)
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def selected_slo_design(plan: dict, rows: list[dict]) -> dict:
+    candidates = plan["preflight"]["candidate_rates_rps"]
+    rates = [row["offered_rps"] for row in rows]
+    if rates != candidates[:len(rates)]:
+        raise RuntimeError("SLO scout results are not an ascending plan prefix")
+    first = next((index for index, row in enumerate(rows)
+                  if row["slo_violation"]), None)
+    guards = plan["selection"]["upper_scout_guards"]
+    if first is None or first == 0 or len(rows) != first + guards + 1:
+        raise RuntimeError("SLO scout did not bracket the optimized-runtime knee")
+    if any(row["status"] != "numeric" or row["slo_violation"]
+           for row in rows[:first]) or any(
+            not row["slo_violation"] for row in rows[first:]):
+        raise RuntimeError("SLO scout evidence is not monotone")
+    low, high = rates[first - 1:first + 1]
+    intervals = plan["selection"]["refinement_intervals"]
+    step = (high - low) / intervals
+    refined = [low + index * step for index in range(intervals + 1)]
+    lower_guards = plan["selection"]["lower_scout_guards"]
+    lower = rates[max(0, first - 1 - lower_guards):first - 1]
+    upper = rates[first + 1:first + guards + 1]
+    if len(upper) != guards:
+        raise RuntimeError("SLO scout bracket lacks upper guard anchors")
+    formal = tuple(sorted(set((*lower, *refined, *upper))))
+    return {
+        "bracket": {
+            "observed_pass_rps": low,
+            "observed_violation_rps": high,
+            "higher_observed_violation_rates_rps": upper,
+        },
+        "formal_rates_rps": list(formal),
+        "refinement_step_rps": step,
+        "maximum_clear_boundary_width_rps": (
+            step * plan["selection"]["maximum_clear_boundary_steps"]),
+        "block_orders": [
+            {"block": block,
+             "rates_rps": list(slo_rate_order(plan["seed"], formal, block))}
+            for block in range(plan["blocks"]["maximum"])
+        ],
+    }
+
+
+def scout_evidence_sha256(root: Path, row: dict) -> str:
+    evidence = [root / row[key] for key in ("evidence_path", "stack_path")]
+    if any(not path.is_dir() for path in evidence):
+        raise RuntimeError("missing SLO scout evidence")
+    return digest({str(path.relative_to(root)): file_sha256(path)
+                   for directory in evidence
+                   for path in sorted(directory.rglob("*")) if path.is_file()})
+
+
+def make_slo_preflight_record(plan: dict, root: Path,
+                              rows: list[dict]) -> dict:
+    design = selected_slo_design(plan, rows)
+    fingerprints = {row["runtime_fingerprint_sha256"] for row in rows}
+    shared = {row["shared_runtime_sha256"] for row in rows}
+    commits = {row["launch_git_sha"] for row in rows}
+    if any(len(values) != 1 for values in (fingerprints, shared, commits)):
+        raise RuntimeError("SLO preflight mixed runtime provenance")
+    scout = []
+    block = plan["blocks"]["maximum"]
+    for row in rows:
+        path = slo_result_path(
+            root, slo_cell_spec(row["offered_rps"], block, "preflight"))
+        scout.append({
+            "offered_rps": row["offered_rps"],
+            "status": row["status"],
+            "slo_violation": row["slo_violation"],
+            "result_sha256": file_sha256(path),
+            "evidence_sha256": scout_evidence_sha256(root, row),
+        })
+    result = {
+        "schema": SLO_SCHEMA,
+        "status": "complete",
+        "plan_sha256": digest(plan),
+        "runtime_fingerprint_sha256": next(iter(fingerprints)),
+        "shared_runtime_sha256": next(iter(shared)),
+        "launch_git_sha": next(iter(commits)),
+        "observed_rates_rps": [row["offered_rps"] for row in rows],
+        "scout": scout,
+        **design,
+    }
+    result["selection_sha256"] = digest(result)
+    return result
+
+
+def read_slo_preflight_record(plan: dict, root: Path, path: Path) -> dict:
+    result = json.loads(path.read_text())
+    rates = result.get("observed_rates_rps")
+    candidates = plan["preflight"]["candidate_rates_rps"]
+    if not isinstance(rates, list) or rates != candidates[:len(rates)]:
+        raise RuntimeError("stale SLO preflight")
+    block = plan["blocks"]["maximum"]
+    rows = [read_slo_result(
+        plan, slo_cell_spec(rate, block, "preflight"),
+        slo_result_path(root, slo_cell_spec(rate, block, "preflight")),
+    ) for rate in rates]
+    if result != make_slo_preflight_record(plan, root, rows):
+        raise RuntimeError("stale SLO preflight")
+    return result
+
+
+def run_slo_block(plan: dict, root: Path, block: int,
+                  rates: tuple[float, ...], stage: str,
+                  expected_fingerprint: str | None = None,
+                  selection_sha256: str | None = None) -> str:
+    if stage == "formal" and not isinstance(selection_sha256, str):
+        raise ValueError("formal SLO cells require a frozen selection")
+    cells = [slo_cell_spec(rate, block, stage) for rate in rates]
+    pending = [cell for cell in cells
+               if not slo_result_path(root, cell).exists()]
+    recorded = [read_slo_result(
+        plan, cell, slo_result_path(root, cell), selection_sha256)
+                for cell in cells if cell not in pending]
+    seen = {row["runtime_fingerprint_sha256"] for row in recorded}
+    if len(seen) > 1 or seen and expected_fingerprint \
+            and seen != {expected_fingerprint}:
+        raise RuntimeError("SLO cells mix runtime fingerprints")
+    cfg = replace(model_config(SLO_MODEL, plan["hardware"]),
+                  enforce_eager=False)
+    allowed_rates = tuple(set((*rates, plan["warmup"]["rate_rps"])))
+    fingerprint = expected_fingerprint or next(iter(seen), None)
+    launch_root = root / "stacks" / f"block-{block:03d}"
+    while pending:
+        launch = len(list(launch_root.glob("launch-*")))
+        stack_root = launch_root / f"launch-{launch:03d}"
+        commands = capacity.stack_commands(
+            cfg, ["--stream-interval", str(plan["runtime"]["stream_interval"])],
+        )
+        identity = runtime_identity(plan, cfg, commands)
+        with capacity.engine_stack(cfg, stack_root, identity, commands) as stack:
+            testbed.validate_optimized_runtime(
+                testbed.shell(commands["vllm"]), testbed.read_text(stack.log),
+            )
+            identity = finalize_runtime_identity(identity, stack.server_info)
+            fingerprint = fingerprint or identity["fingerprint_sha256"]
+            if identity["fingerprint_sha256"] != fingerprint:
+                raise RuntimeError("SLO runtime changed between fresh-engine blocks")
+            write_json(stack_root / "runtime-identity.json", identity)
+            testbed.reset_vllm_caches(cfg, (stack.log,), ports=(stack.port,))
+            warmup = slo_cell_spec(plan["warmup"]["rate_rps"], block, "warmup")
+            warmup["cell_id"] += f"-l{launch:03d}"
+            measured = measure_slo_cell(
+                plan, warmup, cfg, stack, root, identity,
+                f"warmup-{stage}", "warmups", allowed_rates,
+            )
+            if measured["status"] != "numeric":
+                raise RuntimeError("discarded warmup did not complete numerically")
+            for cell in list(pending):
+                testbed.reset_vllm_caches(
+                    cfg, (stack.log,), ports=(stack.port,))
+                measured = measure_slo_cell(
+                    plan, cell, cfg, stack, root, identity, stage, "cells",
+                    allowed_rates, selection_sha256,
+                )
+                pending.remove(cell)
+                if measured["engine_exited"] or not measured["drained"]:
+                    break
+    if fingerprint is None:
+        raise RuntimeError("SLO block has no runtime fingerprint")
+    return fingerprint
+
+
+def preflight_slo(plan: dict, root: Path) -> dict:
+    freeze_plan(root, plan)
+    complete = root / "preflight" / "complete.json"
+    preflight_root = root / "preflight"
+    if complete.exists():
+        return read_slo_preflight_record(plan, preflight_root, complete)
+    block = plan["blocks"]["maximum"]
+    rows, fingerprint, first = [], None, None
+    guards = plan["selection"]["upper_scout_guards"]
+    for rate in plan["preflight"]["candidate_rates_rps"]:
+        fingerprint = run_slo_block(
+            plan, preflight_root, block, (rate,), "preflight", fingerprint)
+        cell = slo_cell_spec(rate, block, "preflight")
+        row = read_slo_result(
+            plan, cell, slo_result_path(preflight_root, cell))
+        rows.append(row)
+        if row["slo_violation"] and first is None:
+            first = len(rows) - 1
+            if first == 0:
+                raise RuntimeError("lowest SLO scout rate did not pass")
+        elif first is not None and not row["slo_violation"]:
+            raise RuntimeError("SLO scout evidence is not monotone")
+        if first is not None and len(rows) == first + guards + 1:
+            break
+    result = make_slo_preflight_record(plan, preflight_root, rows)
+    write_json(complete, result)
+    return result
+
+
+def run_slo_campaign(plan: dict, root: Path, blocks: int) -> None:
+    if blocks not in {plan["blocks"]["primary"], plan["blocks"]["maximum"]}:
+        raise ValueError("SLO run must use the primary or maximum block count")
+    if blocks == plan["blocks"]["maximum"] and reduce_slo(
+            plan, root, plan["blocks"]["primary"]
+    )["models"][SLO_MODEL]["decision"] != "extend_to_30":
+        raise RuntimeError("30-block extension requires an unresolved 20-block look")
+    freeze_plan(root, plan)
+    preflight = preflight_slo(plan, root)
+    for block in range(blocks):
+        order = tuple(preflight["block_orders"][block]["rates_rps"])
+        run_slo_block(
+            plan, root, block, order, "formal",
+            preflight["runtime_fingerprint_sha256"],
+            preflight["selection_sha256"],
+        )
+        write_json(root / "progress.json", {
+            "schema": SLO_SCHEMA, "plan_sha256": digest(plan),
+            "selection_sha256": preflight["selection_sha256"],
+            "completed_blocks": block + 1, "target_blocks": blocks,
+        })
+
+
+def order_statistic_interval(values: list[float | None],
+                             minimum_confidence: float = .975) -> dict:
+    count = len(values)
+    candidates = [
+        (rank, 1 - 2 * sum(math.comb(count, index)
+                          for index in range(rank)) / 2 ** count)
+        for rank in range(1, count // 2 + 1)
+    ]
+    rank, confidence = max(
+        pair for pair in candidates if pair[1] >= minimum_confidence)
+    ordered = sorted(math.inf if value is None else float(value)
+                     for value in values)
+    median = statistics.median(ordered)
+    lower, upper = ordered[rank - 1], ordered[count - rank]
+    finite = lambda value: value if math.isfinite(value) else None
+    return {"median": finite(median), "lower": finite(lower),
+            "upper": finite(upper), "lower_censored": not math.isfinite(lower),
+            "upper_censored": not math.isfinite(upper),
+            "confidence": confidence, "rank": rank}
+
+
+def aggregate_slo_rate(rows: list[dict], rate: float, blocks: int,
+                       slo: dict, minimum_confidence: float) -> dict:
+    matches = sorted(
+        (row for row in rows if row["offered_rps"] == rate),
+        key=lambda row: row["block"],
+    )
+    if len(matches) != blocks or [row["block"] for row in matches] \
+            != list(range(blocks)):
+        raise RuntimeError(f"incomplete block evidence at {rate:g} RPS")
+    realized = [row["realized_rps"] for row in matches
+                if row["realized_rps"] is not None]
+    aggregate = {
+        "offered_rps": rate,
+        "blocks": blocks,
+        "numeric_cells": sum(row["status"] == "numeric" for row in matches),
+        "service_failure_cells": sum(
+            row["status"] == "service_failure" for row in matches),
+        "realized_rps_median": statistics.median(realized) if realized else rate,
+        "points": [{"block": row["block"],
+                    "realized_rps": row["realized_rps"],
+                    "status": row["status"],
+                    "p90_ttft_s": row["p90_ttft_s"],
+                    "p90_tpot_s": row["p90_tpot_s"]} for row in matches],
+    }
+    intervals = {}
+    for field in ("p90_ttft_s", "p90_tpot_s"):
+        interval = order_statistic_interval([
+            row[field] if row["status"] == "numeric" else None
+            for row in matches
+        ], minimum_confidence)
+        intervals[field] = interval
+        aggregate.update({
+            f"{field}_median": interval["median"],
+            f"{field}_ci_low": interval["lower"],
+            f"{field}_ci_high": interval["upper"],
+            f"{field}_ci_confidence": interval["confidence"],
+            f"{field}_ci_rank": interval["rank"],
+        })
+    clear_pass = all(
+        intervals[field]["upper"] is not None
+        and intervals[field]["upper"] < slo[field]
+        for field in intervals
+    )
+    clear_fail = any(
+        interval["lower_censored"]
+        or interval["lower"] is not None and interval["lower"] > slo[field]
+        for field, interval in intervals.items()
+    )
+    aggregate["classification"] = (
+        "clear_pass" if clear_pass else "clear_fail" if clear_fail
+        else "indeterminate")
+    return aggregate
+
+
+def consistent_slo_boundary(curve: list[dict]) -> tuple | None:
+    passes = [index for index, row in enumerate(curve)
+              if row["classification"] == "clear_pass"]
+    failures = [index for index, row in enumerate(curve)
+                if row["classification"] == "clear_fail"]
+    if not passes or not failures or max(passes) >= min(failures):
+        return None
+    left, right = max(passes), min(failures)
+    return (curve[left]["offered_rps"], curve[right]["offered_rps"], right)
+
+
+def reduce_slo(plan: dict, root: Path, blocks: int) -> dict:
+    if blocks not in {plan["blocks"]["primary"], plan["blocks"]["maximum"]}:
+        raise ValueError("SLO reduction must use 20 or 30 blocks")
+    preflight = preflight_slo(plan, root)
+    rates = preflight["formal_rates_rps"]
+    selection = preflight["selection_sha256"]
+    cells = [slo_cell_spec(rate, block)
+             for block in range(blocks)
+             for rate in rates]
+    rows = [read_slo_result(
+        plan, cell, slo_result_path(root, cell), selection)
+            for cell in cells]
+    fingerprints = {row["runtime_fingerprint_sha256"] for row in rows}
+    shared = {row["shared_runtime_sha256"] for row in rows}
+    commits = {row["launch_git_sha"] for row in rows}
+    if fingerprints != {preflight["runtime_fingerprint_sha256"]} \
+            or shared != {preflight["shared_runtime_sha256"]} \
+            or commits != {preflight["launch_git_sha"]}:
+        raise RuntimeError("formal cells do not share the preflight runtime")
+    curve = [aggregate_slo_rate(
+        rows, rate, blocks, plan["slo"],
+        plan["statistics"]["per_look_minimum_confidence"],
+    )
+             for rate in rates]
+    boundary = consistent_slo_boundary(curve)
+    width = boundary[1] - boundary[0] if boundary else None
+    within_tolerance = bool(
+        boundary and width <= preflight["maximum_clear_boundary_width_rps"])
+    higher_failure = bool(boundary and any(
+        row["classification"] == "clear_fail"
+        for row in curve[boundary[2] + 1:]
+    ))
+    confirmed = bool(within_tolerance and higher_failure)
+    decision = ("complete" if confirmed else
+                "extend_to_30" if blocks == plan["blocks"]["primary"] else
+                "unresolved_at_30")
+    model = {
+        "model": SLO_MODEL,
+        "revision": plan["model_revisions"][SLO_MODEL],
+        "slo": plan["slo"],
+        "curve": curve,
+        "last_clear_pass_rps": boundary[0] if boundary else None,
+        "first_clear_violation_rps": boundary[1] if boundary else None,
+        "clear_boundary_confirmed": bool(boundary),
+        "clear_boundary_width_rps": width,
+        "maximum_clear_boundary_width_rps": preflight[
+            "maximum_clear_boundary_width_rps"],
+        "boundary_within_tolerance": within_tolerance,
+        "higher_clear_violation_confirmed": higher_failure,
+        "decision": decision,
+    }
+    return {
+        "schema": SLO_SCHEMA,
+        "stage": "reduced",
+        "plan_sha256": digest(plan),
+        "comparison_sha256": plan["comparison_sha256"],
+        "selection_sha256": selection,
+        "formal_rates_rps": rates,
+        "hardware": plan["hardware"],
+        "request_shape": plan["request_shape"],
+        "blocks": blocks,
+        "runtime_fingerprint_sha256": next(iter(fingerprints)),
+        "shared_runtime_sha256": next(iter(shared)),
+        "launch_git_sha": next(iter(commits)),
+        "finite_episode_claim": True,
+        "rows": rows,
+        "models": {SLO_MODEL: model},
+    }
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--out", type=Path, required=True)
-    prepare.add_argument("--seed", type=int, default=1)
-<<<<<<< Updated upstream
+    prepare.add_argument("--seed", type=int)
     prepare.add_argument("--hardware", choices=("a100", "h100"), default="a100")
-=======
+    prepare.add_argument("--error-bars", action="store_true")
     prepare.add_argument("--tail", action="store_true")
     prepare.add_argument("--gpt-retry", action="store_true")
->>>>>>> Stashed changes
+    preflight = commands.add_parser("preflight")
+    preflight.add_argument("--plan", type=Path, required=True)
+    preflight.add_argument("--run-root", type=Path, required=True)
     run = commands.add_parser("run")
     run.add_argument("--plan", type=Path, required=True)
     run.add_argument("--run-root", type=Path, required=True)
     run.add_argument("--model", choices=MODELS, action="append")
+    run.add_argument("--blocks", type=int, choices=(SLO_PRIMARY_BLOCKS,
+                                                     SLO_MAX_BLOCKS),
+                     default=SLO_PRIMARY_BLOCKS)
     reduce_parser = commands.add_parser("reduce")
     reduce_parser.add_argument("--plan", type=Path, required=True)
     reduce_parser.add_argument("--run-root", type=Path, required=True)
     reduce_parser.add_argument("--out", type=Path, required=True)
     reduce_parser.add_argument("--csv", type=Path)
     reduce_parser.add_argument("--model", choices=MODELS, action="append")
+    reduce_parser.add_argument("--blocks", type=int,
+                               choices=(SLO_PRIMARY_BLOCKS, SLO_MAX_BLOCKS),
+                               default=SLO_PRIMARY_BLOCKS)
     rereduce = commands.add_parser("rereduce")
     rereduce.add_argument("--plan", type=Path, required=True)
     rereduce.add_argument("--source-root", type=Path, action="append",
@@ -791,19 +1547,36 @@ def parse_args(argv=None):
 def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
-<<<<<<< Updated upstream
-        write_json(args.out, make_plan(args.seed, args.hardware))
-=======
+        seed = args.seed if args.seed is not None else (
+            20260901 if args.error_bars else 1)
         if args.gpt_retry:
-            plan = make_gpt_retry_plan(args.seed)
+            plan = make_gpt_retry_plan(seed)
         elif args.tail:
-            plan = make_tail_plan(args.seed)
+            plan = make_tail_plan(seed)
+        elif args.error_bars:
+            plan = make_slo_plan(seed, args.hardware)
         else:
-            plan = make_plan(args.seed)
+            plan = make_plan(seed, args.hardware)
         write_json(args.out, plan)
->>>>>>> Stashed changes
         return
     plan = read_plan(args.plan)
+    if plan["schema"] == SLO_SCHEMA:
+        if args.command == "preflight":
+            preflight_slo(plan, args.run_root)
+            return
+        if args.command == "run":
+            if args.model and args.model != [SLO_MODEL]:
+                raise ValueError("the SLO error-bar plan is GPT-OSS-only")
+            run_slo_campaign(plan, args.run_root, args.blocks)
+            return
+        if args.command == "reduce":
+            summary = reduce_slo(plan, args.run_root, args.blocks)
+            write_json(args.out, summary)
+            write_csv(args.csv or args.out.with_suffix(".csv"), summary["rows"])
+            return
+        raise ValueError("v4 SLO plans cannot re-reduce legacy cells")
+    if args.command == "preflight":
+        raise ValueError("preflight requires a v4 SLO error-bar plan")
     if args.command == "run":
         models = tuple(args.model or MODELS)
         run_campaign(plan, args.run_root, models)

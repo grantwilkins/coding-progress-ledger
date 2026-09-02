@@ -11,16 +11,43 @@ Plausible wrong implementations:
 - Change the target watts with destination constraints.
 - Drop sessions from the three-part action accounting.
 - Split width-8 validation rows from the same session set across fit and holdout.
-- Validate against 30 seconds even though the migration horizon is 25 seconds.
+- Validate against the migration horizon of 41 seconds.
 - Call a target hit from power shortfall alone when execution feasibility failed.
 - Ignore the requested regional timing fit and measured route rates.
 - Make a state depend on whether a tighter counterfactual was solved first.
 - Apply a constrained factor to only one destination or retain a prefill-only label.
+- Drop a migration method from contexts covered by the regional timing model.
+- Apply the measured load factor to route bytes, HBM, or the idle timing anchor.
+- Serialize route and endpoint work after fitting an end-to-end pipeline rate.
+- Use endpoint replica-seconds as the action objective and thereby hide a
+  bandwidth-dependent change in isolated migration duration.
+- Reuse the fitted end-to-end pipeline rate as the physical link budget, leaving
+  Germany effectively unconstrained.
+- Apply the bandwidth bottleneck to only one destination or confuse Mbit/s with
+  bytes/s.
+- Widen context support when extending only the measured bandwidth boundary.
+- Label a single-factor state despite no material paired action response.
+- Summarize a power-targeted action mix by session count instead of phase load.
+- Lose phase-load conservation when assigning selected sessions to actions.
+- Use phase-load shares rather than session shares in the companion boxplot.
+- Include intermediate joint cases instead of the three independent bottlenecks,
+  all bound, and none bound.
+- Use default Tukey whiskers instead of the declared 5th and 95th percentiles.
+- Reverse prefill occupancy into available throughput or report aggregate rather
+  than per-destination throughput.
+- Confuse Mbit/s with bytes/s or fail to recover the measured endpoint cases.
+- Resample OAT levels independently, vary both axes at once, drop not-moved
+  sessions, or weight feasibility by sessions instead of plans.
 """
 
+from types import SimpleNamespace
+
 import numpy as np
+import pytest
 
 import workload_adaptation_campaign as campaign
+from pool_planner import candidate_table
+from power_model import ExpectedPower
 from profiles import ModelProfile
 
 
@@ -43,7 +70,7 @@ def test_factorial_is_exact_and_uses_only_declared_levels():
 
 def test_template_sampling_is_reproducible_and_keeps_whole_shapes():
     profile = ModelProfile.load(campaign.PROFILE)
-    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    templates, workload = campaign.load_templates(campaign.MANIFEST, profile)
 
     first = campaign.sample_pack(templates, 28, 7)
     second = campaign.sample_pack(templates, 28, 7)
@@ -54,6 +81,12 @@ def test_template_sampling_is_reproducible_and_keeps_whole_shapes():
              for shapes in templates.values() for shape in shapes}
     assert all((session.context_tokens, session.expected_f, session.expected_g,
                 session.log_bytes) in valid for session in first)
+    phase = profile.case().phase_power
+    assert workload["phase_direction_excluded_states"] == 2
+    assert all(phase.contains(
+        1e-3 * shape.prompt_tokens / max(shape.prompt_tokens, shape.output_tokens),
+        1e-3 * shape.output_tokens / max(shape.prompt_tokens, shape.output_tokens),
+    ) for shapes in templates.values() for shape in shapes)
 
 
 def test_pack_normalization_preserves_shape_and_sets_common_source_load():
@@ -81,13 +114,162 @@ def test_one_paired_draw_conserves_sessions_and_target():
                for row in rows)
     assert all(np.isclose(sum(row[action] for action in campaign.ACTIONS), 1)
                for row in rows)
+    assert all(np.isclose(sum(row[f"{action}_phase_load"]
+                              for action in campaign.ACTIONS), 1)
+               for row in rows)
     assert all(row["target_met"] == (
         row["feasible"] and row["power_shortfall_w"] <= campaign.POWER_TOLERANCE_W
     ) for row in rows)
     checks = campaign.factor_checks(rows)
     assert len(checks) == 12
+    bandwidth = next(row for row in checks
+                     if row["case_id"] == "bandwidth"
+                     and row["factor"] == "bandwidth")
+    assert bandwidth["utilization"] == next(
+        row["route_utilization"] for row in rows
+        if row["case_id"] == "bandwidth"
+    )
+    none = next(row for row in rows if row["case_id"] == "none")
+    constrained = next(row for row in rows if row["case_id"] == "bandwidth")
+    # Constraining a resource cannot raise the relaxation's value; the two
+    # agree to machine precision when the constraint is not binding.
+    assert constrained["fractional_lp_opportunity_w"] \
+        <= none["fractional_lp_opportunity_w"] * (1 + 1e-12)
     assert not any(row["fractional_opportunity_worsened_on_release"]
                    for row in checks)
+
+
+def test_oat_axes_are_absolute_and_contain_factorial_endpoints():
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 4, 3))
+    fits = campaign.central_timing_fits()
+    bandwidths, prefills, fixed_bandwidth, fixed_prefill, rate = \
+        campaign.oat_design(profile, levels=5)
+
+    assert bandwidths == pytest.approx(np.linspace(
+        campaign.OAT_BANDWIDTH_LOWER_MBPS,
+        campaign.OAT_BANDWIDTH_UPPER_MBPS, 5))
+    assert prefills == pytest.approx(np.linspace(
+        (1 - campaign.OAT_DEST_COMPUTE[1]) * rate,
+        campaign.OAT_PREFILL_UPPER_TPS, 5))
+    assert fixed_bandwidth == pytest.approx(np.median(bandwidths))
+    assert fixed_prefill == pytest.approx(np.median(prefills))
+    loads = campaign.LEVELS["dest_compute"]
+    assert bandwidths[0] < campaign.BANDWIDTH_BOTTLENECK_MBPS
+    assert bandwidths[-1] > max(campaign.physical_route_mbps().values())
+    assert prefills[0] < (1 - loads[1]) * rate
+    assert prefills[-1] > rate
+
+    for point in ((bandwidths[0], prefills[0]), (bandwidths[-1], prefills[-1])):
+        campaign.build_problem(
+            profile, pack, frozenset(), 2 / 3, fits,
+            bandwidth_mbps=point[0], prefill_tps=point[1],
+        )
+
+
+def test_oat_varies_one_axis_and_conserves_session_actions():
+    rows, design = campaign.simulate_oat(
+        samples=4, levels=2, seed=3, sessions=4)
+
+    assert len(rows) == 2 * 2 * len(campaign.ACTIONS)
+    assert design["paired_draws"] == 2
+    for sweep in ("bandwidth", "prefill"):
+        for level in range(2):
+            selected = [row for row in rows
+                        if row["sweep"] == sweep and row["level"] == level]
+            assert sum(row["session_count"] for row in selected) == 8
+            assert sum(row["session_share"] for row in selected) \
+                == pytest.approx(1)
+            assert {row["plans"] for row in selected} == {2}
+            assert len({row["target_met_rate"] for row in selected}) == 1
+    assert len({row["prefill_available_tps"] for row in rows
+                if row["sweep"] == "bandwidth"}) == 1
+    assert len({row["bandwidth_cap_gbps"] for row in rows
+                if row["sweep"] == "prefill"}) == 1
+
+
+def test_phase_load_action_mix_uses_power_weights_not_session_counts():
+    sessions = tuple(SimpleNamespace(session_id=value) for value in "abc")
+    moves = (SimpleNamespace(session_id="a", method="replay"),
+             SimpleNamespace(session_id="b", method="kv_transfer"))
+    power = SimpleNamespace(ell={"a": 1, "b": 3, "c": 6})
+
+    assert campaign.phase_load_shares(sessions, moves, power) == {
+        "replay": .1, "kv_transfer": .3, "not_moved": .6,
+    }
+
+
+def test_action_plots_use_only_the_three_single_bottlenecks_and_endpoints():
+    assert campaign.DISPLAY_CASES == (
+        "hbm", "bandwidth", "dest_compute",
+        "bandwidth-dest_compute-hbm", "none",
+    )
+
+    rows = []
+    for case_id in campaign.DISPLAY_CASES:
+        for replicate, (replay, kv) in enumerate(zip(
+                (0, 10, 20, 30, 40), (0, 0, 10, 10, 20))):
+            rows.append({
+                "case_id": case_id, "replicate": replicate, "sessions": 100,
+                "replay_count": replay, "kv_transfer_count": kv,
+                "not_moved_count": 100 - replay - kv,
+                "replay_phase_load": .99, "kv_transfer_phase_load": .005,
+                "not_moved_phase_load": .005,
+            })
+    rows.append({
+        **rows[0], "case_id": "hbm-bandwidth", "replay_count": 100,
+        "not_moved_count": 0,
+    })
+
+    summary = campaign.action_boxplot_statistics(rows)
+    replay = next(row for row in summary
+                  if row["case_id"] == "hbm" and row["action"] == "replay")
+
+    assert len(summary) == 5 * 3
+    assert tuple(dict.fromkeys(row["case_id"] for row in summary)) \
+        == campaign.DISPLAY_CASES
+    assert (replay["p05"], replay["p25"], replay["median"], replay["p75"],
+            replay["p95"]) == pytest.approx((2, 10, 20, 30, 38))
+
+
+def test_loaded_factor_transport_is_counted_and_in_context_run_is_paired():
+    rows, _ = campaign.simulate(samples=1, seed=3)
+    robust, workload = campaign.simulate(
+        samples=1, seed=3, loaded_context_only=True,
+    )
+
+    assert [(row["timing_fit_sha256"], row["power_bootstrap_index"])
+            for row in rows] == [
+                (row["timing_fit_sha256"], row["power_bootstrap_index"])
+                for row in robust]
+    assert workload["loaded_factor_context_only"]
+    assert workload["loaded_factor_outside_context_states"] > 0
+    assert all(row["loaded_context_below_session_count"] == 0
+               and row["loaded_context_above_session_count"] == 0
+               and row["loaded_context_below_candidate_count"] == 0
+               and row["loaded_context_above_candidate_count"] == 0
+               and row["loaded_context_below_selected_count"] == 0
+               and row["loaded_context_above_selected_count"] == 0
+               for row in robust)
+    summary = campaign.transport_summary(robust)
+    assert summary["context"]["sessions"]["denominator"] == 28
+    assert not summary["context"]["sessions"]["outside"]
+    assert not summary["context"]["candidates"]["outside"]
+    assert not summary["context"]["selected"]["outside"]
+
+
+def test_bandwidth_transport_counts_the_sub_gigabit_east_route():
+    rows, _ = campaign.simulate(samples=1, seed=3)
+    by_case = {row["case_id"]: row for row in rows}
+
+    assert by_case["none"]["loaded_bandwidth_below_pool_count"] == 0
+    assert by_case["bandwidth"]["loaded_bandwidth_below_pool_count"] == 1
+    assert by_case["bandwidth"]["loaded_bandwidth_below_candidate_count"] == 56
+    assert not any(row["loaded_bandwidth_above_pool_count"] for row in rows)
+    summary = campaign.transport_summary(rows)
+    assert summary["bandwidth"]["pools"]["denominator"] == 16
+    assert summary["bandwidth"]["pools"]["outside"] == 4
 
 
 def test_case_results_do_not_depend_on_factorial_traversal():
@@ -129,7 +311,7 @@ def test_opportunity_and_rounded_release_outcomes_are_distinct():
             "power_shortfall_w": 1.0 if not constraints else 0.0,
             "target_met": bool(constraints),
             "fractional_lp_opportunity_w": 10 - len(constraints),
-            "hbm_utilization": 0, "migration_utilization": 0,
+            "hbm_utilization": 0, "route_utilization": 0,
             "service_utilization": 0,
         })
 
@@ -138,6 +320,8 @@ def test_opportunity_and_rounded_release_outcomes_are_distinct():
 
     assert hbm["fractional_lp_opportunity_change_w"] == 1
     assert not hbm["fractional_opportunity_worsened_on_release"]
+    assert not hbm["resource_near_capacity"]
+    assert hbm["opportunity_reduced"] and hbm["active"]
     assert hbm["planner_shortfall_worsened_on_release"]
 
 
@@ -165,10 +349,53 @@ def test_surface_validation_uses_grouped_splits_and_migration_horizon():
         )
 
     assert all(len(splits) == 1 for splits in grouped.values())
-    assert all(row["horizon_s"] == 25 for row in rows)
+    assert all(row["horizon_s"] == 41 for row in rows)
     assert all(row["false_feasible"] == (
-        row["predicted_s"] <= 25 < row["measured_s"]
+        row["predicted_s"] <= 41 < row["measured_s"]
     ) for row in rows)
+
+
+def test_surface_validation_overlaps_route_with_shared_endpoint_work():
+    scenario = SimpleNamespace(
+        migration_s=10, scenario_id="hand", session_set="hand",
+        method="mixed", bandwidth_mbps=1000, concurrency=2,
+    )
+
+    route_bound = campaign._surface_row(
+        "hand", "hand", scenario, replay_s=4, kv_s=3,
+        route_s=10, coupling=1,
+    )
+    endpoint_bound = campaign._surface_row(
+        "hand", "hand", scenario, replay_s=4, kv_s=3,
+        route_s=5, coupling=1,
+    )
+
+    assert route_bound["predicted_s"] == 10
+    assert endpoint_bound["predicted_s"] == 7
+
+
+def test_surface_validation_rejects_width8_false_feasibility(monkeypatch):
+    original = campaign._surface_row
+
+    def unsafe(*args, **kwargs):
+        row = original(*args, **kwargs)
+        if row["source"] == "width8":
+            row["false_feasible"] = True
+        return row
+
+    monkeypatch.setattr(campaign, "_surface_row", unsafe)
+    with pytest.raises(RuntimeError, match="false-feasible on width-8"):
+        campaign.validate_surface()
+
+
+def test_surface_summary_exposes_method_specific_error():
+    rows = campaign.validate_surface()
+    summary = campaign.validation_summary(rows)
+
+    assert "width8/development" in summary
+    assert "width8/development/kv_transfer" in summary
+    assert "width8/development/mixed" in summary
+    assert "width8/development/replay" in summary
 
 
 def test_central_surface_uses_regional_timing_and_routes():
@@ -183,16 +410,114 @@ def test_central_surface_uses_regional_timing_and_routes():
     services = {pool.pool_id: pool.fluid_migration
                 for pool in architecture.pools}
 
-    assert {link.bytes_per_s for link in scenario.links} == {
-        fits[region]["effective_pipeline_mbps"]["natural"] * 125_000
-        for region in campaign.REGIONS
+    links = {link.link_id: link.bytes_per_s for link in scenario.links}
+    physical = campaign.physical_route_mbps()
+    assert links == {
+        **{f"link/{region}": physical[region] * 125_000
+           for region in campaign.REGIONS},
+        **{f"pipeline/{region}":
+           fits[region]["effective_pipeline_mbps"]["natural"] * 125_000
+           for region in campaign.REGIONS},
     }
-    assert all(not service.route_overlap for service in services.values())
-    assert services["pool/east"].kv_ingest_bytes_per_s == \
-        fits["east"]["kv_ingest_lower_bound_bytes_per_s"]
+    assert routes == {("source", region):
+                      (f"link/{region}", f"pipeline/{region}")
+                      for region in campaign.REGIONS}
+    assert all(service.route_overlap for service in services.values())
+    assert services["pool/east"].replay_speedup == \
+        1 / fits["east"]["replay_compute_completion_factor"]
     summary = campaign.json.loads(campaign.TIMING_SUMMARY.read_text())
-    assert summary["migration_gate_passed"]
-    assert all(row["coverage"] == 1 for row in summary["held_out"].values())
+    assert summary["migration_gate_passed"] and not summary["kv_byte_mismatches"]
+    assert all(
+        row["coverage"] >= .9 and row["median_relative_error"] <= .1
+        and (row["p90_relative_error"] <= .15
+             or row["p90_absolute_error_s"] <= 1)
+        for row in summary["held_out"].values()
+    )
+
+
+def test_bandwidth_state_caps_both_physical_routes_at_measured_floor():
+    fits = campaign.central_timing_fits()
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(
+        profile, campaign.sample_pack(templates, 28, 4),
+    )
+    scenario, architecture, routes, _ = campaign.build_problem(
+        profile, pack, frozenset(("bandwidth",)), 2 / 3, fits,
+    )
+    links = {link.link_id: link.bytes_per_s for link in scenario.links}
+    cap = campaign.BANDWIDTH_BOTTLENECK_MBPS * 125_000
+
+    assert campaign.BANDWIDTH_BOTTLENECK_MBPS == \
+        campaign.loaded_service_model()["validation_bandwidth_mbps"][0]
+    assert {links[f"link/{region}"] for region in campaign.REGIONS} == {cap}
+    assert all(links[f"pipeline/{region}"] ==
+               fits[region]["effective_pipeline_mbps"]["controlled_40"] * 125_000
+               for region in campaign.REGIONS)
+    assert all(routes[("source", region)] ==
+               (f"link/{region}", f"pipeline/{region}")
+               for region in campaign.REGIONS)
+    for q in architecture.types:
+        raw = fits[q.type_id.rsplit("/", 1)[-1]]["migration_components"]
+        for method, support in q.migration.items():
+            assert support.context_range == tuple(raw[method]["context_range"])
+            assert support.bandwidth_range_bytes_per_s[0] <= min(
+                links[link] for link in routes[("source", q.type_id.rsplit("/", 1)[-1])]
+            )
+            assert not support.allow_extrapolation
+
+
+def test_destination_load_scales_replay_endpoint_but_not_kv_or_idle_anchor():
+    fits = campaign.central_timing_fits()
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(
+        profile, campaign.sample_pack(templates, 28, 4),
+    )
+
+    scenario, architecture, _, _ = campaign.build_problem(
+        profile, pack, frozenset(), 2 / 3, fits,
+    )
+    model = campaign.loaded_service_model()
+    assert model["slowdown_at_rho_0"]["replay"] == 1
+    assert model["slowdown_at_rho_0"]["kv_transfer"] == 1
+    bandwidths = {link.link_id: link.bytes_per_s for link in scenario.links}
+    for pool in architecture.pools:
+        loaded = architecture.type_by_id[pool.type_id].loaded
+        context = 8192
+        bandwidth = min(bandwidths[link] for link in pool.route)
+        assert loaded["replay"].worst(.95, .95, context, bandwidth) \
+            > loaded["replay"].worst(.25, .25, context, bandwidth) > 1
+        assert loaded["kv_transfer"].worst(.95, .95, context, bandwidth) == 1
+
+
+def test_supported_pack_has_replay_and_kv_candidates_for_every_session():
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(
+        profile, campaign.sample_pack(templates, 28, campaign.DEFAULT_SEED),
+    )
+    scenario, architecture, _, _ = campaign.build_problem(
+        profile, pack, frozenset(), 2 / 3, campaign.central_timing_fits(),
+    )
+    table = candidate_table(
+        scenario, profile, architecture, "normal",
+        ExpectedPower(scenario, profile),
+    )
+    slots = set(campaign.product(range(len(pack)), range(len(architecture.pools))))
+
+    for method in ("replay", "kv_transfer"):
+        assert {(candidate.session, candidate.pool) for candidate in table.candidates
+                if candidate.method == method} == slots
+    dominance = campaign.method_dominance(table, len(architecture.pools))
+    assert dominance["candidate_matched_pairs"] == len(slots)
+    assert not any(dominance[name] for name in (
+        "candidate_replay_only", "candidate_kv_only", "candidate_neither",
+    ))
+    assert sum(dominance[name] for name in (
+        "candidate_replay_dominates", "candidate_kv_dominates",
+        "candidate_equivalent", "candidate_incomparable",
+    )) == len(slots)
 
 
 def test_factor_levels_apply_to_both_destinations():
@@ -207,15 +532,25 @@ def test_factor_levels_apply_to_both_destinations():
         )
         states[bool(constraints)] = (scenario, architecture)
 
-    for constrained, bandwidth_level, compute_level, hbm_level in (
-        (False, "natural", .25, 0), (True, "controlled_40", .95, .9),
+    physical = campaign.physical_route_mbps()
+    for constrained, timing_level, compute_level, hbm_level in (
+        (False, "natural", .25, 0), (True, "controlled_40", .95, .98),
     ):
         scenario, architecture = states[constrained]
         rates = {link.link_id: link.bytes_per_s for link in scenario.links}
         assert rates == {
-            f"link/{region}": fits[region]["effective_pipeline_mbps"][
-                bandwidth_level] * 125_000
-            for region in campaign.REGIONS
+            **{
+                f"link/{region}": (
+                    campaign.BANDWIDTH_BOTTLENECK_MBPS
+                    if constrained else physical[region]
+                ) * 125_000
+                for region in campaign.REGIONS
+            },
+            **{
+                f"pipeline/{region}": fits[region]["effective_pipeline_mbps"][
+                    timing_level] * 125_000
+                for region in campaign.REGIONS
+            },
         }
         for pool in architecture.pools:
             dtype, replica = architecture.type_by_id[pool.type_id], pool.replicas[0]
@@ -230,6 +565,61 @@ def test_factor_levels_apply_to_both_destinations():
             assert replica.baseline_kv_tokens == resident
         assert {pool.replicas[0].replica_id for pool in architecture.pools} == \
             set(campaign.REGIONS)
+
+
+def test_single_factors_change_only_their_physical_columns():
+    fits = campaign.central_timing_fits()
+    profile = ModelProfile.load(campaign.PROFILE)
+    templates, _ = campaign.load_templates(campaign.MANIFEST, profile)
+    pack = campaign.normalize_pack(profile, campaign.sample_pack(templates, 28, 4))
+    tables = {}
+    for name, constraints in {
+        "none": frozenset(), "bandwidth": frozenset(("bandwidth",)),
+        "hbm": frozenset(("hbm",)),
+        "dest_compute": frozenset(("dest_compute",)),
+    }.items():
+        scenario, architecture, _, _ = campaign.build_problem(
+            profile, pack, constraints, 2 / 3, fits,
+        )
+        tables[name] = candidate_table(
+            scenario, profile, architecture, "normal",
+            ExpectedPower(scenario, profile),
+        )
+
+    def choices(table):
+        return {(row.session, row.pool, row.method): (i, row)
+                for i, row in enumerate(table.candidates)}
+
+    base = choices(tables["none"])
+    bandwidth = choices(tables["bandwidth"])
+    hbm = choices(tables["hbm"])
+    compute = choices(tables["dest_compute"])
+    key = next(key for key in base if key[1:] == (0, "kv_transfer"))
+    base_i, base_kv = base[key]
+    bandwidth_i, bandwidth_kv = bandwidth[key]
+    route = tables["none"].resource_names.index("route:link/east")
+    route_bound = tables["bandwidth"].resource_names.index("route:link/east")
+
+    assert bandwidth_kv.migration_work_s > base_kv.migration_work_s
+    assert bandwidth_kv.objective_cost_s > base_kv.objective_cost_s
+    assert tables["bandwidth"].resources[route_bound, bandwidth_i] \
+        > tables["none"].resources[route, base_i]
+
+    for method in ("replay", "kv_transfer"):
+        key = next(key for key in base.keys() & hbm.keys()
+                   if key[1:] == (0, method))
+        base_i, base_row = base[key]
+        hbm_i, hbm_row = hbm[key]
+        base_resource = tables["none"].resource_names.index("kv:pool/east")
+        hbm_resource = tables["hbm"].resource_names.index("kv:pool/east")
+        assert hbm_row.duration_s == pytest.approx(base_row.duration_s)
+        assert tables["hbm"].resources[hbm_resource, hbm_i] \
+            > tables["none"].resources[base_resource, base_i]
+
+    replay_key = next(key for key in base if key[1:] == (0, "replay"))
+    kv_key = next(key for key in base if key[1:] == (0, "kv_transfer"))
+    assert compute[replay_key][1].duration_s > base[replay_key][1].duration_s
+    assert compute[kv_key][1].duration_s == pytest.approx(base[kv_key][1].duration_s)
 
 
 def test_bootstrap_preserves_bandwidth_release_order():
@@ -247,16 +637,31 @@ def test_bootstrap_preserves_bandwidth_release_order():
         )
 
 
-def test_action_mix_figure_is_exactly_five_and_a_half_by_three(tmp_path):
+def test_action_mix_figure_has_half_column_canvas(tmp_path):
     rows = [{
-        "case_id": case_id, "replay": .4, "kv_transfer": .3,
-        "not_moved": .3,
+        "case_id": case_id, "replay_phase_load": .4,
+        "kv_transfer_phase_load": .3, "not_moved_phase_load": .3,
     } for case_id, _, _ in campaign.factorial_cases()]
 
     campaign.plot(rows, tmp_path / "mix")
     image = campaign.plt.imread(tmp_path / "mix.png")
 
-    assert image.shape[:2] == (3 * campaign.plot_style.SAVE_DPI,
-                               5.5 * campaign.plot_style.SAVE_DPI)
+    assert image.shape[:2] == (2.5 * campaign.plot_style.SAVE_DPI,
+                               3.85 * campaign.plot_style.SAVE_DPI)
     assert len({campaign.plot_style.ACTION_HATCHES[action]
                 for action in campaign.ACTIONS}) == len(campaign.ACTIONS)
+
+
+def test_stacked_action_mix_uses_pooled_mean_phase_shares():
+    rows = [{
+        "case_id": case_id,
+        **{f"{action}_phase_load": value for action, value in zip(
+            campaign.ACTIONS, values,
+        )},
+    } for case_id in campaign.DISPLAY_CASES
+        for values in ((.2, .3, .5), (.6, .1, .3))]
+
+    expected = np.asarray((.4, .2, .4))[:, None]
+    assert campaign.action_mix_means(rows) == pytest.approx(
+        np.repeat(expected, len(campaign.DISPLAY_CASES), axis=1),
+    )

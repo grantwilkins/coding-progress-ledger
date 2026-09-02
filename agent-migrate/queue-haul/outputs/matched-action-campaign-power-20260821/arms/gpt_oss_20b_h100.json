@@ -1,0 +1,101 @@
+{
+  "action_counts": {
+    "east_kv_transfer": 0,
+    "east_replay": 1,
+    "germany_kv_transfer": 0,
+    "germany_replay": 5
+  },
+  "arm_id": "gpt_oss_20b_h100",
+  "attained_fraction": 0.9178707243995358,
+  "binding_resources": [],
+  "feasible": true,
+  "hardware": "H100",
+  "initial_source_power_w": 157.7358950200577,
+  "input_sha256": "8dd395eed5389ecc376c060a72d5409b98362cd7abe3daaf2a761d0a2e3b66db",
+  "kv_capacity_tokens": 2377893,
+  "method_counts": {
+    "kv_transfer": 0,
+    "replay": 6
+  },
+  "model": "openai/gpt-oss-20b",
+  "move_count": 6,
+  "moves": [
+    {
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 0,
+      "path": [
+        "link/germany"
+      ],
+      "quiesce_s": null,
+      "rate_limit_bytes_per_s": null,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-f6"
+    },
+    {
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 1,
+      "path": [
+        "link/germany"
+      ],
+      "quiesce_s": null,
+      "rate_limit_bytes_per_s": null,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-f5"
+    },
+    {
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 2,
+      "path": [
+        "link/germany"
+      ],
+      "quiesce_s": null,
+      "rate_limit_bytes_per_s": null,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-f0"
+    },
+    {
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 3,
+      "path": [
+        "link/germany"
+      ],
+      "quiesce_s": null,
+      "rate_limit_bytes_per_s": null,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-f3"
+    },
+    {
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 4,
+      "path": [
+        "link/germany"
+      ],
+      "quiesce_s": null,
+      "rate_limit_bytes_per_s": null,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-f2"
+    },
+    {
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 5,
+      "path": [
+        "link/east"
+      ],
+      "quiesce_s": null,
+      "rate_limit_bytes_per_s": null,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-f7"
+    }
+  ],
+  "planned_source_power_w": 98.76534489496481,
+  "predicted_migration_makespan_s": 1.8371334527819367,
+  "schema": "queue-haul-matched-action-campaign-v2",
+  "session_count": 8,
+  "target_met": true
+}

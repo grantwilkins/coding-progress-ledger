@@ -53,4 +53,4 @@ Artifacts:
 - `qwen-parent-import.json`: the East-to-Sweden parent-result import record.
 - `summary.json`: reduced curves, SLOs, medians, ranges, and boundary selections.
 - `rps-sweep.csv`: the 45 selected per-cell result records.
-- `agentic-rps-sweep.pdf` and `.png`: aligned raw-seconds TTFT/TPOT panels on a linear RPS axis.
+- `agentic-rps-sweep.pdf` and `.png`: compact stacked GPT-OSS-20B TTFT/TPOT panels for the OpenHands Agentic workload, with black dotted SLO lines.

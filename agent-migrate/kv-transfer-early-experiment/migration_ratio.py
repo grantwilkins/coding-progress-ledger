@@ -43,6 +43,17 @@ CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
 CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
 CONTEXT_RATIO_YLIM = (1e-3, 1e2)
 RATIO_YLIM = (1e-3, 1e2)
+KV_REGION_COLOR = "#B1040E"
+CONTEXT_REGION_COLOR = "#008566"
+REGION_ALPHA = 0.06
+OKABE_ITO = {
+    "orange": "#E69F00",
+    "sky_blue": "#56B4E9",
+    "bluish_green": "#009E73",
+    "blue": "#0072B2",
+    "vermillion": "#D55E00",
+    "reddish_purple": "#CC79A7",
+}
 
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
@@ -55,12 +66,15 @@ class Attn:
     compress: KV sequence compressed to T/compress entries (CSA/HCA).
     topk:     compressed entries each query attends to (DSA); 0 = dense.
     window:   uncompressed sliding-window entries, always attended.
+    qk_dim/v_dim: per-group overrides for hybrid head widths; 0 = model default.
     """
 
     layers: int
     compress: int = 1
     topk: int = 0
     window: int = 0
+    qk_dim: int = 0
+    v_dim: int = 0
 
     def pairs(self, T: int) -> float:
         """Causal (query, key) pairs summed over this group's layers.
@@ -117,10 +131,18 @@ def dsv4_kv(T: int) -> float:
     )
 
 
+def gemma4_kv(T: int) -> float:
+    """Five global shared-KV layers plus 25 local GQA layers."""
+    return BPE * (5 * 2 * 512 * T + 2 * 25 * 8 * 256 * min(T, 1024))
+
+
+def gpt_oss_kv(T: int) -> float:
+    """Twelve global and 12 128-token local GQA layers."""
+    return 2 * BPE * 8 * 64 * (12 * T + 12 * min(T, 128))
+
+
 # ── Model catalogue ───────────────────────────────────────────────────────────
-# The six canonical models of the evacuation problem setup (instance.py /
-# Table 2), sorted by KV size. eta and prefill rho both fall out of these
-# architecture configs, so the figure and the table cannot drift apart.
+# Released model configurations, sorted by KV size at 100k tokens.
 MODELS = [
     Model(
         "DeepSeek V4 Pro",
@@ -136,32 +158,44 @@ MODELS = [
         qk_dim=512,
         v_dim=512,
         kv_bytes=dsv4_kv,
-        color="#d62728",
+        color=OKABE_ITO["blue"],
         ls="-",
     ),
     Model(
-        "Qwen3 Next 80B",
-        active_b=3,
-        total_b=80,
-        attn=(Attn(12),),
+        "Gemma 4 26B-A4B",
+        active_b=3.8,
+        total_b=25.2,
+        attn=(Attn(25, topk=1024), Attn(5, qk_dim=512, v_dim=512)),
         query_heads=16,
         qk_dim=256,
         v_dim=256,
-        kv_bytes=gqa_kv(12, 2, 256),
-        color="#1f77b4",
-        ls=(0, (6, 2)),
+        kv_bytes=gemma4_kv,
+        color=OKABE_ITO["orange"],
+        ls=(0, (7, 2, 1, 2)),
     ),
     Model(
-        "Qwen3.5 397B",
-        active_b=17,
-        total_b=397,
-        attn=(Attn(15),),
-        query_heads=32,
+        "gpt-oss-20b",
+        active_b=3.61,
+        total_b=20.91,
+        attn=(Attn(12), Attn(12, topk=128)),
+        query_heads=64,
+        qk_dim=64,
+        v_dim=64,
+        kv_bytes=gpt_oss_kv,
+        color=OKABE_ITO["vermillion"],
+        ls=(0, (2, 1, 2, 3)),
+    ),
+    Model(
+        "Qwen3.8 27B",
+        active_b=27,
+        total_b=27,
+        attn=(Attn(16),),
+        query_heads=24,
         qk_dim=256,
         v_dim=256,
-        kv_bytes=gqa_kv(15, 2, 256),
-        color="#9467bd",
-        ls=(0, (4, 1.5, 1, 1.5)),
+        kv_bytes=gqa_kv(16, 4, 256),
+        color=OKABE_ITO["reddish_purple"],
+        ls=(0, (8, 2)),
     ),
     Model(
         "Kimi K2.6",
@@ -172,7 +206,7 @@ MODELS = [
         qk_dim=192,
         v_dim=128,
         kv_bytes=mla_kv(61, 512, 64),
-        color="#ff7f0e",
+        color=OKABE_ITO["bluish_green"],
         ls=(0, (3, 1, 1, 1, 1, 1)),
     ),
     Model(
@@ -184,20 +218,8 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=mla_kv(78, 512, 64),
-        color="#e377c2",
+        color=OKABE_ITO["sky_blue"],
         ls=(0, (9, 3)),
-    ),
-    Model(
-        "Qwen3 235B",
-        active_b=22,
-        total_b=235,
-        attn=(Attn(94),),
-        query_heads=64,
-        qk_dim=128,
-        v_dim=128,
-        kv_bytes=gqa_kv(94, 4, 128),
-        color="#2ca02c",
-        ls=(0, (1, 1.6)),
     ),
 ]
 
@@ -216,8 +238,14 @@ def eff_flops(m: Model) -> float:
 
 def prefill_flops(m: Model, T: int) -> float:
     ffn = 2.0 * m.active_b * 1e9 * T
-    pairs = sum(g.pairs(T) for g in m.attn)
-    return ffn + 2.0 * m.query_heads * (m.qk_dim + m.v_dim) * pairs
+    attention = sum(
+        2.0
+        * m.query_heads
+        * ((g.qk_dim or m.qk_dim) + (g.v_dim or m.v_dim))
+        * g.pairs(T)
+        for g in m.attn
+    )
+    return ffn + attention
 
 
 def t_replay(m: Model, T: int) -> float:
@@ -262,12 +290,22 @@ def shade_regions(ax, x, kv_at, ctx_at):
     figure to land in the whitespace the curves leave open.
     """
     lo, hi = ax.get_ylim()
-    ax.fill_between(x, 1.0, hi, alpha=0.06, color="#B1040E", zorder=0)
-    ax.fill_between(x, lo, 1.0, alpha=0.06, color="#008566", zorder=0)
+    ax.fill_between(x, 1.0, hi, alpha=REGION_ALPHA, color=KV_REGION_COLOR, zorder=0)
+    ax.fill_between(
+        x, lo, 1.0, alpha=REGION_ALPHA, color=CONTEXT_REGION_COLOR, zorder=0
+    )
     ax.set_ylim(lo, hi)
     tr = ax.get_yaxis_transform()  # x in axes fraction, y in data
-    ax.text(*kv_at, "Transfer KV cache", color="#B1040E", style="italic", transform=tr)
-    ax.text(*ctx_at, "Transfer context", color="#008566", style="italic", transform=tr)
+    ax.text(
+        *kv_at, "Transfer KV cache", color=KV_REGION_COLOR, style="italic", transform=tr
+    )
+    ax.text(
+        *ctx_at,
+        "Transfer context",
+        color=CONTEXT_REGION_COLOR,
+        style="italic",
+        transform=tr,
+    )
 
 
 def plot_context_ratio(label: str = CONTEXT_MODEL, stem: str = CONTEXT_STEM):

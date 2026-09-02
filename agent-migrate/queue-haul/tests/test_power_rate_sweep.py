@@ -2,12 +2,28 @@ import csv
 import json
 
 import pytest
+from urllib.request import Request
 
 import power_rate_sweep as sweep
 
 
 def test_calibration_prompt_uses_requested_size():
     assert sweep.calibration_prompt(3) == "power calibration x x x "
+
+
+def test_request_uses_explicit_model(monkeypatch):
+    body = {}
+    class Response:
+        def read(self): return b'{"usage": {}}'
+    def open_request(request, timeout):
+        assert isinstance(request, Request) and timeout == 600
+        body.update(json.loads(request.data))
+        return Response()
+    monkeypatch.setattr(sweep, "urlopen", open_request)
+
+    sweep.request("http://server", "prompt", 2, "id", "model-b")
+
+    assert body["model"] == "model-b"
 
 
 def test_gpu_guard_requires_azure_300w_a100(monkeypatch):

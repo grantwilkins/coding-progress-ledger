@@ -91,32 +91,32 @@
   howpublished = {\url{https://huggingface.co/moonshotai/Kimi-K2.6}}
 }
 
-@misc{qwen3,
-  title         = {{Qwen3} Technical Report},
-  author        = {{Qwen Team}},
-  year          = {2025},
-  eprint        = {2505.09388},
-  archivePrefix = {arXiv},
-  note          = {Qwen3-235B-A22B config: 94 layers, 64 q-heads,
-                   4 KV-heads, head\_dim 128}
-}
-
-@misc{qwen3next,
-  title        = {{Qwen3-Next-80B-A3B} Model Card},
-  author       = {{Qwen Team}},
-  year         = {2025},
-  note         = {config: 48 layers, full\_attention\_interval 4,
-                  16 q-heads, 2 KV-heads, head\_dim 256},
-  howpublished = {\url{https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct}}
-}
-
-@misc{qwen35,
-  title        = {{Qwen3.5-397B-A17B} Model Card},
+@misc{qwen38,
+  title        = {{Qwen3.8-27B} Model Card},
   author       = {{Qwen Team}},
   year         = {2026},
-  note         = {config: 60 layers in a 3:1 linear/full attention pattern,
-                  32 q-heads, 2 KV-heads, head\_dim 256},
-  howpublished = {\url{https://huggingface.co/Qwen/Qwen3.5-397B-A17B}}
+  note         = {config: 64 layers in a 3:1 linear/full attention pattern,
+                  24 q-heads, 4 KV-heads, head\_dim 256},
+  howpublished = {\url{https://huggingface.co/Qwen/Qwen3.8-27B}}
+}
+
+@misc{gptoss20,
+  title         = {{gpt-oss-120b \& gpt-oss-20b Model Card}},
+  author        = {{OpenAI}},
+  year          = {2025},
+  eprint        = {2508.10925},
+  archivePrefix = {arXiv},
+  note          = {20B config: 24 alternating full/sliding layers, 64 q-heads,
+                   8 KV-heads, head\_dim 64, sliding window 128}
+}
+
+@misc{gemma4,
+  title        = {{Gemma 4 26B-A4B} Model Card},
+  author       = {{Google DeepMind}},
+  year         = {2026},
+  note         = {config: 30 layers in a 5:1 sliding/global pattern, 16
+                  q-heads, local/global head dimensions 256/512, 3.8B active},
+  howpublished = {\url{https://huggingface.co/google/gemma-4-26B-A4B-it}}
 }
 
 @inproceedings{kwon2023efficient,

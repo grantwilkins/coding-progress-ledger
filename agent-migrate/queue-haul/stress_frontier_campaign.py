@@ -20,8 +20,8 @@ from simulate import predict
 
 
 SCHEMA = "queue-haul-stress-frontier-plan-v1"
-POLICIES = ("queue_haul", "greedy", "replay_only", "kv_only",
-            "isolated_fastest", "queue_haul_power_blind",
+POLICIES = ("queue_haul", "greedy", "greedy_lagrangian", "replay_only",
+            "kv_only", "isolated_fastest", "queue_haul_power_blind",
             network.DEADLINE_BLIND_POLICY)
 REFERENCE = plot_style.REFERENCE
 DEADLINES = tuple(range(10, 61, 5))
@@ -203,7 +203,9 @@ def run(plan_path: Path, out: Path, shard: int = 0, shards: int = 1) -> list[dic
         problem, architecture, routes, _target = network.joint_problem(
             scenario, snapshots, profile, base_demand)
         initial = source_power(problem, profile)
-        for policy in (*POLICIES, REFERENCE):
+        policies = (*plan["policies"], *((plan.get("reference"),)
+                                         if plan.get("reference") else ()))
+        for policy in policies:
             planning = problem
             solver = "max_shed" if policy == REFERENCE else network.joint_solver(
                 policy, scenario["objective"])
@@ -293,14 +295,17 @@ def _plot(frontier: list[dict], stem: Path, empirical: bool) -> None:
     import matplotlib.pyplot as plt
     plot_style.apply()
     fig, ax = plt.subplots(figsize=(8.4, 5.4))
-    for policy in (*POLICIES, REFERENCE):
+    maximum = max(row["coverage_90_shed_w"] for row in frontier
+                  if row["policy"] in POLICIES)
+    for policy in POLICIES:
         selected = [row for row in frontier if row["policy"] == policy]
         ax.plot([row["deadline_s"] for row in selected],
-                [row["coverage_90_shed_w"] for row in selected],
+                [row["coverage_90_shed_w"] / maximum for row in selected],
                 **plot_style.policy_style(policy))
-    ax.set(xlabel="Deadline (s)", ylabel="90%-coverage trailing-window shed (W)",
+    ax.set(xlabel="Deadline (s)", ylabel="Normalized 90%-coverage attainment",
            title=("Empirical deadline–shed frontier" if empirical else
                   "Modeled stress-suite sensitivity"))
+    ax.grid(True, alpha=.3)
     ax.legend(frameon=False, fontsize=8, ncol=2)
     fig.tight_layout()
     for suffix in ("png", "pdf"):

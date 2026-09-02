@@ -10,3 +10,8 @@ outputs/*.tar
 outputs/*.tar.sha256
 /data/
 native/target/
+
+# The frontier manifest records the commit its shards must run on, so it cannot
+# live inside that commit; prepare regenerates it and the reduced outputs are
+# what get pinned.
+outputs/fleet-shed-frontier-*/plan.json

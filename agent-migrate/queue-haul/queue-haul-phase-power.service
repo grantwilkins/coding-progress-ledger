@@ -1,0 +1,21 @@
+[Unit]
+Description=Queue-Haul persistent H100 phase power suite
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+WorkingDirectory=/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul
+EnvironmentFile=/datadrive/queue-haul-phase-power.env
+Environment=HF_HOME=/datadrive
+Environment=HF_HUB_CACHE=/datadrive/hub
+Environment=HF_CACHE=/datadrive
+Environment=PATH=/home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin:/home/azureuser/.local/bin:/usr/local/cuda/bin:/usr/bin:/bin
+ExecStart=/home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin/python phase_power_calibration.py run-suite --plan ${QH_PHASE_PLAN} --targets ${QH_PHASE_TARGETS} --out ${QH_PHASE_OUT}
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=90
+StandardOutput=append:/datadrive/queue-haul-phase-power.log
+StandardError=append:/datadrive/queue-haul-phase-power.log
+
+[Install]
+WantedBy=default.target

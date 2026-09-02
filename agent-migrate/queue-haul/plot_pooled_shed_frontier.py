@@ -150,8 +150,8 @@ def write_plot(summary, out: Path, measured=None) -> None:
                      edgecolor="black", linewidth=.8, zorder=5,
                      label="H100 measured Queue-Haul")
     axis.set(xlim=(0, .8), ylim=(0, 1),
-             xlabel="Requested Fraction of Power",
-             ylabel="Shed Power by Deadline")
+             xlabel="Requested Source-Power Fraction",
+             ylabel="Source Power Shed")
     axis.xaxis.set_major_formatter(PercentFormatter(1))
     axis.yaxis.set_major_formatter(PercentFormatter(1))
     axis.tick_params(labelsize=11)
