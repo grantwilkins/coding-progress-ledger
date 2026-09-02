@@ -89,6 +89,7 @@ def test_plot_compares_matching_hardware_with_one_shared_slo(tmp_path,
     figure = plt.gcf()
     lines = figure.axes[0].lines
 
+    assert figure.get_figwidth() == 5.2
     assert [line.get_label() for line in lines] == [
         "Agent - A100", "Agent - H100", "SLO"]
     assert [list(line.get_ydata()) for line in lines] == [[3], [1], [1, 1]]
@@ -189,8 +190,15 @@ def test_quick_plot_marks_metric_violations(tmp_path, monkeypatch):
     axis = figure.axes[1]
     violations = next(collection for collection in axis.collections
                       if collection.get_label() == plot_style.SLO_VIOLATION_NAME)
+    errorbar = next(container for container in axis.containers
+                    if isinstance(container, ErrorbarContainer))
 
     assert list(violations.get_offsets()[0]) == [.25, 60]
+    assert errorbar.lines[0].get_marker() == "o"
+    assert errorbar.lines[0].get_markevery() == [0]
+    assert violations.get_edgecolors()[0].tolist() == pytest.approx(
+        plt.matplotlib.colors.to_rgba(plot_style.AGENTIC_HARDWARE_COLORS["h100"])
+    )
     assert plot_style.SLO_VIOLATION_NAME in [
         text.get_text() for text in figure.legends[0].get_texts()
     ]

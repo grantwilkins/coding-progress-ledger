@@ -49,7 +49,11 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
         if h100_result["slo"] != result["slo"]:
             raise ValueError("A100 and H100 SLOs do not match")
         curves["h100"] = h100_result["curve"]
-    figure, axes = plt.subplots(1, 2, figsize=(3.35, 2.1), sharex=True)
+    figure, axes = plt.subplots(
+        1, 2, figsize=(5.2, 2.5) if h100 else (3.35, 2.1), sharex=True,
+    )
+    font_size = (plot_style.COLUMN_FONT_SIZE if h100 else
+                 plot_style.HALF_COLUMN_FONT_SIZE)
     for axis, (field, ylabel, scale) in zip(axes, METRICS):
         failure_labeled = False
         violation_labeled = False
@@ -60,7 +64,6 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
             style = {
                 "label": label,
                 "color": plot_style.AGENTIC_HARDWARE_COLORS[hardware],
-                "marker": plot_style.AGENTIC_HARDWARE_MARKERS[hardware],
                 "linestyle": plot_style.AGENTIC_HARDWARE_LINESTYLES[hardware],
                 "linewidth": 1.1,
             }
@@ -86,6 +89,9 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                          for row, median in zip(usable, medians)],
                         [row[f"{field}_ci_high"] * scale - median
                          for row, median in zip(usable, medians)],
+                    ], marker="o", markevery=[
+                        index for index, row in enumerate(usable)
+                        if row[f"{field}_median"] <= slos[field]
                     ], capsize=2, elinewidth=.8, zorder=3, **style,
                 )
                 violations = [row for row in usable
@@ -94,7 +100,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                     axis.scatter(
                         [row["offered_rps"] for row in violations],
                         [row[f"{field}_median"] * scale for row in violations],
-                        color=plot_style.SLO_VIOLATION_COLOR,
+                        color=style["color"],
                         marker=plot_style.SLO_VIOLATION_MARKER, s=18, zorder=4,
                         label=(plot_style.SLO_VIOLATION_NAME
                                if not violation_labeled else "_nolegend_"),
@@ -120,6 +126,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                 axis.plot(
                     [row["offered_rps"] for row in rows],
                     [row[f"{field}_median"] * scale for row in rows],
+                    marker=plot_style.AGENTIC_HARDWARE_MARKERS[hardware],
                     **style,
                 )
         axis.axhline(
@@ -127,10 +134,9 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
             linestyle=plot_style.SLO_LINESTYLE, linewidth=1.7,
             label=plot_style.SLO_NAME, zorder=5,
         )
-        axis.set_ylabel(ylabel, fontsize=plot_style.HALF_COLUMN_FONT_SIZE)
-        axis.set_xlabel("Rate (req/s)",
-                        fontsize=plot_style.HALF_COLUMN_FONT_SIZE)
-        axis.tick_params(labelsize=plot_style.HALF_COLUMN_FONT_SIZE)
+        axis.set_ylabel(ylabel, fontsize=font_size)
+        axis.set_xlabel("Rate (req/s)", fontsize=font_size)
+        axis.tick_params(labelsize=font_size)
         axis.grid(alpha=.2)
     if schema in ERROR_BAR_SCHEMAS:
         x_values = [value for rows in curves.values() for row in rows
@@ -166,12 +172,13 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                   ncol=2 if censored else len(handles),
                   loc="upper center",
                   bbox_to_anchor=(.5, .99 if censored else .94),
-                  fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE)
-    figure.subplots_adjust(left=.14, right=.98, bottom=.22,
-                           top=.72 if censored else .82, wspace=.42)
+                  fontsize=(plot_style.COLUMN_LEGEND_FONT_SIZE if h100 else
+                            plot_style.HALF_COLUMN_LEGEND_FONT_SIZE))
+    figure.tight_layout(rect=(0, 0, 1, .72 if censored else .82))
     output.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("pdf", "png"):
-        figure.savefig(output.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
+        figure.savefig(output.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI,
+                       bbox_inches="tight")
     plt.close(figure)
 
 
