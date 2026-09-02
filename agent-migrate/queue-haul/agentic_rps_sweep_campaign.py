@@ -11,6 +11,7 @@ import os
 import re
 import statistics
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
@@ -78,6 +79,8 @@ TAIL_SLOS = {
 SLO_SCHEMA = "queue-haul-agentic-rps-sweep-v4"
 SLO_MODEL = "openai/gpt-oss-20b"
 SLO_TARGETS = {"p90_ttft_s": 1.0, "p90_tpot_s": .05}
+REQUEST_TPOT_DEFINITION = \
+    "p90_across_request_mean_post_first_token_latency"
 SLO_HARDWARE = ("a100", "h100")
 SLO_SCOUT_RATES_RPS = (
     .03125, .0625, .125, .25, .5, 1, 2, 4, 8, 10, 12, 16, 24, 32,
@@ -85,6 +88,9 @@ SLO_SCOUT_RATES_RPS = (
 SLO_PRIMARY_BLOCKS, SLO_MAX_BLOCKS = 20, 30
 SLO_WARMUP_RATE_RPS, SLO_MAX_SEND_LATENESS_S = 1, .05
 SLO_MAX_METRIC_GAP_S = 1
+SLO_METRICS_PERIOD_S = .25
+SLO_MIN_EXACT_TPOT_INTERVAL_COVERAGE = .99
+SLO_MAX_ATTEMPTS_PER_CELL = 2
 SLO_DRAIN_TIMEOUT_S = 300
 SLO_REFINEMENT_INTERVALS = 8
 SLO_UPPER_SCOUT_GUARDS = 2
@@ -103,7 +109,11 @@ def semantic_runtime_value(value):
     if isinstance(value, str):
         if value.startswith("CUDA_VISIBLE_DEVICES="):
             return "CUDA_VISIBLE_DEVICES=<allocated>"
-        return re.sub(r"(/tmp/qh-[^/\s\"']+)-\d+", r"\1-<pid>", value)
+        value = re.sub(r"(/tmp/qh-[^/\s\"']+)-\d+", r"\1-<pid>", value)
+        return re.sub(
+            r"(<[^<>]+ object at )0x[0-9a-fA-F]+(>)",
+            r"\1<object-address>\2", value,
+        )
     return value
 
 
@@ -214,11 +224,18 @@ def _slo_plan(seed: int, hardware: str) -> dict:
     }
     warmup = {"rate_rps": SLO_WARMUP_RATE_RPS,
               "requests": REQUESTS_PER_POINT, "discard": True}
+    collector = {
+        "request_driver": "one_ready_blocking_thread_per_request",
+        "dispatch_lead_s": 1,
+        "metrics_period_s": SLO_METRICS_PERIOD_S,
+    }
     validity = {
         "max_send_lateness_s": SLO_MAX_SEND_LATENESS_S,
         "max_metric_gap_s": SLO_MAX_METRIC_GAP_S,
         "required_completions": REQUESTS_PER_POINT,
-        "required_exact_streams": REQUESTS_PER_POINT,
+        "minimum_exact_tpot_interval_coverage":
+        SLO_MIN_EXACT_TPOT_INTERVAL_COVERAGE,
+        "maximum_attempts_per_cell": SLO_MAX_ATTEMPTS_PER_CELL,
         "required_cached_tokens": 0,
         "require_telemetry": True,
         "require_drain": True,
@@ -251,7 +268,7 @@ def _slo_plan(seed: int, hardware: str) -> dict:
         "randomized_complete_blocks": True,
         "service_failures_are_violations": True,
         "invalid_measurements_hard_fail": True,
-        "tpot_definition": "p90_of_all_exact_post_first_token_intervals",
+        "tpot_definition": "p90_of_observable_exact_singleton_token_intervals",
         "finite_episode_claim": True,
         "boundary_rule": (
             "last_clear_pass_to_first_clear_fail; no_lower_fail; "
@@ -267,6 +284,7 @@ def _slo_plan(seed: int, hardware: str) -> dict:
         "runtime": runtime,
         "blocks": blocks,
         "warmup": warmup,
+        "collector": collector,
         "validity": validity,
         "statistics": statistics,
         "preflight": preflight,
@@ -287,6 +305,7 @@ def _slo_plan(seed: int, hardware: str) -> dict:
         "requests_per_point": REQUESTS_PER_POINT,
         "blocks": blocks,
         "warmup": warmup,
+        "collector": collector,
         "preflight": preflight,
         "selection": selection,
         "slo": {**SLO_TARGETS, "source": "fixed-paper-reference"},
@@ -581,6 +600,26 @@ def observed_token_intervals(row: dict) -> list[float]:
     ]
 
 
+def issue_threaded_trace(host: str, port: int, model: str,
+                         trace: list[dict], timeout_s: float,
+                         lead_s: float) -> tuple[list[dict], Exception | None]:
+    def issue(item: dict, epoch_ns: int) -> dict:
+        scheduled_ns = epoch_ns + int(item["offset_s"] * 1e9)
+        time.sleep(max(0, (scheduled_ns - time.monotonic_ns()) / 1e9))
+        row = serving.issue_prepared(
+            host, port, model, item["prepared"], scheduled_ns, timeout_s, True,
+        )
+        return {**row, "population": item["population"],
+                "offset_s": item["offset_s"]}
+
+    with ThreadPoolExecutor(max_workers=len(trace)) as executor:
+        futures, _ = headroom.submit_synchronized(
+            executor, trace, issue, lead_s,
+        )
+        rows, error = headroom.settle_futures(futures)
+    return sorted(rows, key=lambda row: row["scheduled_ns"]), error
+
+
 def measure_trace(plan: dict, cell: dict, cfg: testbed.Config, stack,
                   root: Path, purpose: str = "",
                   drain_timeout_s: float | None = None,
@@ -590,16 +629,24 @@ def measure_trace(plan: dict, cell: dict, cfg: testbed.Config, stack,
         plan, cfg.model, cell["offered_rps"], repeat, purpose, allowed_rates,
     )
     root.mkdir(parents=True, exist_ok=True)
+    collector = plan.get("collector")
     sampler = serving.MetricsSampler(
-        cfg.host, stack.port, root / "engine.csv", period_s=.1,
+        cfg.host, stack.port, root / "engine.csv",
+        period_s=collector["metrics_period_s"] if collector else .1,
     )
     sampler.start()
     headroom.wait_sampler(sampler)
-    requests, client_error = headroom.issue_async_trace(
-        cfg.host, stack.port, trace, time.monotonic_ns() + 1_000_000_000,
-        plan["request_timeout_s"],
-        shards=min(plan.get("client_shards", 8), len(trace)),
-    )
+    if collector:
+        requests, client_error = issue_threaded_trace(
+            cfg.host, stack.port, cfg.model, trace,
+            plan["request_timeout_s"], collector["dispatch_lead_s"],
+        )
+    else:
+        requests, client_error = headroom.issue_async_trace(
+            cfg.host, stack.port, trace, time.monotonic_ns() + 1_000_000_000,
+            plan["request_timeout_s"],
+            shards=min(plan.get("client_shards", 8), len(trace)),
+        )
     drained = wait_for_drain(
         sampler, stack.engine, drain_timeout_s,
         max((int(row.get("end_ns", 0)) for row in requests), default=0),
@@ -673,6 +720,28 @@ def summarize_cell(plan: dict, cell: dict, requests: list[dict],
         "sampler_error": (f"{type(sampler_error).__name__}: {sampler_error}"
                           if sampler_error else None),
     }
+
+
+def observable_exact_token_itls(row: dict) -> list[float]:
+    events = row.get("token_events")
+    if events is None:
+        return row.get("token_itls_s", []) \
+            if serving.exact_token_timing(row) else []
+    return [
+        (int(right["monotonic_ns"]) - int(left["monotonic_ns"])) / 1e9
+        for left, right in zip(events, events[1:])
+        if len(left.get("token_ids", ())) == len(right.get("token_ids", ())) == 1
+    ]
+
+
+def request_tpot_s(row: dict) -> float | None:
+    first, last, tokens = (row.get(key) for key in (
+        "first_ns", "last_token_ns", "output_tokens"))
+    if not all(isinstance(value, int) and not isinstance(value, bool)
+               for value in (first, last, tokens)) \
+            or tokens <= 1 or last < first:
+        return None
+    return (last - first) / 1e9 / (tokens - 1)
 
 
 def run_cell(plan: dict, cell: dict, cfg: testbed.Config, stack,
@@ -1034,16 +1103,33 @@ def summarize_slo_cell(plan: dict, cell: dict, requests: list[dict],
     )
     completed = [row for row in requests if serving.service_completion(row)]
     expected = plan["requests_per_point"]
+    exact_itls = [value for row in completed
+                  for value in observable_exact_token_itls(row)]
+    expected_itls = expected * (plan["request_shape"]["output_tokens"] - 1)
+    request_tpots = [value for row in completed
+                     if (value := request_tpot_s(row)) is not None]
+    request_metric = plan["semantics"].get("tpot_definition") == \
+        REQUEST_TPOT_DEFINITION
+    tpot = request_tpots if request_metric else exact_itls
+    expected_tpot = expected if request_metric else expected_itls
+    result.update({
+        "p90_tpot_s": float(np.quantile(tpot, .9)) if tpot else None,
+        "tpot_samples": len(tpot),
+        "expected_tpot_samples": expected_tpot,
+        "exact_tpot_interval_coverage": len(exact_itls) / expected_itls,
+    })
+    if request_metric:
+        result["diagnostic_p90_request_mean_tpot_s"] = result["p90_tpot_s"]
     timestamps = sorted(int(row["monotonic_ns"]) for row in metrics)
     gaps = [(right - left) / 1e9
             for left, right in zip(timestamps, timestamps[1:])]
+    max_gap = plan["validity"]["max_metric_gap_s"]
     telemetry_complete = bool(len(timestamps) >= 2 and requests
                               and timestamps[0] <= min(
                                   int(row["scheduled_ns"]) for row in requests)
                               and timestamps[-1] >= max(
                                   int(row["end_ns"]) for row in requests)
-                              and max(gaps) <=
-                              plan["validity"]["max_metric_gap_s"])
+                              and max(gaps) <= max_gap)
     errors = []
     if engine_failure_kind in {"infrastructure", "runtime_contract"}:
         errors.append(engine_failure_kind)
@@ -1062,10 +1148,13 @@ def summarize_slo_cell(plan: dict, cell: dict, requests: list[dict],
            plan["request_shape"]["prompt_tokens"] for row in completed):
         errors.append("prompt_tokens")
     service_failure = engine_exited or not drained or len(completed) != expected
-    if not service_failure and (result["exact_timing"] != expected or
-            result["tpot_samples"] != expected *
-            (plan["request_shape"]["output_tokens"] - 1)):
-        errors.append("exact_token_timing")
+    if not service_failure:
+        if request_metric and result["tpot_samples"] != \
+                plan["validity"]["required_request_tpot_samples"]:
+            errors.append("request_tpot")
+        elif not request_metric and result["exact_tpot_interval_coverage"] < \
+                plan["validity"]["minimum_exact_tpot_interval_coverage"]:
+            errors.append("exact_tpot_interval_coverage")
     status = "invalid" if errors else (
         "service_failure" if service_failure else "numeric")
     if status != "numeric":
@@ -1096,6 +1185,8 @@ def measure_slo_cell(plan: dict, cell: dict, cfg: testbed.Config, stack,
                      selection_sha256: str | None = None) -> dict:
     cell_root = root / group / cell["cell_id"]
     attempt = len(list(cell_root.glob("attempt-*")))
+    if attempt >= plan["validity"]["maximum_attempts_per_cell"]:
+        raise RuntimeError(f"SLO measurement retries exhausted: {cell['cell_id']}")
     attempt_root = cell_root / f"attempt-{attempt:03d}"
     measured = measure_trace(
         plan, cell, cfg, stack, attempt_root, purpose, SLO_DRAIN_TIMEOUT_S,
@@ -1234,6 +1325,35 @@ def read_slo_preflight_record(plan: dict, root: Path, path: Path) -> dict:
     return result
 
 
+def slo_vllm_args(runtime: dict) -> list[str]:
+    args = ["--stream-interval", str(runtime["stream_interval"])]
+    if backend := runtime.get("attention_backend"):
+        args += ["--attention-backend", backend]
+    if (enabled := runtime.get("async_scheduling")) is not None:
+        args.append("--async-scheduling" if enabled else "--no-async-scheduling")
+    if runtime.get("server_info_system_probe") is False:
+        args += ["--middleware", "server_info_middleware.ConfigOnly"]
+    return args
+
+
+def validate_slo_runtime_log(runtime: dict, text: str) -> None:
+    backend = runtime.get("attention_backend")
+    if backend and not re.search(
+            rf"Using (?:AttentionBackendEnum\.)?{re.escape(backend)} "
+            r"(?:attention )?backend", text, re.IGNORECASE):
+        raise RuntimeError("SLO runtime did not prove its attention backend")
+    if (enabled := runtime.get("async_scheduling")) is not None \
+            and f"Asynchronous scheduling is " \
+            f"{'enabled' if enabled else 'disabled'}." not in text:
+        raise RuntimeError("SLO runtime did not prove its scheduling mode")
+
+
+def validate_slo_server_info(runtime: dict, server_info: dict) -> None:
+    if runtime.get("server_info_system_probe") is False \
+            and server_info.get("system_env") != {}:
+        raise RuntimeError("SLO server-info system probe was not disabled")
+
+
 def run_slo_block(plan: dict, root: Path, block: int,
                   rates: tuple[float, ...], stage: str,
                   expected_fingerprint: str | None = None,
@@ -1258,14 +1378,15 @@ def run_slo_block(plan: dict, root: Path, block: int,
     while pending:
         launch = len(list(launch_root.glob("launch-*")))
         stack_root = launch_root / f"launch-{launch:03d}"
-        commands = capacity.stack_commands(
-            cfg, ["--stream-interval", str(plan["runtime"]["stream_interval"])],
-        )
+        commands = capacity.stack_commands(cfg, slo_vllm_args(plan["runtime"]))
         identity = runtime_identity(plan, cfg, commands)
         with capacity.engine_stack(cfg, stack_root, identity, commands) as stack:
+            log = testbed.read_text(stack.log)
             testbed.validate_optimized_runtime(
-                testbed.shell(commands["vllm"]), testbed.read_text(stack.log),
+                testbed.shell(commands["vllm"]), log,
             )
+            validate_slo_runtime_log(plan["runtime"], log)
+            validate_slo_server_info(plan["runtime"], stack.server_info)
             identity = finalize_runtime_identity(identity, stack.server_info)
             fingerprint = fingerprint or identity["fingerprint_sha256"]
             if identity["fingerprint_sha256"] != fingerprint:

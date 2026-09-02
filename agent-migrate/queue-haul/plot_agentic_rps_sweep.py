@@ -15,6 +15,8 @@ plot_style.apply()
 MODEL = "openai/gpt-oss-20b"
 SCHEMA = "queue-haul-agentic-rps-sweep-v3"
 SLO_SCHEMA = "queue-haul-agentic-rps-sweep-v4"
+QUICK_SCHEMA = "queue-haul-quick-slo-sweep-v4"
+ERROR_BAR_SCHEMAS = {SLO_SCHEMA, QUICK_SCHEMA}
 METRICS = (
     ("p90_ttft_s", "P90 TTFT (s)", 1),
     ("p90_tpot_s", "P90 TPOT (ms)", 1000),
@@ -34,7 +36,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                 summary.get("hardware") != "a100" or \
                 h100.get("hardware") != "h100" or \
                 h100.get("request_shape") != summary.get("request_shape") or \
-                (schema == SLO_SCHEMA and (
+                (schema in ERROR_BAR_SCHEMAS and (
                     h100.get("comparison_sha256") !=
                     summary.get("comparison_sha256") or
                     h100.get("shared_runtime_sha256") !=
@@ -50,6 +52,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
     figure, axes = plt.subplots(1, 2, figsize=(3.35, 2.1), sharex=True)
     for axis, (field, ylabel, scale) in zip(axes, METRICS):
         failure_labeled = False
+        violation_labeled = False
         for hardware, rows in curves.items():
             rows = sorted(rows, key=lambda row: row["offered_rps"])
             label = (plot_style.AGENTIC_WORKLOAD_NAME if h100 is None else
@@ -61,7 +64,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                 "linestyle": plot_style.AGENTIC_HARDWARE_LINESTYLES[hardware],
                 "linewidth": 1.1,
             }
-            if schema == SLO_SCHEMA:
+            if schema in ERROR_BAR_SCHEMAS:
                 points = [point for row in rows for point in row["points"]
                           if point["status"] == "numeric"
                           and point[field] is not None]
@@ -85,6 +88,18 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                          for row, median in zip(usable, medians)],
                     ], capsize=2, elinewidth=.8, zorder=3, **style,
                 )
+                violations = [row for row in usable
+                              if row[f"{field}_median"] > slos[field]]
+                if violations:
+                    axis.scatter(
+                        [row["offered_rps"] for row in violations],
+                        [row[f"{field}_median"] * scale for row in violations],
+                        color=plot_style.SLO_VIOLATION_COLOR,
+                        marker=plot_style.SLO_VIOLATION_MARKER, s=18, zorder=4,
+                        label=(plot_style.SLO_VIOLATION_NAME
+                               if not violation_labeled else "_nolegend_"),
+                    )
+                    violation_labeled = True
                 failures = [point for row in rows for point in row["points"]
                             if point["status"] == "service_failure"]
                 if failures:
@@ -117,7 +132,7 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
                         fontsize=plot_style.HALF_COLUMN_FONT_SIZE)
         axis.tick_params(labelsize=plot_style.HALF_COLUMN_FONT_SIZE)
         axis.grid(alpha=.2)
-    if schema == SLO_SCHEMA:
+    if schema in ERROR_BAR_SCHEMAS:
         x_values = [value for rows in curves.values() for row in rows
                     for value in (
                         row["offered_rps"], row["realized_rps_median"],
@@ -137,9 +152,12 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
             axis.set_xticks((0, 2, 4, 6, 8))
         axes[1].set_ylim(0, 52)
         axes[1].set_yticks((0, 10, 20, 30, 40, 50))
-    handles, labels = axes[0].get_legend_handles_labels()
+    legend = {}
+    for axis in axes:
+        handles, labels = axis.get_legend_handles_labels()
+        legend.update(zip(labels, handles))
     handles, labels = zip(*sorted(
-        zip(handles, labels),
+        ((handle, label) for label, handle in legend.items()),
         key=lambda pair: (pair[1] == "Censored service failure",
                           pair[1] == plot_style.SLO_NAME),
     ))
@@ -158,10 +176,10 @@ def plot_summary(summary: dict, output: Path, h100: dict | None = None) -> None:
 
 
 def plot(summary: dict, output_dir: Path, h100: dict | None = None) -> Path:
-    if summary.get("schema") not in {SCHEMA, SLO_SCHEMA} \
+    if summary.get("schema") not in {SCHEMA, *ERROR_BAR_SCHEMAS} \
             or summary.get("stage") != "reduced":
         raise ValueError("agentic RPS summary is not reduced evidence")
-    if summary["schema"] == SLO_SCHEMA and any(
+    if summary["schema"] in ERROR_BAR_SCHEMAS and any(
             not isinstance(summary.get(key), str) for key in (
                 "comparison_sha256", "shared_runtime_sha256", "launch_git_sha",
             )):

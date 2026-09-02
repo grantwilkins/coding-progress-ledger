@@ -1,0 +1,77 @@
+{
+  "ambient_vllm_env": {},
+  "commands": {
+    "cache": [
+      "bash",
+      "-lc",
+      "export PATH=/home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin:$PATH\nexport CUDA_VISIBLE_DEVICES=\nlmcache server --instance-id queue-haul-sink --host 127.0.0.1 --port 5556 --http-host 127.0.0.1 --http-port 8081 --l1-size-gb 16 --eviction-policy LRU --chunk-size 256 --max-workers 8 --supported-transfer-mode engine_driven --l2-adapter '{\"type\":\"resp\",\"host\":\"127.0.0.1\",\"port\":5655,\"num_workers\":8}'"
+    ],
+    "redis": [
+      "valkey-server",
+      "--bind",
+      "127.0.0.1",
+      "--port",
+      "5655",
+      "--save",
+      "",
+      "--appendonly",
+      "no"
+    ],
+    "vllm": [
+      "env",
+      "CUDA_VISIBLE_DEVICES=0",
+      "bash",
+      "-lc",
+      "export PATH=/home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin:$PATH\nmkdir -p /tmp/qh-sink-7695 /datadrive/queue-haul-cache/stage1b-sink/xdg /datadrive/queue-haul-cache/stage1b-sink/torch_extensions /datadrive/queue-haul-cache/stage1b-sink/torchinductor /datadrive/queue-haul-cache/stage1b-sink/triton\nexport PYTHONHASHSEED=0\nexport VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=900\nexport VLLM_SERVER_DEV_MODE=1\nexport VLLM_USE_FLASHINFER_SAMPLER=0\nexport TMPDIR=/tmp/qh-sink-7695\nexport VLLM_RPC_BASE_PATH=/tmp/qh-sink-7695\nexport HF_HOME=/datadrive\nexport HF_HUB_OFFLINE=1\nexport TRANSFORMERS_OFFLINE=1\nexport LMCACHE_REMOTE_URL=lm://127.0.0.1:8300\nexport LMCACHE_REMOTE_SERDE=naive\nexport LMCACHE_LMCACHE_INSTANCE_ID=stage1b_sink\nexport LMCACHE_CHUNK_SIZE=256\nexport LMCACHE_LOCAL_CPU=False\nexport LMCACHE_MAX_LOCAL_CPU_SIZE=4\nexport XDG_CACHE_HOME=/datadrive/queue-haul-cache/stage1b-sink/xdg\nexport TORCH_EXTENSIONS_DIR=/datadrive/queue-haul-cache/stage1b-sink/torch_extensions\nexport TORCHINDUCTOR_CACHE_DIR=/datadrive/queue-haul-cache/stage1b-sink/torchinductor\nexport TRITON_CACHE_DIR=/datadrive/queue-haul-cache/stage1b-sink/triton\nexport PYTHONPATH=/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/lmcache_compat\nvllm serve /datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee --host 127.0.0.1 --port 8200 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --dtype bfloat16 --hf-overrides '{\"allow_global_per_layer_attribute_access\":true}' --kv-cache-dtype auto --block-size 16 --enable-chunked-prefill --enable-prefix-caching --gpu-memory-utilization 0.9 --enable-prompt-tokens-details --kv-transfer-config '{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"connector_patch\",\"engine_id\":\"d0\",\"kv_role\":\"kv_consumer\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"tcp://127.0.0.1\",\"lmcache.mp.port\":5556,\"lmcache.mp.mp_transfer_mode\":\"engine_driven\"}}' --stream-interval 1 --attention-backend TRITON_ATTN --no-async-scheduling --middleware server_info_middleware.ConfigOnly"
+    ]
+  },
+  "fingerprint_sha256": "53e7345dbb5eb4a3a7e2a240639e096b4872636b797d400763e74ce24c5def8e",
+  "git_dirty": false,
+  "git_sha": "43728550abdd7bcae99892ad07b4c4fd0969fb00",
+  "hardware": {
+    "clocks.applications.graphics": "1785",
+    "clocks.applications.memory": "2619",
+    "device": "0",
+    "driver_version": "580.159.04",
+    "memory.total": "95830",
+    "name": "NVIDIA H100 NVL",
+    "power.limit": "400.00",
+    "uuid": "GPU-0ec0a705-24ea-81c8-7ce3-2a14e4b50e46"
+  },
+  "launch_fingerprint_sha256": "697535f3c7637c4a5794dd510657601edd30ec0773968b78ce92fab83e6fb50d",
+  "model": "openai/gpt-oss-20b",
+  "plan_sha256": "a4dadc249358783d4e08f367b51f004ca103e6c483e1e6a55019e5052e825793",
+  "revision": "6cee5e81ee83917806bbde320786a8fb61efebee",
+  "runtime_mode": "native",
+  "runtime_versions": [
+    "0.22.0",
+    "0.5.1"
+  ],
+  "scheduler": {
+    "async_scheduling": false,
+    "attention_backend": "TRITON_ATTN",
+    "block_size": 16,
+    "chunked_prefill": true,
+    "dtype": "bfloat16",
+    "enforce_eager": false,
+    "gpu_count": 1,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "auto",
+    "lmcache_mode": "mp",
+    "max_model_len": 32768,
+    "max_num_batched_tokens": 8192,
+    "max_num_seqs": 256,
+    "mode": "native",
+    "prefix_caching": true,
+    "runtime_versions": [
+      "0.22.0",
+      "0.5.1"
+    ],
+    "server_info_system_probe": false,
+    "stream_interval": 1,
+    "tensor_parallel_size": 1
+  },
+  "server_config_sha256": "8665b434dd34c7240da26b2a13a3c06c40473e9b1e27598ca6ebb5239c768db2",
+  "sha256": "d9c7e924ab985f640f9c24e0cf1074db579bc54fe09c0e821f019c7000fb77fd",
+  "shared_fingerprint_sha256": "cc80f3b7f07e53245fe5b711902c311ebd4ab809153d2c9cbb1712afbadec240"
+}

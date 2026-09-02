@@ -6,6 +6,11 @@
     "stopping": "reduce_at_20; extend_to_30_only_if_unresolved"
   },
   "campaign": "agentic_rps_sweep",
+  "collector": {
+    "dispatch_lead_s": 1,
+    "metrics_period_s": 0.25,
+    "request_driver": "one_ready_blocking_thread_per_request"
+  },
   "comparison": {
     "blocks": {
       "maximum": 30,
@@ -13,8 +18,13 @@
       "rate_order": "ascending_sha256(seed:rate:block:rate-order)",
       "stopping": "reduce_at_20; extend_to_30_only_if_unresolved"
     },
+    "collector": {
+      "dispatch_lead_s": 1,
+      "metrics_period_s": 0.25,
+      "request_driver": "one_ready_blocking_thread_per_request"
+    },
     "implementation": {
-      "campaign_source_sha256": "dca1dcdc435915388cceed02646bbef55a3ddfc99f0a2be94ed739758b166b26"
+      "campaign_source_sha256": "b692eee6fe66770318e8068423520c8ecdab53db03040922edf409b8362cf244"
     },
     "model": "openai/gpt-oss-20b",
     "preflight": {
@@ -83,7 +93,7 @@
       "open_loop_poisson": true,
       "randomized_complete_blocks": true,
       "service_failures_are_violations": true,
-      "tpot_definition": "p90_of_all_exact_post_first_token_intervals"
+      "tpot_definition": "p90_of_observable_exact_singleton_token_intervals"
     },
     "slo": {
       "p90_tpot_s": 0.05,
@@ -101,11 +111,12 @@
     "validity": {
       "max_metric_gap_s": 1,
       "max_send_lateness_s": 0.05,
+      "maximum_attempts_per_cell": 2,
+      "minimum_exact_tpot_interval_coverage": 0.99,
       "require_drain": true,
       "require_telemetry": true,
       "required_cached_tokens": 0,
-      "required_completions": 32,
-      "required_exact_streams": 32
+      "required_completions": 32
     },
     "warmup": {
       "discard": true,
@@ -113,10 +124,10 @@
       "requests": 32
     }
   },
-  "comparison_sha256": "a5c46d6b66ea209959e24d25c7b20e4d764ae3817be5edde9beb955d319414c2",
+  "comparison_sha256": "cc92461d7df76d053e13978187bca589c6ab6d0f1068ec8acddc9d68810e8780",
   "hardware": "a100",
   "implementation": {
-    "campaign_source_sha256": "dca1dcdc435915388cceed02646bbef55a3ddfc99f0a2be94ed739758b166b26"
+    "campaign_source_sha256": "b692eee6fe66770318e8068423520c8ecdab53db03040922edf409b8362cf244"
   },
   "model_revisions": {
     "openai/gpt-oss-20b": "6cee5e81ee83917806bbde320786a8fb61efebee"
@@ -191,7 +202,7 @@
     "open_loop_poisson": true,
     "randomized_complete_blocks": true,
     "service_failures_are_violations": true,
-    "tpot_definition": "p90_of_all_exact_post_first_token_intervals"
+    "tpot_definition": "p90_of_observable_exact_singleton_token_intervals"
   },
   "slo": {
     "p90_tpot_s": 0.05,
@@ -210,11 +221,12 @@
   "validity": {
     "max_metric_gap_s": 1,
     "max_send_lateness_s": 0.05,
+    "maximum_attempts_per_cell": 2,
+    "minimum_exact_tpot_interval_coverage": 0.99,
     "require_drain": true,
     "require_telemetry": true,
     "required_cached_tokens": 0,
-    "required_completions": 32,
-    "required_exact_streams": 32
+    "required_completions": 32
   },
   "warmup": {
     "discard": true,

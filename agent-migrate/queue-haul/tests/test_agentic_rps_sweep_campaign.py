@@ -134,6 +134,27 @@ def test_tail_marks_first_predeclared_sustained_violation(tmp_path):
             == "single_predeclared_sustained_point"
 
 
+def test_error_bar_trace_prestarts_one_thread_per_request(monkeypatch):
+    def issue(_host, _port, _model, prepared, scheduled_ns, _timeout, _bypass):
+        start_ns = campaign.time.monotonic_ns()
+        return {"request_index": prepared["index"],
+                "scheduled_ns": scheduled_ns, "start_ns": start_ns,
+                "send_lateness_s": (start_ns - scheduled_ns) / 1e9}
+
+    monkeypatch.setattr(campaign.serving, "issue_prepared", issue)
+    trace = [{"offset_s": .02, "population": "agentic",
+              "prepared": {"index": index}} for index in range(32)]
+
+    rows, error = campaign.issue_threaded_trace(
+        "127.0.0.1", 1, "model", trace, 1, .02,
+    )
+
+    assert error is None
+    assert len(rows) == 32
+    assert {row["request_index"] for row in rows} == set(range(32))
+    assert max(row["send_lateness_s"] for row in rows) < .05
+
+
 def synthetic_result(plan, model, rate, repeat, ttft, tpot):
     return {
         "schema": campaign.SCHEMA,
@@ -331,9 +352,16 @@ def test_error_bar_plans_freeze_shared_adaptive_protocol():
     assert not h100["runtime"]["enforce_eager"]
     assert h100["runtime"]["stream_interval"] == 1
     assert h100["warmup"]["rate_rps"] == 1
+    assert h100["collector"] == {
+        "request_driver": "one_ready_blocking_thread_per_request",
+        "dispatch_lead_s": 1,
+        "metrics_period_s": .25,
+    }
     assert h100["validity"]["max_metric_gap_s"] == 1
+    assert h100["validity"]["minimum_exact_tpot_interval_coverage"] == .99
+    assert h100["validity"]["maximum_attempts_per_cell"] == 2
     assert h100["statistics"]["per_look_minimum_confidence"] == .975
-    assert {"blocks", "validity", "statistics", "semantics",
+    assert {"blocks", "collector", "validity", "statistics", "semantics",
             "preflight", "selection", "implementation"} \
         <= h100["comparison"].keys()
     assert h100["comparison_sha256"] == a100["comparison_sha256"]
@@ -362,12 +390,14 @@ def slo_requests(exact=True):
         "ttft_s": .8, "mean_tpot_s": .01,
         "token_itls_s": [.01] * 1023 if exact else [],
         "scheduled_ns": index * 10**9, "start_ns": index * 10**9,
-        "end_ns": index * 10**9 + 500_000_000,
+        "first_ns": index * 10**9 + 1_000_000,
+        "last_token_ns": index * 10**9 + 103_300_000,
+        "end_ns": index * 10**9 + 104_300_000,
         "send_lateness_s": 0,
     } for index in range(32)]
 
 
-def test_error_bar_cell_requires_complete_exact_uncached_measurement():
+def test_error_bar_cell_requires_complete_exact_interval_coverage():
     plan = campaign.make_slo_plan()
     cell = campaign.slo_cell_spec(7, 0)
     metrics = [{"monotonic_ns": index * 10**9,
@@ -382,6 +412,17 @@ def test_error_bar_cell_requires_complete_exact_uncached_measurement():
     inexact = campaign.summarize_slo_cell(
         plan, cell, slo_requests(False), metrics, True, None, False, None,
         None, runtime)
+    bundled = slo_requests()
+    bundled[0].update({
+        "exact_token_timestamps": False, "mean_tpot_s": None,
+        "token_itls_s": [],
+        "token_events": [
+            {"monotonic_ns": index * 10_000_000, "token_ids": [1]}
+            for index in range(1022)
+        ] + [{"monotonic_ns": 10_220_000_000, "token_ids": [1, 1]}],
+    })
+    observable = campaign.summarize_slo_cell(
+        plan, cell, bundled, metrics, True, None, False, None, None, runtime)
     incomplete = campaign.summarize_slo_cell(
         plan, cell, slo_requests(), metrics[:1], True, None, False, None,
         None, runtime)
@@ -395,8 +436,13 @@ def test_error_bar_cell_requires_complete_exact_uncached_measurement():
     assert numeric["exact_timing"] == 32
     assert numeric["tpot_samples"] == 32 * 1023
     assert numeric["realized_rps"] == 1
+    assert observable["status"] == "numeric"
+    assert observable["exact_timing"] == 31
+    assert observable["tpot_samples"] == 32 * 1023 - 2
+    assert observable["exact_tpot_interval_coverage"] == pytest.approx(
+        (32 * 1023 - 2) / (32 * 1023))
     assert inexact["status"] == "invalid"
-    assert inexact["validity_errors"] == ["exact_token_timing"]
+    assert inexact["validity_errors"] == ["exact_tpot_interval_coverage"]
     assert incomplete["validity_errors"] == ["telemetry"]
     assert failure["status"] == "service_failure"
     assert failure["slo_violation"]
@@ -412,6 +458,47 @@ def test_error_bar_cell_requires_complete_exact_uncached_measurement():
     assert crashed["validity_errors"] == []
     assert infrastructure["status"] == "invalid"
     assert infrastructure["validity_errors"] == ["infrastructure"]
+
+
+def test_request_tpot_accepts_bundled_streams():
+    plan = campaign.make_slo_plan()
+    plan["semantics"]["tpot_definition"] = campaign.REQUEST_TPOT_DEFINITION
+    plan["validity"]["required_request_tpot_samples"] = 32
+    del plan["validity"]["minimum_exact_tpot_interval_coverage"]
+    rows = slo_requests(False)
+    metrics = [{"monotonic_ns": index * 10**9,
+                "vllm:num_requests_running": 0,
+                "vllm:num_requests_waiting": 0} for index in range(33)]
+    runtime = {"fingerprint_sha256": "fp",
+               "shared_fingerprint_sha256": "shared", "git_sha": "git"}
+
+    result = campaign.summarize_slo_cell(
+        plan, campaign.slo_cell_spec(7, 0), rows, metrics, True, None,
+        False, None, None, runtime)
+
+    assert result["status"] == "numeric"
+    assert result["exact_timing"] == 0
+    assert result["tpot_samples"] == 32
+    assert result["p90_tpot_s"] == pytest.approx(.0001)
+
+    rows[0]["last_token_ns"] = None
+    result = campaign.summarize_slo_cell(
+        plan, campaign.slo_cell_spec(7, 0), rows, metrics, True, None,
+        False, None, None, runtime)
+    assert result["validity_errors"] == ["request_tpot"]
+
+
+def test_error_bar_cell_allows_only_one_validity_retry(tmp_path):
+    plan = campaign.make_slo_plan()
+    cell = campaign.slo_cell_spec(.125, 0)
+    cell_root = tmp_path / "cells" / cell["cell_id"]
+    for attempt in range(2):
+        (cell_root / f"attempt-{attempt:03d}").mkdir(parents=True)
+
+    with pytest.raises(RuntimeError, match="retries exhausted"):
+        campaign.measure_slo_cell(
+            plan, cell, None, None, tmp_path, {}, "formal",
+        )
 
 
 def write_slo_scout(plan, root, rate, violation, status="numeric"):
@@ -545,6 +632,35 @@ def test_fresh_formal_block_accepts_preflight_fingerprint(tmp_path, monkeypatch)
             "selection")
 
 
+def test_slo_runtime_flags_and_observed_contract():
+    runtime = {
+        "stream_interval": 1,
+        "attention_backend": "TRITON_ATTN",
+        "async_scheduling": False,
+        "server_info_system_probe": False,
+    }
+
+    assert campaign.slo_vllm_args(runtime) == [
+        "--stream-interval", "1", "--attention-backend", "TRITON_ATTN",
+        "--no-async-scheduling", "--middleware",
+        "server_info_middleware.ConfigOnly",
+    ]
+    campaign.validate_slo_runtime_log(
+        runtime,
+        "Using AttentionBackendEnum.TRITON_ATTN backend.\n"
+        "Asynchronous scheduling is disabled.\n",
+    )
+    with pytest.raises(RuntimeError, match="attention backend"):
+        campaign.validate_slo_runtime_log(
+            runtime, "Asynchronous scheduling is disabled.")
+    with pytest.raises(RuntimeError, match="scheduling mode"):
+        campaign.validate_slo_runtime_log(
+            runtime, "Using AttentionBackendEnum.TRITON_ATTN backend.")
+    campaign.validate_slo_server_info(runtime, {"system_env": {}})
+    with pytest.raises(RuntimeError, match="system probe"):
+        campaign.validate_slo_server_info(runtime, {"system_env": {"os": "slow"}})
+
+
 def test_runtime_fingerprint_covers_commands_and_server_config(monkeypatch):
     plan = campaign.make_slo_plan()
     monkeypatch.setattr(campaign.profiler, "git_state", lambda _: ("git", False))
@@ -586,6 +702,24 @@ def test_runtime_fingerprint_covers_commands_and_server_config(monkeypatch):
         left, {"vllm_config": {"instance_id": "launch-a", "block_size": 16}}
     )["fingerprint_sha256"] == campaign.finalize_runtime_identity(
         left, {"vllm_config": {"instance_id": "launch-b", "block_size": 16}}
+    )["fingerprint_sha256"]
+    assert campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"quant_config": "<Q object at 0xabc>"}}
+    )["fingerprint_sha256"] == campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"quant_config": "<Q object at 0xdef>"}}
+    )["fingerprint_sha256"]
+    assert campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"quant_config": "<Q object at 0xabc>"}}
+    )["fingerprint_sha256"] != campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"quant_config": "<R object at 0xabc>"}}
+    )["fingerprint_sha256"]
+    assert campaign.semantic_runtime_value({"nested": ["<Q object at 0xabc>"]}) \
+        == {"nested": ["<Q object at <object-address>>"]}
+    assert campaign.semantic_runtime_value("value=0xabc") == "value=0xabc"
+    assert campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"value": "0xabc"}}
+    )["fingerprint_sha256"] != campaign.finalize_runtime_identity(
+        left, {"vllm_config": {"value": "0xdef"}}
     )["fingerprint_sha256"]
 
 
