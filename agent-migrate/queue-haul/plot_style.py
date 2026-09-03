@@ -46,6 +46,9 @@ REFERENCE = "exact_modeled_milp_optimum"
 POLICY_NAMES[REFERENCE] = "Exact modeled MILP optimum"
 POLICY_COLORS[REFERENCE] = "#000000"
 POLICY_LINESTYLES[REFERENCE] = "-"
+POLICY_NAMES["per_session_greedy"] = "Per-session greedy"
+POLICY_COLORS["per_session_greedy"] = POLICY_COLORS["isolated_fastest"]
+POLICY_LINESTYLES["per_session_greedy"] = POLICY_LINESTYLES["isolated_fastest"]
 ACTION_NAMES = {
     "replay": "Replay", "kv_transfer": "KV transfer",
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",
@@ -62,10 +65,6 @@ ACTION_COLORS = {
 TIMING_ACTION_NAMES = {"replay": ACTION_NAMES["replay"],
                        "kv_transfer": ACTION_NAMES["kv_transfer"],
                        "mixed": "Mixed"}
-AGGREGATION_NAMES = {
-    "class_balanced": "Equal class weight",
-    "population_weighted": "Candidate-frequency weight",
-}
 TIMING_ACTION_COLORS = {"replay": ACTION_COLORS["replay"],
                         "kv_transfer": ACTION_COLORS["kv_transfer"],
                         "mixed": "#009E73"}
@@ -86,17 +85,6 @@ SERVICE_LOAD_LINESTYLES = {
     "decode_heavy": "-",
 }
 
-RELIEF_SIGNAL_NAMES = {"measured": "Measured power", "modeled": "Modeled relief"}
-SAMPLE_STAGE_NAMES = {
-    "candidate_population": "Candidate population",
-    "scheduled_sample": "Scheduled sample",
-    "analyzed_sample": "Analyzed sample",
-}
-SAMPLE_STAGE_COLORS = {
-    "candidate_population": POLICY_COLORS["queue_haul"],
-    "scheduled_sample": POLICY_COLORS["greedy"],
-    "analyzed_sample": "#009E73",
-}
 SERVICE_LOAD_MARKERS = {"prefill_heavy": "o", "decode_heavy": "s"}
 SERVICE_MIXES = ("prefill_heavy", "balanced", "decode_heavy")
 SERVICE_MIX_NAMES = {

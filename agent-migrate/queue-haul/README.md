@@ -1915,58 +1915,37 @@ differences as architecture/deployment behavior, not a causal sparsity effect.
 
 ## 2×A100 constrained-state discovery
 
-`constrained_state_campaign.py` is the schema-v2 compiler and reducer. Freeze
-ten eight-session packs, the monotone 256-entry power lattice for each pack,
-action demands, full-drain target, GPT-OSS/A100 profile, WAN contracts, seeded
-background manifest, timing-model identity, and numerical measurement
-tolerances. Every frozen session includes request and reference-continuation
-hashes. The timing identity includes the callable's computed source hash, which
-binds the adapter wrapper only; production provenance must also freeze the
-simulator/repository revision and calibration hashes. Action demands have no
-independent duration field: the frozen state-aware timing evaluator decides
-action and plan feasibility.
+`constrained_state_campaign.py` runs the deliberately small experiment. It
+freezes ten eight-session packs, their power-gain tables, the GPT-OSS/A100
+profile, action demands, shaped WAN rates, integer background units, and the
+full-shed target. Discovery keeps consecutive stable prefill-stream,
+serving-stream, and resident-session rungs.
 
-`discovery_limits()` retains the first invalid point on every integer axis.
-Prefill validity requires a non-growing queue and completed throughput within
-the frozen tolerance of scheduled throughput. Discovery rows must meet frozen
-sample-count, telemetry-coverage, scheduled-load-error, and queue tolerances;
-candidate rows must meet the first three thresholds and carry the adapter's
-background-validity decision. `validate_background_states()` retains invalid
-and KV-ingest-limited candidates. WAN residuals are bounded by natural empty
-capacity; other residuals use the empty measurement under the same WAN setting.
+The generated states are exactly the WAN×prefill grid plus the HBM-only and
+serving-only ladders at the highest shaped WAN rate. Every state is executed;
+there is no Sobol population, sampling, resource labeling, or post-outcome
+selection. The offline enumeration emits only `any_full`, `kv_full`,
+`replay_full`, and `mixed_full`.
 
-`compile_campaign(..., timing=...)` uses scheduled feasibility for the exact
-oracle, records static/scheduled discordance, all 16 resource-restoration
-values, minimal improving coalitions, and natural-unit tightening margins.
-WAN restoration uses natural empty capacity; other resources use their empty
-capacity under the candidate's WAN setting. Class-stratified state draws store
-exact union inclusion probabilities; every scheduled state-pack
-case inherits its inverse-probability analysis weight.
+The live manifest names the existing migration manifest, model profile,
+content-free trace bundle, and service profile. It also fixes one RPS per
+prefill/serving stream, sessions per resident HBM group, warmup time, and a
+hard guard for each discovery ladder. `prepare` fails instead of truncating a
+ladder if that guard is reached while the background remains stable. Resident
+HBM prefixes are checked before and after each episode. `prepare` discovers and
+compiles the campaign; `run` recreates the background for every policy and
+executes the frozen randomized schedule:
 
-Raw episode rows must echo the frozen planner-input hash and include a hashed
-decision list, the observed residual vector and interval provenance, plus
-matched source/control power traces and their artifact hashes. A completed
-action must finish within 25 seconds and match the frozen request and reference
-continuation hashes; an unfinished attempt is `not_moved` with an optional
-`attempted_action`. Power traces must meet the frozen minimum sample count and
-maximum sample gap.
-`reduce_campaign(..., timing=...)` rechecks the frozen selection and schedule,
-classifies background, retryable instrumentation, and reconstruction failures,
-and excludes all three from statistics. A policy miss with valid evidence
-remains a result. Outputs retain both modeled completion-derived relief and
-measured power relief. Repeats are collapsed before Hájek weighting; summaries
-and every performance/composition figure report equal-class and
-full-census-frequency estimates.
+```bash
+module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
+export QH_LMCACHE_MODE=mp
+uv run python constrained_state_campaign.py inputs --out inputs.json
+uv run python constrained_state_campaign.py prepare --inputs inputs.json --out OUT
+uv run python constrained_state_campaign.py run --plan OUT/plan.json --run-root RUN
+```
 
-Do not launch the pilot or full campaign with the current testbed alone. It
-does not expose a parked, verified non-reclaimable KV reservation, and its
-single-node stack requires a shaped numeric proxy rate rather than an
-unshaped natural-WAN mode. Prefix-cache warming is reclaimable and
-`--num-gpu-blocks-override` changes capacity synthetically, so neither is a
-valid HBM unit. The repository also lacks a live four-component residual
-collector, an empirical serving/prefill joint-frontier check, and a concrete
-adapter that invokes and independently verifies the frozen Queue-Haul planner
-trace. A live adapter must add those pieces before the required 15-episode
-pilot can produce valid evidence. Do not substitute synthetic HBM pressure or
-launch the full campaign before that pilot passes compilation, execution,
-reduction, and all four plot families.
+The reducer retains policy misses and writes `episodes.csv`,
+`target_attainment.png`, and `action_composition.png`. Queue-Haul capacity
+inputs, decisions, completion times, and modeled achieved relief are retained
+in every episode row; the underlying profiler directory retains request,
+reconstruction, and sampled-power evidence.
