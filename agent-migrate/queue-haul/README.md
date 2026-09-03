@@ -82,6 +82,17 @@ the two observations above 100 seconds while labeling decades from `10^0`
 through `10^2`. This view and the H100 power parity view use native 1.65 x
 1.75 inch canvases for side-by-side placement within one USENIX column.
 
+The A100 publication pair is generated from the 108 measured regional timing
+paths (72 fit contexts and 36 held-out contexts) and all 350 settled
+post-migration source-power windows. Overall timing MAE is 0.27 s with
+`R^2=0.992`; the held-out paths alone have 0.45 s MAE and `R^2=0.986`. The
+descriptive, in-sample phase-aware power comparison has 2.28 W MAE and
+`R^2=0.956`:
+
+```bash
+uv run python queue-haul/plot_a100_parity.py
+```
+
 The completed 72-scenario H100 hardware-gap campaign has no failed or missing
 runs. It scales the constrained East KV reserve to 96% of the measured
 1,205,376-token capacity, reserves 65% of each destination's migration window
