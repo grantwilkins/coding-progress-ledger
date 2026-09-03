@@ -227,6 +227,14 @@ RUNTIME_ENV = (*HANDOFF_ENV, "QH_MODEL_PROFILE", "QH_RUNTIME",
                "QH_LMCACHE_MODE", "QH_NATIVE_RUNTIME_VERSIONS")
 
 
+def configure_handoff_environment(model: str) -> None:
+    os.environ.update(HANDOFF_ENV)
+    # vLLM turns Qwen's aligned reusable Mamba state off when prefix caching
+    # is disabled; LMCache then correctly refuses the incomplete cache groups.
+    if model == "Qwen/Qwen3.8-27B":
+        os.environ["QH_PREFIX_CACHING"] = "on"
+
+
 def write_checkpoint(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -1801,7 +1809,7 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
     if repeats < 1 or not contexts or min(contexts) < 1 \
             or max(contexts) > 32256:
         raise ValueError("invalid migration timing contexts or repeats")
-    os.environ.update(HANDOFF_ENV)
+    configure_handoff_environment(model)
     validate_calibration_cluster(calibration, cluster)
     host_reports = host_check(cluster, key)
     destination = cluster.destinations[0]
@@ -4726,7 +4734,7 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                                     or stack_block not in range(DRAIN_REPEATS)):
         raise ValueError("stack blocks are only valid for drain campaigns")
     if plan["design"] == "drain":
-        os.environ.update(HANDOFF_ENV)
+        configure_handoff_environment(ModelProfile.load(MODEL_PATH).model)
     if Cluster.parse(plan["cluster"]) != cluster:
         raise ValueError("run cluster differs from the prepared plan")
     if profiler.file_hash(Path(plan["manifest"]["path"])) \

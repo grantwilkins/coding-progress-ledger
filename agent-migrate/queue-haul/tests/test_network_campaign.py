@@ -1604,6 +1604,17 @@ def test_handoff_uses_queue_haul_deadline_and_cache_isolated_load(monkeypatch, t
     assert load.stop.is_set()
 
 
+def test_handoff_environment_keeps_qwen_mamba_state_reusable(monkeypatch):
+    for key in n.HANDOFF_ENV:
+        monkeypatch.delenv(key, raising=False)
+
+    n.configure_handoff_environment("Qwen/Qwen3.8-27B")
+    assert n.os.environ["QH_PREFIX_CACHING"] == "on"
+
+    n.configure_handoff_environment("openai/gpt-oss-20b")
+    assert n.os.environ["QH_PREFIX_CACHING"] == "off"
+
+
 def test_scenario_timing_excludes_background_load_drain(monkeypatch, tmp_path):
     clock = [1_000_000_000]
 
