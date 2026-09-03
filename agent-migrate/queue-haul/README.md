@@ -1915,26 +1915,58 @@ differences as architecture/deployment behavior, not a causal sparsity effect.
 
 ## 2×A100 constrained-state discovery
 
-\`constrained_state_campaign.py\` compiles and reduces the matched constrained-
-state experiment; the live controller remains responsible for creating the
-three real background-unit types and executing its frozen schedule. The module
-never scales session or action demands.
+`constrained_state_campaign.py` is the schema-v2 compiler and reducer. Freeze
+ten eight-session packs, the monotone 256-entry power lattice for each pack,
+action demands, full-drain target, GPT-OSS/A100 profile, WAN contracts, seeded
+background manifest, timing-model identity, and numerical measurement
+tolerances. Every frozen session includes request and reference-continuation
+hashes. The timing identity includes the callable's computed source hash, which
+binds the adapter wrapper only; production provenance must also freeze the
+simulator/repository revision and calibration hashes. Action demands have no
+independent duration field: the frozen state-aware timing evaluator decides
+action and plan feasibility.
 
-Pass \`freeze_inputs()\` one JSON-serializable mapping containing exactly ten
-eight-session packs (including all 256 subset power gains), the GPT-OSS/A100
-profile, the complete two-action demand table, full-drain target, three WAN
-contracts, and the seeded background manifest. It validates and hashes the
-whole contract. Use \`discovery_limits()\` and \`candidate_states()\` to obtain the
-integer pure-axis plus seeded Sobol population, then collect one no-migration
-measurement for every returned state.
+`discovery_limits()` retains the first invalid point on every integer axis.
+Prefill validity requires a non-growing queue and completed throughput within
+the frozen tolerance of scheduled throughput. Discovery rows must meet frozen
+sample-count, telemetry-coverage, scheduled-load-error, and queue tolerances;
+candidate rows must meet the first three thresholds and carry the adapter's
+background-validity decision. `validate_background_states()` retains invalid
+and KV-ingest-limited candidates. WAN residuals are bounded by natural empty
+capacity; other residuals use the empty measurement under the same WAN setting.
 
-\`compile_campaign()\` hard-fails incomplete telemetry, excludes background-
-invalid or KV-ingest-limited states from the oracle, freezes the class-balanced
-selection, and writes \`frozen_inputs.json\`, \`background_discovery.csv\`,
-\`background_states.csv\`, \`oracle_census.csv\`, \`class_histogram.csv\`,
-\`selected_states.json\`, and the randomized \`execution_schedule.csv\`. Execute
-that schedule with a fresh verified background for every policy. Pass all raw
-episode records to \`reduce_campaign()\`; it verifies every hash and schedule row
-before writing \`episodes.csv\`, balanced and population-weighted summaries, and
-the four canonical plot families. Policy nonattainment remains valid evidence;
-background-only invalidity does not.
+`compile_campaign(..., timing=...)` uses scheduled feasibility for the exact
+oracle, records static/scheduled discordance, all 16 resource-restoration
+values, minimal improving coalitions, and natural-unit tightening margins.
+WAN restoration uses natural empty capacity; other resources use their empty
+capacity under the candidate's WAN setting. Class-stratified state draws store
+exact union inclusion probabilities; every scheduled state-pack
+case inherits its inverse-probability analysis weight.
+
+Raw episode rows must echo the frozen planner-input hash and include a hashed
+decision list, the observed residual vector and interval provenance, plus
+matched source/control power traces and their artifact hashes. A completed
+action must finish within 25 seconds and match the frozen request and reference
+continuation hashes; an unfinished attempt is `not_moved` with an optional
+`attempted_action`. Power traces must meet the frozen minimum sample count and
+maximum sample gap.
+`reduce_campaign(..., timing=...)` rechecks the frozen selection and schedule,
+classifies background, retryable instrumentation, and reconstruction failures,
+and excludes all three from statistics. A policy miss with valid evidence
+remains a result. Outputs retain both modeled completion-derived relief and
+measured power relief. Repeats are collapsed before Hájek weighting; summaries
+and every performance/composition figure report equal-class and
+full-census-frequency estimates.
+
+Do not launch the pilot or full campaign with the current testbed alone. It
+does not expose a parked, verified non-reclaimable KV reservation, and its
+single-node stack requires a shaped numeric proxy rate rather than an
+unshaped natural-WAN mode. Prefix-cache warming is reclaimable and
+`--num-gpu-blocks-override` changes capacity synthetically, so neither is a
+valid HBM unit. The repository also lacks a live four-component residual
+collector, an empirical serving/prefill joint-frontier check, and a concrete
+adapter that invokes and independently verifies the frozen Queue-Haul planner
+trace. A live adapter must add those pieces before the required 15-episode
+pilot can produce valid evidence. Do not substitute synthetic HBM pressure or
+launch the full campaign before that pilot passes compilation, execution,
+reduction, and all four plot families.
