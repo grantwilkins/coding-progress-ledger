@@ -1911,3 +1911,30 @@ either a confidence-separated 10-point action-share change or a feasibility
 flip. Execute each live plan with `run-profile`, then pass the six
 `--run MODEL HARDWARE ROOT` arguments to `validate-live`. Interpret accepted
 differences as architecture/deployment behavior, not a causal sparsity effect.
+
+
+## 2×A100 constrained-state discovery
+
+\`constrained_state_campaign.py\` compiles and reduces the matched constrained-
+state experiment; the live controller remains responsible for creating the
+three real background-unit types and executing its frozen schedule. The module
+never scales session or action demands.
+
+Pass \`freeze_inputs()\` one JSON-serializable mapping containing exactly ten
+eight-session packs (including all 256 subset power gains), the GPT-OSS/A100
+profile, the complete two-action demand table, full-drain target, three WAN
+contracts, and the seeded background manifest. It validates and hashes the
+whole contract. Use \`discovery_limits()\` and \`candidate_states()\` to obtain the
+integer pure-axis plus seeded Sobol population, then collect one no-migration
+measurement for every returned state.
+
+\`compile_campaign()\` hard-fails incomplete telemetry, excludes background-
+invalid or KV-ingest-limited states from the oracle, freezes the class-balanced
+selection, and writes \`frozen_inputs.json\`, \`background_discovery.csv\`,
+\`background_states.csv\`, \`oracle_census.csv\`, \`class_histogram.csv\`,
+\`selected_states.json\`, and the randomized \`execution_schedule.csv\`. Execute
+that schedule with a fresh verified background for every policy. Pass all raw
+episode records to \`reduce_campaign()\`; it verifies every hash and schedule row
+before writing \`episodes.csv\`, balanced and population-weighted summaries, and
+the four canonical plot families. Policy nonattainment remains valid evidence;
+background-only invalidity does not.
