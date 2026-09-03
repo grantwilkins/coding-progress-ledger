@@ -21,6 +21,39 @@ def test_grid_separates_discovery_and_unseen_confirmation_cells():
     assert (604, 64) in {(row.prompt_tokens, row.output_tokens) for row in held}
 
 
+def test_power_cli_defaults_h100_and_accepts_a100(tmp_path):
+    base = ["--model", "google/gemma-4-26B-A4B-it",
+            "--out", str(tmp_path / "power")]
+
+    assert campaign.parse_args(base).hardware == "h100"
+    assert campaign.parse_args([*base, "--hardware", "a100"]).hardware == "a100"
+
+
+def test_gpu_contract_supports_a100_and_rejects_wrong_limit(monkeypatch):
+    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *_a, **_k:
+                        "NVIDIA A100 80GB PCIe, GPU-x, 300.00\n")
+    assert campaign.validate_gpu("a100") == {
+        "name": "NVIDIA A100 80GB PCIe", "uuid": "GPU-x",
+        "power_limit_w": 300.0,
+    }
+
+    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *_a, **_k:
+                        "NVIDIA A100 80GB PCIe, GPU-x, 400.00\n")
+    with pytest.raises(RuntimeError, match="at 300 W"):
+        campaign.validate_gpu("a100")
+
+
+def test_server_command_uses_runtime_specific_model_arguments(monkeypatch):
+    monkeypatch.setattr(campaign.testbed, "model_vllm_args",
+                        lambda _cfg: ("--runtime-specific", "yes"))
+    args = SimpleNamespace(model="google/gemma-4-26B-A4B-it",
+                           vllm="vllm", host="127.0.0.1", port=8100)
+
+    command = campaign.server_command(args)
+
+    assert command[-2:] == ["--runtime-specific", "yes"]
+
+
 def test_followup_randomizes_three_calibration_and_validation_reps_with_idle_brackets():
     rows = campaign.followup_cells(4)
 

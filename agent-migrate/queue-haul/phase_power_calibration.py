@@ -227,10 +227,8 @@ def run_plan(plan_path: Path, profile_path: Path | None, out: Path,
 def run_with_server(plan_path: Path, out: Path, model: str, hardware: str,
                     F: float, G: float, vllm: str, host: str, port: int,
                     resume: bool) -> list[dict]:
-    if hardware != "h100":
-        raise ValueError("managed phase-power server launch currently requires H100")
     import power_model_campaign as power
-    gpu = power.validate_gpu()
+    gpu = power.validate_gpu(hardware)
     args = SimpleNamespace(model=model, vllm=vllm, host=host, port=port)
     command = power.server_command(args)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -249,7 +247,7 @@ def run_with_server(plan_path: Path, out: Path, model: str, hardware: str,
                 "server_command": command,
             })
         log.flush()
-        power.testbed.validate_h100_optimized_runtime(
+        power.testbed.validate_optimized_runtime(
             " ".join(command), log_path.read_text(errors="replace"))
         return rows
     finally:

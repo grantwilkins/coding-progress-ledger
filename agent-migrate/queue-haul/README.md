@@ -1879,12 +1879,15 @@ on A100 without changing the default H100 plan.
 uv run python h100_serving_campaign.py prepare --out runs/h100-serving/plan.json
 QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python h100_serving_campaign.py run-prefill --plan runs/h100-serving/plan.json --model MODEL --root /datadrive/h100-serving/MODEL/prefill
 QH_RUNTIME=native QH_LMCACHE_MODE=mp uv run python agentic_rps_sweep_campaign.py run --plan runs/h100-serving/rps-plan.json --model MODEL --run-root /datadrive/h100-serving/rps
-uv run python power_model_campaign.py --model MODEL --out /datadrive/h100-serving/MODEL/power
+uv run python power_model_campaign.py --hardware h100 --model MODEL --out /datadrive/h100-serving/MODEL/power
 ```
 
 Run `reduce-prefill`, the agentic sweep's `reduce`, then `validate` to emit the
 final alignment record. Gemma uses 2 s TTFT/0.2 s TPOT; Qwen uses twice its
 0.125-RPS baseline. The older single-repeat H100 curves are reference-only.
+The same power program accepts `--hardware a100`, hard-gates the Azure 300 W
+A100 identity, and uses runtime-specific model overrides. Managed phase-power
+launches likewise accept either `a100` or `h100`.
 
 For a profile-free two-region mechanism check, `migration-timing` starts the
 pinned model on one source A100 and one destination A100, then measures both KV

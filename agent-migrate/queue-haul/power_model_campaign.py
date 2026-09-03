@@ -27,6 +27,10 @@ CACHED_COUNTER = "vllm:prompt_tokens_cached_total"
 COUNTER_TOLERANCE_FRACTION = .001
 COUNTER_TOLERANCE_TOKENS = 1
 MAX_ELL = 16.0
+GPU_CONTRACTS = {
+    "a100": ("NVIDIA A100 80GB PCIe", 300.0),
+    "h100": ("NVIDIA H100 NVL", 400.0),
+}
 
 
 @dataclass(frozen=True)
@@ -520,14 +524,21 @@ def refit(args) -> None:
         raise RuntimeError("rational power calibration holdout gates failed")
 
 
-def validate_gpu() -> dict:
+def validate_gpu(hardware: str = "h100") -> dict:
+    if hardware not in GPU_CONTRACTS:
+        raise ValueError(f"unsupported power hardware: {hardware}")
+    expected_name, expected_limit = GPU_CONTRACTS[hardware]
     fields = "name,uuid,power.limit"
     lines = subprocess.check_output(["nvidia-smi", f"--query-gpu={fields}",
                                      "--format=csv,noheader,nounits"], text=True).strip().splitlines()
-    if len(lines) != 1 or not lines[0].startswith("NVIDIA H100 NVL,") \
-            or not lines[0].endswith(", 400.00"):
-        raise RuntimeError(f"expected one NVIDIA H100 NVL at 400 W, got {lines}")
+    if len(lines) != 1:
+        raise RuntimeError(
+            f"expected one {expected_name} at {expected_limit:g} W, got {lines}")
     name, uuid, limit = map(str.strip, lines[0].split(","))
+    if name != expected_name or not math.isclose(
+            float(limit), expected_limit, abs_tol=.01):
+        raise RuntimeError(
+            f"expected one {expected_name} at {expected_limit:g} W, got {lines}")
     return {"name": name, "uuid": uuid, "power_limit_w": float(limit)}
 
 
@@ -547,6 +558,7 @@ def wait_ready(base_url: str, server: subprocess.Popen, timeout_s: float = 600) 
 
 def server_command(args) -> list[str]:
     spec = testbed.model_spec(args.model)
+    model_args = testbed.model_vllm_args(testbed.Config(model=args.model))
     return [args.vllm, "serve", args.model, "--revision", spec.revision,
             "--host", args.host, "--port", str(args.port),
             "--served-model-name", args.model, "--tensor-parallel-size", "1",
@@ -555,7 +567,7 @@ def server_command(args) -> list[str]:
             "--dtype", "bfloat16", "--kv-cache-dtype", "auto",
             "--block-size", "16", "--enable-chunked-prefill",
             "--gpu-memory-utilization", ".9", "--no-enable-prefix-caching",
-            *spec.vllm_args]
+            *model_args]
 
 
 def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
@@ -629,7 +641,7 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
 
 
 def run(args) -> None:
-    gpu = validate_gpu()
+    gpu = validate_gpu(args.hardware)
     plan = followup_cells(args.seed) if args.followup_base else cells(args.seed)
     server_cmd = server_command(args)
     if args.followup_base:
@@ -650,7 +662,10 @@ def run(args) -> None:
                     "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                     "model": args.model,
                     "revision": testbed.model_spec(args.model).revision,
-                    "optimized_h100": True, "server_command": server_cmd,
+                    "hardware": args.hardware.upper(),
+                    "optimized_runtime": True,
+                    "optimized_h100": args.hardware == "h100",
+                    "server_command": server_cmd,
                     "minimum_window_s": args.window_s, "warmup": "one complete batch",
                     "cooldown_s": args.cooldown_s, "seed": args.seed}
         if args.followup_base:
@@ -692,6 +707,7 @@ def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--model", choices=tuple(testbed.MODEL_SPECS), required=True)
+    parser.add_argument("--hardware", choices=tuple(GPU_CONTRACTS), default="h100")
     parser.add_argument("--vllm", default="vllm")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8100)
