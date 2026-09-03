@@ -415,6 +415,9 @@ def test_network_proxy_cli_preserves_named_routes_and_caps():
     args.route_mbps_json = json.dumps({"east": 3000})
     assert testbed.proxy_config(args)[2] == {"east": 375_000_000}
 
+    command = n.proxy_command(routes, None, {}, Path("bytes.csv"))
+    assert command[1] == str(n.ROOT / "migration_testbed.py")
+
 
 def test_network_smoke_prompt_fits_model_context():
     smoke = n.parse_args([

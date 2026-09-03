@@ -1349,7 +1349,7 @@ def proxy_command(routes: list[testbed.Route], aggregate_mbps: float | None,
                   route_mbps: dict[str, float], log: Path,
                   control_socket: Path | None = None) -> list[str]:
     command = [
-        sys.executable, "queue-haul/migration_testbed.py", "proxy",
+        sys.executable, str(ROOT / "migration_testbed.py"), "proxy",
         "--routes-json", json.dumps([asdict(route) for route in routes]),
         "--route-mbps-json", json.dumps(route_mbps), "--log", str(log),
     ]
