@@ -44,6 +44,7 @@ CLUSTER_SCHEMA = "queue-haul-azure-cluster-v1"
 CALIBRATION_SCHEMA = "queue-haul-network-calibration-v1"
 PLAN_SCHEMA = "queue-haul-network-plan-v2"
 RESULT_SCHEMA = "queue-haul-network-result-v2"
+MIGRATION_TIMING_SCHEMA = "queue-haul-regional-migration-timing-v1"
 ROOT = Path(__file__).parent
 _MODEL_PATH = Path(os.environ.get(
     "QH_MODEL_PROFILE", "gpt_oss_20b_a100_tp1_azure_300w.json"))
@@ -1402,6 +1403,8 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
             bind_host=bind_host), sink_log)
         testbed.wait_health_process(
             bind_host, internal_cfg.sink_port, testbed.health_timeout(), sink, sink_log)
+        testbed.validate_model_runtime_log(
+            internal_cfg, testbed.read_text(sink_log))
         gateway = PrefillGateway(
             bind_host, cfg.sink_port, bind_host, internal_cfg.sink_port,
             run_root / "prefill_gateway.jsonl")
@@ -1546,7 +1549,11 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
     if any(node not in {item.id for item in cluster.destinations}
            or not 0 < fraction <= 1 for node, fraction in fractions.items()):
         raise ValueError("invalid destination KV capacity fraction")
-    profile_capacity = ModelProfile.load(MODEL_PATH).kv_capacity_tokens
+    # Direct migration timing produces the measurements from which a model
+    # profile can later be built.  Only quota experiments need a pre-existing
+    # profile capacity.
+    profile_capacity = (ModelProfile.load(MODEL_PATH).kv_capacity_tokens
+                        if fractions else None)
     try:
         spot.start()
         lmc_log = run_root / "redis.log"
@@ -1573,6 +1580,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
         testbed.wait_health_process(
             "127.0.0.1", cfg.src_port, testbed.health_timeout(),
             source, source_log)
+        testbed.validate_model_runtime_log(cfg, testbed.read_text(source_log))
         sampler.start()
         remote_roots = {}
         by_id = {node.id: node for node in cluster.destinations}
@@ -1647,9 +1655,11 @@ def stop_cluster(stack: ClusterStack, collect: bool = True) -> None:
 
 
 def smoke(cluster: Cluster, key: Path, calibration: dict, bandwidth: str,
-          run_root: Path, words: int = 1024) -> dict:
+          run_root: Path, words: int = 1024,
+          model: str | None = None) -> dict:
     contract = freeze_contract(calibration)
-    stack = start_cluster(cluster, key, contract, bandwidth, run_root)
+    stack = start_cluster(
+        cluster, key, contract, bandwidth, run_root, model=model)
     report = None
     try:
         prompt = testbed.prompt_text(f"network-smoke-{time.time_ns()}", words)
@@ -1677,6 +1687,8 @@ def smoke(cluster: Cluster, key: Path, calibration: dict, bandwidth: str,
         testbed.set_source_sleep(stack.cfg, False)
         report = {
             "schema": "queue-haul-network-smoke-v1", "status": "complete",
+            "model": stack.cfg.model,
+            "revision": testbed.model_spec(stack.cfg.model).revision,
             "bandwidth": bandwidth, "source": source,
             "destinations": results,
         }
@@ -1749,6 +1761,175 @@ def _warm(stack: ClusterStack, messages: list[dict], code: str,
     chunk = testbed.model_chunk_tokens(stack.cfg)
     testbed.mp_wait_stored(log, offset, result["prompt_tokens"] // chunk * chunk)
     return result
+
+
+def _timing_summary(rows: list[dict]) -> list[dict]:
+    summary = []
+    keys = sorted({(row["method"], row["context_tokens"]) for row in rows})
+    for method, context in keys:
+        selected = [row for row in rows
+                    if (row["method"], row["context_tokens"])
+                    == (method, context)]
+        summary.append({
+            "method": method,
+            "context_tokens": context,
+            "repeats": len(selected),
+            "destination_ready_s_median": statistics.median(
+                row["destination_ready_s"] for row in selected),
+            "completion_s_median": statistics.median(
+                row["completion_s"] for row in selected),
+            "kv_wire_bytes_median": statistics.median(
+                row["kv_wire_bytes"] for row in selected),
+        })
+    return summary
+
+
+def migration_timing(cluster: Cluster, key: Path, calibration: dict,
+                     bandwidth: str, run_root: Path, model: str,
+                     contexts: tuple[int, ...] = (4096, 16384, 32256),
+                     repeats: int = 3) -> dict:
+    """Measure both migration methods on one cross-region route.
+
+    This path intentionally does not consume a model profile: it produces the
+    timing evidence from which a model profile can subsequently be built.
+    """
+    if len(cluster.destinations) != 1:
+        raise ValueError("migration timing requires exactly two regions")
+    if model not in testbed.MODEL_SPECS:
+        raise ValueError("unsupported timing model")
+    contexts = tuple(dict.fromkeys(contexts))
+    if repeats < 1 or not contexts or min(contexts) < 1 \
+            or max(contexts) > 32256:
+        raise ValueError("invalid migration timing contexts or repeats")
+    os.environ.update(HANDOFF_ENV)
+    validate_calibration_cluster(calibration, cluster)
+    host_reports = host_check(cluster, key)
+    destination = cluster.destinations[0]
+    stack = start_cluster(
+        cluster, key, freeze_contract(calibration), bandwidth, run_root,
+        model=model)
+    rows = []
+    try:
+        chunk = testbed.model_chunk_tokens(stack.cfg)
+        prepared = {}
+        for context in contexts:
+            session = {
+                "id": f"timing-{context}",
+                "state_code": f"QH{context:05d}",
+            }
+            messages = profiler.exact_calibration_messages(
+                stack.cfg, session, context)
+            prompt_ids = testbed.mp_chat_tokens(
+                stack.cfg,
+                _probe(stack.cfg, messages, session["state_code"]),
+            )
+            if len(prompt_ids) != context:
+                raise RuntimeError("timing prompt token count changed")
+            prepared[context] = session, messages, prompt_ids
+
+        for context in contexts:
+            session, messages, prompt_ids = prepared[context]
+            for repeat in range(repeats):
+                for method in ("kv_transfer", "replay"):
+                    _clear_cluster(stack)
+                    _warm(stack, messages, session["state_code"],
+                          REQUEST_TIMEOUT_S, prompt_ids)
+                    before = testbed.proxy_counts(
+                        run_root / "proxy_bytes.csv")
+                    result = _chat(
+                        stack.cfg, stack.ports[destination.id]["api"],
+                        messages, session["state_code"], REQUEST_TIMEOUT_S,
+                        method == "replay", prompt_ids=prompt_ids)
+                    time.sleep(1)
+                    delta = testbed.count_delta(
+                        before, testbed.proxy_counts(
+                            run_root / "proxy_bytes.csv"))
+                    kv_wire = int(delta.get(
+                        f"kv/{destination.id}/target_to_client", 0))
+                    api_wire = int(delta.get(
+                        f"api/{destination.id}/client_to_target", 0))
+                    cached = int(result.get("cached_tokens", 0))
+                    expected_cached = context // chunk * chunk
+                    valid = (
+                        exact_completion(result)
+                        and result.get("prompt_tokens") == context
+                        and api_wire > 0
+                        and (cached == expected_cached and kv_wire > 0
+                             if method == "kv_transfer"
+                             else cached == 0 and kv_wire <= 1_000_000)
+                    )
+                    row = {
+                        "model": model,
+                        "revision": testbed.model_spec(model).revision,
+                        "source": cluster.source.id,
+                        "source_region": cluster.source.region,
+                        "destination": destination.id,
+                        "destination_region": destination.region,
+                        "bandwidth": bandwidth,
+                        "method": method,
+                        "context_tokens": context,
+                        "repeat": repeat,
+                        "chunk_tokens": chunk,
+                        "cached_tokens": cached,
+                        "kv_wire_bytes": kv_wire,
+                        "api_wire_bytes": api_wire,
+                        "destination_ready_s": float(result["ttft_s"]),
+                        "completion_s": (
+                            int(result["end_ns"]) - int(result["start_ns"]))
+                            / 1e9,
+                        "mean_tpot_s": float(result["mean_tpot_s"]),
+                        "exact_token_timestamps": bool(
+                            result["exact_token_timestamps"]),
+                        "passed": valid,
+                    }
+                    rows.append(row)
+                    write_checkpoint(run_root / "progress.json", {
+                        "schema": MIGRATION_TIMING_SCHEMA,
+                        "expected": len(contexts) * repeats * 2,
+                        "completed": len(rows), "rows": rows,
+                    })
+                    if not valid:
+                        raise RuntimeError(
+                            f"{method}/{context}/r{repeat} timing gate failed")
+
+        testbed.set_source_sleep(stack.cfg, True)
+        time.sleep(5)
+        testbed.set_source_sleep(stack.cfg, False)
+        testbed.http_text(
+            stack.cfg.host, stack.cfg.src_port, "GET", "/health")
+        report = {
+            "schema": MIGRATION_TIMING_SCHEMA,
+            "status": "complete",
+            "model": model,
+            "revision": testbed.model_spec(model).revision,
+            "source": {"id": cluster.source.id,
+                       "region": cluster.source.region,
+                       "host": cluster.source.host},
+            "destination": {"id": destination.id,
+                            "region": destination.region,
+                            "host": destination.host},
+            "bandwidth": bandwidth,
+            "contexts": list(contexts),
+            "repeats": repeats,
+            "expected": len(contexts) * repeats * 2,
+            "completed": len(rows),
+            "all_passed": all(row["passed"] for row in rows),
+            "source_sleep_wake_passed": True,
+            "runtime": {"vllm": EXPECTED_RUNTIME["vllm"],
+                        "lmcache": EXPECTED_RUNTIME["lmcache"]},
+            "host_reports": host_reports,
+            "node_reports": stack.node_reports,
+            "summary": _timing_summary(rows),
+            "rows": rows,
+        }
+        write_checkpoint(run_root / "report.json", report)
+        with (run_root / "timings.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=rows[0])
+            writer.writeheader()
+            writer.writerows(rows)
+        return report
+    finally:
+        stop_cluster(stack)
 
 
 def _csv_window(path: Path, start_ns: int, end_ns: int) -> list[dict]:
@@ -4736,6 +4917,20 @@ def parse_args(argv=None):
                          choices=("natural", "controlled_40", "controlled_80"))
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--words", type=int, default=1024)
+    command.add_argument("--model", choices=tuple(testbed.MODEL_SPECS))
+    command = sub.add_parser("migration-timing")
+    command.add_argument("--cluster", type=Path, required=True)
+    command.add_argument("--ssh-key", type=Path,
+                         default=Path("~/.ssh/azrs").expanduser())
+    command.add_argument("--calibration", type=Path, required=True)
+    command.add_argument("--bandwidth", default="natural",
+                         choices=("natural", "controlled_40", "controlled_80"))
+    command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--model", choices=tuple(testbed.MODEL_SPECS),
+                         required=True)
+    command.add_argument("--contexts", type=int, nargs="+",
+                         default=(4096, 16384, 32256))
+    command.add_argument("--repeats", type=int, default=3)
     command = sub.add_parser("run")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -4811,7 +5006,13 @@ def main(argv=None) -> None:
         print(json.dumps(smoke(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
             json.loads(args.calibration.read_text()), args.bandwidth,
-            args.run_root, args.words,
+            args.run_root, args.words, args.model,
+        ), indent=2, sort_keys=True))
+    elif args.command == "migration-timing":
+        print(json.dumps(migration_timing(
+            Cluster.load(args.cluster), args.ssh_key.expanduser(),
+            json.loads(args.calibration.read_text()), args.bandwidth,
+            args.run_root, args.model, tuple(args.contexts), args.repeats,
         ), indent=2, sort_keys=True))
     elif args.command == "run":
         print(json.dumps(run_campaign(

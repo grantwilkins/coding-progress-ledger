@@ -417,10 +417,20 @@ def test_network_proxy_cli_preserves_named_routes_and_caps():
 
 
 def test_network_smoke_prompt_fits_model_context():
-    assert n.parse_args([
+    smoke = n.parse_args([
         "smoke", "--cluster", "cluster.json", "--calibration", "c.json",
         "--run-root", "run",
-    ]).words == 1024
+    ])
+    assert (smoke.words, smoke.model) == (1024, None)
+
+    timing = n.parse_args([
+        "migration-timing", "--cluster", "cluster.json",
+        "--calibration", "c.json", "--run-root", "run",
+        "--model", "Qwen/Qwen3.8-27B", "--contexts", "4096", "32256",
+        "--repeats", "2",
+    ])
+    assert (timing.model, timing.contexts, timing.repeats) == (
+        "Qwen/Qwen3.8-27B", [4096, 32256], 2)
 
     handoff = n.parse_args([
         "handoff", "--cluster", "cluster.json", "--calibration", "c.json",
@@ -428,6 +438,32 @@ def test_network_smoke_prompt_fits_model_context():
         "--policy", "kv_only", "--repeat", "2",
     ])
     assert (handoff.policy, handoff.repeat) == ("kv_only", 2)
+
+
+def test_regional_migration_timing_requires_two_regions(tmp_path):
+    with pytest.raises(ValueError, match="exactly two regions"):
+        n.migration_timing(
+            cluster(tmp_path), tmp_path / "key", calibration(), "natural",
+            tmp_path / "run", "Qwen/Qwen3.8-27B", (4096,), 1)
+
+
+def test_regional_migration_timing_summary_groups_methods_and_contexts():
+    rows = [
+        {"method": method, "context_tokens": context,
+         "destination_ready_s": ready, "completion_s": ready + 1,
+         "kv_wire_bytes": wire}
+        for method, context, ready, wire in (
+            ("replay", 4096, 3., 0), ("replay", 4096, 1., 0),
+            ("kv_transfer", 4096, 2., 100),
+            ("kv_transfer", 4096, 4., 300),
+        )
+    ]
+
+    summary = {(row["method"], row["context_tokens"]): row
+               for row in n._timing_summary(rows)}
+
+    assert summary["replay", 4096]["destination_ready_s_median"] == 2
+    assert summary["kv_transfer", 4096]["kv_wire_bytes_median"] == 200
 
 
 def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):

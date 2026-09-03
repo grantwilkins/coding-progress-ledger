@@ -1886,6 +1886,22 @@ Run `reduce-prefill`, the agentic sweep's `reduce`, then `validate` to emit the
 final alignment record. Gemma uses 2 s TTFT/0.2 s TPOT; Qwen uses twice its
 0.125-RPS baseline. The older single-repeat H100 curves are reference-only.
 
+For a profile-free two-region mechanism check, `migration-timing` starts the
+pinned model on one source A100 and one destination A100, then measures both KV
+transfer and replay at exact token counts. It requires a formal calibration for
+that two-node cluster, validates matching host/runtime identities, checks the
+model's cache-block alignment and exact token timestamps on every repetition,
+and finishes with a source sleep/wake health gate.
+
+```bash
+QH_RUNTIME=native QH_LMCACHE_MODE=mp \
+QH_NATIVE_RUNTIME_VERSIONS=0.24.0,0.5.1 \
+uv run python network_campaign.py migration-timing \
+  --cluster azure_network_cluster_germany.json \
+  --calibration /datadrive/queue-haul-network/control/calibration-germany-001.json \
+  --model Qwen/Qwen3.8-27B --run-root /datadrive/qwen-regional-timing
+```
+
 Use `phase_power_calibration.py` for simulation power. Its open-loop five-ray
 grid, grouped holdouts, and bootstrap fit distinguish offered service load from
 the saturated-kernel envelope measured by `power_model_campaign.py`. H100 runs
