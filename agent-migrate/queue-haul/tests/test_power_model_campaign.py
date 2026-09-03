@@ -21,6 +21,20 @@ def test_grid_separates_discovery_and_unseen_confirmation_cells():
     assert (604, 64) in {(row.prompt_tokens, row.output_tokens) for row in held}
 
 
+def test_a100_gpu_contract_is_exact(monkeypatch):
+    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *_a, **_k:
+                        "NVIDIA A100 80GB PCIe, GPU-a, 300.00\n")
+
+    assert campaign.validate_gpu("a100") == {
+        "name": "NVIDIA A100 80GB PCIe", "uuid": "GPU-a",
+        "power_limit_w": 300.0}
+
+    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *_a, **_k:
+                        "NVIDIA A100 80GB PCIe, GPU-a, 400.00\n")
+    with pytest.raises(RuntimeError, match="300 W"):
+        campaign.validate_gpu("a100")
+
+
 def test_followup_randomizes_three_calibration_and_validation_reps_with_idle_brackets():
     rows = campaign.followup_cells(4)
 
@@ -177,6 +191,7 @@ def resume_fixture(tmp_path, monkeypatch):
     orphan.write_text("partial")
     args = SimpleNamespace(out=out, model=model, expected_sha=sha, window_s=12,
                            cooldown_s=2, seed=7, discard_orphan_sequences=[1])
+    args.hardware = "h100"
     monkeypatch.setattr(campaign.subprocess, "check_output", lambda *_a, **_k: "b" * 40 + "\n")
     return args, gpu, plan, orphan
 
@@ -206,6 +221,14 @@ def test_resume_rejects_mismatched_prefix_or_unlisted_artifact(tmp_path, monkeyp
     args, gpu, plan, _ = resume_fixture(tmp_path / "second", monkeypatch)
     (args.out / "power" / "unknown.csv").write_text("x")
     with pytest.raises(RuntimeError, match="power artifacts"):
+        campaign.validate_resume(args, gpu, plan)
+
+
+def test_resume_rejects_hardware_change(tmp_path, monkeypatch):
+    args, gpu, plan, _ = resume_fixture(tmp_path, monkeypatch)
+    args.hardware = "a100"
+
+    with pytest.raises(RuntimeError, match="hardware"):
         campaign.validate_resume(args, gpu, plan)
 
 

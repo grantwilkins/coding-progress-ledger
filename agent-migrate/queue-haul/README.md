@@ -82,16 +82,42 @@ the two observations above 100 seconds while labeling decades from `10^0`
 through `10^2`. This view and the H100 power parity view use native 1.65 x
 1.75 inch canvases for side-by-side placement within one USENIX column.
 
-The A100 publication pair is generated from the 108 measured regional timing
-paths (72 fit contexts and 36 held-out contexts) and all 350 settled
-post-migration source-power windows. Overall timing MAE is 0.27 s with
-`R^2=0.992`; the held-out paths alone have 0.45 s MAE and `R^2=0.986`. The
-descriptive, in-sample phase-aware power comparison has 2.28 W MAE and
-`R^2=0.956`:
+The checked-in A100 pair is a calibration diagnostic, not the H100-comparable
+publication pair: timing has no mixed queues, and power has only eight distinct
+predictions. Collect the replacement directly on the 300 W A100 source. The
+timing plan freezes 120 predictions before measurement, balances 40 replay, 40
+KV-transfer, and 40 mixed queues, and rejects fewer than 90% distinct predicted
+makespans. It varies block-aligned context per session, width, destination,
+background load, and move order. Re-running `run-timing` resumes completed
+scenarios.
 
 ```bash
-uv run python queue-haul/plot_a100_parity.py
+uv run python queue-haul/a100_parity_campaign.py prepare-timing \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --calibration queue-haul/outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json \
+  --timing-model queue-haul/outputs/timing-power-validation-20260814/separation-regional-timing-v2.json \
+  --out /datadrive/queue-haul-network/a100-parity/plan.json
+uv run python queue-haul/a100_parity_campaign.py run-timing \
+  --plan /datadrive/queue-haul-network/a100-parity/plan.json \
+  --run-root /datadrive/queue-haul-network/a100-parity/timing
+uv run python queue-haul/a100_parity_campaign.py reduce-timing \
+  --run-root /datadrive/queue-haul-network/a100-parity/timing \
+  --out queue-haul/outputs/a100_live_queue_makespan_parity
+
+uv run python queue-haul/power_model_campaign.py --hardware a100 \
+  --model openai/gpt-oss-20b \
+  --out /datadrive/queue-haul-power/a100-realized
+uv run python queue-haul/a100_parity_campaign.py plot-power \
+  --run-root /datadrive/queue-haul-power/a100-realized \
+  --out queue-haul/outputs/a100_power_model_parity
 ```
+
+The power command is the same 90-discovery, 18-confirmation, three-idle
+realized-token protocol used for H100. It hard-fails unless exactly one NVIDIA
+A100 80GB PCIe is visible at a 300 W limit, all request/counter accounting is
+exact, and the unseen power gates pass. Do not overlap the power and timing
+campaigns on the source A100.
 
 The completed 72-scenario H100 hardware-gap campaign has no failed or missing
 runs. It scales the constrained East KV reserve to 96% of the measured

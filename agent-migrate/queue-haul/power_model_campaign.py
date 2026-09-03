@@ -1,4 +1,4 @@
-"""Measure and fit H100 power from synchronized realized-token windows."""
+"""Measure and fit GPU power from synchronized realized-token windows."""
 
 from __future__ import annotations
 
@@ -27,6 +27,10 @@ CACHED_COUNTER = "vllm:prompt_tokens_cached_total"
 COUNTER_TOLERANCE_FRACTION = .001
 COUNTER_TOLERANCE_TOKENS = 1
 MAX_ELL = 16.0
+GPU_TARGETS = {
+    "a100": ("NVIDIA A100 80GB PCIe", 300.0),
+    "h100": ("NVIDIA H100 NVL", 400.0),
+}
 
 
 @dataclass(frozen=True)
@@ -520,14 +524,16 @@ def refit(args) -> None:
         raise RuntimeError("rational power calibration holdout gates failed")
 
 
-def validate_gpu() -> dict:
+def validate_gpu(hardware: str = "h100") -> dict:
+    expected = GPU_TARGETS[hardware]
     fields = "name,uuid,power.limit"
     lines = subprocess.check_output(["nvidia-smi", f"--query-gpu={fields}",
                                      "--format=csv,noheader,nounits"], text=True).strip().splitlines()
-    if len(lines) != 1 or not lines[0].startswith("NVIDIA H100 NVL,") \
-            or not lines[0].endswith(", 400.00"):
-        raise RuntimeError(f"expected one NVIDIA H100 NVL at 400 W, got {lines}")
+    if len(lines) != 1:
+        raise RuntimeError(f"expected one {expected[0]} at {expected[1]:g} W, got {lines}")
     name, uuid, limit = map(str.strip, lines[0].split(","))
+    if (name, float(limit)) != expected:
+        raise RuntimeError(f"expected one {expected[0]} at {expected[1]:g} W, got {lines}")
     return {"name": name, "uuid": uuid, "power_limit_w": float(limit)}
 
 
@@ -562,6 +568,8 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
     if not args.expected_sha or len(args.expected_sha) != 40:
         raise ValueError("resume requires the full original --expected-sha")
     metadata = json.loads((args.out / "metadata.json").read_text())
+    if metadata.get("hardware", "h100") != args.hardware:
+        raise RuntimeError("resume metadata mismatch for hardware")
     expected = {"gpu": gpu, "git_sha": args.expected_sha,
                 "minimum_window_s": args.window_s,
                 "warmup": "one complete batch", "cooldown_s": args.cooldown_s,
@@ -629,7 +637,7 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
 
 
 def run(args) -> None:
-    gpu = validate_gpu()
+    gpu = validate_gpu(args.hardware)
     plan = followup_cells(args.seed) if args.followup_base else cells(args.seed)
     server_cmd = server_command(args)
     if args.followup_base:
@@ -650,7 +658,9 @@ def run(args) -> None:
                     "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                     "model": args.model,
                     "revision": testbed.model_spec(args.model).revision,
-                    "optimized_h100": True, "server_command": server_cmd,
+                    "hardware": args.hardware, "optimized_runtime": True,
+                    **({"optimized_h100": True} if args.hardware == "h100" else {}),
+                    "server_command": server_cmd,
                     "minimum_window_s": args.window_s, "warmup": "one complete batch",
                     "cooldown_s": args.cooldown_s, "seed": args.seed}
         if args.followup_base:
@@ -669,7 +679,7 @@ def run(args) -> None:
             rows.append(row)
             append_jsonl(args.out / "cells.jsonl", [row])
             print(json.dumps(row), flush=True)
-        testbed.validate_h100_optimized_runtime(
+        testbed.validate_optimized_runtime(
             " ".join(map(str, server_cmd)), log_path.read_text(errors="replace"))
         result = (followup_result(complete_rows(args.followup_base, args.seed), rows)
                   if args.followup_base else fit_result(rows))
@@ -692,6 +702,7 @@ def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--model", choices=tuple(testbed.MODEL_SPECS), required=True)
+    parser.add_argument("--hardware", choices=tuple(GPU_TARGETS), default="h100")
     parser.add_argument("--vllm", default="vllm")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8100)
