@@ -96,27 +96,19 @@ def test_live_discovery_rejects_an_operational_safety_cap(tmp_path):
         campaign.discover_live(frozen, tmp_path, measure)
 
 
-def test_resident_telemetry_requires_visible_cached_prefixes(monkeypatch):
-    class Destination:
-        @staticmethod
-        def prewarm(*_args, **_kwargs):
-            return [{"cached_tokens": 32}]
-
+def test_resident_telemetry_requires_visible_hbm(monkeypatch):
     metrics = {"vllm:gpu_cache_usage_perc": .25,
                "vllm:num_requests_running": 0,
                "vllm:num_requests_waiting": 0}
-    cfg = type("Cfg", (), {"host": "host", "sink_port": 1,
-                            "model": "model"})()
     monkeypatch.setattr(campaign, "_metrics", lambda *_args: metrics)
 
     assert campaign._resident_telemetry(
-        object(), Destination, cfg, [object()]) == metrics
+        object(), object(), object(), .24, .01) == metrics
 
-    Destination.prewarm = staticmethod(
-        lambda *_args, **_kwargs: [{"cached_tokens": 0}])
-    with pytest.raises(campaign.BackgroundLimit, match="reclaimed"):
+    metrics["vllm:gpu_cache_usage_perc"] = .2
+    with pytest.raises(campaign.BackgroundLimit, match="HBM use decreased"):
         campaign._resident_telemetry(
-            object(), Destination, cfg, [object()])
+            object(), object(), object(), .24, .01)
 
 
 def test_oracle_emits_only_the_four_requested_booleans():

@@ -1932,9 +1932,9 @@ content-free trace bundle, and service profile. It also fixes one RPS per
 prefill/serving stream, sessions per resident HBM group, warmup time, and a
 hard guard for each discovery ladder. `prepare` fails instead of truncating a
 ladder if that guard is reached while the background remains stable. Resident
-HBM prefixes are checked before and after each episode. `prepare` discovers and
-compiles the campaign; `run` recreates the background for every policy and
-executes the frozen randomized schedule:
+HBM use must remain visible after warmup and after each episode. `prepare`
+discovers and compiles the campaign; `run` recreates the background for every
+policy and executes the frozen randomized schedule:
 
 ```bash
 module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4

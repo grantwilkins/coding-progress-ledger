@@ -596,17 +596,14 @@ def _metrics(testbed, destination, cfg) -> dict:
                          "vllm:num_requests_waiting")}
 
 
-def _resident_telemetry(testbed, destination, cfg, resident) -> dict:
-    try:
-        hits = destination.prewarm(
-            cfg.host, cfg.sink_port, cfg.model, resident, bypass_lmcache=True)
-    except RuntimeError as error:
-        raise BackgroundLimit(str(error)) from error
-    if any(not row.get("cached_tokens") for row in hits):
-        raise BackgroundLimit("resident-session group was reclaimed")
+def _resident_telemetry(testbed, destination, cfg, minimum=0.0,
+                        tolerance=0.0) -> dict:
     metrics = _metrics(testbed, destination, cfg)
-    if metrics["vllm:gpu_cache_usage_perc"] <= 0:
+    usage = metrics["vllm:gpu_cache_usage_perc"]
+    if usage <= 0:
         raise BackgroundLimit("resident sessions did not consume visible HBM")
+    if usage + tolerance < minimum:
+        raise BackgroundLimit("resident-session HBM use decreased")
     return metrics
 
 
@@ -676,7 +673,7 @@ def _a100_background(inputs: dict, state: dict, root: Path):
         else:
             time.sleep(float(live.get("warmup_s", 30)))
             rates, sessions = None, []
-        metrics = (_resident_telemetry(testbed, destination, cfg, resident)
+        metrics = (_resident_telemetry(testbed, destination, cfg)
                    if resident else _metrics(testbed, destination, cfg))
         if metrics["vllm:num_requests_waiting"] > 0:
             raise BackgroundLimit("destination background queue is not stable")
@@ -702,7 +699,10 @@ def _a100_background(inputs: dict, state: dict, root: Path):
         }
         yield stack, cfg, profile, manifest, capacity
         if resident:
-            post = _resident_telemetry(testbed, destination, cfg, resident)
+            post = _resident_telemetry(
+                testbed, destination, cfg,
+                metrics["vllm:gpu_cache_usage_perc"],
+                16 / profile.kv_capacity_tokens)
             if post["vllm:num_requests_waiting"] > 0:
                 raise BackgroundLimit("destination background queue is not stable")
             capacity["post_hbm_telemetry"] = post
