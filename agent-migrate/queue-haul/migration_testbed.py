@@ -566,7 +566,7 @@ def proxy_routes(cfg: Config) -> list[Route]:
 def proxy_cmd(cfg: Config, mbps: float = 1000.0, log: Path | None = None) -> list[str]:
     cmd = [
         sys.executable,
-        "queue-haul/migration_testbed.py",
+        str(Path(__file__).resolve()),
         "proxy",
         "--kv-listen",
         f"{cfg.host}:{cfg.kv_proxy_port}",

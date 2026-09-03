@@ -313,7 +313,8 @@ def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     cfg = s.Config()
 
     lmcache = cmd_text(s.lmcache_cmd(cfg))
-    proxy = cmd_text(s.proxy_cmd(cfg, 1000.0))
+    proxy_cmd = s.proxy_cmd(cfg, 1000.0)
+    proxy = cmd_text(proxy_cmd)
 
     assert "migration_testbed.py lmcache-server --host 127.0.0.1 --port 5655" in lmcache
     assert "apptainer" not in lmcache
@@ -321,6 +322,7 @@ def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     assert "APPTAINERENV_CUDA_VISIBLE_DEVICES" not in lmcache
     assert "lmcache.v1.server" not in lmcache
     assert "migration_testbed.py proxy" in proxy
+    assert Path(proxy_cmd[1]).resolve() == Path(s.__file__).resolve()
     assert "--kv-listen 127.0.0.1:8300 --kv-target 127.0.0.1:5655" in proxy
     assert "--api-listen 127.0.0.1:8400 --api-target 127.0.0.1:8200" in proxy
     assert "--mbps 1000.0" in proxy
