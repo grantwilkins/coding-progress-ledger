@@ -1437,10 +1437,11 @@ def http_json(host: str, port: int, method: str, path: str,
     return json.loads(body)
 
 
-def mp_chat_tokens(cfg: Config, messages: list[dict]) -> list[int]:
+def mp_chat_tokens(cfg: Config, messages: list[dict],
+                   max_tokens: int = 512) -> list[int]:
     result = http_json(cfg.host, cfg.src_port, "POST",
                        "/v1/chat/completions/render", {
-        "model": cfg.model, "messages": messages, "max_tokens": 512,
+        "model": cfg.model, "messages": messages, "max_tokens": max_tokens,
         "temperature": 0, "reasoning_effort": "low", "stream": True,
         "stream_options": {"include_usage": True},
     })

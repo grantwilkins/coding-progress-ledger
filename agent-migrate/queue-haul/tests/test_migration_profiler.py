@@ -835,18 +835,22 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
 
 def test_architecture_calibration_renders_the_exact_prompt_tokens(monkeypatch):
     session = {"id": "s", "state_code": "CODE"}
+    budgets = []
 
-    def render(_cfg, messages):
+    def render(_cfg, messages, max_tokens=512):
+        budgets.append(max_tokens)
         words = sum(row["content"].split().count("x") for row in messages)
         return list(range(words + 13))
 
     monkeypatch.setattr(c.b, "mp_chat_tokens", render)
-    messages = c.exact_calibration_messages(SimpleNamespace(), session, 100)
+    messages = c.exact_calibration_messages(
+        SimpleNamespace(), session, 100, max_tokens=128)
 
     probe = messages + [{
         "role": "user", "content": "Reply with session state code CODE.",
     }]
     assert len(render(None, probe)) == 100
+    assert set(budgets[:-1]) == {128}
 
 
 def test_model_chunk_size_controls_sealing():

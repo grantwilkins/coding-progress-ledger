@@ -196,14 +196,16 @@ def calibration_messages(session: dict, tokens: int) -> list[dict]:
     ]
 
 
-def exact_calibration_messages(cfg, session: dict, target: int) -> list[dict]:
+def exact_calibration_messages(cfg, session: dict, target: int,
+                               max_tokens: int = PROBE_MAX_TOKENS) -> list[dict]:
     lo, hi, found = 1, target, None
     probe = {"role": "user", "content":
              f"Reply with session state code {session['state_code']}."}
     while lo <= hi:
         words = (lo + hi) // 2
         messages = calibration_messages(session, words)
-        measured = len(b.mp_chat_tokens(cfg, [*messages, probe]))
+        measured = len(b.mp_chat_tokens(
+            cfg, [*messages, probe], max_tokens=max_tokens))
         if measured == target:
             found = messages
             break

@@ -1826,10 +1826,11 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                 "state_code": f"QH{context:05d}",
             }
             messages = profiler.exact_calibration_messages(
-                stack.cfg, session, context)
+                stack.cfg, session, context, max_tokens=128)
             prompt_ids = testbed.mp_chat_tokens(
                 stack.cfg,
                 _probe(stack.cfg, messages, session["state_code"]),
+                max_tokens=128,
             )
             if len(prompt_ids) != context:
                 raise RuntimeError("timing prompt token count changed")

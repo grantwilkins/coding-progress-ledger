@@ -204,6 +204,9 @@ def test_mp_tokenization_uses_the_exact_chat_completion_renderer(monkeypatch):
         "stream_options": {"include_usage": True},
     }
 
+    assert s.mp_chat_tokens(s.Config(), messages, max_tokens=128) == [1, 2]
+    assert seen["max_tokens"] == 128
+
 
 def test_resp_transfer_is_immediately_visible(tmp_path):
     async def check():
