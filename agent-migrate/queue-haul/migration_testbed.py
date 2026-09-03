@@ -243,7 +243,9 @@ def model_vllm_args(cfg: Config) -> tuple[str, ...]:
     if cfg.model == "google/gemma-4-26B-A4B-it" \
             and expected_runtime_versions()[0] == "0.24.0":
         args += ("--hf-overrides", json.dumps({"text_config": {
-            "allow_global_per_layer_attribute_access": True}}))
+            "allow_global_per_layer_attribute_access": True,
+            "global_head_dim": 512,
+            "num_global_key_value_heads": 2}}))
     return args
 
 

@@ -11,6 +11,7 @@ Plausible wrong implementations:
 - Leave Gemma multimodal caches enabled during the text-only comparison.
 """
 
+import json
 from dataclasses import replace
 
 import pytest
@@ -75,13 +76,20 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
 def test_gemma_024_compatibility_is_runtime_scoped(monkeypatch):
     monkeypatch.setenv("QH_RUNTIME", "native")
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.delenv("QH_NATIVE_RUNTIME_VERSIONS", raising=False)
     gemma = testbed.model_campaign_config("google/gemma-4-26B-A4B-it")
     assert "allow_global_per_layer_attribute_access" not in testbed.shell(
         testbed.vllm_cmd(gemma, "source"))
 
     monkeypatch.setenv("QH_NATIVE_RUNTIME_VERSIONS", "0.24.0,0.5.1")
+    args = testbed.model_vllm_args(gemma)
     command = testbed.shell(testbed.vllm_cmd(gemma, "source"))
-    assert "allow_global_per_layer_attribute_access" in command
+    overrides = json.loads(args[-1])["text_config"]
+    assert overrides == {
+        "allow_global_per_layer_attribute_access": True,
+        "global_head_dim": 512,
+        "num_global_key_value_heads": 2,
+    }
     assert "text_config" in command
 
 

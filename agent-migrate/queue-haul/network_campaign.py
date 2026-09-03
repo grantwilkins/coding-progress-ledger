@@ -201,7 +201,20 @@ WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 )}
 LOAD_SUPPORT_PATH = ROOT / "outputs/capacity-load-publication-20260807/live_plan.json"
-EXPECTED_RUNTIME = {"vllm": "0.22.0", "lmcache": "0.5.1"}
+
+
+def expected_runtime() -> dict[str, str]:
+    raw = os.environ.get(
+        "QH_NATIVE_RUNTIME_VERSIONS",
+        ",".join(testbed.NATIVE_RUNTIME_VERSIONS),
+    )
+    versions = raw.split(",")
+    if len(versions) != 2 or not all(versions):
+        raise ValueError("QH_NATIVE_RUNTIME_VERSIONS must be vllm,lmcache")
+    return dict(zip(("vllm", "lmcache"), versions))
+
+
+EXPECTED_RUNTIME = expected_runtime()
 HANDOFF_DEADLINE_S = 30
 HANDOFF_POLICIES = ("queue_haul", "kv_only", "replay_only")
 HANDOFF_ENV = {
@@ -421,7 +434,6 @@ def node_report() -> dict:
         "dirty": bool(_output([
             "git", "status", "--porcelain", "--untracked-files=no"])),
         "gpu": name, "gpu_memory_mib": int(float(memory)),
-        **EXPECTED_RUNTIME,
         "vllm": version("vllm"), "lmcache": version("lmcache"),
         "clock_uncertainty_ms": chrony_uncertainty_ms(tracking),
         "ptp": str(ptp.resolve()) if ptp.exists() else "",
@@ -473,11 +485,12 @@ def validate_hosts(cluster: Cluster | None, reports: dict[str, dict]) -> None:
                 or float(report.get("clock_uncertainty_ms", 1e9)) \
                 > CLOCK_LIMIT_MS:
             raise ValueError(f"{node_id} host contract failed")
+    runtime = expected_runtime()
     signatures = {(row.get("git_sha"), row.get("vllm"), row.get("lmcache"))
                   for row in reports.values()}
     if len(signatures) != 1 or any(
         row.get(name) != expected_version for row in reports.values()
-        for name, expected_version in EXPECTED_RUNTIME.items()
+        for name, expected_version in runtime.items()
     ):
         raise ValueError("host commit or runtime mismatch")
 

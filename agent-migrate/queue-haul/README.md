@@ -381,6 +381,16 @@ stable `/dev/ptp_hyperv` device, waits for synchronization, installs the pinned
 Python 3.12/vLLM 0.22.0/LMCache 0.5.1 CUDA 12.9 runtime, and stores the pinned
 GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without
 `nvidia-smi`, the persistent data mount, PTP device, or pinned runtime.
+For the A100 three-model architecture/drain campaign, install its isolated
+compatibility contract on every selected host instead:
+
+```bash
+QH_VLLM_VERSION=0.24.0 QH_TRANSFORMERS_VERSION=5.15.1 bash queue-haul/setup.sh
+source ~/.bashrc
+```
+
+Setup records the selected vLLM/LMCache pair in the managed shell block and
+always rebuilds the native planner extension from the checked-out source.
 
 From the Sweden Central source, establish and verify SSH host keys once, then confirm
 that the same commit is checked out everywhere:
@@ -2136,8 +2146,10 @@ the observed request plateau is not a scalar utilization bound.
 `model_architecture_campaign.py` reuses the migration profiler and base planner
 for the pinned GPT-OSS-20B, Qwen3.8-27B, and Gemma-4-26B-A4B checkpoints. It
 keeps BF16 KV, TP1, 32K context, eight sessions, 90% GPU memory, and exact token
-shapes fixed across A100 and H100 arms. Use the native vLLM 0.22/LMCache 0.5.1
-stack with `QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`.
+shapes fixed across A100 and H100 arms. A100 arms use native vLLM 0.24.0,
+Transformers 5.15.1, and LMCache 0.5.1 so Gemma's heterogeneous attention
+geometry is explicit; H100 arms retain vLLM 0.22.0/LMCache 0.5.1. Use
+`QH_RUNTIME=native` and `QH_LMCACHE_MODE=mp`.
 
 ```bash
 uv run python model_architecture_campaign.py prepare --out-dir runs/model-architecture/plans

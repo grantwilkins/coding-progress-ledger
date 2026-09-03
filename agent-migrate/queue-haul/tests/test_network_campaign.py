@@ -48,6 +48,13 @@ import network_campaign as n
 import migration_testbed as testbed
 
 
+def test_network_runtime_can_be_scoped_per_campaign(monkeypatch):
+    monkeypatch.delenv("QH_NATIVE_RUNTIME_VERSIONS", raising=False)
+    assert n.expected_runtime() == {"vllm": "0.22.0", "lmcache": "0.5.1"}
+    monkeypatch.setenv("QH_NATIVE_RUNTIME_VERSIONS", "0.24.0,0.5.1")
+    assert n.expected_runtime() == {"vllm": "0.24.0", "lmcache": "0.5.1"}
+
+
 def test_campaign_scopes_300w_profile_to_azure_nodes():
     generic = n.ModelProfile.load(n.MODEL_PATH.with_name("gpt_oss_20b_a100_tp1.json"))
     azure = n.ModelProfile.load(n.MODEL_PATH)

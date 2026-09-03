@@ -29,6 +29,10 @@ MODELS = {
 }
 ACTIONS = {"replay": ("east_replay", "germany_replay"),
            "kv_transfer": ("east_kv_transfer", "germany_kv_transfer")}
+RUNTIME_VERSIONS = {
+    "A100": "0.24.0,0.5.1",
+    "H100": "0.22.0,0.5.1",
+}
 
 
 def _gated_profile(path: Path, hardware: str) -> ModelProfile:
@@ -85,7 +89,8 @@ def run(hardware: str, profiles: list[Path], cluster: Path,
         _snapshot(source.with_suffix(".gate.json"),
                   snapshot.with_suffix(".gate.json"))
         env = {**os.environ, "QH_MODEL_PROFILE": str(relative),
-               "QH_RUNTIME": "native", "QH_LMCACHE_MODE": "mp"}
+               "QH_RUNTIME": "native", "QH_LMCACHE_MODE": "mp",
+               "QH_NATIVE_RUNTIME_VERSIONS": RUNTIME_VERSIONS[hardware]}
         subprocess.run([
             sys.executable, str(ROOT / "network_campaign.py"), "prepare",
             "--design", "drain", "--cluster", str(cluster),

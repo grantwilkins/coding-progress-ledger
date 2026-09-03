@@ -28,6 +28,8 @@ def test_a100_command_runs_all_three_arms_end_to_end(monkeypatch, tmp_path):
     assert len(calls) == 21
     assert all(call[1]["check"] and call[1]["env"]["QH_RUNTIME"] == "native"
                for call in calls)
+    assert all(call[1]["env"]["QH_NATIVE_RUNTIME_VERSIONS"] == "0.24.0,0.5.1"
+               for call in calls)
     assert all("drain" in call[0] for call in calls[:3])
     assert all("--stack-block" in call[0] for call in calls[3:18])
     assert [call[1]["env"]["QH_MODEL_PROFILE"] for call in calls[3:6]] \

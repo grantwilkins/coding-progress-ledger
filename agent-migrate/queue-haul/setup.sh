@@ -13,6 +13,21 @@ repo_dir=$(dirname "$queue_haul_dir")
   exit 1
 }
 
+vllm_version=${QH_VLLM_VERSION:-0.22.0}
+case "$vllm_version" in
+  0.22.0)
+    transformers_version=${QH_TRANSFORMERS_VERSION:-}
+    ;;
+  0.24.0)
+    transformers_version=${QH_TRANSFORMERS_VERSION:-5.15.1}
+    ;;
+  *)
+    echo "unsupported QH_VLLM_VERSION: $vllm_version" >&2
+    exit 1
+    ;;
+esac
+export QH_NATIVE_RUNTIME_VERSIONS="$vllm_version,0.5.1"
+
 sudo dnf install -y gcc gcc-c++ make pkgconf-pkg-config ca-certificates curl valkey chrony iperf3
 sudo chown "$(id -un):$(id -gn)" /datadrive
 chmod u+rwx /datadrive
@@ -38,10 +53,11 @@ profile="$HOME/.bashrc"
 profile_tmp=$(mktemp)
 touch "$profile"
 sed '/# BEGIN QUEUE-HAUL/,/# END QUEUE-HAUL/d' "$profile" > "$profile_tmp"
-cat >> "$profile_tmp" <<'EOF'
+cat >> "$profile_tmp" <<EOF
 # BEGIN QUEUE-HAUL
 export QH_RUNTIME=native
 export QH_LMCACHE_MODE=mp
+export QH_NATIVE_RUNTIME_VERSIONS=$QH_NATIVE_RUNTIME_VERSIONS
 export QH_CACHE_ROOT=/datadrive/queue-haul-cache
 export HF_HOME=/datadrive
 export HF_HUB_CACHE=/datadrive/hub
@@ -53,12 +69,18 @@ mv "$profile_tmp" "$profile"
 cd "$repo_dir"
 uv python install 3.12
 uv sync --frozen --inexact --python 3.12
+runtime_packages=("vllm==$vllm_version" "lmcache==0.5.1")
+if [[ -n "$transformers_version" ]]; then
+  runtime_packages+=("transformers==$transformers_version")
+fi
 uv pip install --python .venv/bin/python \
-  'vllm==0.22.0' 'lmcache==0.5.1' \
+  "${runtime_packages[@]}" \
   --torch-backend=cu129 \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --find-links https://github.com/LMCache/LMCache/releases/expanded_assets/v0.5.1-cu129 \
   --index-strategy unsafe-best-match
+VIRTUAL_ENV="$repo_dir/.venv" .venv/bin/maturin develop --release \
+  --manifest-path queue-haul/native/Cargo.toml
 
 while read -r model revision; do
   .venv/bin/hf download "$model" --revision "$revision" \
@@ -70,16 +92,20 @@ google/gemma-4-26B-A4B-it 4d7ae4984b7db7de8f8457170b3f1a419ee76d52
 MODELS
 
 .venv/bin/python - <<'PY'
+import os
 from importlib.metadata import version
 from pathlib import Path
 
 import torch
 import lmcache.c_ops
+import _queue_haul_native as native
 from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector
 
-assert version("vllm") == "0.22.0", version("vllm")
-assert version("lmcache") == "0.5.1", version("lmcache")
+vllm_version, lmcache_version = os.environ["QH_NATIVE_RUNTIME_VERSIONS"].split(",")
+assert version("vllm") == vllm_version, version("vllm")
+assert version("lmcache") == lmcache_version, version("lmcache")
 assert torch.version.cuda == "12.9", torch.version.cuda
+assert hasattr(native, "greedy_compact") and hasattr(native, "greedy_csc")
 models = {
     "openai/gpt-oss-20b": "6cee5e81ee83917806bbde320786a8fb61efebee",
     "Qwen/Qwen3.8-27B": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",

@@ -19,7 +19,8 @@ def test_setup_script_has_valid_bash_and_pinned_runtime_contract():
     subprocess.run(["bash", "-n", SCRIPT], check=True)
     text = SCRIPT.read_text()
 
-    for value in ("0.11.32", "3.12", "1.96.0", "vllm==0.22.0", "lmcache==0.5.1", "cu129"):
+    for value in ("0.11.32", "3.12", "1.96.0", "QH_VLLM_VERSION",
+                  "0.22.0", "0.24.0", "lmcache==0.5.1", "cu129"):
         assert value in text
     for model, revision in (
         ("openai/gpt-oss-20b", "6cee5e81ee83917806bbde320786a8fb61efebee"),
@@ -33,6 +34,9 @@ def test_setup_script_has_valid_bash_and_pinned_runtime_contract():
     assert "HF_HUB_CACHE=/datadrive/hub" in text
     assert "QH_CACHE_ROOT=/datadrive/queue-haul-cache" in text
     assert "QH_RUNTIME=native" in text
+    assert "QH_NATIVE_RUNTIME_VERSIONS" in text
+    assert 'VIRTUAL_ENV="$repo_dir/.venv" .venv/bin/maturin develop --release' in text
+    assert "greedy_compact" in text and "greedy_csc" in text
     assert "command -v dnf" in text
     assert "valkey chrony iperf3" in text
     assert "refclock PHC /dev/ptp_hyperv poll 3 dpoll -2 offset 0 stratum 2" in text
