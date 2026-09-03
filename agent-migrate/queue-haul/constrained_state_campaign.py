@@ -607,6 +607,20 @@ def _resident_telemetry(testbed, destination, cfg, minimum=0.0,
     return metrics
 
 
+def _validate_serving(load, destination) -> None:
+    if load.failure or load.blocked_arrivals or not load.rows or any(
+            not destination.service_completion(row) for row in load.rows):
+        raise RuntimeError("serving background was not maintained")
+
+
+def _wait_background(load, kind: str, warmup_s: float, destination) -> None:
+    if kind == "prefill":
+        load.wait_ready()
+    else:
+        time.sleep(warmup_s)
+        _validate_serving(load, destination)
+
+
 @contextmanager
 def _a100_background(inputs: dict, state: dict, root: Path):
     """Reuse the existing stack, load generator, prefix warming, and telemetry."""
@@ -645,6 +659,7 @@ def _a100_background(inputs: dict, state: dict, root: Path):
                 raise BackgroundLimit(str(error)) from error
         kind = "prefill" if state["n_prefill"] else (
             "serving" if state["n_serving"] else None)
+        rps = 0.0
         if kind:
             sessions = destination.manifest_sessions(
                 bundle, "agentic_tool_loop", "validation", 201088,
@@ -667,7 +682,8 @@ def _a100_background(inputs: dict, state: dict, root: Path):
                 rps=rps, max_inflight=256, bypass_lmcache=True)
             load.start()
             try:
-                load.wait_ready()
+                _wait_background(
+                    load, kind, float(live.get("warmup_s", 30)), destination)
             except RuntimeError as error:
                 raise BackgroundLimit(str(error)) from error
         else:
@@ -688,6 +704,7 @@ def _a100_background(inputs: dict, state: dict, root: Path):
                    * profile.kv_capacity_tokens)
         capacity = {
             "wan_mbps": float(state["wan_mbps"]),
+            "background_kind": kind or "none", "background_rps": rps,
             "baseline_work": baseline, "baseline_kv_tokens": kv,
             "telemetry": metrics,
             "resources": {
@@ -706,6 +723,15 @@ def _a100_background(inputs: dict, state: dict, root: Path):
             if post["vllm:num_requests_waiting"] > 0:
                 raise BackgroundLimit("destination background queue is not stable")
             capacity["post_hbm_telemetry"] = post
+        elif kind == "serving":
+            try:
+                _validate_serving(load, destination)
+            except RuntimeError as error:
+                raise BackgroundLimit(str(error)) from error
+            post = _metrics(testbed, destination, cfg)
+            if post["vllm:num_requests_waiting"] > 0:
+                raise BackgroundLimit("destination background queue is not stable")
+            capacity["post_serving_telemetry"] = post
     finally:
         try:
             if load:

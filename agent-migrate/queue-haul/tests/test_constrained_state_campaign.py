@@ -111,6 +111,32 @@ def test_resident_telemetry_requires_visible_hbm(monkeypatch):
             object(), object(), object(), .24, .01)
 
 
+def test_serving_background_uses_an_operational_hold(monkeypatch):
+    class Load:
+        failure = None
+        blocked_arrivals = 0
+        rows = [{"ok": True}]
+
+        def wait_ready(self):
+            raise AssertionError("serving must not use the normalized-load gate")
+
+    class Destination:
+        @staticmethod
+        def service_completion(row):
+            return row["ok"]
+
+    slept = []
+    monkeypatch.setattr(campaign.time, "sleep", slept.append)
+
+    campaign._wait_background(Load(), "serving", 30, Destination)
+
+    assert slept == [30]
+    bad = Load()
+    bad.blocked_arrivals = 1
+    with pytest.raises(RuntimeError, match="serving background was not maintained"):
+        campaign._wait_background(bad, "serving", 30, Destination)
+
+
 def test_oracle_emits_only_the_four_requested_booleans():
     item, rows = pack(), demands()
     for row in rows:
