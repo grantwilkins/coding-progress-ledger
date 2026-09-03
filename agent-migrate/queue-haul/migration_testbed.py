@@ -141,6 +141,7 @@ class ModelSpec:
     vllm_args: tuple[str, ...] = ()
     unified_block_tokens: int | None = None
     separate_object_groups: bool = False
+    hybrid_cache_groups: bool = False
 
 
 MODEL_SPECS = {
@@ -148,10 +149,12 @@ MODEL_SPECS = {
         "--hf-overrides", '{"allow_global_per_layer_attribute_access":true}')),
     "Qwen/Qwen3.8-27B": ModelSpec(
         "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0", 1567, 784,
-        ("--language-model-only", "--mamba-cache-mode", "align"), 784, True),
+        ("--language-model-only", "--mamba-cache-mode", "align"), 784,
+        True, True),
     "google/gemma-4-26B-A4B-it": ModelSpec(
         "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
-        vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}')),
+        vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}'),
+        hybrid_cache_groups=True),
 }
 
 
@@ -359,7 +362,13 @@ def lmcache_l1_gb() -> int:
     return int(os.environ.get("QH_LMCACHE_L1_GB", "16"))
 
 
-def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
+def mp_transfer_mode(cfg: Config) -> str:
+    return ("lmcache_driven" if model_spec(cfg.model).hybrid_cache_groups
+            else "engine_driven")
+
+
+def kv_config(cfg: Config, engine_id: str, kv_role: str, kv_port: int,
+              rpc_port: str) -> str:
     if lmcache_mode() == "mp":
         return json.dumps({
             "kv_connector": "LMCacheMPConnector",
@@ -369,7 +378,7 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
             "kv_connector_extra_config": {
                 "lmcache.mp.host": "tcp://127.0.0.1",
                 "lmcache.mp.port": port_default(5557 if engine_id != "d0" else 5556),
-                "lmcache.mp.mp_transfer_mode": "engine_driven",
+                "lmcache.mp.mp_transfer_mode": mp_transfer_mode(cfg),
             },
         }, separators=(",", ":"))
     return json.dumps(
@@ -482,6 +491,7 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
                           "port": l2_port,
                           "num_workers": 8}, separators=(",", ":"))
     bind_host, http_host = bind_host or cfg.host, http_host or cfg.host
+    transfer_mode = mp_transfer_mode(cfg)
     serve = [
         "lmcache", "server", "--instance-id", f"queue-haul-{role}",
         "--host", bind_host, "--port", port, "--http-host", http_host,
@@ -492,13 +502,14 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
             cfg.architecture_campaign or cfg.capacity_discovery)
           and spec.separate_object_groups else []),
         "--max-workers", 8,
-        "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
+        "--supported-transfer-mode", transfer_mode, "--l2-adapter", adapter,
     ]
     script = "\n".join([
-        "export CUDA_VISIBLE_DEVICES=",
+        *(["export CUDA_VISIBLE_DEVICES="]
+          if transfer_mode == "engine_driven" else []),
         shell(serve),
     ])
-    return apptainer_cmd(cfg, script, nv=False)
+    return apptainer_cmd(cfg, script, nv=transfer_mode == "lmcache_driven")
 
 
 def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
@@ -559,7 +570,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
              else ["--disable-hybrid-kv-cache-manager"]),
            "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         *(["--kv-transfer-config", kv_config(
-            engine_id, kv_role, kv_port, rpc_port)] if kv_transfer else []),
+            cfg, engine_id, kv_role, kv_port, rpc_port)] if kv_transfer else []),
         *(extra or []),
     ]
     script = "\n".join([f"mkdir -p {dirs}", *vllm_exports(cfg, cache_role, remote_url), shell(serve)])

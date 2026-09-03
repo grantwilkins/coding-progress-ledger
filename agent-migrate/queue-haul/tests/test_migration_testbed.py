@@ -351,6 +351,20 @@ def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
     assert "--nv" not in source and "CUDA_VISIBLE_DEVICES=" in source
 
 
+def test_hybrid_mp_cache_uses_gpu_visible_lmcache_driven_transport(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    cfg = s.model_campaign_config("Qwen/Qwen3.8-27B")
+
+    cache = cmd_text(s.mp_server_cmd(cfg, "source"))
+    engine = cmd_text(s.vllm_cmd(cfg, "source"))
+
+    assert "--supported-transfer-mode lmcache_driven" in cache
+    assert "export CUDA_VISIBLE_DEVICES=;" not in cache
+    assert '\"lmcache.mp.mp_transfer_mode\":\"lmcache_driven\"' in engine
+
+
 def test_lmcache_wait_reports_process_exit_log(tmp_path):
     log = tmp_path / "lmcache.log"
     log.write_text("first\nlast\n")

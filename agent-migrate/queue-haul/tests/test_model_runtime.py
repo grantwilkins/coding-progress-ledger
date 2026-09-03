@@ -55,12 +55,22 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
     assert "--max-num-batched-tokens 1567" in qwen_vllm
     assert "--chunk-size 784" in qwen_cache
     assert "--separate-object-groups" in qwen_cache
+    assert "lmcache_driven" in qwen_vllm
+    assert "--supported-transfer-mode lmcache_driven" in qwen_cache
 
-    gemma_vllm = testbed.shell(testbed.vllm_cmd(
-        configs["google/gemma-4-26B-A4B-it"], "source"))
+    gemma = configs["google/gemma-4-26B-A4B-it"]
+    gemma_vllm = testbed.shell(testbed.vllm_cmd(gemma, "source"))
+    gemma_cache = testbed.shell(testbed.mp_server_cmd(gemma, "source"))
     assert "--limit-mm-per-prompt" in gemma_vllm
     assert '"image":0,"audio":0' in gemma_vllm
     assert "image=0,audio=0" not in gemma_vllm
+    assert "lmcache_driven" in gemma_vllm
+    assert "--supported-transfer-mode lmcache_driven" in gemma_cache
+
+    gpt = configs["openai/gpt-oss-20b"]
+    assert "engine_driven" in testbed.shell(testbed.vllm_cmd(gpt, "source"))
+    assert "--supported-transfer-mode engine_driven" in testbed.shell(
+        testbed.mp_server_cmd(gpt, "source"))
 
     for cfg in configs.values():
         command = testbed.shell(testbed.vllm_cmd(cfg, "source"))

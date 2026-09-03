@@ -2130,7 +2130,9 @@ unified block and its LMCache server uses separate object groups. The pinned
 vLLM 0.22 Qwen cache is exposed as a K/V-major transpose of a contiguous
 page-major allocation; `connector_patch.py` restores that page-major view
 without copying and delegates its 784-token logical-page re-view to LMCache.
-The live launch must prove that group geometry.
+The live launch must prove that group geometry. Qwen and Gemma use LMCache's
+GPU-visible `lmcache_driven` transport because its engine-driven gather path
+does not support hybrid KV cache groups; GPT-OSS retains `engine_driven`.
 Results are descriptive limits, not admission gates.
 
 ```bash
