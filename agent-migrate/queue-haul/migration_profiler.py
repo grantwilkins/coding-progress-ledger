@@ -670,6 +670,14 @@ def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int,
     return payload
 
 
+class RetryableStreamError(RuntimeError):
+    pass
+
+
+class StreamResponseError(RuntimeError):
+    pass
+
+
 def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
                 context_hash: str, timeout_s: float,
                 bypass_lmcache: bool = False,
@@ -682,38 +690,58 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
     ))
     start = time.monotonic_ns()
     conn = http.client.HTTPConnection(cfg.host, port, timeout=timeout_s)
-    conn.request("POST", "/v1/chat/completions", body, {
-        "Content-Type": "application/json", **(request_headers or {})})
-    response = conn.getresponse()
+    try:
+        conn.request("POST", "/v1/chat/completions", body, {
+            "Content-Type": "application/json", **(request_headers or {})})
+        response = conn.getresponse()
+    except (http.client.HTTPException, OSError) as exc:
+        conn.close()
+        raise RetryableStreamError("chat transport failed") from exc
     chunks, text, request_id, first, prompt_tokens, output_tokens, cached_tokens = [], [], "", None, 0, 0, 0
+    done = usage_seen = False
     if response.status != 200:
         error = response.read().decode(errors="ignore")
         conn.close()
         end = time.monotonic_ns()
         return RequestResult("", response.status, context_hash, start, end), error
-    while line := response.readline():
-        now = time.monotonic_ns()
-        if not line.strip().startswith(b"data:"):
-            continue
-        chunks.append(StreamChunk(now, len(line)))
-        data = line.strip()[5:].strip()
-        if data == b"[DONE]":
-            break
-        item = json.loads(data)
-        request_id = request_id or item.get("id", "")
-        usage = item.get("usage") or {}
-        prompt_tokens = int(usage.get("prompt_tokens", prompt_tokens))
-        output_tokens = int(usage.get("completion_tokens", output_tokens))
-        cached_tokens = int(
-            (usage.get("prompt_tokens_details") or {}).get(
-                "cached_tokens", cached_tokens,
+    try:
+        while line := response.readline():
+            now = time.monotonic_ns()
+            if not line.strip().startswith(b"data:"):
+                continue
+            chunks.append(StreamChunk(now, len(line)))
+            data = line.strip()[5:].strip()
+            if data == b"[DONE]":
+                done = True
+                break
+            try:
+                item = json.loads(data)
+            except json.JSONDecodeError as exc:
+                raise RetryableStreamError("malformed chat stream") from exc
+            if "error" in item:
+                raise StreamResponseError(f"chat stream error: {item['error']}")
+            request_id = request_id or item.get("id", "")
+            raw_usage = item.get("usage")
+            usage = raw_usage or {}
+            usage_seen |= isinstance(raw_usage, dict) and "prompt_tokens" in raw_usage
+            prompt_tokens = int(usage.get("prompt_tokens", prompt_tokens))
+            output_tokens = int(usage.get("completion_tokens", output_tokens))
+            cached_tokens = int(
+                (usage.get("prompt_tokens_details") or {}).get(
+                    "cached_tokens", cached_tokens,
+                )
             )
-        )
-        content = (item.get("choices") or [{}])[0].get("delta", {}).get("content") or ""
-        if content and first is None:
-            first = now
-        text.append(content)
-    conn.close()
+            content = (item.get("choices") or [{}])[0].get("delta", {}).get("content") or ""
+            if content and first is None:
+                first = now
+            text.append(content)
+    except (http.client.HTTPException, OSError) as exc:
+        raise RetryableStreamError("truncated chat stream") from exc
+    finally:
+        conn.close()
+    if not done or not usage_seen:
+        raise RetryableStreamError(
+            "chat stream ended without terminal usage")
     end = time.monotonic_ns()
     return RequestResult(
         request_id, response.status, context_hash, start, end, first or end,
@@ -1464,7 +1492,8 @@ def with_destination_load(load, action):
         load.close()
 
 
-def verify_continuations(scenario, sessions, cfg, session_ids=None):
+def verify_continuations(scenario, sessions, cfg, session_ids=None,
+                         allow_stream_errors=False):
     expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" \
         else cfg.src_port
 
@@ -1473,7 +1502,15 @@ def verify_continuations(scenario, sessions, cfg, session_ids=None):
         if session.route != expected_port:
             raise RuntimeError(f"wrong continuation route for {session.session_id}")
         committed_hash = messages_hash(session.messages)
-        request = session.continuation()
+        try:
+            request = session.continuation()
+        except (RetryableStreamError, StreamResponseError) as exc:
+            if not allow_stream_errors:
+                raise
+            return {"session_id": session.session_id,
+                    "route_port": session.route,
+                    "committed_context_hash": committed_hash,
+                    "error": f"{type(exc).__name__}: {exc}"}
         return {
             "session_id": session.session_id, "route_port": session.route,
             "committed_context_hash": committed_hash,
@@ -1483,8 +1520,24 @@ def verify_continuations(scenario, sessions, cfg, session_ids=None):
     ordered = sorted((row for row in scenario["sessions"]
                       if session_ids is None or row["session_id"] in session_ids),
                      key=lambda row: row["order"])
+    if not ordered:
+        return []
     with ThreadPoolExecutor(max_workers=len(ordered)) as pool:
-        return list(pool.map(verify, ordered))
+        rows = list(pool.map(verify, ordered))
+    _check_move_errors([row["error"] for row in rows if row.get("error")],
+                       allow_stream_errors)
+    return rows
+
+
+def _check_move_errors(errors: list[str], allow_partial: bool) -> None:
+    if not errors:
+        return
+    if all(row.startswith("RetryableStreamError:") for row in errors):
+        raise RetryableStreamError("; ".join(errors))
+    if allow_partial and all(row.startswith("StreamResponseError:")
+                             for row in errors):
+        return
+    raise RuntimeError("; ".join(errors))
 
 
 def warm_sessions(sessions, concurrency):
@@ -1639,8 +1692,10 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                         power_after()
                     for future in activity_futures:
                         future.result()
-                if any(not row.succeeded for row in rows):
-                    raise RuntimeError("; ".join(row.error for row in rows if row.error))
+                _check_move_errors(
+                    [row.error for row in rows if row.error],
+                    scenario.get("allow_partial_moves", False),
+                )
                 return rows
             if schedule:
                 with ThreadPoolExecutor(max_workers=len(sessions)) as pool:
@@ -1650,11 +1705,16 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
         def action_and_verify():
             nonlocal continuations
             result = action()
-            selected = {row["session_id"] for row in scenario["moves"]} \
+            selected = {row.move.session_id for row in result if row.succeeded} \
                 if scenario["kind"] == "migration" else None
             continuations = verify_continuations(
                 scenario, sessions, cfg, selected,
+                scenario.get("allow_partial_moves", False),
             ) if scenario.get("verify_continuations", True) else []
+            failures = {row["session_id"]: row["error"] for row in continuations
+                        if row.get("error")}
+            result = [replace(row, error=row.error or failures.get(
+                row.move.session_id)) for row in result]
             if destination_load and hasattr(destination_load, "wait_deadline"):
                 destination_load.wait_deadline()
             return result

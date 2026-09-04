@@ -312,3 +312,48 @@ def test_live_runner_uses_schedule_order_and_persists_raw_rows(tmp_path):
     (tmp_path / "plan.sha256").write_text("changed\n")
     with pytest.raises(ValueError, match="run plan hash changed"):
         campaign.run_live(plan, tmp_path, runner)
+
+
+def test_live_runner_retries_incomplete_stream_episode(tmp_path):
+    frozen = campaign.freeze_inputs(inputs(), 7)
+    state = {**campaign.state_grid(dict.fromkeys(campaign.AXES, 0), [10000])[0],
+             "capacity_inputs": capacity()}
+    schedule = campaign.execution_schedule(
+        [state], frozen["inputs"]["packs"][:1], 7, repeats=1)[:1]
+    plan = {"frozen": frozen, "states": [state], "annotations": [],
+            "schedule": schedule}
+    roots = []
+
+    def runner(_inputs, state_, pack_, job_, root):
+        roots.append(root)
+        root.mkdir(parents=True)
+        if len(roots) == 1:
+            raise campaign.RetryableEpisode("incomplete stream")
+        action = "kv_transfer" if job_["policy"] == "kv_only" else "replay"
+        return {"capacity_inputs": state_["capacity_inputs"],
+                "decisions": [{"session_id": row["session_id"],
+                               "action": action, "completion_s": 1}
+                              for row in pack_["sessions"]]}
+
+    assert len(campaign.run_live(plan, tmp_path, runner)) == 1
+    assert [root.name for root in roots] == [
+        schedule[0]["episode_id"], f"{schedule[0]['episode_id']}-attempt-1"]
+
+
+def test_live_runner_bounds_stream_retries(tmp_path):
+    frozen = campaign.freeze_inputs(inputs(), 7)
+    state = {**campaign.state_grid(dict.fromkeys(campaign.AXES, 0), [10000])[0],
+             "capacity_inputs": capacity()}
+    schedule = campaign.execution_schedule(
+        [state], frozen["inputs"]["packs"][:1], 7, repeats=1)[:1]
+    plan = {"frozen": frozen, "states": [state], "annotations": [],
+            "schedule": schedule}
+    attempts = []
+
+    def runner(*args):
+        attempts.append(args[-1])
+        raise campaign.RetryableEpisode("incomplete stream")
+
+    with pytest.raises(campaign.RetryableEpisode):
+        campaign.run_live(plan, tmp_path, runner)
+    assert len(attempts) == campaign.MAX_EPISODE_ATTEMPTS

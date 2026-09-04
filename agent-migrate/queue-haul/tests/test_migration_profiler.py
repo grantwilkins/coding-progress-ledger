@@ -485,6 +485,75 @@ def test_session_probe_appends_one_final_instruction():
     assert c.chat_payload(c.b.Config(), base, 1, ignore_eos=True)["ignore_eos"] is True
 
 
+@pytest.mark.parametrize(("lines", "error"), [
+    ([b'data: {"id":"r","choices":[{"delta":{"content":"ok"}}]}\n',
+      b'data: {"id":"r","choices":[],"usage":{"prompt_tokens":2,'
+      b'"completion_tokens":1,"prompt_tokens_details":{"cached_tokens":1}}}\n',
+      b'data: [DONE]\n'], None),
+    ([b'data: {"id":"r","choices":[]}\n'], c.RetryableStreamError),
+    ([b'data: not-json\n'], c.RetryableStreamError),
+    ([b'data: {"error":{"message":"broken stream"}}\n'],
+     c.StreamResponseError),
+])
+def test_stream_chat_validates_terminal_usage(monkeypatch, lines, error):
+    class Response:
+        status = 200
+
+        def __init__(self):
+            self.lines = iter(lines)
+
+        def readline(self):
+            return next(self.lines, b"")
+
+    class Connection:
+        def __init__(self, *_args, **_kwargs):
+            self.response = Response()
+
+        def request(self, *_args, **_kwargs):
+            pass
+
+        def getresponse(self):
+            return self.response
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(c.http.client, "HTTPConnection", Connection)
+
+    if error:
+        with pytest.raises(error):
+            c.stream_chat(c.b.Config(), 1, [], 1, "hash", 1)
+    else:
+        result, text = c.stream_chat(c.b.Config(), 1, [], 1, "hash", 1)
+        assert (result.prompt_tokens, result.output_tokens,
+                result.cached_tokens, text) == (2, 1, 1, "ok")
+
+
+def test_stream_chat_classifies_request_transport_failure(monkeypatch):
+    class Connection:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def request(self, *_args, **_kwargs):
+            raise OSError("connection reset")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(c.http.client, "HTTPConnection", Connection)
+    with pytest.raises(c.RetryableStreamError, match="transport"):
+        c.stream_chat(c.b.Config(), 1, [], 1, "hash", 1)
+
+
+def test_move_error_classification_does_not_retry_server_failures():
+    c._check_move_errors(["StreamResponseError: bad"], True)
+    with pytest.raises(c.RetryableStreamError):
+        c._check_move_errors(["RetryableStreamError: eof"], True)
+    with pytest.raises(RuntimeError, match="hard"):
+        c._check_move_errors(["RetryableStreamError: eof",
+                              "RuntimeError: hard"], True)
+
+
 def test_session_request_requires_http_success_not_exact_model_text(monkeypatch):
     session = c.LiveSession.__new__(c.LiveSession)
     session.cfg, session.state_code = c.b.Config(), "CODE"
@@ -527,6 +596,46 @@ def test_continuations_verify_in_parallel_and_preserve_order():
     assert [row["session_id"] for row in rows] == ["a", "b"]
     assert {row["committed_context_hash"] for row in rows} == {
         c.messages_hash([])}
+
+
+def test_partial_continuation_keeps_server_stream_failure():
+    session = SimpleNamespace(
+        session_id="a", route=7, messages=[],
+        continuation=lambda: (_ for _ in ()).throw(
+            c.StreamResponseError("server rejected output")),
+    )
+    scenario = {"kind": "migration", "sessions": [
+        {"session_id": "a", "order": 0}]}
+
+    rows = c.verify_continuations(
+        scenario, {"a": session}, SimpleNamespace(api_proxy_port=7), {"a"},
+        allow_stream_errors=True)
+
+    assert rows[0]["error"].startswith("StreamResponseError:")
+
+
+def test_partial_continuation_mixed_stream_failures_hard_fail():
+    class Session:
+        route, messages = 7, []
+
+        def __init__(self, session_id, error):
+            self.session_id, self.error = session_id, error
+
+        def continuation(self):
+            raise self.error
+
+    sessions = {
+        "a": Session("a", c.StreamResponseError("server")),
+        "b": Session("b", c.RetryableStreamError("transport")),
+    }
+    scenario = {"kind": "migration", "sessions": [
+        {"session_id": name, "order": order}
+        for order, name in enumerate(sessions)]}
+
+    with pytest.raises(RuntimeError, match="transport"):
+        c.verify_continuations(
+            scenario, sessions, SimpleNamespace(api_proxy_port=7), set(sessions),
+            allow_stream_errors=True)
 
 
 def test_sessions_warm_in_parallel():

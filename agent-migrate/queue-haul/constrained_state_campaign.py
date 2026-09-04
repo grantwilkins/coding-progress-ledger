@@ -26,6 +26,7 @@ import plot_style
 D_S = 30
 W_S = 5
 REPEATS = 2
+MAX_EPISODE_ATTEMPTS = 3
 SCHEMA = "queue-haul-constrained-resource-v1"
 AXES = ("prefill", "hbm", "serving")
 RESOURCES = ("wan", "service", "prefill", "hbm")
@@ -38,6 +39,10 @@ DEFAULT_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 DEFAULT_MANIFEST = ROOT / "outputs/coding-manifest.json"
 DEFAULT_BUNDLE = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
 DEFAULT_SERVICE = ROOT / "outputs/destination-v7-20260722/baseline-profile.json"
+
+
+class RetryableEpisode(RuntimeError):
+    pass
 
 
 def digest(value) -> str:
@@ -574,13 +579,22 @@ def run_live(plan: dict, run_root: Path, episode_runner=None) -> list[dict]:
     runner = episode_runner or a100_episode
     with raw_path.open("a" if raw_path.exists() else "x", buffering=1) as handle:
         for job in plan["schedule"][len(raw):]:
-            root = run_root / "scenarios" / job["episode_id"]
+            base = run_root / "scenarios" / job["episode_id"]
             attempt = 0
-            while root.exists():
-                attempt += 1
-                root = root.with_name(f"{job['episode_id']}-attempt-{attempt}")
-            result = runner(inputs, states[job["state_id"]],
-                            packs[job["pack_id"]], job, root)
+            for retry in range(MAX_EPISODE_ATTEMPTS):
+                while True:
+                    root = (base if attempt == 0 else
+                            base.with_name(f"{job['episode_id']}-attempt-{attempt}"))
+                    attempt += 1
+                    if not root.exists():
+                        break
+                try:
+                    result = runner(inputs, states[job["state_id"]],
+                                    packs[job["pack_id"]], job, root)
+                    break
+                except RetryableEpisode:
+                    if retry == MAX_EPISODE_ATTEMPTS - 1:
+                        raise
             row = {"episode_id": job["episode_id"], **result}
             handle.write(json.dumps(row, sort_keys=True) + "\n")
             raw.append(row)
@@ -917,15 +931,21 @@ def a100_episode(inputs: dict, state: dict, pack: dict, job: dict,
             "final_state": "awake", "bandwidth_mbps": state["wan_mbps"],
             "allow_partial_moves": True, "reset_caches": False,
         }
-        result = profiler.run_scenario(
-            stack, cfg, manifest, scenario, root, job["episode_id"],
-            configure_proxy=False)
+        try:
+            result = profiler.run_scenario(
+                stack, cfg, manifest, scenario, root, job["episode_id"],
+                configure_proxy=False)
+        except profiler.RetryableStreamError as exc:
+            raise RetryableEpisode(str(exc)) from exc
+        migrations = {row["move"]["session_id"]: row
+                      for row in result["migrations"]}
         completed = {row["move"]["session_id"]:
                      (row["switch_end_ns"] - result["started_ns"]) / 1e9
-                     for row in result["migrations"]}
+                     for row in result["migrations"] if not row["error"]}
         return {"capacity_inputs": capacity,
                 "decisions": [{**row,
-                               "completion_s": completed.get(row["session_id"])}
+                               "completion_s": completed.get(row["session_id"]),
+                               "error": migrations[row["session_id"]]["error"]}
                               for row in decisions]}
 
 

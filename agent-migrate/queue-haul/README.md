@@ -1948,7 +1948,9 @@ uv run python constrained_state_campaign.py run --plan OUT/plan.json --run-root 
 ```
 
 Rerunning `run` with the same root resumes only an exact hashed schedule
-prefix; an interrupted scenario directory is retained and retried separately.
+prefix. Malformed or truncated chat streams retry the whole episode at most
+three times; explicit server stream errors remain valid failed actions. Every
+interrupted or rejected attempt directory remains intact.
 
 The reducer retains policy misses and writes `episodes.csv`,
 `target_attainment.png`, and `action_composition.png`. Queue-Haul capacity
