@@ -1934,7 +1934,8 @@ hard guard for each discovery ladder. `prepare` fails instead of truncating a
 ladder if that guard is reached while the background remains stable. Resident
 HBM use must remain visible after warmup and after each episode. `prepare`
 discovers and compiles the campaign; `run` recreates the background for every
-policy and executes the frozen randomized schedule. Serving discovery uses a
+policy and executes the frozen randomized schedule. Post-move verification
+uses the declared serving concurrency. Serving discovery uses a
 30-second warmup and a separate 30-second measurement, rejecting request
 failures, blocked arrivals, or statistically clear backlog growth. It does not
 use a normalized-work target:

@@ -1493,7 +1493,7 @@ def with_destination_load(load, action):
 
 
 def verify_continuations(scenario, sessions, cfg, session_ids=None,
-                         allow_stream_errors=False):
+                         allow_stream_errors=False, concurrency=None):
     expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" \
         else cfg.src_port
 
@@ -1520,9 +1520,12 @@ def verify_continuations(scenario, sessions, cfg, session_ids=None,
     ordered = sorted((row for row in scenario["sessions"]
                       if session_ids is None or row["session_id"] in session_ids),
                      key=lambda row: row["order"])
+    workers = len(ordered) if concurrency is None else int(concurrency)
+    if workers < 1 and ordered:
+        raise ValueError("continuation concurrency must be positive")
     if not ordered:
         return []
-    with ThreadPoolExecutor(max_workers=len(ordered)) as pool:
+    with ThreadPoolExecutor(max_workers=min(workers, len(ordered))) as pool:
         rows = list(pool.map(verify, ordered))
     _check_move_errors([row["error"] for row in rows if row.get("error")],
                        allow_stream_errors)
@@ -1709,7 +1712,8 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                 if scenario["kind"] == "migration" else None
             continuations = verify_continuations(
                 scenario, sessions, cfg, selected,
-                scenario.get("allow_partial_moves", False),
+                allow_stream_errors=scenario.get("allow_partial_moves", False),
+                concurrency=serving_concurrency,
             ) if scenario.get("verify_continuations", True) else []
             failures = {row["session_id"]: row["error"] for row in continuations
                         if row.get("error")}

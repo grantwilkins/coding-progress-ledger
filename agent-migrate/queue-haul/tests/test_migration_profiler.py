@@ -598,6 +598,30 @@ def test_continuations_verify_in_parallel_and_preserve_order():
         c.messages_hash([])}
 
 
+def test_continuations_honor_declared_concurrency():
+    gate = threading.Lock()
+
+    class Session:
+        route, messages = 7, []
+
+        def __init__(self, session_id):
+            self.session_id = session_id
+
+        def continuation(self):
+            assert gate.acquire(blocking=False)
+            time.sleep(.01)
+            gate.release()
+            return c.RequestResult(self.session_id, 200, "h", 1, 2)
+
+    sessions = {name: Session(name) for name in ("a", "b")}
+    scenario = {"kind": "migration", "sessions": [
+        {"session_id": name, "order": order}
+        for order, name in enumerate(sessions)]}
+
+    c.verify_continuations(
+        scenario, sessions, SimpleNamespace(api_proxy_port=7), concurrency=1)
+
+
 def test_partial_continuation_keeps_server_stream_failure():
     session = SimpleNamespace(
         session_id="a", route=7, messages=[],
