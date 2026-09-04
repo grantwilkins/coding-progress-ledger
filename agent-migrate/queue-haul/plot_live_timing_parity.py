@@ -130,8 +130,8 @@ def write(rows: list[dict], out: Path, log_scale: bool = False) -> None:
         writer.writerows(rows)
 
 
-def write_queue(rows: list[dict], out: Path) -> None:
-    limits = (1, 200)
+def write_queue(rows: list[dict], out: Path,
+                limits: tuple[float, float] = (1, 200)) -> None:
     fig, axis = plt.subplots(figsize=plot_style.HALF_COLUMN_FIGSIZE)
     axis.plot(limits, limits, color="black", linestyle="--",
               linewidth=1.5, label="Ideal")

@@ -1,4 +1,4 @@
-"""Measure and fit H100 power from synchronized realized-token windows."""
+"""Measure and fit GPU power from synchronized realized-token windows."""
 
 from __future__ import annotations
 
@@ -823,6 +823,8 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
     if not args.expected_sha or len(args.expected_sha) != 40:
         raise ValueError("resume requires the full original --expected-sha")
     metadata = json.loads((args.out / "metadata.json").read_text())
+    if str(metadata.get("hardware", "h100")).lower() != args.hardware:
+        raise RuntimeError("resume metadata mismatch for hardware")
     expected = {"gpu": gpu, "git_sha": args.expected_sha,
                 "minimum_window_s": args.window_s,
                 "warmup": "one complete batch", "cooldown_s": args.cooldown_s,
@@ -925,9 +927,8 @@ def run(args) -> None:
                     "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                     "model": args.model,
                     "revision": testbed.model_spec(args.model).revision,
-                    "hardware": args.hardware.upper(),
-                    "optimized_runtime": True,
-                    "optimized_h100": args.hardware == "h100",
+                    "hardware": args.hardware, "optimized_runtime": True,
+                    **({"optimized_h100": True} if args.hardware == "h100" else {}),
                     "server_command": server_cmd,
                     "minimum_window_s": args.window_s, "warmup": "one complete batch",
                     "cooldown_s": args.cooldown_s, "seed": args.seed}
@@ -949,7 +950,7 @@ def run(args) -> None:
             rows.append(row)
             append_jsonl(args.out / "cells.jsonl", [row])
             print(json.dumps(row), flush=True)
-        testbed.validate_h100_optimized_runtime(
+        testbed.validate_optimized_runtime(
             " ".join(map(str, server_cmd)), log_path.read_text(errors="replace"))
         result = (replication_result(base_rows, rows) if extending else
                   followup_result(complete_rows(args.followup_base, args.seed), rows)
