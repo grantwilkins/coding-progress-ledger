@@ -572,6 +572,7 @@ def test_mp_runtime_requires_lookup_bypass_patch(monkeypatch):
     assert "LMCacheMPConnector._qh_bypass_patched" in s.shell(commands[0])
     assert "LMCacheMPConnector._qh_kv_dtype_registration_patched" in s.shell(commands[0])
     assert "_SubpagedAttentionViewEdit._qh_kv_first_patched" in s.shell(commands[0])
+    assert "Worker._qh_ipc_safe_kv_allocator_patched" in s.shell(commands[0])
     assert "lmcache_compat" in s.shell(commands[0])
 
 

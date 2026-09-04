@@ -11,6 +11,7 @@ from lmcache_compat.connector_patch import (
     bypass_lmcache,
     independent_transaction,
     kv_major_attention_view,
+    needs_ipc_safe_kv_allocator,
     patch_on_import,
     restore_page_major_attention,
 )
@@ -144,3 +145,26 @@ def test_qwen_transposed_page_major_attention_is_restored_without_copy():
     assert restored.shape == page_major.shape
     assert restored.untyped_storage().data_ptr() == kv_major.untyped_storage().data_ptr()
     assert torch.equal(restored, page_major)
+
+
+def test_only_sleeping_lmcache_driven_mp_uses_ipc_safe_kv_allocator():
+    def config(*, sleep=True, cumem=True, connector="LMCacheMPConnector",
+               mode="lmcache_driven"):
+        return SimpleNamespace(
+            model_config=SimpleNamespace(
+                enable_sleep_mode=sleep,
+                enable_cumem_allocator=cumem,
+            ),
+            kv_transfer_config=SimpleNamespace(
+                kv_connector=connector,
+                kv_connector_extra_config={
+                    "lmcache.mp.mp_transfer_mode": mode,
+                },
+            ),
+        )
+
+    assert needs_ipc_safe_kv_allocator(config())
+    assert not needs_ipc_safe_kv_allocator(config(sleep=False))
+    assert not needs_ipc_safe_kv_allocator(config(cumem=False))
+    assert not needs_ipc_safe_kv_allocator(config(mode="engine_driven"))
+    assert not needs_ipc_safe_kv_allocator(config(connector="OtherConnector"))

@@ -74,6 +74,7 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
 
     for cfg in configs.values():
         command = testbed.shell(testbed.vllm_cmd(cfg, "source"))
+        assert f"export QH_MODEL={cfg.model}" in command
         assert "TORCH_CUDA_ARCH_LIST" not in command
         assert "--tensor-parallel-size 1" in command
         assert "--dtype bfloat16" in command

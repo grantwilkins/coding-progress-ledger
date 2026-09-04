@@ -2132,7 +2132,10 @@ page-major allocation; `connector_patch.py` restores that page-major view
 without copying and delegates its 784-token logical-page re-view to LMCache.
 The live launch must prove that group geometry. Qwen and Gemma use LMCache's
 GPU-visible `lmcache_driven` transport because its engine-driven gather path
-does not support hybrid KV cache groups; GPT-OSS retains `engine_driven`.
+does not support hybrid KV cache groups. On a sleep-enabled source, their KV
+backing uses PyTorch's standard CUDA allocator so LMCache can export it over
+CUDA IPC; model weights remain in vLLM's CuMem pool for level-1 sleep/wake.
+GPT-OSS retains `engine_driven`.
 Results are descriptive limits, not admission gates.
 
 ```bash

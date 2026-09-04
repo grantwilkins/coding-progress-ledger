@@ -395,6 +395,7 @@ def kv_config(cfg: Config, engine_id: str, kv_role: str, kv_port: int,
 
 def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
     env = {
+        "QH_MODEL": cfg.model,
         "PYTHONHASHSEED": "0",
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
         "VLLM_SERVER_DEV_MODE": "1",
@@ -624,7 +625,19 @@ def gpu_count() -> int:
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
     if lmcache_mode() == "mp":
-        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; assert LMCacheMPConnector._qh_bypass_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
+        check = (
+            "from importlib.metadata import version; "
+            "from connector_patch import LMCacheMPConnector; "
+            "from lmcache.integration.vllm.kv_cache_group_edits import "
+            "_SubpagedAttentionViewEdit; "
+            "from vllm.v1.worker.gpu_worker import Worker; "
+            "assert LMCacheMPConnector._qh_bypass_patched; "
+            "assert LMCacheMPConnector._qh_kv_dtype_registration_patched; "
+            "assert _SubpagedAttentionViewEdit._qh_kv_first_patched; "
+            "assert Worker._qh_ipc_safe_kv_allocator_patched; "
+            "print('QH_RUNTIME_VERSIONS', version('vllm'), "
+            "version('lmcache'))"
+        )
         script = "\n".join([
             f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}",
             shell(["python", "-c", check]),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+from contextlib import nullcontext
 import os
 import socket
 import threading
@@ -72,6 +73,54 @@ def register_verified_kv_caches(register, kv_caches, logger):
     logger.info("QH_KV_CACHE_DTYPES_VERIFIED attention=torch.bfloat16:%d recurrent=%s",
                 attention, recurrent)
     return result
+
+
+def needs_ipc_safe_kv_allocator(vllm_config) -> bool:
+    """Whether LMCache must export a sleep-enabled engine's KV tensors.
+
+    vLLM's CUDA virtual-memory allocator is required for sleepable model
+    weights, but neither PyTorch CUDA IPC nor ``cudaIpcGetMemHandle`` can
+    export allocations from that pool.  LMCache's ``lmcache_driven`` mode
+    needs those IPC handles because its server operates directly on the
+    engine KV tensors.
+    """
+    model = getattr(vllm_config, "model_config", None)
+    transfer = getattr(vllm_config, "kv_transfer_config", None)
+    extra = getattr(transfer, "kv_connector_extra_config", {}) or {}
+    return bool(
+        getattr(model, "enable_sleep_mode", False)
+        and getattr(model, "enable_cumem_allocator", False)
+        and getattr(transfer, "kv_connector", None) == "LMCacheMPConnector"
+        and extra.get("lmcache.mp.mp_transfer_mode") == "lmcache_driven"
+    )
+
+
+def patch_sleep_compatible_kv_allocator(logger) -> None:
+    """Keep LMCache-visible KV tensors IPC-exportable under sleep mode.
+
+    Only the KV allocation context is changed.  Model weights continue to
+    use vLLM's tagged CuMem pool and therefore retain level-1 sleep/wake
+    behavior.  The scheduler still clears its logical KV state on sleep;
+    the standard-allocator KV backing remains resident so the LMCache server's
+    CUDA IPC mapping stays valid across wake-up.
+    """
+    from vllm.v1.worker.gpu_worker import Worker
+
+    if getattr(Worker, "_qh_ipc_safe_kv_allocator_patched", False):
+        return
+    original = Worker._maybe_get_memory_pool_context
+
+    def memory_pool(self, tag):
+        if tag == "kv_cache" and needs_ipc_safe_kv_allocator(self.vllm_config):
+            logger.info(
+                "QH_IPC_SAFE_KV_ALLOCATOR standard PyTorch KV allocation; "
+                "vLLM CuMem remains enabled for sleepable weights"
+            )
+            return nullcontext()
+        return original(self, tag)
+
+    Worker._maybe_get_memory_pool_context = memory_pool
+    Worker._qh_ipc_safe_kv_allocator_patched = True
 
 
 def gemma4_layer_configs(config):
@@ -326,6 +375,7 @@ def patch_adapter() -> None:
 def patch_mp_connector() -> None:
     from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector, logger
 
+    patch_sleep_compatible_kv_allocator(logger)
     if os.environ.get("QH_MODEL") == "google/gemma-4-26B-A4B-it":
         patch_gemma4_config(logger)
         patch_gemma4_decoder()
