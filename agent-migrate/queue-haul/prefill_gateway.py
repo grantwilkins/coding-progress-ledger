@@ -132,7 +132,11 @@ class PrefillGateway:
                     self.send_header("Connection", "close")
                     self.end_headers()
                     transferred = 0
-                    while chunk := response.read(64 * 1024):
+                    # HTTPResponse.read(n) waits for all n bytes (or EOF),
+                    # which collapses a short SSE response into one burst.
+                    # read1 performs at most one underlying buffered read, so
+                    # token events are forwarded as the upstream emits them.
+                    while chunk := response.read1(64 * 1024):
                         self.wfile.write(chunk)
                         self.wfile.flush()
                         transferred += len(chunk)

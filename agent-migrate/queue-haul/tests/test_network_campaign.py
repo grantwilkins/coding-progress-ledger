@@ -476,6 +476,20 @@ def test_regional_migration_timing_summary_groups_methods_and_contexts():
     assert summary["kv_transfer", 4096]["kv_wire_bytes_median"] == 200
 
 
+def test_literal_timing_completion_rejects_eof_buffered_token_burst():
+    row = {
+        "status": 200, "error": "", "done": True,
+        "finish_reason": "length", "output_tokens": 128,
+        "recorded_output_tokens": 128, "exact_token_timestamps": True,
+        "first_ns": 1_000_000_000,
+        "last_token_ns": 1_100_000_000,
+    }
+
+    assert not n.literal_timing_completion(row)
+    row["last_token_ns"] = 2_100_000_000
+    assert n.literal_timing_completion(row)
+
+
 def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):
     value = cluster(tmp_path)
     routes, ports = n.cluster_routes(value)

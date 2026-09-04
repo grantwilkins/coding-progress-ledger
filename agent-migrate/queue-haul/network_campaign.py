@@ -45,6 +45,7 @@ CALIBRATION_SCHEMA = "queue-haul-network-calibration-v1"
 PLAN_SCHEMA = "queue-haul-network-plan-v2"
 RESULT_SCHEMA = "queue-haul-network-result-v2"
 MIGRATION_TIMING_SCHEMA = "queue-haul-regional-migration-timing-v1"
+MIN_LITERAL_STREAM_SPAN_S = 1.0
 ROOT = Path(__file__).parent
 _MODEL_PATH = Path(os.environ.get(
     "QH_MODEL_PROFILE", "gpt_oss_20b_a100_tp1_azure_300w.json"))
@@ -1798,6 +1799,17 @@ def _timing_summary(rows: list[dict]) -> list[dict]:
     return summary
 
 
+def literal_timing_completion(result: dict) -> bool:
+    """Reject an exact-but-transport-buffered 128-token response."""
+    first = result.get("first_ns")
+    last = result.get("last_token_ns")
+    return bool(
+        exact_completion(result)
+        and first is not None and last is not None
+        and (int(last) - int(first)) / 1e9 >= MIN_LITERAL_STREAM_SPAN_S
+    )
+
+
 def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                      bandwidth: str, run_root: Path, model: str,
                      contexts: tuple[int, ...] = (4096, 16384, 32256),
@@ -1865,8 +1877,11 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                         f"api/{destination.id}/client_to_target", 0))
                     cached = int(result.get("cached_tokens", 0))
                     expected_cached = context // chunk * chunk
+                    stream_span_s = (
+                        int(result["last_token_ns"]) - int(result["first_ns"])
+                    ) / 1e9
                     valid = (
-                        exact_completion(result)
+                        literal_timing_completion(result)
                         and result.get("prompt_tokens") == context
                         and api_wire > 0
                         and (cached == expected_cached and kv_wire > 0
@@ -1893,6 +1908,7 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                             int(result["end_ns"]) - int(result["start_ns"]))
                             / 1e9,
                         "mean_tpot_s": float(result["mean_tpot_s"]),
+                        "stream_span_s": stream_span_s,
                         "exact_token_timestamps": bool(
                             result["exact_token_timestamps"]),
                         "passed": valid,
