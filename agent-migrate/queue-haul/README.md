@@ -1894,7 +1894,12 @@ pinned model on one source A100 and one destination A100, then measures both KV
 transfer and replay at exact token counts. It requires a formal calibration for
 that two-node cluster, validates matching host/runtime identities, checks the
 model's cache-block alignment and exact token timestamps on every repetition,
-and finishes with a source sleep/wake health gate.
+and finishes with a source sleep/wake health gate. This timing-only path pins
+vLLM's stream interval to one and disables asynchronous scheduling on both
+engines, because asynchronous engine updates may coalesce multiple generated
+tokens into one SSE event and therefore cannot provide literal per-token
+arrival timestamps. Other architecture, power, and throughput campaigns retain
+their normal scheduler configuration.
 
 ```bash
 QH_RUNTIME=native QH_LMCACHE_MODE=mp \

@@ -442,6 +442,13 @@ def test_network_smoke_prompt_fits_model_context():
     ])
     assert (handoff.policy, handoff.repeat) == ("kv_only", 2)
 
+    node = n.parse_args([
+        "node-serve", "--node-id", "east", "--bind-host", "10.1.0.4",
+        "--source-host", "10.0.0.4", "--kv-port", "8301",
+        "--run-root", "run/east", "--literal-token-timing",
+    ])
+    assert node.literal_token_timing is True
+
 
 def test_regional_migration_timing_requires_two_regions(tmp_path):
     with pytest.raises(ValueError, match="exactly two regions"):

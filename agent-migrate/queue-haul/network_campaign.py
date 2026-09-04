@@ -1378,11 +1378,13 @@ def vllm_kv_capacity(path: Path) -> int:
 
 def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
                run_root: Path, power_interval_s: float = .25,
-               kv_blocks: int | None = None, model: str | None = None) -> None:
+               kv_blocks: int | None = None, model: str | None = None,
+               literal_token_timing: bool = False) -> None:
     import migration_profiler
 
-    cfg = testbed.model_campaign_config(model) if model else testbed.Config(
-        host="127.0.0.1")
+    cfg = (testbed.model_campaign_config(
+        model, literal_token_timing=literal_token_timing)
+        if model else testbed.Config(host="127.0.0.1"))
     testbed.preflight(cfg, 1)
     run_root.mkdir(parents=True, exist_ok=False)
     (run_root / "node-serve.pid").write_text(str(os.getpid()))
@@ -1423,6 +1425,7 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
             "status": "ready", "node_id": node_id, "host": bind_host,
             "vllm_port": cfg.sink_port, "kv_port": kv_port,
             "kv_capacity_tokens": vllm_kv_capacity(sink_log),
+            "literal_token_timing": literal_token_timing,
             "monotonic_ns": time.monotonic_ns(), "wall_ns": time.time_ns(),
         }, sort_keys=True), flush=True)
         stopped.wait()
@@ -1539,11 +1542,13 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                   power_interval_s: float = .25,
                   kv_capacity_fraction: dict[str, float] | None = None,
                   model: str | None = None,
+                  literal_token_timing: bool = False,
                   ) -> ClusterStack:
     import migration_profiler
 
-    cfg = testbed.model_campaign_config(model) if model else testbed.Config(
-        host="127.0.0.1")
+    cfg = (testbed.model_campaign_config(
+        model, literal_token_timing=literal_token_timing)
+        if model else testbed.Config(host="127.0.0.1"))
     testbed.preflight(cfg, 1)
     run_root.mkdir(parents=True, exist_ok=False)
     routes, ports = cluster_routes(cluster)
@@ -1605,6 +1610,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                 str(ports[node_id]["kv"]), "--run-root", str(remote_root),
                 "--power-interval-s", str(power_interval_s),
                 *(["--model", model] if model else []),
+                *(["--literal-token-timing"] if literal_token_timing else []),
                 *(["--kv-blocks", str(round(
                     profile_capacity * fractions[node_id] / KV_BLOCK_SIZE))]
                   if fractions.get(node_id, 1) < 1 else []),
@@ -1815,7 +1821,7 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
     destination = cluster.destinations[0]
     stack = start_cluster(
         cluster, key, freeze_contract(calibration), bandwidth, run_root,
-        model=model)
+        model=model, literal_token_timing=True)
     rows = []
     try:
         chunk = testbed.model_chunk_tokens(stack.cfg)
@@ -1894,6 +1900,7 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                     rows.append(row)
                     write_checkpoint(run_root / "progress.json", {
                         "schema": MIGRATION_TIMING_SCHEMA,
+                        "literal_token_timing": True,
                         "expected": len(contexts) * repeats * 2,
                         "completed": len(rows), "rows": rows,
                     })
@@ -1924,6 +1931,7 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
             "completed": len(rows),
             "all_passed": all(row["passed"] for row in rows),
             "source_sleep_wake_passed": True,
+            "literal_token_timing": True,
             "runtime": {"vllm": EXPECTED_RUNTIME["vllm"],
                         "lmcache": EXPECTED_RUNTIME["lmcache"]},
             "host_reports": host_reports,
@@ -4917,6 +4925,7 @@ def parse_args(argv=None):
     command.add_argument("--power-interval-s", type=float, default=.25)
     command.add_argument("--kv-blocks", type=int)
     command.add_argument("--model", choices=tuple(testbed.MODEL_SPECS))
+    command.add_argument("--literal-token-timing", action="store_true")
     command = sub.add_parser("smoke")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -5010,7 +5019,7 @@ def main(argv=None) -> None:
     elif args.command == "node-serve":
         node_serve(args.node_id, args.bind_host, args.source_host,
                    args.kv_port, args.run_root, args.power_interval_s,
-                   args.kv_blocks, args.model)
+                   args.kv_blocks, args.model, args.literal_token_timing)
     elif args.command == "smoke":
         print(json.dumps(smoke(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),

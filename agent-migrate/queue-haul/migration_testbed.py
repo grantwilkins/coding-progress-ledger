@@ -110,6 +110,9 @@ TYPED_VLLM_FLAGS = {
     "--block-size",
     "--disable-hybrid-kv-cache-manager",
     "--enable-prompt-tokens-details",
+    "--async-scheduling",
+    "--no-async-scheduling",
+    "--stream-interval",
     "--language-model-only",
     "--mamba-cache-mode",
     "--limit-mm-per-prompt",
@@ -182,6 +185,7 @@ class Config:
     architecture_campaign: bool = False
     capacity_discovery: bool = False
     matched_prefill: bool = False
+    literal_token_timing: bool = False
     enforce_eager: bool = True
 
 
@@ -256,11 +260,13 @@ def model_path(cfg: Config) -> Path:
     return model_snapshot_dir(cfg.hf_home, cfg.model) / model_spec(cfg.model).revision
 
 
-def model_campaign_config(model: str) -> Config:
+def model_campaign_config(model: str, *,
+                          literal_token_timing: bool = False) -> Config:
     spec = model_spec(model)
     return Config(model=model, max_num_seqs=8,
                   max_num_batched_tokens=spec.batched_tokens,
-                  architecture_campaign=True)
+                  architecture_campaign=True,
+                  literal_token_timing=literal_token_timing)
 
 
 def model_chunk_tokens(cfg: Config) -> int:
@@ -270,6 +276,9 @@ def model_chunk_tokens(cfg: Config) -> int:
 
 
 def validate_model_runtime(cfg: Config) -> None:
+    if cfg.literal_token_timing and not cfg.architecture_campaign:
+        raise ValueError(
+            "literal token timing requires architecture_campaign")
     if cfg.matched_prefill:
         if cfg.max_model_len != 32768 or cfg.max_num_seqs != 256 \
                 or cfg.max_num_batched_tokens != 8192 \
@@ -323,6 +332,10 @@ def validate_model_runtime_log(cfg: Config, text: str,
     if expected is not None and set(map(int, re.findall(
             r"attention block size to (\d+) tokens", text, re.IGNORECASE))) != {expected}:
         raise RuntimeError(f"runtime did not prove the {expected}-token unified block")
+    if cfg.literal_token_timing and not re.search(
+            r"Asynchronous scheduling is disabled", text, re.IGNORECASE):
+        raise RuntimeError(
+            "timing runtime did not prove asynchronous scheduling disabled")
 
 
 def validate_optimized_runtime(command: str, text: str) -> None:
@@ -561,6 +574,8 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         16,
         "--enable-chunked-prefill",
         "--enable-prefix-caching" if prefix_caching() else "--no-enable-prefix-caching",
+        *(["--no-async-scheduling", "--stream-interval", 1]
+          if cfg.literal_token_timing else []),
         *(["--enforce-eager"] if cfg.enforce_eager else []),
         *(["--enable-sleep-mode"] if role == "source" and (
             sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"

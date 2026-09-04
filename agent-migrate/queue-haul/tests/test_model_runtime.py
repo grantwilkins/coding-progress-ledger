@@ -84,6 +84,36 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
         assert "speculative" not in command
 
 
+def test_literal_token_timing_disables_async_scheduler_only_for_timing(
+        monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    ordinary = testbed.model_campaign_config("Qwen/Qwen3.8-27B")
+    timing = testbed.model_campaign_config(
+        "Qwen/Qwen3.8-27B", literal_token_timing=True)
+
+    assert "--no-async-scheduling" not in testbed.shell(
+        testbed.vllm_cmd(ordinary, "source"))
+    for role in ("source", "sink"):
+        command = testbed.shell(testbed.vllm_cmd(timing, role))
+        assert "--no-async-scheduling" in command
+        assert "--stream-interval 1" in command
+
+    good = """
+    Using bfloat16 data type to store kv cache
+    Setting attention block size to 784 tokens
+    Asynchronous scheduling is disabled.
+    """
+    testbed.validate_model_runtime_log(timing, good)
+    with pytest.raises(RuntimeError, match="asynchronous scheduling disabled"):
+        testbed.validate_model_runtime_log(
+            timing, good.replace("disabled", "enabled"))
+
+    with pytest.raises(ValueError, match="requires architecture_campaign"):
+        testbed.validate_model_runtime(
+            testbed.Config(literal_token_timing=True))
+
+
 def test_gemma_024_compatibility_is_runtime_scoped(monkeypatch):
     monkeypatch.setenv("QH_RUNTIME", "native")
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
