@@ -57,6 +57,8 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
     assert "--separate-object-groups" in qwen_cache
     assert "lmcache_driven" in qwen_vllm
     assert "--supported-transfer-mode lmcache_driven" in qwen_cache
+    assert "QH_KV_GEOMETRY_EVIDENCE=1" in qwen_vllm
+    assert "QH_LMCACHE_SEPARATE_OBJECT_GROUPS=1" in qwen_vllm
 
     gemma = configs["google/gemma-4-26B-A4B-it"]
     gemma_vllm = testbed.shell(testbed.vllm_cmd(gemma, "source"))
@@ -66,6 +68,7 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
     assert "image=0,audio=0" not in gemma_vllm
     assert "lmcache_driven" in gemma_vllm
     assert "--supported-transfer-mode lmcache_driven" in gemma_cache
+    assert "QH_KV_GEOMETRY_EVIDENCE=1" in gemma_vllm
 
     gpt = configs["openai/gpt-oss-20b"]
     assert "engine_driven" in testbed.shell(testbed.vllm_cmd(gpt, "source"))

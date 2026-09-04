@@ -407,6 +407,7 @@ def kv_config(cfg: Config, engine_id: str, kv_role: str, kv_port: int,
 
 
 def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
+    spec = model_spec(cfg.model)
     env = {
         "QH_MODEL": cfg.model,
         "PYTHONHASHSEED": "0",
@@ -424,6 +425,11 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_CHUNK_SIZE": str(model_chunk_tokens(cfg)),
         "LMCACHE_LOCAL_CPU": "False",
         "LMCACHE_MAX_LOCAL_CPU_SIZE": LMCACHE_MAX_LOCAL_CPU_GB,
+        "QH_KV_GEOMETRY_EVIDENCE": "1" if cfg.architecture_campaign else "0",
+        "QH_LMCACHE_SEPARATE_OBJECT_GROUPS": "1" if (
+            (cfg.architecture_campaign or cfg.capacity_discovery)
+            and spec.separate_object_groups
+        ) else "0",
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
     }
     env["PYTHONPATH"] = str(LMCACHE_COMPAT)

@@ -1043,10 +1043,9 @@ class LiveRuntime:
             end = time.monotonic_ns()
             sealed = len(session.copied_token_ids) // self.chunk_tokens if self.mp_layout \
                 else self._prompt_tokens(session, current) // self.chunk_tokens
-            layout = self._kv_layout(request.end_ns)
             stages.append(AppendStageResult(
                 len(stages), start, end, current, request, copied, sealed,
-                (sealed - copied) * layout["chunk_bytes"],
+                request.logical_kv_bytes,
             ))
             copied = sealed
         return tuple(stages)
@@ -1067,6 +1066,8 @@ class LiveRuntime:
             self._start_next(session)
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
         log_offset = self.sink_log.stat().st_size
+        transfer_start_ns = time.monotonic_ns()
+        pending_keys = session.cache_keys - session.copied_keys
         if move.method == "kv_transfer" and self.mp_layout:
             tokens = b.mp_chat_tokens(
                 self.cfg, session.probe(list(state.messages)),
@@ -1111,12 +1112,13 @@ class LiveRuntime:
                     f"{move.method} request {result.request_id} hit {hit} "
                     f"tokens, expected {expected}"
                 )
-        layout = self._kv_layout(result.end_ns) \
+        layout = self._kv_layout(
+            transfer_start_ns, result.end_ns, pending_keys,
+        ) \
             if move.method == "kv_transfer" or not self.mp_layout else {}
         logical_chunks, logical_bytes = (
             (len(session.copied_token_ids) // self.chunk_tokens,
-             len(session.copied_token_ids) // self.chunk_tokens
-             * layout["chunk_bytes"])
+             layout["total_payload_bytes"])
             if move.method == "kv_transfer" and self.mp_layout
             else kv_metrics(hit, layout) if layout else (0, 0)
         )
@@ -1126,20 +1128,30 @@ class LiveRuntime:
         self.event_log.write("copy_end", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase, processed_tokens=result.processed_tokens, logical_kv_bytes=logical_bytes, logical_kv_chunks=result.logical_kv_chunks, kv_layout=layout)
         return result
 
-    def _kv_layout(self, end_ns: int) -> dict:
+    def _kv_layout(self, start_ns: int, end_ns: int,
+                   expected_keys: set[str]) -> dict:
         if not self.mp_layout:
             return kv_layout(self.cache_log, end_ns, self.chunk_tokens)
-        sizes = {
-            int(row["payload_bytes"]) for row in b.resp_rows(self.cache_log)
+        rows = [
+            row for row in b.resp_rows(self.cache_log)
             if row["command"] == "GET" and int(row["payload_bytes"]) > 0
-            and int(row["end_ns"]) <= end_ns
-        }
-        if len(sizes) != 1:
-            raise RuntimeError(f"inconsistent MP KV block sizes: {sizes}")
-        size = sizes.pop()
+            and row["key_hashes"] in expected_keys
+            and int(row["start_ns"]) < end_ns
+            and int(row["end_ns"]) > start_ns
+        ]
+        keys = [row["key_hashes"] for row in rows]
+        if not rows or len(keys) != len(set(keys)):
+            raise RuntimeError(
+                "MP migration did not expose one fresh GET per transferred key"
+            )
+        sizes = [int(row["payload_bytes"]) for row in rows]
+        unique_sizes = set(sizes)
+        total = sum(sizes)
         return {
-            "chunk_tokens": self.chunk_tokens, "chunk_bytes": size,
-            "bytes_per_token": size / self.chunk_tokens,
+            "chunk_tokens": self.chunk_tokens,
+            "chunk_bytes": sizes[0] if len(unique_sizes) == 1 else None,
+            "total_payload_bytes": total,
+            "payload_bytes_by_key": dict(sorted(zip(keys, sizes))),
             "dtype": None, "shape": [],
         }
 

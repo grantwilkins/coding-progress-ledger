@@ -749,6 +749,7 @@ def test_live_runtime_pipelines_four_append_stages(monkeypatch, tmp_path):
         return c.RequestResult(
             "copy", 200, state.context_hash, now, now,
             prompt_tokens=session.prompt_tokens_by_hash[state.context_hash],
+            logical_kv_bytes=10,
         )
 
     runtime.prepare = prepare
@@ -806,6 +807,7 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
         or {"total_keys": 6, "found_keys": 0},
     )
     monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 6)
+    monkeypatch.setattr(c.time, "monotonic_ns", lambda: 0)
     rows = c.b.resp_rows(transfers)
     monkeypatch.setattr(
         c.b, "resp_rows",
@@ -830,7 +832,41 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
     assert session.copied_keys == {"stale", "k1", "k2"}
     assert session.copied_token_ids == [0] * 1568
     assert (result.logical_kv_chunks, result.logical_kv_bytes,
-            result.processed_tokens) == (2, 20, 0)
+            result.processed_tokens) == (2, 10, 0)
+
+
+def test_mp_kv_layout_sums_heterogeneous_fresh_payloads(monkeypatch, tmp_path):
+    monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
+    monkeypatch.setattr(c.b, "mp_model_layout", lambda _path: ("model", 1))
+    rows = [
+        {"command": "GET", "key_hashes": "a", "start_ns": "1",
+         "end_ns": "2", "payload_bytes": "99"},
+        {"command": "GET", "key_hashes": "a", "start_ns": "11",
+         "end_ns": "12", "payload_bytes": "10"},
+        {"command": "GET", "key_hashes": "b", "start_ns": "13",
+         "end_ns": "14", "payload_bytes": "20"},
+        {"command": "GET", "key_hashes": "foreign", "start_ns": "15",
+         "end_ns": "16", "payload_bytes": "1000"},
+        {"command": "SET", "key_hashes": "b", "start_ns": "17",
+         "end_ns": "18", "payload_bytes": "2000"},
+    ]
+    monkeypatch.setattr(c.b, "resp_rows", lambda _path: rows)
+    sink, transfers = tmp_path / "sink.log", tmp_path / "transfers.csv"
+    sink.write_text("")
+    transfers.write_text("")
+    runtime = c.LiveRuntime(
+        {}, c.b.model_campaign_config("google/gemma-4-26B-A4B-it"),
+        "none", sink, transfers,
+        SimpleNamespace(write=lambda *_args, **_kwargs: None),
+        tmp_path / "requests.jsonl",
+    )
+
+    layout = runtime._kv_layout(10, 20, {"a", "b"})
+    runtime.close()
+
+    assert layout["chunk_bytes"] is None
+    assert layout["total_payload_bytes"] == 30
+    assert layout["payload_bytes_by_key"] == {"a": 10, "b": 20}
 
 
 def test_architecture_calibration_renders_the_exact_prompt_tokens(monkeypatch):

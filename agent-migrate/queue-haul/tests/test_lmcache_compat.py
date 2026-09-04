@@ -10,6 +10,7 @@ import torch
 from lmcache_compat.connector_patch import (
     bypass_lmcache,
     independent_transaction,
+    kv_geometry_registration,
     kv_major_attention_view,
     needs_ipc_safe_kv_allocator,
     patch_on_import,
@@ -168,3 +169,57 @@ def test_only_sleeping_lmcache_driven_mp_uses_ipc_safe_kv_allocator():
     assert not needs_ipc_safe_kv_allocator(config(cumem=False))
     assert not needs_ipc_safe_kv_allocator(config(mode="engine_driven"))
     assert not needs_ipc_safe_kv_allocator(config(connector="OtherConnector"))
+
+
+def test_live_kv_geometry_preserves_heterogeneous_kernel_and_object_groups():
+    groups = [
+        SimpleNamespace(
+            shape_desc=SimpleNamespace(kv_size=2, element_size=2, nb=3, bs=8),
+            num_layers=4, hidden_dim_size=5, engine_group_idx=0,
+            layer_indices=[0, 1, 2, 3], tokens_per_block=8,
+            slots_per_block=8,
+        ),
+        SimpleNamespace(
+            shape_desc=SimpleNamespace(kv_size=1, element_size=4, nb=7, bs=16),
+            num_layers=2, hidden_dim_size=3, engine_group_idx=1,
+            layer_indices=[4, 5], tokens_per_block=32,
+            slots_per_block=16,
+        ),
+    ]
+    manager = SimpleNamespace(
+        kernel_groups=groups,
+        object_groups=[
+            SimpleNamespace(kernel_group_indices=[0], sw_size_chunks=-1),
+            SimpleNamespace(kernel_group_indices=[1], sw_size_chunks=2),
+        ],
+        get_slots_per_chunk_in_sw=lambda index: (16, 12)[index],
+    )
+
+    geometry = kv_geometry_registration(manager, 256)
+
+    assert geometry["schema"] == "queue-haul-live-kv-geometry-v1"
+    assert geometry["chunk_tokens"] == 256
+    assert geometry["groups"] == [
+        {
+            "group": "kernel-0:engine-0", "kernel_group": 0,
+            "engine_group": 0, "object_group": 0,
+            "layer_indices": [0, 1, 2, 3], "tokens_per_block": 8,
+            "slots_per_block": 8, "num_blocks": 3,
+            "block_bytes": 640, "capacity_bytes": 1920,
+            "chunk_bytes": 1280,
+        },
+        {
+            "group": "kernel-1:engine-1", "kernel_group": 1,
+            "engine_group": 1, "object_group": 1,
+            "layer_indices": [4, 5], "tokens_per_block": 32,
+            "slots_per_block": 16, "num_blocks": 7,
+            "block_bytes": 384, "capacity_bytes": 2688,
+            "chunk_bytes": 288,
+        },
+    ]
+    assert geometry["object_groups"] == [
+        {"object_group": 0, "kernel_groups": [0],
+         "sw_size_chunks": -1, "chunk_bytes": 1280},
+        {"object_group": 1, "kernel_groups": [1],
+         "sw_size_chunks": 2, "chunk_bytes": 288},
+    ]

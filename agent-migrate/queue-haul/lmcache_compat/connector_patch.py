@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import builtins
 from contextlib import nullcontext
+import json
 import os
 import socket
 import threading
+import time
 
 
 def bypass_lmcache(request) -> bool:
@@ -73,6 +75,87 @@ def register_verified_kv_caches(register, kv_caches, logger):
     logger.info("QH_KV_CACHE_DTYPES_VERIFIED attention=torch.bfloat16:%d recurrent=%s",
                 attention, recurrent)
     return result
+
+
+def kv_geometry_registration(manager, chunk_tokens: int) -> dict:
+    """Describe bytes from live, registered LMCache kernel groups.
+
+    The manager was built from the actual device tensors after LMCache's
+    zero-copy group edits. Consequently this records physical slots and
+    object payload sizes instead of reconstructing them from a model config.
+    """
+    if chunk_tokens <= 0 or not manager.kernel_groups:
+        raise ValueError("KV geometry needs a positive chunk and live groups")
+    object_by_kernel = {
+        kernel: object_index
+        for object_index, group in enumerate(manager.object_groups)
+        for kernel in group.kernel_group_indices
+    }
+    if set(object_by_kernel) != set(range(len(manager.kernel_groups))):
+        raise ValueError("each KV kernel group must belong to one object group")
+    groups = []
+    for index, group in enumerate(manager.kernel_groups):
+        shape = group.shape_desc
+        scalar = int(shape.kv_size) * int(group.num_layers) \
+            * int(group.hidden_dim_size) * int(shape.element_size)
+        block_bytes = scalar * int(shape.bs)
+        transfer_slots = int(manager.get_slots_per_chunk_in_sw(index))
+        groups.append({
+            "group": f"kernel-{index}:engine-{int(group.engine_group_idx)}",
+            "kernel_group": index,
+            "engine_group": int(group.engine_group_idx),
+            "object_group": object_by_kernel[index],
+            "layer_indices": list(map(int, group.layer_indices)),
+            "tokens_per_block": int(group.tokens_per_block),
+            "slots_per_block": int(group.slots_per_block),
+            "num_blocks": int(shape.nb),
+            "block_bytes": block_bytes,
+            "capacity_bytes": int(shape.nb) * block_bytes,
+            "chunk_bytes": transfer_slots * scalar,
+        })
+    objects = []
+    for index, group in enumerate(manager.object_groups):
+        kernels = list(map(int, group.kernel_group_indices))
+        objects.append({
+            "object_group": index,
+            "kernel_groups": kernels,
+            "sw_size_chunks": int(group.sw_size_chunks),
+            "chunk_bytes": sum(groups[kernel]["chunk_bytes"]
+                               for kernel in kernels),
+        })
+    return {
+        "schema": "queue-haul-live-kv-geometry-v1",
+        "chunk_tokens": int(chunk_tokens),
+        "groups": groups,
+        "object_groups": objects,
+    }
+
+
+def registered_kv_geometry(connector) -> dict:
+    """Rebuild the server's metadata-only grouping over registered views."""
+    from lmcache.integration.vllm.utils import vllm_layout_hints
+    from lmcache.utils import EngineType
+    from lmcache.v1.gpu_connector.utils import (
+        normalize_and_discover_per_layer_formats,
+    )
+    from lmcache.v1.kv_layer_groups import KVLayerGroupsManager
+    from lmcache.v1.multiprocess.group_view import engine_group_layer_indices
+
+    adapter = connector.worker_adapter
+    infos = adapter.engine_group_infos
+    caches = list(adapter.kv_caches.values())
+    normalized, formats = normalize_and_discover_per_layer_formats(
+        caches, engine_group_layer_indices(infos), EngineType.VLLM,
+        vllm_layout_hints(),
+    )
+    chunk_tokens = int(adapter.lmcache_tokens_per_chunk)
+    manager = KVLayerGroupsManager(
+        normalized, formats, infos, chunk_tokens,
+        separate_object_groups=(
+            os.environ.get("QH_LMCACHE_SEPARATE_OBJECT_GROUPS") == "1"
+        ),
+    )
+    return kv_geometry_registration(manager, chunk_tokens)
 
 
 def needs_ipc_safe_kv_allocator(vllm_config) -> bool:
@@ -384,6 +467,7 @@ def patch_mp_connector() -> None:
         return
     original_lookup = LMCacheMPConnector.get_num_new_matched_tokens
     original_register = LMCacheMPConnector.register_kv_caches
+    original_update = LMCacheMPConnector.update_state_after_alloc
 
     def lookup(self, request, num_computed_tokens):
         if not bypass_lmcache(request):
@@ -395,12 +479,36 @@ def patch_mp_connector() -> None:
         return 0, False
 
     def register(self, kv_caches):
-        return register_verified_kv_caches(
+        result = register_verified_kv_caches(
             lambda caches: original_register(self, caches), kv_caches, logger,
         )
+        if os.environ.get("QH_KV_GEOMETRY_EVIDENCE") == "1":
+            logger.info("QH_KV_GEOMETRY %s", json.dumps(
+                registered_kv_geometry(self), sort_keys=True,
+                separators=(",", ":"),
+            ))
+        return result
+
+    def update(self, request, blocks, num_external_tokens):
+        result = original_update(self, request, blocks, num_external_tokens)
+        if os.environ.get("QH_KV_GEOMETRY_EVIDENCE") == "1":
+            tracker = self._get_request_tracker(request.request_id)
+            logger.info("QH_KV_ALLOCATION %s", json.dumps({
+                "schema": "queue-haul-live-kv-allocation-v1",
+                "monotonic_ns": time.monotonic_ns(),
+                "request_id": request.request_id,
+                "prompt_tokens": int(request.num_prompt_tokens),
+                "tokens": int(request.num_tokens),
+                "output_tokens": int(request.num_output_tokens),
+                "external_tokens": int(num_external_tokens),
+                "blocks": {str(group): int(count) for group, count in
+                           sorted(tracker.num_allocated_blocks().items())},
+            }, sort_keys=True, separators=(",", ":")))
+        return result
 
     LMCacheMPConnector.get_num_new_matched_tokens = lookup
     LMCacheMPConnector.register_kv_caches = register
+    LMCacheMPConnector.update_state_after_alloc = update
     LMCacheMPConnector._qh_bypass_patched = True
     LMCacheMPConnector._qh_kv_dtype_registration_patched = True
 

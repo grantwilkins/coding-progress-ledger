@@ -27,6 +27,8 @@ from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance
 ROOT = Path(__file__).resolve().parent
 SCHEMA = "queue-haul-model-architecture-campaign-v1"
 GATE_SCHEMA = "queue-haul-model-architecture-gate-v1"
+KV_GEOMETRY_SCHEMA = "queue-haul-live-kv-geometry-v1"
+KV_ALLOCATION_SCHEMA = "queue-haul-live-kv-allocation-v1"
 MODELS = tuple(testbed.MODEL_SPECS)
 HARDWARE = ("A100", "H100")
 CONTEXTS = (4096, 8192, 16384, 24576, 32256)
@@ -241,6 +243,281 @@ def _integer(value, label: str) -> int:
     if not number.is_integer() or number < 0:
         raise ValueError(f"{label} must contain nonnegative integer bytes")
     return int(number)
+
+
+def _json_markers(path: Path, marker: str) -> list[dict]:
+    """Decode JSON evidence following a marker in an ANSI-decorated log."""
+    text = path.read_text(errors="replace")
+    decoder, cursor, records = json.JSONDecoder(), 0, []
+    while True:
+        found = text.find(marker, cursor)
+        if found < 0:
+            return records
+        line_end = text.find("\n", found)
+        line_end = len(text) if line_end < 0 else line_end
+        start = text.find("{", found + len(marker), line_end)
+        if start < 0:
+            raise ValueError(f"{path} has {marker.strip()} without JSON")
+        try:
+            value, consumed = decoder.raw_decode(text[start:])
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{path} has malformed {marker.strip()} JSON") from exc
+        if not isinstance(value, dict):
+            raise ValueError(f"{path} has non-object {marker.strip()} evidence")
+        records.append(value)
+        cursor = start + consumed
+
+
+def _validate_registration(value: dict) -> None:
+    groups, objects = value.get("groups"), value.get("object_groups")
+    if value.get("schema") != KV_GEOMETRY_SCHEMA \
+            or _integer(value.get("chunk_tokens", 0), "chunk_tokens") <= 0 \
+            or not isinstance(groups, list) or not groups \
+            or not isinstance(objects, list) or not objects:
+        raise ValueError("invalid live KV geometry registration")
+    if [row.get("kernel_group") for row in groups] != list(range(len(groups))) \
+            or len({row.get("group") for row in groups}) != len(groups):
+        raise ValueError("live KV kernel group identities are incomplete")
+    assigned = []
+    for index, row in enumerate(groups):
+        required = (
+            "engine_group", "object_group", "num_blocks", "block_bytes",
+            "capacity_bytes", "chunk_bytes", "tokens_per_block",
+            "slots_per_block",
+        )
+        values = {name: _integer(row.get(name, -1), name) for name in required}
+        positive = (
+            "num_blocks", "block_bytes", "capacity_bytes", "chunk_bytes",
+            "tokens_per_block", "slots_per_block",
+        )
+        if any(values[name] <= 0 for name in positive) \
+                or values["capacity_bytes"] != (
+                    values["num_blocks"] * values["block_bytes"]):
+            raise ValueError(f"invalid live KV kernel group {index}")
+    for index, row in enumerate(objects):
+        if row.get("object_group") != index \
+                or not isinstance(row.get("kernel_groups"), list) \
+                or not row["kernel_groups"]:
+            raise ValueError("invalid live KV object group identity")
+        kernels = [_integer(item, "kernel_group")
+                   for item in row["kernel_groups"]]
+        if any(item >= len(groups) for item in kernels) \
+                or _integer(row.get("chunk_bytes", -1), "chunk_bytes") != sum(
+                    _integer(groups[item]["chunk_bytes"], "chunk_bytes")
+                    for item in kernels
+                ):
+            raise ValueError(f"invalid live KV object group {index}")
+        assigned.extend(kernels)
+    if sorted(assigned) != list(range(len(groups))) \
+            or any(groups[kernel]["object_group"] != object_index
+                   for object_index, row in enumerate(objects)
+                   for kernel in row["kernel_groups"]):
+        raise ValueError("live KV object groups do not partition kernel groups")
+
+
+def _geometry_log_index(run_root: Path):
+    registrations, allocations = {}, {}
+    logs = sorted((run_root / "debug").glob("testbed_*/sink.log"))
+    if not logs:
+        raise ValueError("run has no sink logs with live KV geometry evidence")
+    for path in logs:
+        observed = _json_markers(path, "QH_KV_GEOMETRY ")
+        allocated = _json_markers(path, "QH_KV_ALLOCATION ")
+        for value in observed:
+            _validate_registration(value)
+        if observed and any(value != observed[0] for value in observed[1:]):
+            raise ValueError(f"live KV registration changed within {path}")
+        if allocated and not observed:
+            raise ValueError(f"{path} has allocations without a registration")
+        if observed:
+            registrations[path] = observed[0]
+        for value in allocated:
+            if value.get("schema") != KV_ALLOCATION_SCHEMA \
+                    or not value.get("request_id") \
+                    or not isinstance(value.get("blocks"), dict):
+                raise ValueError(f"invalid live KV allocation in {path}")
+            allocations.setdefault(str(value["request_id"]), []).append(
+                (path, value)
+            )
+    if not registrations or not allocations:
+        raise ValueError("run lacks live KV registration or allocation evidence")
+    return registrations, allocations
+
+
+def _allocation_for_request(request: dict, registrations: dict,
+                            allocations: dict) -> tuple[dict, dict]:
+    request_id = str(request.get("request_id", ""))
+    prompt_tokens = _integer(request.get("prompt_tokens", -1), "prompt_tokens")
+    candidates = []
+    for path, value in allocations.get(request_id, []):
+        registration = registrations.get(path)
+        if registration is None \
+                or _integer(value.get("prompt_tokens", -1), "prompt_tokens") \
+                != prompt_tokens \
+                or _integer(value.get("output_tokens", -1), "output_tokens") != 0:
+            continue
+        blocks = {int(group): _integer(count, "allocated blocks")
+                  for group, count in value["blocks"].items()}
+        engines = {int(row["engine_group"])
+                   for row in registration["groups"]}
+        if engines <= blocks.keys() and all(blocks[group] > 0 for group in engines):
+            candidates.append((sum(blocks[group] for group in engines),
+                               _integer(value.get("monotonic_ns", 0),
+                                        "allocation timestamp"),
+                               path, registration, value, blocks))
+    if not candidates:
+        raise ValueError(f"request {request_id} lacks complete live allocation evidence")
+    paths = {row[2] for row in candidates}
+    if len(paths) != 1:
+        raise ValueError(f"request {request_id} appears in multiple sink runtimes")
+    maximum = max(row[0] for row in candidates)
+    largest = [row for row in candidates if row[0] == maximum]
+    vectors = {tuple(sorted(row[5].items())) for row in largest}
+    if len(vectors) != 1:
+        raise ValueError(f"request {request_id} has ambiguous allocation evidence")
+    selected = max(largest, key=lambda row: row[1])
+    return selected[3], selected[5]
+
+
+def _scenario_geometry(scenario: dict, result: dict, root: Path,
+                       registrations: dict, allocations: dict) -> list[dict]:
+    moves = result.get("migrations", [])
+    if result.get("status") != "complete" or len(moves) != 1 \
+            or moves[0].get("error") or not moves[0].get("initial"):
+        raise ValueError(f"{scenario['scenario_id']} is not one successful migration")
+    move, request = moves[0], moves[0]["initial"]
+    if move.get("move", {}).get("method") != "kv_transfer" \
+            or _integer(request.get("prompt_tokens", -1), "prompt_tokens") \
+            != int(scenario["context_size"]):
+        raise ValueError(f"{scenario['scenario_id']} changed its exact-token contract")
+    registration, blocks = _allocation_for_request(
+        request, registrations, allocations,
+    )
+    session_id = move["move"]["session_id"]
+    keys = set(result.get("session_cache_keys", {}).get(session_id, []))
+    start, end = int(move["initial_start_ns"]), int(move["initial_end_ns"])
+    transfers = [
+        row for row in testbed.resp_rows(root / "resp_transfers.csv")
+        if row["command"] == "GET" and row["key_hashes"] in keys
+        and int(row["payload_bytes"]) > 0
+        and int(row["start_ns"]) < end and int(row["end_ns"]) > start
+    ]
+    observed_keys = [row["key_hashes"] for row in transfers]
+    if not transfers or len(observed_keys) != len(set(observed_keys)):
+        raise ValueError(
+            f"{scenario['scenario_id']} lacks one fresh GET per transferred key"
+        )
+    objects_by_size: dict[int, list[dict]] = {}
+    for row in registration["object_groups"]:
+        objects_by_size.setdefault(int(row["chunk_bytes"]), []).append(row)
+    group_transfer = {int(row["kernel_group"]): 0
+                      for row in registration["groups"]}
+    for transfer in transfers:
+        size = int(transfer["payload_bytes"])
+        matches = objects_by_size.get(size, [])
+        if len(matches) != 1:
+            raise ValueError(
+                f"{scenario['scenario_id']} cannot map {size}-byte GET "
+                "to exactly one live object group"
+            )
+        for kernel in matches[0]["kernel_groups"]:
+            group_transfer[int(kernel)] += int(
+                registration["groups"][int(kernel)]["chunk_bytes"]
+            )
+    transferred = sum(group_transfer.values())
+    if transferred != _integer(request.get("logical_kv_bytes", -1),
+                                "logical_kv_bytes"):
+        raise ValueError(
+            f"{scenario['scenario_id']} live group bytes do not match migration"
+        )
+    return [{
+        "context_tokens": int(scenario["context_size"]),
+        "repeat": int(scenario["repeat"]),
+        "bandwidth_mbps": int(scenario["bandwidth_mbps"]),
+        "scenario_id": scenario["scenario_id"],
+        "group": group["group"],
+        "resident_bytes": blocks[int(group["engine_group"])]
+            * int(group["block_bytes"]),
+        "capacity_bytes": int(group["capacity_bytes"]),
+        "transfer_bytes": group_transfer[int(group["kernel_group"])],
+    } for group in registration["groups"]]
+
+
+def collect_geometry_rows(run_root: Path, *, contexts=CONTEXTS,
+                          repeats: int = REPEATS,
+                          bandwidths=BANDWIDTH_MBPS) -> list[dict]:
+    plan_value = json.loads((run_root / "plan.json").read_text())
+    metadata = json.loads((run_root / "run_metadata.json").read_text())
+    if plan_value.get("campaign_schema") != SCHEMA \
+            or plan_value.get("model") not in MODELS \
+            or metadata.get("dirty") \
+            or metadata.get("lmcache_mode") != "mp" \
+            or metadata.get("config", {}).get("model") != plan_value["model"] \
+            or not metadata.get("config", {}).get("architecture_campaign"):
+        raise ValueError("run provenance cannot produce gated KV geometry")
+    full_contract = (tuple(map(int, contexts)) == CONTEXTS
+                     and int(repeats) == REPEATS
+                     and tuple(map(int, bandwidths)) == BANDWIDTH_MBPS)
+    if full_contract:
+        validate_collection_plan(plan_value)
+        if metadata.get("plan_object_sha256") != profiler.object_hash(plan_value):
+            raise ValueError("run plan hash cannot produce gated KV geometry")
+    registrations, allocations = _geometry_log_index(run_root)
+    selected = [
+        row for row in plan_value.get("scenarios", [])
+        if row.get("kind") == "migration" and row.get("method") == "kv_transfer"
+        and row.get("activity") == "none"
+        and int(row.get("move_concurrency", row.get("concurrency", 0))) == 1
+    ]
+    expected_cells = {(int(context), repeat, int(bandwidth))
+                      for context in contexts for repeat in range(repeats)
+                      for bandwidth in bandwidths}
+    actual_cells = {(int(row["context_size"]), int(row["repeat"]),
+                     int(row["bandwidth_mbps"])) for row in selected}
+    if actual_cells != expected_cells or len(selected) != len(expected_cells):
+        raise ValueError("run lacks the complete width-one KV geometry matrix")
+    evidence = []
+    for scenario in selected:
+        root = run_root / "scenarios" / scenario["scenario_id"]
+        result = json.loads((root / "result.json").read_text())
+        evidence.extend(_scenario_geometry(
+            scenario, result, root, registrations, allocations,
+        ))
+    by_cell: dict[tuple, list[dict]] = {}
+    for row in evidence:
+        key = int(row["context_tokens"]), int(row["repeat"]), row["group"]
+        by_cell.setdefault(key, []).append(row)
+    groups = {row["group"] for row in evidence}
+    expected_groups = {(int(context), repeat, group)
+                       for context in contexts for repeat in range(repeats)
+                       for group in groups}
+    if set(by_cell) != expected_groups:
+        raise ValueError("live KV geometry does not cover every group cell")
+    collapsed = []
+    for key, rows in sorted(by_cell.items()):
+        if {int(row["bandwidth_mbps"]) for row in rows} \
+                != set(map(int, bandwidths)) \
+                or len(rows) != len(bandwidths):
+            raise ValueError("live KV geometry lacks a bandwidth replication")
+        measurements = {(int(row["resident_bytes"]),
+                         int(row["capacity_bytes"]),
+                         int(row["transfer_bytes"])) for row in rows}
+        if len(measurements) != 1:
+            raise ValueError("live KV geometry changed across bandwidth controls")
+        resident, capacity, transfer = measurements.pop()
+        collapsed.append({
+            "context_tokens": key[0], "repeat": key[1], "group": key[2],
+            "resident_bytes": resident, "capacity_bytes": capacity,
+            "transfer_bytes": transfer,
+        })
+    return collapsed
+
+
+def collect_geometry(run_root: Path, out_path: Path) -> list[dict]:
+    rows = collect_geometry_rows(run_root)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    profiler.write_csv(out_path, rows)
+    return rows
 
 
 def geometry_evidence(rows: list[dict], migrations: list[dict], *,
@@ -469,7 +746,7 @@ def timing_gate(profile: ModelProfile, migrations: list[dict]) -> dict:
 
 
 def freeze_profile(base_path: Path, run_root: Path, smoke_root: Path,
-                   geometry_path: Path, out_path: Path) -> dict:
+                   geometry_path: Path | None, out_path: Path) -> dict:
     if not (run_root / "migrations.csv").exists():
         profiler.reduce_run(run_root, None)
     base = json.loads(base_path.read_text())
@@ -482,6 +759,9 @@ def freeze_profile(base_path: Path, run_root: Path, smoke_root: Path,
         raise ValueError("base profile does not match the model/hardware arm")
     launch = launch_gate(smoke_root)
     migrations = _rows(run_root / "migrations.csv")
+    geometry_path = geometry_path or run_root / "kv_geometry.csv"
+    if not geometry_path.exists():
+        collect_geometry(run_root, geometry_path)
     geometry, curve = geometry_evidence(
         _rows(geometry_path), migrations,
         heterogeneous=plan_value["model"] != testbed.MODEL,
@@ -503,6 +783,7 @@ def freeze_profile(base_path: Path, run_root: Path, smoke_root: Path,
         "schema": GATE_SCHEMA, "passed": timing["passed"],
         "model": candidate.model, "hardware": plan_value["hardware"],
         "launch": launch, "timing": timing,
+        "geometry_sha256": profiler.file_hash(geometry_path),
         "scalar_kv_residual": candidate.case().kv_transfer.scalar_residual(),
         "kv_representation": "measured_curve",
     }
@@ -1032,7 +1313,10 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--base-profile", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--smoke-root", type=Path, required=True)
-    command.add_argument("--geometry", type=Path, required=True)
+    command.add_argument("--geometry", type=Path)
+    command.add_argument("--out", type=Path, required=True)
+    command = commands.add_parser("collect-geometry")
+    command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
     command = commands.add_parser("screen")
     command.add_argument("--arm", nargs=4, action="append", required=True,
@@ -1073,6 +1357,8 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "freeze-profile":
         freeze_profile(args.base_profile, args.run_root, args.smoke_root,
                        args.geometry, args.out)
+    elif args.command == "collect-geometry":
+        collect_geometry(args.run_root, args.out)
     elif args.command == "screen":
         screen_to_dir(args.arm, args.workload, args.manifest, args.out_dir)
     else:

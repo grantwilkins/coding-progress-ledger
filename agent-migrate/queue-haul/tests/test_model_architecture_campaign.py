@@ -13,6 +13,7 @@ Plausible wrong implementations:
 
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -95,6 +96,99 @@ def test_geometry_requires_complete_group_accounting_and_matches_wire_bytes():
             geometry, bad, contexts=(10, 20), repeats=2,
             heterogeneous=True,
         )
+
+
+def test_geometry_collector_uses_live_allocations_and_heterogeneous_gets(tmp_path):
+    model_name = "google/gemma-4-26B-A4B-it"
+    registration = {
+        "schema": campaign.KV_GEOMETRY_SCHEMA, "chunk_tokens": 10,
+        "groups": [
+            {"group": "full", "kernel_group": 0, "engine_group": 0,
+             "object_group": 0, "layer_indices": [0], "tokens_per_block": 1,
+             "slots_per_block": 1, "num_blocks": 100, "block_bytes": 10,
+             "capacity_bytes": 1000, "chunk_bytes": 30},
+            {"group": "sliding", "kernel_group": 1, "engine_group": 1,
+             "object_group": 1, "layer_indices": [1], "tokens_per_block": 1,
+             "slots_per_block": 1, "num_blocks": 80, "block_bytes": 5,
+             "capacity_bytes": 400, "chunk_bytes": 20},
+        ],
+        "object_groups": [
+            {"object_group": 0, "kernel_groups": [0],
+             "sw_size_chunks": -1, "chunk_bytes": 30},
+            {"object_group": 1, "kernel_groups": [1],
+             "sw_size_chunks": 2, "chunk_bytes": 20},
+        ],
+    }
+    scenarios = []
+    allocations = []
+    for bandwidth, suffix in ((1000, "a"), (5000, "b")):
+        scenario_id, request_id = f"scenario-{suffix}", f"request-{suffix}"
+        scenarios.append({
+            "scenario_id": scenario_id, "kind": "migration",
+            "method": "kv_transfer", "activity": "none", "concurrency": 1,
+            "move_concurrency": 1, "context_size": 10, "repeat": 0,
+            "bandwidth_mbps": bandwidth,
+        })
+        allocations.append({
+            "schema": campaign.KV_ALLOCATION_SCHEMA,
+            "monotonic_ns": 11, "request_id": request_id,
+            "prompt_tokens": 10, "tokens": 10, "output_tokens": 0,
+            "external_tokens": 10, "blocks": {"0": 2, "1": 3},
+        })
+        root = tmp_path / "scenarios" / scenario_id
+        root.mkdir(parents=True)
+        (root / "result.json").write_text(json.dumps({
+            "status": "complete", "session_cache_keys": {
+                "session": [f"full-{suffix}", f"sliding-{suffix}"],
+            },
+            "migrations": [{
+                "move": {"session_id": "session", "method": "kv_transfer"},
+                "error": "", "initial_start_ns": 10, "initial_end_ns": 20,
+                "initial": {"request_id": request_id, "prompt_tokens": 10,
+                            "logical_kv_bytes": 50},
+            }],
+        }))
+        (root / "resp_transfers.csv").write_text(
+            "command,key_hashes,start_ns,end_ns,payload_bytes\n"
+            f"GET,old-{suffix},1,2,999\n"
+            f"GET,full-{suffix},12,13,30\n"
+            f"GET,sliding-{suffix},14,15,20\n"
+        )
+    (tmp_path / "plan.json").write_text(json.dumps({
+        "campaign_schema": campaign.SCHEMA, "model": model_name,
+        "hardware": "A100", "scenarios": scenarios,
+    }))
+    (tmp_path / "run_metadata.json").write_text(json.dumps({
+        "dirty": False, "lmcache_mode": "mp", "config": {
+            "model": model_name, "architecture_campaign": True,
+        },
+    }))
+    debug = tmp_path / "debug" / "testbed_1"
+    debug.mkdir(parents=True)
+    log = "\x1b[32mQH_KV_GEOMETRY " + json.dumps(registration) + "\x1b[0m\n"
+    log += "".join("QH_KV_ALLOCATION " + json.dumps(row) + "\n"
+                   for row in allocations)
+    (debug / "sink.log").write_text(log)
+
+    rows = campaign.collect_geometry_rows(
+        tmp_path, contexts=(10,), repeats=1, bandwidths=(1000, 5000),
+    )
+
+    assert rows == [
+        {"context_tokens": 10, "repeat": 0, "group": "full",
+         "resident_bytes": 20, "capacity_bytes": 1000,
+         "transfer_bytes": 30},
+        {"context_tokens": 10, "repeat": 0, "group": "sliding",
+         "resident_bytes": 15, "capacity_bytes": 400,
+         "transfer_bytes": 20},
+    ]
+    assert campaign._json_markers(
+        debug / "sink.log", "QH_KV_GEOMETRY ") == [registration]
+    args = campaign.parse_args([
+        "collect-geometry", "--run-root", str(tmp_path),
+        "--out", str(tmp_path / "geometry.csv"),
+    ])
+    assert args.command == "collect-geometry" and isinstance(args.out, Path)
 
 
 def workload() -> WorkloadProfile:
