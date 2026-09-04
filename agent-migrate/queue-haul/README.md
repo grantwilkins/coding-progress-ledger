@@ -1889,6 +1889,26 @@ The same power program accepts `--hardware a100`, hard-gates the Azure 300 W
 A100 identity, and uses runtime-specific model overrides. Managed phase-power
 launches likewise accept either `a100` or `h100`.
 
+If the original rational A100 fit completed but failed its frozen holdout gates,
+collect a prospective replication extension instead of refitting or relabeling
+that evidence:
+
+```bash
+uv run python power_model_campaign.py --hardware a100 --model MODEL \
+  --replication-base /datadrive/ORIGINAL-FAILED-RUN \
+  --out /datadrive/NEW-REPLICATION-RUN
+```
+
+The extension pins hashes of the original metadata, cells, and fit; requires the
+same checkpoint revision and physical GPU; and acquires all training data before
+the new holdout. Training adds two complete repeats of the original 45-cell grid
+and three idle anchors. The untouched prospective holdout contains 18 newly
+measured active cells plus six interspersed idle anchors, so its R2 covers the
+full idle-to-saturation envelope. The report also retains an active-only
+diagnostic, excludes the original failed confirmation cells from validation,
+and applies the existing MAE, p90, R2, family, coefficient-stability,
+repeatability, and zero-cache gates without changing their thresholds.
+
 For a profile-free two-region mechanism check, `migration-timing` starts the
 pinned model on one source A100 and one destination A100, then measures both KV
 transfer and replay at exact token counts. It requires a formal calibration for

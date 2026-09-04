@@ -67,6 +67,28 @@ def test_followup_randomizes_three_calibration_and_validation_reps_with_idle_bra
     assert work != sorted(work, key=lambda row: (row.stage, row.concurrency, row.replicate))
 
 
+def test_replication_grid_prespecifies_training_and_broad_holdout():
+    rows = campaign.replication_cells(4)
+
+    assert len(rows) == 117
+    assert [rows[index].stage for index in (0, 46, 92)] == [
+        "replication_training_idle"] * 3
+    discovery = [row for row in rows
+                 if row.stage == "replication_discovery"]
+    active = [row for row in rows
+              if row.stage == "replication_confirmation"]
+    held_idle = [row for row in rows
+                 if row.stage == "replication_holdout_idle"]
+    assert len(discovery) == 90
+    assert {row.replicate for row in discovery} == {2, 3}
+    assert all(sum(row.replicate == replicate for row in discovery) == 45
+               for replicate in (2, 3))
+    assert len(active) == 18 and {row.concurrency for row in active} == {3, 6, 12}
+    assert len(held_idle) == 6
+    assert [rows[index].stage for index in (96, 100, 104, 108, 112, 116)] \
+        == ["replication_holdout_idle"] * 6
+
+
 def test_parse_metrics_sums_engines_and_requires_realized_counters():
     text = """
 # HELP vllm:prompt_tokens_total Number of prefill tokens processed.
@@ -99,6 +121,24 @@ def synthetic_rows(alpha=1 / 1000, beta=1 / 500):
                          "cached_prompt_tokens": 0})
     return rows * 15 + [{"stage": "idle", "power_mean_w": 80,
                          "cached_prompt_tokens": 0}] * 3
+
+
+def synthetic_cell_rows(plan):
+    fcap = 28672 * 16
+    gcap = 512 * 16
+    rows = []
+    for sequence, cell in enumerate(plan):
+        prefill = cell.prompt_tokens * cell.concurrency
+        decode = cell.output_tokens * cell.concurrency
+        z = prefill / fcap + decode / gcap
+        rows.append({
+            **campaign.asdict(cell), "sequence": sequence,
+            "realized_prefill_tps": prefill,
+            "realized_decode_tps": decode,
+            "power_mean_w": 80 + 220 * z / (1 + z),
+            "cached_prompt_tokens": 0,
+        })
+    return rows
 
 
 def test_fit_uses_realized_rates_and_recovers_saturating_model():
@@ -136,6 +176,95 @@ def test_exponential_provisional_is_json_serializable():
 def test_followup_requires_complete_independent_replicates():
     with pytest.raises(RuntimeError, match="three independent reps"):
         campaign.followup_result(synthetic_rows(), [])
+
+
+def test_replication_fit_uses_four_training_reps_and_independent_envelope():
+    base = synthetic_cell_rows(campaign.cells(4))
+    extension = synthetic_cell_rows(campaign.replication_cells(4))
+
+    result = campaign.replication_result(base, extension)
+
+    validation = result["validation"]
+    assert result["schema"] == campaign.REPLICATION_SCHEMA
+    assert result["status"] == "calibrated" and validation["passed"]
+    assert (validation["training_cells"],
+            validation["training_idle_cells"]) == (180, 6)
+    assert (validation["holdout_cells"],
+            validation["holdout_active_cells"],
+            validation["holdout_idle_cells"]) == (24, 18, 6)
+    assert validation["excluded_prior_confirmation_cells"] == 18
+    assert validation["holdout_r2"] > .99
+    assert validation["active_only_diagnostic"]["cells"] == 18
+    assert validation["replicate_p90_difference_w"] == pytest.approx(0)
+    assert validation["cached_prompt_tokens"] == 0
+
+
+def write_replication_base(path, seed=4):
+    path.mkdir()
+    model = "google/gemma-4-26B-A4B-it"
+    metadata = {
+        "model": model,
+        "revision": campaign.testbed.model_spec(model).revision,
+        "hardware": "A100",
+        "gpu": {"name": "NVIDIA A100 80GB PCIe", "uuid": "GPU-x",
+                "power_limit_w": 300.0},
+        "seed": seed,
+        "git_sha": "a" * 40,
+    }
+    (path / "metadata.json").write_text(json.dumps(metadata) + "\n")
+    (path / "cells.jsonl").write_text("".join(
+        json.dumps(row) + "\n"
+        for row in synthetic_cell_rows(campaign.cells(seed))))
+    (path / "fit.json").write_text(json.dumps({
+        "schema": "queue-haul-rational-power-fit-v1",
+        "status": "holdout_failed",
+        "validation": {"passed": False},
+    }) + "\n")
+    return model, metadata
+
+
+def test_replication_base_pins_complete_failed_evidence(tmp_path):
+    model, metadata = write_replication_base(tmp_path / "base")
+
+    rows, loaded, evidence = campaign.replication_base(
+        tmp_path / "base", model, "a100")
+
+    assert len(rows) == 111 and loaded == metadata
+    assert evidence["model_revision"] == metadata["revision"]
+    assert evidence["gpu"] == metadata["gpu"]
+    assert evidence["base_git_sha"] == metadata["git_sha"]
+    assert all(len(evidence[name]) == 64 for name in (
+        "metadata_sha256", "cells_sha256", "fit_sha256"))
+
+
+def test_replication_base_rejects_revision_or_gpu_drift(tmp_path):
+    model, metadata = write_replication_base(tmp_path / "revision")
+    metadata["revision"] = "b" * 40
+    (tmp_path / "revision" / "metadata.json").write_text(
+        json.dumps(metadata) + "\n")
+    with pytest.raises(RuntimeError, match="matching complete failed holdout"):
+        campaign.replication_base(tmp_path / "revision", model, "a100")
+
+    model, metadata = write_replication_base(tmp_path / "gpu")
+    metadata["gpu"]["power_limit_w"] = 400.0
+    (tmp_path / "gpu" / "metadata.json").write_text(json.dumps(metadata) + "\n")
+    with pytest.raises(RuntimeError, match="matching complete failed holdout"):
+        campaign.replication_base(tmp_path / "gpu", model, "a100")
+
+
+def test_replication_cli_is_mutually_exclusive_with_old_followup(tmp_path):
+    base = ["--model", "google/gemma-4-26B-A4B-it",
+            "--out", str(tmp_path / "power")]
+
+    args = campaign.parse_args([
+        *base, "--hardware", "a100", "--replication-base", "/old",
+    ])
+    assert args.replication_base == campaign.Path("/old")
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        campaign.parse_args([
+            *base, "--replication-base", "/old",
+            "--followup-base", "/followup",
+        ])
 
 
 def test_offline_refit_hard_fails_incomplete_grid(tmp_path):

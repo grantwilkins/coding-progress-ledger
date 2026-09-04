@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import itertools
 import json
 import math
 import os
@@ -31,6 +33,7 @@ GPU_CONTRACTS = {
     "a100": ("NVIDIA A100 80GB PCIe", 300.0),
     "h100": ("NVIDIA H100 NVL", 400.0),
 }
+REPLICATION_SCHEMA = "queue-haul-rational-power-replication-v1"
 
 
 @dataclass(frozen=True)
@@ -119,6 +122,52 @@ def followup_cells(seed: int = 1) -> list[Cell]:
     plan = [Cell("idle", "idle", 0, 0, 0, 0)]
     for replicate, cell in enumerate(work, 1):
         plan += [cell, Cell("idle", "idle", 0, 0, 0, replicate)]
+    return plan
+
+
+def replication_cells(seed: int = 1) -> list[Cell]:
+    """Acquire a prospectively split extension of the original power grid."""
+    discovery_work = (
+        (2048, 1), (8192, 1), (28672, 1), (256, 512), (8192, 512),
+        (28672, 512), (604, 64), (8192, 64), (16384, 64),
+    )
+    confirmation_work = (
+        (4096, 1), (16384, 1), (4096, 512), (16384, 512),
+        (604, 64), (12288, 64),
+    )
+    rng = random.Random(seed)
+    discovery = [
+        Cell("replication_discovery", family(prompt, output), prompt,
+             output, concurrency, replicate)
+        for prompt, output in discovery_work
+        for concurrency in (1, 2, 4, 8, 16)
+        for replicate in (2, 3)
+    ]
+    confirmation = [
+        Cell("replication_confirmation", family(prompt, output), prompt,
+             output, concurrency, 0)
+        for prompt, output in confirmation_work
+        for concurrency in (3, 6, 12)
+    ]
+    rng.shuffle(discovery)
+    rng.shuffle(confirmation)
+
+    # Finish all training acquisition before exposing the prospective holdout.
+    # The original three idle anchors remain training data; these three fresh
+    # anchors make startup transients unable to determine P0 by themselves.
+    plan = [Cell("replication_training_idle", "idle", 0, 0, 0, 3)]
+    plan += discovery[:45]
+    plan += [Cell("replication_training_idle", "idle", 0, 0, 0, 4)]
+    plan += discovery[45:]
+    plan += [Cell("replication_training_idle", "idle", 0, 0, 0, 5)]
+
+    # Six independent idle anchors broaden the held-out operating envelope and
+    # are interspersed with the 18 unseen active cells. They are never used to
+    # fit P0 or any other parameter.
+    for replicate in range(6):
+        plan += confirmation[replicate * 3:(replicate + 1) * 3]
+        plan += [Cell("replication_holdout_idle", "idle", 0, 0, 0,
+                      replicate)]
     return plan
 
 
@@ -465,6 +514,152 @@ def prediction_report(rows: list[dict], fit: dict) -> dict:
             "max_abs_error_w": float(max(map(abs, errors)))}
 
 
+def _replication_grid(rows: list[dict]) -> tuple[list[dict], list[dict],
+                                                  list[dict], list[dict]]:
+    discovery = [row for row in rows
+                 if row["stage"] == "replication_discovery"]
+    training_idle = [row for row in rows
+                     if row["stage"] == "replication_training_idle"]
+    confirmation = [row for row in rows
+                    if row["stage"] == "replication_confirmation"]
+    holdout_idle = [row for row in rows
+                    if row["stage"] == "replication_holdout_idle"]
+    expected_discovery = {
+        (family(prompt, output), prompt, output, concurrency, replicate)
+        for prompt, output in (
+            (2048, 1), (8192, 1), (28672, 1), (256, 512),
+            (8192, 512), (28672, 512), (604, 64), (8192, 64),
+            (16384, 64),
+        )
+        for concurrency in (1, 2, 4, 8, 16)
+        for replicate in (2, 3)
+    }
+    expected_confirmation = {
+        (family(prompt, output), prompt, output, concurrency, 0)
+        for prompt, output in (
+            (4096, 1), (16384, 1), (4096, 512), (16384, 512),
+            (604, 64), (12288, 64),
+        )
+        for concurrency in (3, 6, 12)
+    }
+    identity = lambda row: (
+        row["family"], row["prompt_tokens"], row["output_tokens"],
+        row["concurrency"], row["replicate"])
+    if len(discovery) != 90 \
+            or {identity(row) for row in discovery} != expected_discovery \
+            or len(training_idle) != 3 \
+            or {row["replicate"] for row in training_idle} != {3, 4, 5} \
+            or len(confirmation) != 18 \
+            or {identity(row) for row in confirmation} != expected_confirmation \
+            or len(holdout_idle) != 6 \
+            or {row["replicate"] for row in holdout_idle} != set(range(6)):
+        raise RuntimeError("replication extension grid is incomplete or changed")
+    return discovery, training_idle, confirmation, holdout_idle
+
+
+def _replicate_p90(rows: list[dict]) -> float:
+    grouped: dict[tuple, dict[int, float]] = {}
+    for row in rows:
+        key = (row["family"], row["prompt_tokens"], row["output_tokens"],
+               row["concurrency"])
+        values = grouped.setdefault(key, {})
+        replicate = int(row["replicate"])
+        if replicate in values:
+            raise RuntimeError("duplicate discovery replicate")
+        values[replicate] = float(row["power_mean_w"])
+    if len(grouped) != 45 or any(set(values) != set(range(4))
+                                for values in grouped.values()):
+        raise RuntimeError("replicate diagnostic requires four complete grids")
+    differences = [
+        abs(left - right)
+        for values in grouped.values()
+        for left, right in itertools.combinations(values.values(), 2)
+    ]
+    return float(np.quantile(differences, .9))
+
+
+def replication_result(base: list[dict], rows: list[dict]) -> dict:
+    base_discovery = [row for row in base if row["stage"] == "discovery"]
+    base_idle = [row for row in base if row["stage"] == "idle"]
+    if len(base) != 111 or len(base_discovery) != 90 or len(base_idle) != 3:
+        raise RuntimeError("replication requires the complete original grid")
+    discovery, training_idle, active, held_idle = _replication_grid(rows)
+    training = base_discovery + discovery
+    idle = base_idle + training_idle
+    fit = rational_fit(training, idle)
+
+    halves = [rational_fit(
+        [row for row in training if int(row["replicate"]) % 2 == parity],
+        idle,
+    ) for parity in (0, 1)]
+    stability = abs(halves[0]["beta_s_per_decode_token"]
+                    - halves[1]["beta_s_per_decode_token"]) \
+        / fit["beta_s_per_decode_token"]
+    replicate_p90 = _replicate_p90(training)
+
+    held = active + held_idle
+    errors = [abs(row["power_mean_w"] - predict(row, fit)) for row in held]
+    family_mae = {
+        name: statistics.fmean(
+            abs(row["power_mean_w"] - predict(row, fit))
+            for row in held if row["family"] == name)
+        for name in sorted({row["family"] for row in held})
+    }
+    mean = statistics.fmean(row["power_mean_w"] for row in held)
+    ss_res = sum((row["power_mean_w"] - predict(row, fit)) ** 2
+                 for row in held)
+    ss_tot = sum((row["power_mean_w"] - mean) ** 2 for row in held)
+    if ss_tot <= 0:
+        raise RuntimeError("replication holdout has no power range")
+    cached = int(sum(row["cached_prompt_tokens"] for row in base + rows))
+    validation = {
+        "design": "prospective_active_plus_idle_envelope",
+        "training_cells": len(training),
+        "training_idle_cells": len(idle),
+        "holdout_cells": len(held),
+        "holdout_active_cells": len(active),
+        "holdout_idle_cells": len(held_idle),
+        "holdout_power_range_w": [
+            float(min(row["power_mean_w"] for row in held)),
+            float(max(row["power_mean_w"] for row in held)),
+        ],
+        "holdout_mae_w": float(statistics.fmean(errors)),
+        "holdout_p90_abs_error_w": float(np.quantile(errors, .9)),
+        "holdout_r2": float(1 - ss_res / ss_tot),
+        "family_mae_w": {name: float(value)
+                         for name, value in family_mae.items()},
+        "active_only_diagnostic": prediction_report(active, fit),
+        "beta_split_relative_difference": float(stability),
+        "beta_split_values": {
+            "even_replicates_0_2": halves[0]["beta_s_per_decode_token"],
+            "odd_replicates_1_3": halves[1]["beta_s_per_decode_token"],
+        },
+        "replicate_p90_difference_w": replicate_p90,
+        "cached_prompt_tokens": cached,
+        "excluded_prior_confirmation_cells": sum(
+            row["stage"] == "confirmation" for row in base),
+    }
+    validation["gates"] = {
+        "holdout_mae_le_5w": bool(validation["holdout_mae_w"] <= 5),
+        "holdout_p90_le_10w": bool(
+            validation["holdout_p90_abs_error_w"] <= 10),
+        "holdout_r2_ge_0p95": bool(validation["holdout_r2"] >= .95),
+        "each_family_mae_le_8w": bool(max(family_mae.values()) <= 8),
+        "beta_split_difference_le_20pct": bool(stability <= .2),
+        "replicate_p90_difference_le_8w": bool(replicate_p90 <= 8),
+        "zero_cached_prompt_tokens": bool(cached == 0),
+    }
+    validation["passed"] = all(validation["gates"].values())
+    return {
+        "schema": REPLICATION_SCHEMA,
+        "status": "calibrated" if validation["passed"] else "holdout_failed",
+        "fit": fit,
+        "max_ell": MAX_ELL,
+        "power_curve": power_curve(fit),
+        "validation": validation,
+    }
+
+
 def followup_result(base: list[dict], rows: list[dict]) -> dict:
     calibration = [row for row in rows if row["stage"] == "targeted_calibration"]
     held = [row for row in rows if row["stage"] == "targeted_validation"]
@@ -503,6 +698,60 @@ def complete_rows(out: Path, seed: int) -> list[dict]:
                {**asdict(cell), "sequence": sequence}.items()):
             raise RuntimeError(f"row {sequence} does not match deterministic grid")
     return rows
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def replication_base(path: Path, model: str,
+                     hardware: str) -> tuple[list[dict], dict, dict]:
+    path = path.resolve()
+    metadata_path = path / "metadata.json"
+    cells_path = path / "cells.jsonl"
+    fit_path = path / "fit.json"
+    metadata = json.loads(metadata_path.read_text())
+    prior = json.loads(fit_path.read_text())
+    expected_name, expected_limit = GPU_CONTRACTS[hardware]
+    base_gpu = metadata.get("gpu")
+    try:
+        limit_matches = math.isclose(
+            float(base_gpu.get("power_limit_w", math.nan)),
+            expected_limit, abs_tol=.01)
+    except (AttributeError, TypeError, ValueError):
+        limit_matches = False
+    gpu_matches = isinstance(base_gpu, dict) \
+        and base_gpu.get("name") == expected_name \
+        and isinstance(base_gpu.get("uuid"), str) \
+        and bool(base_gpu["uuid"]) \
+        and limit_matches
+    if metadata.get("model") != model \
+            or str(metadata.get("hardware", "")).lower() != hardware \
+            or metadata.get("revision") != testbed.model_spec(model).revision \
+            or not gpu_matches \
+            or not isinstance(metadata.get("seed"), int) \
+            or not isinstance(metadata.get("git_sha"), str) \
+            or len(metadata["git_sha"]) != 40 \
+            or prior.get("schema") != "queue-haul-rational-power-fit-v1" \
+            or prior.get("status") != "holdout_failed" \
+            or prior.get("validation", {}).get("passed") is not False:
+        raise RuntimeError(
+            "replication base must be the matching complete failed holdout")
+    rows = complete_rows(path, int(metadata["seed"]))
+    if any(row["cached_prompt_tokens"] for row in rows):
+        raise RuntimeError("replication base contains cached prompt tokens")
+    evidence = {
+        "path": str(path),
+        "metadata_sha256": _sha256(metadata_path),
+        "cells_sha256": _sha256(cells_path),
+        "fit_sha256": _sha256(fit_path),
+        "model_revision": metadata["revision"],
+        "gpu": base_gpu,
+        "base_git_sha": metadata["git_sha"],
+        "prior_schema": prior["schema"],
+        "prior_status": prior["status"],
+    }
+    return rows, metadata, evidence
 
 
 def refit(args) -> None:
@@ -578,6 +827,10 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
                 "minimum_window_s": args.window_s,
                 "warmup": "one complete batch", "cooldown_s": args.cooldown_s,
                 "seed": args.seed}
+    if getattr(args, "replication_base", None):
+        _rows, _metadata, evidence = replication_base(
+            args.replication_base, args.model, args.hardware)
+        expected["replication_base"] = evidence
     for key, value in expected.items():
         if metadata.get(key) != value:
             raise RuntimeError(f"resume metadata mismatch for {key}: {metadata.get(key)!r} != {value!r}")
@@ -642,8 +895,18 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
 
 def run(args) -> None:
     gpu = validate_gpu(args.hardware)
-    plan = followup_cells(args.seed) if args.followup_base else cells(args.seed)
+    extending = bool(getattr(args, "replication_base", None))
+    plan = (replication_cells(args.seed) if extending else
+            followup_cells(args.seed) if args.followup_base else
+            cells(args.seed))
     server_cmd = server_command(args)
+    base_rows = base_metadata = base_evidence = None
+    if extending:
+        base_rows, base_metadata, base_evidence = replication_base(
+            args.replication_base, args.model, args.hardware)
+        if gpu != base_metadata["gpu"]:
+            raise RuntimeError(
+                "replication extension requires the same physical GPU")
     if args.followup_base:
         base_metadata = json.loads((args.followup_base / "metadata.json").read_text())
         if gpu != base_metadata["gpu"]:
@@ -670,6 +933,8 @@ def run(args) -> None:
                     "cooldown_s": args.cooldown_s, "seed": args.seed}
         if args.followup_base:
             metadata["followup_base"] = str(args.followup_base)
+        if extending:
+            metadata["replication_base"] = base_evidence
         (args.out / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
         rows, log_path = [], args.out / "server.log"
     server_log = log_path.open("x")
@@ -686,8 +951,11 @@ def run(args) -> None:
             print(json.dumps(row), flush=True)
         testbed.validate_h100_optimized_runtime(
             " ".join(map(str, server_cmd)), log_path.read_text(errors="replace"))
-        result = (followup_result(complete_rows(args.followup_base, args.seed), rows)
+        result = (replication_result(base_rows, rows) if extending else
+                  followup_result(complete_rows(args.followup_base, args.seed), rows)
                   if args.followup_base else fit_result(rows))
+        if extending:
+            result["base_evidence"] = base_evidence
         with (args.out / "fit.json").open("x") as handle:
             handle.write(json.dumps(result, indent=2) + "\n")
             handle.flush(); os.fsync(handle.fileno())
@@ -719,9 +987,15 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--discard-orphan-sequences", nargs="*", type=int, default=[])
     parser.add_argument("--refit-only", action="store_true")
     parser.add_argument("--followup-base", type=Path)
+    parser.add_argument("--replication-base", type=Path)
     args = parser.parse_args(argv)
     if min(args.window_s, args.cooldown_s) <= 0:
         raise ValueError("cell durations must be positive")
+    if args.followup_base and args.replication_base:
+        raise ValueError(
+            "--followup-base and --replication-base are mutually exclusive")
+    if args.refit_only and (args.followup_base or args.replication_base):
+        raise ValueError("follow-up/replication refit-only is not supported")
     return args
 
 
