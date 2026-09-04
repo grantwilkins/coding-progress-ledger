@@ -526,10 +526,11 @@ def test_reset_result_rejects_failed_http_200_log():
 
 @pytest.mark.parametrize(("initial", "target", "path"), [(False, True, "/sleep?level=1"), (True, False, "/wake_up")])
 def test_source_sleep_transitions_are_verified(monkeypatch, initial, target, path):
-    states, calls = iter([initial, target]), []
+    states, calls, timeouts = iter([initial, target]), [], []
 
-    def fake_http(host, port, method, path):
+    def fake_http(host, port, method, path, *, timeout_s=30):
         calls.append((host, port, method, path))
+        timeouts.append(timeout_s)
         return json.dumps({"is_sleeping": next(states)}) if method == "GET" else ""
 
     monkeypatch.setattr(s, "http_text", fake_http)
@@ -540,10 +541,13 @@ def test_source_sleep_transitions_are_verified(monkeypatch, initial, target, pat
         ("127.0.0.1", 8100, "POST", path),
         ("127.0.0.1", 8100, "GET", "/is_sleeping"),
     ]
+    assert timeouts == [30, 600, 30]
 
 
 def test_source_sleep_transition_hard_fails(monkeypatch):
-    monkeypatch.setattr(s, "http_text", lambda *_args: '{"is_sleeping": false}')
+    monkeypatch.setattr(
+        s, "http_text", lambda *_args, **_kwargs: '{"is_sleeping": false}',
+    )
 
     with pytest.raises(RuntimeError, match="sleeping"):
         s.set_source_sleep(s.Config(), True)

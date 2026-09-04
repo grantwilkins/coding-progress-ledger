@@ -1448,8 +1448,9 @@ def flush_lmcache(stack: Stack, cfg: Config | None = None) -> None:
     raise TimeoutError("LMCache clear was not acknowledged")
 
 
-def http_text(host: str, port: int, method: str, path: str) -> str:
-    conn = http.client.HTTPConnection(host, port, timeout=30)
+def http_text(host: str, port: int, method: str, path: str, *,
+              timeout_s: float = 30) -> str:
+    conn = http.client.HTTPConnection(host, port, timeout=timeout_s)
     try:
         conn.request(method, path)
         response = conn.getresponse()
@@ -1593,7 +1594,10 @@ def set_source_sleep(cfg: Config, sleeping: bool) -> None:
 
     if state() == sleeping:
         return
-    http_text(cfg.host, cfg.src_port, "POST", "/sleep?level=1" if sleeping else "/wake_up")
+    http_text(
+        cfg.host, cfg.src_port, "POST",
+        "/sleep?level=1" if sleeping else "/wake_up", timeout_s=600,
+    )
     if state() != sleeping:
         raise RuntimeError(f"source failed to become {'sleeping' if sleeping else 'awake'}")
 
