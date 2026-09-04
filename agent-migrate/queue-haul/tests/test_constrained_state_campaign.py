@@ -269,18 +269,30 @@ def test_live_runner_uses_schedule_order_and_persists_raw_rows(tmp_path):
         [state], frozen["inputs"]["packs"][:1], 7, repeats=1)[:2]
     plan = {"frozen": frozen, "states": [state], "annotations": [],
             "schedule": schedule}
-    called = []
+    called, failed, roots = [], set(), []
 
     def runner(inputs_, state_, pack_, job_, root_):
         called.append(job_["episode_id"])
+        roots.append(root_)
+        if job_["episode_id"] == schedule[1]["episode_id"] and not failed:
+            failed.add(job_["episode_id"])
+            root_.mkdir(parents=True)
+            raise RuntimeError("allocation ended")
         action = "kv_transfer" if job_["policy"] == "kv_only" else "replay"
         return {"capacity_inputs": state_["capacity_inputs"],
                 "decisions": [{"session_id": row["session_id"],
                                "action": action, "completion_s": 1}
                               for row in pack_["sessions"]]}
 
+    with pytest.raises(RuntimeError, match="allocation ended"):
+        campaign.run_live(plan, tmp_path, runner)
     raw = campaign.run_live(plan, tmp_path, runner)
 
-    assert called == [row["episode_id"] for row in schedule]
+    assert called == [schedule[0]["episode_id"], schedule[1]["episode_id"],
+                      schedule[1]["episode_id"]]
+    assert roots[-1].name == f"{schedule[1]['episode_id']}-attempt-1"
     assert len(raw) == 2
     assert len((tmp_path / "raw_episodes.jsonl").read_text().splitlines()) == 2
+    (tmp_path / "plan.sha256").write_text("changed\n")
+    with pytest.raises(ValueError, match="run plan hash changed"):
+        campaign.run_live(plan, tmp_path, runner)

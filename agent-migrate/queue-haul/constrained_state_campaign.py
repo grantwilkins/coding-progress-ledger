@@ -531,11 +531,12 @@ def compile_campaign(frozen: dict, discovery: list[dict],
     return plan
 
 
-def _verify_plan(plan: dict) -> None:
+def _verify_plan(plan: dict) -> str:
     verify_frozen(plan["frozen"])
     expected = digest({key: value for key, value in plan.items() if key != "sha256"})
     if plan.get("sha256") not in (None, expected):
         raise ValueError("compiled plan changed")
+    return expected
 
 
 def reduce_campaign(plan: dict, raw: list[dict], out: Path) -> list[dict]:
@@ -551,18 +552,33 @@ def reduce_campaign(plan: dict, raw: list[dict], out: Path) -> list[dict]:
 
 def run_live(plan: dict, run_root: Path, episode_runner=None) -> list[dict]:
     """Execute the frozen order with a fresh, fixed background per policy."""
-    _verify_plan(plan)
+    plan_hash = _verify_plan(plan)
     run_root.mkdir(parents=True, exist_ok=True)
-    raw_path = run_root / "raw_episodes.jsonl"
-    if raw_path.exists():
-        raise FileExistsError(raw_path)
+    raw_path, hash_path = (run_root / "raw_episodes.jsonl",
+                           run_root / "plan.sha256")
+    if hash_path.exists() and hash_path.read_text().strip() != plan_hash:
+        raise ValueError("run plan hash changed")
+    if raw_path.exists() and not hash_path.exists():
+        raise ValueError("existing run lacks its plan hash")
+    if not hash_path.exists():
+        hash_path.write_text(plan_hash + "\n")
+    raw = ([json.loads(line) for line in raw_path.read_text().splitlines()]
+           if raw_path.exists() else [])
+    completed = [row.get("episode_id") for row in raw]
+    expected = [row["episode_id"] for row in plan["schedule"][:len(raw)]]
+    if completed != expected or len(raw) > len(plan["schedule"]):
+        raise ValueError("raw episodes are not a schedule prefix")
     inputs = plan["frozen"]["inputs"]
     states = {row["state_id"]: row for row in plan["states"]}
     packs = {row["pack_id"]: row for row in inputs["packs"]}
-    runner, raw = episode_runner or a100_episode, []
-    with raw_path.open("x", buffering=1) as handle:
-        for job in plan["schedule"]:
+    runner = episode_runner or a100_episode
+    with raw_path.open("a" if raw_path.exists() else "x", buffering=1) as handle:
+        for job in plan["schedule"][len(raw):]:
             root = run_root / "scenarios" / job["episode_id"]
+            attempt = 0
+            while root.exists():
+                attempt += 1
+                root = root.with_name(f"{job['episode_id']}-attempt-{attempt}")
             result = runner(inputs, states[job["state_id"]],
                             packs[job["pack_id"]], job, root)
             row = {"episode_id": job["episode_id"], **result}

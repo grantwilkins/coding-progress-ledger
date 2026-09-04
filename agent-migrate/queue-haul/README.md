@@ -1928,8 +1928,8 @@ selection. The offline enumeration emits only `any_full`, `kv_full`,
 `replay_full`, and `mixed_full`.
 
 The live manifest names the existing migration manifest, model profile,
-content-free trace bundle, and service profile. It also fixes one RPS per
-prefill/serving stream, sessions per resident HBM group, warmup time, and a
+content-free trace bundle, and service profile. It also fixes one prefill RPS
+and 0.25 serving RPS per unit, sessions per resident HBM group, warmup time, and a
 hard guard for each discovery ladder. `prepare` fails instead of truncating a
 ladder if that guard is reached while the background remains stable. Resident
 HBM use must remain visible after warmup and after each episode. `prepare`
@@ -1945,6 +1945,9 @@ uv run python constrained_state_campaign.py inputs --out inputs.json
 uv run python constrained_state_campaign.py prepare --inputs inputs.json --out OUT
 uv run python constrained_state_campaign.py run --plan OUT/plan.json --run-root RUN
 ```
+
+Rerunning `run` with the same root resumes only an exact hashed schedule
+prefix; an interrupted scenario directory is retained and retried separately.
 
 The reducer retains policy misses and writes `episodes.csv`,
 `target_attainment.png`, and `action_composition.png`. Queue-Haul capacity
