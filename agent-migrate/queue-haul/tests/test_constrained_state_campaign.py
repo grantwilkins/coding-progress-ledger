@@ -137,6 +137,22 @@ def test_serving_background_uses_an_operational_hold(monkeypatch):
         campaign._wait_background(bad, "serving", 30, Destination)
 
 
+def test_serving_stability_rejects_only_clear_backlog_growth():
+    def rows(levels):
+        return [{"monotonic_ns": second * 1_000_000_000,
+                 "vllm:num_requests_running": level,
+                 "vllm:num_requests_waiting": 0}
+                for second, level in enumerate(levels)]
+
+    stable = campaign._backlog_stability(
+        rows([10 + second % 2 for second in range(30)]), 0, 30_000_000_000)
+    growing = campaign._backlog_stability(
+        rows(range(30)), 0, 30_000_000_000)
+
+    assert stable["slope_lower_95_per_s"] <= 0
+    assert growing["slope_lower_95_per_s"] > 0
+
+
 def test_oracle_emits_only_the_four_requested_booleans():
     item, rows = pack(), demands()
     for row in rows:

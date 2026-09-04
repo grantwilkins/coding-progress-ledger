@@ -171,7 +171,7 @@ def default_inputs(template_path: Path = DEFAULT_TEMPLATE,
                 "service_profile_path": str(DEFAULT_SERVICE.resolve()),
                 "prefill_unit_rps": 1.0, "serving_unit_rps": .25,
                 "hbm_sessions_per_unit": 8,
-                "max_units": {"prefill": 4, "serving": 30, "hbm": 10},
+                "max_units": {"prefill": 4, "serving": 120, "hbm": 10},
                 "warmup_s": 30,
             },
         },
@@ -629,16 +629,51 @@ def _validate_serving(load, destination) -> None:
         raise RuntimeError("serving background was not maintained")
 
 
-def _wait_background(load, kind: str, warmup_s: float, destination) -> None:
+def _backlog_stability(rows: list[dict], start_ns: int, end_ns: int) -> dict:
+    if end_ns <= start_ns:
+        raise ValueError("serving backlog telemetry is incomplete")
+    bins = [[] for _ in range(6)]
+    for row in rows:
+        at = int(row["monotonic_ns"])
+        if start_ns <= at < end_ns:
+            index = min(5, int(6 * (at - start_ns) / (end_ns - start_ns)))
+            bins[index].append(_number(row["vllm:num_requests_running"], "backlog")
+                               + _number(row["vllm:num_requests_waiting"], "backlog"))
+    if any(not values for values in bins):
+        raise ValueError("serving backlog telemetry is incomplete")
+    means = [statistics.mean(values) for values in bins]
+    fit = statistics.linear_regression(range(6), means)
+    residual = sum((value - fit.intercept - fit.slope * index) ** 2
+                   for index, value in enumerate(means))
+    lower = fit.slope - 2.132 * math.sqrt(residual / (4 * 17.5))
+    scale = 6e9 / (end_ns - start_ns)
+    return {"sample_count": sum(map(len, bins)), "bin_means": means,
+            "slope_per_s": fit.slope * scale,
+            "slope_lower_95_per_s": lower * scale}
+
+
+def _wait_background(load, kind: str, warmup_s: float, destination,
+                     measure: bool = False) -> dict | None:
     if kind == "prefill":
         load.wait_ready()
-    else:
-        time.sleep(warmup_s)
-        _validate_serving(load, destination)
+        return None
+    time.sleep(warmup_s)
+    _validate_serving(load, destination)
+    if not measure:
+        return None
+    start_ns = time.monotonic_ns()
+    time.sleep(warmup_s)
+    _validate_serving(load, destination)
+    report = _backlog_stability(load.sampler.rows, start_ns,
+                                time.monotonic_ns())
+    if report["slope_lower_95_per_s"] > 0:
+        raise RuntimeError("serving background backlog grew")
+    return report
 
 
 @contextmanager
-def _a100_background(inputs: dict, state: dict, root: Path):
+def _a100_background(inputs: dict, state: dict, root: Path,
+                     measure_background: bool = False):
     """Reuse the existing stack, load generator, prefix warming, and telemetry."""
     import destination_runner as destination
     import migration_testbed as testbed
@@ -675,7 +710,7 @@ def _a100_background(inputs: dict, state: dict, root: Path):
                 raise BackgroundLimit(str(error)) from error
         kind = "prefill" if state["n_prefill"] else (
             "serving" if state["n_serving"] else None)
-        rps = 0.0
+        rps, stability = 0.0, None
         if kind:
             sessions = destination.manifest_sessions(
                 bundle, "agentic_tool_loop", "validation", 201088,
@@ -698,8 +733,9 @@ def _a100_background(inputs: dict, state: dict, root: Path):
                 rps=rps, max_inflight=256, bypass_lmcache=True)
             load.start()
             try:
-                _wait_background(
-                    load, kind, float(live.get("warmup_s", 30)), destination)
+                stability = _wait_background(
+                    load, kind, float(live.get("warmup_s", 30)), destination,
+                    measure_background)
             except RuntimeError as error:
                 raise BackgroundLimit(str(error)) from error
         else:
@@ -707,7 +743,7 @@ def _a100_background(inputs: dict, state: dict, root: Path):
             rates, sessions = None, []
         metrics = (_resident_telemetry(testbed, destination, cfg)
                    if resident else _metrics(testbed, destination, cfg))
-        if metrics["vllm:num_requests_waiting"] > 0:
+        if kind != "serving" and metrics["vllm:num_requests_waiting"] > 0:
             raise BackgroundLimit("destination background queue is not stable")
         baseline = [0.0, 0.0]
         if load:
@@ -730,6 +766,8 @@ def _a100_background(inputs: dict, state: dict, root: Path):
                 "hbm": max(0, profile.kv_capacity_tokens - kv),
             },
         }
+        if stability:
+            capacity["serving_stability"] = stability
         yield stack, cfg, profile, manifest, capacity
         if resident:
             post = _resident_telemetry(
@@ -745,8 +783,6 @@ def _a100_background(inputs: dict, state: dict, root: Path):
             except RuntimeError as error:
                 raise BackgroundLimit(str(error)) from error
             post = _metrics(testbed, destination, cfg)
-            if post["vllm:num_requests_waiting"] > 0:
-                raise BackgroundLimit("destination background queue is not stable")
             capacity["post_serving_telemetry"] = post
     finally:
         try:
@@ -757,7 +793,7 @@ def _a100_background(inputs: dict, state: dict, root: Path):
 
 
 def measure_a100_background(inputs: dict, state: dict, root: Path) -> dict:
-    with _a100_background(inputs, state, root) as context:
+    with _a100_background(inputs, state, root, measure_background=True) as context:
         capacity = context[-1]
         return {**state, "operational": True, "capacity_inputs": capacity}
 
