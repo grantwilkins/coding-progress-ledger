@@ -868,22 +868,31 @@ def validate_resume(args, gpu: dict, plan: list[Cell]) -> list[dict]:
         validate_row_numbers(row, watts)
         valid_power.add(path)
         valid_labels[cell_label(sequence, cell)] = row
-    requests = {label: [] for label in valid_labels}
-    for line in (args.out / "requests.jsonl").read_text().splitlines():
-        request_row = json.loads(line)
-        if request_row.get("cell") not in requests:
-            raise RuntimeError("request evidence falls outside committed prefix")
-        requests[request_row["cell"]].append(request_row)
-    for label, row in valid_labels.items():
-        validate_request_evidence(label, row, requests[label])
     discard = set(args.discard_orphan_sequences)
     if any(sequence < len(rows) or sequence >= len(plan) for sequence in discard):
         raise RuntimeError("orphan discard sequence is not in the uncommitted suffix")
+    discard_labels = {cell_label(sequence, plan[sequence]) for sequence in discard}
+    request_path = args.out / "requests.jsonl"
+    raw_requests = request_path.read_text().splitlines()
+    kept_requests = []
+    requests = {label: [] for label in valid_labels}
+    for line in raw_requests:
+        request_row = json.loads(line)
+        if request_row.get("cell") in discard_labels:
+            continue
+        if request_row.get("cell") not in requests:
+            raise RuntimeError("request evidence falls outside committed prefix")
+        kept_requests.append(line)
+        requests[request_row["cell"]].append(request_row)
+    for label, row in valid_labels.items():
+        validate_request_evidence(label, row, requests[label])
     discard_paths = {args.out / "power" / f"{cell_label(sequence, plan[sequence])}.csv"
                      for sequence in discard}
     artifacts = set((args.out / "power").glob("*.csv"))
     if artifacts != valid_power | discard_paths or not all(path.exists() for path in discard_paths):
         raise RuntimeError("power artifacts do not equal committed prefix plus explicit orphans")
+    if len(kept_requests) != len(raw_requests):
+        request_path.write_text("".join(f"{line}\n" for line in kept_requests))
     for path in discard_paths:
         path.unlink()
     current_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()

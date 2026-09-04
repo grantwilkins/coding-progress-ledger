@@ -329,7 +329,8 @@ def resume_fixture(tmp_path, monkeypatch):
            "cached_prompt_tokens": 0, "power_samples": 60,
            "request_count": 0, "completed_requests": 0, "power_path": str(path)}
     (out / "cells.jsonl").write_text(json.dumps(row) + "\n")
-    (out / "requests.jsonl").write_text("")
+    (out / "requests.jsonl").write_text(json.dumps({
+        "cell": campaign.cell_label(1, plan[1]), "orphan": True}) + "\n")
     (out / "metadata.json").write_text(json.dumps({"gpu": gpu, "git_sha": sha,
         "minimum_window_s": 12, "warmup": "one complete batch", "cooldown_s": 2,
         "seed": 7}))
@@ -346,15 +347,15 @@ def resume_fixture(tmp_path, monkeypatch):
 
 def test_resume_validates_prefix_and_replaces_only_explicit_orphan(tmp_path, monkeypatch):
     args, gpu, plan, orphan = resume_fixture(tmp_path, monkeypatch)
-    before = [(args.out / name).read_bytes() for name in ("metadata.json", "cells.jsonl",
-                                                           "requests.jsonl")]
+    before = [(args.out / name).read_bytes() for name in ("metadata.json", "cells.jsonl")]
 
     rows = campaign.validate_resume(args, gpu, plan)
 
     assert len(rows) == 1
     assert not orphan.exists()
     assert before == [(args.out / name).read_bytes() for name in
-                      ("metadata.json", "cells.jsonl", "requests.jsonl")]
+                      ("metadata.json", "cells.jsonl")]
+    assert not (args.out / "requests.jsonl").read_text()
     assert json.loads((args.out / "resumes.jsonl").read_text())["next_sequence"] == 1
 
 
