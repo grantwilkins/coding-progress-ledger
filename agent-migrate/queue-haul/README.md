@@ -139,22 +139,25 @@ The queue reducer now validates each request's frozen move, full KV cache count
 Queue makespan runs from the shared release timestamp to the last first response,
 including dispatch delay. It does not assign overlapping connection/GET windows
 to individual requests; those traces remain available for separate network audits.
-State probes use the migration profiler's 512-token budget so reasoning can finish
-before the final state answer. The budget is recorded in requests and run metadata;
-reduction rejects mixed budgets. Architecture/drain probes remain at 128 tokens.
-The repairs pass the archived concurrent-KV regression and the added state/cache,
-timestamp, dispatch-delay, reasoning-budget, and mixed-budget checks. The full
-suite has 1,199 passes and the same 11 failures as before the repairs; its output
-is retained as `outputs/a100-parity-20260905/timing-repair-pytest.log`.
-Collect a fresh run with the archived frozen predictions; do not combine the old
-128-token attempt with this run or treat either historical figure as accepted.
+State probes retain their original 128-token budget, recorded in requests and run
+metadata; reduction rejects mixed budgets. A live diagnostic disproved the proposed
+512-token fix: the failing prompt emits only 21 tokens, including a malformed
+Harmony final header (`final <|constrain|>QH002`). Both streaming and nonstreaming
+responses have no final content. State verification correctly rejects this result.
+Raw responses and server logs are archived in `outputs/a100-parity-20260905/probe-diagnostics`.
+The queue validation repairs remain covered by concurrent-KV, state/cache,
+timestamp, dispatch-delay, and mixed-budget regressions. The earlier full suite
+had 1,199 passes and 11 baseline failures (`timing-repair-pytest.log`).
+East (10.1.0.4) now times out from Sweden and Germany. Timing needs restored East
+access and a verified serving fix before collecting a fresh run with the archived
+frozen predictions. Neither timing nor power has passed parity acceptance.
 
 ```bash
 uv run python queue-haul/a100_parity_campaign.py run-timing \
   --plan queue-haul/outputs/a100-parity-20260904/timing-plan.json \
-  --run-root /datadrive/queue-haul-network/a100-timing-512
+  --run-root /datadrive/queue-haul-network/a100-timing-verified
 uv run python queue-haul/a100_parity_campaign.py reduce-timing \
-  --run-root /datadrive/queue-haul-network/a100-timing-512 \
+  --run-root /datadrive/queue-haul-network/a100-timing-verified \
   --out queue-haul/outputs/a100_live_queue_makespan_parity
 
 uv run python queue-haul/power_model_campaign.py --hardware a100 \

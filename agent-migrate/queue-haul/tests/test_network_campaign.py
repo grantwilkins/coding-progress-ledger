@@ -1824,7 +1824,7 @@ def test_chat_explicitly_probes_state_code(monkeypatch):
     assert seen == {"messages": [
         {"role": "user", "content": "context"},
         {"role": "user", "content":
-            "Reply only with session state code CODE."}], "tokens": 512,
+            "Reply only with session state code CODE."}], "tokens": 128,
                     "bypass": False, "options": {}}
 
     n._chat(object(), 1, [], "CODE", 1, True)
@@ -1853,17 +1853,18 @@ def test_chat_retries_one_invalid_probe(monkeypatch):
     assert n._chat(object(), 1, [], "CODE", 1)["probe_attempts"] == 2
 
 
-def test_chat_allows_reasoning_before_the_state_answer(monkeypatch):
+def test_chat_rejects_empty_final_answer_below_token_limit(monkeypatch):
+    calls = []
+
     def stream(_cfg, _port, _messages, tokens, *_args):
-        result = n.profiler.RequestResult("r", 200, "", 1, 2,
-                                         output_tokens=min(tokens, 200))
-        return result, "CODE" if tokens >= 200 else ""
+        calls.append(tokens)
+        return n.profiler.RequestResult("r", 200, "", 1, 2,
+                                        output_tokens=21), ""
 
     monkeypatch.setattr(n.profiler, "stream_chat", stream)
-    result = n._chat(object(), 1, [], "CODE", 1)
-    assert result["state_code_verified"]
-    assert result["probe_attempts"] == 1
-    assert result["probe_max_tokens"] == n.profiler.PROBE_MAX_TOKENS == 512
+    with pytest.raises(RuntimeError, match="output_tokens=21"):
+        n._chat(object(), 1, [], "QH002", 1)
+    assert calls == [128, 128]
 
 
 def test_warm_waits_only_for_complete_lmcache_blocks(monkeypatch, tmp_path):

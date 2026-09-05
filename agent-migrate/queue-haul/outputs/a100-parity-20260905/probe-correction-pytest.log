@@ -1,0 +1,172 @@
+........................................................................ [  5%]
+........................................................................ [ 11%]
+...............F.............F.......................................... [ 17%]
+........................................................................ [ 23%]
+...................................F.................................... [ 29%]
+...................F.................................................... [ 35%]
+........................................................................ [ 41%]
+..................................................F......FFFFF.......... [ 47%]
+........................................................................ [ 53%]
+........................................................................ [ 59%]
+........................................................................ [ 65%]
+........................................................................ [ 71%]
+........................................................................ [ 77%]
+........................................................................ [ 83%]
+.......................................................F................ [ 89%]
+........................................................................ [ 95%]
+..........................................................               [100%]
+=================================== FAILURES ===================================
+____________________ test_issue_accepts_a_prepared_request _____________________
+tests/test_destination_runner.py:83: in test_issue_accepts_a_prepared_request
+    row = runner.issue(
+E   TypeError: issue() got an unexpected keyword argument 'prepared'
+____________ test_queue_drift_discards_an_incomplete_trailing_block ____________
+tests/test_destination_runner.py:262: in test_queue_drift_discards_an_incomplete_trailing_block
+    assert runner.queue_drift_upper(rows) == pytest.approx(0)
+E   assert 0.7549019607843137 == 0 ± 1.0e-12
+E     
+E     comparison failed
+E     Obtained: 0.7549019607843137
+E     Expected: 0 ± 1.0e-12
+__________ test_matched_prefill_does_not_start_an_unused_kv_connector __________
+tests/test_h100_serving_campaign.py:51: in test_matched_prefill_does_not_start_an_unused_kv_connector
+    command = campaign.capacity.stack_commands(
+single_gpu_capacity_campaign.py:175: in stack_commands
+    return {"vllm": list(map(str, testbed.vllm_cmd(
+migration_testbed.py:540: in vllm_cmd
+    validate_model_runtime(cfg)
+migration_testbed.py:286: in validate_model_runtime
+    raise ValueError("matched-prefill runtime geometry changed")
+E   ValueError: matched-prefill runtime geometry changed
+__________ test_frozen_bootstrap_is_deduplicated_without_losing_draws __________
+tests/test_matched_power_fit.py:15: in test_frozen_bootstrap_is_deduplicated_without_losing_draws
+    result = fit_spec(SPECS[0], bootstrap_samples=20)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+matched_power_fit.py:61: in fit_spec
+    raw = list(csv.DictReader(path.open()))
+                              ^^^^^^^^^^^
+/usr/lib/python3.12/pathlib.py:1013: in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/datadrive/h100-phase-power-20260820-r5/qwen3_8_27b/measurements.csv'
+____ test_constraint_simulation_separates_joint_policies_and_exports_duals _____
+tests/test_network_campaign.py:719: in test_constraint_simulation_separates_joint_policies_and_exports_duals
+    summary = n.simulate_constraint(plan_path, tmp_path / "simulation")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+network_campaign.py:3228: in simulate_constraint
+    _validate_constraint_simulation(rows, duals)
+network_campaign.py:3146: in _validate_constraint_simulation
+    raise RuntimeError("Queue-Haul is below a baseline capacity point")
+E   RuntimeError: Queue-Haul is below a baseline capacity point
+___________ test_separation_simulation_has_wide_joint_action_margins ___________
+tests/test_network_campaign.py:934: in test_separation_simulation_has_wide_joint_action_margins
+    summary = n.simulate_separation(plan_path, tmp_path / "simulation")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+network_campaign.py:3471: in simulate_separation
+    _validate_separation_simulation(rows, resources, duals)
+network_campaign.py:3356: in _validate_separation_simulation
+    raise RuntimeError("a joint planner lacks the required robust margin")
+E   RuntimeError: a joint planner lacks the required robust margin
+______ test_oracle_stale_simulation_certifies_capacity_and_deadline_traps ______
+tests/test_network_campaign.py:980: in test_oracle_stale_simulation_certifies_capacity_and_deadline_traps
+    summary = n.simulate_oracle_stale(plan_path, tmp_path / "simulation")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+network_campaign.py:3929: in simulate_oracle_stale
+    _validate_oracle_stale(oracles, predictions, resources, duals)
+network_campaign.py:3693: in _validate_oracle_stale
+    raise RuntimeError("deadline blindness is not a severe late-power trap")
+E   RuntimeError: deadline blindness is not a severe late-power trap
+_____ test_hardware_gap_plan_is_matched_and_covers_each_missing_constraint _____
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/tests/test_network_campaign.py:1026: in test_hardware_gap_plan_is_matched_and_covers_each_missing_constraint
+    plan = n.hardware_gap_plan(
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py:4072: in hardware_gap_plan
+    raise RuntimeError("frozen oracle/stale decisions changed")
+E   RuntimeError: frozen oracle/stale decisions changed
+________ test_hardware_gap_rejects_stale_plan_without_silent_replanning ________
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/tests/test_network_campaign.py:1067: in test_hardware_gap_rejects_stale_plan_without_silent_replanning
+    plan = n.hardware_gap_plan(
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py:4072: in hardware_gap_plan
+    raise RuntimeError("frozen oracle/stale decisions changed")
+E   RuntimeError: frozen oracle/stale decisions changed
+_____________ test_hardware_gap_simulation_has_severe_matched_gaps _____________
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/tests/test_network_campaign.py:1102: in test_hardware_gap_simulation_has_severe_matched_gaps
+    n.write_hardware_gap_plan(
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py:4142: in write_hardware_gap_plan
+    plan = hardware_gap_plan(parent, oracle)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py:4072: in hardware_gap_plan
+    raise RuntimeError("frozen oracle/stale decisions changed")
+E   RuntimeError: frozen oracle/stale decisions changed
+__ test_async_trace_releases_many_queued_requests_without_thread_backpressure __
+tests/test_service_headroom_campaign.py:197: in test_async_trace_releases_many_queued_requests_without_thread_backpressure
+    assert max(start - scheduled for scheduled, start in starts) / 1e9 < .05
+E   assert (168854789 / 1000000000.0) < 0.05
+E    +  where 168854789 = max(<generator object test_async_trace_releases_many_queued_requests_without_thread_backpressure.<locals>.<genexpr> at 0xd7555d2f510>)
+=============================== warnings summary ===============================
+queue-haul/tests/test_power_drain_experiment.py::test_worker_processes_preserve_scenario_order_and_results
+queue-haul/tests/test_power_drain_experiment.py::test_worker_processes_preserve_scenario_order_and_results
+  /usr/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=102689) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+queue-haul/tests/test_testbed_kv_timeline.py::test_replay_uses_the_same_measured_clock
+  /home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/plot_testbed_kv_timeline.py:245: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+    fig, gantt = plt.subplots(figsize=(7.2, 3))
+
+queue-haul/tests/test_workload_adaptation_campaign.py::test_action_mix_figure_has_half_column_canvas
+  /home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/workload_adaptation_campaign.py:1149: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+    fig, axis = plt.subplots(figsize=(3.85, 2.5))
+
+queue-haul/tests/test_workload_policy_attainment.py::test_plot_matches_action_mix_canvas
+  /home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/plot_workload_policy_attainment.py:180: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+    fig, axis = plt.subplots(figsize=FIGSIZE)
+
+queue-haul/tests/test_workload_power_frontier.py::test_capacity_figure_has_half_column_canvas
+  /home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/workload_power_frontier.py:259: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+    fig, axis = plt.subplots(figsize=FIGSIZE)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_destination_runner.py::test_issue_accepts_a_prepared_request
+FAILED tests/test_destination_runner.py::test_queue_drift_discards_an_incomplete_trailing_block
+FAILED tests/test_h100_serving_campaign.py::test_matched_prefill_does_not_start_an_unused_kv_connector
+FAILED tests/test_matched_power_fit.py::test_frozen_bootstrap_is_deduplicated_without_losing_draws
+FAILED tests/test_network_campaign.py::test_constraint_simulation_separates_joint_policies_and_exports_duals
+FAILED tests/test_network_campaign.py::test_separation_simulation_has_wide_joint_action_margins
+FAILED tests/test_network_campaign.py::test_oracle_stale_simulation_certifies_capacity_and_deadline_traps
+FAILED tests/test_network_campaign.py::test_hardware_gap_plan_is_matched_and_covers_each_missing_constraint
+FAILED tests/test_network_campaign.py::test_hardware_gap_rejects_stale_plan_without_silent_replanning
+FAILED tests/test_network_campaign.py::test_hardware_gap_simulation_has_severe_matched_gaps
+FAILED tests/test_service_headroom_campaign.py::test_async_trace_releases_many_queued_requests_without_thread_backpressure
+11 failed, 1199 passed, 6 warnings in 109.31s (0:01:49)
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
