@@ -1954,3 +1954,55 @@ Rerunning with the same run root resumes only the exact hashed schedule prefix;
 interrupted attempts remain intact. The old `constrained_state_campaign.py
 prepare` command still reproduces the exhaustive historical design and is not
 used by this comparison.
+
+## Calibrated WAN/replay contention comparison
+
+`contention_campaign.py` searches heterogeneous eight-session packs, shaped
+WAN rates, and explicit per-case deadlines in simulation before selecting live
+cases. It fits aggregate replay throughput and the KV completion tail from the
+completed marginal campaign. The simulation shares WAN bandwidth across
+transfers and replay capacity across simultaneous replays; both resources can
+operate concurrently. The planner profile remains unchanged.
+
+Selection requires predicted full-target attainment by both QH variants,
+prefers full attainment across all three timing variants, then maximizes
+improvement over per-session greedy. Both QH variants must tie or beat all
+three baselines in windowed relief at nominal and ±15% replay/tail durations. The live schedule contains
+the selected case, three nearby qualifying settings, and a slack control, each
+with all five policies and three fresh repeats: at most 75 episodes. Every
+simulated candidate, including baseline winners, remains in `simulation.csv`;
+`calibration.json` identifies the measurements and fitted values. Calibration
+uses equal-context measurements, so heterogeneous performance remains a
+prediction to be tested on hardware.
+
+This snapshot experiment tests WAN/replay contention, not persistent HBM
+residency or sustained serving capacity. The preceding marginal experiment
+confirmed action shifts but did not beat per-session greedy, and its HBM and
+serving admission assumptions did not match physical snapshot execution.
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
+uv run python contention_campaign.py prepare \
+  --source-plan outputs/constrained-resource-a100-20260905/prepared/plan.json \
+  --calibration-plan outputs/marginal-resource-a100-20260905/prepared/plan.json \
+  --calibration-raw outputs/marginal-resource-a100-20260905/run/raw_episodes.jsonl \
+  --out outputs/contention-a100-20260905/prepared
+sbatch contention_campaign.sbatch
+```
+
+The six-hour batch job runs the frozen cases, then writes `comparisons.csv`
+and `validation.json` alongside the episode evidence and canonical plots.
+Comparisons pair each QH variant with each baseline at the same case and repeat;
+losses remain in the outputs. The primary validation requires three repeats,
+no paired full-target attainment losses, and at least one strict attainment win
+over per-session greedy for each QH variant. Partial windowed relief is a
+secondary diagnostic. Completion time alone is insufficient: full relief must
+hold over the final five-second window of the declared deadline.
+The shared runner uses each state's deadline for planning and each scheduled
+policy's deadline for measurement reduction; the historical default is 30s.
+
+The frozen `outputs/contention-a100-20260905/prepared` plan uses paired 16K,
+24K, 28K, and 31,562-token sessions. Its five settings are 5Gbps/20s,
+4Gbps/20s, 6Gbps/20s, 5Gbps/22s, and the 10Gbps/25s slack control. These are
+simulation-selected predictions; the batch job independently tests their
+attainment on hardware. The search retained 5,670 timing/policy outcomes.

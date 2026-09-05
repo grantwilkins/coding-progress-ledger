@@ -508,6 +508,24 @@ def test_reducer_keeps_nonattainment_and_fills_not_moved():
     assert result["target_time_s"] is None
 
 
+@pytest.mark.parametrize("deadline, attained, relief", ((14, False, 3.2), (30, True, 8)))
+def test_state_deadline_controls_trailing_window_attainment(deadline, attained, relief):
+    item = pack()
+    state = {**campaign.state_grid(dict.fromkeys(campaign.AXES, 0), [10000])[0],
+             "deadline_s": deadline}
+    job = next(row for row in campaign.execution_schedule([state], [item], 1, repeats=1)
+               if row["policy"] == "queue_haul")
+    raw = [{"episode_id": job["episode_id"], "capacity_inputs": capacity(),
+            "decisions": [{"session_id": row["session_id"], "action": "replay",
+                           "completion_s": 12} for row in item["sessions"]]}]
+    result = campaign.normalize_episodes(raw, [job], [item], 8)[0]
+    assert result["deadline_s"] == deadline
+    assert result["target_attained"] is attained
+    assert result["achieved_relief_w"] == 8
+    assert result["window_relief_w"] == pytest.approx(relief)
+    assert result["target_time_s"] == (17 if attained else None)
+
+
 def test_compile_reduce_and_two_figures(tmp_path):
     frozen = campaign.freeze_inputs(inputs(), 7)
     discovery = [{"axis": axis, "count": 0, "operational": True,

@@ -337,7 +337,7 @@ def execution_schedule(states: list[dict], packs: list[dict], seed: int,
                              "block_id": block, "state_id": state["state_id"],
                              "pack_id": pack["pack_id"], "repeat": repeat,
                              "policy": policy, "policy_order": order,
-                             "deadline_s": D_S,
+                             "deadline_s": state.get("deadline_s", D_S),
                              **{name: state[name] for name in
                                 ("family", "wan_mbps", "n_prefill",
                                  "n_hbm", "n_serving")}}
@@ -399,7 +399,7 @@ def normalize_episodes(raw: list[dict], schedule: list[dict], packs: list[dict],
             value = item.get("completion_s")
             if value is not None:
                 value = _number(value, "completion")
-                if value <= D_S:
+                if value <= job["deadline_s"]:
                     completions.append((value, item["session_id"]))
         moved = {session for _, session in completions}
         result = {**job,
@@ -415,7 +415,9 @@ def normalize_episodes(raw: list[dict], schedule: list[dict], packs: list[dict],
                                       for item in decisions),
                   "not_moved_count": len(sessions - set(ids)),
                   "achieved_relief_w": _gain(pack, moved),
-                  "target_time_s": target_time(pack, completions, target)}
+                  "window_relief_w": window_relief(pack, completions, job["deadline_s"]),
+                  "target_time_s": target_time(pack, completions, target,
+                                                job["deadline_s"])}
         result["target_attained"] = result["target_time_s"] is not None
         output.append(result)
     return sorted(output, key=lambda row: tuple(
@@ -446,17 +448,18 @@ def plot_results(episodes: list[dict], out: Path) -> None:
     plot_style.apply()
     out.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=plot_style.COMPACT_FIGSIZE)
+    deadline = max(row["deadline_s"] for row in episodes)
     for policy in POLICIES:
         rows = [row for row in episodes if row["policy"] == policy]
         if not rows:
             continue
         times = sorted(float(row["target_time_s"]) for row in rows
                        if row["target_time_s"] not in (None, ""))
-        x, y = [0.0, *times, D_S], [0.0, *(
+        x, y = [0.0, *times, deadline], [0.0, *(
             (index + 1) / len(rows) for index in range(len(times))),
             len(times) / len(rows)]
         ax.step(x, y, where="post", **plot_style.policy_style(policy))
-    ax.set(xlim=(0, D_S), ylim=(0, 1.01), xlabel="Time (s)",
+    ax.set(xlim=(0, deadline), ylim=(0, 1.01), xlabel="Time (s)",
            ylabel="Fraction attaining full shed")
     ax.legend(frameon=False, fontsize=8)
     _save(fig, out, "target_attainment")
@@ -494,6 +497,9 @@ def plot_results(episodes: list[dict], out: Path) -> None:
                       if family in ("wan_prefill", "wan", "prefill", "control") else
                       [f"{key[3] if family == 'hbm' else key[4]:.3g}"
                        for key in keys])
+            if family in ("contention", "slack"):
+                labels = [f"{key[1] / 1000:g}G/{next(row['deadline_s'] for row in selected if row['state_id'] == key[0]):g}s"
+                          for key in keys]
             ax.set_xticks(range(len(keys)), labels, rotation=45, ha="right")
             ax.set_ylim(0, 1)
             ax.set_title(f"{plot_style.POLICY_NAMES[policy]} — "
@@ -891,9 +897,9 @@ def _a100_background(inputs: dict, state: dict, root: Path,
                 "reset_end_ns": reset_end_ns,
             },
             "resources": {
-                "wan": float(state["wan_mbps"]) * 125_000 * D_S,
-                "service": max(0.0, 1 - sum(baseline)) * D_S,
-                "prefill": max(0.0, 1 - baseline[0]) * D_S,
+                "wan": float(state["wan_mbps"]) * 125_000 * state.get("deadline_s", D_S),
+                "service": max(0.0, 1 - sum(baseline)) * state.get("deadline_s", D_S),
+                "prefill": max(0.0, 1 - baseline[0]) * state.get("deadline_s", D_S),
                 "hbm": max(0, kv_capacity - kv),
             },
         }
@@ -981,16 +987,17 @@ def _planner_decisions(inputs: dict, state: dict, pack: dict, policy: str,
                           ServingInstance, SimSession)
 
     case, n = profile.case(), len(pack["sessions"])
+    deadline = state.get("deadline_s", D_S)
     sessions = tuple(SimSession(
         row["session_id"], "source", int(row["initial_tokens"]),
         float(row.get("expected_f", 512 / n)),
         float(row.get("expected_g", 8 / n)), 2 * int(row["initial_tokens"]))
         for row in pack["sessions"])
-    residual = capacity["resources"]["prefill"] / D_S
+    residual = capacity["resources"]["prefill"] / deadline
     if policy == "per_session_greedy":
         links = {"link": float(state["wan_mbps"]) * 125_000}
         def duration(session, action):
-            value = _duration(session, action, case, ("link",), links, D_S)
+            value = _duration(session, action, case, ("link",), links, deadline)
             if action == "replay":
                 if not residual:
                     return math.inf
@@ -1003,7 +1010,7 @@ def _planner_decisions(inputs: dict, state: dict, pack: dict, policy: str,
     if sum(capacity["baseline_work"]) > 1 + 1e-9:
         return []
     problem = ExecutionScenario(
-        D_S, D_S, 0, "awake", 0,
+        deadline, deadline, 0, "awake", 0,
         (PowerNode("source-node", 1, True),
          PowerNode("destination-node", 1, False)),
         (ServingInstance("source", ("source-node",)),
@@ -1025,7 +1032,7 @@ def _planner_decisions(inputs: dict, state: dict, pack: dict, policy: str,
                                methods=pool.methods if residual else ("kv_transfer",),
                                migration_headroom={"replay": residual}
                                if residual else None),),
-                           residency_horizon_s=D_S)
+                           residency_horizon_s=deadline)
     routes = {("source", "destination"): ("link",)}
     solvers = {"queue_haul": "lp_work_first", "greedy": "greedy",
                "kv_only": "kv_only", "replay_only": "replay_only"}
@@ -1046,7 +1053,7 @@ def a100_episode(inputs: dict, state: dict, pack: dict, job: dict,
         decisions = _planner_decisions(
             inputs, state, pack, job["policy"], profile, capacity)
         if not decisions:
-            time.sleep(D_S)
+            time.sleep(job["deadline_s"])
             return {"capacity_inputs": capacity, "decisions": []}
         sessions = pack["sessions"]
         move_rows = [{**next(row for row in sessions
@@ -1059,7 +1066,7 @@ def a100_episode(inputs: dict, state: dict, pack: dict, job: dict,
                      for row in move_rows}) == 1 else "mixed",
             "activity": "none", "request_schedule": [],
             "repeat": job["repeat"], "deadline_s": 180,
-            "required_deadline_s": D_S,
+            "required_deadline_s": job["deadline_s"],
             "sessions": sessions, "moves": move_rows,
             "serving_concurrency": 1, "concurrency": len(sessions),
             "move_concurrency": len(sessions), "copy_policy": "initial_final",
