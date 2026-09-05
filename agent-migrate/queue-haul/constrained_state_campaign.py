@@ -462,8 +462,9 @@ def plot_results(episodes: list[dict], out: Path) -> None:
     _save(fig, out, "target_attainment")
 
     policies = ("queue_haul", "greedy")
-    families = ("wan_prefill", "hbm", "serving")
-    fig, axes = plt.subplots(2, 3, figsize=(14, 7), squeeze=False)
+    families = tuple(dict.fromkeys(row["family"] for row in episodes))
+    fig, axes = plt.subplots(2, len(families),
+                             figsize=(4 * len(families), 7), squeeze=False)
     for row_index, policy in enumerate(policies):
         for column, family in enumerate(families):
             ax = axes[row_index][column]
@@ -489,9 +490,10 @@ def plot_results(episodes: list[dict], out: Path) -> None:
                        color=plot_style.ACTION_COLORS[action],
                        label=plot_style.ACTION_NAMES[action])
                 bottoms = [a + b for a, b in zip(bottoms, values)]
-            labels = ([f"{key[1] / 1000:g}G/P{key[2]}" for key in keys]
-                      if family == "wan_prefill" else
-                      [str(key[3] if family == "hbm" else key[4]) for key in keys])
+            labels = ([f"{key[1] / 1000:.3g}G/P{key[2]:.3g}" for key in keys]
+                      if family in ("wan_prefill", "wan", "prefill", "control") else
+                      [f"{key[3] if family == 'hbm' else key[4]:.3g}"
+                       for key in keys])
             ax.set_xticks(range(len(keys)), labels, rotation=45, ha="right")
             ax.set_ylim(0, 1)
             ax.set_title(f"{plot_style.POLICY_NAMES[policy]} — "
@@ -598,10 +600,11 @@ def run_live(plan: dict, run_root: Path, episode_runner=None) -> list[dict]:
 
     def block_stack(job, state):
         nonlocal shared, block
-        if block != job["block_id"]:
+        key = (state["wan_mbps"], state["n_hbm"])
+        if block != key:
             close_stack()
-            block = job["block_id"]
-            root = _attempt_root(run_root / "blocks" / block)
+            block = key
+            root = _attempt_root(run_root / "blocks" / job["block_id"])
             shared = stack_scope.enter_context(
                 _a100_stack(inputs, state["wan_mbps"], root, state["n_hbm"]))
         return shared
@@ -776,7 +779,7 @@ def _a100_stack(inputs: dict, wan_mbps: float, root: Path, n_hbm: int = 0):
     if json.loads(Path(live["model_profile_path"]).read_text()) != inputs["profile"]:
         raise ValueError("live model profile differs from the frozen profile")
     manifest = json.loads(Path(live["manifest_path"]).read_text())
-    allocated = n_hbm * int(live["hbm_unit_bytes"]) if n_hbm else 0
+    allocated = int(n_hbm * live["hbm_unit_bytes"])
     blocks = _hbm_blocks(profile, allocated, cfg.max_model_len) if allocated else None
     stack = testbed.start_stack(cfg, root / "testbed", wan_mbps, [])
     with ExitStack() as resources:
@@ -826,8 +829,7 @@ def _a100_background(inputs: dict, state: dict, root: Path,
         except (RuntimeError, TimeoutError) as error:
             raise RetryableEpisode(f"stack reset failed: {error}") from error
         reset_end_ns = time.monotonic_ns()
-        expected_hbm = int(state["n_hbm"]) * int(live["hbm_unit_bytes"]) \
-            if state["n_hbm"] else 0
+        expected_hbm = int(state["n_hbm"] * live["hbm_unit_bytes"])
         if (holder["allocated_bytes"] if holder else 0) != expected_hbm:
             raise ValueError("shared stack has the wrong HBM allocation")
         kind = "prefill" if state["n_prefill"] else (
@@ -845,14 +847,14 @@ def _a100_background(inputs: dict, state: dict, root: Path,
                 row.prefix_tokens + row.append_tokens for row in sessions))
             rates = (destination.profile_rate(service, "prefill", context),
                      destination.profile_rate(service, "decode", context))
-            count = int(state[f"n_{kind}"])
+            count = float(state[f"n_{kind}"])
             rps = count * float(live[f"{kind}_unit_rps"])
             rho = rps * statistics.mean(
                 row.append_tokens / rates[0] + row.output_tokens / rates[1]
                 for row in sessions)
             load = destination.DestinationLoad(
                 cfg.host, cfg.sink_port, cfg.model, sessions, rho, *rates,
-                root / f"{kind}_background", 1000 + count,
+                root / f"{kind}_background", 1000 + round(count * 1000),
                 rps=rps, max_inflight=256, bypass_lmcache=True)
             load.start()
             try:

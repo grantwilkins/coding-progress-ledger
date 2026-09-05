@@ -1913,64 +1913,44 @@ flip. Execute each live plan with `run-profile`, then pass the six
 differences as architecture/deployment behavior, not a causal sparsity effect.
 
 
-## 2×A100 constrained-state discovery
+## 2×A100 marginal bottleneck comparison
 
-`constrained_state_campaign.py` runs the deliberately small experiment. It
-freezes ten eight-session packs, their power-gain tables, the GPT-OSS/A100
-profile, action demands, shaped WAN rates, integer background units, and the
-full-shed target. Discovery keeps consecutive stable prefill-stream,
-serving-stream, and ordinary HBM-allocation rungs.
+`marginal_state_campaign.py` replaces the exhaustive 7,400-episode sweep with
+six offline-selected points: slack control, WAN, prefill, HBM, serving, and
+combined WAN/prefill. Each uses the fixed eight-session `large-r0` pack, all
+five policies, and three paired repeats: **90 live episodes**. The repeat order
+covers every point once before the next repeat. Policy order is seeded and
+randomized within each point/repeat.
 
-The generated states are exactly the WAN×prefill grid plus the HBM-only and
-serving-only ladders at the highest shaped WAN rate. Every state is executed;
-there is no Sobol population, sampling, resource labeling, or post-outcome
-selection. The offline enumeration emits only `any_full`, `kv_full`,
-`replay_full`, and `mixed_full`.
+Preparation reuses the existing frozen profile and measured background
+capacities. It places residual budgets just below full-pack demand, verifies
+actual LP and greedy action changes offline, and requires a full mixed-action
+plan at the combined bottleneck. These are predicted capacities; every live
+policy measures its actual background and records the resulting decisions.
+Live outcomes never determine which points are retained. HBM and serving may
+produce ties because their demands do not depend on migration action.
 
-The live manifest names the existing migration manifest, model profile,
-content-free trace bundle, and service profile. It also fixes one prefill RPS
-and 0.25 serving RPS per unit, a four-GiB HBM allocation unit, warmup time, and a
-hard guard for each discovery ladder. `prepare` fails instead of truncating a
-ladder if that guard is reached while the background remains stable. Each HBM
-allocation replaces destination KV blocks, rounded up to cover the held bytes.
-The allocation stays inside the destination vLLM worker through its existing
-worker RPC. Exact held bytes, worker PID, and GPU memory are recorded before and
-after each episode; allocation verifies a visible memory increase. The planner
-uses the actual KV capacity reported by the engine. `prepare` reuses a model
-stack while WAN and HBM allocation are unchanged, rebuilding after an invalid
-background; every measurement still resets caches and warms a fresh background.
-It discovers and compiles the campaign; `run` primes one model stack per randomized
-five-policy block, then flushes both caches and recreates the background before
-every policy. Each episode records the stack path and reset timestamps.
-Background requests omit forced-token masks to avoid cross-request sampler
-leakage; seeded prompts, offered rates, and output lengths stay fixed.
-Measured residual prefill scales the planner's replay migration budget.
-An operational background beyond the calibrated service envelope yields an
-empty admission plan; per-session greedy still dispatches each independently
-fastest action using the current WAN and residual prefill capacities.
-Post-move verification uses the declared serving concurrency. Both prefill and
-serving use a 30-second warmup and a separate 30-second measurement, rejecting
-background request failures, blocked arrivals, or statistically clear total
-running-plus-waiting backlog growth beyond the completion-count noise tolerance
-before a policy starts. Capacity comes from measured completed work;
-there is no normalized-work target. Post-policy background request errors and
-blocked arrivals are recorded as outcomes:
+The shared runner preserves loaded models while WAN and HBM settings stay
+fixed. Each policy still resets caches and starts a fresh background with a
+30-second observation window. Fractional background rates and HBM units allow
+points between the former integer rungs. HBM allocations are actual held worker
+memory, with corresponding destination KV blocks removed.
 
 ```bash
-module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
+module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
 export QH_LMCACHE_MODE=mp
-uv run python constrained_state_campaign.py inputs --out inputs.json
-uv run python constrained_state_campaign.py prepare --inputs inputs.json --out OUT
-uv run python constrained_state_campaign.py run --plan OUT/plan.json --run-root RUN
+uv run python marginal_state_campaign.py prepare \
+  --source-plan outputs/constrained-resource-a100-20260905/prepared/plan.json \
+  --out outputs/marginal-resource-a100-20260905/prepared
+sbatch marginal_state_campaign.sbatch
 ```
 
-Rerunning `run` with the same root resumes only an exact hashed schedule
-prefix. Malformed or truncated chat streams retry the whole episode at most
-three times; explicit server stream errors remain valid failed actions. Every
-interrupted or rejected attempt directory remains intact.
-
-The reducer retains policy misses and writes `episodes.csv`,
-`target_attainment.png`, and `action_composition.png`. Queue-Haul capacity
-inputs, decisions, completion times, and modeled achieved relief are retained
-in every episode row; the underlying profiler directory retains request,
-reconstruction, and sampled-power evidence.
+The batch job has a six-hour limit and runs the repeated comparison followed
+by live action-shift validation. `offline_decisions.csv` records predicted
+policy actions. The run retains every episode, actual capacities, request and
+power evidence, attainment plots, and the final per-point robustness summary.
+A failed action-shift validation remains visible rather than being discarded.
+Rerunning with the same run root resumes only the exact hashed schedule prefix;
+interrupted attempts remain intact. The old `constrained_state_campaign.py
+prepare` command still reproduces the exhaustive historical design and is not
+used by this comparison.
