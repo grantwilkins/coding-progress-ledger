@@ -1,0 +1,90 @@
+{
+  "schema": "queue-haul-rational-power-fit-v1",
+  "status": "holdout_failed",
+  "fit": {
+    "schema": "queue-haul-rational-power-v1",
+    "link": "P=P0+A*z/(1+z); z=alpha*f+beta*g",
+    "power_idle_w": 119.64291666666666,
+    "power_amplitude_w": 182.1747216389628,
+    "power_max_w": 301.8176383056295,
+    "alpha_s_per_prefill_token": 0.002751758865574428,
+    "beta_s_per_decode_token": 0.09499262187631212,
+    "F_prefill_tps": 18170.19675143757,
+    "G_decode_tps": 1591.5563056590415,
+    "discovery_rmse_w": 2.2846034161047113
+  },
+  "max_ell": 16.0,
+  "power_curve": [
+    {
+      "ell": 0,
+      "power_w": 119.64291666666666
+    },
+    {
+      "ell": 0.25,
+      "power_w": 156.07786099445923
+    },
+    {
+      "ell": 0.5,
+      "power_w": 180.36782387965428
+    },
+    {
+      "ell": 1,
+      "power_w": 210.73027748614805
+    },
+    {
+      "ell": 2,
+      "power_w": 241.09273109264188
+    },
+    {
+      "ell": 4,
+      "power_w": 265.38269397783694
+    },
+    {
+      "ell": 8,
+      "power_w": 281.57600256796695
+    },
+    {
+      "ell": 16.0,
+      "power_w": 291.1014782092199
+    }
+  ],
+  "interaction_diagnostic": {
+    "discovery": {
+      "residual_w_per_normalized_f_g": -10.46879144826527,
+      "base_rmse_w": 2.284603416104713,
+      "adjusted_rmse_w": 2.203081930452572,
+      "residual_interaction_correlation": -0.3108358441484652
+    },
+    "confirmation": {
+      "residual_w_per_normalized_f_g": -12.167637794780509,
+      "base_rmse_w": 1.4141724039093102,
+      "adjusted_rmse_w": 1.1283528811157397,
+      "residual_interaction_correlation": -0.6674894423327736
+    }
+  },
+  "validation": {
+    "holdout_cells": 18,
+    "holdout_mae_w": 1.1290496170229636,
+    "holdout_p90_abs_error_w": 2.64310829100433,
+    "holdout_r2": -0.36330667311858056,
+    "family_mae_w": {
+      "agentic": 0.9357850249492685,
+      "campaign": 2.1292798160701714,
+      "decode": 0.7964221747729899,
+      "prefill": 1.0581942557861812
+    },
+    "beta_split_relative_difference": 0.616318593177159,
+    "replicate_p90_difference_w": 3.5067314314878337,
+    "cached_prompt_tokens": 0,
+    "gates": {
+      "holdout_mae_le_5w": true,
+      "holdout_p90_le_10w": true,
+      "holdout_r2_ge_0p95": false,
+      "each_family_mae_le_8w": true,
+      "beta_split_difference_le_20pct": false,
+      "replicate_p90_difference_le_8w": true,
+      "zero_cached_prompt_tokens": true
+    },
+    "passed": false
+  }
+}

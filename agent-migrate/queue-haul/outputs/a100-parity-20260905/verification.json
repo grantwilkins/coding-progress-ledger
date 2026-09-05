@@ -1,0 +1,1015 @@
+{
+  "status": "incomplete",
+  "power": {
+    "cells": 111,
+    "raw_accounting_passed": true,
+    "fit_reproduced_exactly": true,
+    "acceptance": "holdout_failed",
+    "failed_gates": [
+      "holdout_r2_ge_0p95",
+      "beta_split_difference_le_20pct"
+    ]
+  },
+  "timing": {
+    "expected": 120,
+    "complete": 1,
+    "failed": 1,
+    "missing": 118,
+    "accepted_parity": false,
+    "runner_error": "session reconstruction failed after 2 probes: HTTP 200, response empty",
+    "reducer_error": "timing request needs exactly one API connection",
+    "runtime": {
+      "vllm": "0.22.0",
+      "lmcache": "0.5.1"
+    }
+  },
+  "excluded_files": "Unix-domain sockets",
+  "files": [
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/cells.jsonl",
+      "archive": "power/cells.jsonl",
+      "sha256": "9230a8527f60960c2a8d4019e5235cad03f6c51a7d9ccef8a23916660cb92f1b"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/fit.json",
+      "archive": "power/fit.json",
+      "sha256": "e7718dd900238b5d0cff4134e2aa1ceeed9f818d226964ef6704dc58dc4ebdf5"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/metadata.json",
+      "archive": "power/metadata.json",
+      "sha256": "a88e338eec4bf60c450e498f2b7cbd123fc3f557fdaacb3bc8946b1010549d13"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/000-idle-idle-p0-g0-c0-r0.csv",
+      "archive": "power/power/000-idle-idle-p0-g0-c0-r0.csv",
+      "sha256": "7c36d5c8049cd5f35c9ce8bb4db92706d6243e7c752b8a46ee5e6ad3108016a9"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/001-discovery-prefill-p8192-g1-c1-r1.csv",
+      "archive": "power/power/001-discovery-prefill-p8192-g1-c1-r1.csv",
+      "sha256": "e3caed2560b1665ad3430a0c0da0a97d77498229b8872e9cf4e39fe18a155c78"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/002-discovery-agentic-p8192-g64-c4-r1.csv",
+      "archive": "power/power/002-discovery-agentic-p8192-g64-c4-r1.csv",
+      "sha256": "c3f049941e27633bd8ed457df32d5f8fe814b171218ef29e3842ac4b87024264"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/003-discovery-decode-p256-g512-c16-r1.csv",
+      "archive": "power/power/003-discovery-decode-p256-g512-c16-r1.csv",
+      "sha256": "9c08e7a54d9cea4c5331abd7bc7a9567c59c7af5e2c49965fcc91f1ed898b893"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/004-discovery-prefill-p28672-g1-c1-r1.csv",
+      "archive": "power/power/004-discovery-prefill-p28672-g1-c1-r1.csv",
+      "sha256": "49ea9702b65bd0ddf0fdf644126bf99042cc06d7f13a81178dc7cb890deb50ff"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/005-discovery-decode-p8192-g512-c1-r0.csv",
+      "archive": "power/power/005-discovery-decode-p8192-g512-c1-r0.csv",
+      "sha256": "aea9f4b16dad1f0b299c61abafcf3ffcf1295f7300ae501f68d1f70bd5023ee2"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/006-discovery-decode-p256-g512-c1-r0.csv",
+      "archive": "power/power/006-discovery-decode-p256-g512-c1-r0.csv",
+      "sha256": "38f534443767fa3a29234f8f3498ce43bfe68490b09e6f7d7acceee50677c526"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/007-discovery-decode-p256-g512-c4-r0.csv",
+      "archive": "power/power/007-discovery-decode-p256-g512-c4-r0.csv",
+      "sha256": "6476b501f90e5c0109d5b32ea66796a8f627d9a5d0bb6b4d9adb19e10f634b80"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/008-discovery-agentic-p8192-g64-c16-r1.csv",
+      "archive": "power/power/008-discovery-agentic-p8192-g64-c16-r1.csv",
+      "sha256": "2b55e84723b71516570afbdd579c5bc8113691af2ce309704bc388c28feda260"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/009-discovery-campaign-p604-g64-c1-r1.csv",
+      "archive": "power/power/009-discovery-campaign-p604-g64-c1-r1.csv",
+      "sha256": "fc19150de1281c752acee5238a7e6834abfc6cecb8e0b2713dbefdd3fa1e86a3"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/010-discovery-decode-p8192-g512-c16-r0.csv",
+      "archive": "power/power/010-discovery-decode-p8192-g512-c16-r0.csv",
+      "sha256": "e8745c05ca3bbf76b6a5394bfd5e906a58863a669b92cf589ea814f95afdaa41"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/011-discovery-decode-p28672-g512-c16-r1.csv",
+      "archive": "power/power/011-discovery-decode-p28672-g512-c16-r1.csv",
+      "sha256": "b1742f3d5d8363556918220aa422dbdf086b2c2f1667b9a1ea3a0ce461b40563"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/012-discovery-prefill-p8192-g1-c1-r0.csv",
+      "archive": "power/power/012-discovery-prefill-p8192-g1-c1-r0.csv",
+      "sha256": "0ad85213851e909f86e563daee8c75d9c96b3775c26585f065c58361898b3d1d"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/013-discovery-decode-p28672-g512-c1-r1.csv",
+      "archive": "power/power/013-discovery-decode-p28672-g512-c1-r1.csv",
+      "sha256": "9fdb1225ac79fd31e342cee38fce99d5f46742c994f3b1caa8f18081b84fc112"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/014-discovery-decode-p256-g512-c8-r0.csv",
+      "archive": "power/power/014-discovery-decode-p256-g512-c8-r0.csv",
+      "sha256": "abf79f3b7f870ed40b621bb6a99f2ab84f02c71d242a1b09423bfe8dc9b00843"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/015-discovery-decode-p8192-g512-c2-r0.csv",
+      "archive": "power/power/015-discovery-decode-p8192-g512-c2-r0.csv",
+      "sha256": "8125d57d007e7a4816bc6f5a91f64a368945233ef06c09a3589ada67022d6914"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/016-discovery-decode-p28672-g512-c1-r0.csv",
+      "archive": "power/power/016-discovery-decode-p28672-g512-c1-r0.csv",
+      "sha256": "7308095789af091761bbdc25574194e1dd6ba971f69c8cdc45856e8ee088229e"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/017-discovery-prefill-p2048-g1-c16-r1.csv",
+      "archive": "power/power/017-discovery-prefill-p2048-g1-c16-r1.csv",
+      "sha256": "efbac77759736b8b1921c9c795019db0276ec7b937b8bc6fb21529032d2a89f8"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/018-discovery-prefill-p28672-g1-c4-r0.csv",
+      "archive": "power/power/018-discovery-prefill-p28672-g1-c4-r0.csv",
+      "sha256": "3c393fd4ac8e0e75bf5f8c45831d62bf6088cbdd6b07ab5690d56a97df16357a"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/019-discovery-agentic-p16384-g64-c16-r0.csv",
+      "archive": "power/power/019-discovery-agentic-p16384-g64-c16-r0.csv",
+      "sha256": "cbf8b43804eb3f0aa4b019e62f2010a214b26b720f8278827c5b1af462b4c7da"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/020-discovery-decode-p28672-g512-c8-r1.csv",
+      "archive": "power/power/020-discovery-decode-p28672-g512-c8-r1.csv",
+      "sha256": "d2d7e76e8e60594919cd14851d23649570fa142225a76be2f353894abfd31b4b"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/021-discovery-agentic-p8192-g64-c8-r0.csv",
+      "archive": "power/power/021-discovery-agentic-p8192-g64-c8-r0.csv",
+      "sha256": "c01a8c1f4b0f19c3a904dff3bff914ee4261ea200a4380a59fd4cb9e9d77319c"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/022-discovery-prefill-p8192-g1-c4-r0.csv",
+      "archive": "power/power/022-discovery-prefill-p8192-g1-c4-r0.csv",
+      "sha256": "5288d7fd2d3a8d7d64143b2427b6c7ad1f7f09788016ae406c6d9284f831e857"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/023-discovery-prefill-p8192-g1-c2-r0.csv",
+      "archive": "power/power/023-discovery-prefill-p8192-g1-c2-r0.csv",
+      "sha256": "f65fd424e82c2ab69e98ac49036b9a90610c1e532f6d6f94c1d12b266a49d6d1"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/024-discovery-agentic-p16384-g64-c1-r0.csv",
+      "archive": "power/power/024-discovery-agentic-p16384-g64-c1-r0.csv",
+      "sha256": "cdab7d01125275d319ee20e9fa2ec592de51de6756937fbe410d88edcae321be"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/025-discovery-decode-p256-g512-c1-r1.csv",
+      "archive": "power/power/025-discovery-decode-p256-g512-c1-r1.csv",
+      "sha256": "15a3a767ee9c23b35e9cde8643da3538e2ecfa81ae5ccbb07c98c90cbf21e3f3"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/026-discovery-decode-p28672-g512-c2-r1.csv",
+      "archive": "power/power/026-discovery-decode-p28672-g512-c2-r1.csv",
+      "sha256": "2c772590e270ea4f229e62d8356131d9fb61aa7a701518635d020baa87335276"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/027-discovery-decode-p256-g512-c16-r0.csv",
+      "archive": "power/power/027-discovery-decode-p256-g512-c16-r0.csv",
+      "sha256": "91af7b56395cfcce30f05c8f4eed62ac8f3d6f7fc4ae09cb8bf3fa1bad204fcb"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/028-discovery-campaign-p604-g64-c1-r0.csv",
+      "archive": "power/power/028-discovery-campaign-p604-g64-c1-r0.csv",
+      "sha256": "26a9d17221fe345a7d504933e76576cccb13bff5a1759d04d1cde79752c3d30e"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/029-discovery-decode-p8192-g512-c8-r1.csv",
+      "archive": "power/power/029-discovery-decode-p8192-g512-c8-r1.csv",
+      "sha256": "f24be3acac3f447bc34552ea7aed48131afa820cf853af2d49f53789f6fe4033"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/030-discovery-prefill-p28672-g1-c8-r0.csv",
+      "archive": "power/power/030-discovery-prefill-p28672-g1-c8-r0.csv",
+      "sha256": "fe92ef3d18fd7282620d83bb85e1d31d3e49cc6c4741b609557452d89e9845fe"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/031-discovery-decode-p8192-g512-c4-r1.csv",
+      "archive": "power/power/031-discovery-decode-p8192-g512-c4-r1.csv",
+      "sha256": "185a4fcafddf415ecd2878c4adb7de61e20ab69fc0911ac654e6b8c8dcf2f1fc"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/032-discovery-campaign-p604-g64-c16-r1.csv",
+      "archive": "power/power/032-discovery-campaign-p604-g64-c16-r1.csv",
+      "sha256": "e108ddc9f6067f4b69606185b1f506359e114ccbcbf47455d8f8ce1805730e74"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/033-discovery-decode-p28672-g512-c4-r0.csv",
+      "archive": "power/power/033-discovery-decode-p28672-g512-c4-r0.csv",
+      "sha256": "7152712dd96a9f05f95b4d5fda8b10b73adaf594a715d08fecc314b4a440a25b"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/034-discovery-prefill-p2048-g1-c1-r0.csv",
+      "archive": "power/power/034-discovery-prefill-p2048-g1-c1-r0.csv",
+      "sha256": "cdba3d12d1dad84e74ad088820008edbfb51bafa2ac7211a9371a1de73a4b83c"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/035-discovery-prefill-p8192-g1-c8-r0.csv",
+      "archive": "power/power/035-discovery-prefill-p8192-g1-c8-r0.csv",
+      "sha256": "f78803f7f82400fc4f6a2c8912a0874aae45a7de5ae37c20a63f14e68fd23d4a"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/036-discovery-decode-p28672-g512-c8-r0.csv",
+      "archive": "power/power/036-discovery-decode-p28672-g512-c8-r0.csv",
+      "sha256": "e0eb6437260180fd7005160a3fd9506726813a868d285ddfe1464595a2695efd"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/037-discovery-prefill-p8192-g1-c16-r0.csv",
+      "archive": "power/power/037-discovery-prefill-p8192-g1-c16-r0.csv",
+      "sha256": "220746b8ab306a201acd35962ad4916186f2a9eb16f0b4a4097836c380eee48d"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/038-discovery-prefill-p28672-g1-c1-r0.csv",
+      "archive": "power/power/038-discovery-prefill-p28672-g1-c1-r0.csv",
+      "sha256": "43dea91634419d4f877ee4ad6a361093ffe09b5eae761ddcbbc6534b03124366"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/039-discovery-prefill-p28672-g1-c16-r0.csv",
+      "archive": "power/power/039-discovery-prefill-p28672-g1-c16-r0.csv",
+      "sha256": "78428f6cd3166eb2dd604aaf094c209445f23f3910fe550302b3645649e2a55f"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/040-discovery-agentic-p8192-g64-c2-r0.csv",
+      "archive": "power/power/040-discovery-agentic-p8192-g64-c2-r0.csv",
+      "sha256": "ae74312a3f74256a419c4d32e4b421ae157e2cf078e13ca0f2ca18e2123deb05"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/041-discovery-decode-p8192-g512-c1-r1.csv",
+      "archive": "power/power/041-discovery-decode-p8192-g512-c1-r1.csv",
+      "sha256": "bda9b813c745be8ec78787e9decd6be7b814c5fb0a35e0376f3b057f7e0fb839"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/042-discovery-prefill-p2048-g1-c1-r1.csv",
+      "archive": "power/power/042-discovery-prefill-p2048-g1-c1-r1.csv",
+      "sha256": "7f20452903a76e3ed9636f5df3090532d24f663b24bb85659051a60dc7c00a05"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/043-discovery-agentic-p16384-g64-c16-r1.csv",
+      "archive": "power/power/043-discovery-agentic-p16384-g64-c16-r1.csv",
+      "sha256": "5994618e0eed052b2d9e614612e7c2529c9f938f11591837a63b18d49d128e7f"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/044-discovery-campaign-p604-g64-c2-r1.csv",
+      "archive": "power/power/044-discovery-campaign-p604-g64-c2-r1.csv",
+      "sha256": "4dbc81f78f7e19b7dc9ab5c291e04e31415dfb2579ece95aface14dfd2bef782"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/045-discovery-decode-p256-g512-c4-r1.csv",
+      "archive": "power/power/045-discovery-decode-p256-g512-c4-r1.csv",
+      "sha256": "a3e055b93971001f80838bb21bf7002d7e996c1f0a2feff85e594bb37a0785ff"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/046-discovery-agentic-p16384-g64-c4-r1.csv",
+      "archive": "power/power/046-discovery-agentic-p16384-g64-c4-r1.csv",
+      "sha256": "48a391d36ec0ac5c780c05a1151002799d256883d2a6dc5cfcae21c80e664d13"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/047-discovery-agentic-p16384-g64-c1-r1.csv",
+      "archive": "power/power/047-discovery-agentic-p16384-g64-c1-r1.csv",
+      "sha256": "24f704207468f9b92bada191d817592ba378029e8a56fe19d6df5b04aa45c2df"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/048-discovery-agentic-p8192-g64-c1-r0.csv",
+      "archive": "power/power/048-discovery-agentic-p8192-g64-c1-r0.csv",
+      "sha256": "e836e22f65de715ef25007cab9d03c0a89376b5db2a8c7dba966c698f3713197"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/049-discovery-prefill-p2048-g1-c2-r1.csv",
+      "archive": "power/power/049-discovery-prefill-p2048-g1-c2-r1.csv",
+      "sha256": "dbc64144d3fbf0302cd51ef4f263c9ce79d908736bf0307a61b57d8bc3a82d16"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/050-discovery-campaign-p604-g64-c4-r1.csv",
+      "archive": "power/power/050-discovery-campaign-p604-g64-c4-r1.csv",
+      "sha256": "25fa3b566c6ae2e8594614745d8e977c0d1cf12b3de85fc15c3847fe80460ba3"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/051-discovery-agentic-p16384-g64-c2-r1.csv",
+      "archive": "power/power/051-discovery-agentic-p16384-g64-c2-r1.csv",
+      "sha256": "ac09b6151ef337a58b269417ef9dff5b7cd58762c2f9234efb4d6c28c9fe8670"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/052-discovery-campaign-p604-g64-c8-r1.csv",
+      "archive": "power/power/052-discovery-campaign-p604-g64-c8-r1.csv",
+      "sha256": "4b30fce0791c4d5ceb4ea481bf0e3535a07d7507b3423a1b8d65612a67b3c78b"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/053-discovery-agentic-p8192-g64-c16-r0.csv",
+      "archive": "power/power/053-discovery-agentic-p8192-g64-c16-r0.csv",
+      "sha256": "ce202f4e5f2a34157b0a76f4afacc7369dd7f85f276599263faea466fe9e3ab1"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/054-discovery-campaign-p604-g64-c16-r0.csv",
+      "archive": "power/power/054-discovery-campaign-p604-g64-c16-r0.csv",
+      "sha256": "12366ce4d9498f1093c4dd4a2063e8688a6971f5c1d0e2dd1f453902a7d7079b"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/055-discovery-agentic-p16384-g64-c8-r0.csv",
+      "archive": "power/power/055-discovery-agentic-p16384-g64-c8-r0.csv",
+      "sha256": "93d75074733cae1efa48db8d451a33054cc5bf1dc39a4668f449081403769866"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/056-discovery-prefill-p2048-g1-c16-r0.csv",
+      "archive": "power/power/056-discovery-prefill-p2048-g1-c16-r0.csv",
+      "sha256": "22a4ac3cec3c4ef481effd284c9d44f2fd607a7b2f51afaff4e5aab4b9694a7f"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/057-discovery-decode-p256-g512-c8-r1.csv",
+      "archive": "power/power/057-discovery-decode-p256-g512-c8-r1.csv",
+      "sha256": "9686a587bba158f9415991557bc89a74b466864f87942bcf2421214ae2825d56"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/058-discovery-agentic-p8192-g64-c1-r1.csv",
+      "archive": "power/power/058-discovery-agentic-p8192-g64-c1-r1.csv",
+      "sha256": "7821a6c255b865df7de81dd008887118bb94b51d8e86d631de9dc1a698c57c74"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/059-discovery-prefill-p28672-g1-c2-r1.csv",
+      "archive": "power/power/059-discovery-prefill-p28672-g1-c2-r1.csv",
+      "sha256": "9ad561b397cc5f63f73444e99eec6f58322fcd08ac3b69b878996a37dc19c48b"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/060-discovery-decode-p256-g512-c2-r0.csv",
+      "archive": "power/power/060-discovery-decode-p256-g512-c2-r0.csv",
+      "sha256": "c255a4ac9541763cf12766c74d975e563fe434c8dd6b0a33ef5be64b2ccedf7c"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/061-discovery-decode-p28672-g512-c2-r0.csv",
+      "archive": "power/power/061-discovery-decode-p28672-g512-c2-r0.csv",
+      "sha256": "1a57f1e1774b7bee8f1d1d406230afe92b38c1fdf7ddbfb4152af735e32bbe40"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/062-discovery-decode-p8192-g512-c4-r0.csv",
+      "archive": "power/power/062-discovery-decode-p8192-g512-c4-r0.csv",
+      "sha256": "38768ee3a2156fb146b73db77891890f446e47aa28bc5810a3257cfbab7f7143"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/063-discovery-campaign-p604-g64-c2-r0.csv",
+      "archive": "power/power/063-discovery-campaign-p604-g64-c2-r0.csv",
+      "sha256": "6ccc5ced12081d9980398ad27a6ab8eeac322d55255aa80495b8e6e4563ae0e4"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/064-discovery-prefill-p2048-g1-c8-r0.csv",
+      "archive": "power/power/064-discovery-prefill-p2048-g1-c8-r0.csv",
+      "sha256": "297af1381604097f75b2dc7553686b71b68bc9ee8ec498f2f9bce9df6385acf0"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/065-discovery-decode-p8192-g512-c16-r1.csv",
+      "archive": "power/power/065-discovery-decode-p8192-g512-c16-r1.csv",
+      "sha256": "340a2af1625f2a84dac362d7253044699c90a32aa96d2e032d16b38c610eac94"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/066-discovery-decode-p28672-g512-c16-r0.csv",
+      "archive": "power/power/066-discovery-decode-p28672-g512-c16-r0.csv",
+      "sha256": "911fef9c7f0fa8c827fa5947641ef5607fd7e06566be5da2595e45ee5f929154"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/067-discovery-prefill-p28672-g1-c8-r1.csv",
+      "archive": "power/power/067-discovery-prefill-p28672-g1-c8-r1.csv",
+      "sha256": "989b7193c754b8335d6b263d5dd290fe695e9ff81878064cdf50d104eb7affe6"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/068-discovery-agentic-p16384-g64-c4-r0.csv",
+      "archive": "power/power/068-discovery-agentic-p16384-g64-c4-r0.csv",
+      "sha256": "2064fc3f9a7dce513a4d4e9ae819adcea235ec82c1e72337e6814a5a08bc8c8b"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/069-discovery-prefill-p28672-g1-c2-r0.csv",
+      "archive": "power/power/069-discovery-prefill-p28672-g1-c2-r0.csv",
+      "sha256": "f55dd4f4dbae677cb3fa8e473d1b58ba46dc26397e09ad66c7212dd3ab0d1b01"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/070-discovery-prefill-p28672-g1-c16-r1.csv",
+      "archive": "power/power/070-discovery-prefill-p28672-g1-c16-r1.csv",
+      "sha256": "ffcc9b8eb1ebc9c3b502abb5660b2a39484440e895db8bcd655709861852e9bf"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/071-discovery-prefill-p2048-g1-c2-r0.csv",
+      "archive": "power/power/071-discovery-prefill-p2048-g1-c2-r0.csv",
+      "sha256": "a92494a745d695bf4c1b03a95850cb08dd8c91f071187f51f93ff3026fa3d6a8"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/072-discovery-prefill-p8192-g1-c8-r1.csv",
+      "archive": "power/power/072-discovery-prefill-p8192-g1-c8-r1.csv",
+      "sha256": "8230f1716b8f46ec1a69e9420d617cd576342b0706067a7cc011c76569d6cfa7"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/073-discovery-prefill-p28672-g1-c4-r1.csv",
+      "archive": "power/power/073-discovery-prefill-p28672-g1-c4-r1.csv",
+      "sha256": "f4556f0415791e7b64a4f05d16ce36f1cdca7b9d1349ff561fa26bb47d502bbc"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/074-discovery-prefill-p2048-g1-c4-r1.csv",
+      "archive": "power/power/074-discovery-prefill-p2048-g1-c4-r1.csv",
+      "sha256": "7ea1c0c5e81f8fbf751190b0c8a83a5d0b3fbf04b1ea479b2865f472b6bc3267"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/075-discovery-decode-p256-g512-c2-r1.csv",
+      "archive": "power/power/075-discovery-decode-p256-g512-c2-r1.csv",
+      "sha256": "c9d9920536c8b72add127f7b3be244d85cbde8229fc1eb57436bc0bf9559d2a9"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/076-discovery-prefill-p8192-g1-c16-r1.csv",
+      "archive": "power/power/076-discovery-prefill-p8192-g1-c16-r1.csv",
+      "sha256": "63d14d797df65ec493f87e1a6e2b20b38795757bac7d53572e3c205a665bc704"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/077-discovery-prefill-p8192-g1-c2-r1.csv",
+      "archive": "power/power/077-discovery-prefill-p8192-g1-c2-r1.csv",
+      "sha256": "2f39b041ae522d3f30a7944877edc078e5c7b1afb0a9257090fb0bf6e8f53723"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/078-discovery-prefill-p8192-g1-c4-r1.csv",
+      "archive": "power/power/078-discovery-prefill-p8192-g1-c4-r1.csv",
+      "sha256": "41f50cad25e71ae4c474398b19c639585444492866e359c1dda729179c523727"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/079-discovery-agentic-p16384-g64-c8-r1.csv",
+      "archive": "power/power/079-discovery-agentic-p16384-g64-c8-r1.csv",
+      "sha256": "eb118d962d9a293c88084c15ee0f7a41b203b37e70a6f432884f72a21d63c59a"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/080-discovery-decode-p28672-g512-c4-r1.csv",
+      "archive": "power/power/080-discovery-decode-p28672-g512-c4-r1.csv",
+      "sha256": "56fe0c048b3dea458827a214333e473caa3f2a77d81277e9a63795fddd4cbe3d"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/081-discovery-agentic-p8192-g64-c4-r0.csv",
+      "archive": "power/power/081-discovery-agentic-p8192-g64-c4-r0.csv",
+      "sha256": "8b5428e167e6d8f0af9a87ca42ce4cbcdd1fa2a5d1ca58c8761c88668e301c7a"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/082-discovery-prefill-p2048-g1-c8-r1.csv",
+      "archive": "power/power/082-discovery-prefill-p2048-g1-c8-r1.csv",
+      "sha256": "e219e29045c7474e732109087f1ac7745718e42332c3da1dde790cae2de02582"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/083-discovery-agentic-p8192-g64-c2-r1.csv",
+      "archive": "power/power/083-discovery-agentic-p8192-g64-c2-r1.csv",
+      "sha256": "e8f37d366fcdefd4309cdbd52e81de860afd7cb5b34ca438063da6b45f40fa39"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/084-discovery-agentic-p16384-g64-c2-r0.csv",
+      "archive": "power/power/084-discovery-agentic-p16384-g64-c2-r0.csv",
+      "sha256": "2d26ad6ac4dd2a76567f7ab355344f38c08cc01192c39672206393c6b29bcc60"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/085-discovery-campaign-p604-g64-c4-r0.csv",
+      "archive": "power/power/085-discovery-campaign-p604-g64-c4-r0.csv",
+      "sha256": "65a5b9eef4f04b0bfc32d82694f0083e8c661a4d87de9f3d1c2508f3d538193f"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/086-discovery-decode-p8192-g512-c8-r0.csv",
+      "archive": "power/power/086-discovery-decode-p8192-g512-c8-r0.csv",
+      "sha256": "152a2907e5c54308918b93a23c7a40933b71d7aa44aa707fa64629f01ff77673"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/087-discovery-prefill-p2048-g1-c4-r0.csv",
+      "archive": "power/power/087-discovery-prefill-p2048-g1-c4-r0.csv",
+      "sha256": "e4f8b82a67ab7486df621a4757602bcd3cfaa2a978dbc55a7e3387ba569c434c"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/088-discovery-campaign-p604-g64-c8-r0.csv",
+      "archive": "power/power/088-discovery-campaign-p604-g64-c8-r0.csv",
+      "sha256": "29ac42577e26a86e6e5c7aa164f3798fe964094efc5f119425b000715f1d237a"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/089-discovery-agentic-p8192-g64-c8-r1.csv",
+      "archive": "power/power/089-discovery-agentic-p8192-g64-c8-r1.csv",
+      "sha256": "6dd5624f738f4a15d1abbeef0c3754d684b065b5486d46cc8ef32bfaf66b760c"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/090-discovery-decode-p8192-g512-c2-r1.csv",
+      "archive": "power/power/090-discovery-decode-p8192-g512-c2-r1.csv",
+      "sha256": "f02cc4cd420a1e8d50134ceef09431a2c6af9c77d283512ff6b7e5ec0e8c7b8e"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/091-idle-idle-p0-g0-c0-r1.csv",
+      "archive": "power/power/091-idle-idle-p0-g0-c0-r1.csv",
+      "sha256": "09dec51c630e0b4b89cf9a94246f33c8aef4950ca807fb9bac80e5edccca7bea"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/092-confirmation-prefill-p4096-g1-c12-r0.csv",
+      "archive": "power/power/092-confirmation-prefill-p4096-g1-c12-r0.csv",
+      "sha256": "4c430a765a5f01fb7987c15b916bca69688360b58242a87325a9c65c9edcb1a3"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/093-confirmation-prefill-p16384-g1-c12-r0.csv",
+      "archive": "power/power/093-confirmation-prefill-p16384-g1-c12-r0.csv",
+      "sha256": "ff050ef88659b73aa5896ba2863a58f1cb1d4cfdb42c3ebed9636c44ab0e1446"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/094-confirmation-agentic-p12288-g64-c6-r0.csv",
+      "archive": "power/power/094-confirmation-agentic-p12288-g64-c6-r0.csv",
+      "sha256": "5055a075f42cb53edcc45dea15485313848a6046399011e6c5ac8a30f95751a6"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/095-confirmation-agentic-p12288-g64-c3-r0.csv",
+      "archive": "power/power/095-confirmation-agentic-p12288-g64-c3-r0.csv",
+      "sha256": "2a581ca14a8b9b4a12994c58f266635ead7c4430004026854975e457a4a982ee"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/096-confirmation-decode-p4096-g512-c3-r0.csv",
+      "archive": "power/power/096-confirmation-decode-p4096-g512-c3-r0.csv",
+      "sha256": "fea1ac048201d7f42122b52a742600dc4e01652eac90f145b4114ec74a18b484"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/097-confirmation-agentic-p12288-g64-c12-r0.csv",
+      "archive": "power/power/097-confirmation-agentic-p12288-g64-c12-r0.csv",
+      "sha256": "817e6accb63d13976053bdc64c8c13f7cb55e06ba687e58967dc48365df8dbb7"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/098-confirmation-decode-p16384-g512-c6-r0.csv",
+      "archive": "power/power/098-confirmation-decode-p16384-g512-c6-r0.csv",
+      "sha256": "f52d3801a86c2216ddfe53cc3bbf63500ccc1a46c7dfd59207dd41e5d9f3964f"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/099-confirmation-campaign-p604-g64-c6-r0.csv",
+      "archive": "power/power/099-confirmation-campaign-p604-g64-c6-r0.csv",
+      "sha256": "a9ca1807f16d05f612250d1beb914d141b07c3453130a3db6317198dc17e6bbf"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/100-confirmation-prefill-p4096-g1-c6-r0.csv",
+      "archive": "power/power/100-confirmation-prefill-p4096-g1-c6-r0.csv",
+      "sha256": "03d65960ad6b31ddbd06a91859f2b54279b99b064b2bdefcd194c4d15d10069e"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/101-confirmation-decode-p16384-g512-c3-r0.csv",
+      "archive": "power/power/101-confirmation-decode-p16384-g512-c3-r0.csv",
+      "sha256": "e98a42fc27c1291c379f583bca15921fd1b36c9b8fdd905329519e5534835d31"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/102-confirmation-decode-p4096-g512-c12-r0.csv",
+      "archive": "power/power/102-confirmation-decode-p4096-g512-c12-r0.csv",
+      "sha256": "84b033cb870a36314d84853893fa784ddaaf16037256c724670afac11aabc72d"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/103-confirmation-prefill-p4096-g1-c3-r0.csv",
+      "archive": "power/power/103-confirmation-prefill-p4096-g1-c3-r0.csv",
+      "sha256": "3fa0b5a7db57667ecaa25d4748b3ad006f0bec67771b0e645624453444369dc9"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/104-confirmation-prefill-p16384-g1-c6-r0.csv",
+      "archive": "power/power/104-confirmation-prefill-p16384-g1-c6-r0.csv",
+      "sha256": "48ba4e6d62e011e41cf4d4142b13874f6400d57b1e33cf7c28c070beb242b7ac"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/105-confirmation-campaign-p604-g64-c3-r0.csv",
+      "archive": "power/power/105-confirmation-campaign-p604-g64-c3-r0.csv",
+      "sha256": "f815f765fc7fff6ffb4189e8c4bb512cde731f52d29a50a111c3d3d9ddcfb6c3"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/106-confirmation-prefill-p16384-g1-c3-r0.csv",
+      "archive": "power/power/106-confirmation-prefill-p16384-g1-c3-r0.csv",
+      "sha256": "5a1c4e2030d6e2c95167bf02a703bd8c28ea1f143bf013f7251330bd225dd267"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/107-confirmation-decode-p16384-g512-c12-r0.csv",
+      "archive": "power/power/107-confirmation-decode-p16384-g512-c12-r0.csv",
+      "sha256": "d41c040b82a71bde1a60d9aaae50bc3bbedf5a2949519fed42dc2b0a3e30890a"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/108-confirmation-decode-p4096-g512-c6-r0.csv",
+      "archive": "power/power/108-confirmation-decode-p4096-g512-c6-r0.csv",
+      "sha256": "c4e5017ace9a1695bce88512be3e3e2b1f63f5c5b074b708190ba1ec37b88609"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/109-confirmation-campaign-p604-g64-c12-r0.csv",
+      "archive": "power/power/109-confirmation-campaign-p604-g64-c12-r0.csv",
+      "sha256": "742ad3f354903f388ccdd4412a8d00fb59335c6fac67b95bf86597be785c00ff"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/power/110-idle-idle-p0-g0-c0-r2.csv",
+      "archive": "power/power/110-idle-idle-p0-g0-c0-r2.csv",
+      "sha256": "99ee148ec4d1f6808933362b501c5d435634dd328cdb844a8d40d98f02c80229"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/requests.jsonl",
+      "archive": "power/requests.jsonl",
+      "sha256": "14abee1125a2c35b2d12c5911c4695521e415f4ce240bdc4bfe2a0501fb4a247"
+    },
+    {
+      "source": "/datadrive/queue-haul-power/a100-sweden-20260905-001/server.log",
+      "archive": "power/server.log",
+      "sha256": "4fc7393c59dd82d1c33d8aaa366aae7ed25d0f225b40d438b7c80c136aa2d8e5"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/plan.json",
+      "archive": "timing-v022/plan.json",
+      "sha256": "f7b1f2646741d3465317ee9c8c633290c98724f0ee687807429a9680d9e86015"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/progress.json",
+      "archive": "timing-v022/progress.json",
+      "sha256": "5fd3934d00eb7b42c2feb77c3216563bd1c4db644abb1a08ff5c36f52cb9d0b6"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/run_metadata.json",
+      "archive": "timing-v022/run_metadata.json",
+      "sha256": "bf82c56cbdfaa7ca822d63c48ae5d35e1603b42702f671359777d7ba8ce18e2e"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/23a72a106e2a7034/attempt-0001/decision.json",
+      "archive": "timing-v022/scenarios/23a72a106e2a7034/attempt-0001/decision.json",
+      "sha256": "71b95f8e5771fa8768a949524a7d1a792d1d741fa75c91b3c584776291cbfc7f"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/23a72a106e2a7034/attempt-0001/result.json",
+      "archive": "timing-v022/scenarios/23a72a106e2a7034/attempt-0001/result.json",
+      "sha256": "be1ed7ffed2699aedfec4b748e857780a9076a39efbac0502fa4dcb87d1a4619"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/23a72a106e2a7034/attempt-0001/scenario.json",
+      "archive": "timing-v022/scenarios/23a72a106e2a7034/attempt-0001/scenario.json",
+      "sha256": "d11c55d535ae86360c502581aec877ab9468ebaca0e49111c4567933a5276e5e"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/23a72a106e2a7034/attempt-0001/sink_load_germany.jsonl",
+      "archive": "timing-v022/scenarios/23a72a106e2a7034/attempt-0001/sink_load_germany.jsonl",
+      "sha256": "917be90747d8e1fd6a65dd46f88b611355430b383c3c0688bec06329c549d77c"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/23a72a106e2a7034/attempt-0001/source_load.jsonl",
+      "archive": "timing-v022/scenarios/23a72a106e2a7034/attempt-0001/source_load.jsonl",
+      "sha256": "bd4d8d951ed50db68cce352c542b9eaa20da1c5f6924c9d820fa4a1152056525"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/decision.json",
+      "archive": "timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/decision.json",
+      "sha256": "24c37f3ab153059520431c06929a839d5dc1284886b2d314f7775391c9fab11a"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/result.json",
+      "archive": "timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/result.json",
+      "sha256": "942ad2826debc84453480a58940a3cf05b2ee6a153e4ef0c64a85a1986340fca"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/scenario.json",
+      "archive": "timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/scenario.json",
+      "sha256": "c23a4446232fd15a6b44ec9ee21ca1dafa223ccc84c4396efd408c967211a090"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/sink_load_east.jsonl",
+      "archive": "timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/sink_load_east.jsonl",
+      "sha256": "8b4f05759bffb808358a83d34e712d6c538059448d4a342a4c261cb5f91b64f5"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/sink_load_germany.jsonl",
+      "archive": "timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/sink_load_germany.jsonl",
+      "sha256": "545efec0f3a1b455e2ddec73782abd1c92b81de5e1c4f593dab341410754fe0c"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/source_load.jsonl",
+      "archive": "timing-v022/scenarios/5e19c10f47fa0204/attempt-0001/source_load.jsonl",
+      "sha256": "d06c689172748143e29e19fe3a4bbe319af610afc78b797e221aab4c1277f0f1"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/bandwidth-control.jsonl",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/bandwidth-control.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/lmcache-source.log",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/lmcache-source.log",
+      "sha256": "0679598d896949a42cb68d5f6f2b24d20a7285322f82fa682f97adf19d5259da"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/east/lmcache-sink.log",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/east/lmcache-sink.log",
+      "sha256": "235cf04f846b5ec70b8812fb3dcc1d8c2fcb098d9734c41ea064c0781821db56"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/east/node-serve.pid",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/east/node-serve.pid",
+      "sha256": "e834d1f803324936adf21a508f7d93c47c7a71815c89fbfc7706b6daea86893b"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/east/power.csv",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/east/power.csv",
+      "sha256": "7588ea4311225f72fefec29e5e873d72fa4556a28046a76574cb6cd91dcb589f"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/east/prefill_gateway.jsonl",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/east/prefill_gateway.jsonl",
+      "sha256": "264915bcdfaefff9fd871917936686144df0856774c12f2d1a916766b85de49d"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/east/scheduled_events.jsonl",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/east/scheduled_events.jsonl",
+      "sha256": "dcf30fe4a3d28672a4777d9cdb4738ad606935f5aeec535aeaf87fcab77d12eb"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/east/sink.log",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/east/sink.log",
+      "sha256": "fd26a3449bd797ef944beeaacbf462814821beb21b8300a5684c3d5c903c87da"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/germany/lmcache-sink.log",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/germany/lmcache-sink.log",
+      "sha256": "175c72ec74fa161680a75c8761c5acf8ab160db33a2b542fe83d5c73040188d9"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/germany/node-serve.pid",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/germany/node-serve.pid",
+      "sha256": "ef1d71643fa87d1f35778139cfadfe073580fb50b38fae6c1df678fa783c285c"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/germany/power.csv",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/germany/power.csv",
+      "sha256": "0c0cdbe9839a7cf3b41defba10a93beb4dddd431c151d132592171c1b27dae72"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/germany/prefill_gateway.jsonl",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/germany/prefill_gateway.jsonl",
+      "sha256": "bf3862918caa033023566fd4021ba4cefc1f69204ccdbcddfa947d7ac6e2bdc4"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/germany/scheduled_events.jsonl",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/germany/scheduled_events.jsonl",
+      "sha256": "2fce7771bbe149432179e095894b187e392e40db6c3be0af4cac7294e244ac27"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/nodes/germany/sink.log",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/nodes/germany/sink.log",
+      "sha256": "739c926d19a29608750a7cd982f32e2e283b39c1f239f7b9a2fcd06d867d74ac"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/power.csv",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/power.csv",
+      "sha256": "0f77a7b0a713de74e47bc3d497215b0314778a1d3da3a1c1fa4727b11386c37b"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/proxy.log",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/proxy.log",
+      "sha256": "e1d6aba9495057867bbba21fe36fa3e530b9e907c4030c566be231c9f413cbc6"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/proxy_bytes.csv",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/proxy_bytes.csv",
+      "sha256": "c88677f7656b00e0f7e558d50da6127afda170ac24aae9a4789c402240fec147"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/proxy_connections.csv",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/proxy_connections.csv",
+      "sha256": "5df905e554db347c4de6f1a532624bd447d0f81c600839f61c2985cc804f933a"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/redis.log",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/redis.log",
+      "sha256": "67b241454dc3f1df07479c1018334991f7dd9d343091cc9ac680241eb3d97ef7"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/resp_transfers.csv",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/resp_transfers.csv",
+      "sha256": "85310b50cc5ce9ffecbc17b4bc0e0e9ccd3291d25c0cdf1434325c3d9fe84749"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/scheduled_events.jsonl",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/scheduled_events.jsonl",
+      "sha256": "1e5ea74c290f206d19031c67c362dc58c22d10aeca967f547ddc3a20c384721a"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-timing-v022/stacks/natural-1788631520953984495/source.log",
+      "archive": "timing-v022/stacks/natural-1788631520953984495/source.log",
+      "sha256": "59cbf830a3086c7ad990e57a5868d72e7d8f92071f2a419e7b47f9f414ffbc66"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/driver-v022.log",
+      "archive": "timing-startup-attempts/driver-v022.log",
+      "sha256": "e56fcbd3d1089f78d01d2678b23162cd648283a8c004c630e0e9d07b00ea5557"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/driver-v022.pid",
+      "archive": "timing-startup-attempts/driver-v022.pid",
+      "sha256": "923284aed2041a16b0f988e2f62d7971318cc53bf981ff9e442bed43a4bc1424"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/driver.log",
+      "archive": "timing-startup-attempts/driver.log",
+      "sha256": "d8bccb877199065b69a6b2c2a9c82a8bc39da355b77a4330f0f9b7a6273930fc"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/driver.pid",
+      "archive": "timing-startup-attempts/driver.pid",
+      "sha256": "cbcb1cd5f8d03fd760d45d476cde9a675eb4b83aafda0094a3254fb46de40406"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/plan.json",
+      "archive": "timing-startup-attempts/timing/plan.json",
+      "sha256": "f7b1f2646741d3465317ee9c8c633290c98724f0ee687807429a9680d9e86015"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/progress.json",
+      "archive": "timing-startup-attempts/timing/progress.json",
+      "sha256": "fe476f370a9522ae5dc58975d363eee9c67bf9b611b1abc50b89c64acb38d3ef"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/run_metadata.json",
+      "archive": "timing-startup-attempts/timing/run_metadata.json",
+      "sha256": "4eb3bb84fecc531538473ebda2167348f6a4b2352dda0187d353746293168842"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/scenarios/5e19c10f47fa0204/attempt-0001/decision.json",
+      "archive": "timing-startup-attempts/timing/scenarios/5e19c10f47fa0204/attempt-0001/decision.json",
+      "sha256": "24c37f3ab153059520431c06929a839d5dc1284886b2d314f7775391c9fab11a"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/scenarios/5e19c10f47fa0204/attempt-0001/result.json",
+      "archive": "timing-startup-attempts/timing/scenarios/5e19c10f47fa0204/attempt-0001/result.json",
+      "sha256": "cd567c10de987fda3dc60072837c5f119a8da78b8ebd7510acb89101e7f01710"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/scenarios/5e19c10f47fa0204/attempt-0001/scenario.json",
+      "archive": "timing-startup-attempts/timing/scenarios/5e19c10f47fa0204/attempt-0001/scenario.json",
+      "sha256": "c23a4446232fd15a6b44ec9ee21ca1dafa223ccc84c4396efd408c967211a090"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/bandwidth-control.jsonl",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/bandwidth-control.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/lmcache-source.log",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/lmcache-source.log",
+      "sha256": "4fcefb2f2bfa8cb49884cbe18efdcb2652c7eb3b4eb6797a9e6e15286e3fd4d0"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/east/lmcache-sink.log",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/east/lmcache-sink.log",
+      "sha256": "70c291e0a7e58629cadb56fd11bcd953ece9613411a1b446278a988cf162fe24"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/east/node-serve.pid",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/east/node-serve.pid",
+      "sha256": "24692c831b6954b711aaf161d80a2f49a1d9b1ff8917e18b0c0e9a6813de1b51"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/east/power.csv",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/east/power.csv",
+      "sha256": "713a3b5a01f0890999ca9c54c2f2f33654378d0ac44647e101c98a819d703e1d"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/east/prefill_gateway.jsonl",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/east/prefill_gateway.jsonl",
+      "sha256": "f31a18ecb1038ae3b605fad69b0937f78e49e7b5546d1e32e31a0d2cbbebbd2e"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/east/scheduled_events.jsonl",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/east/scheduled_events.jsonl",
+      "sha256": "581d61dad8850f81e940c25a743d115d61233d079c521289ae5794110349aae8"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/east/sink.log",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/east/sink.log",
+      "sha256": "e64b60d09b39a54dd3ad72522f2590124554ae33c8cb6382d039a594a98b39ef"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/germany/lmcache-sink.log",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/germany/lmcache-sink.log",
+      "sha256": "465621e6c4b18320db56e937a6c097b057f7c8702e6a9a93021aac0a63c6987f"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/germany/node-serve.pid",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/germany/node-serve.pid",
+      "sha256": "3189722cce958adc1be93bfd677c6f9370eef5c2f75e2be123c1f06b3e8c6840"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/germany/power.csv",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/germany/power.csv",
+      "sha256": "c845fcfea2bdb4f96eb9514114a7df032325035ad28e87ab251397c7786a93e2"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/germany/prefill_gateway.jsonl",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/germany/prefill_gateway.jsonl",
+      "sha256": "76c2e54a8ec4c9a849671992809f897c57f2e955fbfc5db47f360cbfc3a1d940"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/germany/scheduled_events.jsonl",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/germany/scheduled_events.jsonl",
+      "sha256": "1cb6bf9a33a2d6e00b7f9db15f85381b1f80a3c34014298b8ec516a35b310b9b"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/nodes/germany/sink.log",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/nodes/germany/sink.log",
+      "sha256": "76ad18fe4732f37cc05cdc0e77b82990f5f993384f54aa599e71b77657232a6c"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/power.csv",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/power.csv",
+      "sha256": "8219db7d5fa5037492918d5d823aa18e4140f6c0b34beb25c7ec4b846a4af0a7"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/proxy.log",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/proxy.log",
+      "sha256": "e1d6aba9495057867bbba21fe36fa3e530b9e907c4030c566be231c9f413cbc6"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/proxy_bytes.csv",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/proxy_bytes.csv",
+      "sha256": "5966c00c53b7b1399791d3b3c68c32d209b5a0dcc58dba23c4c2e8da4d8b4bbf"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/proxy_connections.csv",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/proxy_connections.csv",
+      "sha256": "d301ee463b3d6def1e3182f73840f76ff7ab794d0abc6436eed4f7f55aa92d23"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/redis.log",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/redis.log",
+      "sha256": "a4a136253709f1765125a4758dd4d2c70ac5273f07138c5e3f7be4f5bff4db66"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/resp_transfers.csv",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/resp_transfers.csv",
+      "sha256": "4dc5280270e3a5bf031eee42e2e030593c23bdbe81c6b71a2e150bf6864b5a15"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/scheduled_events.jsonl",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/scheduled_events.jsonl",
+      "sha256": "f382394fd7ac129a69aede70d52a33f4fe5d358814014c84528250d441392114"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing/stacks/natural-1788630694822469541/source.log",
+      "archive": "timing-startup-attempts/timing/stacks/natural-1788630694822469541/source.log",
+      "sha256": "b924d76dc929fb8a479fe93582354351646f3e6f4cd4a13a0ad44718c24e4d2f"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/plan.json",
+      "archive": "timing-startup-attempts/timing-v022/plan.json",
+      "sha256": "f7b1f2646741d3465317ee9c8c633290c98724f0ee687807429a9680d9e86015"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/progress.json",
+      "archive": "timing-startup-attempts/timing-v022/progress.json",
+      "sha256": "2920b121566aff279e26a8942cd5759372de9a45480853d94dcefc1bd0e2d1c6"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/run_metadata.json",
+      "archive": "timing-startup-attempts/timing-v022/run_metadata.json",
+      "sha256": "3cb7ded0b2e05785e32a5532091acf27aded95b6d538926773a496d488bd4342"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/stacks/natural-1788631443712825147/bandwidth-control.jsonl",
+      "archive": "timing-startup-attempts/timing-v022/stacks/natural-1788631443712825147/bandwidth-control.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/stacks/natural-1788631443712825147/proxy.log",
+      "archive": "timing-startup-attempts/timing-v022/stacks/natural-1788631443712825147/proxy.log",
+      "sha256": "aa48437cd53430f895f1ddb5adb61760b4031aa3c784eac10b24e7e0975c3c4d"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/stacks/natural-1788631443712825147/proxy_bytes.csv",
+      "archive": "timing-startup-attempts/timing-v022/stacks/natural-1788631443712825147/proxy_bytes.csv",
+      "sha256": "dabc4a2c4a5e54cb19b1ae4fe7c844b992b0a43b6808159b231cbda1fc1cfc44"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/stacks/natural-1788631443712825147/proxy_connections.csv",
+      "archive": "timing-startup-attempts/timing-v022/stacks/natural-1788631443712825147/proxy_connections.csv",
+      "sha256": "aa252a8570c13cbab76ba486c2c950753dae9a581fe2a2649b87a9ff0fc1dd72"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/stacks/natural-1788631443712825147/redis.log",
+      "archive": "timing-startup-attempts/timing-v022/stacks/natural-1788631443712825147/redis.log",
+      "sha256": "7d976c72d6870886d2e49160bc141285ffad4573be3ca3bddf1e056cd2155984"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/stacks/natural-1788631443712825147/resp_transfers.csv",
+      "archive": "timing-startup-attempts/timing-v022/stacks/natural-1788631443712825147/resp_transfers.csv",
+      "sha256": "0a109a501574430afc77297ebab6970cd3a8f2d654860f6694417a3fa7ce9d49"
+    },
+    {
+      "source": "/datadrive/queue-haul-network/a100-parity/timing-v022/stacks/natural-1788631443712825147/scheduled_events.jsonl",
+      "archive": "timing-startup-attempts/timing-v022/stacks/natural-1788631443712825147/scheduled_events.jsonl",
+      "sha256": "9e23a03c67d62e2dea4bcb094e850d09ba8946d2095d32cf1bbffb4595d69620"
+    },
+    {
+      "archive": "timing-east-logs.tar.gz",
+      "sha256": "e58e51a826bd84bb478f2d48a4ba4ea32ee5701959bc5aac16231f5d1178c07a",
+      "regular_files": 12
+    },
+    {
+      "archive": "timing-germany-logs.tar.gz",
+      "sha256": "701ef6c8f25962f2385ad959733a612cca0bf428d281e6391a21ca3abe15ea96",
+      "regular_files": 12
+    }
+  ],
+  "tests": {
+    "full_passed": 1186,
+    "full_failed": 11,
+    "a100_parity_passed": 32,
+    "source_code_changed": false
+  }
+}

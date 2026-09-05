@@ -1,0 +1,26 @@
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1993, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1974, in main
+    asyncio.run(run_proxy(
+  File "/usr/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1278, in run_proxy
+    servers, byte_log = await start_proxy(
+                        ^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1267, in start_proxy
+    server = await asyncio.start_unix_server(control, path=control_socket)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/streams.py", line 113, in start_unix_server
+    return await loop.create_unix_server(factory, path, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/unix_events.py", line 319, in create_unix_server
+    sock.bind(path)
+OSError: AF_UNIX path too long

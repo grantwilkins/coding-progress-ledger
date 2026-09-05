@@ -1,0 +1,50 @@
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+[32;20m[2026-09-05 18:04:05,605] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/home/azureuser/coding-progress-ledger/agent-migrate/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-09-05 18:04:05,626] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-09-05 18:04:05,867] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-05 18:04:05,867] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-05 18:04:05,869] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-09-05 18:04:12,767] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/a100_parity_campaign.py", line 340, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/a100_parity_campaign.py", line 332, in main
+    run_timing(args.plan, args.run_root, args.ssh_key.expanduser())
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/a100_parity_campaign.py", line 227, in run_timing
+    return network.run_campaign(
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py", line 4834, in run_campaign
+    stack = start_cluster(
+            ^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py", line 1582, in start_cluster
+    testbed.wait_tcp_process(
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1314, in wait_tcp_process
+    raise RuntimeError(f"process exited while waiting for {host}:{port}; log tail:\n{tail(log)}")
+RuntimeError: process exited while waiting for 10.0.0.4:8301; log tail:
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1993, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1974, in main
+    asyncio.run(run_proxy(
+  File "/usr/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1278, in run_proxy
+    servers, byte_log = await start_proxy(
+                        ^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py", line 1267, in start_proxy
+    server = await asyncio.start_unix_server(control, path=control_socket)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/streams.py", line 113, in start_unix_server
+    return await loop.create_unix_server(factory, path, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/unix_events.py", line 319, in create_unix_server
+    sock.bind(path)
+OSError: AF_UNIX path too long

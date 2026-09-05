@@ -93,7 +93,7 @@ scenarios.
 
 The 2026-09-04 direct power run completed all 111 base and 117 prospective
 replication cells. Evidence is archived under `outputs/a100-parity-20260904/`
-(`base/`, `replication/`, and the unexecuted `timing-plan.json`), preserving
+(`base/`, `replication/`, and the frozen `timing-plan.json`), preserving
 original metadata, paths, fits, requests, and raw power samples. The source roots
 are `/datadrive/queue-haul-power/a100-realized-002` and its `-replication`
 extension. All 228 cells passed raw sample, request, token, sequence, and pinned
@@ -105,9 +105,37 @@ split variation was 29.94%, exceeding the frozen 20% gate. Every other gate
 passed. Active-only R² was -1.124 (1.163 W MAE); the high envelope R² includes
 six idle anchors and does not establish active-load discrimination. These
 results do not replace the canonical diagnostic figures or certify calibration.
-The 120-scenario timing replacement has no collected results in its prepared
-run root; completing the publication pair still requires timing acquisition
-and resolution of the power coefficient-stability failure.
+The 2026-09-05 Sweden resumption is archived in `outputs/a100-parity-20260905/`.
+All three nodes passed host checks at commit `12ef9536`. Timing requires the
+calibration's vLLM 0.22.0 and LMCache 0.5.1: vLLM 0.24.0 renders the background
+prompt as 607 tokens instead of the required 604. The failed 0.24 attempt and
+a subsequent Unix-socket path-length startup failure are retained separately.
+Use a short run root; the latest is `/datadrive/queue-haul-network/a100-timing-v022`.
+It stopped after one complete KV scenario and one failed scenario out of 120:
+the second scenario's KV warm-up returned no final text after two probes.
+The completed scenario also fails reduction because `live_measurements` assumes
+one API connection per request window, incompatible with concurrent migrations
+and background requests. Neither outcome is accepted timing parity. The archive
+includes local attempts and both destinations' logs; socket files are excluded.
+
+The separate Sweden power run completed and verified all 111 cells, with exact
+raw sample, request, token, sequence, grid, and fit-reproduction checks. It remains
+`holdout_failed`: the 18 unseen cells have 1.129 W MAE, 2.643 W p90 error,
+R²=-0.3633, and 61.63% coefficient variation. The R² and 20% stability gates fail;
+all other gates pass. `power-holdout-diagnostic` plots only these unseen cells.
+Original evidence is under `/datadrive/queue-haul-power/a100-sweden-20260905-001`.
+No acquisition remains running. The publication pair still requires timing
+runner/reducer repairs and a power calibration that passes the frozen gates.
+The restored environment's full suite had 1,186 passes and 11 failures; all 32
+A100 timing/power tests passed after restoring vLLM 0.22.0. Logs are archived.
+
+For timing, set `QH_RUNTIME=native`, `QH_LMCACHE_MODE=mp`,
+`QH_NATIVE_RUNTIME_VERSIONS=0.22.0,0.5.1`, `HF_HOME=/datadrive`, and
+`QH_CACHE_ROOT=/datadrive/queue-haul-cache`; the destination login environments
+also need the cache paths. Set `UV_NO_SYNC=1` when using an installed serving
+environment so `uv run` preserves packages installed separately by `setup.sh`.
+The commands below describe the workflow; repair the recorded failures before
+resuming timing or treating either figure as accepted evidence.
 
 ```bash
 uv run python queue-haul/a100_parity_campaign.py prepare-timing \
