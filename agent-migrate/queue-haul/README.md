@@ -91,6 +91,24 @@ makespans. It varies block-aligned context per session, width, destination,
 background load, and move order. Re-running `run-timing` resumes completed
 scenarios.
 
+The 2026-09-04 direct power run completed all 111 base and 117 prospective
+replication cells. Evidence is archived under `outputs/a100-parity-20260904/`
+(`base/`, `replication/`, and the unexecuted `timing-plan.json`), preserving
+original metadata, paths, fits, requests, and raw power samples. The source roots
+are `/datadrive/queue-haul-power/a100-realized-002` and its `-replication`
+extension. All 228 cells passed raw sample, request, token, sequence, and pinned
+base-hash checks on 2026-09-05.
+
+The replication remains `holdout_failed`: its 24 prospective holdout cells
+achieved 1.467 W MAE, 2.932 W p90 error, and R²=0.999498, but decode-coefficient
+split variation was 29.94%, exceeding the frozen 20% gate. Every other gate
+passed. Active-only R² was -1.124 (1.163 W MAE); the high envelope R² includes
+six idle anchors and does not establish active-load discrimination. These
+results do not replace the canonical diagnostic figures or certify calibration.
+The 120-scenario timing replacement has no collected results in its prepared
+run root; completing the publication pair still requires timing acquisition
+and resolution of the power coefficient-stability failure.
+
 ```bash
 uv run python queue-haul/a100_parity_campaign.py prepare-timing \
   --manifest queue-haul/outputs/coding-manifest.json \

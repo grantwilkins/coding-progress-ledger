@@ -1,0 +1,119 @@
+{
+  "schema": "queue-haul-rational-power-replication-v1",
+  "status": "holdout_failed",
+  "fit": {
+    "schema": "queue-haul-rational-power-v1",
+    "link": "P=P0+A*z/(1+z); z=alpha*f+beta*g",
+    "power_idle_w": 118.50224656357389,
+    "power_amplitude_w": 183.63582620371278,
+    "power_max_w": 302.13807276728664,
+    "alpha_s_per_prefill_token": 0.00274238633858817,
+    "beta_s_per_decode_token": 0.10019041388513088,
+    "F_prefill_tps": 18232.296192716927,
+    "G_decode_tps": 1602.8655204340316,
+    "discovery_rmse_w": 2.388753318918445
+  },
+  "max_ell": 16.0,
+  "power_curve": [
+    {
+      "ell": 0,
+      "power_w": 118.50224656357389
+    },
+    {
+      "ell": 0.25,
+      "power_w": 155.22941180431644
+    },
+    {
+      "ell": 0.5,
+      "power_w": 179.71418863147815
+    },
+    {
+      "ell": 1,
+      "power_w": 210.32015966543028
+    },
+    {
+      "ell": 2,
+      "power_w": 240.9261306993824
+    },
+    {
+      "ell": 4,
+      "power_w": 265.4109075265441
+    },
+    {
+      "ell": 8,
+      "power_w": 281.7340920779852
+    },
+    {
+      "ell": 16.0,
+      "power_w": 291.3359653435389
+    }
+  ],
+  "validation": {
+    "design": "prospective_active_plus_idle_envelope",
+    "training_cells": 180,
+    "training_idle_cells": 6,
+    "holdout_cells": 24,
+    "holdout_active_cells": 18,
+    "holdout_idle_cells": 6,
+    "holdout_power_range_w": [
+      115.44916666666667,
+      299.4668
+    ],
+    "holdout_mae_w": 1.4670891371109296,
+    "holdout_p90_abs_error_w": 2.932194480240551,
+    "holdout_r2": 0.9994983067624507,
+    "family_mae_w": {
+      "agentic": 1.0189207711725696,
+      "campaign": 1.6233814611108908,
+      "decode": 0.8488455666260298,
+      "idle": 2.3793298969072225,
+      "prefill": 1.3190299687687361
+    },
+    "active_only_diagnostic": {
+      "cells": 18,
+      "mae_w": 1.1630088838454986,
+      "p90_abs_error_w": 2.22900652938377,
+      "rmse_w": 1.4464794171628137,
+      "r2": -1.1242275127229537,
+      "concurrency_mae_w": {
+        "3": 0.7992233202823323,
+        "6": 1.0999690279228294,
+        "12": 1.5898343033313342
+      },
+      "max_abs_error_w": 3.0786832532147628
+    },
+    "beta_split_relative_difference": 0.2993635804927442,
+    "beta_split_values": {
+      "even_replicates_0_2": 0.08534825874724461,
+      "odd_replicates_1_3": 0.11534161977894734
+    },
+    "replicate_p90_difference_w": 3.4042097978285306,
+    "cached_prompt_tokens": 0,
+    "excluded_prior_confirmation_cells": 18,
+    "gates": {
+      "holdout_mae_le_5w": true,
+      "holdout_p90_le_10w": true,
+      "holdout_r2_ge_0p95": true,
+      "each_family_mae_le_8w": true,
+      "beta_split_difference_le_20pct": false,
+      "replicate_p90_difference_le_8w": true,
+      "zero_cached_prompt_tokens": true
+    },
+    "passed": false
+  },
+  "base_evidence": {
+    "path": "/datadrive/queue-haul-power/a100-realized-002",
+    "metadata_sha256": "ecb87e30a60b9177aac242e630a28bdc033b8d8ed5ce21ee208981bbb09895e8",
+    "cells_sha256": "d24bcacdc34e82a7e54126d1d2c6e4ccfd030c65de439bb040aba309f13e9fca",
+    "fit_sha256": "47dfe1e4744b94839d4498caa4666455cf8f29ff0eb0ac18d8a8c52f97defcb5",
+    "model_revision": "6cee5e81ee83917806bbde320786a8fb61efebee",
+    "gpu": {
+      "name": "NVIDIA A100 80GB PCIe",
+      "uuid": "GPU-287df663-51e6-f3ba-0fa0-fbec76f9ca42",
+      "power_limit_w": 300.0
+    },
+    "base_git_sha": "8f28b20e7a79d53a044a5d07e8e4f0110d94fe15",
+    "prior_schema": "queue-haul-rational-power-fit-v1",
+    "prior_status": "holdout_failed"
+  }
+}
