@@ -1,6 +1,7 @@
 """Tests for the small two-A100 constrained-resource campaign."""
 
 import json
+from contextlib import contextmanager
 
 import pytest
 
@@ -357,3 +358,50 @@ def test_live_runner_bounds_stream_retries(tmp_path):
     with pytest.raises(campaign.RetryableEpisode):
         campaign.run_live(plan, tmp_path, runner)
     assert len(attempts) == campaign.MAX_EPISODE_ATTEMPTS
+
+
+def test_live_runner_reuses_stack_until_block_changes(monkeypatch, tmp_path):
+    frozen = campaign.freeze_inputs(inputs(), 7)
+    states = [{**campaign.state_grid(dict.fromkeys(campaign.AXES, 0),
+                                    [10000])[0],
+               "operational": True, "capacity_inputs": capacity()}]
+    schedule = campaign.execution_schedule(
+        states, frozen["inputs"]["packs"][:2], 7, repeats=1)
+    plan = {"frozen": frozen, "states": states, "annotations": [],
+            "schedule": schedule}
+    starts, stops, calls = [], [], []
+
+    @contextmanager
+    def stack(_inputs, wan_mbps, root):
+        root.mkdir(parents=True)
+        shared = {"wan_mbps": wan_mbps, "root": root}
+        starts.append(shared)
+        try:
+            yield shared
+        finally:
+            stops.append(shared)
+
+    def runner(_inputs, state, pack_, job, root, shared):
+        calls.append((job["episode_id"], shared))
+        assert shared["wan_mbps"] == state["wan_mbps"]
+        if len(calls) == 1:
+            root.mkdir(parents=True)
+            raise campaign.RetryableEpisode("incomplete stream")
+        action = "kv_transfer" if job["policy"] == "kv_only" else "replay"
+        return {"capacity_inputs": state["capacity_inputs"],
+                "decisions": [{"session_id": row["session_id"],
+                               "action": action, "completion_s": 1}
+                              for row in pack_["sessions"]]}
+
+    monkeypatch.setattr(campaign, "_a100_stack", stack)
+    monkeypatch.setattr(campaign, "a100_episode", runner)
+    raw = campaign.run_live(plan, tmp_path)
+
+    assert len(raw) == 10
+    assert [row["wan_mbps"] for row in starts] == [10000, 10000, 10000]
+    assert stops == starts
+    assert [row["root"].name for row in starts] == [
+        schedule[0]["block_id"], f"{schedule[0]['block_id']}-attempt-1",
+        schedule[5]["block_id"]]
+    assert calls[0][1] is not calls[1][1]
+    assert len({id(shared) for _, shared in calls[1:5]}) == 1

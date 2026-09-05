@@ -1933,10 +1933,11 @@ and 0.25 serving RPS per unit, sessions per resident HBM group, warmup time, and
 hard guard for each discovery ladder. `prepare` fails instead of truncating a
 ladder if that guard is reached while the background remains stable. Resident
 HBM use must remain visible after warmup and after each episode. `prepare`
-discovers and compiles the campaign; `run` recreates the background for every
-policy and executes the frozen randomized schedule. Post-move verification
-uses the declared serving concurrency. Serving discovery uses a
-30-second warmup and a separate 30-second measurement, rejecting request
+discovers and compiles the campaign; `run` primes one model stack per randomized
+five-policy block, then flushes both caches and recreates the background before
+every policy. Each episode records the stack path and reset timestamps.
+Post-move verification uses the declared serving concurrency. Serving discovery
+uses a 30-second warmup and a separate 30-second measurement, rejecting request
 failures, blocked arrivals, or statistically clear backlog growth. It does not
 use a normalized-work target:
 

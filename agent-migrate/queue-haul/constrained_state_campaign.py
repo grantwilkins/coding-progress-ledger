@@ -11,7 +11,7 @@ import math
 import random
 import statistics
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import replace
 from pathlib import Path
 
@@ -555,8 +555,16 @@ def reduce_campaign(plan: dict, raw: list[dict], out: Path) -> list[dict]:
     return episodes
 
 
+def _attempt_root(base: Path) -> Path:
+    for attempt in itertools.count():
+        root = base if attempt == 0 else base.with_name(
+            f"{base.name}-attempt-{attempt}")
+        if not root.exists():
+            return root
+
+
 def run_live(plan: dict, run_root: Path, episode_runner=None) -> list[dict]:
-    """Execute the frozen order with a fresh, fixed background per policy."""
+    """Execute the frozen order with a fresh background and shared block stack."""
     plan_hash = _verify_plan(plan)
     run_root.mkdir(parents=True, exist_ok=True)
     raw_path, hash_path = (run_root / "raw_episodes.jsonl",
@@ -577,27 +585,46 @@ def run_live(plan: dict, run_root: Path, episode_runner=None) -> list[dict]:
     states = {row["state_id"]: row for row in plan["states"]}
     packs = {row["pack_id"]: row for row in inputs["packs"]}
     runner = episode_runner or a100_episode
-    with raw_path.open("a" if raw_path.exists() else "x", buffering=1) as handle:
-        for job in plan["schedule"][len(raw):]:
-            base = run_root / "scenarios" / job["episode_id"]
-            attempt = 0
-            for retry in range(MAX_EPISODE_ATTEMPTS):
-                while True:
-                    root = (base if attempt == 0 else
-                            base.with_name(f"{job['episode_id']}-attempt-{attempt}"))
-                    attempt += 1
-                    if not root.exists():
+    reuse_stack, stack_scope, shared, block = (
+        episode_runner is None, ExitStack(), None, None)
+
+    def close_stack():
+        nonlocal stack_scope, shared, block
+        stack_scope.close()
+        stack_scope, shared, block = ExitStack(), None, None
+
+    def block_stack(job, state):
+        nonlocal shared, block
+        if block != job["block_id"]:
+            close_stack()
+            block = job["block_id"]
+            root = _attempt_root(run_root / "blocks" / block)
+            shared = stack_scope.enter_context(
+                _a100_stack(inputs, state["wan_mbps"], root))
+        return shared
+
+    try:
+        with raw_path.open("a" if raw_path.exists() else "x", buffering=1) as handle:
+            for job in plan["schedule"][len(raw):]:
+                state = states[job["state_id"]]
+                for retry in range(MAX_EPISODE_ATTEMPTS):
+                    root = _attempt_root(
+                        run_root / "scenarios" / job["episode_id"])
+                    try:
+                        args = (inputs, state, packs[job["pack_id"]], job, root)
+                        result = (runner(*args, block_stack(job, state))
+                                  if reuse_stack else runner(*args))
                         break
-                try:
-                    result = runner(inputs, states[job["state_id"]],
-                                    packs[job["pack_id"]], job, root)
-                    break
-                except RetryableEpisode:
-                    if retry == MAX_EPISODE_ATTEMPTS - 1:
-                        raise
-            row = {"episode_id": job["episode_id"], **result}
-            handle.write(json.dumps(row, sort_keys=True) + "\n")
-            raw.append(row)
+                    except RetryableEpisode:
+                        if reuse_stack:
+                            close_stack()
+                        if retry == MAX_EPISODE_ATTEMPTS - 1:
+                            raise
+                row = {"episode_id": job["episode_id"], **result}
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+                raw.append(row)
+    finally:
+        close_stack()
     reduce_campaign(plan, raw, run_root)
     return raw
 
@@ -686,10 +713,8 @@ def _wait_background(load, kind: str, warmup_s: float, destination,
 
 
 @contextmanager
-def _a100_background(inputs: dict, state: dict, root: Path,
-                     measure_background: bool = False):
-    """Reuse the existing stack, load generator, prefix warming, and telemetry."""
-    import destination_runner as destination
+def _a100_stack(inputs: dict, wan_mbps: float, root: Path):
+    """Start and prime one bandwidth-pinned source/destination model stack."""
     import migration_testbed as testbed
     from profiles import ModelProfile
 
@@ -698,15 +723,48 @@ def _a100_background(inputs: dict, state: dict, root: Path,
     if json.loads(Path(live["model_profile_path"]).read_text()) != inputs["profile"]:
         raise ValueError("live model profile differs from the frozen profile")
     manifest = json.loads(Path(live["manifest_path"]).read_text())
-    bundle = json.loads(Path(live["bundle_path"]).read_text())
-    service = json.loads(Path(live["service_profile_path"]).read_text())
-    stack = testbed.start_stack(cfg, root / "testbed", state["wan_mbps"], [])
-    testbed.start_sink(stack, cfg, [])
-    load = None
+    stack = testbed.start_stack(cfg, root / "testbed", wan_mbps, [])
     try:
+        testbed.start_sink(stack, cfg, [])
+        testbed.run_smoke2_probe(cfg, stack.run_root, wan_mbps)
         testbed.flush_lmcache(stack, cfg)
         testbed.reset_vllm_caches(
             cfg, (stack.run_root / "source.log", stack.run_root / "sink.log"))
+        yield stack, cfg, profile, manifest
+    finally:
+        testbed.stop_stack(stack)
+
+
+@contextmanager
+def _a100_background(inputs: dict, state: dict, root: Path,
+                     measure_background: bool = False, shared=None):
+    """Create, warm, and verify one policy's fixed physical background."""
+    if shared is None:
+        with _a100_stack(inputs, state["wan_mbps"], root) as stack:
+            with _a100_background(inputs, state, root, measure_background,
+                                  stack) as context:
+                yield context
+        return
+
+    import destination_runner as destination
+    import migration_testbed as testbed
+
+    live = _paths(inputs)
+    stack, cfg, profile, manifest = shared
+    if stack.bandwidth_mbps != state["wan_mbps"]:
+        raise ValueError("background WAN differs from the shared stack")
+    bundle = json.loads(Path(live["bundle_path"]).read_text())
+    service = json.loads(Path(live["service_profile_path"]).read_text())
+    load = None
+    try:
+        reset_start_ns = time.monotonic_ns()
+        try:
+            testbed.flush_lmcache(stack, cfg)
+            testbed.reset_vllm_caches(
+                cfg, (stack.run_root / "source.log", stack.run_root / "sink.log"))
+        except (RuntimeError, TimeoutError) as error:
+            raise RetryableEpisode(f"stack reset failed: {error}") from error
+        reset_end_ns = time.monotonic_ns()
         hbm, resident = int(state["n_hbm"]), []
         if hbm:
             pool = sum((destination.manifest_sessions(
@@ -773,6 +831,11 @@ def _a100_background(inputs: dict, state: dict, root: Path,
             "background_kind": kind or "none", "background_rps": rps,
             "baseline_work": baseline, "baseline_kv_tokens": kv,
             "telemetry": metrics,
+            "stack_provenance": {
+                "root": str(stack.run_root.resolve()),
+                "reset_start_ns": reset_start_ns,
+                "reset_end_ns": reset_end_ns,
+            },
             "resources": {
                 "wan": float(state["wan_mbps"]) * 125_000 * D_S,
                 "service": max(0.0, 1 - sum(baseline)) * D_S,
@@ -799,11 +862,8 @@ def _a100_background(inputs: dict, state: dict, root: Path,
             post = _metrics(testbed, destination, cfg)
             capacity["post_serving_telemetry"] = post
     finally:
-        try:
-            if load:
-                load.close()
-        finally:
-            testbed.stop_stack(stack)
+        if load:
+            load.close()
 
 
 def measure_a100_background(inputs: dict, state: dict, root: Path) -> dict:
@@ -901,12 +961,12 @@ def _planner_decisions(inputs: dict, state: dict, pack: dict, policy: str,
 
 
 def a100_episode(inputs: dict, state: dict, pack: dict, job: dict,
-                 root: Path) -> dict:
+                 root: Path, shared=None) -> dict:
     """Create one physical background, plan once, and run one policy."""
     import migration_profiler as profiler
 
     root.mkdir(parents=True, exist_ok=False)
-    with _a100_background(inputs, state, root) as (
+    with _a100_background(inputs, state, root, shared=shared) as (
             stack, cfg, profile, manifest, capacity):
         decisions = _planner_decisions(
             inputs, state, pack, job["policy"], profile, capacity)
