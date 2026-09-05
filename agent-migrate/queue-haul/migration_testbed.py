@@ -186,6 +186,7 @@ class Config:
     capacity_discovery: bool = False
     matched_prefill: bool = False
     literal_token_timing: bool = False
+    timing_only: bool = False
     enforce_eager: bool = True
 
 

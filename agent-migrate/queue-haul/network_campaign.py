@@ -1760,8 +1760,11 @@ def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
             cfg, port, messages, 128,
             profiler.messages_hash(messages), timeout_s,
             bypass_lmcache, **request_options)
-        if result.status_code == 200 and code in text:
-            return {**asdict(result), "state_code_verified": True,
+        if result.status_code == 200 and (code in text or (
+                getattr(cfg, "timing_only", False) and result.output_tokens > 0
+                and result.stream_chunks)):
+            return {**asdict(result), "state_code_verified": code in text,
+                    "timing_only": getattr(cfg, "timing_only", False),
                     "probe_max_tokens": 128,
                     "probe_attempts": attempt + 1}
     raise RuntimeError(
@@ -4755,8 +4758,10 @@ def merge_metadata(current: dict, previous: dict | None) -> dict:
 
 def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                  plan_path: Path, run_root: Path,
-                 stack_block: int | None = None) -> dict:
+                 stack_block: int | None = None, timing_only: bool = False) -> dict:
     plan = json.loads(plan_path.read_text())
+    if timing_only and plan["design"] != "calibration":
+        raise ValueError("timing-only probes require a calibration campaign")
     validate_plan(plan)
     if stack_block is not None and (plan["design"] != "drain"
                                     or stack_block not in range(DRAIN_REPEATS)):
@@ -4783,7 +4788,7 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
     )
     metadata = {
         "schema": "queue-haul-network-run-v1",
-        "state_probe_max_tokens": 128,
+        "state_probe_max_tokens": 128, "timing_only": timing_only,
         "plan_sha256": profiler.file_hash(plan_path), "git_sha": sha,
         "dirty": dirty,
         **({"runtime_environment": {
@@ -4844,6 +4849,8 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                         "kv_capacity_fraction"),
                     model=model,
                 )
+            if timing_only:
+                stack.cfg = replace(stack.cfg, timing_only=True)
             attempt = _next_attempt(scenario_root)
             attempt_root = scenario_root / f"attempt-{attempt:04d}"
             try:

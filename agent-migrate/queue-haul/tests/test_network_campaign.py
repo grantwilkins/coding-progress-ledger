@@ -1941,3 +1941,21 @@ def test_resume_metadata_allows_audited_commit_change_but_pins_identity():
     current["hosts"]["east"]["gpu"] = "H100"
     with pytest.raises(RuntimeError, match="metadata changed"):
         n.merge_metadata(current, first)
+
+
+def test_timing_only_keeps_empty_content_with_generated_tokens(monkeypatch):
+    result = n.profiler.RequestResult('r', 200, '', 1, 3, output_tokens=21,
+                                     stream_chunks=(n.profiler.StreamChunk(2, 10),))
+    monkeypatch.setattr(n.profiler, 'stream_chat', lambda *_args: (result, ''))
+    row = n._chat(SimpleNamespace(timing_only=True), 1, [], 'CODE', 1)
+    assert row['timing_only'] and not row['state_code_verified']
+    assert row['probe_attempts'] == 1
+
+
+@pytest.mark.parametrize('status,tokens', [(500, 21), (200, 0)])
+def test_timing_only_rejects_failed_generation(monkeypatch, status, tokens):
+    result = n.profiler.RequestResult('r', status, '', 1, 3, output_tokens=tokens,
+                                     stream_chunks=(n.profiler.StreamChunk(2, 10),))
+    monkeypatch.setattr(n.profiler, 'stream_chat', lambda *_args: (result, ''))
+    with pytest.raises(RuntimeError):
+        n._chat(SimpleNamespace(timing_only=True), 1, [], 'CODE', 1)

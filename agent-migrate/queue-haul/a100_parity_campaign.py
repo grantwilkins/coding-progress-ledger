@@ -219,16 +219,18 @@ def validate_timing_plan(plan: dict, check_files: bool = True) -> None:
                 raise RuntimeError("frozen timing prediction changed")
 
 
-def run_timing(plan_path: Path, run_root: Path, ssh_key: Path) -> dict:
+def run_timing(plan_path: Path, run_root: Path, ssh_key: Path,
+               timing_only: bool = False) -> dict:
     plan = json.loads(plan_path.read_text())
     validate_timing_plan(plan)
     network.MODEL_PATH = Path(plan["model_profile"]["path"])
     return network.run_campaign(
         network.Cluster.parse(plan["cluster"]), ssh_key,
-        Path(plan["calibration"]["path"]), plan_path, run_root)
+        Path(plan["calibration"]["path"]), plan_path, run_root,
+        timing_only=timing_only)
 
 
-def queue_makespan(scenario: dict, result: dict) -> float:
+def queue_makespan(scenario: dict, result: dict, timing_only: bool = False) -> float:
     requests = result.get("requests", [])
     fields = ("session_id", "destination_instance", "method", "order")
     if result.get("status") != "complete" or result.get("request_failures") \
@@ -243,7 +245,8 @@ def queue_makespan(scenario: dict, result: dict) -> float:
         context = contexts[row["session_id"]]
         cached = context if row["method"] == "kv_transfer" else 0
         if request.get("status_code") != 200 \
-                or not request.get("state_code_verified") \
+                or bool(request.get("timing_only", False)) != timing_only \
+                or (not timing_only and not request.get("state_code_verified")) \
                 or request.get("cached_tokens") != cached \
                 or request.get("prompt_tokens", 0) < context \
                 or not 0 < request.get("output_tokens", 0) \
@@ -262,13 +265,19 @@ def timing_rows(run_root: Path) -> tuple[list[dict], dict]:
     plan = json.loads((run_root / "plan.json").read_text())
     validate_timing_plan(plan)
     network.MODEL_PATH = Path(plan["model_profile"]["path"])
+    metadata_path = run_root / "run_metadata.json"
+    timing_only = json.loads(metadata_path.read_text()).get("timing_only", False) \
+        if metadata_path.exists() else False
     rows, probe_budgets = [], set()
+    content_failures = 0
     for scenario in plan["scenarios"]:
         latest = network._latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None or latest[1].get("status") != "complete":
             raise RuntimeError(f"missing complete result for {scenario['scenario_id']}")
         result = latest[1]
-        measured = queue_makespan(scenario, result)
+        measured = queue_makespan(scenario, result, timing_only)
+        content_failures += sum(not row["request"].get("state_code_verified")
+                                for row in result["requests"])
         probe_budgets.update(row["request"].get("probe_max_tokens", 128)
                              for row in result["requests"])
         rows.append({"scenario_id": scenario["scenario_id"],
@@ -292,6 +301,7 @@ def timing_rows(run_root: Path) -> tuple[list[dict], dict]:
         "unique_predictions": len({round(row["predicted_s"], 9) for row in rows}),
         "mae_s": mae, "r2": r2,
         "probe_max_tokens": probe_budgets.pop(),
+        "timing_only": timing_only, "state_probe_failures": content_failures,
         "gates": {"mae": mae <= gates["mae_s"], "r2": r2 >= gates["r2"]},
     }
     summary["passed"] = all(summary["gates"].values())
@@ -333,6 +343,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     command = commands.add_parser("run-timing")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--timing-only", action="store_true")
     command.add_argument("--ssh-key", type=Path, default=Path("~/.ssh/azrs").expanduser())
     command = commands.add_parser("reduce-timing")
     command.add_argument("--run-root", type=Path, required=True)
@@ -353,7 +364,8 @@ def main() -> None:
                          args.timing_model, args.out, args.seed,
                          args.scenarios_per_action)
     elif args.command == "run-timing":
-        run_timing(args.plan, args.run_root, args.ssh_key.expanduser())
+        run_timing(args.plan, args.run_root, args.ssh_key.expanduser(),
+                   args.timing_only)
     elif args.command == "reduce-timing":
         reduce_timing(args.run_root, args.out)
     else:

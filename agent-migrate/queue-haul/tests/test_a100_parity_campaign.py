@@ -206,3 +206,15 @@ def test_power_plot_requires_direct_a100_campaign(tmp_path, monkeypatch):
             "name": "NVIDIA H100 NVL", "power_limit_w": 400.0}}))
     with pytest.raises(RuntimeError, match="300 W A100"):
         campaign.plot_power(root, [], tmp_path / "plot")
+
+
+def test_timing_only_requires_matching_protocol_and_preserves_cache_checks(queue_result):
+    scenario, result = queue_result
+    for row in result['requests']:
+        row['request'].update(timing_only=True, state_code_verified=False)
+    assert campaign.queue_makespan(scenario, result, True) == pytest.approx(700e-9)
+    with pytest.raises(RuntimeError):
+        campaign.queue_makespan(scenario, result)
+    result['requests'][0]['request']['cached_tokens'] = 0
+    with pytest.raises(RuntimeError):
+        campaign.queue_makespan(scenario, result, True)

@@ -82,9 +82,8 @@ the two observations above 100 seconds while labeling decades from `10^0`
 through `10^2`. This view and the H100 power parity view use native 1.65 x
 1.75 inch canvases for side-by-side placement within one USENIX column.
 
-The checked-in A100 pair is a calibration diagnostic, not the H100-comparable
-publication pair: timing has no mixed queues, and power has only eight distinct
-predictions. Collect the replacement directly on the 300 W A100 source. The
+The historical A100 timing figure has no mixed queues and remains a calibration
+diagnostic. The power figure now uses the complete Sweden run described below. The
 timing plan freezes 120 predictions before measurement, balances 40 replay, 40
 KV-transfer, and 40 mixed queues, and rejects fewer than 90% distinct predicted
 makespans. It varies block-aligned context per session, width, destination,
@@ -124,8 +123,10 @@ raw sample, request, token, sequence, grid, and fit-reproduction checks. It rema
 R²=-0.3633, and 61.63% coefficient variation. The R² and 20% stability gates fail;
 all other gates pass. `power-holdout-diagnostic` plots only these unseen cells.
 Original evidence is under `/datadrive/queue-haul-power/a100-sweden-20260905-001`.
-These archived acquisition processes exited. The publication pair still requires
-complete timing acquisition and a power calibration that passes the frozen gates.
+These archived acquisition processes exited. `outputs/a100_power_model_parity`
+uses the H100 renderer on all 111 Sweden cells (PNG, PDF, CSV), including training
+and idle cells: MAE 1.65 W, R² 0.990. This descriptive all-cell plot is separate
+from the holdout validation above. Timing acquisition remains incomplete.
 The restored environment's full suite had 1,186 passes and 11 failures; all 32
 A100 timing/power tests passed after restoring vLLM 0.22.0. Logs are archived.
 
@@ -148,16 +149,21 @@ Raw responses and server logs are archived in `outputs/a100-parity-20260905/prob
 The queue validation repairs remain covered by concurrent-KV, state/cache,
 timestamp, dispatch-delay, and mixed-budget regressions. The earlier full suite
 had 1,199 passes and 11 baseline failures (`timing-repair-pytest.log`).
-East (10.1.0.4) now times out from Sweden and Germany. Timing needs restored East
-access and a verified serving fix before collecting a fresh run with the archived
-frozen predictions. Neither timing nor power has passed parity acceptance.
+The requested timing-only campaign uses `--timing-only` to record missing state
+answers without retrying or rejecting otherwise successful generation. HTTP,
+nonzero output, full KV cache (or uncached replay), and timestamp checks remain.
+Each request records its actual state-probe result; reduction reports the failure
+count and rejects mixed protocols. This measures timing, not semantic restoration.
+The frozen 120 variations cover 40 replay, 40 KV, and 40 mixed queues; predictions
+are unchanged and every completed scenario is included. East (10.1.0.4) must be
+reachable before launch. Neither historical timing nor power has passed validation.
 
 ```bash
 uv run python queue-haul/a100_parity_campaign.py run-timing \
-  --plan queue-haul/outputs/a100-parity-20260904/timing-plan.json \
-  --run-root /datadrive/queue-haul-network/a100-timing-verified
+  --plan queue-haul/outputs/a100-parity-20260904/timing-plan.json --timing-only \
+  --run-root /datadrive/queue-haul-network/a100-timing-only
 uv run python queue-haul/a100_parity_campaign.py reduce-timing \
-  --run-root /datadrive/queue-haul-network/a100-timing-verified \
+  --run-root /datadrive/queue-haul-network/a100-timing-only \
   --out queue-haul/outputs/a100_live_queue_makespan_parity
 
 uv run python queue-haul/power_model_campaign.py --hardware a100 \
