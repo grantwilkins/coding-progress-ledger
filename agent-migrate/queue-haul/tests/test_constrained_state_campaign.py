@@ -97,61 +97,155 @@ def test_live_discovery_rejects_an_operational_safety_cap(tmp_path):
         campaign.discover_live(frozen, tmp_path, measure)
 
 
-def test_resident_telemetry_requires_visible_hbm(monkeypatch):
-    metrics = {"vllm:gpu_cache_usage_perc": .25,
-               "vllm:num_requests_running": 0,
-               "vllm:num_requests_waiting": 0}
-    monkeypatch.setattr(campaign, "_metrics", lambda *_args: metrics)
+def test_hbm_reservation_removes_physical_blocks_and_stops_before_model_no_longer_fits():
+    from dataclasses import replace
+    from profiles import ModelProfile
 
-    assert campaign._resident_telemetry(
-        object(), object(), object(), .24, .01) == metrics
+    profile = ModelProfile.load(campaign.DEFAULT_PROFILE)
+    unit = 4 * 1024**3
+    blocks = campaign._hbm_blocks(profile, unit, 32768)
+    reserved = (profile.kv_capacity_tokens - blocks * 16) * 49152
+    assert unit <= reserved < unit + 16 * 49152
+    assert campaign._hbm_blocks(profile, 10 * unit, 32768) * 16 >= 32768
+    with pytest.raises(campaign.BackgroundLimit, match="maximum-length"):
+        campaign._hbm_blocks(profile, 11 * unit, 32768)
+    with pytest.raises(ValueError, match="geometry"):
+        campaign._hbm_blocks(replace(profile, model="other"), unit, 32768)
 
-    metrics["vllm:gpu_cache_usage_perc"] = .2
-    with pytest.raises(campaign.BackgroundLimit, match="HBM use decreased"):
-        campaign._resident_telemetry(
-            object(), object(), object(), .24, .01)
+
+def test_hbm_telemetry_checks_holder_pid_memory_and_liveness(monkeypatch):
+    from types import SimpleNamespace
+
+    process = SimpleNamespace(poll=lambda: None)
+    holder = process, {"pid": 17, "allocated_bytes": 4 * 1024**3}
+    rows = ["17, 5000\n99, 70000\n"]
+    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *args, **kw: rows[0])
+    assert campaign._hbm_telemetry(holder)["process_gpu_memory_bytes"] == 5000 * 1024**2
+    rows[0] = "17, 4095\n99, 70000\n"
+    with pytest.raises(campaign.BackgroundLimit, match="visibly resident"):
+        campaign._hbm_telemetry(holder)
+    rows[0] = "99, 70000\n"
+    with pytest.raises(KeyError):
+        campaign._hbm_telemetry(holder)
+    process.poll = lambda: 1
+    with pytest.raises(campaign.BackgroundLimit, match="exited"):
+        campaign._hbm_telemetry(holder)
 
 
-def test_serving_background_uses_an_operational_hold(monkeypatch):
+@pytest.mark.parametrize("dead", (False, True))
+def test_hbm_holder_owns_only_destination_gpu_and_always_stops(monkeypatch, tmp_path, dead):
+    from types import SimpleNamespace
+    import migration_testbed as testbed
+
+    process = SimpleNamespace(poll=lambda: 1 if dead else None)
+    gpus, stopped = [], []
+    def command(cfg, script, gpu):
+        gpus.append(gpu)
+        return [script]
+    def start(cmd, log):
+        log.write_text('HBM_READY {"pid":17,"allocated_bytes":4294967296}\n')
+        return process
+    monkeypatch.setattr(testbed, "apptainer_cmd", command)
+    monkeypatch.setattr(testbed, "start_logged", start)
+    monkeypatch.setattr(testbed, "stop_proc", stopped.append)
+    with pytest.raises(campaign.BackgroundLimit if dead else RuntimeError):
+        with campaign._hbm_allocation(object(), tmp_path, 4 * 1024**3):
+            raise RuntimeError("episode failed")
+    assert gpus == [1] and stopped == [process]
+
+
+@pytest.mark.parametrize("kind", ("prefill", "serving"))
+@pytest.mark.parametrize("measure", (False, True))
+def test_background_uses_operational_hold_and_measured_capacity(monkeypatch, kind, measure):
+    from types import SimpleNamespace
+
     class Load:
         failure = None
         blocked_arrivals = 0
-        rows = [{"ok": True}]
+        rows = [{"ok": True, "end_ns": 10_000_000_000},
+                {"ok": True, "end_ns": 40_000_000_000}]
+        prefill_rate, decode_rate, normal_bound, rate = 10, 20, 1, .25
+        sampler = SimpleNamespace(error=None, rows=[
+            {"monotonic_ns": second * 1_000_000_000,
+             "vllm:num_requests_running": 3,
+             "vllm:num_requests_waiting": 0} for second in range(61)])
 
         def wait_ready(self):
-            raise AssertionError("serving must not use the normalized-load gate")
+            raise AssertionError("background must not use the normalized-load gate")
 
     class Destination:
         @staticmethod
         def service_completion(row):
             return row["ok"]
 
+        @staticmethod
+        def measured_rho(rows, prefill_rate, decode_rate, normal_bound):
+            assert (prefill_rate, decode_rate, normal_bound) == (10, 20, 1)
+            return 1.2
+
     slept = []
     monkeypatch.setattr(campaign.time, "sleep", slept.append)
+    monkeypatch.setattr(campaign.time, "monotonic", lambda: sum(slept))
+    monkeypatch.setattr(campaign.time, "monotonic_ns", lambda: int(sum(slept) * 1e9))
 
-    campaign._wait_background(Load(), "serving", 30, Destination)
+    load = Load()
+    report = campaign._wait_background(load, kind, 30, Destination, measure)
 
-    assert slept == [30]
+    assert slept == [30] * (2 if measure else 1)
+    assert load.achieved == 1.2
+    assert report["completed_requests"] == 1
+    assert report["configured_rps"] == .25
+    assert report["slope_lower_95_per_s"] == 0
     bad = Load()
     bad.blocked_arrivals = 1
     with pytest.raises(RuntimeError, match="serving background was not maintained"):
-        campaign._wait_background(bad, "serving", 30, Destination)
+        campaign._wait_background(bad, kind, 30, Destination)
 
 
-def test_serving_stability_rejects_only_clear_backlog_growth():
-    def rows(levels):
+def test_total_backlog_detects_waiting_and_running_growth():
+    def rows(levels, running=False):
         return [{"monotonic_ns": second * 1_000_000_000,
-                 "vllm:num_requests_running": level,
-                 "vllm:num_requests_waiting": 0}
+                 "vllm:num_requests_running": level if running else 0,
+                 "vllm:num_requests_waiting": 0 if running else level}
                 for second, level in enumerate(levels)]
 
     stable = campaign._backlog_stability(
         rows([10 + second % 2 for second in range(30)]), 0, 30_000_000_000)
     growing = campaign._backlog_stability(
         rows(range(30)), 0, 30_000_000_000)
+    busy = campaign._backlog_stability(
+        rows(range(30), running=True), 0, 30_000_000_000)
 
     assert stable["slope_lower_95_per_s"] <= 0
     assert growing["slope_lower_95_per_s"] > 0
+    assert busy["slope_lower_95_per_s"] > 0
+
+
+@pytest.mark.parametrize("kind", ("prefill", "serving"))
+@pytest.mark.parametrize("growth", (1, 20))
+def test_background_distinguishes_count_noise_from_in_service_backlog(monkeypatch, kind, growth):
+    from types import SimpleNamespace
+
+    slept = []
+    monkeypatch.setattr(campaign.time, "sleep", slept.append)
+    monkeypatch.setattr(campaign.time, "monotonic", lambda: sum(slept))
+    monkeypatch.setattr(campaign.time, "monotonic_ns", lambda: int(sum(slept) * 1e9))
+    load = SimpleNamespace(
+        failure=None, blocked_arrivals=0, rows=[{"end_ns": 10_000_000_000}],
+        prefill_rate=10, decode_rate=20, normal_bound=1, rate=.25,
+        sampler=SimpleNamespace(error=None, rows=[
+            {"monotonic_ns": second * 1_000_000_000,
+             "vllm:num_requests_running": growth * second / 30,
+             "vllm:num_requests_waiting": 0} for second in range(31)]))
+    destination = SimpleNamespace(service_completion=lambda row: True,
+                                  measured_rho=lambda *args: 1.2)
+    if growth == 20:
+        with pytest.raises(RuntimeError, match="background backlog grew"):
+            campaign._wait_background(load, kind, 30, destination)
+    else:
+        report = campaign._wait_background(load, kind, 30, destination)
+        assert report["slope_lower_95_per_s"] > 0
+        assert report["completed_requests"] == 1
 
 
 def test_oracle_emits_only_the_four_requested_booleans():
@@ -206,6 +300,26 @@ def test_existing_planner_receives_current_wan_and_background():
     assert len(slow) == len(fast) == 8
     assert sum(row["action"] == "kv_transfer" for row in slow) \
         < sum(row["action"] == "kv_transfer" for row in fast)
+
+
+@pytest.mark.parametrize("policy", ("queue_haul", "greedy", "kv_only", "replay_only"))
+def test_live_planner_uses_actual_destination_kv_capacity(policy):
+    from profiles import ModelProfile
+
+    frozen = campaign.default_inputs()
+    profile = ModelProfile.load(campaign.DEFAULT_PROFILE)
+    original_capacity = profile.kv_capacity_tokens
+    item = next(row for row in frozen["packs"] if row["pack_id"] == "large-r0")
+    tokens = {row["initial_tokens"] for row in item["sessions"]}
+    assert len(tokens) == 1
+    result = campaign._planner_decisions(
+        frozen, {"wan_mbps": 10000}, item, policy, profile,
+        {"baseline_work": [0, 0], "baseline_kv_tokens": 0,
+         "kv_capacity_tokens": 2 * min(tokens),
+         "resources": {"prefill": campaign.D_S}})
+
+    assert len(result) == 2
+    assert profile.kv_capacity_tokens == original_capacity
 
 
 @pytest.mark.parametrize("policy", campaign.POLICIES)
@@ -438,7 +552,7 @@ def test_live_runner_reuses_stack_until_block_changes(monkeypatch, tmp_path):
     starts, stops, calls = [], [], []
 
     @contextmanager
-    def stack(_inputs, wan_mbps, root):
+    def stack(_inputs, wan_mbps, root, n_hbm=0):
         root.mkdir(parents=True)
         shared = {"wan_mbps": wan_mbps, "root": root}
         starts.append(shared)

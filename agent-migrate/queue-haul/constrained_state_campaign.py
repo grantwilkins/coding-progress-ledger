@@ -10,6 +10,7 @@ import json
 import math
 import random
 import statistics
+import subprocess
 import time
 from contextlib import ExitStack, contextmanager
 from dataclasses import replace
@@ -175,8 +176,8 @@ def default_inputs(template_path: Path = DEFAULT_TEMPLATE,
                 "bundle_path": str(DEFAULT_BUNDLE.resolve()),
                 "service_profile_path": str(DEFAULT_SERVICE.resolve()),
                 "prefill_unit_rps": 1.0, "serving_unit_rps": .25,
-                "hbm_sessions_per_unit": 8,
-                "max_units": {"prefill": 4, "serving": 120, "hbm": 10},
+                "hbm_unit_bytes": 4 * 1024**3,
+                "max_units": {"prefill": 16, "serving": 120, "hbm": 12},
                 "warmup_s": 30,
             },
         },
@@ -602,7 +603,7 @@ def run_live(plan: dict, run_root: Path, episode_runner=None) -> list[dict]:
             block = job["block_id"]
             root = _attempt_root(run_root / "blocks" / block)
             shared = stack_scope.enter_context(
-                _a100_stack(inputs, state["wan_mbps"], root))
+                _a100_stack(inputs, state["wan_mbps"], root, state["n_hbm"]))
         return shared
 
     try:
@@ -639,7 +640,7 @@ def _paths(inputs: dict) -> dict:
     live = inputs["background_manifest"].get("live")
     required = {"manifest_path", "model_profile_path", "bundle_path",
                 "service_profile_path", "prefill_unit_rps", "serving_unit_rps",
-                "hbm_sessions_per_unit", "max_units"}
+                "max_units"}
     if not isinstance(live, dict) or not required <= live.keys() \
             or set(live["max_units"]) != set(AXES):
         raise ValueError("live background manifest is incomplete")
@@ -653,17 +654,6 @@ def _metrics(testbed, destination, cfg) -> dict:
             for name in ("vllm:gpu_cache_usage_perc",
                          "vllm:num_requests_running",
                          "vllm:num_requests_waiting")}
-
-
-def _resident_telemetry(testbed, destination, cfg, minimum=0.0,
-                        tolerance=0.0) -> dict:
-    metrics = _metrics(testbed, destination, cfg)
-    usage = metrics["vllm:gpu_cache_usage_perc"]
-    if usage <= 0:
-        raise BackgroundLimit("resident sessions did not consume visible HBM")
-    if usage + tolerance < minimum:
-        raise BackgroundLimit("resident-session HBM use decreased")
-    return metrics
 
 
 def _validate_serving(load, destination) -> None:
@@ -680,8 +670,8 @@ def _backlog_stability(rows: list[dict], start_ns: int, end_ns: int) -> dict:
         at = int(row["monotonic_ns"])
         if start_ns <= at < end_ns:
             index = min(5, int(6 * (at - start_ns) / (end_ns - start_ns)))
-            bins[index].append(_number(row["vllm:num_requests_running"], "backlog")
-                               + _number(row["vllm:num_requests_waiting"], "backlog"))
+            bins[index].append(_number(row["vllm:num_requests_waiting"], "backlog")
+                               + _number(row["vllm:num_requests_running"], "backlog"))
     if any(not values for values in bins):
         raise ValueError("serving backlog telemetry is incomplete")
     means = [statistics.mean(values) for values in bins]
@@ -696,28 +686,100 @@ def _backlog_stability(rows: list[dict], start_ns: int, end_ns: int) -> dict:
 
 
 def _wait_background(load, kind: str, warmup_s: float, destination,
-                     measure: bool = False) -> dict | None:
-    if kind == "prefill":
-        load.wait_ready()
-        return None
-    time.sleep(warmup_s)
-    _validate_serving(load, destination)
-    if not measure:
-        return None
+                     measure: bool = False) -> dict:
     start_ns = time.monotonic_ns()
     time.sleep(warmup_s)
     _validate_serving(load, destination)
-    report = _backlog_stability(load.sampler.rows, start_ns,
-                                time.monotonic_ns())
-    if report["slope_lower_95_per_s"] > 0:
-        raise RuntimeError("serving background backlog grew")
+    if measure:
+        start_ns = time.monotonic_ns()
+        time.sleep(warmup_s)
+    deadline = time.monotonic() + 5
+    samples = load.sampler.rows
+    while len(samples) < 2 or samples[-1]["monotonic_ns"] - samples[0]["monotonic_ns"] < 30e9:
+        if load.sampler.error or time.monotonic() >= deadline:
+            raise ValueError("background telemetry is incomplete")
+        time.sleep(.25)
+    if load.sampler.error:
+        raise ValueError("background telemetry is incomplete")
+    _validate_serving(load, destination)
+    load.achieved = destination.measured_rho(
+        samples, load.prefill_rate, load.decode_rate, load.normal_bound)
+    end_ns = time.monotonic_ns()
+    report = _backlog_stability(samples, start_ns, end_ns)
+    report.update(configured_rps=load.rate, completed_requests=sum(
+        start_ns <= row["end_ns"] < end_ns for row in load.rows))
+    if report["slope_lower_95_per_s"] > 0 and \
+            report["bin_means"][-1] - report["bin_means"][0] \
+            > 2 * math.sqrt(max(1, report["completed_requests"])):
+        raise RuntimeError(f"{kind} background backlog grew")
     return report
 
 
+def _hbm_blocks(profile, allocated_bytes: int, minimum_tokens: int) -> int:
+    kv = profile.case().kv_transfer
+    bytes_per_token = kv.block_bytes // kv.block_tokens
+    if profile.model != "openai/gpt-oss-20b" or profile.kv_geometry is not None \
+            or bytes_per_token != 49152:
+        raise ValueError("HBM reservation requires the pinned dense BF16 KV geometry")
+    blocks = (profile.kv_capacity_tokens * bytes_per_token - allocated_bytes) \
+        // (16 * bytes_per_token)
+    if blocks * 16 < minimum_tokens:
+        raise BackgroundLimit("HBM allocation leaves less than one maximum-length session")
+    return blocks
+
+
 @contextmanager
-def _a100_stack(inputs: dict, wan_mbps: float, root: Path):
+def _hbm_allocation(cfg, root: Path, allocated_bytes: int):
+    import migration_testbed as testbed
+
+    log = root / "hbm_allocation.log"
+    code = ("import json,os,signal,torch; "
+            f"held=torch.empty({allocated_bytes},dtype=torch.uint8,device='cuda'); "
+            "held.zero_(); torch.cuda.synchronize(); "
+            "print('HBM_READY '+json.dumps({'pid':os.getpid(),"
+            "'allocated_bytes':held.numel()}),flush=True); signal.pause()")
+    process = testbed.start_logged(testbed.apptainer_cmd(
+        cfg, testbed.shell(["python", "-c", code]), gpu=1), log)
+    try:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise BackgroundLimit(f"HBM allocation failed: {log}")
+            ready = [line[10:] for line in log.read_text().splitlines()
+                     if line.startswith("HBM_READY ")]
+            if ready:
+                report = json.loads(ready[-1])
+                if report["allocated_bytes"] != allocated_bytes:
+                    raise ValueError("HBM holder allocation differs from its request")
+                yield process, {**report, "log_path": str(log.resolve())}
+                return
+            time.sleep(.1)
+        raise BackgroundLimit(f"HBM allocation did not become ready: {log}")
+    finally:
+        testbed.stop_proc(process)
+
+
+def _hbm_telemetry(holder) -> dict:
+    process, report = holder
+    if process.poll() is not None:
+        raise BackgroundLimit("HBM allocation process exited")
+    output = subprocess.check_output([
+        "nvidia-smi", "--query-compute-apps=pid,used_gpu_memory",
+        "--format=csv,noheader,nounits"], text=True)
+    memory = {int(pid): int(mib) * 1024**2
+              for pid, mib in csv.reader(output.splitlines())}
+    used = memory[report["pid"]]
+    if used < report["allocated_bytes"]:
+        raise BackgroundLimit("HBM allocation is not visibly resident")
+    return {**report, "process_gpu_memory_bytes": used,
+            "checked_monotonic_ns": time.monotonic_ns()}
+
+
+@contextmanager
+def _a100_stack(inputs: dict, wan_mbps: float, root: Path, n_hbm: int = 0):
     """Start and prime one bandwidth-pinned source/destination model stack."""
     import migration_testbed as testbed
+    from network_campaign import vllm_kv_capacity
     from profiles import ModelProfile
 
     live, cfg = _paths(inputs), testbed.Config()
@@ -725,16 +787,24 @@ def _a100_stack(inputs: dict, wan_mbps: float, root: Path):
     if json.loads(Path(live["model_profile_path"]).read_text()) != inputs["profile"]:
         raise ValueError("live model profile differs from the frozen profile")
     manifest = json.loads(Path(live["manifest_path"]).read_text())
+    allocated = n_hbm * int(live["hbm_unit_bytes"]) if n_hbm else 0
+    blocks = _hbm_blocks(profile, allocated, cfg.max_model_len) if allocated else None
     stack = testbed.start_stack(cfg, root / "testbed", wan_mbps, [])
-    try:
-        testbed.start_sink(stack, cfg, [])
+    with ExitStack() as resources:
+        resources.callback(testbed.stop_stack, stack)
+        testbed.start_sink(stack, cfg, ["--num-gpu-blocks-override", str(blocks)]
+                          if blocks is not None else [])
+        kv_capacity = vllm_kv_capacity(stack.run_root / "sink.log")
+        if blocks is not None and (kv_capacity != blocks * 16 or
+                "dtype=torch.bfloat16" not in (stack.run_root / "sink.log").read_text()):
+            raise ValueError("destination KV capacity or dtype differs from the reservation")
+        holder = resources.enter_context(_hbm_allocation(cfg, root, allocated)) \
+            if allocated else None
         testbed.run_smoke2_probe(cfg, stack.run_root, wan_mbps)
         testbed.flush_lmcache(stack, cfg)
         testbed.reset_vllm_caches(
             cfg, (stack.run_root / "source.log", stack.run_root / "sink.log"))
-        yield stack, cfg, profile, manifest
-    finally:
-        testbed.stop_stack(stack)
+        yield stack, cfg, profile, manifest, holder, kv_capacity
 
 
 @contextmanager
@@ -742,7 +812,7 @@ def _a100_background(inputs: dict, state: dict, root: Path,
                      measure_background: bool = False, shared=None):
     """Create, warm, and verify one policy's fixed physical background."""
     if shared is None:
-        with _a100_stack(inputs, state["wan_mbps"], root) as stack:
+        with _a100_stack(inputs, state["wan_mbps"], root, state["n_hbm"]) as stack:
             with _a100_background(inputs, state, root, measure_background,
                                   stack) as context:
                 yield context
@@ -752,7 +822,7 @@ def _a100_background(inputs: dict, state: dict, root: Path,
     import migration_testbed as testbed
 
     live = _paths(inputs)
-    stack, cfg, profile, manifest = shared
+    stack, cfg, profile, manifest, holder, kv_capacity = shared
     if stack.bandwidth_mbps != state["wan_mbps"]:
         raise ValueError("background WAN differs from the shared stack")
     bundle = json.loads(Path(live["bundle_path"]).read_text())
@@ -767,21 +837,10 @@ def _a100_background(inputs: dict, state: dict, root: Path,
         except (RuntimeError, TimeoutError) as error:
             raise RetryableEpisode(f"stack reset failed: {error}") from error
         reset_end_ns = time.monotonic_ns()
-        hbm, resident = int(state["n_hbm"]), []
-        if hbm:
-            pool = sum((destination.manifest_sessions(
-                bundle, job, split, 201088, inputs["background_manifest"]["seed"])
-                for job, splits in bundle["manifest"]["splits"].items()
-                for split in splits), [])
-            needed = hbm * int(live["hbm_sessions_per_unit"])
-            if needed > len(pool):
-                raise BackgroundLimit("resident-session groups exhausted")
-            resident = [replace(row, force_output=False) for row in pool[:needed]]
-            try:
-                destination.prewarm(cfg.host, cfg.sink_port, cfg.model,
-                                    resident, bypass_lmcache=True)
-            except RuntimeError as error:
-                raise BackgroundLimit(str(error)) from error
+        expected_hbm = int(state["n_hbm"]) * int(live["hbm_unit_bytes"]) \
+            if state["n_hbm"] else 0
+        if (holder[1]["allocated_bytes"] if holder else 0) != expected_hbm:
+            raise ValueError("shared stack has the wrong HBM allocation")
         kind = "prefill" if state["n_prefill"] else (
             "serving" if state["n_serving"] else None)
         rps, stability = 0.0, None
@@ -816,24 +875,24 @@ def _a100_background(inputs: dict, state: dict, root: Path,
         else:
             time.sleep(float(live.get("warmup_s", 30)))
             rates, sessions = None, []
-        metrics = (_resident_telemetry(testbed, destination, cfg)
-                   if resident else _metrics(testbed, destination, cfg))
-        if kind != "serving" and metrics["vllm:num_requests_waiting"] > 0:
+        metrics = _metrics(testbed, destination, cfg)
+        hbm_report = _hbm_telemetry(holder) if holder else None
+        if not load and metrics["vllm:num_requests_waiting"] > 0:
             raise BackgroundLimit("destination background queue is not stable")
         baseline = [0.0, 0.0]
         if load:
             work = [statistics.mean(getattr(row, field) / rate
                                     for row in sessions)
                     for field, rate in zip(("append_tokens", "output_tokens"), rates)]
-            achieved = load.achieved if load.achieved is not None else load.target
-            baseline = [achieved * value / sum(work) for value in work]
+            baseline = [load.achieved * value / sum(work) for value in work]
         kv = round(metrics["vllm:gpu_cache_usage_perc"]
-                   * profile.kv_capacity_tokens)
+                   * kv_capacity)
         capacity = {
             "wan_mbps": float(state["wan_mbps"]),
             "background_kind": kind or "none", "background_rps": rps,
             "background_output_forcing": False,
             "baseline_work": baseline, "baseline_kv_tokens": kv,
+            "kv_capacity_tokens": kv_capacity, "hbm_allocation": hbm_report,
             "telemetry": metrics,
             "stack_provenance": {
                 "root": str(stack.run_root.resolve()),
@@ -844,27 +903,25 @@ def _a100_background(inputs: dict, state: dict, root: Path,
                 "wan": float(state["wan_mbps"]) * 125_000 * D_S,
                 "service": max(0.0, 1 - sum(baseline)) * D_S,
                 "prefill": max(0.0, 1 - baseline[0]) * D_S,
-                "hbm": max(0, profile.kv_capacity_tokens - kv),
+                "hbm": max(0, kv_capacity - kv),
             },
         }
         if stability:
-            capacity["serving_stability"] = stability
+            capacity["background_stability"] = stability
         yield stack, cfg, profile, manifest, capacity
-        if resident:
-            post = _resident_telemetry(
-                testbed, destination, cfg,
-                metrics["vllm:gpu_cache_usage_perc"],
-                16 / profile.kv_capacity_tokens)
-            if post["vllm:num_requests_waiting"] > 0:
-                raise BackgroundLimit("destination background queue is not stable")
+        if holder:
+            post = _hbm_telemetry(holder)
+            if post["process_gpu_memory_bytes"] < hbm_report["process_gpu_memory_bytes"]:
+                raise BackgroundLimit("HBM allocation memory decreased")
             capacity["post_hbm_telemetry"] = post
-        elif kind == "serving":
-            try:
-                _validate_serving(load, destination)
-            except RuntimeError as error:
-                raise BackgroundLimit(str(error)) from error
-            post = _metrics(testbed, destination, cfg)
-            capacity["post_serving_telemetry"] = post
+        if load:
+            capacity["post_background_status"] = {
+                "request_count": len(load.rows),
+                "request_error_count": sum(not destination.service_completion(row)
+                                           for row in load.rows),
+                "blocked_arrivals": load.blocked_arrivals,
+                "telemetry": _metrics(testbed, destination, cfg),
+            }
     finally:
         if load:
             load.close()
@@ -947,6 +1004,9 @@ def _planner_decisions(inputs: dict, state: dict, pack: dict, policy: str,
     initial = source_power(problem, profile)
     problem = replace(problem, power_limit_w=initial - float(inputs["target"]))
     architecture = dedicated_sink_architecture(profile, "destination", ("link",))
+    architecture = replace(architecture, types=(replace(
+        architecture.types[0], kv_capacity_tokens=capacity.get(
+            "kv_capacity_tokens", profile.kv_capacity_tokens)),))
     pool = architecture.pools[0]
     replica = replace(pool.replicas[0],
                       baseline_work=tuple(capacity["baseline_work"]),

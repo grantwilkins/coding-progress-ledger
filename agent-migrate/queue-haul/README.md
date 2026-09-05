@@ -1919,7 +1919,7 @@ differences as architecture/deployment behavior, not a causal sparsity effect.
 freezes ten eight-session packs, their power-gain tables, the GPT-OSS/A100
 profile, action demands, shaped WAN rates, integer background units, and the
 full-shed target. Discovery keeps consecutive stable prefill-stream,
-serving-stream, and resident-session rungs.
+serving-stream, and ordinary HBM-allocation rungs.
 
 The generated states are exactly the WAN×prefill grid plus the HBM-only and
 serving-only ladders at the highest shaped WAN rate. Every state is executed;
@@ -1929,10 +1929,12 @@ selection. The offline enumeration emits only `any_full`, `kv_full`,
 
 The live manifest names the existing migration manifest, model profile,
 content-free trace bundle, and service profile. It also fixes one prefill RPS
-and 0.25 serving RPS per unit, sessions per resident HBM group, warmup time, and a
+and 0.25 serving RPS per unit, a four-GiB HBM allocation unit, warmup time, and a
 hard guard for each discovery ladder. `prepare` fails instead of truncating a
-ladder if that guard is reached while the background remains stable. Resident
-HBM use must remain visible after warmup and after each episode. `prepare`
+ladder if that guard is reached while the background remains stable. Each HBM
+allocation replaces destination KV blocks, rounded up to cover the held bytes.
+The planner uses the actual KV capacity reported by the engine; holder-process
+GPU memory is checked before and after each episode. `prepare`
 discovers and compiles the campaign; `run` primes one model stack per randomized
 five-policy block, then flushes both caches and recreates the background before
 every policy. Each episode records the stack path and reset timestamps.
@@ -1942,10 +1944,13 @@ Measured residual prefill scales the planner's replay migration budget.
 An operational background beyond the calibrated service envelope yields an
 empty admission plan; per-session greedy still dispatches each independently
 fastest action using the current WAN and residual prefill capacities.
-Post-move verification uses the declared serving concurrency. Serving discovery
-uses a 30-second warmup and a separate 30-second measurement, rejecting request
-failures, blocked arrivals, or statistically clear backlog growth. It does not
-use a normalized-work target:
+Post-move verification uses the declared serving concurrency. Both prefill and
+serving use a 30-second warmup and a separate 30-second measurement, rejecting
+background request failures, blocked arrivals, or statistically clear total
+running-plus-waiting backlog growth beyond the completion-count noise tolerance
+before a policy starts. Capacity comes from measured completed work;
+there is no normalized-work target. Post-policy background request errors and
+blocked arrivals are recorded as outcomes:
 
 ```bash
 module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
