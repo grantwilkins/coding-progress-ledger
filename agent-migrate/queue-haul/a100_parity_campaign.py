@@ -12,7 +12,6 @@ from pathlib import Path
 import migration_profiler as profiler
 import network_campaign as network
 import plot_style
-from live_timing_campaign import live_measurements
 from plot_h100_power_parity import load as load_power, write as write_power
 from plot_live_timing_parity import write_queue
 from profiles import ModelProfile
@@ -229,31 +228,55 @@ def run_timing(plan_path: Path, run_root: Path, ssh_key: Path) -> dict:
         Path(plan["calibration"]["path"]), plan_path, run_root)
 
 
+def queue_makespan(scenario: dict, result: dict) -> float:
+    requests = result.get("requests", [])
+    fields = ("session_id", "destination_instance", "method", "order")
+    if result.get("status") != "complete" or result.get("request_failures") \
+            or not requests or [[row.get(key) for key in fields] for row in requests] \
+            != [[row[key] for key in fields] for row in scenario["moves"]]:
+        raise RuntimeError("queue requests differ from the complete frozen moves")
+    contexts = {row["session_id"]: row["initial_tokens"]
+                for row in scenario["sessions"]}
+    first_responses = []
+    for row in requests:
+        request = row["request"]
+        context = contexts[row["session_id"]]
+        cached = context if row["method"] == "kv_transfer" else 0
+        if request.get("status_code") != 200 \
+                or not request.get("state_code_verified") \
+                or request.get("cached_tokens") != cached \
+                or request.get("prompt_tokens", 0) < context \
+                or not 0 < request.get("output_tokens", 0) \
+                <= request.get("probe_max_tokens", 128) \
+                or not request.get("stream_chunks"):
+            raise RuntimeError("queue request failed state, cache or token checks")
+        first = profiler.first_stream_ns(request)
+        if not result["started_ns"] <= request["start_ns"] <= first \
+                <= request["end_ns"] <= result["ended_ns"]:
+            raise RuntimeError("queue request timestamps are unordered")
+        first_responses.append(first)
+    return (max(first_responses) - result["started_ns"]) / 1e9
+
+
 def timing_rows(run_root: Path) -> tuple[list[dict], dict]:
     plan = json.loads((run_root / "plan.json").read_text())
     validate_timing_plan(plan)
     network.MODEL_PATH = Path(plan["model_profile"]["path"])
-    rows = []
+    rows, probe_budgets = [], set()
     for scenario in plan["scenarios"]:
         latest = network._latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None or latest[1].get("status") != "complete":
             raise RuntimeError(f"missing complete result for {scenario['scenario_id']}")
         result = latest[1]
-        if result.get("request_failures"):
-            raise RuntimeError(f"request failure in {scenario['scenario_id']}")
-        checked = live_measurements(scenario, result)
-        expected = [(row["session_id"], row["destination_instance"], row["method"], row["order"])
-                    for row in scenario["moves"]]
-        actual = [(row["row"]["session_id"], row["row"]["destination_instance"],
-                   row["row"]["method"], row["row"]["order"]) for row in checked]
-        if actual != expected:
-            raise RuntimeError(f"executed moves differ from plan for {scenario['scenario_id']}")
-        measured = max((profiler.first_stream_ns(row["request"])
-                        - row["request"]["start_ns"]) / 1e9 for row in checked)
+        measured = queue_makespan(scenario, result)
+        probe_budgets.update(row["request"].get("probe_max_tokens", 128)
+                             for row in result["requests"])
         rows.append({"scenario_id": scenario["scenario_id"],
                      "action": scenario["parity_prediction"]["action"],
                      "predicted_s": scenario["parity_prediction"]["predicted_s"],
                      "measured_s": measured})
+    if len(probe_budgets) != 1:
+        raise RuntimeError("timing campaign mixes state-probe token budgets")
     residuals = [row["measured_s"] - row["predicted_s"] for row in rows]
     mean = statistics.fmean(row["measured_s"] for row in rows)
     denominator = sum((row["measured_s"] - mean) ** 2 for row in rows)
@@ -268,6 +291,7 @@ def timing_rows(run_root: Path) -> tuple[list[dict], dict]:
             row["action"] for row in rows)),
         "unique_predictions": len({round(row["predicted_s"], 9) for row in rows}),
         "mae_s": mae, "r2": r2,
+        "probe_max_tokens": probe_budgets.pop(),
         "gates": {"mae": mae <= gates["mae_s"], "r2": r2 >= gates["r2"]},
     }
     summary["passed"] = all(summary["gates"].values())

@@ -110,10 +110,10 @@ All three nodes passed host checks at commit `12ef9536`. Timing requires the
 calibration's vLLM 0.22.0 and LMCache 0.5.1: vLLM 0.24.0 renders the background
 prompt as 607 tokens instead of the required 604. The failed 0.24 attempt and
 a subsequent Unix-socket path-length startup failure are retained separately.
-Use a short run root; the latest is `/datadrive/queue-haul-network/a100-timing-v022`.
+That attempt used `/datadrive/queue-haul-network/a100-timing-v022`.
 It stopped after one complete KV scenario and one failed scenario out of 120:
 the second scenario's KV warm-up returned no final text after two probes.
-The completed scenario also fails reduction because `live_measurements` assumes
+The original reducer rejected the completed scenario because `live_measurements` assumes
 one API connection per request window, incompatible with concurrent migrations
 and background requests. Neither outcome is accepted timing parity. The archive
 includes local attempts and both destinations' logs; socket files are excluded.
@@ -124,8 +124,8 @@ raw sample, request, token, sequence, grid, and fit-reproduction checks. It rema
 R²=-0.3633, and 61.63% coefficient variation. The R² and 20% stability gates fail;
 all other gates pass. `power-holdout-diagnostic` plots only these unseen cells.
 Original evidence is under `/datadrive/queue-haul-power/a100-sweden-20260905-001`.
-No acquisition remains running. The publication pair still requires timing
-runner/reducer repairs and a power calibration that passes the frozen gates.
+These archived acquisition processes exited. The publication pair still requires
+complete timing acquisition and a power calibration that passes the frozen gates.
 The restored environment's full suite had 1,186 passes and 11 failures; all 32
 A100 timing/power tests passed after restoring vLLM 0.22.0. Logs are archived.
 
@@ -134,21 +134,27 @@ For timing, set `QH_RUNTIME=native`, `QH_LMCACHE_MODE=mp`,
 `QH_CACHE_ROOT=/datadrive/queue-haul-cache`; the destination login environments
 also need the cache paths. Set `UV_NO_SYNC=1` when using an installed serving
 environment so `uv run` preserves packages installed separately by `setup.sh`.
-The commands below describe the workflow; repair the recorded failures before
-resuming timing or treating either figure as accepted evidence.
+The queue reducer now validates each request's frozen move, full KV cache count
+(or uncached replay), successful state probe, and ordered response timestamps.
+Queue makespan runs from the shared release timestamp to the last first response,
+including dispatch delay. It does not assign overlapping connection/GET windows
+to individual requests; those traces remain available for separate network audits.
+State probes use the migration profiler's 512-token budget so reasoning can finish
+before the final state answer. The budget is recorded in requests and run metadata;
+reduction rejects mixed budgets. Architecture/drain probes remain at 128 tokens.
+The repairs pass the archived concurrent-KV regression and the added state/cache,
+timestamp, dispatch-delay, reasoning-budget, and mixed-budget checks. The full
+suite has 1,199 passes and the same 11 failures as before the repairs; its output
+is retained as `outputs/a100-parity-20260905/timing-repair-pytest.log`.
+Collect a fresh run with the archived frozen predictions; do not combine the old
+128-token attempt with this run or treat either historical figure as accepted.
 
 ```bash
-uv run python queue-haul/a100_parity_campaign.py prepare-timing \
-  --manifest queue-haul/outputs/coding-manifest.json \
-  --cluster queue-haul/azure_network_cluster_east_germany.json \
-  --calibration queue-haul/outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json \
-  --timing-model queue-haul/outputs/timing-power-validation-20260814/separation-regional-timing-v2.json \
-  --out /datadrive/queue-haul-network/a100-parity/plan.json
 uv run python queue-haul/a100_parity_campaign.py run-timing \
-  --plan /datadrive/queue-haul-network/a100-parity/plan.json \
-  --run-root /datadrive/queue-haul-network/a100-parity/timing
+  --plan queue-haul/outputs/a100-parity-20260904/timing-plan.json \
+  --run-root /datadrive/queue-haul-network/a100-timing-512
 uv run python queue-haul/a100_parity_campaign.py reduce-timing \
-  --run-root /datadrive/queue-haul-network/a100-parity/timing \
+  --run-root /datadrive/queue-haul-network/a100-timing-512 \
   --out queue-haul/outputs/a100_live_queue_makespan_parity
 
 uv run python queue-haul/power_model_campaign.py --hardware a100 \

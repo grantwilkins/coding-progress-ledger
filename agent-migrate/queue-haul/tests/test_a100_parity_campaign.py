@@ -86,23 +86,29 @@ def test_timing_plan_rejects_binned_predictions(tmp_path):
         campaign.validate_timing_plan(plan)
 
 
-def test_timing_reduction_requires_complete_exact_moves_and_reports_gates(
-        tmp_path, monkeypatch):
+def test_timing_reduction_requires_complete_exact_moves_and_reports_gates(tmp_path):
     plan = make_plan(tmp_path, 2)
     run_root = tmp_path / "run"
     run_root.mkdir()
     (run_root / "plan.json").write_text(json.dumps(plan))
     for scenario in plan["scenarios"]:
         predicted = scenario["parity_prediction"]["predicted_s"]
-        requests = [{**move, "request": {"start_ns": 0,
-                     "stream_chunks": [{"monotonic_ns": round(predicted * 1e9)}]}}
+        contexts = {row["session_id"]: row["initial_tokens"]
+                    for row in scenario["sessions"]}
+        end = round(predicted * 1e9) + 1
+        requests = [{**move, "request": {"start_ns": 0, "end_ns": end,
+                     "status_code": 200, "state_code_verified": True,
+                     "prompt_tokens": contexts[move["session_id"]] + 128,
+                     "output_tokens": 32, "probe_max_tokens": 512,
+                     "cached_tokens": contexts[move["session_id"]]
+                     if move["method"] == "kv_transfer" else 0,
+                     "stream_chunks": [{"monotonic_ns": end - 1}]}}
                     for move in scenario["moves"]]
         root = run_root / "scenarios" / scenario["scenario_id"] / "attempt-0001"
         root.mkdir(parents=True)
         (root / "result.json").write_text(json.dumps({
-            "status": "complete", "request_failures": 0, "requests": requests}))
-    monkeypatch.setattr(campaign, "live_measurements", lambda _scenario, result: [
-        {"row": row, "request": row["request"]} for row in result["requests"]])
+            "status": "complete", "started_ns": 0, "ended_ns": end,
+            "request_failures": 0, "requests": requests}))
 
     rows, summary = campaign.timing_rows(run_root)
 
@@ -111,6 +117,74 @@ def test_timing_reduction_requires_complete_exact_moves_and_reports_gates(
     assert summary["mae_s"] < 1e-9
     assert summary["r2"] == pytest.approx(1)
     assert summary["passed"]
+    assert summary["probe_max_tokens"] == 512
+
+    result_path = root / "result.json"
+    result = json.loads(result_path.read_text())
+    result["requests"][0]["request"]["probe_max_tokens"] = 128
+    result_path.write_text(json.dumps(result))
+    with pytest.raises(RuntimeError, match="mixes state-probe"):
+        campaign.timing_rows(run_root)
+
+
+@pytest.fixture
+def queue_result():
+    moves = [{"session_id": str(i), "destination_instance": destination,
+              "method": method, "order": i}
+             for i, (destination, method) in enumerate(
+                 [("east", "kv_transfer"), ("germany", "replay")])]
+    scenario = {"moves": moves, "sessions": [
+        {"session_id": str(i), "initial_tokens": 256} for i in range(2)]}
+    result = {"status": "complete", "started_ns": 100, "ended_ns": 1000,
+              "requests": [{**move, "request": {
+                  "status_code": 200, "state_code_verified": True,
+                  "start_ns": start, "end_ns": 900, "prompt_tokens": 300,
+                  "output_tokens": 32, "cached_tokens": cached,
+                  "probe_max_tokens": 512,
+                  "stream_chunks": [{"monotonic_ns": first}]}}
+                  for move, start, first, cached in zip(
+                      moves, [110, 400], [300, 800], [256, 0])]}
+    return scenario, result
+
+
+def test_queue_makespan_includes_dispatch_delay(queue_result):
+    assert campaign.queue_makespan(*queue_result) == pytest.approx(700e-9)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("status_code", 500), ("state_code_verified", False),
+    ("cached_tokens", 128), ("prompt_tokens", 128), ("output_tokens", 0),
+    ("output_tokens", 513), ("start_ns", 99), ("end_ns", 299),
+    ("stream_chunks", []),
+])
+def test_queue_makespan_rejects_invalid_request_evidence(queue_result, field, value):
+    scenario, result = queue_result
+    result["requests"][0]["request"][field] = value
+    with pytest.raises(RuntimeError):
+        campaign.queue_makespan(scenario, result)
+
+
+def test_queue_makespan_rejects_cached_replay_and_changed_moves(queue_result):
+    scenario, result = queue_result
+    result["requests"][1]["request"]["cached_tokens"] = 256
+    with pytest.raises(RuntimeError):
+        campaign.queue_makespan(scenario, result)
+    result["requests"][1]["request"]["cached_tokens"] = 0
+    result["requests"].reverse()
+    with pytest.raises(RuntimeError):
+        campaign.queue_makespan(scenario, result)
+
+
+def test_queue_makespan_accepts_archived_concurrent_kv_requests():
+    root = campaign.ROOT / (
+        "outputs/a100-parity-20260905/timing-v022/scenarios/"
+        "5e19c10f47fa0204/attempt-0001")
+    scenario = json.loads((root / "scenario.json").read_text())
+    result = json.loads((root / "result.json").read_text())
+    assert len(result["connections"]) > len(result["requests"])
+    expected = (max(campaign.profiler.first_stream_ns(row["request"])
+                    for row in result["requests"]) - result["started_ns"]) / 1e9
+    assert campaign.queue_makespan(scenario, result) == expected
 
 
 def test_power_plot_requires_direct_a100_campaign(tmp_path, monkeypatch):

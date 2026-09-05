@@ -1757,14 +1757,17 @@ def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
             "X-QH-Prefill-Class": prefill_class}}
             if prefill_class else {})
         result, text = profiler.stream_chat(
-            cfg, port, messages, 128, profiler.messages_hash(messages), timeout_s,
+            cfg, port, messages, profiler.PROBE_MAX_TOKENS,
+            profiler.messages_hash(messages), timeout_s,
             bypass_lmcache, **request_options)
         if result.status_code == 200 and code in text:
             return {**asdict(result), "state_code_verified": True,
+                    "probe_max_tokens": profiler.PROBE_MAX_TOKENS,
                     "probe_attempts": attempt + 1}
     raise RuntimeError(
         f"session reconstruction failed after 2 probes: HTTP "
-        f"{result.status_code}, response={text[:200]!r}")
+        f"{result.status_code}, output_tokens={result.output_tokens}, "
+        f"response={text[:200]!r}")
 
 
 def _warm(stack: ClusterStack, messages: list[dict], code: str,
@@ -4780,6 +4783,8 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
     )
     metadata = {
         "schema": "queue-haul-network-run-v1",
+        "state_probe_max_tokens": 128 if plan["design"] == "drain"
+        else profiler.PROBE_MAX_TOKENS,
         "plan_sha256": profiler.file_hash(plan_path), "git_sha": sha,
         "dirty": dirty,
         **({"runtime_environment": {
