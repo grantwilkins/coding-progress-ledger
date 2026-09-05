@@ -135,6 +135,7 @@ class Session:
     output_tokens: int
     vocabulary: int
     seed: int
+    force_output: bool = True
     history: list[int] = field(init=False)
 
     def __post_init__(self):
@@ -143,11 +144,12 @@ class Session:
         self.history = deterministic_tokens(f"{self.session_id}:prefix", self.prefix_tokens,
                                             self.vocabulary, self.seed)
 
-    def prompt(self, index: int) -> tuple[list[int], int]:
+    def prompt(self, index: int) -> tuple[list[int], int | None]:
         added = deterministic_tokens(f"{self.session_id}:{index}:input", self.append_tokens,
                                      self.vocabulary, self.seed)
         forced = deterministic_tokens(f"{self.session_id}:{index}:output", 1,
-                                      min(self.vocabulary, FORCED_VOCABULARY), self.seed)[0]
+                                      min(self.vocabulary, FORCED_VOCABULARY), self.seed)[0] \
+            if self.force_output else None
         return self.history[:self.prefix_tokens] + added, forced
 
 def parse_metrics(text: str) -> dict[str, float]:
@@ -213,11 +215,13 @@ class MetricsSampler:
 
 
 def completion_payload(model: str, prompt: list[int], output_tokens: int,
-                       forced: int, bypass_lmcache: bool = False) -> dict:
+                       forced: int | None, bypass_lmcache: bool = False) -> dict:
     payload = {"model": model, "prompt": prompt, "max_tokens": output_tokens,
-               "ignore_eos": True, "temperature": 0, "allowed_token_ids": [forced],
+               "ignore_eos": True, "temperature": 0,
                "stream": True, "stream_options": {"include_usage": True},
                "return_token_ids": True}
+    if forced is not None:
+        payload["allowed_token_ids"] = [forced]
     if bypass_lmcache:
         payload["kv_transfer_params"] = {
             "qh_bypass_lmcache": True, "lmcache.skip_save": True,
@@ -252,7 +256,7 @@ def completion_row(status: int, start_ns: int, end_ns: int, usage: dict,
 
 
 def _completion(host: str, port: int, model: str, prompt: list[int], output_tokens: int,
-                forced: int, timeout_s: float, bypass_lmcache: bool = False,
+                forced: int | None, timeout_s: float, bypass_lmcache: bool = False,
                 *, prepared_body: str | None = None) -> dict:
     body = prepared_body or json.dumps(completion_payload(
         model, prompt, output_tokens, forced, bypass_lmcache))

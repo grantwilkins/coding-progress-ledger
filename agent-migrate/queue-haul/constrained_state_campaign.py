@@ -776,7 +776,7 @@ def _a100_background(inputs: dict, state: dict, root: Path,
             needed = hbm * int(live["hbm_sessions_per_unit"])
             if needed > len(pool):
                 raise BackgroundLimit("resident-session groups exhausted")
-            resident = pool[:needed]
+            resident = [replace(row, force_output=False) for row in pool[:needed]]
             try:
                 destination.prewarm(cfg.host, cfg.sink_port, cfg.model,
                                     resident, bypass_lmcache=True)
@@ -786,9 +786,10 @@ def _a100_background(inputs: dict, state: dict, root: Path,
             "serving" if state["n_serving"] else None)
         rps, stability = 0.0, None
         if kind:
-            sessions = destination.manifest_sessions(
+            sessions = [replace(row, force_output=False)
+                        for row in destination.manifest_sessions(
                 bundle, "agentic_tool_loop", "validation", 201088,
-                inputs["background_manifest"]["seed"])
+                inputs["background_manifest"]["seed"])]
             if kind == "prefill":
                 sessions = [replace(row, prefix_tokens=1, append_tokens=2048,
                                     output_tokens=32) for row in sessions]
@@ -831,6 +832,7 @@ def _a100_background(inputs: dict, state: dict, root: Path,
         capacity = {
             "wan_mbps": float(state["wan_mbps"]),
             "background_kind": kind or "none", "background_rps": rps,
+            "background_output_forcing": False,
             "baseline_work": baseline, "baseline_kv_tokens": kv,
             "telemetry": metrics,
             "stack_provenance": {

@@ -1936,6 +1936,8 @@ HBM use must remain visible after warmup and after each episode. `prepare`
 discovers and compiles the campaign; `run` primes one model stack per randomized
 five-policy block, then flushes both caches and recreates the background before
 every policy. Each episode records the stack path and reset timestamps.
+Background requests omit forced-token masks to avoid cross-request sampler
+leakage; seeded prompts, offered rates, and output lengths stay fixed.
 Measured residual prefill scales the planner's replay migration budget.
 An operational background beyond the calibrated service envelope yields an
 empty admission plan; per-session greedy still dispatches each independently
