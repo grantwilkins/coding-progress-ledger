@@ -1936,6 +1936,10 @@ HBM use must remain visible after warmup and after each episode. `prepare`
 discovers and compiles the campaign; `run` primes one model stack per randomized
 five-policy block, then flushes both caches and recreates the background before
 every policy. Each episode records the stack path and reset timestamps.
+Measured residual prefill scales the planner's replay migration budget.
+An operational background beyond the calibrated service envelope yields an
+empty admission plan; per-session greedy still dispatches each independently
+fastest action using the current WAN and residual prefill capacities.
 Post-move verification uses the declared serving concurrency. Serving discovery
 uses a 30-second warmup and a separate 30-second measurement, rejecting request
 failures, blocked arrivals, or statistically clear backlog growth. It does not

@@ -193,7 +193,8 @@ def test_existing_planner_receives_current_wan_and_background():
     frozen = campaign.default_inputs()
     profile = ModelProfile.load(campaign.DEFAULT_PROFILE)
     item = next(row for row in frozen["packs"] if row["pack_id"] == "mixed-r0")
-    capacity_inputs = {"baseline_work": [0, 0], "baseline_kv_tokens": 0}
+    capacity_inputs = {"baseline_work": [0, 0], "baseline_kv_tokens": 0,
+                       "resources": {"prefill": campaign.D_S}}
 
     slow = campaign._planner_decisions(
         frozen, {"wan_mbps": 1000}, item, "queue_haul", profile,
@@ -205,6 +206,71 @@ def test_existing_planner_receives_current_wan_and_background():
     assert len(slow) == len(fast) == 8
     assert sum(row["action"] == "kv_transfer" for row in slow) \
         < sum(row["action"] == "kv_transfer" for row in fast)
+
+
+@pytest.mark.parametrize("policy", campaign.POLICIES)
+def test_operational_saturated_background_keeps_valid_policy_nonattainment(policy):
+    from profiles import ModelProfile
+
+    frozen = campaign.default_inputs()
+    profile = ModelProfile.load(campaign.DEFAULT_PROFILE)
+    capacity_inputs = {"baseline_work": [1.15, .04], "baseline_kv_tokens": 0,
+                       "resources": {"prefill": 0}}
+    result = campaign._planner_decisions(
+        frozen, {"wan_mbps": 1000}, frozen["packs"][0], policy,
+        profile, capacity_inputs)
+
+    assert len(result) == (8 if policy == "per_session_greedy" else 0)
+    assert all(row["action"] == "kv_transfer" for row in result)
+    assert capacity_inputs["baseline_work"] == [1.15, .04]
+
+
+def test_live_per_session_timing_responds_to_wan_and_prefill_without_admission(monkeypatch):
+    import planner
+    from profiles import ModelProfile
+
+    def no_admission(*args, **kwargs):
+        pytest.fail("independent action choice called aggregate admission")
+
+    monkeypatch.setattr(planner, "plan", no_admission)
+    frozen = campaign.default_inputs()
+    profile = ModelProfile.load(campaign.DEFAULT_PROFILE)
+    item = next(row for row in frozen["packs"] if row["pack_id"] == "mixed-r0")
+    def choices(wan, prefill):
+        return campaign._planner_decisions(
+            frozen, {"wan_mbps": wan}, item, "per_session_greedy", profile,
+            {"baseline_work": [1 - prefill, 1],
+             "baseline_kv_tokens": profile.kv_capacity_tokens,
+             "resources": {"prefill": prefill * campaign.D_S}})
+
+    slow, fast, loaded = choices(1000, 1), choices(10000, 1), choices(1000, .05)
+    kv = lambda rows: sum(row["action"] == "kv_transfer" for row in rows)
+    assert kv(slow) < kv(fast)
+    assert kv(slow) < kv(loaded)
+    assert all(len(rows) == 8 for rows in (slow, fast, loaded, choices(.01, 1)))
+
+
+@pytest.mark.parametrize("policy", ("queue_haul", "greedy", "kv_only", "replay_only"))
+def test_live_planner_receives_residual_prefill_budget(monkeypatch, policy):
+    from types import SimpleNamespace
+    import planner
+    from profiles import ModelProfile
+
+    seen = []
+    def capture(*args, destination, **kwargs):
+        seen.append(destination.pools[0])
+        return SimpleNamespace(moves=())
+
+    monkeypatch.setattr(planner, "plan", capture)
+    frozen = campaign.default_inputs()
+    profile = ModelProfile.load(campaign.DEFAULT_PROFILE)
+    for residual in (.2, 0):
+        campaign._planner_decisions(
+            frozen, {"wan_mbps": 1000}, frozen["packs"][0], policy, profile,
+            {"baseline_work": [1 - residual, 0], "baseline_kv_tokens": 0,
+             "resources": {"prefill": residual * campaign.D_S}})
+    assert seen[0].migration_headroom == {"replay": .2}
+    assert seen[1].methods == ("kv_transfer",)
 
 
 def test_schedule_executes_every_state_pack_policy_and_repeat():

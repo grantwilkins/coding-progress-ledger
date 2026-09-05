@@ -435,7 +435,7 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 
 
 def _save(fig, out: Path, name: str) -> None:
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, .92) if fig.legends else None)
     fig.savefig(out / f"{name}.png", dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
@@ -468,6 +468,9 @@ def plot_results(episodes: list[dict], out: Path) -> None:
             ax = axes[row_index][column]
             selected = [row for row in episodes
                         if row["policy"] == policy and row["family"] == family]
+            if not selected:
+                ax.text(.5, .5, "No episodes", ha="center", va="center",
+                        transform=ax.transAxes)
             keys = sorted({(row["state_id"], row["wan_mbps"], row["n_prefill"],
                             row["n_hbm"], row["n_serving"]) for row in selected},
                           key=lambda value: value[1:])
@@ -496,7 +499,6 @@ def plot_results(episodes: list[dict], out: Path) -> None:
                 ax.set_ylabel("Action share")
     handles, labels = axes[0][0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False)
-    fig.subplots_adjust(top=.88)
     _save(fig, out, "action_composition")
 
 
@@ -907,7 +909,7 @@ def discover_live(frozen: dict, out: Path, measurement=None) -> tuple[list[dict]
 def _planner_decisions(inputs: dict, state: dict, pack: dict, policy: str,
                        profile, capacity: dict) -> list[dict]:
     from destination import dedicated_sink_architecture
-    from planner import plan, source_power
+    from planner import _duration, plan, source_power
     from simulate import (ExecutionScenario, NetworkLink, PowerNode,
                           ServingInstance, SimSession)
 
@@ -917,6 +919,22 @@ def _planner_decisions(inputs: dict, state: dict, pack: dict, policy: str,
         float(row.get("expected_f", 512 / n)),
         float(row.get("expected_g", 8 / n)), 2 * int(row["initial_tokens"]))
         for row in pack["sessions"])
+    residual = capacity["resources"]["prefill"] / D_S
+    if policy == "per_session_greedy":
+        links = {"link": float(state["wan_mbps"]) * 125_000}
+        def duration(session, action):
+            value = _duration(session, action, case, ("link",), links, D_S)
+            if action == "replay":
+                if not residual:
+                    return math.inf
+                value += session.context_tokens / case.replay.rate(
+                    session.context_tokens, 1) * (1 / residual - 1)
+            return value
+        return [{"session_id": session.session_id, "action": min(
+                    ACTIONS, key=lambda action: (duration(session, action), action)),
+                 "order": order} for order, session in enumerate(sessions)]
+    if sum(capacity["baseline_work"]) > 1 + 1e-9:
+        return []
     problem = ExecutionScenario(
         D_S, D_S, 0, "awake", 0,
         (PowerNode("source-node", 1, True),
@@ -932,32 +950,19 @@ def _planner_decisions(inputs: dict, state: dict, pack: dict, policy: str,
                       baseline_work=tuple(capacity["baseline_work"]),
                       baseline_kv_tokens=int(capacity["baseline_kv_tokens"]))
     architecture = replace(architecture,
-                           pools=(replace(pool, replicas=(replica,)),),
+                           pools=(replace(
+                               pool, replicas=(replica,),
+                               methods=pool.methods if residual else ("kv_transfer",),
+                               migration_headroom={"replay": residual}
+                               if residual else None),),
                            residency_horizon_s=D_S)
     routes = {("source", "destination"): ("link",)}
     solvers = {"queue_haul": "lp_work_first", "greedy": "greedy",
                "kv_only": "kv_only", "replay_only": "replay_only"}
-    if policy != "per_session_greedy":
-        moves = plan(problem, profile, routes, solvers[policy],
-                     destination=architecture).moves
-        return [{"session_id": row.session_id, "action": row.method,
-                 "order": row.order} for row in moves]
-    choices = []
-    for session in sessions:
-        durations = {}
-        for action, solver in (("kv_transfer", "kv_only"),
-                               ("replay", "replay_only")):
-            single = replace(problem, sessions=(session,))
-            result = plan(single, profile, routes, solver,
-                          destination=architecture)
-            durations[action] = (result.predicted_migration_makespan_s
-                                 if result.moves and
-                                 result.predicted_migration_makespan_s is not None
-                                 else math.inf)
-        choices.append((session.session_id,
-                        min(ACTIONS, key=lambda action: (durations[action], action))))
-    return [{"session_id": session, "action": action, "order": order}
-            for order, (session, action) in enumerate(choices)]
+    moves = plan(problem, profile, routes, solvers[policy],
+                 destination=architecture).moves
+    return [{"session_id": row.session_id, "action": row.method,
+             "order": row.order} for row in moves]
 
 
 def a100_episode(inputs: dict, state: dict, pack: dict, job: dict,
