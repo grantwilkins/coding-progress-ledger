@@ -97,6 +97,55 @@ def test_live_discovery_rejects_an_operational_safety_cap(tmp_path):
         campaign.discover_live(frozen, tmp_path, measure)
 
 
+@pytest.mark.parametrize("instrumentation_error", (False, True))
+def test_discovery_reuses_only_matching_stacks_and_closes_failed_loads(
+        monkeypatch, tmp_path, instrumentation_error):
+    raw = campaign.default_inputs()
+    raw["background_manifest"]["live"]["max_units"] = dict.fromkeys(campaign.AXES, 3)
+    frozen = campaign.freeze_inputs(raw, 1)
+    opened, closed, active, measured = [], [], [], []
+
+    @contextmanager
+    def stack(inputs_, wan_mbps, root, n_hbm=0):
+        assert not active
+        shared = {"key": (wan_mbps, n_hbm), "id": len(opened)}
+        opened.append(shared)
+        active.append(shared)
+        try:
+            if n_hbm:
+                raise campaign.BackgroundLimit("allocation cannot start")
+            yield shared
+        finally:
+            closed.append(active.pop())
+
+    def measure(inputs_, state, root, shared=None):
+        assert active == [shared]
+        assert shared["key"] == (state["wan_mbps"], state["n_hbm"])
+        measured.append((state, shared))
+        if instrumentation_error and state["family"] == "wan_prefill":
+            raise ValueError("missing telemetry")
+        if max(state["n_prefill"], state["n_serving"]) > 1:
+            raise campaign.BackgroundLimit("background cannot be maintained")
+        return {**state, "operational": True, "capacity_inputs": capacity()}
+
+    monkeypatch.setattr(campaign, "_a100_stack", stack)
+    monkeypatch.setattr(campaign, "measure_a100_background", measure)
+    if instrumentation_error:
+        with pytest.raises(ValueError, match="missing telemetry"):
+            campaign.discover_live(frozen, tmp_path)
+        assert not active and closed == opened
+        return
+    discovery, states = campaign.discover_live(frozen, tmp_path)
+
+    assert len(discovery) == 8 and len(states) == 9
+    assert measured[0][1] is measured[1][1]
+    grid = [(state, shared) for state, shared in measured if state["family"] == "wan_prefill"]
+    for wan in raw["wan_mbps"]:
+        assert len({shared["id"] for state, shared in grid if state["wan_mbps"] == wan}) == 1
+    assert not active and closed == opened
+    assert len(opened) < len(measured)
+
+
 def test_hbm_reservation_removes_physical_blocks_and_stops_before_model_no_longer_fits():
     from dataclasses import replace
     from profiles import ModelProfile
@@ -113,45 +162,76 @@ def test_hbm_reservation_removes_physical_blocks_and_stops_before_model_no_longe
         campaign._hbm_blocks(replace(profile, model="other"), unit, 32768)
 
 
-def test_hbm_telemetry_checks_holder_pid_memory_and_liveness(monkeypatch):
+def test_hbm_worker_holds_exact_bytes_in_existing_cuda_context(monkeypatch):
+    import sys
     from types import SimpleNamespace
 
-    process = SimpleNamespace(poll=lambda: None)
-    holder = process, {"pid": 17, "allocated_bytes": 4 * 1024**3}
-    rows = ["17, 5000\n99, 70000\n"]
-    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *args, **kw: rows[0])
-    assert campaign._hbm_telemetry(holder)["process_gpu_memory_bytes"] == 5000 * 1024**2
-    rows[0] = "17, 4095\n99, 70000\n"
-    with pytest.raises(campaign.BackgroundLimit, match="visibly resident"):
-        campaign._hbm_telemetry(holder)
-    rows[0] = "99, 70000\n"
-    with pytest.raises(KeyError):
-        campaign._hbm_telemetry(holder)
-    process.poll = lambda: 1
-    with pytest.raises(campaign.BackgroundLimit, match="exited"):
-        campaign._hbm_telemetry(holder)
+    monkeypatch.delenv("QH_LMCACHE_MODE", raising=False)
+    from lmcache_compat.connector_patch import ConstrainedHBM
+
+    allocated, calls = [1024], []
+    def zeros(size, dtype, device):
+        calls.append((size, dtype, device))
+        allocated[0] += size
+        return SimpleNamespace(numel=lambda: size)
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(
+        zeros=zeros, uint8="uint8", cuda=SimpleNamespace(
+            empty_cache=lambda: None, synchronize=lambda device: None,
+            memory_allocated=lambda device: allocated[0])))
+    worker = ConstrainedHBM()
+    worker.device = "cuda:0"
+    before = worker.qh_hbm()
+    held = worker.qh_hbm(str(4 * 1024**3))
+    assert held["allocated_bytes"] == 4 * 1024**3
+    assert held["torch_allocated_bytes"] - before["torch_allocated_bytes"] == 4 * 1024**3
+    assert worker.qh_hbm() == held
+    assert calls == [(4 * 1024**3, "uint8", "cuda:0")]
+    with pytest.raises(ValueError, match="already allocated"):
+        worker.qh_hbm("1")
 
 
-@pytest.mark.parametrize("dead", (False, True))
-def test_hbm_holder_owns_only_destination_gpu_and_always_stops(monkeypatch, tmp_path, dead):
+def test_hbm_rpc_verifies_destination_allocation_and_stable_worker(monkeypatch):
     from types import SimpleNamespace
     import migration_testbed as testbed
 
-    process = SimpleNamespace(poll=lambda: 1 if dead else None)
-    gpus, stopped = [], []
-    def command(cfg, script, gpu):
-        gpus.append(gpu)
-        return [script]
-    def start(cmd, log):
-        log.write_text('HBM_READY {"pid":17,"allocated_bytes":4294967296}\n')
-        return process
-    monkeypatch.setattr(testbed, "apptainer_cmd", command)
-    monkeypatch.setattr(testbed, "start_logged", start)
-    monkeypatch.setattr(testbed, "stop_proc", stopped.append)
-    with pytest.raises(campaign.BackgroundLimit if dead else RuntimeError):
-        with campaign._hbm_allocation(object(), tmp_path, 4 * 1024**3):
-            raise RuntimeError("episode failed")
-    assert gpus == [1] and stopped == [process]
+    cfg = SimpleNamespace(host="localhost", sink_port=8200)
+    held, calls, copies = [0], [], [1]
+    def rpc(host, port, method, path, payload):
+        assert (host, port, method, path) == ("localhost", 8200, "POST", "/collective_rpc")
+        assert payload["method"] == "qh_hbm"
+        calls.append(payload["args"])
+        if payload["args"]:
+            held[0] = int(payload["args"][0])
+        return {"results": [{"pid": 17, "allocated_bytes": held[0],
+                             "torch_allocated_bytes": 1024 + held[0]}] * copies[0]}
+    monkeypatch.setattr(testbed, "http_json", rpc)
+    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *args, **kw:
+                        f"17, {1000 + held[0] // 1024**2}\n99, 70000\n")
+    holder = campaign._hbm_allocation(cfg, 4 * 1024**3)
+    assert calls == [[], ["4294967296"]]
+    assert holder["before"]["process_gpu_memory_bytes"] == 1000 * 1024**2
+    assert campaign._hbm_telemetry(cfg, holder)["allocated_bytes"] == 4 * 1024**3
+    held[0] = 0
+    with pytest.raises(campaign.BackgroundLimit, match="changed"):
+        campaign._hbm_telemetry(cfg, holder)
+    copies[0] = 2
+    with pytest.raises(ValueError, match="one destination worker"):
+        campaign._hbm_telemetry(cfg, holder)
+
+
+@pytest.mark.parametrize("field", ("torch_allocated_bytes", "process_gpu_memory_bytes"))
+def test_hbm_allocation_requires_visible_memory_increase(monkeypatch, field):
+    unit = 4 * 1024**3
+    before = {"pid": 17, "allocated_bytes": 0, "torch_allocated_bytes": 1024,
+              "process_gpu_memory_bytes": 5000 * 1024**2}
+    after = {**before, "allocated_bytes": unit,
+             **{key: before[key] + unit for key in (
+                 "torch_allocated_bytes", "process_gpu_memory_bytes")}}
+    after[field] = before[field]
+    monkeypatch.setattr(campaign, "_hbm_rpc",
+                        lambda cfg, allocated=None: before if allocated is None else after)
+    with pytest.raises(campaign.BackgroundLimit, match="visibly resident"):
+        campaign._hbm_allocation(object(), unit)
 
 
 @pytest.mark.parametrize("kind", ("prefill", "serving"))

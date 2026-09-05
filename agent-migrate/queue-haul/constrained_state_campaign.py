@@ -728,51 +728,40 @@ def _hbm_blocks(profile, allocated_bytes: int, minimum_tokens: int) -> int:
     return blocks
 
 
-@contextmanager
-def _hbm_allocation(cfg, root: Path, allocated_bytes: int):
+def _hbm_rpc(cfg, allocated_bytes=None) -> dict:
     import migration_testbed as testbed
 
-    log = root / "hbm_allocation.log"
-    code = ("import json,os,signal,torch; "
-            f"held=torch.empty({allocated_bytes},dtype=torch.uint8,device='cuda'); "
-            "held.zero_(); torch.cuda.synchronize(); "
-            "print('HBM_READY '+json.dumps({'pid':os.getpid(),"
-            "'allocated_bytes':held.numel()}),flush=True); signal.pause()")
-    process = testbed.start_logged(testbed.apptainer_cmd(
-        cfg, testbed.shell(["python", "-c", code]), gpu=1), log)
-    try:
-        deadline = time.monotonic() + 60
-        while time.monotonic() < deadline:
-            if process.poll() is not None:
-                raise BackgroundLimit(f"HBM allocation failed: {log}")
-            ready = [line[10:] for line in log.read_text().splitlines()
-                     if line.startswith("HBM_READY ")]
-            if ready:
-                report = json.loads(ready[-1])
-                if report["allocated_bytes"] != allocated_bytes:
-                    raise ValueError("HBM holder allocation differs from its request")
-                yield process, {**report, "log_path": str(log.resolve())}
-                return
-            time.sleep(.1)
-        raise BackgroundLimit(f"HBM allocation did not become ready: {log}")
-    finally:
-        testbed.stop_proc(process)
-
-
-def _hbm_telemetry(holder) -> dict:
-    process, report = holder
-    if process.poll() is not None:
-        raise BackgroundLimit("HBM allocation process exited")
+    results = testbed.http_json(cfg.host, cfg.sink_port, "POST", "/collective_rpc", {
+        "method": "qh_hbm", "args": [] if allocated_bytes is None else [str(allocated_bytes)],
+        "timeout": 60})["results"]
+    if len(results) != 1 or not isinstance(results[0], dict):
+        raise ValueError("HBM RPC requires one destination worker")
+    report = results[0]
     output = subprocess.check_output([
         "nvidia-smi", "--query-compute-apps=pid,used_gpu_memory",
         "--format=csv,noheader,nounits"], text=True)
     memory = {int(pid): int(mib) * 1024**2
               for pid, mib in csv.reader(output.splitlines())}
-    used = memory[report["pid"]]
-    if used < report["allocated_bytes"]:
-        raise BackgroundLimit("HBM allocation is not visibly resident")
-    return {**report, "process_gpu_memory_bytes": used,
+    return {**report, "process_gpu_memory_bytes": memory[report["pid"]],
             "checked_monotonic_ns": time.monotonic_ns()}
+
+
+def _hbm_allocation(cfg, allocated_bytes: int) -> dict:
+    before = _hbm_rpc(cfg)
+    after = _hbm_rpc(cfg, allocated_bytes)
+    if after["pid"] != before["pid"] or after["allocated_bytes"] != allocated_bytes \
+            or after["torch_allocated_bytes"] - before["torch_allocated_bytes"] < allocated_bytes \
+            or after["process_gpu_memory_bytes"] - before["process_gpu_memory_bytes"] \
+            + 1024**2 < allocated_bytes:
+        raise BackgroundLimit("HBM allocation is not visibly resident")
+    return {**after, "before": before}
+
+
+def _hbm_telemetry(cfg, holder: dict) -> dict:
+    report = _hbm_rpc(cfg)
+    if any(report[key] != holder[key] for key in ("pid", "allocated_bytes")):
+        raise BackgroundLimit("HBM allocation changed")
+    return {**report, "before": holder["before"]}
 
 
 @contextmanager
@@ -792,14 +781,14 @@ def _a100_stack(inputs: dict, wan_mbps: float, root: Path, n_hbm: int = 0):
     stack = testbed.start_stack(cfg, root / "testbed", wan_mbps, [])
     with ExitStack() as resources:
         resources.callback(testbed.stop_stack, stack)
-        testbed.start_sink(stack, cfg, ["--num-gpu-blocks-override", str(blocks)]
+        testbed.start_sink(stack, cfg, ["--num-gpu-blocks-override", str(blocks),
+                                      "--worker-extension-cls", "connector_patch.ConstrainedHBM"]
                           if blocks is not None else [])
         kv_capacity = vllm_kv_capacity(stack.run_root / "sink.log")
         if blocks is not None and (kv_capacity != blocks * 16 or
                 "dtype=torch.bfloat16" not in (stack.run_root / "sink.log").read_text()):
             raise ValueError("destination KV capacity or dtype differs from the reservation")
-        holder = resources.enter_context(_hbm_allocation(cfg, root, allocated)) \
-            if allocated else None
+        holder = _hbm_allocation(cfg, allocated) if allocated else None
         testbed.run_smoke2_probe(cfg, stack.run_root, wan_mbps)
         testbed.flush_lmcache(stack, cfg)
         testbed.reset_vllm_caches(
@@ -839,7 +828,7 @@ def _a100_background(inputs: dict, state: dict, root: Path,
         reset_end_ns = time.monotonic_ns()
         expected_hbm = int(state["n_hbm"]) * int(live["hbm_unit_bytes"]) \
             if state["n_hbm"] else 0
-        if (holder[1]["allocated_bytes"] if holder else 0) != expected_hbm:
+        if (holder["allocated_bytes"] if holder else 0) != expected_hbm:
             raise ValueError("shared stack has the wrong HBM allocation")
         kind = "prefill" if state["n_prefill"] else (
             "serving" if state["n_serving"] else None)
@@ -876,7 +865,7 @@ def _a100_background(inputs: dict, state: dict, root: Path,
             time.sleep(float(live.get("warmup_s", 30)))
             rates, sessions = None, []
         metrics = _metrics(testbed, destination, cfg)
-        hbm_report = _hbm_telemetry(holder) if holder else None
+        hbm_report = _hbm_telemetry(cfg, holder) if holder else None
         if not load and metrics["vllm:num_requests_waiting"] > 0:
             raise BackgroundLimit("destination background queue is not stable")
         baseline = [0.0, 0.0]
@@ -910,10 +899,7 @@ def _a100_background(inputs: dict, state: dict, root: Path,
             capacity["background_stability"] = stability
         yield stack, cfg, profile, manifest, capacity
         if holder:
-            post = _hbm_telemetry(holder)
-            if post["process_gpu_memory_bytes"] < hbm_report["process_gpu_memory_bytes"]:
-                raise BackgroundLimit("HBM allocation memory decreased")
-            capacity["post_hbm_telemetry"] = post
+            capacity["post_hbm_telemetry"] = _hbm_telemetry(cfg, holder)
         if load:
             capacity["post_background_status"] = {
                 "request_count": len(load.rows),
@@ -927,8 +913,9 @@ def _a100_background(inputs: dict, state: dict, root: Path,
             load.close()
 
 
-def measure_a100_background(inputs: dict, state: dict, root: Path) -> dict:
-    with _a100_background(inputs, state, root, measure_background=True) as context:
+def measure_a100_background(inputs: dict, state: dict, root: Path, shared=None) -> dict:
+    with _a100_background(inputs, state, root, measure_background=True,
+                          shared=shared) as context:
         capacity = context[-1]
         return {**state, "operational": True, "capacity_inputs": capacity}
 
@@ -936,6 +923,25 @@ def measure_a100_background(inputs: dict, state: dict, root: Path) -> dict:
 def discover_live(frozen: dict, out: Path, measurement=None) -> tuple[list[dict], list[dict]]:
     """Discover integer rungs, then measure the complete generated state grid."""
     verify_frozen(frozen)
+    if measurement is None:
+        with ExitStack() as stacks:
+            key, shared = None, None
+            def measure(inputs, state, root):
+                nonlocal key, shared
+                current = state["wan_mbps"], state["n_hbm"]
+                if key != current:
+                    stacks.close()
+                    key, shared = None, None
+                    shared = stacks.enter_context(
+                        _a100_stack(inputs, current[0], root, current[1]))
+                    key = current
+                try:
+                    return measure_a100_background(inputs, state, root, shared)
+                except BackgroundLimit:
+                    stacks.close()
+                    key, shared = None, None
+                    raise
+            return discover_live(frozen, out, measure)
     inputs, measure = frozen["inputs"], measurement or measure_a100_background
     live, reference = _paths(inputs), max(inputs["wan_mbps"])
     discovery = []

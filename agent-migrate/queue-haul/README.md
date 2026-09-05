@@ -1933,9 +1933,13 @@ and 0.25 serving RPS per unit, a four-GiB HBM allocation unit, warmup time, and 
 hard guard for each discovery ladder. `prepare` fails instead of truncating a
 ladder if that guard is reached while the background remains stable. Each HBM
 allocation replaces destination KV blocks, rounded up to cover the held bytes.
-The planner uses the actual KV capacity reported by the engine; holder-process
-GPU memory is checked before and after each episode. `prepare`
-discovers and compiles the campaign; `run` primes one model stack per randomized
+The allocation stays inside the destination vLLM worker through its existing
+worker RPC. Exact held bytes, worker PID, and GPU memory are recorded before and
+after each episode; allocation verifies a visible memory increase. The planner
+uses the actual KV capacity reported by the engine. `prepare` reuses a model
+stack while WAN and HBM allocation are unchanged, rebuilding after an invalid
+background; every measurement still resets caches and warms a fresh background.
+It discovers and compiles the campaign; `run` primes one model stack per randomized
 five-policy block, then flushes both caches and recreates the background before
 every policy. Each episode records the stack path and reset timestamps.
 Background requests omit forced-token masks to avoid cross-request sampler
