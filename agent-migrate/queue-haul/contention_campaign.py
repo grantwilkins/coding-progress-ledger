@@ -36,7 +36,8 @@ def calibrate(plan: dict, raw: list[dict]) -> dict:
                  sum(case.kv_transfer.sealed_bytes(t) for t in tokens) / (job["wan_mbps"] * 125_000))
         (replay if job["policy"] == "replay_only" else kv).append(value)
         evidence.append({"episode_id": job["episode_id"], "policy": job["policy"],
-                         "value": value, "completion_s": elapsed, "sessions": len(moves)})
+                         "value": value, "completion_s": elapsed, "sessions": len(moves),
+                         "context_tokens": tokens})
     if not replay or not kv or min(replay + kv) <= 0:
         raise ValueError("positive replay and KV calibration measurements required")
     return {"replay_speedup": statistics.median(replay), "kv_tail_s": statistics.median(kv),
@@ -44,7 +45,7 @@ def calibrate(plan: dict, raw: list[dict]) -> dict:
             "kv_tail_range_s": [min(kv), max(kv)], "evidence": evidence,
             "source_plan_sha256": campaign._verify_plan(plan),
             "raw_sha256": campaign.digest(raw),
-            "scope": "idle destination; calibrated at eight equal 16K contexts; heterogeneous execution is a prediction"}
+            "scope": "idle destination; fitted from the listed fixed-policy episodes; new workloads are predictions"}
 
 
 def simulate(pack: dict, moves: list[dict], wan_mbps: float, deadline_s: float,
@@ -70,7 +71,8 @@ def simulate(pack: dict, moves: list[dict], wan_mbps: float, deadline_s: float,
             "admitted": len(moves), "completion_times": completed}
 
 
-def prepare(source_plan: dict, calibration_plan: dict, calibration_raw: list[dict], out: Path) -> dict:
+def prepare(source_plan: dict, calibration_plan: dict, calibration_raw: list[dict], out: Path,
+            original_contract: bool = False) -> dict:
     campaign._verify_plan(source_plan)
     calibration = calibrate(calibration_plan, calibration_raw)
     inputs = copy.deepcopy(source_plan["frozen"]["inputs"])
@@ -81,14 +83,19 @@ def prepare(source_plan: dict, calibration_plan: dict, calibration_raw: list[dic
     contexts = [(4096, 8192, 12288, 16384), (8192, 12288, 14336, 16384),
                 (8192, 16384, 24576, 31562), (16384, 24576, 28672, 31562),
                 (4096, 8192, 24576, 31562), (12288, 16384, 24576, 31562)]
+    deadlines, bandwidths = (12, 13, 14, 15, 16, 18, 20, 22, 25), (2000, 3000, 4000, 5000, 6000, 8000, 10000)
+    if original_contract:
+        contexts = [(24576, 28672, 30720, 31562),
+                    (28672, 30720, 31232, 31562), (31562,) * 4]
+        deadlines, bandwidths = (30,), (2500, 3000, 3250, 3500, 3750, 4000, 4250, 4500, 5000, 10000)
     outcomes, candidates = [], []
     for context in contexts:
         pack = copy.deepcopy(template)
         pack["pack_id"] = campaign.digest(context)[:16]
         for row, tokens in zip(pack["sessions"], sorted(context * 2)):
             row.update(initial_tokens=tokens, log_bytes=2 * tokens)
-        for wan in (2000, 3000, 4000, 5000, 6000, 8000, 10000):
-            for deadline in (12, 13, 14, 15, 16, 18, 20, 22, 25):
+        for wan in bandwidths:
+            for deadline in deadlines:
                 state = {"state_id": campaign.digest([context, wan, deadline])[:16],
                          "family": "contention", "wan_mbps": wan, "deadline_s": deadline,
                          "n_prefill": 0, "n_hbm": 0, "n_serving": 0, "operational": True,
@@ -133,7 +140,7 @@ def prepare(source_plan: dict, calibration_plan: dict, calibration_raw: list[dic
                                      abs(row["state"]["wan_mbps"] - winner["state"]["wan_mbps"]) / 1000,
                                      -row["gain"]))
     slack = next(row for row in candidates if row["pack"]["pack_id"] == winner["pack"]["pack_id"] and
-                 row["state"]["wan_mbps"] == 10000 and row["state"]["deadline_s"] == 25)
+                 row["state"]["wan_mbps"] == 10000 and row["state"]["deadline_s"] == deadlines[-1])
     if len(nearby) < 3 or not slack["robust"]:
         raise ValueError("selected candidate lacks three robust neighbors or a robust slack control")
     selected = [winner, *nearby[:3]]
@@ -164,6 +171,7 @@ def prepare(source_plan: dict, calibration_plan: dict, calibration_raw: list[dic
             "calibration": calibration, "offline_decisions": [{"state_id": row["state"]["state_id"],
                 "policy": policy, "moves": moves} for row in selected for policy, moves in row["moves"].items()],
             "design": {"repeats": 3, "selected_pack": pack["pack_id"], "episode_count": len(schedule),
+                       "original_contract": original_contract,
                        "selection": "both QH variants attain full target; prefer attainment at all +/-15% duration sensitivities, then maximize relief gain under robust dominance; three nearest full-attainment robust neighbors and slack; all candidates retained",
                        "planner_profile": "unchanged", "metric": "full-target attainment primary; five-second windowed relief secondary"}}
     plan["sha256"] = campaign.digest(plan)
@@ -229,13 +237,15 @@ def main():
     prepare_parser = commands.add_parser("prepare")
     for name in ("source-plan", "calibration-plan", "calibration-raw", "out"):
         prepare_parser.add_argument(f"--{name}", type=Path, required=True)
+    prepare_parser.add_argument("--original-contract", action="store_true")
     summary_parser = commands.add_parser("summarize")
     summary_parser.add_argument("--plan", type=Path, required=True)
     summary_parser.add_argument("--run-root", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(json.loads(args.source_plan.read_text()), json.loads(args.calibration_plan.read_text()),
-                [json.loads(line) for line in args.calibration_raw.read_text().splitlines()], args.out)
+                [json.loads(line) for line in args.calibration_raw.read_text().splitlines()], args.out,
+                original_contract=args.original_contract)
     else:
         summarize(json.loads(args.plan.read_text()), args.run_root)
 

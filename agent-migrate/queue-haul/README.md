@@ -1955,7 +1955,7 @@ interrupted attempts remain intact. The old `constrained_state_campaign.py
 prepare` command still reproduces the exhaustive historical design and is not
 used by this comparison.
 
-## Calibrated WAN/replay contention comparison
+## Calibrated WAN/replay contention deadline sensitivity
 
 `contention_campaign.py` searches heterogeneous eight-session packs, shaped
 WAN rates, and explicit per-case deadlines in simulation before selecting live
@@ -2006,3 +2006,33 @@ The frozen `outputs/contention-a100-20260905/prepared` plan uses paired 16K,
 4Gbps/20s, 6Gbps/20s, 5Gbps/22s, and the 10Gbps/25s slack control. These are
 simulation-selected predictions; the batch job independently tests their
 attainment on hardware. The search retained 5,670 timing/policy outcomes.
+
+## Original 30-second contract
+
+`contention_campaign.py prepare --original-contract` fixes every candidate and
+control to the original 30-second deadline and five-second relief window.
+It retains eight sessions, the two-A100 runtime, the model profile, and the
+full-shed power target. Only context lengths and shaped WAN rates change.
+The shorter-deadline experiment above is a separate sensitivity study, not
+validation of this original contract.
+
+The `outputs/contention-original-a100-20260906/prepared` plan uses eight
+31,562-token contexts at 2.5, 3, 3.25, 3.5, and 10Gbps, all at 30 seconds.
+Each of the five policies gets three fresh repeats (75 episodes). Concurrent
+execution is calibrated from the completed heterogeneous-context campaign;
+all candidate outcomes and calibration measurements remain in the prepared
+output. Simulation predicts mixed QH actions meet the full-target deadline
+while isolated greedy's eight replays exceed the 25-second migration cutoff
+needed for five seconds of full relief. Hardware results must validate this.
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
+uv run python contention_campaign.py prepare --original-contract \
+  --source-plan outputs/constrained-resource-a100-20260905/prepared/plan.json \
+  --calibration-plan outputs/contention-a100-20260905/prepared/plan.json \
+  --calibration-raw outputs/contention-a100-20260905/run/raw_episodes.jsonl \
+  --out outputs/contention-original-a100-20260906/prepared
+sbatch --job-name=qh-original-30s \
+  --output=outputs/contention-original-a100-20260906/job-%j.log \
+  contention_campaign.sbatch outputs/contention-original-a100-20260906
+```

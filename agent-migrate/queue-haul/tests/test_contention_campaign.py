@@ -32,9 +32,59 @@ def test_calibration_uses_successful_fixed_policy_timings_and_rejects_failures()
     assert result["replay_speedup"] == pytest.approx(2)
     assert result["kv_tail_s"] == pytest.approx(3)
     assert len(result["evidence"]) == 2
+    assert "16K" not in result["scope"]
     raw[0]["decisions"][0]["completion_s"] = None
     with pytest.raises(ValueError, match="calibration migration failed"):
         contention.calibrate(plan, raw)
+
+
+@pytest.mark.parametrize("qualifies", (True, False))
+def test_original_contract_search_preserves_deadline_workload_and_evidence(monkeypatch, tmp_path, qualifies):
+    inputs = campaign.default_inputs()
+    source = {"frozen": campaign.freeze_inputs(inputs, 7)}
+    template = next(row for row in inputs["packs"] if row["pack_id"] == "large-r0")
+    seen = []
+    monkeypatch.setattr(contention, "calibrate", lambda *args: {"replay_speedup": 1, "kv_tail_s": 1})
+
+    def decisions(inputs, state, pack, policy, profile, capacity):
+        seen.append(state)
+        assert len(pack["sessions"]) == 8
+        assert max(row["initial_tokens"] for row in pack["sessions"]) <= 31562
+        return [{"session_id": row["session_id"], "action": "replay", "order": i,
+                 "policy": policy} for i, row in enumerate(pack["sessions"])]
+
+    def simulated(pack, moves, wan, deadline, profile, calibration, scale):
+        winner = qualifies and moves[0]["policy"] in ("queue_haul", "greedy")
+        return {"relief_w": inputs["target"] if winner else 0,
+                "target_time_s": 25 if winner else None}
+
+    monkeypatch.setattr(campaign, "_planner_decisions", decisions)
+    monkeypatch.setattr(contention, "simulate", simulated)
+    if not qualifies:
+        with pytest.raises(ValueError, match="all simulation outcomes retained"):
+            contention.prepare(source, source, [], tmp_path, original_contract=True)
+        assert not (tmp_path / "plan.json").exists()
+    else:
+        plan = contention.prepare(source, source, [], tmp_path, original_contract=True)
+        frozen = plan["frozen"]["inputs"]
+        selected = next(row for row in frozen["packs"] if row["pack_id"] == plan["design"]["selected_pack"])
+        assert selected["power_gains"] == template["power_gains"]
+        assert frozen["target"] == inputs["target"]
+        assert frozen["profile"] == inputs["profile"]
+        assert frozen["background_manifest"] == inputs["background_manifest"]
+        assert plan["frozen"]["constants"]["power_window_s"] == 5
+        assert {row["deadline_s"] for row in plan["schedule"]} == {30}
+        assert any(row["family"] == "slack" for row in plan["states"])
+        assert len(plan["schedule"]) <= 75
+        assert {row["repeat"] for row in plan["schedule"]} == {0, 1, 2}
+        assert campaign._verify_plan(plan) == plan["sha256"]
+    assert {row["deadline_s"] for row in seen} == {30}
+    assert all(1000 <= row["wan_mbps"] <= 10000 for row in seen)
+    assert (tmp_path / "calibration.json").is_file()
+    with (tmp_path / "simulation.csv").open() as handle:
+        rows = list(csv.DictReader(handle))
+    assert {row["policy"] for row in rows} == set(campaign.POLICIES)
+    assert {row["deadline_s"] for row in rows} == {"30"}
 
 
 @pytest.mark.parametrize("action, completion", (("kv_transfer", 3), ("replay", 2.4)))
