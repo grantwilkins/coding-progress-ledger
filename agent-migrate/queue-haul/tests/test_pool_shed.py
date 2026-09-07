@@ -155,6 +155,46 @@ def test_lp_bound_against_exhaustive_integer_plans_and_monotonicity():
     assert large['lp_bound_w'] >= small['lp_bound_w']
 
 
+def test_lp_bound_dominates_all_baselines_under_identical_constraints():
+    rng = np.random.default_rng(20260909)
+    for _ in range(24):
+        n = rng.integers(1, 6)
+        f = fleet(count=rng.integers(1, 21, n), demand=rng.uniform(.01, .6, n),
+                  replay=rng.uniform(.05, 3., n), kv=rng.uniform(2., 100., n),
+                  log=rng.uniform(.1, 5., n), gpus=int(rng.integers(4, 31)))
+        f = replace(f, kv_capacity=f.baseline_kv + rng.uniform(5., 80.))
+        deadline, budgets, endpoint = rng.uniform(.2, 10.), rng.uniform(2., 80., 3), rng.uniform(1., 40., 3)
+        matrix, capacities, isolated = c.resources(f, deadline, budgets, endpoint)
+        bound = c.select(f, deadline, budgets, endpoint, 'queue_haul')[1]['lp_bound_w']
+        tolerance = 1e-8 * max(1., bound)
+        for policy in c.POLICIES:
+            plan, stats = c.select(f, deadline, budgets, endpoint, policy)
+            assert np.all(plan >= 0) and np.all(plan == np.floor(plan))
+            assert np.all(plan.reshape(-1, 4).sum(1) <= f.count)
+            assert np.all(matrix @ plan <= capacities * (1 + 1e-8))
+            assert np.all(isolated[plan > 0] <= deadline)
+            assert stats['planned_shed_w'] == pytest.approx(np.repeat(f.gain, 4) @ plan)
+            assert stats['planned_shed_w'] <= bound + tolerance
+            done, _ = c.execute(f, plan, deadline, budgets, endpoint)
+            assert np.repeat(f.gain, 4) @ done <= stats['planned_shed_w'] + tolerance
+
+
+def test_volume_feasibility_does_not_guarantee_staged_completion():
+    f = fleet(count=(2,), demand=(.5,), replay=(.75,), kv=(100.,), log=(1.,), gpus=4)
+    plan, deadline = np.array([2, 0, 0, 0]), 2.
+    budgets, endpoint = np.full(3, 2.), np.array([2., 2., 4.])
+    matrix, capacities, isolated = c.resources(f, deadline, budgets, endpoint)
+    assert np.all(matrix @ plan <= capacities)
+    assert np.all(isolated[plan > 0] <= deadline)
+    bound = c.select(f, deadline, budgets, endpoint, 'queue_haul')[1]['lp_bound_w']
+    assert np.repeat(f.gain, 4) @ plan <= bound + 1e-8
+    done, stats = c.execute(f, plan, deadline, budgets, endpoint)
+    # One second of log transport leaves one GPU-second for 1.5 GPU-seconds of replay.
+    assert done.sum() == 0 and stats['rejected_sessions'] == 0
+    assert stats['prefill_remaining_gpu_s'] == pytest.approx([.5, 0.])
+    np.testing.assert_array_equal(c.execute(f, plan, 2.5, budgets, endpoint)[0], plan)
+
+
 def test_greedy_uses_global_action_order_and_count_weighted_prices():
     matrix = np.array([[1., 0., 0., 0., 0., 0., 0., 0.],
                        [0., 4., 0., 0., 2., 0., 0., 0.]])
@@ -216,6 +256,17 @@ def test_compact_draws_are_paired_and_reproducible():
             assert sum(row['action_shed_w']) == pytest.approx(row['shed_w'])
             assert 0 <= row['shed_w'] <= row['initial_source_w'] - row['idle_source_w'] + 1e-7
     assert a['plans']['queue_haul']['planned_shed_w'] == rows[0]['planned_shed_w']
+    volume = list(c.volume_rows(a))
+    assert len(volume) == 6 * config['draws']
+    for draw in range(config['draws']):
+        matched = {r['policy']: r for r in volume if r['draw'] == draw}
+        for policy, row in matched.items():
+            assert row['shed_w'] <= matched['lp_bound']['shed_w'] + 1e-6
+            if policy != 'lp_bound':
+                assert sum(row['action_shed_w']) == pytest.approx(row['shed_w'])
+    a['plans']['queue_haul']['lp_bound_w'] = -1.
+    with pytest.raises(RuntimeError, match='upper bound'):
+        c.audit_plans(a['plans'])
 
 
 def test_fleet_lp_keeps_small_log_coefficients_at_large_bandwidth():
@@ -261,6 +312,14 @@ def test_checkpoint_reduction_and_hard_failures(tmp_path, monkeypatch):
     assert before == path.stat().st_mtime_ns
     summary = c.reduce(tmp_path)
     assert len(summary) == 15
+    assert {r['evaluation'] for r in summary} == {'staged_execution'}
+    import csv
+    with (tmp_path / 'volume-summary.csv').open() as handle:
+        volume = list(csv.DictReader(handle))
+    assert len(volume) == 6
+    assert {r['evaluation'] for r in volume} == {'nominal_volume'}
+    audit = json.loads((tmp_path / 'dominance-audit.json').read_text())
+    assert audit['cells_checked'] == 1 and audit['volume_bound_violations'] == 0
     with gzip.open(path, 'rt') as handle:
         data = json.load(handle)
     data['executions'].append(data['executions'][0])

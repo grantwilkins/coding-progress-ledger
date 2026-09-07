@@ -1,4 +1,4 @@
-"""GPT-OSS/A100 whole-session shed with pooled compute and ideal flow timing."""
+"""GPT-OSS/A100 volume shed bounds and separate staged execution stress tests."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ PREFILL_METRICS = ("prefill_contention_session_s", "prefill_peak_ready_sessions"
 DEADLINES = (1, 3, 10, 30, 60, 120, 300, 600, 1800, 3600)
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-pool-shed-v2"
+SCHEMA = "queue-haul-a100-pool-shed-v3"
 SOURCE_LOAD, BASELINE_LOAD = .8, .5
 
 
@@ -271,7 +271,7 @@ def select(fleet, deadline, budgets, endpoint, policy):
         if not result.success:
             raise RuntimeError(result.message)
         bound = float(-result.fun * objective.max())
-        # Preserve maximum shed, then minimize peak resource pressure (including log transport).
+        # Tie-break only: a binding resource can make peak pressure identical for all optima.
         pressure = matrix * population / capacities[:, None]
         balanced = linprog(np.r_[np.zeros(len(gains)), 1.],
                           A_ub=vstack((hstack((constraints, csr_matrix((constraints.shape[0], 1)))),
@@ -292,7 +292,7 @@ def select(fleet, deadline, budgets, endpoint, policy):
     if residual > 1e-8 or np.any(chosen.reshape(-1, 4).sum(1) > fleet.count):
         raise RuntimeError("selection violates pooled capacity or session conservation")
     return chosen, {"planned_shed_w": float(gains @ chosen), "lp_bound_w": bound,
-                    "solver_status": "optimal" if policy == "queue_haul" else "heuristic",
+                    "solver_status": "optimal_relaxation_then_heuristic_rounding" if policy == "queue_haul" else "heuristic",
                     "rounding_gap_w": None if bound is None else max(0., bound - gains @ chosen),
                     "max_relative_capacity_residual": residual}
 
@@ -457,7 +457,7 @@ def prepare(out, smoke=False, wan_gbps=None):
                     "per-session network ceiling assumes one measured eight-stream endpoint bundle",
                     "replay per-session compute ceiling is one GPU; capacity uses contextual prefill times",
                     "all compute after serving reservation is available to replay with ideal processor sharing; no measured loaded-queue claim",
-                    "LP tie-break minimizes peak normalized resource use while preserving maximum shed",
+                    "LP peak-pressure tie-break may be constant on optimal face; no scheduling guarantee",
                     "stable session IDs are cohort-major then action-major within selected counts",
                     "greedy averages tied scarcity estimates, reprices remaining headroom, and balances cohort methods across routes without an LP",
                     "KV geometry follows matched_action analytical BF16 formulas, not measured wire bytes",
@@ -467,7 +467,8 @@ def prepare(out, smoke=False, wan_gbps=None):
                     "destination-only service sensitivity is assumed +/-20%; source demand/power fixed",
                     "network bootstrap has only three paired repetitions; no regional capacity confidence claim",
                     "power draw is fleet-wide, weighted by compressed bootstrap multiplicities",
-                    "LP is a volume relaxation bound; executor reports completed whole sessions"]}
+                    "primary comparison is nominal volume LP upper bound versus volume-feasible integer plans",
+                    "staged processor-sharing completion is a separate scheduling stress test, not the LP objective"]}
     metadata["identity"] = digest({"config": config, "sources": metadata["sources"]})
     path = out / "plan.json"
     if path.exists():
@@ -511,13 +512,43 @@ def run_cell(config, cell):
                                    "network_draw": int(k), "action_gpu": action_gpu.tolist(),
                                    "action_counts": completed.reshape(-1, 4).sum(0).tolist(),
                                    "network_budget_gbps": (actual_budgets * 8e-9).tolist()})
+    audit_plans(plans)
     curves = [np.array(power["phase_power"]["measured_power_bootstrap"][p]) for p in power_draws]
     return {"case": base, "status": "complete", "executions": executions, "plans": plans, "metadata": fleet.metadata,
-            "gpus": fleet.gpus, "draws": {"network": network_draws.tolist(), "power": power_draws.tolist(),
+            "gpus": fleet.gpus, "removable_w_per_gpu": fleet.power_w - fleet.idle_w,
+            "draws": {"network": network_draws.tolist(), "power": power_draws.tolist(),
                 "active_w": [float(np.interp(SOURCE_LOAD, *curve.T)) for curve in curves],
                 "idle_w": [float(curve[0, 1]) for curve in curves]},
             "cohorts": {"counts": fleet.count.tolist(), "context": fleet.context.tolist(),
                         "demand": fleet.demand.tolist(), "replay_gpu_s": fleet.replay.tolist()}}
+
+
+def audit_plans(plans):
+    """Only the continuous volume objective has a superset dominance guarantee."""
+    qh = plans["queue_haul"]
+    bound = qh["lp_bound_w"]
+    tolerance = 1e-8 * max(1., abs(bound))
+    if not np.isfinite(bound) or any(not np.isfinite(p["planned_shed_w"]) or
+                                   p["planned_shed_w"] > bound + tolerance for p in plans.values()):
+        raise RuntimeError("LP volume upper bound below a feasible plan")
+    return {policy: {"rounded_plan_gap_w": qh["planned_shed_w"] - p["planned_shed_w"],
+                     "central_execution_gap_w": qh["central_execution"]["shed_w"] - p["central_execution"]["shed_w"]}
+            for policy, p in plans.items() if policy != "queue_haul"}
+
+
+def volume_rows(result):
+    """Nominal flow volumes; power repeats never perturb the optimized resources."""
+    demand = np.array(result["cohorts"]["demand"]) / SOURCE_LOAD
+    for policy, plan in result["plans"].items():
+        counts = np.array(plan["counts"])
+        actions = (counts * demand[:, None]).sum(0)
+        for draw, (active, idle) in enumerate(zip(result["draws"]["active_w"], result["draws"]["idle_w"])):
+            yield {**result["case"], "policy": "lp_plan" if policy == "queue_haul" else policy,
+                   "draw": draw, "shed_w": float(actions.sum() * (active - idle)),
+                   "action_counts": counts.sum(0).tolist(), "action_shed_w": (actions * (active - idle)).tolist()}
+            if policy == "queue_haul":
+                yield {**result["case"], "policy": "lp_bound", "draw": draw,
+                       "shed_w": plan["lp_bound_w"] * (active - idle) / result["removable_w_per_gpu"]}
 
 
 def draw_rows(result):
@@ -572,7 +603,7 @@ def reduce(out):
     paths = sorted((out / "cells").glob("*.json.gz"))
     if {p.name for p in paths} != {f"{i:06d}.json.gz" for i in range(len(expected))}:
         raise ValueError("missing or unexpected campaign cells")
-    groups, pairs, invalid = {}, {}, []
+    groups, pairs, invalid, volumes, audit = {}, {}, [], {}, []
     grouping = ("model", "workload", "density", "wan_gbps", "deadline_s", "policy", "service_factor")
     for i, path in enumerate(paths):
         with gzip.open(path, "rt") as handle:
@@ -584,6 +615,16 @@ def reduce(out):
             continue
         if result["status"] != "complete" or any(len(v) != plan["config"]["draws"] for v in result["draws"].values()):
             raise ValueError(f"invalid status or draw lengths: {path}")
+        audit.append({**result["case"], "comparisons": audit_plans(result["plans"])})
+        volume = list(volume_rows(result))
+        for policy in ("lp_bound", "lp_plan", *POLICIES[1:]):
+            selected = [r for r in volume if r["policy"] == policy]
+            key = (*[result["case"][k] for k in grouping[:-2]], policy, 1.)
+            volumes.setdefault(key, []).append({
+                "watts": np.array([r["shed_w"] for r in selected]),
+                "actions": selected[0].get("action_counts"),
+                "action_watts": np.mean([r["action_shed_w"] for r in selected], axis=0) if policy != "lp_bound" else None,
+                "population": result["case"]["population_sessions"]})
         rows = list(draw_rows(result))
         keys = [(r["policy"], r["service_factor"], r["draw"]) for r in rows]
         required = set(product(POLICIES, plan["config"]["service_factors"], range(plan["config"]["draws"])))
@@ -626,7 +667,7 @@ def reduce(out):
         snapshot_medians = [np.median(r["watts"]) for r in group]
         calibration_width = [np.diff(np.quantile(r["watts"], [.05, .95]))[0] for r in group]
         completed = np.concatenate([r["completed"] for r in group])
-        summary.append({**dict(zip(grouping, key)), "draws": len(watts), "snapshots": len(group), "status": status,
+        summary.append({**dict(zip(grouping, key)), "evaluation": "staged_execution", "draws": len(watts), "snapshots": len(group), "status": status,
                         "p05_shed_mw": float(np.quantile(watts, .05) / 1e6),
                         "median_shed_mw": float(np.median(watts) / 1e6), "p95_shed_mw": float(np.quantile(watts, .95) / 1e6),
                         "median_shed_fraction": float(np.median(np.concatenate([r["fractions"] for r in group]))),
@@ -650,7 +691,7 @@ def reduce(out):
     paired = []
     for key, arrays in pairs.items():
         values = np.concatenate(arrays)
-        paired.append({**dict(zip(grouping, key)), "draws": len(values),
+        paired.append({**dict(zip(grouping, key)), "evaluation": "staged_execution", "draws": len(values),
                        **dict(zip(("p05_qh_minus_baseline_w", "median_qh_minus_baseline_w", "p95_qh_minus_baseline_w"),
                                   np.quantile(values, [.05, .5, .95]))), "qh_win_fraction": float(np.mean(values > 0))})
     write_csv(out / "summary.csv", summary)
@@ -668,16 +709,51 @@ def reduce(out):
                                     "median_shed_drop_mw": before["median_shed_mw"] - after["median_shed_mw"]})
     write_json(out / "summary.json", {"identity": plan["identity"], "complete_cells": len(paths),
                                       "memory_infeasible": invalid, "deadline_regressions": regressions, "summary": summary})
-    plot(summary, out)
+    write_json(out / "dominance-audit.json", {"cells_checked": len(audit), "volume_bound_violations": 0,
+        "comparisons": {policy: {"rounded_plan_losses": sum(r["comparisons"][policy]["rounded_plan_gap_w"] < -1e-6 for r in audit),
+            "central_execution_losses": sum(r["comparisons"][policy]["central_execution_gap_w"] < -1e-6 for r in audit),
+            "worst_rounded_plan_gap_w": min(r["comparisons"][policy]["rounded_plan_gap_w"] for r in audit),
+            "worst_central_execution_gap_w": min(r["comparisons"][policy]["central_execution_gap_w"] for r in audit)} for policy in POLICIES[1:]}})
+    volume_summary, volume_pairs = [], []
+    central = np.median(network_samples(), axis=0)
+    central[2] = central[:2].sum()
+    for key, group in volumes.items():
+        watts = np.array([r["watts"] for r in group])
+        row = {**dict(zip(grouping, key)), "evaluation": "nominal_volume", "draws": watts.size, "snapshots": len(group),
+               "status": "complete" if len(group) == plan["config"]["snapshots"] else "conditional_on_memory_feasible_snapshots",
+               **dict(zip(("p05_shed_mw", "median_shed_mw", "p95_shed_mw"), np.quantile(watts, [.05, .5, .95]) / 1e6)),
+               **dict(zip(("workload_p05_mw", "workload_p95_mw"), np.quantile(np.median(watts, axis=1), [.05, .95]) / 1e6)),
+               "median_calibration_width_mw": float(np.median(np.diff(np.quantile(watts, [.05, .95], axis=1), axis=0)) / 1e6),
+               "network_budget_gbps_median": (bandwidth(central, plan["config"]["gpus"], key[3]) * 8e-9).tolist(),
+               "action_counts_mean": None, "action_shed_mw_mean": None, "mean_not_selected": None}
+        if key[-2] != "lp_bound":
+            row.update(action_counts_mean=np.mean([r["actions"] for r in group], axis=0).tolist(),
+                       action_shed_mw_mean=(np.mean([r["action_watts"] for r in group], axis=0) / 1e6).tolist(),
+                       mean_not_selected=float(np.mean([r["population"] - sum(r["actions"]) for r in group])))
+            for comparator in ("lp_bound", "lp_plan"):
+                if key[-2] == comparator:
+                    continue
+                differences = np.array([r["watts"] for r in volumes[(*key[:-2], comparator, 1.)]]) - watts
+                volume_pairs.append({**dict(zip(grouping, key)), "evaluation": "nominal_volume", "comparator": comparator,
+                    **dict(zip(("p05_difference_w", "median_difference_w", "p95_difference_w"), np.quantile(differences, [.05, .5, .95]))),
+                    "win_fraction": float(np.mean(differences > 0))})
+        volume_summary.append(row)
+    write_csv(out / "volume-summary.csv", volume_summary)
+    write_csv(out / "volume-paired-differences.csv", volume_pairs)
+    plot(volume_summary, out, "volume")
+    plot(summary, out, "staged")
     return summary
 
 
-def plot(summary, out):
+def plot(summary, out, evaluation):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import plot_style
     plot_style.apply()
+    policies = ("lp_bound", "lp_plan", *POLICIES[1:]) if evaluation == "volume" else POLICIES
+    identity = lambda policy: "lp_plan" if policy == "queue_haul" else policy
+    caption = "Nominal volume bounds/plans; power-repeat bands" if evaluation == "volume" else "Staged scheduling stress test; paired power/endpoint bands"
     for workload, density in sorted({(r["workload"], r["density"]) for r in summary}):
         selected = [r for r in summary if (r["workload"], r["density"], r["service_factor"]) == (workload, density, 1.)]
         models = [m for m in MODELS if any(r["model"] == m for r in selected)]
@@ -685,45 +761,46 @@ def plot(summary, out):
         fig, axes = plt.subplots(len(models), len(wan_points), squeeze=False,
                                  figsize=(3.5 * len(wan_points), max(4.2, 2.8 * len(models))), sharex=True, sharey="row")
         for ax, (model, wan_gbps) in zip(axes.flat, product(models, wan_points)):
-            for policy in POLICIES:
+            for policy in policies:
                 series = sorted((r for r in selected if (r["model"], r["wan_gbps"], r["policy"]) == (model, wan_gbps, policy)), key=lambda r: r["deadline_s"])
                 if not series:
                     continue
                 x = [r["deadline_s"] for r in series]
-                ax.plot(x, [r["median_shed_mw"] for r in series], color=plot_style.POLICY_COLORS[policy],
-                        linestyle=plot_style.POLICY_LINESTYLES[policy], label=plot_style.POLICY_NAMES[policy])
-                ax.fill_between(x, [r["p05_shed_mw"] for r in series], [r["p95_shed_mw"] for r in series], color=plot_style.POLICY_COLORS[policy], alpha=.1)
+                ax.plot(x, [r["median_shed_mw"] for r in series], color=plot_style.POLICY_COLORS[identity(policy)],
+                        linestyle=plot_style.POLICY_LINESTYLES[identity(policy)], label=plot_style.POLICY_NAMES[identity(policy)])
+                ax.fill_between(x, [r["p05_shed_mw"] for r in series], [r["p95_shed_mw"] for r in series], color=plot_style.POLICY_COLORS[identity(policy)], alpha=.1)
             budget = next(r["network_budget_gbps_median"][2] for r in selected if r["model"] == model and r["wan_gbps"] == wan_gbps)
             ax.set(title=f"{model}\nshared {budget:.3g} Gbit/s", xscale="log", xlabel="Deadline (s)")
         handles, labels = axes.flat[0].get_legend_handles_labels()
         fig.legend(handles, labels, loc="outside lower center", ncol=3, fontsize=9)
-        fig.suptitle(f"GPT-OSS/A100; provisional power and pooled compute\n{workload}, {density} sessions/GPU; bands: paired draw p05–p95", fontsize=11)
-        fig.supylabel("Attained shed (MW)")
+        fig.suptitle(f"{caption}; p05–p95 over snapshots/draws\nGPT-OSS/A100; provisional power/compute; {workload}, {density} sessions/GPU", fontsize=11)
+        fig.supylabel("Volume-objective shed (MW)" if evaluation == "volume" else "Completed shed (MW)")
         fig.tight_layout(rect=(.03, .1, 1, .94))
         for suffix in ("png", "pdf"):
-            fig.savefig(out / f"frontier-{workload}-{density}.{suffix}", bbox_inches="tight")
+            fig.savefig(out / f"{evaluation}-frontier-{workload}-{density}.{suffix}", bbox_inches="tight")
         plt.close(fig)
         for wan_gbps, metric in product(wan_points, ("sessions", "watts")):
-            fig, axes = plt.subplots(len(models), len(POLICIES), squeeze=False, figsize=(17.5, max(4.2, 2.8 * len(models))), sharey="row")
-            actions = (*ACTIONS, "not_moved") if metric == "sessions" else ACTIONS
-            for ax, (model, policy) in zip(axes.flat, product(models, POLICIES)):
+            action_policies = [p for p in policies if p != "lp_bound"]
+            fig, axes = plt.subplots(len(models), len(action_policies), squeeze=False, figsize=(17.5, max(4.2, 2.8 * len(models))), sharey="row")
+            actions = (*ACTIONS, "not_selected" if evaluation == "volume" else "not_moved") if metric == "sessions" else ACTIONS
+            for ax, (model, policy) in zip(axes.flat, product(models, action_policies)):
                 series = sorted((r for r in selected if (r["model"], r["wan_gbps"], r["policy"]) == (model, wan_gbps, policy)), key=lambda r: r["deadline_s"])
                 if metric == "sessions":
-                    values = np.array([r["action_counts_mean"] + [r["mean_not_completed"]] for r in series]).T
+                    values = np.array([r["action_counts_mean"] + [r["mean_not_selected" if evaluation == "volume" else "mean_not_completed"]] for r in series]).T
                     values /= values.sum(0)
                     ax.set_ylim(0, 1)
                 else:
                     values = np.array([r["action_shed_mw_mean"] for r in series]).T
                 ax.stackplot([r["deadline_s"] for r in series], values, labels=[plot_style.ACTION_NAMES[a] for a in actions],
                              colors=[plot_style.ACTION_COLORS[a] for a in actions])
-                ax.set(title=f"{model}\n{plot_style.POLICY_NAMES[policy]}", xscale="log", xlabel="Deadline (s)",
+                ax.set(title=f"{model}\n{plot_style.POLICY_NAMES[identity(policy)]}", xscale="log", xlabel="Deadline (s)",
                        ylabel="Session share" if metric == "sessions" else "Mean shed (MW)")
             fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=5, fontsize=9)
-            caption = "measured endpoint reference" if wan_gbps == "reference" else f"assumed shared WAN {wan_gbps:g} Gbit/s"
-            fig.suptitle(f"A100; provisional power/compute; {workload}, {density} sessions/GPU; {caption}", fontsize=11)
+            network_caption = "measured endpoint reference" if wan_gbps == "reference" else f"assumed shared WAN {wan_gbps:g} Gbit/s"
+            fig.suptitle(f"{'Volume-feasible integer plans' if evaluation == 'volume' else 'Staged scheduling stress test'}; A100; provisional power/compute\n{workload}, {density} sessions/GPU; {network_caption}", fontsize=11)
             fig.tight_layout(rect=(0, .1, 1, .96))
             for suffix in ("png", "pdf"):
-                fig.savefig(out / f"actions-{workload}-{density}-{wan_gbps}-{metric}.{suffix}", bbox_inches="tight")
+                fig.savefig(out / f"{evaluation}-actions-{workload}-{density}-{wan_gbps}-{metric}.{suffix}", bbox_inches="tight")
             plt.close(fig)
 
 

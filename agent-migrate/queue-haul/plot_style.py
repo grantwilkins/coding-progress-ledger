@@ -43,18 +43,21 @@ POLICY_LINESTYLES = dict(zip(POLICIES, (
     "-", "--", (0, (3, 1, 1, 1)), (0, (5, 1)), "-.", ":",
     (0, (3, 1)), (0, (1, 1)),
 )))
+POLICY_NAMES.update(lp_bound="QH continuous volume bound", lp_plan="QH LP-derived integer plan")
+POLICY_COLORS.update(lp_bound=POLICY_COLORS["queue_haul"], lp_plan="#009E73")
+POLICY_LINESTYLES.update(lp_bound=POLICY_LINESTYLES["queue_haul"], lp_plan=(0, (3, 1)))
 ACTION_NAMES = {
     "replay": "Replay", "kv_transfer": "KV transfer",
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",
     "germany_replay": "Replay → Germany",
     "germany_kv_transfer": "KV transfer → Germany",
-    "not_moved": "Not moved",
+    "not_moved": "Not moved", "not_selected": "Not selected",
 }
 ACTION_COLORS = {
     "replay": "#E98300", "kv_transfer": "#006CB8",
     "east_replay": "#F6B65B", "germany_replay": "#D55E00",
     "east_kv_transfer": "#56B4E9", "germany_kv_transfer": "#0072B2",
-    "not_moved": "#999999",
+    "not_moved": "#999999", "not_selected": "#999999",
 }
 OAT_DENSITY_COLOR = "#6A3D9A"
 OAT_TARGET_COLOR = "#222222"

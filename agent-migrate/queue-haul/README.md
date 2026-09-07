@@ -33,7 +33,8 @@ calibration is mixed into the run. Serving-to-idle watts use the empirical
 298.78 W active and 119.70 W warm idle. The initial cold-idle anchor is excluded.
 Removed compute drains equivalent
 busy capacity to idle; no discrete GPU placement, GPU shutdown, host power, or
-facility power is modeled. Session choices and completed handoffs are integers.
+facility power is modeled. Heuristic session choices and completed handoffs are
+integers; the LP upper bound allows fractional sessions.
 
 **MW and compute-headroom projections remain provisional.** The raw power
 campaign used continuous short requests; transferring its power curve to paced
@@ -42,6 +43,19 @@ long-context coding sessions is unvalidated. Its rational fit remains
 repeatability, not workload-transfer error. The earlier H100 outputs under
 `outputs/h100-pool-shed-smoke/` are historical: their requested/achieved load
 axes, runtime generations, and power workload mixtures were not comparable.
+
+**The current throughput model is not validated against deployment.** F comes
+from 2,048-prompt/one-output requests at concurrency 16; G comes from
+256-prompt/512-output requests at concurrency 16. Their normalized sum does not
+measure GPU occupancy or spare replay throughput. For example, the repeated
+28,672-prompt/512-output/concurrency-one cell draws about 289.6 W while its
+normalized coordinate is only 0.275. Power alone cannot determine headroom,
+either. Therefore nominal 50% serving does **not establish 50% replay capacity**.
+Existing migration runs have offered-load labels and different launcher defaults;
+their matching server logs are unavailable locally. They cannot supply a trustworthy
+scalar correction. Keep the measured isolated
+prefill times, but validate loaded replay throughput and resident-service retention
+together before treating these shed deadlines as deployment predictions.
 
 Each of 20 coding snapshots resamples 24 public coding trajectories, chooses
 one joint context/prompt/output state per sampled trajectory within measured
@@ -100,13 +114,36 @@ State is frozen, model weights are resident, and setup, control-plane delay,
 catch-up, fragmentation, and ongoing request network traffic are omitted.
 Short deadlines therefore describe ideal flow timing, not hardware handoff guarantees.
 
-QH LP maximizes additive removable watts under byte, GPU-second, serving, and
-KV-memory budgets. A second LP preserves maximum shed and minimizes peak
-normalized resource use, avoiding arbitrary overloaded destinations when
-equally good allocations exist; it includes networking so balancing compute
-does not simply fill the WAN with KV. It then floors and greedily fills whole-session counts. Its
-fractional result is a **volume-relaxation upper bound**, not an executable
-scheduling optimum. QH greedy averages equally cheap actions when estimating
+The primary comparison uses **nominal flow volumes**. For cohort/action counts
+`x`, QH LP maximizes `sum(gain * x)` subject to cohort conservation, isolated
+action eligibility, shared/route byte budgets, per-destination GPU-second budgets
+`sum((replay_work + deadline * serving_demand) * x)`, and pooled KV memory.
+Every restricted baseline uses these same constraints. The continuous LP bound
+must therefore dominate every feasible baseline's planned watts. Flooring and
+heuristic refill produce a separate **LP-derived integer plan**, which need not
+dominate an integer baseline. The secondary LP minimizes peak normalized
+resource use at the optimal objective; when a resource remains saturated this
+tie-break is constant and provides no routing or scheduling guarantee.
+
+**Staged completion is a separate scheduling stress test.** The volume LP
+budgets compute over the full deadline; the executor releases replay work only
+after log arrival and credits whole completed sessions. Small release delays
+can therefore cause large cohort completion cliffs. The LP-derived plan is not
+optimal for this executor. The audit of the previous 4,000-cell run found zero
+volume-bound violations, but 1,065 central execution losses against replay-only;
+59 rounded-plan losses were at most 523 W. These were objective mismatches,
+not evidence that replay lies outside the LP feasible set. The corrected reports
+retain these losses rather than selecting a winning baseline after execution.
+
+This repairs reporting, not the scheduling deficiency or the capacity calibration.
+A queue-aware replacement must optimize and execute the same schedule, including
+log release and replay service allocation; adding a staging allowance while keeping
+an unrelated equal-sharing executor is insufficient. Exact whole-session optimality
+would additionally require integer optimization. The short profiling follow-up
+below must establish the available service budget before such a replacement can
+claim deployment fidelity.
+
+QH greedy averages equally cheap actions when estimating
 population-weighted scarcity, then refreshes scores against remaining headroom
 after each cohort allocation. For a selected cohort/method, it takes the largest
 feasible whole-session count across both eligible destinations and splits it
@@ -116,8 +153,8 @@ This fixes the old first-destination tie bias and one-route saturation artifact.
 Ranking still uses the best individual route before committing a cohort batch,
 so it is a cohort-level heuristic, not exact per-session marginal greedy.
 KV-only and replay-only restrict the same allocator's actions; isolated-fastest fixes
-the fastest isolated method while retaining both destination choices. All
-methods use the same executor and reserve selected ongoing serving demand
+the fastest isolated method while retaining both destination choices. In the staged
+stress test, all methods use the same executor and reserve selected ongoing serving demand
 throughout migration. Under sampled shortages, admission follows stable
 cohort/action/session IDs; routes and methods never change. Only completed
 handoffs earn shed credit, so central execution can fall below planned watts.
@@ -142,12 +179,17 @@ Each execution exposes per-destination peak ready replay sessions, ready-but-unf
 and network-blocked sessions at the deadline, remaining replay GPU-seconds,
 and contention-equivalent session-seconds: the integral of `1 - allocated_GPU`
 over each ready session's time. This last quantity measures lost service relative
-to a dedicated GPU, not FCFS waiting time. `summary.csv` includes their means,
+to a dedicated GPU, not FCFS waiting time. The staged `summary.csv` includes their means,
 planned versus attained shed, reserved serving utilization, and actual migration
 compute utilization. Counts of ready work represent a processor-sharing backlog.
 
-Each central plan is evaluated against 200 paired draws of the three available
-endpoint-network repetitions and weighted power-bootstrap curves. WAN allocations
+For nominal volume results, the fixed central resource budgets define both the
+bound and feasible plans. The same power-bootstrap draw rescales both; bands
+separate snapshot variation from power repeatability. No network or service
+perturbation is applied to this comparison.
+
+For the staged stress test, each central plan is evaluated against 200 paired
+draws of the three available endpoint-network repetitions and weighted power-bootstrap curves. WAN allocations
 are held fixed within a scenario; no backbone error distribution is invented
 from endpoint measurements. Calibration errors
 are shared across the fleet; F/G and replay proxies are held at their central
@@ -173,8 +215,15 @@ uv run python pool_shed_campaign.py reduce
 `plan.json` pins inputs, code, seeds, regions, and assumptions. Compressed cell
 checkpoints store unique executions and paired draw indices; `draw_rows()`
 reconstructs individual trials without persisting millions of duplicate rows.
-`summary.csv`, `paired_differences.csv`, `summary.json`, and PDF/PNG figures are
-the reduced outputs, including normalized shed fractions and prefill contention.
+`volume-summary.csv`, `volume-paired-differences.csv`, and `volume-*.png/pdf`
+are the primary nominal-volume results: bound and feasible-plan objectives,
+paired differences against both the bound and rounded plan, and selected integer
+action breakdowns. The bound has no integer action breakdown.
+`summary.csv`, `paired_differences.csv`, `summary.json`, and `staged-*.png/pdf`
+retain execution stress results, including completed actions, normalized shed,
+and prefill contention. These rows explicitly identify their evaluation model.
+`dominance-audit.json` records continuous-bound checks and rounded/staged losses
+against every baseline; bound violations hard-fail both simulation and reduction.
 `summary.json` also lists deadline regressions in executed
 median shed rather than smoothing them away. Restarting a shard skips valid completed cells; reduction
 hard-fails missing/duplicate cells, incomplete draws, and changed provenance.
@@ -195,8 +244,8 @@ anchors only after runtime and token-accounting checks.
 |---|---|
 | Workload capacity | Three windows of synchronized eight-session rounds (one turn per session), each 5 s settling + 15 s measurement. Count completed rounds; freeze achieved turns/s without claiming proven saturation. |
 | Paced serving and power | Fractions 0.1/0.25/0.5/0.8/1.0 of that capacity, three repeats each; three 0.65 windows are held out. Each window is 5 + 15 s. |
-| Replay contention | 8K contexts at concurrency 1/8 and 28K at concurrency 1/4, under achieved half-capacity background, three repeats. Each has 5 s settling and a 40 s completion timeout. |
-| Isolated replay | Both contexts at concurrency one, two repeats each; 5 s settling and a 10 s completion timeout. |
+| Replay contention and isolated anchors | One replay request at 8K or 28K context, each at offered resident-load fractions 0/0.5/0.9, two repeats. First repetitions fit; second repetitions are held out. Zero-background cells supply isolated anchors. Each has 5 s settling and a 40 s completion timeout. |
+| Unloaded replay batches | 8K contexts at concurrency 8 and 28K at concurrency 2, two repeats each; 5 s settling and a 10 s completion timeout. Compare against summed isolated work. |
 | Warm idle | 30 s workload warmup, plus 20 s resident-idle anchors before and after acquisition. |
 
 Worst-case core acquisition is **18 min 10 s**, with a **20-minute warm-campaign
@@ -206,8 +255,20 @@ under similar cached conditions. Timeouts are censored failures, and a hard stop
 leaves an incomplete plan invalid; validation cells are never dropped to fit.
 There is no separate power grid, network test, or KV-ingest experiment.
 
-Freeze capacity and fit parameters before inspecting the 0.65 load holdout and
-the third replay repetitions. Record background/replay token counters separately,
+These fractions use the frozen achieved turns/s of the same eight-session resident
+cohort as their denominator; they describe offered load, not SM utilization or
+known free compute. The 0.9 case approximates 50% baseline plus 40% imported steady
+serving. Fit residual replay capacity from the matched concurrency-one observations
+at zero/0.5/0.9 load, using the first zero-background repetitions as isolated
+single-request anchors, without an arbitrary throughput discount.
+During every nonzero-background burst, require achieved resident turns/s within
+10% of offered turns/s and no sustained resident backlog growth. Replay throughput
+obtained by starving resident serving fails validation; report zero-background
+bursts separately.
+
+The plan keeps **40 cells**: six replay fit cells at IDs 24–29, then nine holdouts
+(six replay and three power) at IDs 30–38. Freeze capacity and fit parameters before
+cell 30; do not refit after inspecting holdouts. Record background/replay token counters separately,
 completed turns, first-token and completion times, queued/running work, cache hits,
 active-request preemptions, KV capacity, and synchronized power. Count block-aligned
 cached prefixes and any uncached prefix tails explicitly; ordinary LRU eviction
@@ -217,8 +278,10 @@ MAE ≤5 W and p90 error ≤10 W, warm-idle drift ≤5 W, and replay drain/throu
 error ≤20% on held-out repetitions. These are declared acceptance thresholds,
 not measured error bars. Test both empirical power interpolation and the current
 linear busy-fraction shed assumption; a failed assumption remains invalid.
-Acceptance covers this frozen mixture and concurrency range. Broader workload
-transfer and fleet-wide variability remain sensitivities.
+Acceptance covers this frozen mixture and loaded replay at concurrency one for
+the two tested contexts. Unloaded batch probes do not validate concurrent replay
+under resident load. Broader workload transfer, loaded replay concurrency above
+one, long-window stability, and fleet-wide variability remain unvalidated.
 
 ## Current evidence
 
