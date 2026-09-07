@@ -20,12 +20,25 @@ compute utilization is 80%; each destination starts at 50%. Utilization means
 `prompt_tokens_per_second / measured_F + output_tokens_per_second / measured_G`.
 This is a pooled compute contract, without a serving-latency SLO guarantee.
 
-The three independent model runs use the matched H100 GPT-OSS-20B, Qwen3.8-27B,
-and Gemma-4-26B power/prefill calibrations. The legacy H100 profile's inherited
-A100 decode and migration timings are not used. Serving-to-idle GPU watts come
-from each model's measured curve at load 0.8. Removed compute drains equivalent
+The three independent model runs use the existing matched-action H100 GPT-OSS-20B,
+Qwen3.8-27B, and Gemma-4-26B calibration files. Serving-to-idle GPU watts come
+from each file's power curve at coordinate 0.8. Removed compute drains equivalent
 busy capacity to idle; no discrete GPU placement, GPU shutdown, host power, or
 facility power is modeled. Session choices and completed handoffs are integers.
+
+**Power calibration audit, 2026-09-07: MW and compute-headroom projections are
+provisional.** `matched_power_fit.py` labels Qwen's curve with requested load,
+while GPT/Gemma use realized `f/F + g/G`; coordinate 0.8 is not a verified common
+operating point. GPT's decode capacity is the 451.32 tok/s value in the older
+vLLM 0.22 eager-runtime profile, combined with a newer prefill calibration.
+GPT/Gemma power fits select 604-prompt/64-output campaign cells; Qwen selects
+the separate mixed-phase benchmark. Applying these fixed power curves to each
+sampled serving mix has not been validated. The repeat-holdout gate establishes
+repeatability within selected cells, not comparability across these workloads
+and runtimes. The smoke outputs retain the original calculations for inspection;
+their model-to-model power differences are not an established datacenter result.
+Correcting the calibration requires the source `/datadrive/` measurements and
+runtime metadata, which are not included locally for these three runs.
 
 Each of 20 coding snapshots resamples 24 public coding trajectories, chooses
 one joint context/prompt/output state per sampled trajectory within measured
