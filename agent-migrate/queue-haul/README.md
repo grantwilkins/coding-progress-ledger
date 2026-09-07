@@ -243,13 +243,97 @@ Full-grid checkpoints and shard logs stay local; reductions and provenance are
 tracked. The full 4,000-cell A100 grid has been executed locally.
 The older A100 fleet campaign remains historical and is not the current 20 MW model.
 
-### Quick profiling follow-up
+### Literature-backed simulation design using existing data
+
+This is the proposed replacement design; the current pool simulator has not yet
+implemented it. Use existing measurements only. The goal is a scalable reproduction
+of the measured serving and migration behavior, with no additional hardware campaign.
+
+| Paper | Relevant result and implication |
+|---|---|
+| [DistServe, OSDI 2024, §2.3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf) | Prefill/decode interference and latency constraints determine serving capacity. Keep resident-service admission separate from migration throughput; a normalized phase-work coordinate is not literal free GPU capacity. |
+| [Sarathi-Serve, OSDI 2024, §4](https://www.usenix.org/system/files/osdi24-agrawal.pdf) | Chunking and batch composition control interference. Preserve the scheduler/chunk configuration associated with each measurement instead of assuming universal equal processor sharing. |
+| [Vidur, MLSys 2024, §4 and §7.2](https://proceedings.mlsys.org/paper_files/paper/2024/file/b74a8de47d2b3c928360e0a011f48351-Paper-Conference.pdf) | Profile-derived execution costs and event-driven scheduling reproduce serving behavior; queue predictions become sensitive near capacity. Use measured batch times and test completion/backlog against existing held-out traces. |
+| [Llumnix, OSDI 2024, §3–4](https://www.usenix.org/system/files/osdi24-sun-biao.pdf) | Local queueing, memory availability, and request interference matter even when aggregate capacity exists. Preserve representative queue states when pooling replicas. |
+| [Splitwise, ISCA 2024, §III.F and §IV](https://arxiv.org/html/2311.18677v2) | Prompt/token phases have different power and batching behavior; the system separates global routing from local queues. Use a shared WAN model with local measured service behavior and retain independent power accounting. |
+| [Varys, SIGCOMM 2014, §2 and §5](https://istc-cc.cmu.edu/publications/papers/2014/varys-sigcomm14.pdf) | Per-flow fairness and deadline completion are different objectives. Simple ingress/egress constraints can support coordinated rate reservations; packet simulation is not required for this abstraction. |
+
+These papers motivate the structure; their throughput numbers, hardware, and
+reported errors are not calibration constants for GPT-OSS/A100.
+
+Use a **measured batch/event model** first. The September 5 raw prefill cells give
+8K effective batch seconds per request of 0.583–0.588 across concurrency 1–16;
+at 28K the range is 3.629–3.644. That supports near-additive long-context prefill
+cost for this measured regime. Preserve batch-size effects where present and
+use existing request/batch timestamps for completion distributions. Operator- or
+GPU-cycle simulation is unnecessary unless existing held-out traces show a failure
+that this abstraction cannot explain. Finer scheduling does not identify unmeasured
+kernel timings automatically.
+
+Treat the loaded-service factor as an **effective endpoint wall-time response**,
+not intrinsic GPU work. Its target subtracts modeled route and switch time from
+measured last-commit time, so batching and background interference are already
+included. Apply `exp(beta * rho)` once; do not also divide its service capacity
+by `1-rho` for the same background traffic. Preserve separate ongoing-serving
+admission constraints. The fitted width-eight intercept belongs to that measured
+pack; retain the independently calibrated baseline for regional single moves.
+Use measured pack wall time as the complete pack cost, including its internal
+batching/queueing; only waiting behind earlier packs is additional queue delay.
+
+Keep physical offered prefill/decode rates and each calibration's own normalization.
+The loaded-factor campaign uses F/G of about 5,581/2,564 tok/s; the new pool uses
+18,156/1,586. The factor's rho=0.5 (about 1.318 RPS of 2,048-input/32-output
+background) maps to about 0.175 in the pool's coordinates. Feeding the pool's
+rho directly into the old factor changes the traffic being modeled. Coordinate
+conversion also does not remove workload-shape differences: choose compatible
+existing strata and report extensions separately. Interpret a percentage of
+serving capacity against a named measured operating point, not interchangeable
+SM utilization, normalized offered work, and GPU power.
+
+Scale with weighted representative replica states inside each destination pool.
+Retain their local queue depth, context/batch mix, arrival phase, and completion
+state; multiply counts and resource use, not the speed of a single replay. All
+representatives consume the same global route/shared-WAN reservations. Replay
+becomes ready after its log transfer; KV completes after its transfer, with no
+KV-ingest bottleneck. Imported steady serving must enter the destination load
+state. Replicas may share a measured behavior class without assigning every fleet
+session to a named GPU. Increase representative-state resolution until the shed
+curves stabilize, and compare with explicit small simulated fleets; this is a
+software check using existing data. Preserve genuinely synchronized shed arrivals
+while avoiding artificial synchronization from collapsing all local queues to one
+identical cohort.
+
+For a queue-aware LP, use a finite common library of complete representative
+schedules generated by this measured event model. Each schedule records completed
+cohort counts, replica occupancy, serving/memory feasibility, and piecewise-constant
+network reservations. The LP selects nonnegative schedule multiplicities to
+maximize additive shed, subject to population, per-initial-state replica-count,
+and route/shared-rate constraints in every time interval. Each schedule consumes
+its actual starting-state inventory; the LP cannot replace busy replicas with
+empty ones. Include the baseline schedules in that same
+library before solving; restricted methods use only compatible schedules.
+The continuous LP then dominates those baselines **within the same schedule
+library and scenario**, because every baseline allocation remains feasible.
+This is not global optimality over arbitrary vLLM schedules. Whole-session exact
+optimality requires integer schedule counts. Integer rounding and evaluation under
+changed resources do not inherit the continuous nominal guarantee. Use the same
+schedule semantics for planning and scoring; an unrelated equal-sharing executor
+would recreate the current mismatch.
+
+Bootstrap complete existing runs/batches, retaining within-run dependence and
+fleet-common calibration error. Keep workload variation, calibration repeatability,
+model residuals, and numerical aggregation error distinct. Interpolate within
+measured support; explicitly identify runtime/context/load-shape extrapolation.
+Retain the shared WAN allocation sweep as a scenario input, independently of GPU
+count. Validate against the existing loaded replay holdouts and service-transition
+traces before scaling; do not replace those checks with a new acquisition campaign.
+
+### Earlier profiling proposal (not scheduled)
 
 `outputs/a100-quick-profile-plan.json` freezes a proposed single-launch GPT-OSS/A100
 protocol; it is a plan, not acquired evidence or an executable hardware runner.
-It is an optional workload/runtime transfer study, not a prerequisite for establishing
-that loaded replay is possible. Audit reuse of the existing loaded-service and
-admission-transition evidence above before acquiring any additional cells.
+It is retained as historical design context. The current task uses existing data
+only; no acquisition is scheduled or required by the proposed simulation design.
 Reuse the same checkpoint and optimized runtime, explicitly enabling prefix caching
 for eight resident coding contexts. Keep append tokens uncached and replay prefixes
 unique. This changes the prefix-cache regime, so new measurements supersede old
