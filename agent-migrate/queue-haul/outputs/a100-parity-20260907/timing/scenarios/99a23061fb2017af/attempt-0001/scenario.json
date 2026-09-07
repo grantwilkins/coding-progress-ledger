@@ -1,0 +1,148 @@
+{
+  "background": {
+    "east": [
+      0.5,
+      0
+    ],
+    "germany": [
+      0,
+      0
+    ]
+  },
+  "bandwidth": "natural",
+  "bandwidth_mbps": {
+    "east": 2280.176174037911,
+    "germany": 8733.31359588583
+  },
+  "condition_id": "mixed",
+  "condition_index": 86,
+  "deadline_s": 300,
+  "design": "calibration",
+  "load_normalization": "destination_service",
+  "load_warmup_s": 10,
+  "moves": [
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "kv_transfer",
+      "order": 0,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-2-6-0"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 1,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-2-6-1"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 2,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-2-6-2"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "kv_transfer",
+      "order": 3,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-2-6-3"
+    }
+  ],
+  "parity_prediction": {
+    "action": "mixed",
+    "moves": [
+      {
+        "context_tokens": 28672,
+        "destination": "east",
+        "method": "kv_transfer",
+        "predicted_s": 11.015365436916666,
+        "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-2-6-0"
+      },
+      {
+        "context_tokens": 16128,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 3.1526116293185775,
+        "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-2-6-1"
+      },
+      {
+        "context_tokens": 28416,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 4.977979917167419,
+        "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-2-6-2"
+      },
+      {
+        "context_tokens": 29440,
+        "destination": "germany",
+        "method": "kv_transfer",
+        "predicted_s": 4.8096643625416675,
+        "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-2-6-3"
+      }
+    ],
+    "path_s": {
+      "east:kv_transfer": 11.015365436916666,
+      "east:replay": 3.1526116293185775,
+      "germany:kv_transfer": 4.8096643625416675,
+      "germany:replay": 4.977979917167419
+    },
+    "predicted_s": 11.015365436916666
+  },
+  "policy": "fixed_mixed",
+  "repeat": 0,
+  "scenario_id": "99a23061fb2017af",
+  "sessions": [
+    {
+      "initial_tokens": 28672,
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-2-6-0",
+      "template_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 16128,
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-2-6-1",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 28416,
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-2-6-2",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 29440,
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-2-6-3",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    }
+  ],
+  "source_load": 0.8,
+  "workload": "agentic_tool_loop"
+}

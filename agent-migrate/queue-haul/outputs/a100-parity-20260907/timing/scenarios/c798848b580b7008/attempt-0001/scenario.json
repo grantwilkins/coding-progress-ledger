@@ -1,0 +1,406 @@
+{
+  "background": {
+    "east": [
+      0.25,
+      0
+    ],
+    "germany": [
+      0,
+      0
+    ]
+  },
+  "bandwidth": "natural",
+  "bandwidth_mbps": {
+    "east": 2280.176174037911,
+    "germany": 8733.31359588583
+  },
+  "condition_id": "replay",
+  "condition_index": 39,
+  "deadline_s": 300,
+  "design": "calibration",
+  "load_normalization": "destination_service",
+  "load_warmup_s": 10,
+  "moves": [
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 0,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-0-39-0"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 1,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-0-39-1"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 2,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-0-39-2"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 3,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-0-39-3"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 4,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-0-39-4"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 5,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-a100-parity-0-39-5"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 6,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-0-39-6"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 7,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-0-39-7"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 8,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-0-39-8"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 9,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-0-39-9"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 10,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-0-39-10"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 11,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-0-39-11"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 12,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-0-39-12"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 13,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-a100-parity-0-39-13"
+    }
+  ],
+  "parity_prediction": {
+    "action": "replay",
+    "moves": [
+      {
+        "context_tokens": 19712,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 3.013697046867492,
+        "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-0-39-0"
+      },
+      {
+        "context_tokens": 31232,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 7.675633308194993,
+        "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-0-39-1"
+      },
+      {
+        "context_tokens": 17664,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 2.635505275328539,
+        "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-0-39-2"
+      },
+      {
+        "context_tokens": 12544,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 2.456212989418994,
+        "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-0-39-3"
+      },
+      {
+        "context_tokens": 27904,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 4.844495991086574,
+        "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-0-39-4"
+      },
+      {
+        "context_tokens": 24320,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 5.299557720301024,
+        "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-a100-parity-0-39-5"
+      },
+      {
+        "context_tokens": 22528,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 4.764211069191773,
+        "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-0-39-6"
+      },
+      {
+        "context_tokens": 30720,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 5.620330258131757,
+        "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-0-39-7"
+      },
+      {
+        "context_tokens": 9216,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 1.4261983283536097,
+        "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-0-39-8"
+      },
+      {
+        "context_tokens": 15616,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 3.048256427482295,
+        "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-0-39-9"
+      },
+      {
+        "context_tokens": 19712,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 3.013697046867492,
+        "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-0-39-10"
+      },
+      {
+        "context_tokens": 10240,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 2.0627500423571195,
+        "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-0-39-11"
+      },
+      {
+        "context_tokens": 28672,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 6.722375047088818,
+        "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-0-39-12"
+      },
+      {
+        "context_tokens": 9216,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 1.4261983283536097,
+        "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-a100-parity-0-39-13"
+      }
+    ],
+    "path_s": {
+      "east:replay": 32.028996604035015,
+      "germany:replay": 21.98012227498907
+    },
+    "predicted_s": 32.028996604035015
+  },
+  "policy": "fixed_replay",
+  "repeat": 0,
+  "scenario_id": "c798848b580b7008",
+  "sessions": [
+    {
+      "initial_tokens": 19712,
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-0-39-0",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 31232,
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-0-39-1",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 17664,
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-0-39-2",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 12544,
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-0-39-3",
+      "template_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 27904,
+      "job_class": "coding",
+      "order": 4,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-0-39-4",
+      "template_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 24320,
+      "job_class": "coding",
+      "order": 5,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-a100-parity-0-39-5",
+      "template_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 22528,
+      "job_class": "coding",
+      "order": 6,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-0-39-6",
+      "template_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30720,
+      "job_class": "coding",
+      "order": 7,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-0-39-7",
+      "template_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 9216,
+      "job_class": "coding",
+      "order": 8,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-0-39-8",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 15616,
+      "job_class": "coding",
+      "order": 9,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-0-39-9",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 19712,
+      "job_class": "coding",
+      "order": 10,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-0-39-10",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 10240,
+      "job_class": "coding",
+      "order": 11,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-0-39-11",
+      "template_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 28672,
+      "job_class": "coding",
+      "order": 12,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-0-39-12",
+      "template_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 9216,
+      "job_class": "coding",
+      "order": 13,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253-a100-parity-0-39-13",
+      "template_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    }
+  ],
+  "source_load": 0.8,
+  "workload": "agentic_tool_loop"
+}

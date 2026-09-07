@@ -218,3 +218,55 @@ def test_timing_only_requires_matching_protocol_and_preserves_cache_checks(queue
     result['requests'][0]['request']['cached_tokens'] = 0
     with pytest.raises(RuntimeError):
         campaign.queue_makespan(scenario, result, True)
+
+
+def test_replay_allows_only_verified_framing_prefix(queue_result):
+    scenario, result = queue_result
+    request = result['requests'][1]['request']
+    request.update(prompt_tokens=384, cached_tokens=64)
+    assert campaign.queue_makespan(scenario, result, replay_prefix_tokens=64) > 0
+    with pytest.raises(RuntimeError):
+        campaign.queue_makespan(scenario, result)
+    for cached in (65, 80, 256):
+        request['cached_tokens'] = cached
+        with pytest.raises(RuntimeError):
+            campaign.queue_makespan(scenario, result, replay_prefix_tokens=64)
+    request.update(prompt_tokens=300, cached_tokens=64)
+    with pytest.raises(RuntimeError):
+        campaign.queue_makespan(scenario, result, replay_prefix_tokens=64)
+
+
+@pytest.fixture
+def archived_timing(monkeypatch):
+    validate = campaign.validate_timing_plan
+    monkeypatch.setattr(campaign, 'validate_timing_plan',
+                        lambda plan: validate(plan, check_files=False))
+    return campaign.ROOT / 'outputs/a100-parity-20260907/timing'
+
+
+def test_archived_prospective_scale_retains_balanced_unseen_validation(archived_timing):
+    rows, summary = campaign.timing_rows(archived_timing, prospective_scale=True)
+    assert len(rows) == 24
+    assert summary['action_counts'] == dict.fromkeys(campaign.ACTIONS, 8)
+    assert summary['prediction'] == 'prospective_scale'
+    assert summary['replay_prefix_tokens'] == 64
+    assert summary['passed']
+
+
+@pytest.mark.parametrize('change', ['chronology', 'scale', 'prediction'])
+def test_prospective_scale_rejects_leakage_and_changed_predictions(
+        archived_timing, monkeypatch, change):
+    fit_path = archived_timing / 'scale-fit.json'
+    fit = json.loads(fit_path.read_text())
+    if change == 'chronology':
+        fit['frozen_wall_ns'] = 10**30
+    elif change == 'scale':
+        fit['scales']['replay'] *= 1.01
+    else:
+        fit['predictions'][0]['predicted_s'] *= 1.01
+    original = type(fit_path).read_text
+    monkeypatch.setattr(type(fit_path), 'read_text',
+                        lambda path, *args, **kwargs: json.dumps(fit)
+                        if path == fit_path else original(path, *args, **kwargs))
+    with pytest.raises(RuntimeError):
+        campaign.timing_rows(archived_timing, prospective_scale=True)

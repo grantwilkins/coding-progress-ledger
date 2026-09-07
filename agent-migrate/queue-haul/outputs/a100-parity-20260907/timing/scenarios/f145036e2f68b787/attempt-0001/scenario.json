@@ -1,0 +1,226 @@
+{
+  "background": {
+    "east": [
+      0,
+      0
+    ],
+    "germany": [
+      0.8,
+      0
+    ]
+  },
+  "bandwidth": "natural",
+  "bandwidth_mbps": {
+    "east": 2280.176174037911,
+    "germany": 8733.31359588583
+  },
+  "condition_id": "mixed",
+  "condition_index": 85,
+  "deadline_s": 300,
+  "design": "calibration",
+  "load_normalization": "destination_service",
+  "load_warmup_s": 10,
+  "moves": [
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 0,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-2-5-0"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 1,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-2-5-1"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "kv_transfer",
+      "order": 2,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-2-5-2"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "replay",
+      "order": 3,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-2-5-3"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "kv_transfer",
+      "order": 4,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-2-5-4"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 5,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-2-5-5"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "kv_transfer",
+      "order": 6,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-2-5-6"
+    }
+  ],
+  "parity_prediction": {
+    "action": "mixed",
+    "moves": [
+      {
+        "context_tokens": 9984,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 1.5160032592454271,
+        "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-2-5-0"
+      },
+      {
+        "context_tokens": 12800,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 2.5033126233323175,
+        "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-2-5-1"
+      },
+      {
+        "context_tokens": 15616,
+        "destination": "germany",
+        "method": "kv_transfer",
+        "predicted_s": 3.054576772291667,
+        "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-2-5-2"
+      },
+      {
+        "context_tokens": 21760,
+        "destination": "germany",
+        "method": "replay",
+        "predicted_s": 3.41266574955483,
+        "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-2-5-3"
+      },
+      {
+        "context_tokens": 23552,
+        "destination": "east",
+        "method": "kv_transfer",
+        "predicted_s": 9.410748488583332,
+        "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-2-5-4"
+      },
+      {
+        "context_tokens": 13824,
+        "destination": "east",
+        "method": "replay",
+        "predicted_s": 2.692520249712898,
+        "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-2-5-5"
+      },
+      {
+        "context_tokens": 21248,
+        "destination": "east",
+        "method": "kv_transfer",
+        "predicted_s": 8.688670861833332,
+        "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-2-5-6"
+      }
+    ],
+    "path_s": {
+      "east:kv_transfer": 18.099419350416664,
+      "east:replay": 5.195832873045216,
+      "germany:kv_transfer": 3.054576772291667,
+      "germany:replay": 4.928669008800257
+    },
+    "predicted_s": 18.099419350416664
+  },
+  "policy": "fixed_mixed",
+  "repeat": 0,
+  "scenario_id": "f145036e2f68b787",
+  "sessions": [
+    {
+      "initial_tokens": 9984,
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-2-5-0",
+      "template_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 12800,
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-2-5-1",
+      "template_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 15616,
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-2-5-2",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 21760,
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-2-5-3",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 23552,
+      "job_class": "coding",
+      "order": 4,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766-a100-parity-2-5-4",
+      "template_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 13824,
+      "job_class": "coding",
+      "order": 5,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb-a100-parity-2-5-5",
+      "template_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 21248,
+      "job_class": "coding",
+      "order": 6,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287-a100-parity-2-5-6",
+      "template_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    }
+  ],
+  "source_load": 0.8,
+  "workload": "agentic_tool_loop"
+}

@@ -82,97 +82,76 @@ the two observations above 100 seconds while labeling decades from `10^0`
 through `10^2`. This view and the H100 power parity view use native 1.65 x
 1.75 inch canvases for side-by-side placement within one USENIX column.
 
-The historical A100 timing figure has no mixed queues and remains a calibration
-diagnostic. The power figure now uses the complete Sweden run described below. The
-timing plan freezes 120 predictions before measurement, balances 40 replay, 40
-KV-transfer, and 40 mixed queues, and rejects fewer than 90% distinct predicted
-makespans. It varies block-aligned context per session, width, destination,
-background load, and move order. Re-running `run-timing` resumes completed
-scenarios.
+The A100 timing campaign completed all 120 prespecified scenarios: 40 replay,
+40 KV-transfer, and 40 mixed queues, varying context, width, destination,
+background load, and move order. All 1,241 migration requests passed HTTP, token,
+cache, and timestamp accounting. Two failed attempts (a background Harmony parser
+error and a midnight prompt-date change) are preserved alongside successful retries.
 
-The 2026-09-04 direct power run completed all 111 base and 117 prospective
-replication cells. Evidence is archived under `outputs/a100-parity-20260904/`
-(`base/`, `replication/`, and the frozen `timing-plan.json`), preserving
-original metadata, paths, fits, requests, and raw power samples. The source roots
-are `/datadrive/queue-haul-power/a100-realized-002` and its `-replication`
-extension. All 228 cells passed raw sample, request, token, sequence, and pinned
-base-hash checks on 2026-09-05.
+The original frozen model overpredicts: its full 120-scenario comparison has
+9.161 s MAE and R²=0.32294, failing the 3 s / 0.8 gates. This baseline remains in
+`outputs/a100_live_queue_makespan_parity.{png,pdf,csv}` and its summary JSON.
+A separately prespecified correction fits one positive least-squares scale through
+the origin per action using the first 80 scenarios: replay 0.53599, KV 0.73814,
+and mixed 0.79805. Predictions were frozen before the final 24 balanced scenarios
+(eight per action) began. Those unseen scenarios achieve **1.310 s MAE and
+R²=0.98378**, passing both gates. The held-out view uses the H100 plot format in
+`outputs/a100_heldout_queue_makespan_parity.{png,pdf,csv}`. The intervening 16
+scenarios remain in the baseline and are excluded from this calibration/validation
+split. No observations were selected by prediction error.
 
-The replication remains `holdout_failed`: its 24 prospective holdout cells
-achieved 1.467 W MAE, 2.932 W p90 error, and R²=0.999498, but decode-coefficient
-split variation was 29.94%, exceeding the frozen 20% gate. Every other gate
-passed. Active-only R² was -1.124 (1.163 W MAE); the high envelope R² includes
-six idle anchors and does not establish active-load discrimination. These
-results do not replace the canonical diagnostic figures or certify calibration.
-The 2026-09-05 Sweden resumption is archived in `outputs/a100-parity-20260905/`.
-All three nodes passed host checks at commit `12ef9536`. Timing requires the
-calibration's vLLM 0.22.0 and LMCache 0.5.1: vLLM 0.24.0 renders the background
-prompt as 607 tokens instead of the required 604. The failed 0.24 attempt and
-a subsequent Unix-socket path-length startup failure are retained separately.
-That attempt used `/datadrive/queue-haul-network/a100-timing-v022`.
-It stopped after one complete KV scenario and one failed scenario out of 120:
-the second scenario's KV warm-up returned no final text after two probes.
-The original reducer rejected the completed scenario because `live_measurements` assumes
-one API connection per request window, incompatible with concurrent migrations
-and background requests. Neither outcome is accepted timing parity. The archive
-includes local attempts and both destinations' logs; socket files are excluded.
+Evidence is archived in `outputs/a100-parity-20260907/`: all scenario attempts,
+node logs, raw timing/power traces, setup logs, and an SHA-256 archive manifest.
+`timing/scale-protocol.json` records the split before validation; `scale-fit.json`
+records the frozen coefficients and predictions. Reduction verifies their hashes,
+reproduces the training coefficients, and checks that all training ended before
+freezing and every held-out measurement began afterward.
 
-The separate Sweden power run completed and verified all 111 cells, with exact
-raw sample, request, token, sequence, grid, and fit-reproduction checks. It remains
-`holdout_failed`: the 18 unseen cells have 1.129 W MAE, 2.643 W p90 error,
-R²=-0.3633, and 61.63% coefficient variation. The R² and 20% stability gates fail;
-all other gates pass. `power-holdout-diagnostic` plots only these unseen cells.
-Original evidence is under `/datadrive/queue-haul-power/a100-sweden-20260905-001`.
-These archived acquisition processes exited. `outputs/a100_power_model_parity`
-uses the H100 renderer on all 111 Sweden cells (PNG, PDF, CSV), including training
-and idle cells: MAE 1.65 W, R² 0.990. This descriptive all-cell plot is separate
-from the holdout validation above. Timing acquisition remains incomplete.
-The restored environment's full suite had 1,186 passes and 11 failures; all 32
-A100 timing/power tests passed after restoring vLLM 0.22.0. Logs are archived.
+Queue makespan runs from the shared release timestamp to the last first streamed
+response, including dispatch delay. KV requests must retrieve their full planned
+context. Replay may reuse at most 64 framing tokens: a local synthetic rendering
+audit found 69 common tokens before different state codes, or four 16-token cache
+blocks. The reducer requires that audit and rejects cached session context.
+`--timing-only` records missing state answers without rejecting otherwise valid
+generation; 17 of 1,241 requests lacked a verified answer (four of 261 in the
+held-out block). These figures validate timing, not semantic restoration.
 
-For timing, set `QH_RUNTIME=native`, `QH_LMCACHE_MODE=mp`,
-`QH_NATIVE_RUNTIME_VERSIONS=0.22.0,0.5.1`, `HF_HOME=/datadrive`, and
-`QH_CACHE_ROOT=/datadrive/queue-haul-cache`; the destination login environments
-also need the cache paths. Set `UV_NO_SYNC=1` when using an installed serving
-environment so `uv run` preserves packages installed separately by `setup.sh`.
-The queue reducer now validates each request's frozen move, full KV cache count
-(or uncached replay), successful state probe, and ordered response timestamps.
-Queue makespan runs from the shared release timestamp to the last first response,
-including dispatch delay. It does not assign overlapping connection/GET windows
-to individual requests; those traces remain available for separate network audits.
-State probes retain their original 128-token budget, recorded in requests and run
-metadata; reduction rejects mixed budgets. A live diagnostic disproved the proposed
-512-token fix: the failing prompt emits only 21 tokens, including a malformed
-Harmony final header (`final <|constrain|>QH002`). Both streaming and nonstreaming
-responses have no final content. State verification correctly rejects this result.
-Raw responses and server logs are archived in `outputs/a100-parity-20260905/probe-diagnostics`.
-The queue validation repairs remain covered by concurrent-KV, state/cache,
-timestamp, dispatch-delay, and mixed-budget regressions. The earlier full suite
-had 1,199 passes and 11 baseline failures (`timing-repair-pytest.log`).
-The requested timing-only campaign uses `--timing-only` to record missing state
-answers without retrying or rejecting otherwise successful generation. HTTP,
-nonzero output, full KV cache (or uncached replay), and timestamp checks remain.
-Each request records its actual state-probe result; reduction reports the failure
-count and rejects mixed protocols. This measures timing, not semantic restoration.
-The frozen 120 variations cover 40 replay, 40 KV, and 40 mixed queues; predictions
-are unchanged and every completed scenario is included. East (10.1.0.4) must be
-reachable before launch. Neither historical timing nor power has passed validation.
+East US 2 was restored after its reimage, retaining the existing data disk and
+model snapshot. All three nodes used commit `7fc0cda1`, vLLM 0.22.0, LMCache 0.5.1,
+torch 2.11.0+cu129, and transformers 5.15.1. Use `QH_RUNTIME=native`,
+`QH_LMCACHE_MODE=mp`, `QH_NATIVE_RUNTIME_VERSIONS=0.22.0,0.5.1`,
+`HF_HOME=/datadrive`, and `QH_CACHE_ROOT=/datadrive/queue-haul-cache` on every node.
+Their login environments now pin `VLLM_SYSTEM_START_DATE=2026-09-06`, matching the
+campaign: vLLM's automatic date otherwise changes cache hashes at midnight.
+Keep `UV_NO_SYNC=1` so `uv run` preserves the separately installed serving runtime.
+The raw run remains at `/datadrive/queue-haul-network/a100-timing-r3`.
+
+The A100 power graph uses the H100 renderer on all 111 verified Sweden cells,
+including training and idle cells: **1.65 W MAE, R²=0.990**. Artifacts are
+`outputs/a100_power_model_parity.{png,pdf,csv}`. This descriptive plot is separate
+from power holdout acceptance: the 18 unseen cells had 1.129 W MAE, R²=-0.3633,
+and 61.63% coefficient variation, failing the R² and 20% stability gates. Raw
+Sweden power evidence and its holdout-only diagnostic remain under
+`outputs/a100-parity-20260905/`. The earlier 111+117-cell Germany replication
+remains under `outputs/a100-parity-20260904/`; its stability gate also failed
+(29.94%). Earlier interrupted timing and parser diagnostics are retained.
+
+Reproduce the figures from the archive (run from `agent-migrate`):
 
 ```bash
-uv run python queue-haul/a100_parity_campaign.py run-timing \
-  --plan queue-haul/outputs/a100-parity-20260904/timing-plan.json --timing-only \
-  --run-root /datadrive/queue-haul-network/a100-timing-only
+export UV_NO_SYNC=1
 uv run python queue-haul/a100_parity_campaign.py reduce-timing \
-  --run-root /datadrive/queue-haul-network/a100-timing-only \
-  --out queue-haul/outputs/a100_live_queue_makespan_parity
-
-uv run python queue-haul/power_model_campaign.py --hardware a100 \
-  --model openai/gpt-oss-20b \
-  --out /datadrive/queue-haul-power/a100-realized
+  --run-root queue-haul/outputs/a100-parity-20260907/timing --prospective-scale \
+  --out queue-haul/outputs/a100_heldout_queue_makespan_parity
 uv run python queue-haul/a100_parity_campaign.py plot-power \
-  --run-root /datadrive/queue-haul-power/a100-realized \
+  --run-root queue-haul/outputs/a100-parity-20260905/power \
   --out queue-haul/outputs/a100_power_model_parity
 ```
+
+Omit `--prospective-scale` and use `outputs/a100_live_queue_makespan_parity` to
+reproduce the full frozen baseline; that reduction writes its artifacts and exits
+nonzero because its accuracy gates fail. Collection uses the unchanged archived
+`timing-plan.json` with `run-timing --timing-only` and a fresh run root.
 
 The power command is the same 90-discovery, 18-confirmation, three-idle
 realized-token protocol used for H100. It hard-fails unless exactly one NVIDIA

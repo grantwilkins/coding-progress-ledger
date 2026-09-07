@@ -1,0 +1,146 @@
+{
+  "background": {
+    "east": [
+      0.5,
+      0
+    ],
+    "germany": [
+      0.8,
+      0
+    ]
+  },
+  "bandwidth": "natural",
+  "bandwidth_mbps": {
+    "east": 2280.176174037911,
+    "germany": 8733.31359588583
+  },
+  "condition_id": "kv_transfer",
+  "condition_index": 77,
+  "deadline_s": 300,
+  "design": "calibration",
+  "load_normalization": "destination_service",
+  "load_warmup_s": 10,
+  "moves": [
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "kv_transfer",
+      "order": 0,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-1-37-0"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "kv_transfer",
+      "order": 1,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-1-37-1"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "kv_transfer",
+      "order": 2,
+      "path": [
+        "link/east"
+      ],
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-1-37-2"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "germany",
+      "destination_pool": "pool/germany",
+      "method": "kv_transfer",
+      "order": 3,
+      "path": [
+        "link/germany"
+      ],
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-1-37-3"
+    }
+  ],
+  "parity_prediction": {
+    "action": "kv_transfer",
+    "moves": [
+      {
+        "context_tokens": 16384,
+        "destination": "germany",
+        "method": "kv_transfer",
+        "predicted_s": 3.152081638416667,
+        "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-1-37-0"
+      },
+      {
+        "context_tokens": 24832,
+        "destination": "east",
+        "method": "kv_transfer",
+        "predicted_s": 9.811902725666666,
+        "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-1-37-1"
+      },
+      {
+        "context_tokens": 28160,
+        "destination": "east",
+        "method": "kv_transfer",
+        "predicted_s": 10.854903742083332,
+        "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-1-37-2"
+      },
+      {
+        "context_tokens": 17920,
+        "destination": "germany",
+        "method": "kv_transfer",
+        "predicted_s": 3.347091370666667,
+        "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-1-37-3"
+      }
+    ],
+    "path_s": {
+      "east:kv_transfer": 20.66680646775,
+      "germany:kv_transfer": 6.499173009083334
+    },
+    "predicted_s": 20.66680646775
+  },
+  "policy": "fixed_kv_transfer",
+  "repeat": 0,
+  "scenario_id": "6d2dfeee5abbf956",
+  "sessions": [
+    {
+      "initial_tokens": 16384,
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e-a100-parity-1-37-0",
+      "template_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 24832,
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa-a100-parity-1-37-1",
+      "template_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 28160,
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5-a100-parity-1-37-2",
+      "template_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 17920,
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0-a100-parity-1-37-3",
+      "template_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    }
+  ],
+  "source_load": 0.8,
+  "workload": "agentic_tool_loop"
+}

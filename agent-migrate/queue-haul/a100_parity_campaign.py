@@ -230,7 +230,8 @@ def run_timing(plan_path: Path, run_root: Path, ssh_key: Path,
         timing_only=timing_only)
 
 
-def queue_makespan(scenario: dict, result: dict, timing_only: bool = False) -> float:
+def queue_makespan(scenario: dict, result: dict, timing_only: bool = False,
+                   replay_prefix_tokens: int = 0) -> float:
     requests = result.get("requests", [])
     fields = ("session_id", "destination_instance", "method", "order")
     if result.get("status") != "complete" or result.get("request_failures") \
@@ -243,11 +244,15 @@ def queue_makespan(scenario: dict, result: dict, timing_only: bool = False) -> f
     for row in requests:
         request = row["request"]
         context = contexts[row["session_id"]]
-        cached = context if row["method"] == "kv_transfer" else 0
+        cached = request.get("cached_tokens", -1)
+        cache_valid = (cached == context if row["method"] == "kv_transfer" else
+                       0 <= cached <= replay_prefix_tokens
+                       and cached % 16 == 0
+                       and cached <= request.get("prompt_tokens", 0) - context)
         if request.get("status_code") != 200 \
                 or bool(request.get("timing_only", False)) != timing_only \
                 or (not timing_only and not request.get("state_code_verified")) \
-                or request.get("cached_tokens") != cached \
+                or not cache_valid \
                 or request.get("prompt_tokens", 0) < context \
                 or not 0 < request.get("output_tokens", 0) \
                 <= request.get("probe_max_tokens", 128) \
@@ -261,23 +266,28 @@ def queue_makespan(scenario: dict, result: dict, timing_only: bool = False) -> f
     return (max(first_responses) - result["started_ns"]) / 1e9
 
 
-def timing_rows(run_root: Path) -> tuple[list[dict], dict]:
+def timing_rows(run_root: Path, prospective_scale: bool = False) -> tuple[list[dict], dict]:
     plan = json.loads((run_root / "plan.json").read_text())
     validate_timing_plan(plan)
     network.MODEL_PATH = Path(plan["model_profile"]["path"])
     metadata_path = run_root / "run_metadata.json"
     timing_only = json.loads(metadata_path.read_text()).get("timing_only", False) \
         if metadata_path.exists() else False
-    rows, probe_budgets = [], set()
-    content_failures = 0
+    prefix_path = run_root / "replay-prefix-audit.json"
+    prefix = json.loads(prefix_path.read_text()) if prefix_path.exists() else None
+    prefix_tokens = prefix["full_16_token_blocks"] if prefix else 0
+    if prefix and (prefix["common_prefix_tokens"] != len(prefix["common_prefix_token_ids"])
+                   or prefix_tokens != prefix["common_prefix_tokens"] // 16 * 16
+                   or not 0 <= prefix_tokens < 256):
+        raise RuntimeError("invalid replay framing-prefix audit")
+    rows, probe_budgets, results = [], set(), {}
     for scenario in plan["scenarios"]:
         latest = network._latest_result(run_root / "scenarios" / scenario["scenario_id"])
         if latest is None or latest[1].get("status") != "complete":
             raise RuntimeError(f"missing complete result for {scenario['scenario_id']}")
         result = latest[1]
-        measured = queue_makespan(scenario, result, timing_only)
-        content_failures += sum(not row["request"].get("state_code_verified")
-                                for row in result["requests"])
+        measured = queue_makespan(scenario, result, timing_only, prefix_tokens)
+        results[scenario["scenario_id"]] = result
         probe_budgets.update(row["request"].get("probe_max_tokens", 128)
                              for row in result["requests"])
         rows.append({"scenario_id": scenario["scenario_id"],
@@ -286,6 +296,34 @@ def timing_rows(run_root: Path) -> tuple[list[dict], dict]:
                      "measured_s": measured})
     if len(probe_budgets) != 1:
         raise RuntimeError("timing campaign mixes state-probe token budgets")
+    if prospective_scale:
+        protocol_path = run_root / "scale-protocol.json"
+        protocol = json.loads(protocol_path.read_text())
+        fit = json.loads((run_root / "scale-fit.json").read_text())
+        training, holdout = rows[:80], rows[96:]
+        if len(rows) != 120 \
+                or protocol["plan_sha256"] != profiler.file_hash(run_root / "plan.json") \
+                or fit["protocol_sha256"] != profiler.file_hash(protocol_path) \
+                or protocol["training_ids"] != [r["scenario_id"] for r in training] \
+                or protocol["holdout_ids"] != [r["scenario_id"] for r in holdout] \
+                or not protocol["created_wall_ns"] < fit["frozen_wall_ns"] \
+                or max(results[r["scenario_id"]]["ended_wall_ns"] for r in training) \
+                >= fit["frozen_wall_ns"] \
+                or min(results[r["scenario_id"]]["started_wall_ns"] for r in holdout) \
+                <= fit["frozen_wall_ns"]:
+            raise RuntimeError("scale calibration provenance or holdout chronology failed")
+        for action in ACTIONS:
+            selected = [r for r in training if r["action"] == action]
+            scale = sum(r["predicted_s"] * r["measured_s"] for r in selected) / sum(
+                r["predicted_s"] * r["predicted_s"] for r in selected)
+            if fit["scales"][action] != scale:
+                raise RuntimeError("scale differs from the prespecified training fit")
+        predictions = [{k: r[k] for k in ("scenario_id", "action")} | {
+            "predicted_s": r["predicted_s"] * fit["scales"][r["action"]]}
+            for r in holdout]
+        if predictions != fit["predictions"]:
+            raise RuntimeError("frozen holdout predictions changed")
+        rows = [{**r, **p} for r, p in zip(holdout, predictions)]
     residuals = [row["measured_s"] - row["predicted_s"] for row in rows]
     mean = statistics.fmean(row["measured_s"] for row in rows)
     denominator = sum((row["measured_s"] - mean) ** 2 for row in rows)
@@ -301,15 +339,20 @@ def timing_rows(run_root: Path) -> tuple[list[dict], dict]:
         "unique_predictions": len({round(row["predicted_s"], 9) for row in rows}),
         "mae_s": mae, "r2": r2,
         "probe_max_tokens": probe_budgets.pop(),
-        "timing_only": timing_only, "state_probe_failures": content_failures,
+        "timing_only": timing_only,
+        "prediction": "prospective_scale" if prospective_scale else "frozen_baseline",
+        "replay_prefix_tokens": prefix_tokens,
+        "requests": sum(len(results[r["scenario_id"]]["requests"]) for r in rows),
+        "state_probe_failures": sum(not q["request"].get("state_code_verified")
+                                    for r in rows for q in results[r["scenario_id"]]["requests"]),
         "gates": {"mae": mae <= gates["mae_s"], "r2": r2 >= gates["r2"]},
     }
     summary["passed"] = all(summary["gates"].values())
     return rows, summary
 
 
-def reduce_timing(run_root: Path, out: Path) -> dict:
-    rows, summary = timing_rows(run_root)
+def reduce_timing(run_root: Path, out: Path, prospective_scale: bool = False) -> dict:
+    rows, summary = timing_rows(run_root, prospective_scale)
     write_queue(rows, out)
     summary_path = out.with_name(f"{out.name}_summary.json")
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
@@ -347,6 +390,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     command.add_argument("--ssh-key", type=Path, default=Path("~/.ssh/azrs").expanduser())
     command = commands.add_parser("reduce-timing")
     command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--prospective-scale", action="store_true")
     command.add_argument("--out", type=Path,
                          default=ROOT / "outputs/a100_live_queue_makespan_parity")
     command = commands.add_parser("plot-power")
@@ -367,7 +411,7 @@ def main() -> None:
         run_timing(args.plan, args.run_root, args.ssh_key.expanduser(),
                    args.timing_only)
     elif args.command == "reduce-timing":
-        reduce_timing(args.run_root, args.out)
+        reduce_timing(args.run_root, args.out, args.prospective_scale)
     else:
         plot_power(args.run_root, args.history_run_root, args.out)
 

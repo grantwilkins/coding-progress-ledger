@@ -1,0 +1,569 @@
+/var/cache/dnf/expired_repos.json is empty file
+Azure Linux Official Cloud Native 3.0 x86_64    1.6 kB/s | 481  B     00:00    
+Azure Linux Official Cloud Native 3.0 x86_64    960 kB/s | 983  B     00:00    
+Importing GPG key 0x3135CE90:
+ Userid     : "Mariner RPM Release Signing <marinerrpmprod@microsoft.com>"
+ Fingerprint: 2BC9 4FFF 7015 A5F2 8F15 37AD 0CD9 FED3 3135 CE90
+ From       : /etc/pki/rpm-gpg/MICROSOFT-RPM-GPG-KEY
+Azure Linux Official Cloud Native 3.0 x86_64     16 MB/s | 2.5 MB     00:00    
+Azure Linux Official Extended 3.0 x86_64        5.7 kB/s | 481  B     00:00    
+Azure Linux Official Extended 3.0 x86_64        960 kB/s | 983  B     00:00    
+Importing GPG key 0x3135CE90:
+ Userid     : "Mariner RPM Release Signing <marinerrpmprod@microsoft.com>"
+ Fingerprint: 2BC9 4FFF 7015 A5F2 8F15 37AD 0CD9 FED3 3135 CE90
+ From       : /etc/pki/rpm-gpg/MICROSOFT-RPM-GPG-KEY
+Azure Linux Official Extended 3.0 x86_64        7.9 MB/s | 1.0 MB     00:00    
+Azure Linux Official Microsoft Non-Open-Source  1.7 kB/s | 481  B     00:00    
+Azure Linux Official Microsoft Non-Open-Source  960 kB/s | 983  B     00:00    
+Importing GPG key 0x3135CE90:
+ Userid     : "Mariner RPM Release Signing <marinerrpmprod@microsoft.com>"
+ Fingerprint: 2BC9 4FFF 7015 A5F2 8F15 37AD 0CD9 FED3 3135 CE90
+ From       : /etc/pki/rpm-gpg/MICROSOFT-RPM-GPG-KEY
+Azure Linux Official Microsoft Non-Open-Source  317 kB/s |  43 kB     00:00    
+Azure Linux Official Microsoft Open-Source 3.0  5.9 kB/s | 481  B     00:00    
+Azure Linux Official Microsoft Open-Source 3.0  960 kB/s | 983  B     00:00    
+Importing GPG key 0x3135CE90:
+ Userid     : "Mariner RPM Release Signing <marinerrpmprod@microsoft.com>"
+ Fingerprint: 2BC9 4FFF 7015 A5F2 8F15 37AD 0CD9 FED3 3135 CE90
+ From       : /etc/pki/rpm-gpg/MICROSOFT-RPM-GPG-KEY
+Azure Linux Official Microsoft Open-Source 3.0  855 kB/s | 102 kB     00:00    
+azurelinux/3.0/prod/nvidia/x86_64               6.1 kB/s | 481  B     00:00    
+azurelinux/3.0/prod/nvidia/x86_64                11 kB/s | 957  B     00:00    
+Importing GPG key 0x3135CE90:
+ Userid     : "Mariner RPM Release Signing <marinerrpmprod@microsoft.com>"
+ Fingerprint: 2BC9 4FFF 7015 A5F2 8F15 37AD 0CD9 FED3 3135 CE90
+ From       : https://packages.microsoft.com/azurelinux/3.0/prod/nvidia/x86_64/repodata/repomd.xml.key
+azurelinux/3.0/prod/nvidia/x86_64               259 kB/s |  30 kB     00:00    
+Azure Linux Official Base 3.0 x86_64            5.4 kB/s | 481  B     00:00    
+Azure Linux Official Base 3.0 x86_64            960 kB/s | 983  B     00:00    
+Importing GPG key 0x3135CE90:
+ Userid     : "Mariner RPM Release Signing <marinerrpmprod@microsoft.com>"
+ Fingerprint: 2BC9 4FFF 7015 A5F2 8F15 37AD 0CD9 FED3 3135 CE90
+ From       : /etc/pki/rpm-gpg/MICROSOFT-RPM-GPG-KEY
+Azure Linux Official Base 3.0 x86_64             20 MB/s | 2.8 MB     00:00    
+cuda-azl3-x86_64                                1.6 MB/s | 220 kB     00:00    
+Package gcc-13.2.0-7.azl3.x86_64 is already installed.
+Package gcc-c++-13.2.0-7.azl3.x86_64 is already installed.
+Package make-4.4.1-2.azl3.x86_64 is already installed.
+Package pkgconf-pkg-config-2.0.2-1.azl3.x86_64 is already installed.
+Package ca-certificates-1:3.0.0-14.azl3.noarch is already installed.
+Package curl-8.11.1-8.azl3.x86_64 is already installed.
+Package valkey-8.0.11-1.azl3.x86_64 is already installed.
+Package chrony-4.5-1.azl3.x86_64 is already installed.
+Package iperf3-3.17.1-5.azl3.x86_64 is already installed.
+Dependencies resolved.
+Nothing to do.
+Complete!
+try: 1, refid: 00000000, correction: 0.000000000, skew: 0.000
+try: 2, refid: 00000000, correction: 0.000000000, skew: 0.000
+try: 3, refid: 00000000, correction: 0.000000000, skew: 0.000
+try: 4, refid: 50484330, correction: 0.000000000, skew: 0.614
+downloading uv 0.11.32 x86_64-unknown-linux-gnu
+installing to /home/azureuser/.local/bin
+  uv
+  uvx
+everything's installed!
+info: downloading installer
+warn: It looks like you have an existing installation of Rust at:
+warn: /usr/bin
+warn: This could mean one of the following:
+warn: - You have already installed rustup: you can quit the installer right now.
+warn: - You haven't installed rustup yet, but have Rust installed from elsewhere.
+warn: In the latter case, rustup can coexist with and adopt your existing Rust.
+warn: To adopt, please reply `yes`, or set RUSTUP_INIT_SKIP_PATH_CHECK to yes,
+warn: or pass `-y` to ignore all ignorable checks, then follow the instructions at:
+warn: <https://rust-lang.github.io/rustup/installation/already-installed-rust.html>
+error: cannot install while Rust is installed
+warn: continuing (because the -y flag is set and the error is ignorable)
+info: profile set to minimal
+info: default host tuple is x86_64-unknown-linux-gnu
+info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+info: downloading 3 components
+info: default toolchain set to stable-x86_64-unknown-linux-gnu
+
+  stable-x86_64-unknown-linux-gnu installed - rustc 1.98.1 (48a229cea 2026-09-01)
+
+
+Rust is installed now. Great!
+
+To get started you may need to restart your current shell.
+This would reload your PATH environment variable to include
+Cargo's bin directory ($HOME/.cargo/bin).
+
+To configure your current shell, you need to source the
+corresponding env file under $HOME/.cargo.
+
+Consider running the right command for your shell (note the leading DOT):
+. "$HOME/.cargo/env"           # For sh/ash/dash/pdksh/bash
+source "$HOME/.cargo/env.tcsh" # For tcsh
+cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+CC_x86_64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+CC_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+CFLAGS_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+CFLAGS_x86_64-unknown-linux-gnu = None
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 3 components
+
+  1.96.0-x86_64-unknown-linux-gnu installed - rustc 1.96.0 (ac68faa20 2026-05-25)
+
+info: checking for self-update (current version: 1.29.1)
+Downloading cpython-3.12.13-linux-x86_64-gnu (download) (32.6MiB)
+ Downloaded cpython-3.12.13-linux-x86_64-gnu (download)
+Installed Python 3.12.13 in 923ms
+ + cpython-3.12.13-linux-x86_64-gnu (python3.12)
+Using CPython 3.12.13
+Creating virtual environment at: .venv
+   Building queue-haul-native @ file:///home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/native
+Downloading pygments (1.2MiB)
+Downloading numpy (15.9MiB)
+Downloading matplotlib (8.4MiB)
+Downloading scipy (33.6MiB)
+Downloading pillow (6.8MiB)
+Downloading maturin (10.1MiB)
+Downloading fonttools (4.8MiB)
+Downloading highspy (2.5MiB)
+Downloading clarabel (1.1MiB)
+Downloading pandas (10.4MiB)
+Downloading scs (11.5MiB)
+Downloading kiwisolver (1.4MiB)
+Downloading cvxpy (1.3MiB)
+ Downloaded clarabel
+ Downloaded kiwisolver
+ Downloaded highspy
+ Downloaded pygments
+ Downloaded fonttools
+ Downloaded cvxpy
+ Downloaded pillow
+ Downloaded matplotlib
+ Downloaded maturin
+ Downloaded scs
+ Downloaded numpy
+ Downloaded scipy
+ Downloaded pandas
+      Built queue-haul-native @ file:///home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/native
+Prepared 32 packages in 12.40s
+Installed 32 packages in 47ms
+ + cffi==2.0.0
+ + clarabel==0.11.1
+ + contourpy==1.3.3
+ + cvxpy==1.8.2
+ + cycler==0.12.1
+ + fonttools==4.62.1
+ + highspy==1.14.0
+ + iniconfig==2.3.0
+ + jinja2==3.1.6
+ + joblib==1.5.3
+ + kiwisolver==1.5.0
+ + markupsafe==3.0.3
+ + matplotlib==3.10.9
+ + maturin==1.14.1
+ + numpy==2.4.4
+ + osqp==1.1.1
+ + packaging==26.2
+ + pandas==3.0.2
+ + pillow==12.2.0
+ + pluggy==1.6.0
+ + pycparser==3.0
+ + pygments==2.20.0
+ + pyparsing==3.3.2
+ + pytest==9.0.3
+ + python-dateutil==2.9.0.post0
+ + pyyaml==6.0.3
+ + queue-haul-native==0.1.0 (from file:///home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/native)
+ + scipy==1.17.1
+ + scs==3.2.11
+ + seaborn==0.13.2
+ + setuptools==82.0.1
+ + six==1.17.0
+Resolved 223 packages in 2.20s
+Downloading nvidia-cusparse-cu12 (349.5MiB)
+Downloading nvidia-cublas-cu12 (554.3MiB)
+Downloading nvidia-nvjitlink-cu12 (37.9MiB)
+Downloading flashinfer-cubin (344.2MiB)
+Downloading nixl-cu12 (75.6MiB)
+Downloading nvidia-cutlass-dsl-libs-base (71.1MiB)
+Downloading opencv-python-headless (58.4MiB)
+Downloading tilelang (43.3MiB)
+Downloading flashinfer-python (13.1MiB)
+Downloading transformers (11.2MiB)
+Downloading pycountry (7.7MiB)
+Downloading grpcio (6.7MiB)
+Downloading mistral-common (6.2MiB)
+Downloading vllm (248.9MiB)
+Downloading z3-solver (27.9MiB)
+Downloading nvidia-cutlass-dsl-libs-cu13 (75.1MiB)
+Downloading networkx (2.0MiB)
+Downloading cupy-cuda12x (129.8MiB)
+Downloading sympy (6.0MiB)
+Downloading tokenspeed-triton (77.9MiB)
+Downloading xgrammar (42.8MiB)
+Downloading numpy (15.8MiB)
+Downloading lmcache (13.3MiB)
+Downloading nvidia-cufft-cu12 (191.6MiB)
+Downloading nvidia-cuda-runtime (2.2MiB)
+Downloading triton (179.6MiB)
+Downloading nvidia-nvvm (66.0MiB)
+Downloading llvmlite (53.7MiB)
+Downloading nvidia-cuda-nvcc (42.9MiB)
+Downloading cryptography (4.5MiB)
+Downloading cuda-bindings (7.3MiB)
+Downloading torchaudio (1.5MiB)
+Downloading torch (1.1GiB)
+Downloading torchvision (8.7MiB)
+Downloading nvidia-cusparselt-cu12 (273.9MiB)
+Downloading nvidia-nvshmem-cu12 (132.7MiB)
+Downloading nvidia-cuda-runtime-cu12 (3.3MiB)
+Downloading nvidia-cudnn-cu12 (617.8MiB)
+Downloading nvidia-curand-cu12 (65.1MiB)
+Downloading nvidia-cuda-nvrtc-cu12 (85.4MiB)
+Downloading nvidia-cuda-cccl (3.3MiB)
+Downloading nvidia-cuda-cupti-cu12 (10.3MiB)
+Downloading nvidia-cuda-nvrtc (48.7MiB)
+Downloading nvidia-cufile-cu12 (1.2MiB)
+Downloading nvidia-cusolver-cu12 (322.5MiB)
+Downloading nvidia-nccl-cu12 (283.0MiB)
+Downloading hf-xet (4.3MiB)
+Downloading uvloop (4.2MiB)
+ Downloaded nvidia-cufile-cu12
+Downloading awscrt (4.1MiB)
+Downloading numba (3.6MiB)
+Downloading tokenizers (3.1MiB)
+ Downloaded torchaudio
+Downloading llguidance (2.9MiB)
+ Downloaded nvidia-cuda-runtime
+Downloading openai-harmony (2.8MiB)
+ Downloaded nvidia-cuda-runtime-cu12
+Downloading nvtx (2.7MiB)
+ Downloaded torchvision
+Downloading outlines-core (2.2MiB)
+ Downloaded nvidia-cuda-cupti-cu12
+Downloading apache-tvm-ffi (2.2MiB)
+ Downloaded nvidia-nvjitlink-cu12
+Downloading nvidia-cudnn-frontend (2.1MiB)
+ Downloaded networkx
+Downloading pydantic-core (2.0MiB)
+ Downloaded lmcache
+Downloading fastsafetensors (1.8MiB)
+ Downloaded outlines-core
+Downloading aiohttp (1.7MiB)
+ Downloaded triton
+Downloading openai (1.7MiB)
+ Downloaded llguidance
+Downloading sentencepiece (1.3MiB)
+ Downloaded nvidia-cuda-nvrtc
+Downloading anthropic (1.2MiB)
+ Downloaded apache-tvm-ffi
+ Downloaded openai-harmony
+Downloading tiktoken (1.1MiB)
+Downloading setuptools (1.0MiB)
+ Downloaded nvtx
+ Downloaded tokenizers
+ Downloaded numba
+ Downloaded nvidia-cudnn-frontend
+ Downloaded cryptography
+ Downloaded hf-xet
+ Downloaded nvidia-curand-cu12
+ Downloaded uvloop
+ Downloaded awscrt
+ Downloaded pydantic-core
+ Downloaded setuptools
+ Downloaded fastsafetensors
+ Downloaded tiktoken
+ Downloaded nvidia-cuda-nvrtc-cu12
+ Downloaded sentencepiece
+ Downloaded aiohttp
+ Downloaded nvidia-cuda-cccl
+ Downloaded sympy
+ Downloaded nvidia-cufft-cu12
+ Downloaded mistral-common
+ Downloaded nvidia-nvshmem-cu12
+ Downloaded anthropic
+ Downloaded grpcio
+ Downloaded cuda-bindings
+ Downloaded openai
+ Downloaded pycountry
+ Downloaded nvidia-cublas-cu12
+ Downloaded nvidia-cusparse-cu12
+ Downloaded nvidia-cusparselt-cu12
+ Downloaded transformers
+ Downloaded nvidia-nccl-cu12
+ Downloaded numpy
+ Downloaded nvidia-cusolver-cu12
+ Downloaded flashinfer-python
+ Downloaded nvidia-cudnn-cu12
+ Downloaded z3-solver
+ Downloaded xgrammar
+ Downloaded nvidia-cuda-nvcc
+ Downloaded llvmlite
+ Downloaded opencv-python-headless
+ Downloaded nvidia-nvvm
+ Downloaded nixl-cu12
+ Downloaded nvidia-cutlass-dsl-libs-base
+ Downloaded nvidia-cutlass-dsl-libs-cu13
+ Downloaded tokenspeed-triton
+ Downloaded tilelang
+ Downloaded cupy-cuda12x
+ Downloaded vllm
+ Downloaded torch
+ Downloaded flashinfer-cubin
+Prepared 211 packages in 52.84s
+Uninstalled 2 packages in 26ms
+Installed 211 packages in 7.96s
+ + agent-detector==2.0.0
+ + aiofile==3.12.3
+ + aiofiles==25.1.0
+ + aiohappyeyeballs==2.7.1
+ + aiohttp==3.14.3
+ + aiosignal==1.4.0
+ + annotated-doc==0.0.5
+ + annotated-types==0.8.0
+ + anthropic==1.4.0
+ + anyio==4.15.1
+ + apache-tvm-ffi==0.1.9
+ + astor==0.8.1
+ + attrs==26.1.0
+ + awscrt==0.36.2
+ + blake3==1.0.9
+ + cachetools==7.1.8
+ + caio==0.12.2
+ + cbor2==6.1.4
+ + certifi==2026.7.22
+ + charset-normalizer==3.5.1
+ + click==8.5.0
+ + cloudpickle==3.1.2
+ + compressed-tensors==0.15.0.1
+ + cryptography==50.0.1
+ + cuda-bindings==12.9.7
+ + cuda-pathfinder==1.8.1
+ + cuda-python==12.9.7
+ + cuda-tile==1.5.0
+ + cuda-toolkit==12.9.1
+ + cufile-python==0.2.0
+ + cupy-cuda12x==14.2.0
+ + depyf==0.20.0
+ + detect-installer==0.2.1
+ + dill==0.4.1
+ + diskcache==5.6.3
+ + dnspython==2.8.0
+ + docstring-parser==0.18.0
+ + einops==0.8.2
+ + email-validator==2.3.0
+ + fastapi==0.141.1
+ + fastapi-cli==0.0.32
+ + fastapi-cloud-cli==0.25.0
+ + fastar==0.12.0
+ + fastsafetensors==0.3.3
+ + filelock==3.32.5
+ + flashinfer-cubin==0.6.11.post2
+ + flashinfer-python==0.6.11.post2
+ + frozenlist==1.8.0
+ + fsspec==2026.7.0
+ + gguf==0.19.0
+ + google-api-core==2.34.0
+ + google-auth==2.57.1
+ + google-cloud-bigtable==2.44.0
+ + google-cloud-core==2.7.0
+ + google-cloud-monitoring==2.31.0
+ + google-crc32c==1.8.0
+ + googleapis-common-protos==1.75.3
+ + grpc-google-iam-v1==0.14.5
+ + grpcio==1.83.1
+ + grpcio-status==1.83.1
+ + h11==0.16.0
+ + hf-xet==1.6.0
+ + httpcore==1.0.9
+ + httpcore2==2.12.0
+ + httptools==0.8.0
+ + httpx==0.28.1
+ + httpx2==2.12.0
+ + huggingface-hub==1.30.0
+ + humming-kernels==0.1.2
+ + idna==3.19
+ + ijson==3.5.1
+ + importlib-metadata==8.7.1
+ + interegular==0.3.3
+ + jiter==0.16.0
+ + jmespath==1.1.0
+ + jsonschema==4.26.0
+ + jsonschema-specifications==2025.9.1
+ + lark==1.2.2
+ + llguidance==1.7.6
+ + llvmlite==0.47.0
+ + lm-format-enforcer==0.11.3
+ + lmcache==0.5.1
+ + loguru==0.7.3
+ + markdown-it-py==4.2.0
+ + mcp==2.1.1
+ + mcp-types==2.1.1
+ + mdurl==0.1.2
+ + mistral-common==1.11.7
+ + ml-dtypes==0.6.0
+ + model-hosting-container-standards==0.1.16
+ + mpmath==1.3.0
+ + msgspec==0.21.1
+ + multidict==6.7.1
+ + networkx==3.6.1
+ + ninja==1.13.2
+ + nixl-cu12==1.4.1
+ + numba==0.65.0
+ - numpy==2.4.4
+ + numpy==2.2.6
+ + nvidia-cublas-cu12==12.9.1.4
+ + nvidia-cuda-cccl==13.3.3.4.1
+ + nvidia-cuda-crt==13.3.73
+ + nvidia-cuda-cupti-cu12==12.9.79
+ + nvidia-cuda-nvcc==13.3.73
+ + nvidia-cuda-nvrtc==13.3.33
+ + nvidia-cuda-nvrtc-cu12==12.9.86
+ + nvidia-cuda-runtime==13.3.29
+ + nvidia-cuda-runtime-cu12==12.9.79
+ + nvidia-cudnn-cu12==9.17.1.4
+ + nvidia-cudnn-frontend==1.18.0
+ + nvidia-cufft-cu12==11.4.1.4
+ + nvidia-cufile-cu12==1.14.1.1
+ + nvidia-curand-cu12==10.3.10.19
+ + nvidia-cusolver-cu12==11.7.5.82
+ + nvidia-cusparse-cu12==12.5.10.65
+ + nvidia-cusparselt-cu12==0.7.1
+ + nvidia-cutlass-dsl==4.5.2
+ + nvidia-cutlass-dsl-libs-base==4.5.2
+ + nvidia-cutlass-dsl-libs-cu13==4.5.2
+ + nvidia-ml-py==13.610.43
+ + nvidia-nccl-cu12==2.28.9
+ + nvidia-nvjitlink-cu12==12.9.86
+ + nvidia-nvshmem-cu12==3.4.5
+ + nvidia-nvtx-cu12==12.9.79
+ + nvidia-nvvm==13.3.73
+ + nvtx==0.2.16
+ + openai==3.8.0
+ + openai-harmony==0.0.8
+ + opencv-python-headless==5.0.0.93
+ + opentelemetry-api==1.40.0
+ + opentelemetry-exporter-otlp==1.40.0
+ + opentelemetry-exporter-otlp-proto-common==1.40.0
+ + opentelemetry-exporter-otlp-proto-grpc==1.40.0
+ + opentelemetry-exporter-otlp-proto-http==1.40.0
+ + opentelemetry-exporter-prometheus==0.61b0
+ + opentelemetry-proto==1.40.0
+ + opentelemetry-sdk==1.40.0
+ + opentelemetry-semantic-conventions==0.61b0
+ + opentelemetry-semantic-conventions-ai==0.5.1
+ + outlines-core==0.2.14
+ + partial-json-parser==0.2.1.1.post7
+ + prometheus-client==0.24.1
+ + prometheus-fastapi-instrumentator==8.1.0
+ + propcache==0.5.2
+ + proto-plus==1.28.4
+ + protobuf==6.33.6
+ + psutil==7.2.2
+ + py-cpuinfo==9.0.0
+ + pyasn1==0.6.4
+ + pyasn1-modules==0.4.2
+ + pybase64==1.5.0
+ + pycountry==26.2.16
+ + pydantic==2.13.5
+ + pydantic-core==2.46.5
+ + pydantic-extra-types==2.11.1
+ + pydantic-settings==2.15.0
+ + pyelftools==0.33
+ + pyjwt==2.13.0
+ + python-dotenv==1.2.3
+ + python-json-logger==4.2.0
+ + python-multipart==0.0.32
+ + pyzmq==27.2.0
+ + quack-kernels==0.5.0
+ + redis==8.1.0
+ + referencing==0.37.0
+ + regex==2026.9.3
+ + requests==2.34.2
+ + rich==15.0.0
+ + rich-toolkit==0.20.4
+ + rignore==0.8.1
+ + rpds-py==2026.6.3
+ + safetensors==0.8.0
+ + sentencepiece==0.2.2
+ + sentry-sdk==2.68.1
+ + setproctitle==1.3.7
+ - setuptools==82.0.1
+ + setuptools==80.10.2
+ + setuptools-scm==10.2.3
+ + shellingham==1.5.4
+ + sniffio==1.3.1
+ + sortedcontainers==2.4.0
+ + sse-starlette==3.4.11
+ + starlette==1.6.0
+ + supervisor==4.3.0
+ + sympy==1.14.0
+ + tabulate==0.10.0
+ + tiktoken==0.14.0
+ + tilelang==0.1.9
+ + tokenizers==0.22.2
+ + tokenspeed-mla==0.1.2
+ + tokenspeed-triton==3.8.10.post20260906
+ + torch==2.11.0+cu129
+ + torch-c-dlpack-ext==0.1.5
+ + torchaudio==2.11.0+cu129
+ + torchvision==0.26.0+cu129
+ + tqdm==4.70.0
+ + transformers==5.15.1
+ + triton==3.6.0
+ + truststore==0.10.4
+ + typer==0.27.2
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.4
+ + urllib3==2.7.0
+ + uvicorn==0.52.4
+ + uvloop==0.22.1
+ + vcs-versioning==2.3.4
+ + vllm==0.22.0
+ + watchfiles==1.2.0
+ + websockets==17.1
+ + xgrammar==0.2.3
+ + yarl==1.24.5
+ + z3-solver==4.15.4.0
+ + zipp==4.1.0
+🐍 Found CPython 3.12 at /home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin/python
+🔗 Found pyo3 bindings
+   Compiling target-lexicon v0.13.5
+   Compiling autocfg v1.5.1
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+   Compiling heck v0.5.0
+   Compiling rawpointer v0.2.1
+   Compiling once_cell v1.21.4
+   Compiling rustc-hash v2.1.3
+   Compiling num-traits v0.2.19
+   Compiling matrixmultiply v0.3.11
+   Compiling pyo3-build-config v0.28.3
+   Compiling syn v2.0.119
+   Compiling num-integer v0.1.46
+   Compiling num-complex v0.4.6
+   Compiling ndarray v0.17.2
+   Compiling pyo3-ffi v0.28.3
+   Compiling pyo3-macros-backend v0.28.3
+   Compiling pyo3 v0.28.3
+   Compiling numpy v0.28.0
+   Compiling pyo3-macros v0.28.3
+   Compiling queue-haul-native v0.1.0 (/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/native)
+    Finished `release` profile [optimized] target(s) in 10.77s
+📦 Built wheel for CPython 3.12 to /tmp/.tmpdMXDVT/queue_haul_native-0.1.0-cp312-cp312-linux_x86_64.whl
+✏️ Setting installed package as editable
+🛠 Installed queue-haul-native-0.1.0

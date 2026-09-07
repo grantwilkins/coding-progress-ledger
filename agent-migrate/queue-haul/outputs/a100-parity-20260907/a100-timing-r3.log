@@ -1,0 +1,44 @@
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+[32;20m[2026-09-06 23:13:05,065] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/home/azureuser/coding-progress-ledger/agent-migrate/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-09-06 23:13:05,098] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-09-06 23:13:07,307] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-06 23:13:07,307] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-06 23:13:07,358] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-09-06 23:13:34,102] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py", line 2369, in _run
+    rows.append(futures.pop(0).result())
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py", line 2359, in _request
+    raise RuntimeError("sink load request violated its service contract")
+RuntimeError: sink load request violated its service contract
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/a100_parity_campaign.py", line 376, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/a100_parity_campaign.py", line 367, in main
+    run_timing(args.plan, args.run_root, args.ssh_key.expanduser(),
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/a100_parity_campaign.py", line 227, in run_timing
+    return network.run_campaign(
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py", line 4857, in run_campaign
+    result = run_network_scenario(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py", line 2545, in run_network_scenario
+    load.close()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py", line 2391, in close
+    raise RuntimeError(
+RuntimeError: sink load failed: RuntimeError: sink load request violated its service contract

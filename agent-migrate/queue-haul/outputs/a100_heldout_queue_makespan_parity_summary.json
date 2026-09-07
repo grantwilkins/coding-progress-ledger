@@ -1,0 +1,23 @@
+{
+  "action_counts": {
+    "kv_transfer": 8,
+    "mixed": 8,
+    "replay": 8
+  },
+  "gates": {
+    "mae": true,
+    "r2": true
+  },
+  "mae_s": 1.3102393262960341,
+  "passed": true,
+  "prediction": "prospective_scale",
+  "probe_max_tokens": 128,
+  "r2": 0.983783581069816,
+  "replay_prefix_tokens": 64,
+  "requests": 261,
+  "scenarios": 24,
+  "schema": "queue-haul-a100-timing-parity-result-v1",
+  "state_probe_failures": 4,
+  "timing_only": true,
+  "unique_predictions": 24
+}
