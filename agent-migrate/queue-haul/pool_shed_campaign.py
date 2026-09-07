@@ -594,15 +594,16 @@ def plot(summary, out):
                                 color=plot_style.POLICY_COLORS[policy], alpha=.12)
             ax.set(title=f"{workload.replace('_', ' ')}; load {load:g}", xscale="log", xlabel="Deadline (s)")
         fig.supylabel("Shed power proxy (MW)")
-        network_label = "measured endpoint reference" if wan == "reference" else f"assumed shared WAN {wan} Gbit/s"
-        fig.suptitle(f"{model_label}; {network_label}; scenario-reoptimized p05–p95")
+        network_label = "measured endpoint reference" if wan == "reference" else f"assumed shared WAN {wan / 1000:g} Tbit/s" if wan >= 1000 else f"assumed shared WAN {wan:g} Gbit/s"
+        fig.suptitle(f"{model_label}; {network_label}; scenario-reoptimized p05–p95\nExperimental: regional timing validation fails; endpoint ceilings also apply")
         fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=5, fontsize=9)
-        fig.tight_layout(rect=(.02, .08, 1, .94))
+        fig.tight_layout(rect=(.02, .08, 1, .90))
         for extension in ("png", "pdf"):
             fig.savefig(out / f"shed-{wan}.{extension}", bbox_inches="tight")
         plt.close(fig)
-    wan = 40 if any(r["wan_gbps"] == 40 for r in summary) else summary[0]["wan_gbps"]
-    for load in loads:
+    numeric_wans = [r["wan_gbps"] for r in summary if r["wan_gbps"] != "reference"]
+    action_wans = dict.fromkeys(([40] if 40 in numeric_wans else []) + [max(numeric_wans) if numeric_wans else "reference"])
+    for wan, load in product(action_wans, loads):
         fig, axes = plt.subplots(2, 5, figsize=(16, 6), sharey=True)
         for ax, (workload, policy) in zip(axes.flat, product(workloads, POLICIES)):
             series = sorted((r for r in summary if (r["workload"], r["load"], r["wan_gbps"], r["policy"]) ==
@@ -611,12 +612,37 @@ def plot(summary, out):
                          labels=[plot_style.ACTION_NAMES[a] for a in ACTIONS], colors=[plot_style.ACTION_COLORS[a] for a in ACTIONS])
             ax.set(title=f"{workload.replace('_', ' ')}\n{plot_style.POLICY_NAMES[policy]}", xscale="log", xlabel="Deadline (s)", ylim=(0, 1))
         fig.supylabel("Removed source workload fraction")
-        fig.suptitle(f"Action breakdown; resident load {load:g}; shared WAN {wan} Gbit/s")
+        network_label = f"{wan / 1000:g} Tbit/s" if isinstance(wan, (int, float)) and wan >= 1000 else f"{wan} Gbit/s" if wan != "reference" else "measured reference"
+        fig.suptitle(f"Action breakdown; resident load {load:g}; WAN budget {network_label}\nExperimental: regional timing validation fails; endpoint ceilings also apply")
         fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=4, fontsize=9)
-        fig.tight_layout(rect=(.02, .07, 1, .92))
+        fig.tight_layout(rect=(.02, .07, 1, .90))
         for extension in ("png", "pdf"):
-            fig.savefig(out / f"actions-{load:g}.{extension}", bbox_inches="tight")
+            fig.savefig(out / f"actions-{wan}-{load:g}.{extension}", bbox_inches="tight")
         plt.close(fig)
+
+
+def plot_scale(scales, out):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import plot_style
+    plot_style.apply()
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), sharey=True)
+    for ax, scope, title in zip(axes, ("fixed_total_wan", "fixed_wan_per_node"),
+                               ("40 Gbit/s total WAN budget", "40 Gbit/s per node WAN budget")):
+        rows = sorted((r for r in scales if r["scope"] == scope), key=lambda r: r["source_gpus"])
+        for policy, key in (("queue_haul", "qh_shed_fraction"), ("replay_only", "replay_shed_fraction")):
+            ax.plot([r["source_gpus"] for r in rows], [100 * r[key] for r in rows], marker="o", **plot_style.policy_style(policy))
+        ax.set(title=title, xlabel="Source GPU count (8 GPUs/node)", xscale="log", ylim=(0, 105))
+        ax.text(.04, .08, f"Largest fleet: QH migrates {rows[-1]['qh_kv_sessions']:,.0f} sessions via KV", transform=ax.transAxes, fontsize=9)
+    axes[0].set_ylabel("Removed source workload (%)")
+    axes[0].legend(fontsize=9)
+    fig.suptitle("Scaling diagnostic: measured pack, 3-second deadline, 50% resident load")
+    fig.text(.5, .02, "Experimental: regional timing validation fails. Proportional WAN is an assumption; endpoint ceilings still apply.", ha="center", fontsize=9)
+    fig.tight_layout(rect=(0, .08, 1, .93))
+    for extension in ("png", "pdf"):
+        fig.savefig(out / f"scale-comparison.{extension}", bbox_inches="tight")
+    plt.close(fig)
 
 
 def validate(out):
@@ -646,6 +672,7 @@ def validate(out):
               "library_max_difference_fraction": max(errors), "seconds": time.perf_counter() - started,
               "scope": "library sensitivity, not a bound on global scheduling optimality"}
     write_json(out / "validation.json", report)
+    plot_scale(scales, out)
     if np.quantile(errors, .95) > .01 or max(errors) > .02:
         raise RuntimeError("batch-library sensitivity exceeds the promotion gate")
     if not report["regional_fidelity"]["current_pool"]["gate_pass"]:

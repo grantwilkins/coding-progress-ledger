@@ -181,14 +181,20 @@ groups; the idle anchor is held fixed.
 uv run python pool_shed_campaign.py validate
 
 # Diagnostic simulations only until the regional timing gate passes.
-uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-batch-shed-corrected-smoke
-uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-corrected-smoke
-uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-corrected-smoke
+uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-batch-shed-node-network-smoke
+uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-node-network-smoke
+uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-node-network-smoke
 
 # Default: 11,250 scenario cells, five policies per cell.
-uv run python pool_shed_campaign.py prepare
-uv run python pool_shed_campaign.py run
-uv run python pool_shed_campaign.py reduce
+uv run python pool_shed_campaign.py prepare --out outputs/a100-batch-shed-node-network-default
+uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-node-network-default
+uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-node-network-default
+
+# Full node-aware comparison in a fresh directory, including the proportional
+# upper diagnostic: 8,334 nodes * 40 Gbit/s = 333,360 Gbit/s nominal WAN budget.
+uv run python pool_shed_campaign.py prepare --wan-gbps 10 40 100 400 333360 --out outputs/a100-batch-shed-node-network-repeat
+uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-node-network-repeat
+uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-node-network-repeat
 ```
 
 Preparation accepts `--resident-loads`, `--snapshots`, `--draws`, `--wan-gbps`,
@@ -208,6 +214,20 @@ Current code defaults to `outputs/a100-batch-shed-node-network`. Its
 `validation.json` records the failed regional gate and a scale comparison that
 holds either total WAN or WAN per node fixed. Scaled diagnostic budgets are not
 recommended allocations. A passing LP audit cannot override a failed timing gate.
+Validation also writes `scale-comparison.png` and `.pdf`. Full campaign plots
+show every policy's shed curve; action breakdowns cover both 40 Gbit/s total
+WAN and the largest numeric WAN scenario. All plots identify their experimental
+status and the outstanding regional timing failure.
+
+The completed node-aware comparison in that directory contains **13,500 scenario
+cells and 67,500 policy evaluations**, including the proportional upper diagnostic.
+Preparation, simulation, reduction, and campaign plots took **205.16 seconds**;
+validation took another 2.59 seconds. All cells passed feasibility and LP dominance,
+with zero deadline regressions. At 50% resident load and a 3-second deadline for
+the coding workload, median shed is 9.08 MW for QH LP versus 7.36 MW for replay-only
+under the assumed proportional WAN budget; QH uses KV. With 40 Gbit/s total WAN,
+both reach 7.11 MW and QH uses no KV. These are experimental scenario comparisons,
+not validated fleet predictions or evidence of an available WAN allocation.
 
 The historical `outputs/a100-batch-shed-corrected/performance.json` records
 all 56,250 policy evaluations, I/O, reduction, and 20 PNG/PDF figures under the
