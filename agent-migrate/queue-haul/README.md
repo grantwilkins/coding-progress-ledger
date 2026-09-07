@@ -106,14 +106,24 @@ normalized resource use, avoiding arbitrary overloaded destinations when
 equally good allocations exist; it includes networking so balancing compute
 does not simply fill the WAN with KV. It then floors and greedily fills whole-session counts. Its
 fractional result is a **volume-relaxation upper bound**, not an executable
-scheduling optimum. QH greedy uses the existing scarcity-price primary scan,
-weighted by cohort populations, without legacy power-target recovery scans.
-KV-only and replay-only restrict that scan's actions; isolated-fastest fixes
+scheduling optimum. QH greedy averages equally cheap actions when estimating
+population-weighted scarcity, then refreshes scores against remaining headroom
+after each cohort allocation. For a selected cohort/method, it takes the largest
+feasible whole-session count across both eligible destinations and splits it
+to minimize squared normalized resource use. The split has a one-dimensional
+closed form with feasible integer rounding; no LP or per-session loop is used.
+This fixes the old first-destination tie bias and one-route saturation artifact.
+Ranking still uses the best individual route before committing a cohort batch,
+so it is a cohort-level heuristic, not exact per-session marginal greedy.
+KV-only and replay-only restrict the same allocator's actions; isolated-fastest fixes
 the fastest isolated method while retaining both destination choices. All
 methods use the same executor and reserve selected ongoing serving demand
 throughout migration. Under sampled shortages, admission follows stable
 cohort/action/session IDs; routes and methods never change. Only completed
 handoffs earn shed credit, so central execution can fall below planned watts.
+LP rounding also uses the common greedy allocator while preserving all floored
+LP choices. Greedy and replay-only can still overlap when replay is the selected
+method; such overlap alone does not indicate a routing error.
 
 Replay uses all compute remaining after serving reservations. Ready replays
 share that capacity equally, capped at one GPU each: this is **ideal processor

@@ -87,15 +87,47 @@ def test_prefill_contention_and_network_blocking_are_separate():
     assert stats['prefill_peak_ready_sessions'] == stats['prefill_ready_at_deadline'] == [2, 0]
 
 
-def test_lp_preserves_shed_and_balances_equal_optima():
+@pytest.mark.parametrize('policy', ['queue_haul', 'greedy', 'replay_only'])
+def test_policies_preserve_shed_and_balance_symmetric_routes(policy):
     f = fleet(count=(100,), demand=(.08,), replay=(1.,), kv=(1e9,), log=(.001,), gpus=20)
     limits = np.full(3, 100.)
-    chosen, stats = c.select(f, 10., limits, limits, 'queue_haul')
-    assert stats['planned_shed_w'] == pytest.approx(stats['lp_bound_w'])
+    chosen, stats = c.select(f, 10., limits, limits, policy)
+    if policy == 'queue_haul':
+        assert stats['planned_shed_w'] == pytest.approx(stats['lp_bound_w'])
+    np.testing.assert_array_equal(chosen, [50, 0, 50, 0])
     assert chosen.sum() == 100
     matrix, capacity, _ = c.resources(f, 10., limits, limits)
     assert max((matrix @ chosen / capacity)[3:5]) < .901
     assert c.execute(f, chosen, 10., limits, limits)[0].sum() == 100
+
+
+def test_greedy_balances_around_existing_allocations_and_preserves_odd_counts():
+    f = fleet(count=(101,), demand=(.08,), replay=(1.,), kv=(1e9,), log=(.001,), gpus=20)
+    matrix, caps, isolated = c.resources(f, 10., np.full(3, 100.), np.full(3, 100.))
+    initial = np.array([40, 0, 0, 0])
+    chosen = c.greedy_fill(f.count, np.repeat(f.gain, 4), matrix, caps, isolated <= 10., initial)
+    assert chosen.sum() == 101 and abs(chosen[0] - chosen[2]) == 1
+    assert np.all(chosen >= initial)
+    assert np.all(matrix @ chosen <= caps)
+    np.testing.assert_array_equal(initial, [40, 0, 0, 0])
+
+
+def test_greedy_routes_respect_unequal_budgets_and_endpoint_eligibility():
+    f = fleet(count=(100,), demand=(.001,), replay=(100.,), kv=(10.,), log=(1.,), gpus=100)
+    budgets = np.array([20., 80., 100.])
+    chosen, _ = c.select(f, 1., budgets, np.full(3, 1000.), 'kv_only')
+    np.testing.assert_array_equal(chosen, [0, 2, 0, 8])
+    chosen, _ = c.select(f, 1., budgets, np.array([1000., 1., 1001.]), 'kv_only')
+    np.testing.assert_array_equal(chosen, [0, 2, 0, 0])
+
+
+@pytest.mark.parametrize('policy', ['greedy', 'kv_only', 'replay_only', 'isolated_fastest'])
+def test_greedy_is_invariant_to_destination_labels(policy):
+    f = fleet(count=(10, 20), demand=(.2, .4), replay=(.4, .8), kv=(30., 100.), log=(2., 3.), gpus=20)
+    budgets, endpoint = np.array([50., 150., 180.]), np.array([30., 100., 130.])
+    a, _ = c.select(f, 3., budgets, endpoint, policy)
+    b, _ = c.select(f, 3., budgets[[1, 0, 2]], endpoint[[1, 0, 2]], policy)
+    np.testing.assert_array_equal(a.reshape(-1, 4)[:, [2, 3, 0, 1]], b.reshape(-1, 4))
 
 
 def test_lp_bound_against_exhaustive_integer_plans_and_monotonicity():

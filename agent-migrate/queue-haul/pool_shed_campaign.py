@@ -31,7 +31,7 @@ PREFILL_METRICS = ("prefill_contention_session_s", "prefill_peak_ready_sessions"
 DEADLINES = (1, 3, 10, 30, 60, 120, 300, 600, 1800, 3600)
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-pool-shed-v1"
+SCHEMA = "queue-haul-a100-pool-shed-v2"
 SOURCE_LOAD, BASELINE_LOAD = .8, .5
 
 
@@ -202,25 +202,43 @@ def resources(fleet, deadline, budgets, endpoint):
 
 
 def greedy_fill(count, gains, matrix, capacities, eligible, chosen=None):
-    """Count-weighted version of the existing fixed scarcity-price greedy."""
+    """Reprice cohort choices against headroom; balance each method across routes."""
     chosen = np.zeros(len(gains), dtype=np.int64) if chosen is None else chosen.copy()
     left = count - chosen.reshape(-1, 4).sum(1)
     normalized = matrix / capacities[:, None]
     costs = np.where(eligible, normalized.sum(0), np.inf).reshape(-1, 4)
-    cheapest = np.argmin(costs, axis=1) + 4 * np.arange(len(count))
-    valid = np.isfinite(costs.min(1))
-    prices = np.maximum(normalized[:, cheapest[valid]] @ count[valid], 1)
-    score = np.where(eligible, gains / np.maximum(prices @ normalized, 1e-30), -np.inf)
+    tied = np.isfinite(costs) & np.isclose(costs, costs.min(1)[:, None], rtol=1e-12, atol=0)
+    weights = (tied * (left / np.maximum(tied.sum(1), 1))[:, None]).ravel()
+    prices = np.maximum(normalized @ weights, 1)
     usage = matrix @ chosen
-    for j in np.argsort(-score, kind="stable"):
+    while True:
+        remaining = np.maximum(capacities - usage, 0)
+        feasible = eligible & np.repeat(left > 0, 4) & np.all(matrix <= remaining[:, None] * (1 + 1e-12), axis=0)
+        if not feasible.any():
+            break
+        marginal = (prices / np.maximum(remaining / capacities, 1e-12)) @ normalized
+        j = int(np.argmax(np.where(feasible, gains / np.maximum(marginal, 1e-30), -np.inf)))
         i = j // 4
-        if not eligible[j] or not left[i]:
-            continue
-        positive = matrix[:, j] > 0
-        take = min(left[i], max(0, int(np.floor(np.min((capacities - usage)[positive] / matrix[positive, j]) + 1e-9))))
-        chosen[j] += take
+        pair = np.array([4 * i + j % 2, 4 * i + j % 2 + 2])
+        shared = np.all(matrix[:, pair] > 0, axis=1)
+        if np.any(matrix[shared, pair[0]] != matrix[shared, pair[1]]):
+            raise ValueError("paired routes must have equal per-session shared-resource costs")
+        def slots(column, mask):
+            return max(0, int(np.floor(np.min(remaining[mask] / matrix[mask, column], initial=float(left[i])) + 1e-9)))
+        route_slots = [slots(k, (matrix[:, k] > 0) & ~shared) if eligible[k] else 0 for k in pair]
+        take = min(left[i], sum(route_slots), slots(pair[0], shared))
+        if take < 1:
+            raise RuntimeError("greedy selected an infeasible cohort")
+        low, high = max(0, take - route_slots[1]), min(take, route_slots[0])
+        delta = normalized[:, pair[0]] - normalized[:, pair[1]]
+        # min_x ||u + take*N_germany + x*(N_east-N_germany)||² on feasible integer x.
+        split = (-delta @ (usage / capacities + take * normalized[:, pair[1]]) / (delta @ delta)
+                 if np.any(delta) else take / 2)
+        east = int(np.floor(np.clip(split, low, high) + .5))
+        allocation = np.array([east, take - east])
+        chosen[pair] += allocation
         left[i] -= take
-        usage += take * matrix[:, j]
+        usage += matrix[:, pair] @ allocation
     return chosen
 
 
@@ -441,7 +459,7 @@ def prepare(out, smoke=False, wan_gbps=None):
                     "all compute after serving reservation is available to replay with ideal processor sharing; no measured loaded-queue claim",
                     "LP tie-break minimizes peak normalized resource use while preserving maximum shed",
                     "stable session IDs are cohort-major then action-major within selected counts",
-                    "greedy uses the native scarcity-price primary pass; no target-recovery scans",
+                    "greedy averages tied scarcity estimates, reprices remaining headroom, and balances cohort methods across routes without an LP",
                     "KV geometry follows matched_action analytical BF16 formulas, not measured wire bytes",
                     "pooled KV tokens use measured startup capacity; no placement/fragmentation model",
                     "coding logs assume 2 bytes/token; equal cadence normalized to source load",
