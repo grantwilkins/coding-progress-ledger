@@ -13,375 +13,164 @@ contract, not an inferred GPU inventory.
 
 ## Pooled 20 MW GPT-OSS/A100 simulation
 
-`pool_shed_campaign.py` models 66,666 Azure 300 W A100s in Sweden Central
-and the same count at each of East US 2 and Germany West Central: **19.9998 MW
-installed GPU capacity, not measured initial draw or removable power.** Source
-normalized demand is 80%; each destination starts at 50%. Demand means
-`prompt_tokens_per_second / measured_F + output_tokens_per_second / measured_G`.
-This is an assumed pooled compute contract, without a serving-latency SLO guarantee.
+`pool_shed_campaign.py` uses the same executable batch schedules for Queue-Haul
+LP, Queue-Haul greedy, KV-only, replay-only, and isolated-fastest. The source in
+Sweden Central and each destination in East US 2 and Germany West Central contain
+66,666 A100s: **19.9998 MW of installed GPU capacity per site**. This is neither
+measured operating draw nor removable power.
 
-The current run uses only GPT-OSS-20B and the local raw September 5 A100 campaign
-in `outputs/a100-parity-20260905/power/`. Runtime metadata and logs establish
-vLLM 0.22.0, optimized TP1, MXFP4 weights, BF16 KV, 8192-token chunked prefill,
-prefix caching disabled, and 1,936,832 KV tokens. F/G are the maximum repeated-cell
-median throughputs (18,156/1,586 tokens/s), not a proven universal compute capacity.
-Single-request prefill has two measurements each at 2,048/8,192/28,672 tokens;
-their batch wall times include API and one-output-token overhead. Contexts
-outside this support are excluded and counted. No old eager-runtime or H100
-calibration is mixed into the run. Serving-to-idle watts use the empirical
-604-prompt/64-output power anchors at normalized coordinate 0.8, approximately
-298.78 W active and 119.70 W warm idle. The initial cold-idle anchor is excluded.
-Removed compute drains equivalent
-busy capacity to idle; no discrete GPU placement, GPU shutdown, host power, or
-facility power is modeled. Heuristic session choices and completed handoffs are
-integers; the LP upper bound allows fractional sessions.
+### Workload and load definition
 
-**MW and compute-headroom projections remain provisional.** The raw power
-campaign used continuous short requests; transferring its power curve to paced
-long-context coding sessions is unvalidated. Its rational fit remains
-`holdout_failed` and is not used. Resampling raw anchor repeats measures their
-repeatability, not workload-transfer error. The earlier H100 outputs under
-`outputs/h100-pool-shed-smoke/` are historical: their requested/achieved load
-axes, runtime generations, and power workload mixtures were not comparable.
+The primary workload samples 24 trajectories and joint context/prompt/output
+states from the coding manifest, with four independent snapshots by default.
+An exact eight-session measured pack is a separate benchmark. Both use eight
+resident sessions per GPU, fixed context snapshots, resident weights, and source
+load 0.8. Destination load sweeps 0.25, 0.50, 0.75, 0.90, and 0.95.
 
-**Loaded replay and resident-service preservation already have hardware evidence.**
-[The loaded-service model](outputs/loaded-service-model-20260815/model.json) uses
-160 fitting episodes and 440 separate validation episodes. Its 220 replay
-validation episodes have 1.23% median and 2.27% p90 absolute percentage error,
-with zero false-feasible cases at 25 seconds. The measured relative replay factor
-is `exp(0.284963 * rho)`: about 1.153 at rho=0.5 and 1.311 at rho=0.95.
-Separately, [the A100 admission transitions](outputs/service-admission-transition-a100-20260816/summary.json)
-passed all nine tested transitions, preserving incumbent and added-cohort latency
-and queue stability across three load recipes and three restart blocks. These
-transitions increase total normalized work from 0.25 to 0.50; they do not certify
-an additional 0.50 above a 0.50 baseline.
+Load means **fraction of a derived phase-normalized serving reference**:
+`w = fresh_prompt_tokens / 5581.106795982606 + output_tokens / 2563.502783064874`,
+`reference_RPS = 1 / mean(w)`. These denominators are the loaded campaign's frozen
+phase-rate measurements, not a measured coding-workload saturation limit, FLOP
+budget, GPU busy fraction, or power fraction. The coding manifest has no arrival
+timestamps; sessions therefore use equal paced cadence scaled to the requested
+load. Context/prompt/output correlations are retained. Unsupported contexts and
+inactive states are excluded with counts and reasons in the output metadata.
 
-The integration gap is in **this pool simulator**: it does not consume the
-existing loaded-service calibration. It uses isolated prefill work and ideal
-processor sharing after a linear serving reservation. F/G come from different
-request shapes at concurrency 16; their normalized sum is offered phase work,
-not measured GPU occupancy. The 50% reservation is consequently a model
-assumption, not a replacement for the existing measured load response.
-`workload_adaptation_campaign.py` already authenticates and uses the loaded
-coefficients. Reuse that evidence with its recorded support: width-eight,
-2,048–14,336-token, prefill-heavy packs and 1–10 Gbit/s validation. The separate
-nine-transition result covers its exact A100/4K recipes and 240-second horizon,
-not a universal scalar capacity bound. Additional profiling should target only
-workload/runtime transfer gaps identified after this reuse audit.
+Resident population and rounded KV residency stay fixed when load changes.
+Imported sessions retain their source cadence. Final reference work cannot exceed
+one GPU-equivalent per destination GPU; this is an explicit pooled serving
+contract, not a prediction of TTFT/TPOT or an SLO certificate. With two equal
+sites, serving alone caps removable source workload at
+`min(1, 2 * (1 - destination_load) / 0.8)`, or 12.5% at destination load 0.95.
 
-Each of 20 coding snapshots resamples 24 public coding trajectories, chooses
-one joint context/prompt/output state per sampled trajectory within measured
-prefill support, and draws integer population counts. The headline has eight
-resident sessions per GPU (533,328 source sessions), with equal turn cadence
-normalized to 80% source load. These are workload assumptions, not a measured
-datacenter population. Destination baseline traffic has the same distribution
-and cadence at 50% load; pooled KV-token occupancy follows from that population.
-Density sensitivities use 4/16/32 sessions per GPU. The default campaign is
-restricted to coding until additional workload support is validated.
-Memory-infeasible snapshots are recorded, and summaries over surviving
-snapshots are explicitly marked conditional.
+### Measured endpoint costs and executable schedules
 
-Raw simultaneous network repetitions supply East/Germany endpoint goodput,
-not the fitted KV pipeline rates. The calibration's approximately 0.29/2.26
-Gbit/s with one/eight East TCP streams is consistent with a TCP window/RTT
-limit. [Azure explains that limit](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning)
-and states that [global peering adds no bandwidth restriction](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview).
-Neither establishes region-pair capacity. **WAN bandwidth is independent of
-GPU count.** The main sweep uses **10/40/100/400 Gbit/s total migration bandwidth**,
-shared across both destinations, plus a single-endpoint reference. Each route
-can individually use up to that shared budget, subject to contention. These are
-assumed allocations available after other traffic, not estimates of Azure's
-physical backbone or guarantees for these region pairs. The default does not
-multiply endpoint rates by the GPU count to obtain a WAN allocation.
+`pool_shed_calibration.py` validates the existing loaded-service artifact and
+resamples complete repeat groups. The exact benchmark retains its measured
+8-session response: idle endpoint time 5.241578 s and load factor
+`exp(0.284963426 * load)`. Its 220 disjoint replay holdouts have p90 absolute
+percentage error 2.275% and zero false-feasible decisions at 25 seconds.
 
-The literature distinguishes link capacities, site/fabric capacities, global
-totals, and application allocations:
+A universal batching factor did **not** reproduce the longer coding queues.
+Coding instead uses four measured context-dependent batching anchors from the
+existing uniform-pack experiment, reserving the mixed packs for validation.
+For replay counts `r`, singleton endpoint costs `t`, and batching factors `k`,
+endpoint duration is `exp(beta * load) * (sum(r*k*t) + max((1-k)*t))`, where
+the maximum includes only replayed cohorts and the empty batch costs zero.
+Singleton costs are preserved exactly. Any replay context above the largest
+uniform calibration anchor selects a serial batch, `sum(r*t)`, supported by
+the archived long-context measurements. These are complete endpoint wall costs;
+internal batching/queueing is not added again and capacity is not also divided
+by `1-load`. The measured switch/control overhead (under 0.731 ms per eight
+sessions) is subtracted during fitting and omitted from this simulator.
 
-| Paper | Evidence relevant to the model |
-|---|---|
-| [SWAN, SIGCOMM 2013, §6.1](https://www.microsoft.com/en-us/research/wp-content/uploads/2013/08/Achieving-High-Utilization-with-Software-Driven-WAN.pdf) | Production inter-DC capacities range from tens of Gbit/s to Tbit/s. This is historical evidence, not a current Azure route measurement. |
-| [B4, SIGCOMM 2013](https://conferences.sigcomm.org/sigcomm/2013/papers/sigcomm/p3.pdf) | Applications share constrained WAN links through traffic engineering and priority allocation. |
-| [B4 and After, SIGCOMM 2018, §3](https://cs538.github.io/readings/hong18.pdf) | Saturn supports up to 6.4 Tbit/s WAN-facing site capacity; Stargate's 81.92 Tbit/s includes WAN, cluster, and sidelinks. Neither is a dedicated route allocation. |
-| [RADWAN, SIGCOMM 2018](https://www.microsoft.com/en-us/research/uploads/prod/2018/03/Rate_Adaptive_WAN.pdf) | Studies 100 Gbit/s IP links and rate adaptation toward 200 Gbit/s. Global capacity gains must not be interpreted as per-route bandwidth. |
-| [OneWAN, NSDI 2023](https://www.usenix.org/system/files/nsdi23-krishnaswamy.pdf) | Regional aggregation and backbone links are separate shared constraints; application traffic receives allocated capacity. |
-| [TEAL, SIGCOMM 2023, §5.1](https://minlanyu.seas.harvard.edu/writeup/sigcomm23-teal.pdf) | Uses measured SWAN demand, but assigns some missing topology capacities for evaluation. Simulation capacities are not physical measurements. |
-| [HEDGE, NSDI 2026](https://www.usenix.org/system/files/nsdi26-devraj.pdf) | Demonstrates a 600 Gbit/s hardware LAG and studies changing production link capacity; its 3/5 Tbit/s provisioning targets are modeled scenarios. |
+The exact pack, coding pack interpolation, long-context serial check, and
+transferred resident-background factor have separate evidence scopes. The coding
+model has p90 error 10.23% on 56 reserved packing episodes; the long-context
+serial check has p90 error 16.01% on 72 episodes. Both have zero false-feasible
+decisions at 25 seconds. The serial rule was chosen after inspecting its check
+data, so those 72 episodes are not an untouched holdout. Newer
+optimized-runtime power/prefill measurements are not mixed into this timing
+calibration. The existing nine successful admission transitions remain positive
+service-preservation evidence for their three specific recipes; no new hardware
+campaign is scheduled.
 
-Thus Tbit/s-scale aggregates can exist, but a 548 Tbit/s migration allocation
-derived from endpoint counts is unsupported. The 10–400 Gbit/s grid is a declared
-conservative allocation sensitivity, not a range inferred statistically from
-these papers. `prepare --wan-gbps 10 40 100 400 1000` explicitly adds an optimistic
-1,000 Gbit/s case if needed. GPU count scales measured endpoint ceilings only;
-no H100-specific VM bandwidth specification is imposed on A100.
-Per-session throughput assumes one measured eight-stream endpoint bundle.
-Measured East/Germany throughput asymmetry remains at the endpoint layer;
-it does not establish aggregate WAN-capacity asymmetry. Max-min sharing enforces
-route and shared limits.
+Each destination batch contains at most eight selected sessions. For deadline
+`D`, replay cost `T`, replay-log bytes `L`, and KV bytes `K`, it reserves
+`L/(D-T)` for logs and `K/D` for KV, then runs replay from `D-T` to `D`.
+Zero-byte replay still requires `T <= D`; nonzero logs require `T < D`.
+All imported serving activates at the common deadline. This conservative
+handoff barrier keeps resident load constant during the measured migration
+batch. Frozen-state modeling omits KV ingest, context growth, catch-up, and
+shutdown.
 
-KV uses the same analytical BF16 state-size formulas as the matched action
-comparison; coding replay logs assume two bytes per context token. Replay
-transfers its log before consuming context-dependent measured prefill work,
-at no more than one GPU per session. There is **no KV ingest bottleneck**.
-State is frozen, model weights are resident, and setup, control-plane delay,
-catch-up, fragmentation, and ongoing request network traffic are omitted.
-Short deadlines therefore describe ideal flow timing, not hardware handoff guarantees.
+Reservations start together and only decrease, so route/shared peak-rate rows
+certify the network schedule without time bins or packet events. Shared WAN
+allocations are the measured-endpoint reference case plus assumed 10, 40, 100,
+and 400 Gbit/s budgets. Each route and the shared budget also respect paired
+measured endpoint ceilings, including the per-batch endpoint ceiling. GPU count
+never scales the assumed WAN allocation. KV wire geometry comes from the loaded
+runtime profile; replay logs retain the explicit two-bytes-per-context-token
+assumption. KV and ongoing serving are aggregate pool resources, without
+session-to-GPU placement or fragmentation optimization.
 
-The primary comparison uses **nominal flow volumes**. For cohort/action counts
-`x`, QH LP maximizes `sum(gain * x)` subject to cohort conservation, isolated
-action eligibility, shared/route byte budgets, per-destination GPU-second budgets
-`sum((replay_work + deadline * serving_demand) * x)`, and pooled KV memory.
-Every restricted baseline uses these same constraints. The continuous LP bound
-must therefore dominate every feasible baseline's planned watts. Flooring and
-heuristic refill produce a separate **LP-derived integer plan**, which need not
-dominate an integer baseline. The secondary LP minimizes peak normalized
-resource use at the optimal objective; when a resource remains saturated this
-tie-break is constant and provides no routing or scheduling guarantee.
+### Shared LP and uncertainty
 
-**Staged completion is a separate scheduling stress test.** The volume LP
-budgets compute over the full deadline; the executor releases replay work only
-after log arrival and credits whole completed sessions. Small release delays
-can therefore cause large cohort completion cliffs. The LP-derived plan is not
-optimal for this executor. The audit of the previous 4,000-cell run found zero
-volume-bound violations, but 1,065 central execution losses against replay-only;
-59 rounded-plan losses were at most 523 W. These were objective mismatches,
-not evidence that replay lies outside the LP feasible set. The corrected reports
-retain these losses rather than selecting a winning baseline after execution.
+A bounded library contains deterministic template prefixes, replay/KV tradeoffs,
+and all singleton actions, with at most 1,344 route columns before deduplication.
+The isolated-fastest method threshold is included by the same tradeoff ordering.
+Columns consume source cohorts, destination migration replicas, final serving
+and KV capacity, and route/shared network rates. Replica multiplicities are
+continuous: every selected pattern describes a complete batch, while its fleet
+multiplicity can be fractional. There is no integer rounding in the primary
+comparison.
 
-This repairs reporting, not the scheduling deficiency or the capacity calibration.
-A queue-aware replacement must optimize and execute the same schedule, including
-log release and replay service allocation; adding a staging allowance while keeping
-an unrelated equal-sharing executor is insufficient. Exact whole-session optimality
-would additionally require integer optimization. Integrate the existing measured
-load response and reconcile its support with this workload before deciding which
-additional measurements are necessary.
+QH LP optimizes the complete library; KV-only, replay-only, and isolated-fastest
+solve restricted LPs. Isolated-fastest fixes the method using each cohort's best
+isolated route and optimizes destination allocation afterward. Greedy repeatedly
+bulk-fills the best gain per normalized remaining-resource cost, splitting
+symmetric route ties, without calling an LP. The same evaluator checks physical
+reservations and completion for every method. QH LP must dominate all baselines
+within the common library and scenario; it is not a global optimum over arbitrary
+serving schedules. Library expansion is audited separately.
 
-QH greedy averages equally cheap actions when estimating
-population-weighted scarcity, then refreshes scores against remaining headroom
-after each cohort allocation. For a selected cohort/method, it takes the largest
-feasible whole-session count across both eligible destinations and splits it
-to minimize squared normalized resource use. The split has a one-dimensional
-closed form with feasible integer rounding; no LP or per-session loop is used.
-This fixes the old first-destination tie bias and one-route saturation artifact.
-Ranking still uses the best individual route before committing a cohort batch,
-so it is a cohort-level heuristic, not exact per-session marginal greedy.
-KV-only and replay-only restrict the same allocator's actions; isolated-fastest fixes
-the fastest isolated method while retaining both destination choices. In the staged
-stress test, all methods use the same executor and reserve selected ongoing serving demand
-throughout migration. Under sampled shortages, admission follows stable
-cohort/action/session IDs; routes and methods never change. Only completed
-handoffs earn shed credit, so central execution can fall below planned watts.
-LP rounding also uses the common greedy allocator while preserving all floored
-LP choices. Greedy and replay-only can still overlap when replay is the selected
-method; such overlap alone does not indicate a routing error.
+All methods **replan for every paired sampled scenario**. Default intervals
+combine four coding snapshots, eight joint timing/network calibration draws,
+and 200 cheap power resamples. The central result is stored separately. These
+are scenario-reoptimized sensitivities, not fixed-plan robustness, a probability
+of deadline success, or confidence bounds on workload transfer. Fleet-common
+calibration uncertainty is not divided by the square root of the GPU count.
 
-Replay uses all compute remaining after serving reservations. Ready replays
-share that capacity equally, capped at one GPU each: this is **ideal processor
-sharing**, not a measured vLLM prefill queue. The context curves are single-request
-measurements; linear sharing with ordinary serving remains an assumption.
-At eight sessions/GPU in snapshot zero, all replay work totals approximately
-629k effective GPU-seconds, versus 165 TB for KV. After accepting the entire
-source, the destinations retain 13,333.2 spare GPU equivalents combined.
-Balanced compute-only replay time is therefore about 47 seconds. Replay can
-dominate at longer deadlines under
-these capacities and WAN budgets; QH need not improve when replay already sheds
-all removable power. The LP still ignores log-release timing in its aggregate
-compute budget, so tight deadlines can leave substantial work unfinished.
+Power uses direct coding pre-window measurements: active 280.8065 W, awake idle
+101.776198 W. This gives approximately 18.72 MW initial draw and 11.94 MW fully
+removable power. Partial MW is **linear allocation of this measured difference
+by removed source reference work**, with workload transfer explicitly assumed.
+The failed partial-load power fit is unused. Power resampling uses whole repeat
+groups; the idle anchor is held fixed.
 
-Each execution exposes per-destination peak ready replay sessions, ready-but-unfinished
-and network-blocked sessions at the deadline, remaining replay GPU-seconds,
-and contention-equivalent session-seconds: the integral of `1 - allocated_GPU`
-over each ready session's time. This last quantity measures lost service relative
-to a dedicated GPU, not FCFS waiting time. The staged `summary.csv` includes their means,
-planned versus attained shed, reserved serving utilization, and actual migration
-compute utilization. Counts of ready work represent a processor-sharing backlog.
-
-For nominal volume results, the fixed central resource budgets define both the
-bound and feasible plans. The same power-bootstrap draw rescales both; bands
-separate snapshot variation from power repeatability. No network or service
-perturbation is applied to this comparison.
-
-For the staged stress test, each central plan is evaluated against 200 paired
-draws of the three available endpoint-network repetitions and weighted power-bootstrap curves. WAN allocations
-are held fixed within a scenario; no backbone error distribution is invented
-from endpoint measurements. Calibration errors
-are shared across the fleet; F/G and replay proxies are held at their central
-estimates. Separate destination-service factors 0.8/1.0/1.2 are assumed sensitivities,
-not confidence intervals. Source demand and power are not renormalized.
-Outputs separate workload variation and calibration variation, show 5th/median/95th
-percentile attained MW, paired policy differences, deadline success, and
-action session shares and MW contributions. These intervals cannot bound
-unmeasured backbone contention or model mismatch.
+### Run and inspect
 
 ```bash
-# Small validation: one model, all ten deadlines, 20 cells, 20 paired draws.
-uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-pool-shed-smoke
-uv run python pool_shed_campaign.py run --out outputs/a100-pool-shed-smoke
-uv run python pool_shed_campaign.py reduce --out outputs/a100-pool-shed-smoke
+# Software validation and a 24-cell end-to-end smoke run; no hardware acquisition.
+uv run python pool_shed_campaign.py validate --out outputs/a100-batch-shed
+uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-batch-shed-smoke
+uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-smoke
+uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-smoke
 
-# Full grid: 4,000 cells; run each of four shards, then reduce after all finish.
+# Default: 11,250 scenario cells, five policies per cell.
 uv run python pool_shed_campaign.py prepare
-uv run python pool_shed_campaign.py run --shard 0 --shards 4
+uv run python pool_shed_campaign.py run
 uv run python pool_shed_campaign.py reduce
 ```
 
-`plan.json` pins inputs, code, seeds, regions, and assumptions. Compressed cell
-checkpoints store unique executions and paired draw indices; `draw_rows()`
-reconstructs individual trials without persisting millions of duplicate rows.
-`volume-summary.csv`, `volume-paired-differences.csv`, and `volume-*.png/pdf`
-are the primary nominal-volume results: bound and feasible-plan objectives,
-paired differences against both the bound and rounded plan, and selected integer
-action breakdowns. The bound has no integer action breakdown.
-`summary.csv`, `paired_differences.csv`, `summary.json`, and `staged-*.png/pdf`
-retain execution stress results, including completed actions, normalized shed,
-and prefill contention. These rows explicitly identify their evaluation model.
-`dominance-audit.json` records continuous-bound checks and rounded/staged losses
-against every baseline; bound violations hard-fail both simulation and reduction.
-`summary.json` also lists deadline regressions in executed
-median shed rather than smoothing them away. Restarting a shard skips valid completed cells; reduction
-hard-fails missing/duplicate cells, incomplete draws, and changed provenance.
-Full-grid checkpoints and shard logs stay local; reductions and provenance are
-tracked. The full 4,000-cell A100 grid has been executed locally.
-The older A100 fleet campaign remains historical and is not the current 20 MW model.
+Preparation accepts `--resident-loads`, `--snapshots`, `--draws`, and `--wan-gbps`;
+`run` retains `--shard`/`--shards`. Inputs, code, seeds, and assumptions are pinned
+in `plan.json`; changing them requires a new output directory. Valid checkpoints
+can be resumed. Reduction rejects missing or stale cells and failed feasibility,
+dominance, or deadline-monotonicity audits.
 
-### Literature-backed simulation design using existing data
+`scenarios.csv` retains paired scenario outcomes and resource usage; `summary.csv`
+and `paired_differences.csv` contain reduced shed, action, and policy comparisons.
+`summary.json` records workload provenance, calibration scope, and timing.
+`dominance-audit.json` and `validation.json` expose correctness and library checks.
+Shed and action figures use the canonical shared plot styles. Compressed cell
+checkpoints remain local; compact summaries, audits, and figures are tracked.
+The default campaign completed in **141.28 seconds** on the current 10-core
+macOS/arm64 machine, including validation, all 56,250 policy evaluations, I/O,
+reduction, and 20 PNG/PDF figures (`performance.json`). All 11,250 scenarios
+passed dominance and capacity checks within the 1e-8 relative tolerance, with
+zero LP deadline regressions. The expanded-library audit changed shed by at
+most 0.3491 percentage points of removable source workload across 72 cases.
+Historical `outputs/a100-pool-shed` volume/staged results are superseded by this
+model, and the earlier acquisition proposal remains unscheduled.
 
-This is the proposed replacement design; the current pool simulator has not yet
-implemented it. Use existing measurements only. The goal is a scalable reproduction
-of the measured serving and migration behavior, with no additional hardware campaign.
-
-| Paper | Relevant result and implication |
-|---|---|
-| [DistServe, OSDI 2024, §2.3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf) | Prefill/decode interference and latency constraints determine serving capacity. Keep resident-service admission separate from migration throughput; a normalized phase-work coordinate is not literal free GPU capacity. |
-| [Sarathi-Serve, OSDI 2024, §4](https://www.usenix.org/system/files/osdi24-agrawal.pdf) | Chunking and batch composition control interference. Preserve the scheduler/chunk configuration associated with each measurement instead of assuming universal equal processor sharing. |
-| [Vidur, MLSys 2024, §4 and §7.2](https://proceedings.mlsys.org/paper_files/paper/2024/file/b74a8de47d2b3c928360e0a011f48351-Paper-Conference.pdf) | Profile-derived execution costs and event-driven scheduling reproduce serving behavior; queue predictions become sensitive near capacity. Use measured batch times and test completion/backlog against existing held-out traces. |
-| [Llumnix, OSDI 2024, §3–4](https://www.usenix.org/system/files/osdi24-sun-biao.pdf) | Local queueing, memory availability, and request interference matter even when aggregate capacity exists. Preserve representative queue states when pooling replicas. |
-| [Splitwise, ISCA 2024, §III.F and §IV](https://arxiv.org/html/2311.18677v2) | Prompt/token phases have different power and batching behavior; the system separates global routing from local queues. Use a shared WAN model with local measured service behavior and retain independent power accounting. |
-| [Varys, SIGCOMM 2014, §2 and §5](https://istc-cc.cmu.edu/publications/papers/2014/varys-sigcomm14.pdf) | Per-flow fairness and deadline completion are different objectives. Simple ingress/egress constraints can support coordinated rate reservations; packet simulation is not required for this abstraction. |
-
-These papers motivate the structure; their throughput numbers, hardware, and
-reported errors are not calibration constants for GPT-OSS/A100.
-
-Use a **measured batch/event model** first. The September 5 raw prefill cells give
-8K effective batch seconds per request of 0.583–0.588 across concurrency 1–16;
-at 28K the range is 3.629–3.644. That supports near-additive long-context prefill
-cost for this measured regime. Preserve batch-size effects where present and
-use existing request/batch timestamps for completion distributions. Operator- or
-GPU-cycle simulation is unnecessary unless existing held-out traces show a failure
-that this abstraction cannot explain. Finer scheduling does not identify unmeasured
-kernel timings automatically.
-
-Treat the loaded-service factor as an **effective endpoint wall-time response**,
-not intrinsic GPU work. Its target subtracts modeled route and switch time from
-measured last-commit time, so batching and background interference are already
-included. Apply `exp(beta * rho)` once; do not also divide its service capacity
-by `1-rho` for the same background traffic. Preserve separate ongoing-serving
-admission constraints. The fitted width-eight intercept belongs to that measured
-pack; retain the independently calibrated baseline for regional single moves.
-Use measured pack wall time as the complete pack cost, including its internal
-batching/queueing; only waiting behind earlier packs is additional queue delay.
-
-Keep physical offered prefill/decode rates and each calibration's own normalization.
-The loaded-factor campaign uses F/G of about 5,581/2,564 tok/s; the new pool uses
-18,156/1,586. The factor's rho=0.5 (about 1.318 RPS of 2,048-input/32-output
-background) maps to about 0.175 in the pool's coordinates. Feeding the pool's
-rho directly into the old factor changes the traffic being modeled. Coordinate
-conversion also does not remove workload-shape differences: choose compatible
-existing strata and report extensions separately. Interpret a percentage of
-serving capacity against a named measured operating point, not interchangeable
-SM utilization, normalized offered work, and GPU power.
-
-Scale with weighted representative replica states inside each destination pool.
-Retain their local queue depth, context/batch mix, arrival phase, and completion
-state; multiply counts and resource use, not the speed of a single replay. All
-representatives consume the same global route/shared-WAN reservations. Replay
-becomes ready after its log transfer; KV completes after its transfer, with no
-KV-ingest bottleneck. Imported steady serving must enter the destination load
-state. Replicas may share a measured behavior class without assigning every fleet
-session to a named GPU. Increase representative-state resolution until the shed
-curves stabilize, and compare with explicit small simulated fleets; this is a
-software check using existing data. Preserve genuinely synchronized shed arrivals
-while avoiding artificial synchronization from collapsing all local queues to one
-identical cohort.
-
-For a queue-aware LP, use a finite common library of complete representative
-schedules generated by this measured event model. Each schedule records completed
-cohort counts, replica occupancy, serving/memory feasibility, and piecewise-constant
-network reservations. The LP selects nonnegative schedule multiplicities to
-maximize additive shed, subject to population, per-initial-state replica-count,
-and route/shared-rate constraints in every time interval. Each schedule consumes
-its actual starting-state inventory; the LP cannot replace busy replicas with
-empty ones. Include the baseline schedules in that same
-library before solving; restricted methods use only compatible schedules.
-The continuous LP then dominates those baselines **within the same schedule
-library and scenario**, because every baseline allocation remains feasible.
-This is not global optimality over arbitrary vLLM schedules. Whole-session exact
-optimality requires integer schedule counts. Integer rounding and evaluation under
-changed resources do not inherit the continuous nominal guarantee. Use the same
-schedule semantics for planning and scoring; an unrelated equal-sharing executor
-would recreate the current mismatch.
-
-Bootstrap complete existing runs/batches, retaining within-run dependence and
-fleet-common calibration error. Keep workload variation, calibration repeatability,
-model residuals, and numerical aggregation error distinct. Interpolate within
-measured support; explicitly identify runtime/context/load-shape extrapolation.
-Retain the shared WAN allocation sweep as a scenario input, independently of GPU
-count. Validate against the existing loaded replay holdouts and service-transition
-traces before scaling; do not replace those checks with a new acquisition campaign.
-
-### Earlier profiling proposal (not scheduled)
-
-`outputs/a100-quick-profile-plan.json` freezes a proposed single-launch GPT-OSS/A100
-protocol; it is a plan, not acquired evidence or an executable hardware runner.
-It is retained as historical design context. The current task uses existing data
-only; no acquisition is scheduled or required by the proposed simulation design.
-Reuse the same checkpoint and optimized runtime, explicitly enabling prefix caching
-for eight resident coding contexts. Keep append tokens uncached and replay prefixes
-unique. This changes the prefix-cache regime, so new measurements supersede old
-anchors only after runtime and token-accounting checks.
-
-| Work | Exact acquisition |
-|---|---|
-| Workload capacity | Three windows of synchronized eight-session rounds (one turn per session), each 5 s settling + 15 s measurement. Count completed rounds; freeze achieved turns/s without claiming proven saturation. |
-| Paced serving and power | Fractions 0.1/0.25/0.5/0.8/1.0 of that capacity, three repeats each; three 0.65 windows are held out. Each window is 5 + 15 s. |
-| Replay contention and isolated anchors | One replay request at 8K or 28K context, each at offered resident-load fractions 0/0.5/0.9, two repeats. First repetitions fit; second repetitions are held out. Zero-background cells supply isolated anchors. Each has 5 s settling and a 40 s completion timeout. |
-| Unloaded replay batches | 8K contexts at concurrency 8 and 28K at concurrency 2, two repeats each; 5 s settling and a 10 s completion timeout. Compare against summed isolated work. |
-| Warm idle | 30 s workload warmup, plus 20 s resident-idle anchors before and after acquisition. |
-
-Worst-case core acquisition is **18 min 10 s**, with a **20-minute warm-campaign
-hard stop** including drains. Cold startup is separate; the saved A100 run took
-about 2 min 44 s from engine initialization to readiness, so budget 3–5 minutes
-under similar cached conditions. Timeouts are censored failures, and a hard stop
-leaves an incomplete plan invalid; validation cells are never dropped to fit.
-There is no separate power grid, network test, or KV-ingest experiment.
-
-These fractions use the frozen achieved turns/s of the same eight-session resident
-cohort as their denominator; they describe offered load, not SM utilization or
-known free compute. The 0.9 case approximates 50% baseline plus 40% imported steady
-serving. Fit residual replay capacity from the matched concurrency-one observations
-at zero/0.5/0.9 load, using the first zero-background repetitions as isolated
-single-request anchors, without an arbitrary throughput discount.
-During every nonzero-background burst, require achieved resident turns/s within
-10% of offered turns/s and no sustained resident backlog growth. Replay throughput
-obtained by starving resident serving fails validation; report zero-background
-bursts separately.
-
-The plan keeps **40 cells**: six replay fit cells at IDs 24–29, then nine holdouts
-(six replay and three power) at IDs 30–38. Freeze capacity and fit parameters before
-cell 30; do not refit after inspecting holdouts. Record background/replay token counters separately,
-completed turns, first-token and completion times, queued/running work, cache hits,
-active-request preemptions, KV capacity, and synchronized power. Count block-aligned
-cached prefixes and any uncached prefix tails explicitly; ordinary LRU eviction
-of obsolete append entries is allowed. Require exact token/cache accounting,
-stable backlog and achieved rates within 10% at loads through 0.8, held-out power
-MAE ≤5 W and p90 error ≤10 W, warm-idle drift ≤5 W, and replay drain/throughput
-error ≤20% on held-out repetitions. These are declared acceptance thresholds,
-not measured error bars. Test both empirical power interpolation and the current
-linear busy-fraction shed assumption; a failed assumption remains invalid.
-Acceptance covers this frozen mixture and loaded replay at concurrency one for
-the two tested contexts. Unloaded batch probes do not validate concurrent replay
-under resident load. This proposed pilot alone would not establish broader workload
-transfer, loaded replay concurrency above one, long-window stability, or fleet-wide
-variability; the existing independent loaded-replay validation retains its own scope.
+The structural choices follow [DistServe](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
+and [Sarathi-Serve](https://www.usenix.org/system/files/osdi24-agrawal.pdf) on
+prefill/decode interference, [Vidur](https://proceedings.mlsys.org/paper_files/paper/2024/file/b74a8de47d2b3c928360e0a011f48351-Paper-Conference.pdf)
+on measured-cost scheduling, [Llumnix](https://www.usenix.org/system/files/osdi24-sun-biao.pdf)
+on local queue behavior, [Splitwise](https://arxiv.org/html/2311.18677v2) on phase
+and power differences, and [Varys](https://istc-cc.cmu.edu/publications/papers/2014/varys-sigcomm14.pdf)
+on coordinated flow reservations. Their throughput numbers are not our calibration.
 
 ## Current evidence
 

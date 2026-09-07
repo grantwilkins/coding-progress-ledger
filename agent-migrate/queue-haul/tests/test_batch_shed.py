@@ -1,0 +1,213 @@
+"""Analytical checks for measured batch schedules and pooled admission."""
+
+import numpy as np
+import pytest
+
+import pool_shed_campaign as c
+
+
+def fleet(count=(4, 4), demand=(.1, .1), t1=(1., 3.), log=(1., 2.), kv=(10., 20.)):
+    n = len(count)
+    return c.Fleet(count=np.array(count), context=np.arange(1, n + 1) * 10.,
+                   prompt=np.ones(n), output=np.ones(n), t1=np.array(t1),
+                   kv=np.array(kv), log=np.array(log), demand=np.array(demand),
+                   templates=[np.repeat(np.arange(n), count).tolist()], gpus=1,
+                   kv_capacity=10000., metadata={})
+
+
+def table(f, replay, kv, deadline=4., load=.5, endpoint=(100., 100., 200.),
+          budgets=(100., 100., 100.), kappa=.5):
+    return c.schedule_table(f, np.array(replay), np.array(kv), load, deadline,
+                            np.array(endpoint), np.array(budgets), {"beta": 0., "kappa": kappa})
+
+
+def test_batch_wall_time_preserves_singletons_and_counts_repeated_requests():
+    replay = np.array([[0, 0], [1, 0], [0, 1], [2, 1], [3, 0]])
+    expected = np.array([0., 1., 3., 4., 2.])
+    np.testing.assert_allclose(c.batch_time(replay, np.array([1., 3.]), 0., .5, .95), expected)
+    np.testing.assert_allclose(c.batch_time(replay, np.array([1., 3.]), np.log(2), .5, .5),
+                               expected * np.sqrt(2))
+
+
+def test_serial_batch_limit_adds_wall_service_without_a_free_gpu_factor():
+    replay, t1 = np.array([[1, 1], [2, 1]]), np.array([1., 3.])
+    np.testing.assert_allclose(c.batch_time(replay, t1, 0., 1., .95), [4., 5.])
+
+
+def test_context_specific_batch_factors_preserve_singletons_and_monotonicity():
+    replay = np.array([[0, 0], [1, 0], [0, 1], [2, 1], [1, 2], [3, 0]])
+    t1, kappa = np.array([1., 3.]), np.array([.2, .8])
+    expected = [0., 1., 3., 3.6, 5.8, 1.4]
+    np.testing.assert_allclose(c.batch_time(replay, t1, 0., kappa, .95), expected)
+    factors = np.tile(kappa, (len(replay), 1))
+    factors[-1] = 1.
+    np.testing.assert_allclose(c.batch_time(replay, t1, 0., factors, .95), [*expected[:-1], 3.])
+    for extra in np.eye(2, dtype=int):
+        assert np.all(c.batch_time(replay + extra, t1, 0., kappa, .95) >= np.array(expected) - 1e-12)
+
+
+@pytest.mark.parametrize("kappa", (-.1, 1.1, np.array([.5, np.nan])))
+def test_unidentified_batch_factors_hard_fail(kappa):
+    with pytest.raises(ValueError, match="batch"):
+        c.batch_time(np.array([[1, 1]]), np.array([1., 3.]), 0., kappa, .5)
+
+
+def test_long_context_replay_serializes_the_entire_batch_only_when_selected():
+    f = fleet()
+    f.metadata = {"packing_context_tokens": [10., 20.], "batch_context_limit": 15.}
+    replay = np.array([[1, 0], [1, 1], [0, 0]])
+    kv = np.array([[0, 1], [0, 0], [0, 1]])
+    t = c.schedule_table(f, replay, kv, .5, 10., np.full(3, 100.), np.full(3, 100.),
+                         {"beta": 0., "packing_kappa": [.2, .8]})
+    np.testing.assert_allclose(t.duration, [1., 4., 0., 1., 4., 0.])
+
+
+def test_library_keeps_every_singleton_and_whole_request_counts():
+    f = fleet()
+    replay, kv = c.library(f)
+    patterns = np.column_stack((replay, kv))
+    assert len(patterns) == len(np.unique(patterns, axis=0))
+    assert np.all(patterns >= 0) and np.all(patterns == np.floor(patterns))
+    assert np.all((replay + kv).sum(1) <= 8)
+    assert np.all((replay + kv).sum(1) > 0)
+    assert np.all(replay + kv <= f.count)
+    for j in range(2 * len(f.count)):
+        singleton = np.eye(2 * len(f.count), dtype=int)[j]
+        assert np.any(np.all(patterns == singleton, axis=1))
+
+
+def test_shared_wan_limits_complete_batches_across_both_destinations():
+    t = table(fleet(), [[1, 1]], [[0, 0]], budgets=(6., 6., 6.))
+    np.testing.assert_allclose(t.duration, 3.5)
+    np.testing.assert_allclose(t.release, .5)
+    np.testing.assert_allclose(t.log_bytes, 3.)
+    np.testing.assert_allclose(t.rate, 6.)
+    x = c.select(t, "queue_haul")
+    assert x.sum() == pytest.approx(1.)
+    assert t.gains @ x == pytest.approx(.25)
+    result = c.execute(t, x)
+    assert result["shed_fraction"] == pytest.approx(.25)
+    assert sum(result["action_counts"]) == pytest.approx(2.)
+    assert sum(result["action_fractions"]) == pytest.approx(.25)
+    assert result["last_completion_s"] == pytest.approx(4.)
+    assert result["resource_utilization"][-1] == pytest.approx(1.)
+
+
+def test_endpoint_ceiling_is_per_replica_pattern():
+    t = table(fleet(), [[1, 1]], [[0, 0]], endpoint=(5., 100., 105.))
+    assert not t.eligible[t.route == 0].any()
+    assert t.eligible[t.route == 1].all()
+    x = c.select(t, "queue_haul")
+    assert not x[t.route == 0].any()
+    assert x[t.route == 1].sum() == pytest.approx(1.)
+
+
+def test_wan_budget_does_not_multiply_with_the_number_of_source_gpus():
+    endpoint = np.array([2., 3., 5.])
+    np.testing.assert_allclose(c.bandwidth(endpoint, 2, 1.), [4., 6., 10.])
+    for gpus in (10000, 20000):
+        np.testing.assert_allclose(c.bandwidth(endpoint, gpus, 1e-5), 1250.)
+        np.testing.assert_allclose(c.bandwidth(endpoint, gpus, "reference"), endpoint)
+
+
+def test_ninety_five_percent_load_keeps_fractional_pooled_admission():
+    f = fleet(count=(4,), demand=(.2,), t1=(1.,), log=(0.,), kv=(1.,))
+    t = table(f, [[0]], [[1]], load=.95)
+    x = c.select(t, "kv_only")
+    for route in (0, 1):
+        assert x[t.route == route].sum() == pytest.approx(.25)
+    result = c.execute(t, x)
+    assert sum(result["action_counts"]) == pytest.approx(.5)
+    assert result["shed_fraction"] == pytest.approx(.125)
+    assert f.baseline_kv == pytest.approx(64.)  # Four ten-token contexts occupy four 16-token blocks.
+    low = table(f, [[0]], [[1]], load=.25)
+    memory = slice(len(f.count) + 4, len(f.count) + 6)
+    np.testing.assert_allclose(t.capacities[memory], low.capacities[memory])
+    np.testing.assert_allclose(t.capacities[memory], 9936.)
+
+
+def test_patterns_cannot_reuse_the_same_source_population():
+    f = fleet(count=(4,), demand=(.2,), t1=(1.,), log=(0.,), kv=(1.,))
+    t = table(f, [[0]], [[3]], load=.25)
+    x = c.select(t, "queue_haul")
+    assert x.sum() == pytest.approx(4 / 3)
+    result = c.execute(t, x)
+    assert sum(result["action_counts"]) == pytest.approx(4.)
+    assert result["shed_fraction"] == pytest.approx(1.)
+
+
+@pytest.mark.parametrize("deadline,log,allowed", [(2., 0., True), (2., 1., False), (1.99, 0., False)])
+def test_zero_log_does_not_waive_batch_completion_deadline(deadline, log, allowed):
+    f = fleet(count=(4,), demand=(.2,), t1=(2.,), log=(log,), kv=(1.,))
+    t = table(f, [[1]], [[0]], deadline=deadline)
+    assert t.eligible.all() if allowed else not t.eligible.any()
+    x = c.select(t, "queue_haul")
+    assert x.sum() > 0 if allowed else x.sum() == 0
+    assert np.isfinite(c.execute(t, x)["shed_fraction"])
+
+
+def test_replay_and_kv_reservations_share_the_initial_peak():
+    t = table(fleet(), [[1, 0]], [[0, 1]])
+    np.testing.assert_allclose(t.duration, 1.)
+    np.testing.assert_allclose(t.release, 3.)
+    np.testing.assert_allclose(t.rate, 1 / 3 + 20 / 4)
+    # The log ends at three seconds; the KV flow continues until four.
+    assert np.all(t.log_bytes / t.release + t.kv_bytes / t.deadline == t.rate)
+
+
+def test_evaluator_rejects_a_shared_wan_overbooking():
+    t = table(fleet(), [[1, 1]], [[0, 0]], budgets=(6., 6., 6.))
+    with pytest.raises((ValueError, RuntimeError)):
+        c.execute(t, np.ones(len(t.gains)))
+
+
+def test_every_policy_uses_the_same_feasible_schedule_evaluator():
+    f = fleet()
+    replay, kv = c.library(f)
+    t = c.schedule_table(f, replay, kv, .5, 4., np.array([5., 20., 25.]),
+                         np.array([8., 12., 15.]), {"beta": 0., "kappa": .5})
+    upper = c.execute(t, c.select(t, "queue_haul"))["shed_fraction"]
+    for policy in c.POLICIES:
+        x = c.select(t, policy)
+        result = c.execute(t, x)
+        assert np.all(x >= 0)
+        assert not x[~t.eligible].any()
+        assert np.all(t.matrix @ x <= t.capacities + 1e-8)
+        assert result["shed_fraction"] == pytest.approx(t.gains @ x)
+        assert result["shed_fraction"] <= upper + 1e-8
+        if policy == "kv_only":
+            assert not np.any(x @ t.replay)
+        if policy == "replay_only":
+            assert not np.any(x @ t.kv)
+        if policy == "isolated_fastest":
+            assert not np.any((x @ t.kv)[t.fastest])
+            assert not np.any((x @ t.replay)[~t.fastest])
+
+
+def test_lp_shed_increases_with_deadline_and_wan_and_decreases_with_resident_load():
+    f = fleet()
+    replay, kv = c.library(f)
+
+    def shed(deadline=4., bandwidth=6., load=.5):
+        t = c.schedule_table(f, replay, kv, load, deadline, np.full(3, 100.),
+                             np.full(3, bandwidth), {"beta": .5, "kappa": .5})
+        return c.execute(t, c.select(t, "queue_haul"))["shed_fraction"]
+
+    deadlines = [shed(deadline=d) for d in (1., 2., 4., 8., 16.)]
+    bandwidths = [shed(bandwidth=b) for b in (1., 3., 6., 12., 24.)]
+    loads = [shed(deadline=16., bandwidth=24., load=u) for u in (.25, .5, .75, .9, .95)]
+    assert np.all(np.diff(deadlines) >= -1e-9) and deadlines[-1] > deadlines[0]
+    assert np.all(np.diff(bandwidths) >= -1e-9) and bandwidths[-1] > bandwidths[0]
+    assert np.all(np.diff(loads) <= 1e-9)
+    np.testing.assert_allclose(loads, [1., 1., .625, .25, .125], atol=1e-9)
+
+
+@pytest.mark.parametrize("policy", ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest"))
+def test_destination_names_do_not_change_optimized_shed(policy):
+    f = fleet()
+    replay, kv = c.library(f)
+    endpoint, budgets = np.array([5., 20., 25.]), np.array([8., 12., 15.])
+    a = c.schedule_table(f, replay, kv, .5, 4., endpoint, budgets, {"beta": 0., "kappa": .5})
+    b = c.schedule_table(f, replay, kv, .5, 4., endpoint[[1, 0, 2]], budgets[[1, 0, 2]],
+                         {"beta": 0., "kappa": .5})
+    assert a.gains @ c.select(a, policy) == pytest.approx(b.gains @ c.select(b, policy))

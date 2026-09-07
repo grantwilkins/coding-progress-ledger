@@ -1,4 +1,4 @@
-"""GPT-OSS/A100 volume shed bounds and separate staged execution stress tests."""
+"""Measured batch schedules for a pooled 20 MW installed GPT-OSS/A100 fleet."""
 
 from __future__ import annotations
 
@@ -7,9 +7,8 @@ import csv
 import gzip
 import hashlib
 import json
-import re
 import subprocess
-from collections import Counter
+import time
 from dataclasses import dataclass
 from functools import cache
 from itertools import product
@@ -17,26 +16,24 @@ from pathlib import Path
 
 import numpy as np
 from scipy.optimize import linprog
-from scipy.sparse import csr_matrix, hstack, vstack
+from scipy.sparse import csr_matrix
+
+from pool_shed_calibration import calibration, replay_seconds
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "outputs/a100-pool-shed"
-MODELS = ("gpt-oss-20b",)
-GPUS = int(20e6 / 300)
-CALIBRATION = ROOT / "outputs/a100-parity-20260905/power"
-POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
-ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
-PREFILL_METRICS = ("prefill_contention_session_s", "prefill_peak_ready_sessions", "prefill_ready_at_deadline",
-                   "prefill_network_blocked_at_deadline", "prefill_remaining_gpu_s")
-DEADLINES = (1, 3, 10, 30, 60, 120, 300, 600, 1800, 3600)
+OUT = ROOT / "outputs/a100-batch-shed"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-pool-shed-v3"
-SOURCE_LOAD, BASELINE_LOAD = .8, .5
+SCHEMA = "queue-haul-a100-batch-shed-v1"
+GPUS, SOURCE_LOAD = 66666, .8
+POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
+ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
+DEADLINES = (1, 3, 10, 30, 60, 120, 300, 600, 1800, 3600)
+LOADS = (.25, .5, .75, .9, .95)
 
 
 def digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
 def write_json(path, value):
@@ -52,776 +49,584 @@ def write_json(path, value):
 
 
 @cache
-def calibrations(model):
-    metadata = json.loads((CALIBRATION / "metadata.json").read_text())
-    log = (CALIBRATION / "server.log").read_text()
-    rows = [json.loads(line) for line in (CALIBRATION / "cells.jsonl").read_text().splitlines()]
-    if (model != MODELS[0] or metadata["model"] != "openai/gpt-oss-20b"
-            or metadata["gpu"]["name"] != "NVIDIA A100 80GB PCIe" or metadata["gpu"]["power_limit_w"] != 300
-            or not metadata["optimized_runtime"] or "enforce_eager=False" not in log
-            or [r["sequence"] for r in rows] != list(range(111)) or any(r["cached_prompt_tokens"] for r in rows)):
-        raise ValueError("invalid optimized GPT-OSS/A100 raw calibration")
-    keys = {(r["family"], r["prompt_tokens"], r["output_tokens"], r["concurrency"]) for r in rows}
-    groups = {key: [r for r in rows if (r["family"], r["prompt_tokens"], r["output_tokens"], r["concurrency"]) == key] for key in sorted(keys)}
-    F, G = [max(np.median([r[field] for r in group]) for key, group in groups.items()
-                if key[0] == family and len(group) > 1)
-            for family, field in (("prefill", "realized_prefill_tps"), ("decode", "realized_decode_tps"))]
-    prefill = {"model": metadata["model"], "kv_capacity_tokens": int(re.search(r"GPU KV cache size: ([\d,]+) tokens", log)[1].replace(",", "")),
-               "curve": [{"context_tokens": key[1], "prefill_tps_median": float(np.median([r["realized_prefill_tps"] for r in group]))}
-                         for key, group in groups.items() if key[0] == "prefill" and key[3] == 1]}
-    idle = [r["power_mean_w"] for r in rows if r["family"] == "idle" and r["sequence"] > 0]
-    active = [group for key, group in groups.items() if key[0] == "campaign"]
-    active.sort(key=lambda group: np.median([r["realized_prefill_tps"] / F + r["realized_decode_tps"] / G for r in group]))
-    xs = [0., *[float(np.median([r["realized_prefill_tps"] / F + r["realized_decode_tps"] / G for r in group])) for group in active]]
-    watts = [idle, *[[r["power_mean_w"] for r in group] for group in active]]
-    if np.any(np.diff(xs) <= 0) or len(idle) != 2:
-        raise ValueError("invalid empirical power support or warm-idle anchors")
-    rng = np.random.default_rng(1)
-    draws = Counter(tuple(float(rng.choice(values)) for values in watts) for _ in range(200))
-    power = {"model": metadata["model"], "hardware": "A100", "F_prefill_tps": float(F), "G_decode_tps": float(G),
-             "bootstrap_curve_counts": list(draws.values()),
-             "phase_power": {"measured_power_curve": list(zip(xs, map(float, map(np.median, watts)))),
-                             "measured_power_bootstrap": [list(zip(xs, values)) for values in draws]},
-             "evidence": {"status": "empirical_anchors_only; pooled workload extrapolation provisional",
-                          "runtime": "vLLM 0.22.0, optimized TP1, MXFP4 weights, BF16 KV, chunked prefill 8192",
-                          "power_shape": [604, 64], "cold_start_idle_excluded": True,
-                          "normalization": "maximum repeated-cell median achieved prefill/decode throughput",
-                          "prior_rational_fit_status": json.loads((CALIBRATION / "fit.json").read_text())["status"]}}
-    return prefill, power
-
-
 def network_samples():
     data = json.loads(NETWORK.read_text())
     routes = np.array([data["paths"][r]["simultaneous_mbps"] for r in ("east", "germany")]).T
     shared = np.array(data["aggregate_simultaneous_mbps"])
     if not np.allclose(routes.sum(1), shared) or np.any(routes <= 0):
-        raise ValueError("network repetitions must be positive and paired")
+        raise ValueError("network observations must be positive and paired")
     return np.column_stack((routes, shared)) * 125_000
 
 
 def bandwidth(endpoint, gpus, wan_gbps):
-    """WAN allocations are independent of GPU count and measured TCP asymmetry."""
-    budgets = endpoint.copy() if wan_gbps == "reference" else np.minimum(
-        np.full(3, float(wan_gbps) * 1e9 / 8), endpoint * gpus)
-    if not np.all(np.isfinite(budgets)) or np.any(budgets <= 0):
-        raise ValueError("WAN budgets must be finite and positive")
-    return budgets
-
-
-def kv_bytes(model, context):
-    """Same analytical BF16 state geometry as matched_action_campaign's source."""
-    if model == "gpt-oss-20b":
-        return 4 * 8 * 64 * (12 * context + 12 * np.minimum(context, 128))
-    raise ValueError(model)
+    if gpus < 1 or np.any(np.asarray(endpoint) <= 0):
+        raise ValueError("invalid endpoint capacity")
+    return endpoint.copy() if wan_gbps == "reference" else np.minimum(endpoint * gpus, float(wan_gbps) * 1e9 / 8)
 
 
 @dataclass
 class Fleet:
     count: np.ndarray
     context: np.ndarray
-    demand: np.ndarray
-    replay: np.ndarray
+    prompt: np.ndarray
+    output: np.ndarray
+    t1: np.ndarray
     kv: np.ndarray
     log: np.ndarray
+    demand: np.ndarray
+    templates: list
     gpus: int
     kv_capacity: float
-    power_w: float
-    idle_w: float
     metadata: dict
 
     @property
     def gain(self):
-        return self.demand / SOURCE_LOAD * (self.power_w - self.idle_w)
+        return self.demand / (SOURCE_LOAD * self.gpus)
 
     @property
     def baseline_kv(self):
-        return float(self.count @ self.context) * BASELINE_LOAD / SOURCE_LOAD
+        return float(self.count @ self.memory_tokens)
+
+    @property
+    def memory_tokens(self):
+        return np.ceil(self.context / 16) * 16
 
 
-def sample_fleet(model, workload, density, snapshot, gpus=GPUS):
-    prefill, power = calibrations(model)
-    curve = np.array([[r["context_tokens"], r["prefill_tps_median"]] for r in prefill["curve"]])
+@cache
+def sample_fleet(workload, snapshot=0, gpus=GPUS):
+    c = calibration(0)
     rng = np.random.default_rng(1001 + snapshot)
-    if workload == "coding":
+    if workload == "measured_pack":
+        shapes = np.array([[context, 2048, 32] for context in (2048, 4096, 4096, 8192, 8192, 12288, 12288, 14336)], float)
+        count = np.full(8, gpus)
+        evidence = {"timing_scope": "measured_pack_and_background", "excluded_states": 0}
+    elif workload == "coding":
         raw = json.loads(MANIFEST.read_text())
         ids = sum(raw["manifest"]["splits"]["coding"].values(), [])
-        traces = [r for r in raw["traces"] if r["session_id"] in ids]
-        supported = [r for r in traces if curve[0, 0] <= r["input_tokens_total"] - r["newly_append_tokens"] <= curve[-1, 0]
+        rows = [r for r in raw["traces"] if r["session_id"] in ids]
+        lo, hi = min(c["replay_context_tokens"]), max(c["replay_context_tokens"])
+        supported = [r for r in rows if lo <= r["input_tokens_total"] - r["newly_append_tokens"] <= hi
                      and r["newly_append_tokens"] + r["output_tokens"] > 0]
         families = {key: [r for r in supported if r["session_id"] == key] for key in ids}
         families = {key: value for key, value in families.items() if value}
         if not families:
-            raise ValueError("no coding states within measured context support")
-        picked = [families[key][rng.integers(len(families[key]))]
-                  for key in rng.choice(sorted(families), len(ids))]
-        shapes = np.array([(r["input_tokens_total"] - r["newly_append_tokens"],
-                            r["newly_append_tokens"], r["output_tokens"]) for r in picked], float)
-        logs, cadence = 2 * shapes[:, 0], np.ones(len(shapes))
-        evidence = {"supported_states": len(supported), "excluded_states": len(traces) - len(supported),
-                    "sampled_trajectories": len(ids), "log_density_assumed_bytes_per_token": 2}
+            raise ValueError("no coding states in the singleton calibration support")
+        picked = [families[key][rng.integers(len(families[key]))] for key in rng.choice(sorted(families), 24)]
+        shapes = np.array([(r["input_tokens_total"] - r["newly_append_tokens"], r["newly_append_tokens"], r["output_tokens"]) for r in picked], float)
+        count = rng.multinomial(gpus * 8, np.full(24, 1 / 24))
+        evidence = {"timing_scope": "coding_background_and_subset_transfer", "sampled_states": picked,
+                    "excluded_states": len(rows) - len(supported), "supported_states": len(supported),
+                    "exclusion_reason": "context outside singleton support or no ongoing work"}
     else:
-        raw = json.loads((ROOT / f"profiles/{workload}.json").read_text())
-        records = raw["records"]
-        shapes = np.array([(r["context_tokens"], r["prompt_tokens"], r["output_tokens"]) for r in records], float)
-        logs = np.array([r["log_bytes"] for r in records], float)
-        cadence = 1 / np.array([r["request_gap_s"] + r["tool_delay_s"]
-                                + r["prompt_tokens"] / power["F_prefill_tps"]
-                                + r["output_tokens"] / power["G_decode_tps"] for r in records])
-        evidence = {"workload_source": raw["source"], "cadence": "profile gaps, then common load normalization"}
-    records, frequencies = np.unique(np.column_stack((shapes, logs, cadence)), axis=0, return_counts=True)
-    counts = rng.multinomial(gpus * density, frequencies / frequencies.sum())
-    records, counts = records[counts > 0], counts[counts > 0]
-    context, prompt, output, logs, cadence = records.T
-    if np.any((context < curve[0, 0]) | (context > curve[-1, 0])):
-        raise ValueError("workload contexts outside measured A100 prefill support")
-    work = cadence * (prompt / power["F_prefill_tps"] + output / power["G_decode_tps"])
-    demand = work * (gpus * SOURCE_LOAD / (counts @ work))
-    watts = np.array(power["phase_power"]["measured_power_curve"])
-    if SOURCE_LOAD > watts[-1, 0]:
-        raise ValueError("source load outside measured power support")
-    return Fleet(counts, context, demand, context / np.interp(context, *curve.T),
-                 kv_bytes(model, context), logs, gpus, gpus * prefill["kv_capacity_tokens"],
-                 float(np.interp(SOURCE_LOAD, *watts.T)), float(watts[0, 1]), evidence)
+        raise ValueError(workload)
+    context, prompt, output = shapes.T
+    work = prompt / c["F"] + output / c["G"]
+    cadence = SOURCE_LOAD * gpus / (count @ work)
+    evidence.update(reference_rps=float(count.sum() / (count @ work)), source_session_rps=float(cadence),
+                    reference_basis="derived_phase_normalized_reference_not_measured_saturation",
+                    arrivals="equal paced session cadence; trace timestamps unavailable", initial_migration_queue=0,
+                    batch_context_limit=c["batch_context_limit"],
+                    packing_context_tokens=c["packing_context_tokens"] if workload == "coding" else None)
+    return Fleet(count, context, prompt, output, replay_seconds(context, c),
+                 np.ceil(context / c["kv_block_tokens"]) * c["kv_block_bytes"], 2 * context,
+                 work * cadence, [list(range(i, i + 8)) for i in range(0, len(count), 8)],
+                 gpus, gpus * c["kv_capacity_tokens"], evidence)
 
 
-def resources(fleet, deadline, budgets, endpoint):
-    """Columns are cohort-major: four actions per cohort; rows use physical units."""
+def batch_time(replay, t1, beta, kappa, load):
+    replay, t1, kappa = np.asarray(replay), np.asarray(t1), np.asarray(kappa)
+    if (np.any(replay < 0) or np.any(t1 <= 0) or np.any((kappa < 0) | (kappa > 1))
+            or np.any(replay != np.floor(replay))
+            or not np.isfinite(np.r_[beta, kappa.ravel(), load, t1, replay.ravel()]).all()):
+        raise ValueError("invalid measured batch inputs")
+    return np.exp(beta * load) * (np.sum(replay * kappa * t1, axis=1)
+                                 + np.max(np.where(replay > 0, (1 - kappa) * t1, 0), axis=1))
+
+
+@cache
+def patterns(workload, snapshot=0, gpus=GPUS, expanded=False):
+    return library(sample_fleet(workload, snapshot, gpus), expanded)
+
+
+def library(fleet, expanded=False):
     n = len(fleet.count)
-    route = np.tile((0, 0, 1, 1), n)
-    replay = np.tile((True, False, True, False), n)
-    volume = np.where(replay, np.repeat(fleet.log, 4), np.repeat(fleet.kv, 4))
-    work = np.repeat(fleet.replay, 4) * replay
-    demand, context = np.repeat(fleet.demand, 4), np.repeat(fleet.context, 4)
-    matrix = np.array([volume * (route == r) for r in (0, 1)] + [volume]
-                      + [(work + deadline * demand) * (route == r) for r in (0, 1)]
-                      + [context * (route == r) for r in (0, 1)])
-    capacities = np.r_[budgets * deadline, np.repeat(fleet.gpus * (1 - BASELINE_LOAD) * deadline, 2),
-                       np.repeat(fleet.kv_capacity - fleet.baseline_kv, 2)]
-    isolated = volume / np.minimum(endpoint[route], np.minimum(budgets[route], budgets[2])) + work
-    return matrix, capacities, isolated
+    found = set()
+    def add(selected, replayed):
+        r, k = np.zeros(n, int), np.zeros(n, int)
+        np.add.at(r, replayed, 1)
+        np.add.at(k, selected, 1)
+        k -= r
+        found.add(tuple(np.r_[r, k]))
+    for i in range(n):
+        add([i], [])
+        add([i], [i])
+    keys = [fleet.context, -fleet.context, -fleet.gain / fleet.t1, -fleet.gain / fleet.kv]
+    if expanded:
+        keys += [fleet.gain / fleet.t1, fleet.gain / fleet.kv, fleet.demand, -fleet.demand]
+    ratio = (fleet.kv - fleet.log) / fleet.t1
+    for template in fleet.templates:
+        for key in keys:
+            order = sorted(template, key=lambda i: (key[i], i))
+            for width in range(1, len(order) + 1):
+                selected = order[:width]
+                ranked = sorted(selected, key=lambda i: (-ratio[i], i))
+                for sequence in (ranked, ranked[::-1]) if expanded else (ranked,):
+                    for cut in range(width + 1):
+                        add(selected, sequence[:cut])
+    values = np.array(sorted(found), dtype=float)
+    return values[:, :n], values[:, n:]
 
 
-def greedy_fill(count, gains, matrix, capacities, eligible, chosen=None):
-    """Reprice cohort choices against headroom; balance each method across routes."""
-    chosen = np.zeros(len(gains), dtype=np.int64) if chosen is None else chosen.copy()
-    left = count - chosen.reshape(-1, 4).sum(1)
-    normalized = matrix / capacities[:, None]
-    costs = np.where(eligible, normalized.sum(0), np.inf).reshape(-1, 4)
-    tied = np.isfinite(costs) & np.isclose(costs, costs.min(1)[:, None], rtol=1e-12, atol=0)
-    weights = (tied * (left / np.maximum(tied.sum(1), 1))[:, None]).ravel()
-    prices = np.maximum(normalized @ weights, 1)
-    usage = matrix @ chosen
-    while True:
-        remaining = np.maximum(capacities - usage, 0)
-        feasible = eligible & np.repeat(left > 0, 4) & np.all(matrix <= remaining[:, None] * (1 + 1e-12), axis=0)
-        if not feasible.any():
-            break
-        marginal = (prices / np.maximum(remaining / capacities, 1e-12)) @ normalized
-        j = int(np.argmax(np.where(feasible, gains / np.maximum(marginal, 1e-30), -np.inf)))
-        i = j // 4
-        pair = np.array([4 * i + j % 2, 4 * i + j % 2 + 2])
-        shared = np.all(matrix[:, pair] > 0, axis=1)
-        if np.any(matrix[shared, pair[0]] != matrix[shared, pair[1]]):
-            raise ValueError("paired routes must have equal per-session shared-resource costs")
-        def slots(column, mask):
-            return max(0, int(np.floor(np.min(remaining[mask] / matrix[mask, column], initial=float(left[i])) + 1e-9)))
-        route_slots = [slots(k, (matrix[:, k] > 0) & ~shared) if eligible[k] else 0 for k in pair]
-        take = min(left[i], sum(route_slots), slots(pair[0], shared))
-        if take < 1:
-            raise RuntimeError("greedy selected an infeasible cohort")
-        low, high = max(0, take - route_slots[1]), min(take, route_slots[0])
-        delta = normalized[:, pair[0]] - normalized[:, pair[1]]
-        # min_x ||u + take*N_germany + x*(N_east-N_germany)||² on feasible integer x.
-        split = (-delta @ (usage / capacities + take * normalized[:, pair[1]]) / (delta @ delta)
-                 if np.any(delta) else take / 2)
-        east = int(np.floor(np.clip(split, low, high) + .5))
-        allocation = np.array([east, take - east])
-        chosen[pair] += allocation
-        left[i] -= take
-        usage += matrix[:, pair] @ allocation
-    return chosen
+@dataclass
+class Table:
+    fleet: Fleet
+    replay: np.ndarray
+    kv: np.ndarray
+    route: np.ndarray
+    duration: np.ndarray
+    release: np.ndarray
+    log_bytes: np.ndarray
+    kv_bytes: np.ndarray
+    rate: np.ndarray
+    eligible: np.ndarray
+    fastest: np.ndarray
+    matrix: np.ndarray
+    capacities: np.ndarray
+    gains: np.ndarray
+    deadline: float
+    load: float
+    endpoint: np.ndarray
+    budgets: np.ndarray
 
 
-def select(fleet, deadline, budgets, endpoint, policy):
-    matrix, capacities, isolated = resources(fleet, deadline, budgets, endpoint)
-    gains = np.repeat(fleet.gain, 4)
-    eligible = isolated <= deadline
-    if np.any(capacities <= 0):
-        raise ValueError("source/destination baseline leaves no migration resources")
-    if policy in ("kv_only", "replay_only"):
-        eligible &= np.arange(len(gains)) % 2 == (policy == "kv_only")
+def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing):
+    endpoint, budgets = np.asarray(endpoint), np.asarray(budgets)
+    if (not 0 <= load < 1 or deadline <= 0 or np.any(endpoint <= 0) or np.any(budgets <= 0)
+            or not np.isfinite(np.r_[deadline, load, endpoint, budgets]).all()
+            or np.any(replay < 0) or np.any(kv < 0) or np.any(kv != np.floor(kv)) or replay.shape != kv.shape):
+        raise ValueError("invalid scheduling inputs")
+    r, k = np.tile(replay, (2, 1)), np.tile(kv, (2, 1))
+    route = np.repeat([0, 1], len(replay))
+    long_context = np.any((r > 0) & (fleet.context > fleet.metadata.get("batch_context_limit", np.inf)), axis=1)
+    knots = fleet.metadata.get("packing_context_tokens")
+    kappa = np.interp(fleet.context, knots, timing["packing_kappa"]) if knots else timing["kappa"]
+    duration = batch_time(r, fleet.t1, timing["beta"], np.where(long_context[:, None], 1., kappa), load)
+    release = deadline - duration
+    logs, state = r @ fleet.log, k @ fleet.kv
+    rates = np.divide(logs, release, out=np.zeros_like(logs), where=release > 0) + state / deadline
+    eligible = (duration <= deadline) & ((logs == 0) | (release > 0)) & (rates <= endpoint[route] * (1 + 1e-12))
+    total = r + k
+    row_masks = np.array([route == j for j in (0, 1)])
+    matrix = np.vstack((total.T, row_masks, row_masks * (total @ fleet.demand),
+                        row_masks * (total @ fleet.memory_tokens), row_masks * rates, rates))
+    capacities = np.r_[fleet.count, [fleet.gpus] * 2, [fleet.gpus * (1 - load)] * 2,
+                       [fleet.kv_capacity - fleet.baseline_kv] * 2, budgets]
+    if np.any(capacities < 0):
+        raise ValueError("resident state exceeds pooled KV capacity")
+    isolated_bw = max(min(endpoint[j], budgets[j], budgets[2]) for j in (0, 1))
+    fastest = fleet.log / isolated_bw + fleet.t1 * np.exp(timing["beta"] * load) < fleet.kv / isolated_bw
+    return Table(fleet, r, k, route, duration, release, logs, state, rates, eligible, fastest,
+                 matrix, capacities, total @ fleet.gain, deadline, load, endpoint, budgets)
+
+
+def policy_mask(table, policy):
+    mask = table.eligible.copy()
+    if policy == "kv_only":
+        mask &= table.replay.sum(1) == 0
+    elif policy == "replay_only":
+        mask &= table.kv.sum(1) == 0
     elif policy == "isolated_fastest":
-        # Prefer less replay work, then action ID, when isolated times tie.
-        fastest = np.array([min(range(4), key=lambda a: (isolated[4*i+a],
-                            fleet.replay[i] if a % 2 == 0 else 0, a)) for i in range(len(fleet.count))])
-        eligible &= np.tile(np.arange(4) % 2, len(fleet.count)) == np.repeat(fastest % 2, 4)
-    chosen, bound = None, None
-    if policy == "queue_haul":
-        population = np.repeat(fleet.count, 4)
-        incidence = csr_matrix((np.ones(len(gains)), (np.repeat(np.arange(len(fleet.count)), 4),
-                                                    np.arange(len(gains)))), shape=(len(fleet.count), len(gains)))
-        # Solve cohort fractions so tiny per-session byte coefficients survive HiGHS scaling.
-        constraints = vstack((incidence, csr_matrix(matrix * population / capacities[:, None])), format="csr")
-        objective = gains * population
-        result = linprog(-objective / objective.max(), A_ub=constraints,
-                         b_ub=np.ones(len(fleet.count) + len(capacities)),
-                         bounds=np.column_stack((np.zeros(len(gains)), eligible)),
-                         method="highs", options={"primal_feasibility_tolerance": 1e-9,
-                                                  "dual_feasibility_tolerance": 1e-9})
-        if not result.success:
-            raise RuntimeError(result.message)
-        bound = float(-result.fun * objective.max())
-        # Tie-break only: a binding resource can make peak pressure identical for all optima.
-        pressure = matrix * population / capacities[:, None]
-        balanced = linprog(np.r_[np.zeros(len(gains)), 1.],
-                          A_ub=vstack((hstack((constraints, csr_matrix((constraints.shape[0], 1)))),
-                                       csr_matrix(np.column_stack((pressure, -np.ones(len(capacities))))))),
-                          b_ub=np.r_[np.ones(constraints.shape[0]), np.zeros(len(capacities))],
-                          A_eq=csr_matrix(np.r_[objective / objective.max(), 0.][None, :]),
-                          b_eq=[-result.fun], bounds=[*zip(np.zeros(len(gains)), eligible), (0, 1)],
-                          method="highs", options={"primal_feasibility_tolerance": 1e-9,
-                                                   "dual_feasibility_tolerance": 1e-9})
-        if not balanced.success:
-            raise RuntimeError(balanced.message)
-        counts = balanced.x[:-1] * population
-        chosen = np.floor(np.maximum(counts, 0)).astype(np.int64)
+        mask &= ~np.any((table.replay > 0) & ~table.fastest, axis=1)
+        mask &= ~np.any((table.kv > 0) & table.fastest, axis=1)
     elif policy not in POLICIES:
         raise ValueError(policy)
-    chosen = greedy_fill(fleet.count, gains, matrix, capacities, eligible, chosen)
-    residual = float(np.max((matrix @ chosen - capacities) / capacities))
-    if residual > 1e-8 or np.any(chosen.reshape(-1, 4).sum(1) > fleet.count):
-        raise RuntimeError("selection violates pooled capacity or session conservation")
-    return chosen, {"planned_shed_w": float(gains @ chosen), "lp_bound_w": bound,
-                    "solver_status": "optimal_relaxation_then_heuristic_rounding" if policy == "queue_haul" else "heuristic",
-                    "rounding_gap_w": None if bound is None else max(0., bound - gains @ chosen),
-                    "max_relative_capacity_residual": residual}
+    return mask
 
 
-def fair_rates(count, caps, capacity):
-    """Max-min per-session rates, compressed over identical session cohorts."""
-    if not len(count) or capacity <= 0:
-        return np.zeros(len(count))
-    order = np.argsort(caps)
-    c, weights = caps[order], count[order]
-    spent = np.r_[0., np.cumsum(c * weights)[:-1]]
-    remaining = np.cumsum(weights[::-1])[::-1]
-    levels = (capacity - spent) / remaining
-    index = np.flatnonzero(levels <= c)
-    level = levels[index[0]] if len(index) else c[-1]
-    return np.minimum(caps, max(0., level))
+def select(table, policy):
+    allowed = policy_mask(table, policy)
+    chosen = np.zeros(len(table.gains))
+    if not allowed.any():
+        return chosen
+    scale = np.where(table.capacities > 0, table.capacities, 1)
+    matrix = table.matrix * table.fleet.gpus / scale[:, None]
+    limits = (table.capacities > 0).astype(float)
+    gains = table.gains * table.fleet.gpus
+    if policy != "greedy":
+        ids = np.flatnonzero(allowed)
+        result = linprog(-gains[ids] / gains[ids].max(), A_ub=csr_matrix(matrix[:, ids]), b_ub=limits,
+                         bounds=(0, None), method="highs",
+                         options={"primal_feasibility_tolerance": 1e-9, "dual_feasibility_tolerance": 1e-9})
+        if not result.success:
+            raise RuntimeError(result.message)
+        if np.min(result.x) < -1e-9:
+            raise RuntimeError("LP returned negative replica fractions")
+        chosen[ids] = np.maximum(result.x, 0)
+    else:
+        remaining = limits.copy()
+        for _ in range(len(limits) + 1):
+            feasible = allowed & ~np.any((matrix > 0) & (remaining[:, None] <= 1e-10), axis=0)
+            if not feasible.any():
+                break
+            cost = np.sum(matrix / np.maximum(remaining[:, None], 1e-30), axis=0)
+            score = np.where(feasible, gains / np.maximum(cost, 1e-30), -np.inf)
+            j = int(np.argmax(score))
+            twin = (j + len(gains) // 2) % len(gains)
+            ids = [j, twin] if feasible[twin] and np.isclose(score[j], score[twin], rtol=1e-12, atol=0) else [j]
+            direction = matrix[:, ids].sum(1)
+            take = np.min(remaining[direction > 0] / direction[direction > 0])
+            chosen[ids] += take
+            remaining = np.maximum(remaining - take * direction, 0)
+        else:
+            raise RuntimeError("greedy failed to exhaust a resource per iteration")
+    return chosen * table.fleet.gpus
 
 
-def execute(fleet, chosen, deadline, budgets, endpoint, service=1.):
-    """Reserve serving, then run exact fluid stage events; commit integer cohorts."""
+def execute(table, chosen):
     chosen = np.asarray(chosen)
-    if (chosen.shape != (4 * len(fleet.count),) or np.any(chosen < 0)
-            or np.any(chosen != np.floor(chosen)) or np.any(chosen.reshape(-1, 4).sum(1) > fleet.count)
-            or not np.all(np.isfinite(np.r_[deadline, service, budgets, endpoint]))
-            or deadline <= 0 or service <= BASELINE_LOAD or np.any(budgets <= 0) or np.any(endpoint <= 0)):
-        raise ValueError("invalid whole-session execution inputs")
-    chosen = chosen.astype(np.int64)
-    admitted = chosen.copy()
-    demand = np.repeat(fleet.demand, 4) / service
-    context = np.repeat(fleet.context, 4)
-    route = np.tile((0, 0, 1, 1), len(fleet.count))
-    compute = np.full(2, fleet.gpus * (1 - BASELINE_LOAD / service))
-    memory = np.full(2, fleet.kv_capacity - fleet.baseline_kv)
-    if np.any(compute <= 0) or np.any(memory <= 0):
-        raise ValueError("sampled destination baseline itself is infeasible")
-    for j in np.flatnonzero(chosen):
-        r = route[j]
-        admitted[j] = max(0, min(chosen[j], int(np.floor(min(compute[r] / demand[j], memory[r] / context[j]) + 1e-9))))
-        compute[r] -= admitted[j] * demand[j]
-        memory[r] -= admitted[j] * context[j]
-    ids = np.flatnonzero(admitted)
-    count, routes = admitted[ids], route[ids]
-    replay = ids % 2 == 0
-    net = np.where(replay, np.repeat(fleet.log, 4)[ids], np.repeat(fleet.kv, 4)[ids]).copy()
-    work = (np.repeat(fleet.replay, 4)[ids] / service) * replay
-    committed = (net <= 1e-6) & (work <= 1e-12)
-    transferred, computed, contention = np.zeros(3), np.zeros(2), np.zeros(2)
-    peak_ready = np.zeros(2, dtype=np.int64)
-    now = 0.
-    while now < deadline and np.any(~committed):
-        sending = net > 1e-6
-        ready = ~sending & (work > 1e-12)
-        net_rate, compute_rate = np.zeros(len(ids)), np.zeros(len(ids))
-        active = np.array([count[sending & (routes == r)].sum() for r in (0, 1)])
-        caps = np.minimum(endpoint[:2], np.divide(budgets[:2], active, out=np.zeros(2), where=active > 0))
-        net_rate[sending] = fair_rates(count[sending], caps[routes[sending]], budgets[2])
-        for r in (0, 1):
-            mask = ready & (routes == r)
-            compute_rate[mask] = min(1., max(0., compute[r]) / max(1, count[mask].sum()))
-            peak_ready[r] = max(peak_ready[r], count[mask].sum())
-        times = np.r_[np.divide(net, net_rate, out=np.full(len(ids), np.inf), where=net_rate > 0),
-                      np.divide(work, compute_rate, out=np.full(len(ids), np.inf), where=compute_rate > 0)]
-        step = min(deadline - now, times.min(initial=np.inf))
-        if step <= 0:
-            raise RuntimeError("fluid executor made no progress")
-        network_work, gpu_work = np.minimum(net, net_rate * step), np.minimum(work, compute_rate * step)
-        for r in (0, 1):
-            transferred[r] += count[routes == r] @ network_work[routes == r]
-            computed[r] += count[routes == r] @ gpu_work[routes == r]
-            mask = ready & (routes == r)
-            contention[r] += count[mask] @ (1 - compute_rate[mask]) * step
-        transferred[2] = transferred[:2].sum()
-        net -= network_work
-        work -= gpu_work
-        now += step
-        committed |= (net <= 1e-6) & (work <= 1e-12)
-    completed = np.zeros(len(chosen), dtype=np.int64)
-    completed[ids[committed]] = count[committed]
-    ready_at_deadline = [int(count[replay & (net <= 1e-6) & ~committed & (routes == r)].sum()) for r in (0, 1)]
-    peak_ready = np.maximum(peak_ready, ready_at_deadline)
-    if np.any(transferred > budgets * deadline * (1 + 1e-8)) or np.any(computed > np.maximum(compute, 0) * deadline * (1 + 1e-8)):
-        raise RuntimeError("execution exceeded flow-volume capacity")
-    return completed, {"selected_sessions": int(chosen.sum()), "completed_sessions": int(completed.sum()),
-                       "rejected_sessions": int((chosen - admitted).sum()),
-                       "incomplete_sessions": int((admitted - completed).sum()),
-                       "unselected_sessions": int(fleet.count.sum() - chosen.sum()),
-                       "full_plan_success": bool(np.array_equal(completed, chosen)),
-                       "network_utilization": (transferred / (budgets * deadline)).tolist(),
-                       "compute_utilization": (computed / (fleet.gpus * deadline)).tolist(),
-                       "prefill_contention_session_s": contention.tolist(),
-                       "prefill_peak_ready_sessions": peak_ready.tolist(),
-                       "prefill_ready_at_deadline": ready_at_deadline,
-                       "prefill_network_blocked_at_deadline": [int(count[replay & (net > 1e-6) & (routes == r)].sum()) for r in (0, 1)],
-                       "prefill_remaining_gpu_s": [float(count[routes == r] @ work[routes == r]) for r in (0, 1)],
-                       "reserved_serving_utilization": (1 - compute / fleet.gpus).tolist(),
-                       "kv_utilization": (1 - memory / fleet.kv_capacity).tolist(),
-                       "last_event_s": now}
+    if chosen.shape != table.gains.shape or not np.isfinite(chosen).all() or np.any(chosen < -1e-10):
+        raise ValueError("invalid pattern multiplicities")
+    if np.any(chosen[~table.eligible] > 1e-10):
+        raise ValueError("selected an ineligible batch schedule")
+    used = table.matrix @ chosen
+    residual = float(np.max((used - table.capacities) / np.maximum(table.capacities, 1)))
+    if residual > 1e-8:
+        raise RuntimeError("schedule exceeds pooled resources")
+    active = chosen > 1e-10
+    if (np.any(table.log_bytes[active] > np.maximum(table.release[active], 0) *
+               (table.rate[active] - table.kv_bytes[active] / table.deadline) * (1 + 1e-8) + 1e-5)
+            or np.any(table.release[active] < -1e-10)):
+        raise RuntimeError("replay begins before its log transfer can finish")
+    action_counts, action_fractions = [], []
+    for route in (0, 1):
+        for action in (table.replay, table.kv):
+            counts = chosen[table.route == route] @ action[table.route == route]
+            action_counts.append(float(counts.sum()))
+            action_fractions.append(float(counts @ table.fleet.gain))
+    return {"shed_fraction": float(table.gains @ chosen), "action_counts": action_counts,
+            "action_fractions": action_fractions, "completed_sessions": sum(action_counts),
+            "max_relative_residual": max(0., residual),
+            "resource_utilization": (used / np.maximum(table.capacities, 1e-30)).tolist(),
+            "binding_rows": np.flatnonzero((table.capacities > 0) & np.isclose(used, table.capacities, rtol=1e-7, atol=0)).tolist(),
+            "batch_replica_seconds": [float((chosen * table.duration)[table.route == r].sum()) for r in (0, 1)],
+            "last_completion_s": table.deadline if active.any() else 0.,
+            "patterns": [{"column": int(j), "multiplicity": float(chosen[j]), "route": int(table.route[j]),
+                          "replay_counts": table.replay[j].tolist(), "kv_counts": table.kv[j].tolist(),
+                          "replay_release_s": float(table.release[j]), "batch_duration_s": float(table.duration[j]),
+                          "reserved_bytes_per_s": float(table.rate[j])} for j in np.flatnonzero(active)]}
+
+
+def compare(table):
+    results = {policy: execute(table, select(table, policy)) for policy in POLICIES}
+    for policy, result in results.items():
+        result["solver_status"] = "greedy_feasible" if policy == "greedy" else "optimal_within_library"
+    qh = results["queue_haul"]["shed_fraction"]
+    if any(r["shed_fraction"] > qh + 1e-8 for r in results.values()):
+        raise RuntimeError("QH LP is below a feasible baseline in the same schedule library")
+    return results
 
 
 def configuration(smoke=False):
-    return {"schema": SCHEMA, "models": list(MODELS), "gpus": GPUS,
-            "hardware": "NVIDIA A100 80GB PCIe", "gpu_power_limit_w": 300,
-            "installed_gpu_w": GPUS * 300, "deadlines": list(DEADLINES),
-            "wan_gbps": [40, 400] if smoke else ["reference", 10, 40, 100, 400],
-            "snapshots": 1 if smoke else 20, "draws": 20 if smoke else 200,
-            "service_factors": [.8, 1., 1.2],
-            "cases": [["coding", 8]] if smoke else [["coding", d] for d in (8, 4, 16, 32)]}
+    return {"schema": SCHEMA, "gpus": GPUS, "installed_gpu_w": GPUS * 300, "source_load": SOURCE_LOAD,
+            "resident_loads": [.25, .95] if smoke else list(LOADS),
+            "deadlines": [1, 10, 60] if smoke else list(DEADLINES),
+            "wan_gbps": [40] if smoke else ["reference", 10, 40, 100, 400],
+            "snapshots": 1 if smoke else 4, "draws": 1 if smoke else 8, "seed": 2001}
 
 
 def cells(config):
-    return list(product(config["models"], config["cases"], range(config["snapshots"]),
-                        config["wan_gbps"], config["deadlines"]))
+    snapshots = [("measured_pack", 0)] + [("coding", i) for i in range(config["snapshots"])]
+    return list(product(snapshots, config["resident_loads"], range(config["draws"] + 1), config["wan_gbps"], config["deadlines"]))
 
 
-def provenance():
-    paths = [Path(__file__), NETWORK, MANIFEST, ROOT / "plot_style.py"]
-    paths += [CALIBRATION / name for name in ("cells.jsonl", "metadata.json", "server.log", "fit.json")]
-    paths += [ROOT / f"profiles/{w}.json" for w in ("interactive_coding", "agentic_tool_loop", "agentic_rps_shape")]
-    return {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+def provenance(c):
+    paths = [Path(__file__), ROOT / "pool_shed_calibration.py", ROOT / "plot_style.py", NETWORK, MANIFEST]
+    return {**c["sources"], **{str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
 
 
-def prepare(out, smoke=False, wan_gbps=None):
+def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, wan_gbps=None):
+    started = time.perf_counter()
     config = configuration(smoke)
+    for key, value in (("resident_loads", resident_loads), ("snapshots", snapshots), ("draws", draws)):
+        if value is not None:
+            config[key] = value
     if wan_gbps is not None:
-        if len(set(wan_gbps)) != len(wan_gbps) or not np.all(np.isfinite(wan_gbps)) or min(wan_gbps) <= 0:
-            raise ValueError("WAN sweep requires distinct positive finite Gbit/s budgets")
-        config["wan_gbps"] = ["reference", *sorted(wan_gbps)]
-    metadata = {"config": config, "sources": provenance(), "calibration": calibrations(MODELS[0])[1]["evidence"],
-                "source_region": "swedencentral", "destination_regions": ["eastus2", "germanywestcentral"],
-                "seeds": {"workload": "1001 + snapshot", "calibration": "2001 + snapshot"},
-                "network_references": [
-                    "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning",
-                    "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview"],
-                "wan_literature": [
-                    {"paper": "SWAN, SIGCOMM 2013, section 6.1", "scope": "production inter-DC capacities: tens of Gbit/s to Tbit/s",
-                     "url": "https://www.microsoft.com/en-us/research/wp-content/uploads/2013/08/Achieving-High-Utilization-with-Software-Driven-WAN.pdf"},
-                    {"paper": "B4, SIGCOMM 2013", "scope": "shared WAN links, application-priority allocation; not GPU-count capacity",
-                     "url": "https://conferences.sigcomm.org/sigcomm/2013/papers/sigcomm/p3.pdf"},
-                    {"paper": "B4 and After, SIGCOMM 2018, section 3", "scope": "up to 6.4 Tbit/s Saturn WAN/site; 81.92 Tbit/s Stargate includes cluster and sidelinks",
-                     "url": "https://cs538.github.io/readings/hong18.pdf"},
-                    {"paper": "RADWAN, SIGCOMM 2018", "scope": "100 Gbit/s IP links and 100-200 Gbit/s rate adaptation; global sums are not route budgets",
-                     "url": "https://www.microsoft.com/en-us/research/uploads/prod/2018/03/Rate_Adaptive_WAN.pdf"},
-                    {"paper": "OneWAN, NSDI 2023", "scope": "regional aggregation and backbone links shared by traffic classes",
-                     "url": "https://www.usenix.org/system/files/nsdi23-krishnaswamy.pdf"},
-                    {"paper": "TEAL, SIGCOMM 2023, section 5.1", "scope": "uses measured SWAN demand; assigns some missing topology capacities for evaluation",
-                     "url": "https://minlanyu.seas.harvard.edu/writeup/sigcomm23-teal.pdf"},
-                    {"paper": "HEDGE, NSDI 2026", "scope": "600 Gbit/s hardware LAG; stochastic production link capacity; 3/5 Tbit/s targets are modeled",
-                     "url": "https://www.usenix.org/system/files/nsdi26-devraj.pdf"}],
-                "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-                "git_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True)),
-                "network_observations_bytes_per_s": network_samples().tolist(),
-                "assumptions": ["20 MW target installed; 66666 300W A100 GPUs = 19.9998 MW",
-                    "80% source and 50% destination normalized F/G demand are assumed; no calibrated utilization or latency SLO claim",
-                    "empirical 604/64 active power anchors are provisional for sampled serving mixes; failed rational fit unused",
-                    "bootstrap only within warm idle and same-shape/concurrency groups; no workload-transfer confidence claim",
-                    "busy equivalent capacity drains to idle; no discrete GPU packing or shutdown",
-                    "frozen state; weights resident; no ingest/setup/catch-up cost",
-                    "configured Gbit/s shared migration allocations are assumed, not Azure route measurements",
-                    "each route capped at the shared WAN budget; aggregate caps do not inherit TCP throughput asymmetry",
-                    "GPU count scales endpoint ceilings only, never the available WAN allocation",
-                    "network repeats vary endpoint limits only; WAN allocation held fixed, no invented backbone error distribution",
-                    "per-session network ceiling assumes one measured eight-stream endpoint bundle",
-                    "replay per-session compute ceiling is one GPU; capacity uses contextual prefill times",
-                    "all compute after serving reservation is available to replay with ideal processor sharing; no measured loaded-queue claim",
-                    "LP peak-pressure tie-break may be constant on optimal face; no scheduling guarantee",
-                    "stable session IDs are cohort-major then action-major within selected counts",
-                    "greedy averages tied scarcity estimates, reprices remaining headroom, and balances cohort methods across routes without an LP",
-                    "KV geometry follows matched_action analytical BF16 formulas, not measured wire bytes",
-                    "pooled KV tokens use measured startup capacity; no placement/fragmentation model",
-                    "coding logs assume 2 bytes/token; equal cadence normalized to source load",
-                    "coding snapshots resample 24 trajectories and one supported joint state each",
-                    "destination-only service sensitivity is assumed +/-20%; source demand/power fixed",
-                    "network bootstrap has only three paired repetitions; no regional capacity confidence claim",
-                    "power draw is fleet-wide, weighted by compressed bootstrap multiplicities",
-                    "primary comparison is nominal volume LP upper bound versus volume-feasible integer plans",
-                    "staged processor-sharing completion is a separate scheduling stress test, not the LP objective"]}
-    metadata["identity"] = digest({"config": config, "sources": metadata["sources"]})
-    path = out / "plan.json"
-    if path.exists():
-        if json.loads(path.read_text())["identity"] != metadata["identity"]:
-            raise ValueError("existing plan differs; use a new output directory")
-    else:
-        write_json(path, metadata)
-    return metadata
+        config["wan_gbps"] = ["reference", *wan_gbps]
+    if (config["snapshots"] < 1 or config["draws"] < 0 or not config["resident_loads"]
+            or len(set(config["resident_loads"])) != len(config["resident_loads"])
+            or any(not 0 <= u < 1 for u in config["resident_loads"])
+            or len(set(config["wan_gbps"])) != len(config["wan_gbps"])
+            or any(not np.isfinite(w) or w <= 0 for w in config["wan_gbps"] if w != "reference")):
+        raise ValueError("invalid campaign grid")
+    c = calibration(config["draws"])
+    rng = np.random.default_rng(config["seed"])
+    indices = [-1, *rng.integers(len(network_samples()), size=config["draws"]).tolist()]
+    sources = provenance(c)
+    identity = digest({"config": config, "sources": sources})
+    plan = {"identity": identity, "config": config, "sources": sources, "calibration": c,
+            "network_indices": indices, "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+            "git_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], text=True)),
+            "assumptions": ["continuous pooled populations; optimum only within the common finite batch library",
+                            "scenario-reoptimized sensitivity, not fixed-plan robustness or transfer-error confidence bounds",
+                            "source swedencentral; equal-size eastus2 and germanywestcentral destinations",
+                            "resident load uses derived phase-reference work, not FLOPs, busy time, or validated SLO capacity",
+                            "coding uses measured singleton support and transferred batch/background response",
+                            "eight resident sessions/GPU at every load; no invented initial migration backlog",
+                            "paced arrivals; fixed context snapshots, resident weights; handoff at deadline",
+                            "ongoing serving and KV are pooled; no discrete placement or local fragmentation model",
+                            "KV ingest, catch-up, context growth, and shutdown are omitted",
+                            "replay logs assume two bytes/token; KV uses loaded-runtime serialized geometry",
+                            "WAN allocations are scenarios, not measurements of backbone capacity",
+                            "power is linear workload-share allocation of direct coding active-to-awake-idle anchors"],
+            "resource_rows": "one source-cohort row per state, then " + ", ".join(
+                [f"{resource}_{route}" for resource in ("migration_replicas", "serving_reference", "kv_tokens", "network")
+                 for route in ("east", "germany")] + ["network_shared"]),
+            "preparation_s": time.perf_counter() - started}
+    if (out / "plan.json").exists() and json.loads((out / "plan.json").read_text())["identity"] != identity:
+        raise ValueError("existing output uses different inputs; choose a new directory")
+    write_json(out / "plan.json", plan)
+    return plan
 
 
-def run_cell(config, cell):
-    model, (workload, density), snapshot, wan_gbps, deadline = cell
-    fleet = sample_fleet(model, workload, density, snapshot, config["gpus"])
-    source_memory = float(fleet.count @ fleet.context)
-    base = {"model": model, "workload": workload, "density": density, "snapshot": snapshot,
-            "wan_gbps": wan_gbps, "deadline_s": deadline,
-            "population_sessions": int(fleet.count.sum()), "source_kv_utilization": source_memory / fleet.kv_capacity}
-    if source_memory > fleet.kv_capacity or fleet.baseline_kv >= fleet.kv_capacity:
-        return {"case": base, "status": "memory_infeasible", "metadata": fleet.metadata}
+def load_plan(out):
+    plan = json.loads((out / "plan.json").read_text())
+    if plan["config"]["schema"] != SCHEMA or plan["sources"] != provenance(calibration(plan["config"]["draws"])):
+        raise ValueError("stale schema, code, or calibration")
+    if plan["identity"] != digest({"config": plan["config"], "sources": plan["sources"]}):
+        raise ValueError("invalid plan identity")
+    return plan
+
+
+def run_cell(plan, cell, expanded=False):
+    (workload, snapshot), load, draw, wan, deadline = cell
+    fleet = sample_fleet(workload, snapshot, plan["config"]["gpus"])
     samples = network_samples()
-    central = np.median(samples, axis=0)
-    central[2] = central[:2].sum()
-    budgets = bandwidth(central, fleet.gpus, wan_gbps)
-    _, power = calibrations(model)
-    rng = np.random.default_rng(2001 + snapshot)
-    network_draws = rng.integers(len(samples), size=config["draws"])
-    power_draws = rng.choice(len(power["bootstrap_curve_counts"]), size=config["draws"],
-                            p=np.array(power["bootstrap_curve_counts"]) / 200)
-    executions, plans = [], {}
-    for policy in POLICIES:
-        chosen, planning = select(fleet, deadline, budgets, central, policy)
-        plans[policy] = {**planning, "counts": chosen.reshape(-1, 4).tolist()}
-        central_done, central_result = execute(fleet, chosen, deadline, budgets, central)
-        plans[policy]["central_execution"] = {**central_result, "shed_w": float(np.repeat(fleet.gain, 4) @ central_done)}
-        for service in config["service_factors"]:
-            for k in np.unique(network_draws):
-                actual_budgets = bandwidth(samples[k], fleet.gpus, wan_gbps)
-                completed, result = execute(fleet, chosen, deadline, actual_budgets, samples[k], service)
-                action_gpu = (completed.reshape(-1, 4) * fleet.demand[:, None]).sum(0) / SOURCE_LOAD
-                executions.append({**planning, **result, "policy": policy, "service_factor": service,
-                                   "network_draw": int(k), "action_gpu": action_gpu.tolist(),
-                                   "action_counts": completed.reshape(-1, 4).sum(0).tolist(),
-                                   "network_budget_gbps": (actual_budgets * 8e-9).tolist()})
-    audit_plans(plans)
-    curves = [np.array(power["phase_power"]["measured_power_bootstrap"][p]) for p in power_draws]
-    return {"case": base, "status": "complete", "executions": executions, "plans": plans, "metadata": fleet.metadata,
-            "gpus": fleet.gpus, "removable_w_per_gpu": fleet.power_w - fleet.idle_w,
-            "draws": {"network": network_draws.tolist(), "power": power_draws.tolist(),
-                "active_w": [float(np.interp(SOURCE_LOAD, *curve.T)) for curve in curves],
-                "idle_w": [float(curve[0, 1]) for curve in curves]},
-            "cohorts": {"counts": fleet.count.tolist(), "context": fleet.context.tolist(),
-                        "demand": fleet.demand.tolist(), "replay_gpu_s": fleet.replay.tolist()}}
-
-
-def audit_plans(plans):
-    """Only the continuous volume objective has a superset dominance guarantee."""
-    qh = plans["queue_haul"]
-    bound = qh["lp_bound_w"]
-    tolerance = 1e-8 * max(1., abs(bound))
-    if not np.isfinite(bound) or any(not np.isfinite(p["planned_shed_w"]) or
-                                   p["planned_shed_w"] > bound + tolerance for p in plans.values()):
-        raise RuntimeError("LP volume upper bound below a feasible plan")
-    return {policy: {"rounded_plan_gap_w": qh["planned_shed_w"] - p["planned_shed_w"],
-                     "central_execution_gap_w": qh["central_execution"]["shed_w"] - p["central_execution"]["shed_w"]}
-            for policy, p in plans.items() if policy != "queue_haul"}
-
-
-def volume_rows(result):
-    """Nominal flow volumes; power repeats never perturb the optimized resources."""
-    demand = np.array(result["cohorts"]["demand"]) / SOURCE_LOAD
-    for policy, plan in result["plans"].items():
-        counts = np.array(plan["counts"])
-        actions = (counts * demand[:, None]).sum(0)
-        for draw, (active, idle) in enumerate(zip(result["draws"]["active_w"], result["draws"]["idle_w"])):
-            yield {**result["case"], "policy": "lp_plan" if policy == "queue_haul" else policy,
-                   "draw": draw, "shed_w": float(actions.sum() * (active - idle)),
-                   "action_counts": counts.sum(0).tolist(), "action_shed_w": (actions * (active - idle)).tolist()}
-            if policy == "queue_haul":
-                yield {**result["case"], "policy": "lp_bound", "draw": draw,
-                       "shed_w": plan["lp_bound_w"] * (active - idle) / result["removable_w_per_gpu"]}
-
-
-def draw_rows(result):
-    """Expand compact, paired execution/power draws only when needed."""
-    for execution in result["executions"]:
-        for draw, k in enumerate(result["draws"]["network"]):
-            if execution["network_draw"] != k:
-                continue
-            active, idle = result["draws"]["active_w"][draw], result["draws"]["idle_w"][draw]
-            action_w = np.array(execution["action_gpu"]) * (active - idle)
-            yield {**result["case"], **execution, "draw": draw, "power_draw": result["draws"]["power"][draw],
-                   "initial_source_w": result["gpus"] * active, "idle_source_w": result["gpus"] * idle,
-                   "shed_w": float(action_w.sum()), "shed_fraction": sum(execution["action_gpu"]) / result["gpus"],
-                   "action_shed_w": action_w.tolist()}
+    endpoint = samples[plan["network_indices"][draw]].copy() if draw else np.r_[np.median(samples[:, :2], axis=0), 0.]
+    if not draw:
+        endpoint[2] = endpoint[:2].sum()
+    budgets = bandwidth(endpoint, fleet.gpus, wan)
+    r, k = patterns(workload, snapshot, fleet.gpus, expanded)
+    start = time.perf_counter()
+    table = schedule_table(fleet, r, k, load, deadline, endpoint, budgets, plan["calibration"]["timing"][draw])
+    build_s = time.perf_counter() - start
+    start = time.perf_counter()
+    results = compare(table)
+    return {"identity": plan["identity"], "cell": list(cell), "status": "complete", "results": results,
+            "columns": len(table.gains), "eligible_columns": int(table.eligible.sum()),
+            "budgets_gbps": (budgets * 8e-9).tolist(), "endpoint_gbps": (endpoint * 8e-9).tolist(),
+            "serving_ceiling": min(1., 2 * (1 - load) / SOURCE_LOAD),
+            "build_s": build_s, "solve_evaluate_s": time.perf_counter() - start}
 
 
 def run(out, shard=0, shards=1):
-    plan = json.loads((out / "plan.json").read_text())
-    if plan["sources"] != provenance() or not 0 <= shard < shards:
-        raise ValueError("input/code changed or invalid shard")
-    for index, cell in enumerate(cells(plan["config"])):
+    started = time.perf_counter()
+    plan = load_plan(out)
+    if not 0 <= shard < shards:
+        raise ValueError("invalid shard")
+    work = cells(plan["config"])
+    for index, cell in enumerate(work):
         if index % shards != shard:
             continue
         path = out / "cells" / f"{index:06d}.json.gz"
         if path.exists():
             with gzip.open(path, "rt") as handle:
                 previous = json.load(handle)
-            if previous["identity"] != plan["identity"] or previous["cell"] != list(cell):
-                raise ValueError(f"stale cell: {path}")
+            if previous["identity"] != plan["identity"] or previous["cell"] != json.loads(json.dumps(cell)):
+                raise ValueError("stale cell checkpoint")
             continue
-        result = run_cell(plan["config"], cell)
-        write_json(path, {"identity": plan["identity"], "cell": cell, **result})
-        print(f"{index + 1}/{len(cells(plan['config']))} {model_label(cell)} {result['status']}", flush=True)
-
-
-def model_label(cell):
-    return f"{cell[0]} {cell[1]} snapshot={cell[2]} network={cell[3]} deadline={cell[4]}"
+        write_json(path, run_cell(plan, cell))
+        if index % 250 == 0:
+            print(f"{index + 1}/{len(work)} cells; {time.perf_counter() - started:.1f}s", flush=True)
+    write_json(out / f"runtime-{shard}.json", {"identity": plan["identity"], "shard": shard, "shards": shards,
+                                              "wall_s": time.perf_counter() - started})
 
 
 def write_csv(path, rows):
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
-        writer.writerows({k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in row.items()} for row in rows)
+        writer.writerows({k: json.dumps(v) if isinstance(v, (dict, list)) else v for k, v in row.items()} for row in rows)
 
 
 def reduce(out):
-    plan = json.loads((out / "plan.json").read_text())
-    if plan["sources"] != provenance():
-        raise ValueError("input/code changed since preparation")
+    started = time.perf_counter()
+    plan = load_plan(out)
     expected = cells(plan["config"])
     paths = sorted((out / "cells").glob("*.json.gz"))
-    if {p.name for p in paths} != {f"{i:06d}.json.gz" for i in range(len(expected))}:
-        raise ValueError("missing or unexpected campaign cells")
-    groups, pairs, invalid, volumes, audit = {}, {}, [], {}, []
-    grouping = ("model", "workload", "density", "wan_gbps", "deadline_s", "policy", "service_factor")
+    if [p.name for p in paths] != [f"{i:06d}.json.gz" for i in range(len(expected))]:
+        raise ValueError("missing or unexpected cells")
+    rows, groups, differences, regressions = [], {}, [], []
+    maxima = {"residual": 0., "columns": 0, "lp_loss": 0.}
+    build_s = solve_s = 0.
     for i, path in enumerate(paths):
         with gzip.open(path, "rt") as handle:
-            result = json.load(handle)
-        if result["identity"] != plan["identity"] or result["cell"] != list(expected[i]):
-            raise ValueError(f"stale or duplicate cell: {path}")
-        if result["status"] == "memory_infeasible":
-            invalid.append(result["case"])
-            continue
-        if result["status"] != "complete" or any(len(v) != plan["config"]["draws"] for v in result["draws"].values()):
-            raise ValueError(f"invalid status or draw lengths: {path}")
-        audit.append({**result["case"], "comparisons": audit_plans(result["plans"])})
-        volume = list(volume_rows(result))
-        for policy in ("lp_bound", "lp_plan", *POLICIES[1:]):
-            selected = [r for r in volume if r["policy"] == policy]
-            key = (*[result["case"][k] for k in grouping[:-2]], policy, 1.)
-            volumes.setdefault(key, []).append({
-                "watts": np.array([r["shed_w"] for r in selected]),
-                "actions": selected[0].get("action_counts"),
-                "action_watts": np.mean([r["action_shed_w"] for r in selected], axis=0) if policy != "lp_bound" else None,
-                "population": result["case"]["population_sessions"]})
-        rows = list(draw_rows(result))
-        keys = [(r["policy"], r["service_factor"], r["draw"]) for r in rows]
-        required = set(product(POLICIES, plan["config"]["service_factors"], range(plan["config"]["draws"])))
-        if len(keys) != len(required) or set(keys) != required:
-            raise ValueError(f"missing or duplicate policy/draw rows: {path}")
-        local = {}
-        for row in rows:
-            local.setdefault(tuple(row[k] for k in grouping), []).append(row)
-        for key, group in local.items():
-            group.sort(key=lambda r: r["draw"])
-            groups.setdefault(key, []).append({
-                "watts": np.array([r["shed_w"] for r in group]),
-                "fractions": np.array([r["shed_fraction"] for r in group]),
-                "completed": np.array([r["completed_sessions"] for r in group]),
-                "success": np.mean([r["full_plan_success"] for r in group]),
-                "actions": np.mean([r["action_counts"] for r in group], axis=0),
-                "action_watts": np.mean([r["action_shed_w"] for r in group], axis=0),
-                "network_usage": np.mean([r["network_utilization"] for r in group], axis=0),
-                "compute_usage": np.mean([r["compute_utilization"] for r in group], axis=0),
-                "serving_usage": np.mean([r["reserved_serving_utilization"] for r in group], axis=0),
-                **{metric: np.mean([r[metric] for r in group], axis=0) for metric in PREFILL_METRICS},
-                "planned_shed_w": np.mean([r["planned_shed_w"] for r in group]),
-                "memory_usage": np.mean([r["kv_utilization"] for r in group], axis=0),
-                "not_completed": np.mean([r["population_sessions"] - r["completed_sessions"] for r in group]),
-                "budget": np.median([r["network_budget_gbps"] for r in group], axis=0)})
-            if key[-2] != "queue_haul":
-                qh_key = (*key[:-2], "queue_haul", key[-1])
-                qh = sorted(local[qh_key], key=lambda r: r["draw"])
-                pairs.setdefault(key, []).append(np.array([a["shed_w"] - b["shed_w"] for a, b in zip(qh, group)]))
-    if not groups:
-        raise ValueError("no memory-feasible campaign cells")
-    summary = []
-    for key, group in groups.items():
-        if len(group) != plan["config"]["snapshots"]:
-            # Memory feasibility can depend on the sampled context distribution.
-            status = "conditional_on_memory_feasible_snapshots"
-        else:
-            status = "complete"
-        watts = np.concatenate([r["watts"] for r in group])
-        snapshot_medians = [np.median(r["watts"]) for r in group]
-        calibration_width = [np.diff(np.quantile(r["watts"], [.05, .95]))[0] for r in group]
-        completed = np.concatenate([r["completed"] for r in group])
-        summary.append({**dict(zip(grouping, key)), "evaluation": "staged_execution", "draws": len(watts), "snapshots": len(group), "status": status,
-                        "p05_shed_mw": float(np.quantile(watts, .05) / 1e6),
-                        "median_shed_mw": float(np.median(watts) / 1e6), "p95_shed_mw": float(np.quantile(watts, .95) / 1e6),
-                        "median_shed_fraction": float(np.median(np.concatenate([r["fractions"] for r in group]))),
-                        "workload_p05_mw": float(np.quantile(snapshot_medians, .05) / 1e6),
-                        "workload_p95_mw": float(np.quantile(snapshot_medians, .95) / 1e6),
-                        "median_calibration_width_mw": float(np.median(calibration_width) / 1e6),
-                        "full_plan_success": float(np.mean([r["success"] for r in group])),
-                        "p05_completed_sessions": float(np.quantile(completed, .05)),
-                        "median_completed_sessions": float(np.median(completed)),
-                        "p95_completed_sessions": float(np.quantile(completed, .95)),
-                        "mean_network_utilization": np.mean([r["network_usage"] for r in group], axis=0).tolist(),
-                        "mean_migration_compute_utilization": np.mean([r["compute_usage"] for r in group], axis=0).tolist(),
-                        "mean_serving_utilization": np.mean([r["serving_usage"] for r in group], axis=0).tolist(),
-                        **{f"mean_{metric}": np.mean([r[metric] for r in group], axis=0).tolist() for metric in PREFILL_METRICS},
-                        "mean_planned_shed_mw": float(np.mean([r["planned_shed_w"] for r in group]) / 1e6),
-                        "mean_kv_utilization": np.mean([r["memory_usage"] for r in group], axis=0).tolist(),
-                        "action_counts_mean": np.mean([r["actions"] for r in group], axis=0).tolist(),
-                        "action_shed_mw_mean": (np.mean([r["action_watts"] for r in group], axis=0) / 1e6).tolist(),
-                        "mean_not_completed": float(np.mean([r["not_completed"] for r in group])),
-                        "network_budget_gbps_median": np.median([r["budget"] for r in group], axis=0).tolist()})
-    paired = []
-    for key, arrays in pairs.items():
-        values = np.concatenate(arrays)
-        paired.append({**dict(zip(grouping, key)), "evaluation": "staged_execution", "draws": len(values),
-                       **dict(zip(("p05_qh_minus_baseline_w", "median_qh_minus_baseline_w", "p95_qh_minus_baseline_w"),
-                                  np.quantile(values, [.05, .5, .95]))), "qh_win_fraction": float(np.mean(values > 0))})
-    write_csv(out / "summary.csv", summary)
-    write_csv(out / "paired_differences.csv", paired)
+            value = json.load(handle)
+        if value["identity"] != plan["identity"] or value["cell"] != json.loads(json.dumps(expected[i])) or value["status"] != "complete":
+            raise ValueError("invalid cell checkpoint")
+        (workload, snapshot), load, draw, wan, deadline = value["cell"]
+        if set(value["results"]) != set(POLICIES):
+            raise ValueError("missing policy")
+        qh = value["results"]["queue_haul"]["shed_fraction"]
+        maxima["columns"] = max(maxima["columns"], value["columns"])
+        build_s += value["build_s"]
+        solve_s += value["solve_evaluate_s"]
+        for policy, result in value["results"].items():
+            maxima["residual"] = max(maxima["residual"], result["max_relative_residual"])
+            maxima["lp_loss"] = max(maxima["lp_loss"], result["shed_fraction"] - qh)
+            if (not np.isfinite(result["shed_fraction"]) or result["shed_fraction"] < -1e-8
+                    or result["shed_fraction"] > value["serving_ceiling"] + 1e-8):
+                raise ValueError("invalid shed or serving ceiling")
+            row = {"workload": workload, "snapshot": snapshot, "load": load, "draw": draw, "wan_gbps": wan,
+                   "deadline_s": deadline, "policy": policy, "shed_fraction": result["shed_fraction"],
+                   "action_counts": result["action_counts"], "action_fractions": result["action_fractions"],
+                   "resource_utilization": result["resource_utilization"], "batch_replica_seconds": result["batch_replica_seconds"],
+                   "serving_ceiling": value["serving_ceiling"], "qh_minus_policy_fraction": qh - result["shed_fraction"]}
+            rows.append(row)
+            groups.setdefault((workload, load, wan, deadline, policy), []).append(row)
+    if maxima["residual"] > 1e-8 or maxima["lp_loss"] > 1e-8:
+        raise RuntimeError("campaign feasibility/dominance audit failed")
     curves = {}
-    for row in summary:
-        key = tuple(row[k] for k in grouping if k != "deadline_s")
-        curves.setdefault(key, []).append(row)
-    regressions = []
+    for row in rows:
+        if row["policy"] == "queue_haul":
+            curves.setdefault((row["workload"], row["snapshot"], row["load"], row["draw"], row["wan_gbps"]), []).append(row)
     for curve in curves.values():
-        curve.sort(key=lambda r: r["deadline_s"])
-        for before, after in zip(curve, curve[1:]):
-            if after["median_shed_mw"] + 1e-9 < before["median_shed_mw"]:
-                regressions.append({**{k: after[k] for k in grouping}, "previous_deadline_s": before["deadline_s"],
-                                    "median_shed_drop_mw": before["median_shed_mw"] - after["median_shed_mw"]})
-    write_json(out / "summary.json", {"identity": plan["identity"], "complete_cells": len(paths),
-                                      "memory_infeasible": invalid, "deadline_regressions": regressions, "summary": summary})
-    write_json(out / "dominance-audit.json", {"cells_checked": len(audit), "volume_bound_violations": 0,
-        "comparisons": {policy: {"rounded_plan_losses": sum(r["comparisons"][policy]["rounded_plan_gap_w"] < -1e-6 for r in audit),
-            "central_execution_losses": sum(r["comparisons"][policy]["central_execution_gap_w"] < -1e-6 for r in audit),
-            "worst_rounded_plan_gap_w": min(r["comparisons"][policy]["rounded_plan_gap_w"] for r in audit),
-            "worst_central_execution_gap_w": min(r["comparisons"][policy]["central_execution_gap_w"] for r in audit)} for policy in POLICIES[1:]}})
-    volume_summary, volume_pairs = [], []
-    central = np.median(network_samples(), axis=0)
-    central[2] = central[:2].sum()
-    for key, group in volumes.items():
-        watts = np.array([r["watts"] for r in group])
-        row = {**dict(zip(grouping, key)), "evaluation": "nominal_volume", "draws": watts.size, "snapshots": len(group),
-               "status": "complete" if len(group) == plan["config"]["snapshots"] else "conditional_on_memory_feasible_snapshots",
-               **dict(zip(("p05_shed_mw", "median_shed_mw", "p95_shed_mw"), np.quantile(watts, [.05, .5, .95]) / 1e6)),
-               **dict(zip(("workload_p05_mw", "workload_p95_mw"), np.quantile(np.median(watts, axis=1), [.05, .95]) / 1e6)),
-               "median_calibration_width_mw": float(np.median(np.diff(np.quantile(watts, [.05, .95], axis=1), axis=0)) / 1e6),
-               "network_budget_gbps_median": (bandwidth(central, plan["config"]["gpus"], key[3]) * 8e-9).tolist(),
-               "action_counts_mean": None, "action_shed_mw_mean": None, "mean_not_selected": None}
-        if key[-2] != "lp_bound":
-            row.update(action_counts_mean=np.mean([r["actions"] for r in group], axis=0).tolist(),
-                       action_shed_mw_mean=(np.mean([r["action_watts"] for r in group], axis=0) / 1e6).tolist(),
-                       mean_not_selected=float(np.mean([r["population"] - sum(r["actions"]) for r in group])))
-            for comparator in ("lp_bound", "lp_plan"):
-                if key[-2] == comparator:
-                    continue
-                differences = np.array([r["watts"] for r in volumes[(*key[:-2], comparator, 1.)]]) - watts
-                volume_pairs.append({**dict(zip(grouping, key)), "evaluation": "nominal_volume", "comparator": comparator,
-                    **dict(zip(("p05_difference_w", "median_difference_w", "p95_difference_w"), np.quantile(differences, [.05, .5, .95]))),
-                    "win_fraction": float(np.mean(differences > 0))})
-        volume_summary.append(row)
-    write_csv(out / "volume-summary.csv", volume_summary)
-    write_csv(out / "volume-paired-differences.csv", volume_pairs)
-    plot(volume_summary, out, "volume")
-    plot(summary, out, "staged")
-    return summary
+        curve.sort(key=lambda row: row["deadline_s"])
+        if np.any(np.diff([r["shed_fraction"] for r in curve]) < -1e-8):
+            regressions.append(curve[0])
+    if regressions:
+        raise RuntimeError("LP shed declined with deadline")
+    power = np.array(plan["calibration"]["power_draws_w"]) * plan["config"]["gpus"] / 1e6
+    central_power = plan["config"]["gpus"] * (plan["calibration"]["active_w"] - plan["calibration"]["idle_w"]) / 1e6
+    summary = []
+    for key, values in groups.items():
+        central = [r for r in values if r["draw"] == 0]
+        sampled = [r for r in values if r["draw"] > 0] or central
+        fractions = np.array([r["shed_fraction"] for r in sampled])
+        mw = fractions[:, None] * power
+        summary.append({**dict(zip(("workload", "load", "wan_gbps", "deadline_s", "policy"), key)),
+                        "central_shed_mw": float(np.median([r["shed_fraction"] for r in central]) * central_power),
+                        "median_shed_fraction": float(np.median(fractions)),
+                        **dict(zip(("p05_shed_mw", "median_shed_mw", "p95_shed_mw"), map(float, np.quantile(mw, [.05, .5, .95])))),
+                        "action_counts_mean": np.mean([r["action_counts"] for r in sampled], axis=0).tolist(),
+                        "action_fractions_mean": np.mean([r["action_fractions"] for r in sampled], axis=0).tolist(),
+                        "serving_ceiling": sampled[0]["serving_ceiling"],
+                        "resource_utilization_mean": np.mean([r["resource_utilization"] for r in sampled], axis=0).tolist(),
+                        "workload_central_range_mw": [min(r["shed_fraction"] for r in central) * central_power,
+                                                     max(r["shed_fraction"] for r in central) * central_power],
+                        "timing_network_range_fraction": [float(fractions.min()), float(fractions.max())]})
+        if key[-1] != "queue_haul":
+            differences.append({**dict(zip(("workload", "load", "wan_gbps", "deadline_s", "policy"), key)),
+                                "minimum_qh_gap_fraction": min(r["qh_minus_policy_fraction"] for r in values),
+                                "median_qh_gap_fraction": float(np.median([r["qh_minus_policy_fraction"] for r in sampled]))})
+    write_csv(out / "scenarios.csv", rows)
+    write_csv(out / "summary.csv", summary)
+    write_csv(out / "paired_differences.csv", differences)
+    write_json(out / "dominance-audit.json", {"identity": plan["identity"], "cells": len(paths), "maxima": maxima,
+                                            "deadline_regressions": 0})
+    plot_start = time.perf_counter()
+    plot(summary, out)
+    metadata = {"identity": plan["identity"], "cells": len(paths), "summary": summary,
+                "calibration_evidence": plan["calibration"]["evidence"],
+                "workloads": {f"{w}-{s}": sample_fleet(w, s, plan["config"]["gpus"]).metadata
+                              for w, s in {cell[0] for cell in expected}},
+                "power_scope": "linear measured-anchor proxy; workload transfer; no shutdown",
+                "interval_scope": "scenario-reoptimized workload/calibration sensitivity; not transfer-error or fixed-plan coverage",
+                "timing_s": {"preparation": plan["preparation_s"], "pattern_tables": build_s, "solves_evaluation": solve_s,
+                             "plotting": time.perf_counter() - plot_start, "reduction": time.perf_counter() - started}}
+    write_json(out / "summary.json", metadata)
+    return metadata
 
 
-def plot(summary, out, evaluation):
+def plot(summary, out):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import plot_style
     plot_style.apply()
-    policies = ("lp_bound", "lp_plan", *POLICIES[1:]) if evaluation == "volume" else POLICIES
-    identity = lambda policy: "lp_plan" if policy == "queue_haul" else policy
-    caption = "Nominal volume bounds/plans; power-repeat bands" if evaluation == "volume" else "Staged scheduling stress test; paired power/endpoint bands"
-    for workload, density in sorted({(r["workload"], r["density"]) for r in summary}):
-        selected = [r for r in summary if (r["workload"], r["density"], r["service_factor"]) == (workload, density, 1.)]
-        models = [m for m in MODELS if any(r["model"] == m for r in selected)]
-        wan_points = list(dict.fromkeys(r["wan_gbps"] for r in selected))
-        fig, axes = plt.subplots(len(models), len(wan_points), squeeze=False,
-                                 figsize=(3.5 * len(wan_points), max(4.2, 2.8 * len(models))), sharex=True, sharey="row")
-        for ax, (model, wan_gbps) in zip(axes.flat, product(models, wan_points)):
-            for policy in policies:
-                series = sorted((r for r in selected if (r["model"], r["wan_gbps"], r["policy"]) == (model, wan_gbps, policy)), key=lambda r: r["deadline_s"])
-                if not series:
-                    continue
+    model_label = plot_style.MODEL_NAMES["openai/gpt-oss-20b"] + " / " + plot_style.AGENTIC_HARDWARE_NAMES["a100"]
+    workloads = ("measured_pack", "coding")
+    loads = sorted({r["load"] for r in summary})
+    for wan in dict.fromkeys(r["wan_gbps"] for r in summary):
+        fig, axes = plt.subplots(2, len(loads), squeeze=False, figsize=(3.2 * len(loads), 6), sharex=True, sharey=True)
+        for ax, (workload, load) in zip(axes.flat, product(workloads, loads)):
+            for policy in POLICIES:
+                series = sorted((r for r in summary if (r["workload"], r["load"], r["wan_gbps"], r["policy"]) ==
+                                 (workload, load, wan, policy)), key=lambda r: r["deadline_s"])
                 x = [r["deadline_s"] for r in series]
-                ax.plot(x, [r["median_shed_mw"] for r in series], color=plot_style.POLICY_COLORS[identity(policy)],
-                        linestyle=plot_style.POLICY_LINESTYLES[identity(policy)], label=plot_style.POLICY_NAMES[identity(policy)])
-                ax.fill_between(x, [r["p05_shed_mw"] for r in series], [r["p95_shed_mw"] for r in series], color=plot_style.POLICY_COLORS[identity(policy)], alpha=.1)
-            budget = next(r["network_budget_gbps_median"][2] for r in selected if r["model"] == model and r["wan_gbps"] == wan_gbps)
-            ax.set(title=f"{model}\nshared {budget:.3g} Gbit/s", xscale="log", xlabel="Deadline (s)")
-        handles, labels = axes.flat[0].get_legend_handles_labels()
-        fig.legend(handles, labels, loc="outside lower center", ncol=3, fontsize=9)
-        fig.suptitle(f"{caption}; p05–p95 over snapshots/draws\nGPT-OSS/A100; provisional power/compute; {workload}, {density} sessions/GPU", fontsize=11)
-        fig.supylabel("Volume-objective shed (MW)" if evaluation == "volume" else "Completed shed (MW)")
-        fig.tight_layout(rect=(.03, .1, 1, .94))
-        for suffix in ("png", "pdf"):
-            fig.savefig(out / f"{evaluation}-frontier-{workload}-{density}.{suffix}", bbox_inches="tight")
+                ax.plot(x, [r["median_shed_mw"] for r in series], color=plot_style.POLICY_COLORS[policy],
+                        linestyle=plot_style.POLICY_LINESTYLES[policy], label=plot_style.POLICY_NAMES[policy])
+                ax.fill_between(x, [r["p05_shed_mw"] for r in series], [r["p95_shed_mw"] for r in series],
+                                color=plot_style.POLICY_COLORS[policy], alpha=.12)
+            ax.set(title=f"{workload.replace('_', ' ')}; load {load:g}", xscale="log", xlabel="Deadline (s)")
+        fig.supylabel("Shed power proxy (MW)")
+        network_label = "measured endpoint reference" if wan == "reference" else f"assumed shared WAN {wan} Gbit/s"
+        fig.suptitle(f"{model_label}; {network_label}; scenario-reoptimized p05–p95")
+        fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=5, fontsize=9)
+        fig.tight_layout(rect=(.02, .08, 1, .94))
+        for extension in ("png", "pdf"):
+            fig.savefig(out / f"shed-{wan}.{extension}", bbox_inches="tight")
         plt.close(fig)
-        for wan_gbps, metric in product(wan_points, ("sessions", "watts")):
-            action_policies = [p for p in policies if p != "lp_bound"]
-            fig, axes = plt.subplots(len(models), len(action_policies), squeeze=False, figsize=(17.5, max(4.2, 2.8 * len(models))), sharey="row")
-            actions = (*ACTIONS, "not_selected" if evaluation == "volume" else "not_moved") if metric == "sessions" else ACTIONS
-            for ax, (model, policy) in zip(axes.flat, product(models, action_policies)):
-                series = sorted((r for r in selected if (r["model"], r["wan_gbps"], r["policy"]) == (model, wan_gbps, policy)), key=lambda r: r["deadline_s"])
-                if metric == "sessions":
-                    values = np.array([r["action_counts_mean"] + [r["mean_not_selected" if evaluation == "volume" else "mean_not_completed"]] for r in series]).T
-                    values /= values.sum(0)
-                    ax.set_ylim(0, 1)
-                else:
-                    values = np.array([r["action_shed_mw_mean"] for r in series]).T
-                ax.stackplot([r["deadline_s"] for r in series], values, labels=[plot_style.ACTION_NAMES[a] for a in actions],
-                             colors=[plot_style.ACTION_COLORS[a] for a in actions])
-                ax.set(title=f"{model}\n{plot_style.POLICY_NAMES[identity(policy)]}", xscale="log", xlabel="Deadline (s)",
-                       ylabel="Session share" if metric == "sessions" else "Mean shed (MW)")
-            fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=5, fontsize=9)
-            network_caption = "measured endpoint reference" if wan_gbps == "reference" else f"assumed shared WAN {wan_gbps:g} Gbit/s"
-            fig.suptitle(f"{'Volume-feasible integer plans' if evaluation == 'volume' else 'Staged scheduling stress test'}; A100; provisional power/compute\n{workload}, {density} sessions/GPU; {network_caption}", fontsize=11)
-            fig.tight_layout(rect=(0, .1, 1, .96))
-            for suffix in ("png", "pdf"):
-                fig.savefig(out / f"{evaluation}-actions-{workload}-{density}-{wan_gbps}-{metric}.{suffix}", bbox_inches="tight")
-            plt.close(fig)
+    wan = 40 if any(r["wan_gbps"] == 40 for r in summary) else summary[0]["wan_gbps"]
+    for load in loads:
+        fig, axes = plt.subplots(2, 5, figsize=(16, 6), sharey=True)
+        for ax, (workload, policy) in zip(axes.flat, product(workloads, POLICIES)):
+            series = sorted((r for r in summary if (r["workload"], r["load"], r["wan_gbps"], r["policy"]) ==
+                             (workload, load, wan, policy)), key=lambda r: r["deadline_s"])
+            ax.stackplot([r["deadline_s"] for r in series], np.array([r["action_fractions_mean"] for r in series]).T,
+                         labels=[plot_style.ACTION_NAMES[a] for a in ACTIONS], colors=[plot_style.ACTION_COLORS[a] for a in ACTIONS])
+            ax.set(title=f"{workload.replace('_', ' ')}\n{plot_style.POLICY_NAMES[policy]}", xscale="log", xlabel="Deadline (s)", ylim=(0, 1))
+        fig.supylabel("Removed source workload fraction")
+        fig.suptitle(f"Action breakdown; resident load {load:g}; shared WAN {wan} Gbit/s")
+        fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=4, fontsize=9)
+        fig.tight_layout(rect=(.02, .07, 1, .92))
+        for extension in ("png", "pdf"):
+            fig.savefig(out / f"actions-{load:g}.{extension}", bbox_inches="tight")
+        plt.close(fig)
+
+
+def validate(out):
+    started = time.perf_counter()
+    c = calibration(0)
+    config = configuration(True)
+    config.update(draws=0, resident_loads=[.25, .75, .95], deadlines=[1, 3, 10, 60], wan_gbps=[10, 40, 400])
+    plan = {"identity": "validation", "config": config, "calibration": c, "network_indices": [-1]}
+    errors = []
+    for cell in cells(config):
+        a, b = run_cell(plan, cell), run_cell(plan, cell, expanded=True)
+        errors.append(abs(a["results"]["queue_haul"]["shed_fraction"] - b["results"]["queue_haul"]["shed_fraction"]))
+    report = {"calibration": c["evidence"], "library_audit_cells": len(errors),
+              "library_p95_difference_fraction": float(np.quantile(errors, .95)),
+              "library_max_difference_fraction": max(errors), "seconds": time.perf_counter() - started,
+              "scope": "library sensitivity, not a bound on global scheduling optimality"}
+    write_json(out / "validation.json", report)
+    if np.quantile(errors, .95) > .01 or max(errors) > .02:
+        raise RuntimeError("batch-library sensitivity exceeds the promotion gate")
+    return report
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "run", "reduce"))
+    parser.add_argument("command", choices=("prepare", "run", "reduce", "validate"))
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument("--smoke", action="store_true")
-    parser.add_argument("--wan-gbps", type=float, nargs="+", help="prepare: shared migration budgets; e.g. 10 40 100 400 1000")
+    parser.add_argument("--resident-loads", type=float, nargs="+")
+    parser.add_argument("--wan-gbps", type=float, nargs="+")
+    parser.add_argument("--snapshots", type=int)
+    parser.add_argument("--draws", type=int)
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=1)
     args = parser.parse_args()
-    if args.command != "prepare" and (args.smoke or args.wan_gbps is not None):
-        parser.error("--smoke and --wan-gbps apply only to prepare")
+    if args.command != "prepare" and any(v is not None for v in (args.resident_loads, args.wan_gbps, args.snapshots, args.draws)):
+        parser.error("grid overrides apply only to prepare")
     if args.command == "prepare":
-        plan = prepare(args.out, args.smoke, args.wan_gbps)
-        print(f"Prepared {len(cells(plan['config']))} cells: {args.out}")
+        plan = prepare(args.out, args.smoke, args.resident_loads, args.snapshots, args.draws, args.wan_gbps)
+        print(f"Prepared {len(cells(plan['config']))} cells")
     elif args.command == "run":
         run(args.out, args.shard, args.shards)
-    else:
+    elif args.command == "reduce":
         reduce(args.out)
+    else:
+        print(json.dumps(validate(args.out), indent=2))
 
 
 if __name__ == "__main__":
