@@ -494,7 +494,7 @@ def plot_results(episodes: list[dict], out: Path) -> None:
                        label=plot_style.ACTION_NAMES[action])
                 bottoms = [a + b for a, b in zip(bottoms, values)]
             labels = ([f"{key[1] / 1000:.3g}G/P{key[2]:.3g}" for key in keys]
-                      if family in ("wan_prefill", "wan", "prefill", "control") else
+                      if family in ("wan_prefill", "wan", "prefill", "prefill_pressure", "control") else
                       [f"{key[3] if family == 'hbm' else key[4]:.3g}"
                        for key in keys])
             if family in ("contention", "slack"):

@@ -13,5 +13,6 @@ set -euo pipefail
 module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
 export QH_LMCACHE_MODE=mp
 campaign_root=${1:-outputs/contention-a100-20260905}
+summary_script=${2:-contention_campaign.py}
 uv run python constrained_state_campaign.py run --plan "$campaign_root/prepared/plan.json" --run-root "$campaign_root/run"
-uv run python contention_campaign.py summarize --plan "$campaign_root/prepared/plan.json" --run-root "$campaign_root/run"
+uv run python "$summary_script" summarize --plan "$campaign_root/prepared/plan.json" --run-root "$campaign_root/run"

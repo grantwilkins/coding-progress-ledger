@@ -2023,7 +2023,10 @@ execution is calibrated from the completed heterogeneous-context campaign;
 all candidate outcomes and calibration measurements remain in the prepared
 output. Simulation predicts mixed QH actions meet the full-target deadline
 while isolated greedy's eight replays exceed the 25-second migration cutoff
-needed for five seconds of full relief. Hardware results must validate this.
+needed for five seconds of full relief. The completed 75-episode run
+validated both QH variants at all four constrained rates (3/3 each), with
+isolated greedy missing every constrained case and tying at the 10Gbps
+control. The original deadline stayed fixed.
 
 ```bash
 module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
@@ -2035,4 +2038,31 @@ uv run python contention_campaign.py prepare --original-contract \
 sbatch --job-name=qh-original-30s \
   --output=outputs/contention-original-a100-20260906/job-%j.log \
   contention_campaign.sbatch outputs/contention-original-a100-20260906
+```
+
+## Controlled prefill-pressure probe
+
+`prefill_pressure_campaign.py` tests a narrow simulation-predicted transition
+at fixed 4Gbps WAN, eight 27,360-token sessions, the original 30-second deadline,
+and the five-second relief window. Only the background prefill rate changes:
+0, 0.4, 0.5, and 0.6 requests/second. All five policies run three fresh repeats
+at each rate (60 episodes). HBM allocations and serving backgrounds remain zero.
+
+The timing model uses prior heterogeneous migration measurements and the
+observed effect of prefill load from the earlier marginal campaign, rather
+than treating inverse remaining prefill capacity as measured slowdown.
+The predicted transition is narrow and is not established hardware evidence.
+`prefill_validation.json` explicitly checks the zero-load control before
+attributing any isolated-greedy miss to background prefill. A robust transition
+requires all three control trials to pass and all three loaded trials to favor
+both QH variants; unsuccessful probes and baseline wins remain in the outputs.
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
+uv run python prefill_pressure_campaign.py prepare \
+  --out outputs/prefill-pressure-a100-20260906/prepared
+sbatch --job-name=qh-prefill-probe \
+  --output=outputs/prefill-pressure-a100-20260906/job-%j.log \
+  contention_campaign.sbatch outputs/prefill-pressure-a100-20260906 \
+  prefill_pressure_campaign.py
 ```
