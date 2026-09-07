@@ -16,9 +16,10 @@ def fleet(count=(4, 4), demand=(.1, .1), t1=(1., 3.), log=(1., 2.), kv=(10., 20.
 
 
 def table(f, replay, kv, deadline=4., load=.5, endpoint=(100., 100., 200.),
-          budgets=(100., 100., 100.), kappa=.5):
+          budgets=(100., 100., 100.), kappa=.5, kv_tails=(0., 0.)):
     return c.schedule_table(f, np.array(replay), np.array(kv), load, deadline,
-                            np.array(endpoint), np.array(budgets), {"beta": 0., "kappa": kappa})
+                            np.array(endpoint), np.array(budgets),
+                            {"kv_completion_s": kv_tails[0], "kv_batch_completion_s": kv_tails[1], "beta": 0., "kappa": kappa})
 
 
 def test_batch_wall_time_preserves_singletons_and_counts_repeated_requests():
@@ -58,7 +59,7 @@ def test_long_context_replay_serializes_the_entire_batch_only_when_selected():
     replay = np.array([[1, 0], [1, 1], [0, 0]])
     kv = np.array([[0, 1], [0, 0], [0, 1]])
     t = c.schedule_table(f, replay, kv, .5, 10., np.full(3, 100.), np.full(3, 100.),
-                         {"beta": 0., "packing_kappa": [.2, .8]})
+                         {"kv_completion_s": 0., "kv_batch_completion_s": 0., "beta": 0., "packing_kappa": [.2, .8]})
     np.testing.assert_allclose(t.duration, [1., 4., 0., 1., 4., 0.])
 
 
@@ -136,6 +137,39 @@ def test_patterns_cannot_reuse_the_same_source_population():
     assert result["shed_fraction"] == pytest.approx(1.)
 
 
+def test_pure_kv_does_not_reserve_replay_slots_but_keeps_endpoint_capacity():
+    f = fleet(count=(4,), demand=(.2,), t1=(1.,), log=(0.,), kv=(1.,))
+    t = table(f, [[0]], [[1]], load=.25, deadline=1.)
+    assert c.execute(t, c.select(t, "kv_only"))["completed_sessions"] == pytest.approx(4.)
+    assert not t.matrix[1:3].any()
+    t = table(f, [[0]], [[1]], load=.25, deadline=1., endpoint=(1., 1., 2.))
+    assert c.execute(t, c.select(t, "kv_only"))["completed_sessions"] == pytest.approx(2.)
+    mixed = table(f, [[1]], [[1]])
+    np.testing.assert_equal(mixed.matrix[1:3].sum(0), 1.)
+
+
+def test_kv_completion_changes_isolated_choice_and_deadline_feasibility():
+    f = fleet(count=(4,), demand=(.2,), t1=(1.,), log=(1.,), kv=(10.,))
+    r, k = np.array([[0], [1]]), np.array([[1], [0]])
+    assert not table(f, r, k).fastest.any()
+    t = table(f, r, k, deadline=1.5, kv_tails=(2., 2.))
+    assert t.fastest.all()
+    assert not t.eligible[t.kv.any(1)].any()
+    assert t.eligible[t.replay.any(1)].all()
+    assert c.execute(t, c.select(t, "kv_only"))["completed_sessions"] == 0
+    boundary = table(f, [[0]], [[1]], deadline=2., kv_tails=(2., 2.))
+    assert not boundary.eligible.any()
+
+
+def test_kv_flow_finishes_before_measured_completion_tail():
+    t = table(fleet(), [[1, 0]], [[0, 1]], kv_tails=(.5, 1.2))
+    np.testing.assert_allclose(t.kv_release, 3.5)
+    np.testing.assert_allclose(t.rate, 1 / 3 + 20 / 3.5)
+    c.execute(t, c.select(t, "queue_haul"))
+    t = table(fleet(), [[0, 0]], [[4, 4]], kv_tails=(.5, 1.2))
+    np.testing.assert_allclose(t.kv_release, 2.8)
+
+
 @pytest.mark.parametrize("deadline,log,allowed", [(2., 0., True), (2., 1., False), (1.99, 0., False)])
 def test_zero_log_does_not_waive_batch_completion_deadline(deadline, log, allowed):
     f = fleet(count=(4,), demand=(.2,), t1=(2.,), log=(log,), kv=(1.,))
@@ -165,7 +199,7 @@ def test_every_policy_uses_the_same_feasible_schedule_evaluator():
     f = fleet()
     replay, kv = c.library(f)
     t = c.schedule_table(f, replay, kv, .5, 4., np.array([5., 20., 25.]),
-                         np.array([8., 12., 15.]), {"beta": 0., "kappa": .5})
+                         np.array([8., 12., 15.]), {"kv_completion_s": 0., "kv_batch_completion_s": 0., "beta": 0., "kappa": .5})
     upper = c.execute(t, c.select(t, "queue_haul"))["shed_fraction"]
     for policy in c.POLICIES:
         x = c.select(t, policy)
@@ -190,7 +224,7 @@ def test_lp_shed_increases_with_deadline_and_wan_and_decreases_with_resident_loa
 
     def shed(deadline=4., bandwidth=6., load=.5):
         t = c.schedule_table(f, replay, kv, load, deadline, np.full(3, 100.),
-                             np.full(3, bandwidth), {"beta": .5, "kappa": .5})
+                             np.full(3, bandwidth), {"kv_completion_s": 0., "kv_batch_completion_s": 0., "beta": .5, "kappa": .5})
         return c.execute(t, c.select(t, "queue_haul"))["shed_fraction"]
 
     deadlines = [shed(deadline=d) for d in (1., 2., 4., 8., 16.)]
@@ -207,7 +241,7 @@ def test_destination_names_do_not_change_optimized_shed(policy):
     f = fleet()
     replay, kv = c.library(f)
     endpoint, budgets = np.array([5., 20., 25.]), np.array([8., 12., 15.])
-    a = c.schedule_table(f, replay, kv, .5, 4., endpoint, budgets, {"beta": 0., "kappa": .5})
+    a = c.schedule_table(f, replay, kv, .5, 4., endpoint, budgets, {"kv_completion_s": 0., "kv_batch_completion_s": 0., "beta": 0., "kappa": .5})
     b = c.schedule_table(f, replay, kv, .5, 4., endpoint[[1, 0, 2]], budgets[[1, 0, 2]],
-                         {"beta": 0., "kappa": .5})
+                         {"kv_completion_s": 0., "kv_batch_completion_s": 0., "beta": 0., "kappa": .5})
     assert a.gains @ c.select(a, policy) == pytest.approx(b.gains @ c.select(b, policy))

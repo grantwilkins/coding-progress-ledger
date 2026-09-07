@@ -21,10 +21,10 @@ from scipy.sparse import csr_matrix
 from pool_shed_calibration import calibration, replay_seconds
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "outputs/a100-batch-shed"
+OUT = ROOT / "outputs/a100-batch-shed-corrected"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-batch-shed-v1"
+SCHEMA = "queue-haul-a100-batch-shed-v2"
 GPUS, SOURCE_LOAD = 66666, .8
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
 ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
@@ -185,6 +185,7 @@ class Table:
     route: np.ndarray
     duration: np.ndarray
     release: np.ndarray
+    kv_release: np.ndarray
     log_bytes: np.ndarray
     kv_bytes: np.ndarray
     rate: np.ndarray
@@ -199,12 +200,26 @@ class Table:
     budgets: np.ndarray
 
 
+def isolated_methods(fleet, load, endpoint, budgets, timing):
+    budgets = np.minimum(budgets, endpoint * fleet.gpus)
+    rate = max(min(endpoint[j], budgets[j], budgets[2]) for j in (0, 1))
+    return fleet.log / rate + fleet.t1 * np.exp(timing["beta"] * load) < fleet.kv / rate + timing["kv_completion_s"]
+
+
+def include_isolated(replay, kv, fastest):
+    total = replay + kv
+    return np.split(np.unique(np.vstack((np.c_[replay, kv], np.c_[total * fastest, total * ~fastest])), axis=0), 2, axis=1)
+
+
 def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing):
     endpoint, budgets = np.asarray(endpoint), np.asarray(budgets)
-    if (not 0 <= load < 1 or deadline <= 0 or np.any(endpoint <= 0) or np.any(budgets <= 0)
-            or not np.isfinite(np.r_[deadline, load, endpoint, budgets]).all()
+    tails = np.array([timing["kv_completion_s"], timing["kv_batch_completion_s"]])
+    if (not 0 <= load < 1 or deadline <= 0 or np.any(tails < 0) or np.any(endpoint <= 0) or np.any(budgets <= 0)
+            or not np.isfinite(np.r_[deadline, load, tails, endpoint, budgets]).all()
             or np.any(replay < 0) or np.any(kv < 0) or np.any(kv != np.floor(kv)) or replay.shape != kv.shape):
         raise ValueError("invalid scheduling inputs")
+    budgets = np.minimum(budgets, endpoint * fleet.gpus)
+    fastest = isolated_methods(fleet, load, endpoint, budgets, timing)
     r, k = np.tile(replay, (2, 1)), np.tile(kv, (2, 1))
     route = np.repeat([0, 1], len(replay))
     long_context = np.any((r > 0) & (fleet.context > fleet.metadata.get("batch_context_limit", np.inf)), axis=1)
@@ -212,20 +227,22 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
     kappa = np.interp(fleet.context, knots, timing["packing_kappa"]) if knots else timing["kappa"]
     duration = batch_time(r, fleet.t1, timing["beta"], np.where(long_context[:, None], 1., kappa), load)
     release = deadline - duration
+    # ponytail: KV tails are wall-latency floors; compute overlap needs a calibrated contention model.
+    kv_release = deadline - np.interp(k.sum(1), [0, 1, 8], [0, *tails])
     logs, state = r @ fleet.log, k @ fleet.kv
-    rates = np.divide(logs, release, out=np.zeros_like(logs), where=release > 0) + state / deadline
-    eligible = (duration <= deadline) & ((logs == 0) | (release > 0)) & (rates <= endpoint[route] * (1 + 1e-12))
+    rates = (np.divide(logs, release, out=np.zeros_like(logs), where=release > 0)
+             + np.divide(state, kv_release, out=np.zeros_like(state), where=kv_release > 0))
+    eligible = ((duration <= deadline) & ((logs == 0) | (release > 0)) & (kv_release >= 0)
+                & ((state == 0) | (kv_release > 0)) & (rates <= endpoint[route] * (1 + 1e-12)))
     total = r + k
     row_masks = np.array([route == j for j in (0, 1)])
-    matrix = np.vstack((total.T, row_masks, row_masks * (total @ fleet.demand),
+    matrix = np.vstack((total.T, row_masks * r.any(1), row_masks * (total @ fleet.demand),
                         row_masks * (total @ fleet.memory_tokens), row_masks * rates, rates))
     capacities = np.r_[fleet.count, [fleet.gpus] * 2, [fleet.gpus * (1 - load)] * 2,
                        [fleet.kv_capacity - fleet.baseline_kv] * 2, budgets]
     if np.any(capacities < 0):
         raise ValueError("resident state exceeds pooled KV capacity")
-    isolated_bw = max(min(endpoint[j], budgets[j], budgets[2]) for j in (0, 1))
-    fastest = fleet.log / isolated_bw + fleet.t1 * np.exp(timing["beta"] * load) < fleet.kv / isolated_bw
-    return Table(fleet, r, k, route, duration, release, logs, state, rates, eligible, fastest,
+    return Table(fleet, r, k, route, duration, release, kv_release, logs, state, rates, eligible, fastest,
                  matrix, capacities, total @ fleet.gain, deadline, load, endpoint, budgets)
 
 
@@ -254,14 +271,16 @@ def select(table, policy):
     gains = table.gains * table.fleet.gpus
     if policy != "greedy":
         ids = np.flatnonzero(allowed)
-        result = linprog(-gains[ids] / gains[ids].max(), A_ub=csr_matrix(matrix[:, ids]), b_ub=limits,
+        column_scale = np.maximum(matrix[:, ids].max(0), 1.)
+        objective = gains[ids] / column_scale
+        result = linprog(-objective / objective.max(), A_ub=csr_matrix(matrix[:, ids] / column_scale), b_ub=limits,
                          bounds=(0, None), method="highs",
                          options={"primal_feasibility_tolerance": 1e-9, "dual_feasibility_tolerance": 1e-9})
         if not result.success:
             raise RuntimeError(result.message)
         if np.min(result.x) < -1e-9:
             raise RuntimeError("LP returned negative replica fractions")
-        chosen[ids] = np.maximum(result.x, 0)
+        chosen[ids] = np.maximum(result.x, 0) / column_scale
     else:
         remaining = limits.copy()
         for _ in range(len(limits) + 1):
@@ -293,10 +312,12 @@ def execute(table, chosen):
     if residual > 1e-8:
         raise RuntimeError("schedule exceeds pooled resources")
     active = chosen > 1e-10
+    kv_rate = np.divide(table.kv_bytes, table.kv_release, out=np.zeros_like(table.kv_bytes), where=table.kv_release > 0)
     if (np.any(table.log_bytes[active] > np.maximum(table.release[active], 0) *
-               (table.rate[active] - table.kv_bytes[active] / table.deadline) * (1 + 1e-8) + 1e-5)
-            or np.any(table.release[active] < -1e-10)):
-        raise RuntimeError("replay begins before its log transfer can finish")
+               (table.rate[active] - kv_rate[active]) * (1 + 1e-8) + 1e-5)
+            or np.any(table.kv_bytes[active] > np.maximum(table.kv_release[active], 0) * kv_rate[active] * (1 + 1e-8) + 1e-5)
+            or np.any(table.release[active] < -1e-10) or np.any(table.kv_release[active] < -1e-10)):
+        raise RuntimeError("endpoint work begins before its transfer can finish")
     action_counts, action_fractions = [], []
     for route in (0, 1):
         for action in (table.replay, table.kv):
@@ -313,6 +334,7 @@ def execute(table, chosen):
             "patterns": [{"column": int(j), "multiplicity": float(chosen[j]), "route": int(table.route[j]),
                           "replay_counts": table.replay[j].tolist(), "kv_counts": table.kv[j].tolist(),
                           "replay_release_s": float(table.release[j]), "batch_duration_s": float(table.duration[j]),
+                          "kv_completion_start_s": float(table.kv_release[j]),
                           "reserved_bytes_per_s": float(table.rate[j])} for j in np.flatnonzero(active)]}
 
 
@@ -375,6 +397,8 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
                             "paced arrivals; fixed context snapshots, resident weights; handoff at deadline",
                             "ongoing serving and KV are pooled; no discrete placement or local fragmentation model",
                             "KV ingest, catch-up, context growth, and shutdown are omitted",
+                            "KV response/validation tail is measured separately; batch/load overlap is a transfer assumption",
+                            "only replay-containing batches reserve migration compute slots; KV retains network/memory/serving limits",
                             "replay logs assume two bytes/token; KV uses loaded-runtime serialized geometry",
                             "WAN allocations are scenarios, not measurements of backbone capacity",
                             "power is linear workload-share allocation of direct coding active-to-awake-idle anchors"],
@@ -407,7 +431,10 @@ def run_cell(plan, cell, expanded=False):
     budgets = bandwidth(endpoint, fleet.gpus, wan)
     r, k = patterns(workload, snapshot, fleet.gpus, expanded)
     start = time.perf_counter()
-    table = schedule_table(fleet, r, k, load, deadline, endpoint, budgets, plan["calibration"]["timing"][draw])
+    timing = plan["calibration"]["timing"][draw]
+    fastest = isolated_methods(fleet, load, endpoint, budgets, timing)
+    r, k = include_isolated(r, k, fastest)
+    table = schedule_table(fleet, r, k, load, deadline, endpoint, budgets, timing)
     build_s = time.perf_counter() - start
     start = time.perf_counter()
     results = compare(table)

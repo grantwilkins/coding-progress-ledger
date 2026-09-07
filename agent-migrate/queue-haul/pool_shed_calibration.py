@@ -24,8 +24,8 @@ PATHS = (Path(__file__), ROOT / "loaded_service_model.py", ROOT / "profiles.py",
          loaded.PROFILE, loaded.OUT, POWER_POINTS, POWER_PROFILE, TRANSITIONS,
          loaded.TRAINING, *loaded.BLOCKS, loaded.STANDALONE,
          CROSSOVER / "migrations.csv", CROSSOVER / "run_metadata.json",
-         LONG_PACKS / "migrations.csv", LONG_PACKS / "scenarios.csv", LONG_PACKS / "run_metadata.json",
-         PACKING / "policy_episodes.csv", PACKING / "plan.json", PACKING / "run_metadata.json",
+         LONG_PACKS / "migrations.csv", LONG_PACKS / "scenarios.csv", LONG_PACKS / "policy_episodes.csv", LONG_PACKS / "run_metadata.json",
+         PACKING / "policy_episodes.csv", PACKING / "policy_migrations.csv", PACKING / "plan.json", PACKING / "run_metadata.json",
          *(p.parent / "live_plan.json" for p in (loaded.TRAINING, *loaded.BLOCKS, loaded.STANDALONE)))
 
 
@@ -50,6 +50,89 @@ def _metrics(observed, predicted):
     return {"episodes": len(observed), "median_relative_error": float(np.median(errors)),
             "p90_relative_error": float(np.quantile(errors, .9)),
             "false_feasible_25s": int(np.sum((predicted <= 25) & (observed > 25)))}
+
+
+def _kv_completion(value, draws):
+    singleton = [[float(r["initial_response_s"]) + float(r["initial_validation_s"])
+                  for r in _read(CROSSOVER / "migrations.csv")
+                  if (r["method"], r["activity"], int(r["concurrency"]), int(r["repeat"]))
+                  == ("kv_transfer", "none", 1, repeat)] for repeat in range(3)]
+    migrations, groups = {}, {}
+    scenarios = {r["scenario_id"]: r for r in _read(LONG_PACKS / "scenarios.csv")}
+    for row in _read(LONG_PACKS / "migrations.csv"):
+        migrations.setdefault(row["scenario_id"], []).append(row)
+    for row in _read(LONG_PACKS / "policy_episodes.csv"):
+        if row["policy"] != "kv_only":
+            continue
+        moves, scenario = migrations[row["scenario_id"]], scenarios[row["scenario_id"]]
+        if (row["status"] != "complete" or len(moves) != 8 or int(row["completed_migrations"]) != 8
+                or (scenario["activity"], int(scenario["concurrency"])) != ("none", 8)
+                or any(m["method"] != "kv_transfer" for m in moves)):
+            raise ValueError("KV completion requires complete zero-background eight-session KV batches")
+        tails = np.array([float(m["initial_response_s"]) + float(m["initial_validation_s"]) for m in moves])
+        if not np.isfinite(tails).all() or np.any(tails <= 0):
+            raise ValueError("KV batch completion observations must be finite and positive")
+        groups.setdefault(row["condition"], []).append((int(row["episode"]), float(tails.max())))
+    if any(len(rows) != 24 for rows in singleton) or len(groups) != 24 or any(len(rows) != 3 for rows in groups.values()):
+        raise ValueError("KV completion requires three repeats of 24 singleton and batch conditions")
+    batches = np.array([[tail for _, tail in sorted(rows)] for rows in groups.values()]).T
+    singleton = np.asarray(singleton)
+    if not np.isfinite(np.r_[singleton.ravel(), batches.ravel()]).all() or min(singleton.min(), batches.min()) <= 0:
+        raise ValueError("KV completion observations must be finite and positive")
+    rng = np.random.default_rng(4)
+    for i, timing in enumerate(value["timing"]):
+        for name, samples in (("kv_completion_s", singleton), ("kv_batch_completion_s", batches)):
+            timing[name] = float(np.median(samples[rng.choice(2, 2) if i else np.arange(2)]))
+    if len(value["timing"]) != draws + 1:
+        raise ValueError("KV completion timing draw count changed")
+    return {"training_episodes_per_width": 48, "heldout_episodes_per_width": 24, "bootstrap_seed": 4,
+            "heldout": {name: {"median_absolute_error_s": float(np.median(abs(samples[2] - np.median(samples[:2])))),
+                "p90_relative_error": float(np.quantile(abs(np.median(samples[:2]) / samples[2] - 1), .9))}
+                for name, samples in (("singleton", singleton), ("width8", batches))},
+            "scope": "Response generation plus validation after first response; excludes ingestion. First two repeats per condition fit, third checks; bootstrap complete repeat-position groups independently for widths 1 and 8. Batch tail is maximum per-request tail for synchronized readiness; intermediate widths, mixed replay/KV, resident load and overlap without KV compute accounting remain transfers, not GPU scheduling guarantees."}
+
+
+def _policy_checks(value):
+    scenarios = {r["scenario_id"]: r for r in json.loads((PACKING / "plan.json").read_text())["scenarios"]}
+    migrations, groups = {}, {}
+    for row in _read(PACKING / "policy_migrations.csv"):
+        migrations.setdefault(row["scenario_id"], []).append(row)
+    for row in _read(PACKING / "policy_episodes.csv"):
+        scenario, moves = scenarios[row["scenario_id"]], migrations[row["scenario_id"]]
+        if (len(moves) != 8 or row["status"] != "complete" or scenario["activity"] != "none"
+                or any(m["method"] not in ("replay", "kv_transfer") for m in moves)):
+            raise ValueError("policy timing requires eight complete zero-resident-load recorded moves")
+        actual = float(row["commit_100_s"])
+        if abs(actual - max(float(m["reaction_commit_s"]) for m in moves)) > 1e-8:
+            raise ValueError("policy timing commit milestones differ")
+        context = np.array([int(m["context_tokens"]) for m in moves])
+        replay = np.array([m["method"] == "replay" for m in moves])
+        work, timing = replay_seconds(context[replay], value), value["timing"][0]
+        kappa = np.interp(context[replay], value["packing_context_tokens"], timing["packing_kappa"])
+        if np.any(context[replay] > value["batch_context_limit"]):
+            kappa = np.ones_like(work)
+        duration = float((kappa * work).sum() + max((1 - kappa) * work, default=0))
+        logs = 2 * context[replay].sum()
+        state = (np.ceil(context[~replay] / value["kv_block_tokens"]) * value["kv_block_bytes"]).sum()
+        tail = np.interp((~replay).sum(), [1, 8], [timing["kv_completion_s"], timing["kv_batch_completion_s"]]) if state else 0
+        bandwidth = scenario["bandwidth_mbps"] * 125_000
+        a = duration + tail + (logs + state) / bandwidth
+        discriminant = (duration - tail + (logs - state) / bandwidth) ** 2 + 4 * logs * state / bandwidth ** 2
+        predicted = float((a + np.sqrt(discriminant)) / 2)
+        groups.setdefault((row["policy"], row["condition"]), []).append(
+            (int(row["episode"]), actual, predicted, int(replay.sum())))
+    if len(groups) != 160 or any(len(rows) != 3 for rows in groups.values()):
+        raise ValueError("policy timing requires four policies and forty three-repeat conditions")
+    policies = sorted({policy for policy, _ in groups})
+    heldout = {policy: [max(rows) for (p, _), rows in groups.items() if p == policy] for policy in policies}
+    return {"heldout_third_repeat": {p: _metrics([r[1] for r in rows], [r[2] for r in rows]) for p, rows in heldout.items()},
+            "selected_conditions": {f"{p}/{condition}": {"episodes": len(rows),
+                "observed_median_s": float(np.median([r[1] for r in rows])),
+                "predicted_median_s": float(np.median([r[2] for r in rows])),
+                "recorded_replay_counts": sorted({r[3] for r in rows})}
+                for (p, condition), rows in groups.items()
+                if condition.startswith(("mixed-fixed-10000", "large-fixed-5000", "large-fixed-10000"))},
+            "scope": "Recorded actions, one destination, zero resident load, configured WAN; final route commit; third within-condition repeat held out; timing diagnostic, not planner optimality or mixed-action accuracy certification"}
 
 
 def _packing(value, draws):
@@ -174,6 +257,7 @@ def calibration(draws=8):
     result["timing"] = [fit(training)] + [fit([row for repeat in rng.choice(repeats, len(repeats))
                                               for row in training if row["repeat"] == repeat]) for _ in range(draws)]
     packing = _packing(result, draws)
+    kv_completion = _kv_completion(result, draws)
     timing = result["timing"][0]
     batch = singleton.max() + timing["kappa"] * (singleton.sum() - singleton.max())
     observed, predicted = [], []
@@ -209,6 +293,7 @@ def calibration(draws=8):
         "batch_equation": "exp(beta*rho) * (max(singleton_s) + kappa*(sum(singleton_s)-max(singleton_s))); empty=0",
         "coding_batch_equation": "exp(beta*rho)*(sum(kappa_i*t_i)+max((1-kappa_i)*t_i)); interpolate four packing knots; ANY context>16384 serializes entire batch; empty=0",
         "coding_packing": packing,
+        "kv_completion": kv_completion, "recorded_policy_checks": _policy_checks(result),
         "idle_width8_endpoint_s": float(batch), "timing_seed": 1, "power_seed": 2,
         "power_windows": 42, "power_repeat_groups": 3, "power_bootstrap_draws": 200,
         "power_scope": "Direct coding pre-window median and separate awake-idle anchor; partial/fleet/workload transfer assumed; fitted partial-power curve unused; idle held fixed",

@@ -75,10 +75,27 @@ calibration. The existing nine successful admission transitions remain positive
 service-preservation evidence for their three specific recipes; no new hardware
 campaign is scheduled.
 
+KV includes a separate measured response-generation/validation tail, without
+an ingest resource: 0.531909 s for one session and 0.785862 s for eight.
+Each anchor uses 48 existing training observations; 24 reserved observations
+give p90 tail errors of 17.82% and 22.66%, respectively. Widths 2–7 interpolate
+linearly. Batch tails use the maximum per-request tail for synchronized
+readiness. Mixed-action overlap, resident-load transfer, and treating this
+tail as wall latency without charging KV compute remain explicit assumptions.
+
+An additional diagnostic replays **recorded action choices** from the packing
+experiment against the same final-commit milestone, one destination, and its
+configured WAN. On the third repeat of 40 conditions per policy, p90 timing
+errors are 23.10% for KV, 28.38% for historical QH, 30.61% for historical greedy,
+and 18.67% for replay. These residual errors are not covered by the campaign's
+bootstrap bands. The corrections below do not establish accurate mixed-action
+queueing or context-dependent resident-serving demand; both remain limitations.
+
 Each destination batch contains at most eight selected sessions. For deadline
-`D`, replay cost `T`, replay-log bytes `L`, and KV bytes `K`, it reserves
-`L/(D-T)` for logs and `K/D` for KV, then runs replay from `D-T` to `D`.
-Zero-byte replay still requires `T <= D`; nonzero logs require `T < D`.
+`D`, replay cost `T`, KV tail `C`, replay-log bytes `L`, and KV bytes `K`, it
+reserves `L/(D-T)` for logs and `K/(D-C)` for KV. Replay runs from `D-T` to `D`;
+KV completion runs from `D-C` to `D`. Zero-byte actions still require their
+endpoint duration to fit; positive transfer volumes require positive windows.
 All imported serving activates at the common deadline. This conservative
 handoff barrier keeps resident load constant during the measured migration
 batch. Frozen-state modeling omits KV ingest, context growth, catch-up, and
@@ -97,10 +114,12 @@ session-to-GPU placement or fragmentation optimization.
 ### Shared LP and uncertainty
 
 A bounded library contains deterministic template prefixes, replay/KV tradeoffs,
-and all singleton actions, with at most 1,344 route columns before deduplication.
-The isolated-fastest method threshold is included by the same tradeoff ordering.
-Columns consume source cohorts, destination migration replicas, final serving
-and KV capacity, and route/shared network rates. Replica multiplicities are
+and all singleton actions. Each scenario also adds every template prefix's
+isolated-fastest action mix to the common library; the completion offsets mean
+the original tradeoff ordering alone no longer guarantees those mixes exist.
+Columns consume source cohorts, final serving and KV capacity, and route/shared
+network rates. Only columns containing replay reserve migration compute slots;
+pure KV retains the per-flow and aggregate endpoint ceilings. Multiplicities are
 continuous: every selected pattern describes a complete batch, while its fleet
 multiplicity can be fractional. There is no integer rounding in the primary
 comparison.
@@ -112,7 +131,9 @@ bulk-fills the best gain per normalized remaining-resource cost, splitting
 symmetric route ties, without calling an LP. The same evaluator checks physical
 reservations and completion for every method. QH LP must dominate all baselines
 within the common library and scenario; it is not a global optimum over arbitrary
-serving schedules. Library expansion is audited separately.
+serving schedules. Library expansion is audited separately. Deadline comparisons
+use identical libraries; libraries can vary across WAN/load scenarios, so those
+comparisons do not have a general monotonicity guarantee.
 
 All methods **replan for every paired sampled scenario**. Default intervals
 combine four coding snapshots, eight joint timing/network calibration draws,
@@ -132,10 +153,10 @@ groups; the idle anchor is held fixed.
 
 ```bash
 # Software validation and a 24-cell end-to-end smoke run; no hardware acquisition.
-uv run python pool_shed_campaign.py validate --out outputs/a100-batch-shed
-uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-batch-shed-smoke
-uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-smoke
-uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-smoke
+uv run python pool_shed_campaign.py validate
+uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-batch-shed-corrected-smoke
+uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-corrected-smoke
+uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-corrected-smoke
 
 # Default: 11,250 scenario cells, five policies per cell.
 uv run python pool_shed_campaign.py prepare
@@ -155,14 +176,18 @@ and `paired_differences.csv` contain reduced shed, action, and policy comparison
 `dominance-audit.json` and `validation.json` expose correctness and library checks.
 Shed and action figures use the canonical shared plot styles. Compressed cell
 checkpoints remain local; compact summaries, audits, and figures are tracked.
-The default campaign completed in **141.28 seconds** on the current 10-core
-macOS/arm64 machine, including validation, all 56,250 policy evaluations, I/O,
-reduction, and 20 PNG/PDF figures (`performance.json`). All 11,250 scenarios
-passed dominance and capacity checks within the 1e-8 relative tolerance, with
-zero LP deadline regressions. The expanded-library audit changed shed by at
-most 0.3491 percentage points of removable source workload across 72 cases.
-Historical `outputs/a100-pool-shed` volume/staged results are superseded by this
-model, and the earlier acquisition proposal remains unscheduled.
+Current outputs use `outputs/a100-batch-shed-corrected`; `performance.json`
+records validation, preparation, all 56,250 policy evaluations, I/O, reduction,
+and 20 PNG/PDF figures. The full run took **164.94 seconds** on the current
+10-core macOS/arm64 machine. All 11,250 scenarios passed the shared feasibility
+and LP-dominance checks, with zero deadline regressions; the expanded-library
+maximum difference was 0.3486 percentage points across 72 cases. The 40 Gbit/s
+coding results still show QH tying replay-only: fixing the accounting has not
+resolved the broader workload/queueing fidelity concern.
+Historical `outputs/a100-batch-shed` omits KV completion
+and charges pure KV a replay slot; its plots are superseded, as are the earlier
+`outputs/a100-pool-shed` volume/staged results. The acquisition proposal remains
+unscheduled.
 
 The structural choices follow [DistServe](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 and [Sarathi-Serve](https://www.usenix.org/system/files/osdi24-agrawal.pdf) on

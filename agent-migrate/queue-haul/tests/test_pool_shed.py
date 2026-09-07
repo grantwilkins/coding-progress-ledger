@@ -47,11 +47,20 @@ def test_default_grid_and_paired_endpoints():
         np.testing.assert_equal(c.bandwidth(endpoint, c.GPUS, 'reference'), endpoint)
 
 
+def test_lp_scaling_preserves_source_counts_in_the_loaded_coding_case(tmp_path):
+    plan = c.prepare(tmp_path)
+    result = c.run_cell(plan, (('coding', 1), .75, 4, 100, 30))
+    assert result['results']['queue_haul']['shed_fraction'] == pytest.approx(.625)
+    assert max(r['max_relative_residual'] for r in result['results'].values()) <= 1e-8
+
+
 def test_isolated_fastest_masks_exist_in_the_common_library():
     fleet = c.sample_fleet('coding')
     r, k = c.library(fleet)
     for load, wan in ((.25, 10), (.5, 40), (.95, 400)):
         endpoint = c.network_samples()[0]
+        r, k = c.include_isolated(r, k, c.isolated_methods(fleet, load, endpoint,
+                                  c.bandwidth(endpoint, fleet.gpus, wan), calibration(0)['timing'][0]))
         table = c.schedule_table(fleet, r, k, load, 60, endpoint,
                                  c.bandwidth(endpoint, fleet.gpus, wan), calibration(0)['timing'][0])
         signatures = set(map(tuple, np.c_[r, k]))
