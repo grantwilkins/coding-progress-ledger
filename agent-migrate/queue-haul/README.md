@@ -44,18 +44,30 @@ repeatability, not workload-transfer error. The earlier H100 outputs under
 `outputs/h100-pool-shed-smoke/` are historical: their requested/achieved load
 axes, runtime generations, and power workload mixtures were not comparable.
 
-**The current throughput model is not validated against deployment.** F comes
-from 2,048-prompt/one-output requests at concurrency 16; G comes from
-256-prompt/512-output requests at concurrency 16. Their normalized sum does not
-measure GPU occupancy or spare replay throughput. For example, the repeated
-28,672-prompt/512-output/concurrency-one cell draws about 289.6 W while its
-normalized coordinate is only 0.275. Power alone cannot determine headroom,
-either. Therefore nominal 50% serving does **not establish 50% replay capacity**.
-Existing migration runs have offered-load labels and different launcher defaults;
-their matching server logs are unavailable locally. They cannot supply a trustworthy
-scalar correction. Keep the measured isolated
-prefill times, but validate loaded replay throughput and resident-service retention
-together before treating these shed deadlines as deployment predictions.
+**Loaded replay and resident-service preservation already have hardware evidence.**
+[The loaded-service model](outputs/loaded-service-model-20260815/model.json) uses
+160 fitting episodes and 440 separate validation episodes. Its 220 replay
+validation episodes have 1.23% median and 2.27% p90 absolute percentage error,
+with zero false-feasible cases at 25 seconds. The measured relative replay factor
+is `exp(0.284963 * rho)`: about 1.153 at rho=0.5 and 1.311 at rho=0.95.
+Separately, [the A100 admission transitions](outputs/service-admission-transition-a100-20260816/summary.json)
+passed all nine tested transitions, preserving incumbent and added-cohort latency
+and queue stability across three load recipes and three restart blocks. These
+transitions increase total normalized work from 0.25 to 0.50; they do not certify
+an additional 0.50 above a 0.50 baseline.
+
+The integration gap is in **this pool simulator**: it does not consume the
+existing loaded-service calibration. It uses isolated prefill work and ideal
+processor sharing after a linear serving reservation. F/G come from different
+request shapes at concurrency 16; their normalized sum is offered phase work,
+not measured GPU occupancy. The 50% reservation is consequently a model
+assumption, not a replacement for the existing measured load response.
+`workload_adaptation_campaign.py` already authenticates and uses the loaded
+coefficients. Reuse that evidence with its recorded support: width-eight,
+2,048–14,336-token, prefill-heavy packs and 1–10 Gbit/s validation. The separate
+nine-transition result covers its exact A100/4K recipes and 240-second horizon,
+not a universal scalar capacity bound. Additional profiling should target only
+workload/runtime transfer gaps identified after this reuse audit.
 
 Each of 20 coding snapshots resamples 24 public coding trajectories, chooses
 one joint context/prompt/output state per sampled trajectory within measured
@@ -139,9 +151,9 @@ This repairs reporting, not the scheduling deficiency or the capacity calibratio
 A queue-aware replacement must optimize and execute the same schedule, including
 log release and replay service allocation; adding a staging allowance while keeping
 an unrelated equal-sharing executor is insufficient. Exact whole-session optimality
-would additionally require integer optimization. The short profiling follow-up
-below must establish the available service budget before such a replacement can
-claim deployment fidelity.
+would additionally require integer optimization. Integrate the existing measured
+load response and reconcile its support with this workload before deciding which
+additional measurements are necessary.
 
 QH greedy averages equally cheap actions when estimating
 population-weighted scarcity, then refreshes scores against remaining headroom
@@ -235,6 +247,9 @@ The older A100 fleet campaign remains historical and is not the current 20 MW mo
 
 `outputs/a100-quick-profile-plan.json` freezes a proposed single-launch GPT-OSS/A100
 protocol; it is a plan, not acquired evidence or an executable hardware runner.
+It is an optional workload/runtime transfer study, not a prerequisite for establishing
+that loaded replay is possible. Audit reuse of the existing loaded-service and
+admission-transition evidence above before acquiring any additional cells.
 Reuse the same checkpoint and optimized runtime, explicitly enabling prefix caching
 for eight resident coding contexts. Keep append tokens uncached and replay prefixes
 unique. This changes the prefix-cache regime, so new measurements supersede old
@@ -280,8 +295,9 @@ not measured error bars. Test both empirical power interpolation and the current
 linear busy-fraction shed assumption; a failed assumption remains invalid.
 Acceptance covers this frozen mixture and loaded replay at concurrency one for
 the two tested contexts. Unloaded batch probes do not validate concurrent replay
-under resident load. Broader workload transfer, loaded replay concurrency above
-one, long-window stability, and fleet-wide variability remain unvalidated.
+under resident load. This proposed pilot alone would not establish broader workload
+transfer, loaded replay concurrency above one, long-window stability, or fleet-wide
+variability; the existing independent loaded-replay validation retains its own scope.
 
 ## Current evidence
 
