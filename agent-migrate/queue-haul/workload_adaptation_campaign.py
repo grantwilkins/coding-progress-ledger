@@ -650,7 +650,7 @@ def simulate(samples=1000, seed=DEFAULT_SEED, sessions=28, target_fraction=2 / 3
     return rows, workload
 
 
-def oat_design(profile, levels=OAT_LEVELS):
+def oat_design(profile, levels=OAT_LEVELS, fixed_prefill_tps=None):
     if levels < 3:
         raise ValueError("OAT sweep requires at least three levels")
     q = dedicated_sink_architecture(profile, REGIONS[0], ("link/east",)).types[0]
@@ -663,6 +663,10 @@ def oat_design(profile, levels=OAT_LEVELS):
     bandwidths = np.linspace(
         OAT_BANDWIDTH_LOWER_MBPS, natural_bandwidth, levels)
     lower = (1 - OAT_DEST_COMPUTE[1]) * prefill_max
+    if fixed_prefill_tps is not None:
+        if not lower < fixed_prefill_tps < prefill_max:
+            raise ValueError("fixed OAT prefill must lie inside the prefill sweep")
+        fixed_prefill = fixed_prefill_tps
     below = min(levels - 2, max(1, round(
         (fixed_prefill - lower) / (prefill_max - lower) * (levels - 1))))
     prefills = np.r_[np.linspace(lower, fixed_prefill, below + 1),
@@ -676,7 +680,7 @@ def oat_design(profile, levels=OAT_LEVELS):
 
 def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
                  target_fraction=1.0, levels=OAT_LEVELS, profile_path=PROFILE,
-                 manifest_path=MANIFEST):
+                 manifest_path=MANIFEST, fixed_prefill_tps=None):
     if packs < 1 or levels < 3:
         raise ValueError("invalid OAT controls")
     if target_fraction != 1:
@@ -691,10 +695,11 @@ def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
     ).hexdigest()
     bandwidths, prefills, fixed_bandwidth, fixed_prefill, prefill_max, \
         model_rate = \
-        oat_design(profile, levels)
+        oat_design(profile, levels, fixed_prefill_tps)
     anchor_data = json.loads(PREFILL_ANCHORS.read_text())
     anchor_rows = [row for row in anchor_data["anchors"]
                    if row["metric"] == "prefill"]
+    observed_median = float(np.median([row["tokens_per_s"] for row in anchor_rows]))
     contexts = sorted({int(row["context_tokens"]) for row in anchor_rows})
     repeats = {context: sum(int(row["context_tokens"]) == context
                             for row in anchor_rows) for context in contexts}
@@ -855,10 +860,10 @@ def simulate_oat(packs=OAT_PACKS, seed=DEFAULT_SEED, sessions=OAT_SESSIONS,
             "protocol": anchor_data["source"]["protocol"],
             "median_reducer": "pooled median across contexts and repeats",
             "max_reducer": "raw maximum across contexts and repeats",
-            "median_tps": fixed_prefill,
+            "median_tps": observed_median,
             "max_tps": prefill_max,
-            "median_fraction_of_model_rate": fixed_prefill / model_rate,
-            "median_implied_load_fraction": 1 - fixed_prefill / model_rate,
+            "median_fraction_of_model_rate": observed_median / model_rate,
+            "median_implied_load_fraction": 1 - observed_median / model_rate,
             "max_fraction_of_model_rate": prefill_max / model_rate,
             "max_implied_load_fraction": 1 - prefill_max / model_rate,
             "max_observation": next(row for row in anchor_rows
@@ -1406,6 +1411,8 @@ def main():
     parser.add_argument("--oat-packs", type=int, default=OAT_PACKS)
     parser.add_argument("--oat-levels", type=int, default=OAT_LEVELS)
     parser.add_argument("--oat-only", action="store_true")
+    parser.add_argument("--oat-fixed-prefill-tps", type=float,
+                        help="Fixed bandwidth-sweep prefill rate (default: observed median)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--sessions", type=int, default=28)
     parser.add_argument("--target", type=float, default=2 / 3)
@@ -1415,6 +1422,7 @@ def main():
         oat_rows, oat_packs, oat_plans, oat_distribution, oat_metadata = \
             simulate_oat(
             args.oat_packs, args.seed, OAT_SESSIONS, 1.0, args.oat_levels,
+            fixed_prefill_tps=args.oat_fixed_prefill_tps,
         )
         write_oat_outputs(args.out, oat_rows, oat_packs, oat_plans,
                           oat_distribution, oat_metadata)
@@ -1428,7 +1436,7 @@ def main():
     )
     oat_rows, oat_packs, oat_plans, oat_distribution, oat_design_metadata = \
         simulate_oat(args.oat_packs, args.seed, OAT_SESSIONS, 1.0,
-                     args.oat_levels)
+                     args.oat_levels, fixed_prefill_tps=args.oat_fixed_prefill_tps)
     if any((row["replicate"], row["case_id"], row["timing_fit_sha256"],
             row["power_bootstrap_index"]) !=
            (robust["replicate"], robust["case_id"], robust["timing_fit_sha256"],

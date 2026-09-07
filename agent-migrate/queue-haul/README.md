@@ -1145,6 +1145,20 @@ uv run python queue-haul/workload_adaptation_campaign.py
 uv run python queue-haul/workload_adaptation_campaign.py --oat-only
 ```
 
+To rerun with the bandwidth sweep's fixed prefill throughput halved to
+2,671.188 token/s, preserving the original outputs:
+
+```bash
+uv run python queue-haul/workload_adaptation_campaign.py --oat-only --oat-fixed-prefill-tps 2671.1881753955605 --out queue-haul/outputs/workload-action-adaptation-half-prefill-20260907
+```
+
+This uses the same seeded packs and bandwidth levels. The paired prefill sweep
+keeps its original endpoints and includes the new shared operating point;
+metadata retains the measured median separately from the fixed control.
+At the maximum 8.733-Gbit/s bandwidth, halving prefill increases modeled KV
+transfer share from 13.8% to 34.125%; full-target deadline attainment is
+97.3--97.4% across the bandwidth sweep, compared with 99.8% originally.
+
 The main factorial's 1,000 draws are a modeled calibration/workload
 sensitivity, not a confidence interval or 1,000 independent workloads. The
 OAT sweeps instead fix calibration across 1,000 Monte Carlo workload packs from
