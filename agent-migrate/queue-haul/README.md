@@ -2051,7 +2051,9 @@ at each rate (60 episodes). HBM allocations and serving backgrounds remain zero.
 The timing model uses prior heterogeneous migration measurements and the
 observed effect of prefill load from the earlier marginal campaign, rather
 than treating inverse remaining prefill capacity as measured slowdown.
-The predicted transition is narrow and is not established hardware evidence.
+The completed 60-episode probe passed all 12 trials for each QH variant,
+but isolated greedy missed all three zero-load controls by 0.35–0.47 seconds.
+The control failure prevents attributing its misses specifically to prefill.
 `prefill_validation.json` explicitly checks the zero-load control before
 attributing any isolated-greedy miss to background prefill. A robust transition
 requires all three control trials to pass and all three loaded trials to favor
@@ -2066,3 +2068,22 @@ sbatch --job-name=qh-prefill-probe \
   contention_campaign.sbatch outputs/prefill-pressure-a100-20260906 \
   prefill_pressure_campaign.py
 ```
+
+## Additional fixed-case repeats
+
+`outputs/robustness-a100-20260907` freezes ten additional paired repeats
+(IDs 3–12) for every original-contract WAN and prefill case and all five
+policies: 450 new episodes, giving 13 observations per case and policy with
+the existing runs. Workloads, capacities, deadline, and relief window are
+unchanged. Policy order is randomized within each repeat. Five sequential
+array tasks each run two repeats of both campaigns, with a six-hour limit
+per task; sequential execution avoids shared testbed port conflicts.
+
+Submit with `sbatch outputs/robustness-a100-20260907/run.sbatch`.
+Each task retains raw episodes and produces normalized CSVs and existing
+diagnostic plots. Runs resume from their saved schedule prefix. These are
+distribution measurements, so execution does not require QH wins or a passing
+prefill causal control. Final CDFs and descriptive error bars should group by
+case and policy, retain deadline misses, and treat each eight-session episode
+as one repeat. The original three trials should remain identifiable as pilot
+measurements when combined with the ten fresh repeats.
