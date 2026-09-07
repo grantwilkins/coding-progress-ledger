@@ -11,6 +11,148 @@ debt, recovery, achieved shed, and unmet shed. A requirement frontier summarizes
 plans across source-power targets. Destination capacity is an advertised pool
 contract, not an inferred GPU inventory.
 
+## Pooled 20 MW H100 simulation
+
+`h100_pool_shed_campaign.py` models 50,000 Azure 400 W H100s in Sweden Central
+and 50,000 H100s at each of East US 2 and Germany West Central. **20 MW is
+installed GPU capacity, not measured initial draw or removable power.** Source
+compute utilization is 80%; each destination starts at 50%. Utilization means
+`prompt_tokens_per_second / measured_F + output_tokens_per_second / measured_G`.
+This is a pooled compute contract, without a serving-latency SLO guarantee.
+
+The three independent model runs use the matched H100 GPT-OSS-20B, Qwen3.8-27B,
+and Gemma-4-26B power/prefill calibrations. The legacy H100 profile's inherited
+A100 decode and migration timings are not used. Serving-to-idle GPU watts come
+from each model's measured curve at load 0.8. Removed compute drains equivalent
+busy capacity to idle; no discrete GPU placement, GPU shutdown, host power, or
+facility power is modeled. Session choices and completed handoffs are integers.
+
+Each of 20 coding snapshots resamples 24 public coding trajectories, chooses
+one joint context/prompt/output state per sampled trajectory within measured
+prefill support, and draws integer population counts. The headline has eight
+resident sessions per GPU (400,000 source sessions), with equal turn cadence
+normalized to 80% source load. These are workload assumptions, not a measured
+datacenter population. Destination baseline traffic has the same distribution
+and cadence at 50% load; pooled KV-token occupancy follows from that population.
+Density sensitivities use 4/16/32 sessions per GPU; interactive coding and the
+two existing agentic profiles retain their declared workload assumptions.
+Memory-infeasible snapshots are recorded, and summaries over surviving
+snapshots are explicitly marked conditional.
+
+Raw simultaneous network repetitions supply East/Germany endpoint goodput,
+not the fitted KV pipeline rates. The calibration's approximately 0.29/2.26
+Gbit/s with one/eight East TCP streams is consistent with a TCP window/RTT
+limit. [Azure explains that limit](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning)
+and states that [global peering adds no bandwidth restriction](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview).
+Neither establishes region-pair capacity. **WAN bandwidth is independent of
+GPU count.** The main sweep uses **10/40/100/400 Gbit/s total migration bandwidth**,
+shared across both destinations, plus a single-endpoint reference. Each route
+can individually use up to that shared budget, subject to contention. These are
+assumed allocations available after other traffic, not estimates of Azure's
+physical backbone or guarantees for these region pairs. The default does not
+multiply endpoint rates by 50,000 to obtain a WAN allocation.
+
+The literature distinguishes link capacities, site/fabric capacities, global
+totals, and application allocations:
+
+| Paper | Evidence relevant to the model |
+|---|---|
+| [SWAN, SIGCOMM 2013, §6.1](https://www.microsoft.com/en-us/research/wp-content/uploads/2013/08/Achieving-High-Utilization-with-Software-Driven-WAN.pdf) | Production inter-DC capacities range from tens of Gbit/s to Tbit/s. This is historical evidence, not a current Azure route measurement. |
+| [B4, SIGCOMM 2013](https://conferences.sigcomm.org/sigcomm/2013/papers/sigcomm/p3.pdf) | Applications share constrained WAN links through traffic engineering and priority allocation. |
+| [B4 and After, SIGCOMM 2018, §3](https://cs538.github.io/readings/hong18.pdf) | Saturn supports up to 6.4 Tbit/s WAN-facing site capacity; Stargate's 81.92 Tbit/s includes WAN, cluster, and sidelinks. Neither is a dedicated route allocation. |
+| [RADWAN, SIGCOMM 2018](https://www.microsoft.com/en-us/research/uploads/prod/2018/03/Rate_Adaptive_WAN.pdf) | Studies 100 Gbit/s IP links and rate adaptation toward 200 Gbit/s. Global capacity gains must not be interpreted as per-route bandwidth. |
+| [OneWAN, NSDI 2023](https://www.usenix.org/system/files/nsdi23-krishnaswamy.pdf) | Regional aggregation and backbone links are separate shared constraints; application traffic receives allocated capacity. |
+| [TEAL, SIGCOMM 2023, §5.1](https://minlanyu.seas.harvard.edu/writeup/sigcomm23-teal.pdf) | Uses measured SWAN demand, but assigns some missing topology capacities for evaluation. Simulation capacities are not physical measurements. |
+| [HEDGE, NSDI 2026](https://www.usenix.org/system/files/nsdi26-devraj.pdf) | Demonstrates a 600 Gbit/s hardware LAG and studies changing production link capacity; its 3/5 Tbit/s provisioning targets are modeled scenarios. |
+
+Thus Tbit/s-scale aggregates can exist, but a 548 Tbit/s migration allocation
+derived from endpoint counts is unsupported. The 10–400 Gbit/s grid is a declared
+conservative allocation sensitivity, not a range inferred statistically from
+these papers. `prepare --wan-gbps 10 40 100 400 1000` explicitly adds an optimistic
+1,000 Gbit/s case if needed. GPU count scales endpoint ceilings only, capped by
+the documented [40 Gbit/s per single-GPU VM](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncadsh100v5-series).
+Per-session throughput assumes one measured eight-stream endpoint bundle.
+Measured East/Germany throughput asymmetry remains at the endpoint layer;
+it does not establish aggregate WAN-capacity asymmetry. Max-min sharing enforces
+route and shared limits.
+
+KV uses the same analytical BF16 state-size formulas as the matched action
+comparison; coding replay logs assume two bytes per context token. Replay
+transfers its log before consuming context-dependent measured prefill work,
+at no more than one GPU per session. There is **no KV ingest bottleneck**.
+State is frozen, model weights are resident, and setup, control-plane delay,
+catch-up, fragmentation, and ongoing request network traffic are omitted.
+Short deadlines therefore describe ideal flow timing, not hardware handoff guarantees.
+
+QH LP maximizes additive removable watts under byte, GPU-second, serving, and
+KV-memory budgets. A second LP preserves maximum shed and minimizes peak
+normalized resource use, avoiding arbitrary overloaded destinations when
+equally good allocations exist; it includes networking so balancing compute
+does not simply fill the WAN with KV. It then floors and greedily fills whole-session counts. Its
+fractional result is a **volume-relaxation upper bound**, not an executable
+scheduling optimum. QH greedy uses the existing scarcity-price primary scan,
+weighted by cohort populations, without legacy power-target recovery scans.
+KV-only and replay-only restrict that scan's actions; isolated-fastest fixes
+the fastest isolated method while retaining both destination choices. All
+methods use the same executor and reserve selected ongoing serving demand
+throughout migration. Under sampled shortages, admission follows stable
+cohort/action/session IDs; routes and methods never change. Only completed
+handoffs earn shed credit, so central execution can fall below planned watts.
+
+Replay uses all compute remaining after serving reservations. Ready replays
+share that capacity equally, capped at one GPU each: this is **ideal processor
+sharing**, not a measured vLLM prefill queue. The context curves are single-request
+measurements; linear sharing with ordinary serving remains an assumption.
+At eight sessions/GPU in snapshot zero, all replay work totals approximately
+124k/684k/156k GPU-seconds for GPT/Qwen/Gemma, versus 129/342/137 TB for KV.
+After accepting the entire source, the destinations retain 10,000 spare GPU
+equivalents combined. Balanced compute-only replay times are therefore about
+12/68/16 seconds. Replay can legitimately dominate at longer deadlines under
+these capacities and WAN budgets; QH need not improve when replay already sheds
+all removable power. The LP still ignores log-release timing in its aggregate
+compute budget, so tight deadlines can leave substantial work unfinished.
+
+Each execution exposes per-destination peak ready replay sessions, ready-but-unfinished
+and network-blocked sessions at the deadline, remaining replay GPU-seconds,
+and contention-equivalent session-seconds: the integral of `1 - allocated_GPU`
+over each ready session's time. This last quantity measures lost service relative
+to a dedicated GPU, not FCFS waiting time. `summary.csv` includes their means,
+planned versus attained shed, reserved serving utilization, and actual migration
+compute utilization. Counts of ready work represent a processor-sharing backlog.
+
+Each central plan is evaluated against 200 paired draws of the three available
+endpoint-network repetitions and weighted power-bootstrap curves. WAN allocations
+are held fixed within a scenario; no backbone error distribution is invented
+from endpoint measurements. Calibration errors
+are shared across the fleet; service evidence without raw repeats is held
+fixed. Separate destination-service factors 0.8/1.0/1.2 are assumed sensitivities,
+not confidence intervals. Source demand and power are not renormalized.
+Outputs separate workload variation and calibration variation, show 5th/median/95th
+percentile attained MW, paired policy differences, deadline success, and
+action session shares and MW contributions. These intervals cannot bound
+unmeasured backbone contention or model mismatch.
+
+```bash
+# Small end-to-end validation: three models, 18 cells, 20 paired draws.
+uv run python h100_pool_shed_campaign.py prepare --smoke --out outputs/h100-pool-shed-smoke
+uv run python h100_pool_shed_campaign.py run --out outputs/h100-pool-shed-smoke
+uv run python h100_pool_shed_campaign.py reduce --out outputs/h100-pool-shed-smoke
+
+# Full grid: 21,000 cells; run each shard once, then reduce after all finish.
+uv run python h100_pool_shed_campaign.py prepare
+uv run python h100_pool_shed_campaign.py run --shard 0 --shards 32
+uv run python h100_pool_shed_campaign.py reduce
+```
+
+`plan.json` pins inputs, code, seeds, regions, and assumptions. Compressed cell
+checkpoints store unique executions and paired draw indices; `draw_rows()`
+reconstructs individual trials without persisting millions of duplicate rows.
+`summary.csv`, `paired_differences.csv`, `summary.json`, and PDF/PNG figures are
+the reduced outputs. `summary.json` also lists deadline regressions in executed
+median shed rather than smoothing them away. Restarting a shard skips valid completed cells; reduction
+hard-fails missing/duplicate cells, incomplete draws, and changed provenance.
+The older A100 fleet campaign remains historical and is not the 20 MW model.
+
 ## Current evidence
 
 The repository contains:
