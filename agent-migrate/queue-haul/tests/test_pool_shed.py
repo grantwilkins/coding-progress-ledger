@@ -8,7 +8,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-import h100_pool_shed_campaign as c
+import pool_shed_campaign as c
 
 
 def fleet(count=(2,), demand=(.1,), replay=(1.,), kv=(10.,), log=(1.,), gpus=10):
@@ -137,8 +137,8 @@ def test_greedy_uses_global_action_order_and_count_weighted_prices():
 @pytest.mark.parametrize('model', c.MODELS)
 def test_measured_population_power_and_baselines(model):
     f = c.sample_fleet(model, 'coding', 8, 0)
-    assert f.count.sum() == 400_000
-    assert f.count @ f.demand == pytest.approx(40_000.)
+    assert f.count.sum() == c.GPUS * 8
+    assert f.count @ f.demand == pytest.approx(c.GPUS * .8)
     assert f.count @ f.gain == pytest.approx(f.gpus * (f.power_w - f.idle_w))
     assert f.baseline_kv == pytest.approx(f.count @ f.context * .5 / .8)
     endpoint = np.median(c.network_samples(), axis=0)
@@ -149,6 +149,23 @@ def test_measured_population_power_and_baselines(model):
             assert not chosen[::2].any()
         if policy == 'replay_only':
             assert not chosen[1::2].any()
+
+
+def test_a100_calibration_uses_same_runtime_raw_anchors_and_warm_idle():
+    prefill, power = c.calibrations('gpt-oss-20b')
+    assert prefill['kv_capacity_tokens'] == 1_936_832
+    assert [r['context_tokens'] for r in prefill['curve']] == [2048, 8192, 28672]
+    assert power['F_prefill_tps'] == pytest.approx(18156.26919119177)
+    assert power['G_decode_tps'] == pytest.approx(1585.5893522872957)
+    assert power['evidence']['prior_rational_fit_status'] == 'holdout_failed'
+    assert all(119 < curve[0][1] < 120 for curve in power['phase_power']['measured_power_bootstrap'])
+    assert sum(power['bootstrap_curve_counts']) == 200
+    assert c.configuration()['installed_gpu_w'] == 19_999_800
+    f = c.sample_fleet('gpt-oss-20b', 'coding', 8, 0)
+    assert 295 < f.power_w < 301
+    assert 0 < f.metadata['excluded_states'] < f.metadata['supported_states']
+    with pytest.raises(ValueError, match='A100'):
+        c.calibrations('qwen3.8-27b')
 
 
 def test_compact_draws_are_paired_and_reproducible():

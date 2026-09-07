@@ -15,3 +15,7 @@ native/target/
 # live inside that commit; prepare regenerates it and the reduced outputs are
 # what get pinned.
 outputs/fleet-shed-frontier-*/plan.json
+
+# Reproducible pooled-simulation checkpoints; keep compact reductions in Git.
+outputs/a100-pool-shed/cells/
+outputs/a100-pool-shed/shard-*.log

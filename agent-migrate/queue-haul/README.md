@@ -11,44 +11,47 @@ debt, recovery, achieved shed, and unmet shed. A requirement frontier summarizes
 plans across source-power targets. Destination capacity is an advertised pool
 contract, not an inferred GPU inventory.
 
-## Pooled 20 MW H100 simulation
+## Pooled 20 MW GPT-OSS/A100 simulation
 
-`h100_pool_shed_campaign.py` models 50,000 Azure 400 W H100s in Sweden Central
-and 50,000 H100s at each of East US 2 and Germany West Central. **20 MW is
+`pool_shed_campaign.py` models 66,666 Azure 300 W A100s in Sweden Central
+and the same count at each of East US 2 and Germany West Central: **19.9998 MW
 installed GPU capacity, not measured initial draw or removable power.** Source
-compute utilization is 80%; each destination starts at 50%. Utilization means
+normalized demand is 80%; each destination starts at 50%. Demand means
 `prompt_tokens_per_second / measured_F + output_tokens_per_second / measured_G`.
-This is a pooled compute contract, without a serving-latency SLO guarantee.
+This is an assumed pooled compute contract, without a serving-latency SLO guarantee.
 
-The three independent model runs use the existing matched-action H100 GPT-OSS-20B,
-Qwen3.8-27B, and Gemma-4-26B calibration files. Serving-to-idle GPU watts come
-from each file's power curve at coordinate 0.8. Removed compute drains equivalent
+The current run uses only GPT-OSS-20B and the local raw September 5 A100 campaign
+in `outputs/a100-parity-20260905/power/`. Runtime metadata and logs establish
+vLLM 0.22.0, optimized TP1, MXFP4 weights, BF16 KV, 8192-token chunked prefill,
+prefix caching disabled, and 1,936,832 KV tokens. F/G are the maximum repeated-cell
+median throughputs (18,156/1,586 tokens/s), not a proven universal compute capacity.
+Single-request prefill has two measurements each at 2,048/8,192/28,672 tokens;
+their batch wall times include API and one-output-token overhead. Contexts
+outside this support are excluded and counted. No old eager-runtime or H100
+calibration is mixed into the run. Serving-to-idle watts use the empirical
+604-prompt/64-output power anchors at normalized coordinate 0.8, approximately
+298.78 W active and 119.70 W warm idle. The initial cold-idle anchor is excluded.
+Removed compute drains equivalent
 busy capacity to idle; no discrete GPU placement, GPU shutdown, host power, or
 facility power is modeled. Session choices and completed handoffs are integers.
 
-**Power calibration audit, 2026-09-07: MW and compute-headroom projections are
-provisional.** `matched_power_fit.py` labels Qwen's curve with requested load,
-while GPT/Gemma use realized `f/F + g/G`; coordinate 0.8 is not a verified common
-operating point. GPT's decode capacity is the 451.32 tok/s value in the older
-vLLM 0.22 eager-runtime profile, combined with a newer prefill calibration.
-GPT/Gemma power fits select 604-prompt/64-output campaign cells; Qwen selects
-the separate mixed-phase benchmark. Applying these fixed power curves to each
-sampled serving mix has not been validated. The repeat-holdout gate establishes
-repeatability within selected cells, not comparability across these workloads
-and runtimes. The smoke outputs retain the original calculations for inspection;
-their model-to-model power differences are not an established datacenter result.
-Correcting the calibration requires the source `/datadrive/` measurements and
-runtime metadata, which are not included locally for these three runs.
+**MW and compute-headroom projections remain provisional.** The raw power
+campaign used continuous short requests; transferring its power curve to paced
+long-context coding sessions is unvalidated. Its rational fit remains
+`holdout_failed` and is not used. Resampling raw anchor repeats measures their
+repeatability, not workload-transfer error. The earlier H100 outputs under
+`outputs/h100-pool-shed-smoke/` are historical: their requested/achieved load
+axes, runtime generations, and power workload mixtures were not comparable.
 
 Each of 20 coding snapshots resamples 24 public coding trajectories, chooses
 one joint context/prompt/output state per sampled trajectory within measured
 prefill support, and draws integer population counts. The headline has eight
-resident sessions per GPU (400,000 source sessions), with equal turn cadence
+resident sessions per GPU (533,328 source sessions), with equal turn cadence
 normalized to 80% source load. These are workload assumptions, not a measured
 datacenter population. Destination baseline traffic has the same distribution
 and cadence at 50% load; pooled KV-token occupancy follows from that population.
-Density sensitivities use 4/16/32 sessions per GPU; interactive coding and the
-two existing agentic profiles retain their declared workload assumptions.
+Density sensitivities use 4/16/32 sessions per GPU. The default campaign is
+restricted to coding until additional workload support is validated.
 Memory-infeasible snapshots are recorded, and summaries over surviving
 snapshots are explicitly marked conditional.
 
@@ -63,7 +66,7 @@ shared across both destinations, plus a single-endpoint reference. Each route
 can individually use up to that shared budget, subject to contention. These are
 assumed allocations available after other traffic, not estimates of Azure's
 physical backbone or guarantees for these region pairs. The default does not
-multiply endpoint rates by 50,000 to obtain a WAN allocation.
+multiply endpoint rates by the GPU count to obtain a WAN allocation.
 
 The literature distinguishes link capacities, site/fabric capacities, global
 totals, and application allocations:
@@ -82,8 +85,8 @@ Thus Tbit/s-scale aggregates can exist, but a 548 Tbit/s migration allocation
 derived from endpoint counts is unsupported. The 10–400 Gbit/s grid is a declared
 conservative allocation sensitivity, not a range inferred statistically from
 these papers. `prepare --wan-gbps 10 40 100 400 1000` explicitly adds an optimistic
-1,000 Gbit/s case if needed. GPU count scales endpoint ceilings only, capped by
-the documented [40 Gbit/s per single-GPU VM](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncadsh100v5-series).
+1,000 Gbit/s case if needed. GPU count scales measured endpoint ceilings only;
+no H100-specific VM bandwidth specification is imposed on A100.
 Per-session throughput assumes one measured eight-stream endpoint bundle.
 Measured East/Germany throughput asymmetry remains at the endpoint layer;
 it does not establish aggregate WAN-capacity asymmetry. Max-min sharing enforces
@@ -117,10 +120,10 @@ share that capacity equally, capped at one GPU each: this is **ideal processor
 sharing**, not a measured vLLM prefill queue. The context curves are single-request
 measurements; linear sharing with ordinary serving remains an assumption.
 At eight sessions/GPU in snapshot zero, all replay work totals approximately
-124k/684k/156k GPU-seconds for GPT/Qwen/Gemma, versus 129/342/137 TB for KV.
-After accepting the entire source, the destinations retain 10,000 spare GPU
-equivalents combined. Balanced compute-only replay times are therefore about
-12/68/16 seconds. Replay can legitimately dominate at longer deadlines under
+629k effective GPU-seconds, versus 165 TB for KV. After accepting the entire
+source, the destinations retain 13,333.2 spare GPU equivalents combined.
+Balanced compute-only replay time is therefore about 47 seconds. Replay can
+dominate at longer deadlines under
 these capacities and WAN budgets; QH need not improve when replay already sheds
 all removable power. The LP still ignores log-release timing in its aggregate
 compute budget, so tight deadlines can leave substantial work unfinished.
@@ -137,8 +140,8 @@ Each central plan is evaluated against 200 paired draws of the three available
 endpoint-network repetitions and weighted power-bootstrap curves. WAN allocations
 are held fixed within a scenario; no backbone error distribution is invented
 from endpoint measurements. Calibration errors
-are shared across the fleet; service evidence without raw repeats is held
-fixed. Separate destination-service factors 0.8/1.0/1.2 are assumed sensitivities,
+are shared across the fleet; F/G and replay proxies are held at their central
+estimates. Separate destination-service factors 0.8/1.0/1.2 are assumed sensitivities,
 not confidence intervals. Source demand and power are not renormalized.
 Outputs separate workload variation and calibration variation, show 5th/median/95th
 percentile attained MW, paired policy differences, deadline success, and
@@ -146,25 +149,66 @@ action session shares and MW contributions. These intervals cannot bound
 unmeasured backbone contention or model mismatch.
 
 ```bash
-# Small end-to-end validation: three models, 18 cells, 20 paired draws.
-uv run python h100_pool_shed_campaign.py prepare --smoke --out outputs/h100-pool-shed-smoke
-uv run python h100_pool_shed_campaign.py run --out outputs/h100-pool-shed-smoke
-uv run python h100_pool_shed_campaign.py reduce --out outputs/h100-pool-shed-smoke
+# Small validation: one model, all ten deadlines, 20 cells, 20 paired draws.
+uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-pool-shed-smoke
+uv run python pool_shed_campaign.py run --out outputs/a100-pool-shed-smoke
+uv run python pool_shed_campaign.py reduce --out outputs/a100-pool-shed-smoke
 
-# Full grid: 21,000 cells; run each shard once, then reduce after all finish.
-uv run python h100_pool_shed_campaign.py prepare
-uv run python h100_pool_shed_campaign.py run --shard 0 --shards 32
-uv run python h100_pool_shed_campaign.py reduce
+# Full grid: 4,000 cells; run each of four shards, then reduce after all finish.
+uv run python pool_shed_campaign.py prepare
+uv run python pool_shed_campaign.py run --shard 0 --shards 4
+uv run python pool_shed_campaign.py reduce
 ```
 
 `plan.json` pins inputs, code, seeds, regions, and assumptions. Compressed cell
 checkpoints store unique executions and paired draw indices; `draw_rows()`
 reconstructs individual trials without persisting millions of duplicate rows.
 `summary.csv`, `paired_differences.csv`, `summary.json`, and PDF/PNG figures are
-the reduced outputs. `summary.json` also lists deadline regressions in executed
+the reduced outputs, including normalized shed fractions and prefill contention.
+`summary.json` also lists deadline regressions in executed
 median shed rather than smoothing them away. Restarting a shard skips valid completed cells; reduction
 hard-fails missing/duplicate cells, incomplete draws, and changed provenance.
-The older A100 fleet campaign remains historical and is not the 20 MW model.
+Full-grid checkpoints and shard logs stay local; reductions and provenance are
+tracked. The full 4,000-cell A100 grid has been executed locally.
+The older A100 fleet campaign remains historical and is not the current 20 MW model.
+
+### Quick profiling follow-up
+
+`outputs/a100-quick-profile-plan.json` freezes a proposed single-launch GPT-OSS/A100
+protocol; it is a plan, not acquired evidence or an executable hardware runner.
+Reuse the same checkpoint and optimized runtime, explicitly enabling prefix caching
+for eight resident coding contexts. Keep append tokens uncached and replay prefixes
+unique. This changes the prefix-cache regime, so new measurements supersede old
+anchors only after runtime and token-accounting checks.
+
+| Work | Exact acquisition |
+|---|---|
+| Workload capacity | Three windows of synchronized eight-session rounds (one turn per session), each 5 s settling + 15 s measurement. Count completed rounds; freeze achieved turns/s without claiming proven saturation. |
+| Paced serving and power | Fractions 0.1/0.25/0.5/0.8/1.0 of that capacity, three repeats each; three 0.65 windows are held out. Each window is 5 + 15 s. |
+| Replay contention | 8K contexts at concurrency 1/8 and 28K at concurrency 1/4, under achieved half-capacity background, three repeats. Each has 5 s settling and a 40 s completion timeout. |
+| Isolated replay | Both contexts at concurrency one, two repeats each; 5 s settling and a 10 s completion timeout. |
+| Warm idle | 30 s workload warmup, plus 20 s resident-idle anchors before and after acquisition. |
+
+Worst-case core acquisition is **18 min 10 s**, with a **20-minute warm-campaign
+hard stop** including drains. Cold startup is separate; the saved A100 run took
+about 2 min 44 s from engine initialization to readiness, so budget 3–5 minutes
+under similar cached conditions. Timeouts are censored failures, and a hard stop
+leaves an incomplete plan invalid; validation cells are never dropped to fit.
+There is no separate power grid, network test, or KV-ingest experiment.
+
+Freeze capacity and fit parameters before inspecting the 0.65 load holdout and
+the third replay repetitions. Record background/replay token counters separately,
+completed turns, first-token and completion times, queued/running work, cache hits,
+active-request preemptions, KV capacity, and synchronized power. Count block-aligned
+cached prefixes and any uncached prefix tails explicitly; ordinary LRU eviction
+of obsolete append entries is allowed. Require exact token/cache accounting,
+stable backlog and achieved rates within 10% at loads through 0.8, held-out power
+MAE ≤5 W and p90 error ≤10 W, warm-idle drift ≤5 W, and replay drain/throughput
+error ≤20% on held-out repetitions. These are declared acceptance thresholds,
+not measured error bars. Test both empirical power interpolation and the current
+linear busy-fraction shed assumption; a failed assumption remains invalid.
+Acceptance covers this frozen mixture and concurrency range. Broader workload
+transfer and fleet-wide variability remain sensitivities.
 
 ## Current evidence
 

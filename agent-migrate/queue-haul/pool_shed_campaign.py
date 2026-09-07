@@ -1,4 +1,4 @@
-"""Whole-session H100 shed with pooled compute and ideal network flow timing."""
+"""GPT-OSS/A100 whole-session shed with pooled compute and ideal flow timing."""
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ import csv
 import gzip
 import hashlib
 import json
+import re
 import subprocess
+from collections import Counter
 from dataclasses import dataclass
+from functools import cache
 from itertools import product
 from pathlib import Path
 
@@ -17,8 +20,10 @@ from scipy.optimize import linprog
 from scipy.sparse import csr_matrix, hstack, vstack
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "outputs/h100-pool-shed"
-MODELS = ("gpt-oss-20b", "qwen3.8-27b", "gemma-4-26b")
+OUT = ROOT / "outputs/a100-pool-shed"
+MODELS = ("gpt-oss-20b",)
+GPUS = int(20e6 / 300)
+CALIBRATION = ROOT / "outputs/a100-parity-20260905/power"
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
 ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
 PREFILL_METRICS = ("prefill_contention_session_s", "prefill_peak_ready_sessions", "prefill_ready_at_deadline",
@@ -26,7 +31,7 @@ PREFILL_METRICS = ("prefill_contention_session_s", "prefill_peak_ready_sessions"
 DEADLINES = (1, 3, 10, 30, 60, 120, 300, 600, 1800, 3600)
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-h100-pool-shed-v3"
+SCHEMA = "queue-haul-a100-pool-shed-v1"
 SOURCE_LOAD, BASELINE_LOAD = .8, .5
 
 
@@ -46,13 +51,42 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+@cache
 def calibrations(model):
-    prefill = json.loads((ROOT / f"profiles/matched_action_h100_prefill/{model}.json").read_text())
-    power = json.loads((ROOT / f"profiles/matched_action_h100_power/{model}.json").read_text())
-    if (prefill["model"] != power["model"] or power["hardware"] != "H100"
-            or not power["validation"]["gate_passed"]
-            or sum(power["bootstrap_curve_counts"]) != 200):
-        raise ValueError(f"invalid matched H100 calibration: {model}")
+    metadata = json.loads((CALIBRATION / "metadata.json").read_text())
+    log = (CALIBRATION / "server.log").read_text()
+    rows = [json.loads(line) for line in (CALIBRATION / "cells.jsonl").read_text().splitlines()]
+    if (model != MODELS[0] or metadata["model"] != "openai/gpt-oss-20b"
+            or metadata["gpu"]["name"] != "NVIDIA A100 80GB PCIe" or metadata["gpu"]["power_limit_w"] != 300
+            or not metadata["optimized_runtime"] or "enforce_eager=False" not in log
+            or [r["sequence"] for r in rows] != list(range(111)) or any(r["cached_prompt_tokens"] for r in rows)):
+        raise ValueError("invalid optimized GPT-OSS/A100 raw calibration")
+    keys = {(r["family"], r["prompt_tokens"], r["output_tokens"], r["concurrency"]) for r in rows}
+    groups = {key: [r for r in rows if (r["family"], r["prompt_tokens"], r["output_tokens"], r["concurrency"]) == key] for key in sorted(keys)}
+    F, G = [max(np.median([r[field] for r in group]) for key, group in groups.items()
+                if key[0] == family and len(group) > 1)
+            for family, field in (("prefill", "realized_prefill_tps"), ("decode", "realized_decode_tps"))]
+    prefill = {"model": metadata["model"], "kv_capacity_tokens": int(re.search(r"GPU KV cache size: ([\d,]+) tokens", log)[1].replace(",", "")),
+               "curve": [{"context_tokens": key[1], "prefill_tps_median": float(np.median([r["realized_prefill_tps"] for r in group]))}
+                         for key, group in groups.items() if key[0] == "prefill" and key[3] == 1]}
+    idle = [r["power_mean_w"] for r in rows if r["family"] == "idle" and r["sequence"] > 0]
+    active = [group for key, group in groups.items() if key[0] == "campaign"]
+    active.sort(key=lambda group: np.median([r["realized_prefill_tps"] / F + r["realized_decode_tps"] / G for r in group]))
+    xs = [0., *[float(np.median([r["realized_prefill_tps"] / F + r["realized_decode_tps"] / G for r in group])) for group in active]]
+    watts = [idle, *[[r["power_mean_w"] for r in group] for group in active]]
+    if np.any(np.diff(xs) <= 0) or len(idle) != 2:
+        raise ValueError("invalid empirical power support or warm-idle anchors")
+    rng = np.random.default_rng(1)
+    draws = Counter(tuple(float(rng.choice(values)) for values in watts) for _ in range(200))
+    power = {"model": metadata["model"], "hardware": "A100", "F_prefill_tps": float(F), "G_decode_tps": float(G),
+             "bootstrap_curve_counts": list(draws.values()),
+             "phase_power": {"measured_power_curve": list(zip(xs, map(float, map(np.median, watts)))),
+                             "measured_power_bootstrap": [list(zip(xs, values)) for values in draws]},
+             "evidence": {"status": "empirical_anchors_only; pooled workload extrapolation provisional",
+                          "runtime": "vLLM 0.22.0, optimized TP1, MXFP4 weights, BF16 KV, chunked prefill 8192",
+                          "power_shape": [604, 64], "cold_start_idle_excluded": True,
+                          "normalization": "maximum repeated-cell median achieved prefill/decode throughput",
+                          "prior_rational_fit_status": json.loads((CALIBRATION / "fit.json").read_text())["status"]}}
     return prefill, power
 
 
@@ -71,7 +105,6 @@ def bandwidth(endpoint, gpus, wan_gbps):
         np.full(3, float(wan_gbps) * 1e9 / 8), endpoint * gpus)
     if not np.all(np.isfinite(budgets)) or np.any(budgets <= 0):
         raise ValueError("WAN budgets must be finite and positive")
-    budgets[2] = min(budgets[2], gpus * 40e9 / 8)
     return budgets
 
 
@@ -79,10 +112,6 @@ def kv_bytes(model, context):
     """Same analytical BF16 state geometry as matched_action_campaign's source."""
     if model == "gpt-oss-20b":
         return 4 * 8 * 64 * (12 * context + 12 * np.minimum(context, 128))
-    if model == "gemma-4-26b":
-        return 2 * (5 * 2 * 512 * context + 2 * 25 * 8 * 256 * np.minimum(context, 1024))
-    if model == "qwen3.8-27b":
-        return 4 * 16 * 4 * 256 * context
     raise ValueError(model)
 
 
@@ -109,7 +138,7 @@ class Fleet:
         return float(self.count @ self.context) * BASELINE_LOAD / SOURCE_LOAD
 
 
-def sample_fleet(model, workload, density, snapshot, gpus=50_000):
+def sample_fleet(model, workload, density, snapshot, gpus=GPUS):
     prefill, power = calibrations(model)
     curve = np.array([[r["context_tokens"], r["prefill_tps_median"]] for r in prefill["curve"]])
     rng = np.random.default_rng(1001 + snapshot)
@@ -144,7 +173,7 @@ def sample_fleet(model, workload, density, snapshot, gpus=50_000):
     records, counts = records[counts > 0], counts[counts > 0]
     context, prompt, output, logs, cadence = records.T
     if np.any((context < curve[0, 0]) | (context > curve[-1, 0])):
-        raise ValueError("workload contexts outside measured H100 prefill support")
+        raise ValueError("workload contexts outside measured A100 prefill support")
     work = cadence * (prompt / power["F_prefill_tps"] + output / power["G_decode_tps"])
     demand = work * (gpus * SOURCE_LOAD / (counts @ work))
     watts = np.array(power["phase_power"]["measured_power_curve"])
@@ -346,13 +375,13 @@ def execute(fleet, chosen, deadline, budgets, endpoint, service=1.):
 
 
 def configuration(smoke=False):
-    return {"schema": SCHEMA, "models": list(MODELS), "gpus": 50_000,
-            "deadlines": [1, 30, 300] if smoke else list(DEADLINES),
+    return {"schema": SCHEMA, "models": list(MODELS), "gpus": GPUS,
+            "hardware": "NVIDIA A100 80GB PCIe", "gpu_power_limit_w": 300,
+            "installed_gpu_w": GPUS * 300, "deadlines": list(DEADLINES),
             "wan_gbps": [40, 400] if smoke else ["reference", 10, 40, 100, 400],
             "snapshots": 1 if smoke else 20, "draws": 20 if smoke else 200,
             "service_factors": [.8, 1., 1.2],
-            "cases": [["coding", 8]] if smoke else [["coding", d] for d in (8, 4, 16, 32)]
-            + [[w, 8] for w in ("interactive_coding", "agentic_tool_loop", "agentic_rps_shape")]}
+            "cases": [["coding", 8]] if smoke else [["coding", d] for d in (8, 4, 16, 32)]}
 
 
 def cells(config):
@@ -362,7 +391,7 @@ def cells(config):
 
 def provenance():
     paths = [Path(__file__), NETWORK, MANIFEST, ROOT / "plot_style.py"]
-    paths += [ROOT / f"profiles/matched_action_h100_{kind}/{model}.json" for kind, model in product(("power", "prefill"), MODELS)]
+    paths += [CALIBRATION / name for name in ("cells.jsonl", "metadata.json", "server.log", "fit.json")]
     paths += [ROOT / f"profiles/{w}.json" for w in ("interactive_coding", "agentic_tool_loop", "agentic_rps_shape")]
     return {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
 
@@ -373,13 +402,12 @@ def prepare(out, smoke=False, wan_gbps=None):
         if len(set(wan_gbps)) != len(wan_gbps) or not np.all(np.isfinite(wan_gbps)) or min(wan_gbps) <= 0:
             raise ValueError("WAN sweep requires distinct positive finite Gbit/s budgets")
         config["wan_gbps"] = ["reference", *sorted(wan_gbps)]
-    metadata = {"config": config, "sources": provenance(),
+    metadata = {"config": config, "sources": provenance(), "calibration": calibrations(MODELS[0])[1]["evidence"],
                 "source_region": "swedencentral", "destination_regions": ["eastus2", "germanywestcentral"],
                 "seeds": {"workload": "1001 + snapshot", "calibration": "2001 + snapshot"},
                 "network_references": [
                     "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning",
-                    "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview",
-                    "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ncadsh100v5-series"],
+                    "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview"],
                 "wan_literature": [
                     {"paper": "SWAN, SIGCOMM 2013, section 6.1", "scope": "production inter-DC capacities: tens of Gbit/s to Tbit/s",
                      "url": "https://www.microsoft.com/en-us/research/wp-content/uploads/2013/08/Achieving-High-Utilization-with-Software-Driven-WAN.pdf"},
@@ -398,8 +426,10 @@ def prepare(out, smoke=False, wan_gbps=None):
                 "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 "git_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True)),
                 "network_observations_bytes_per_s": network_samples().tolist(),
-                "assumptions": ["20 MW installed, 50000 400W GPUs; measured actual power",
-                    "80% source and 50% destination measured F/G compute load; no latency SLO claim",
+                "assumptions": ["20 MW target installed; 66666 300W A100 GPUs = 19.9998 MW",
+                    "80% source and 50% destination normalized F/G demand are assumed; no calibrated utilization or latency SLO claim",
+                    "empirical 604/64 active power anchors are provisional for sampled serving mixes; failed rational fit unused",
+                    "bootstrap only within warm idle and same-shape/concurrency groups; no workload-transfer confidence claim",
                     "busy equivalent capacity drains to idle; no discrete GPU packing or shutdown",
                     "frozen state; weights resident; no ingest/setup/catch-up cost",
                     "configured Gbit/s shared migration allocations are assumed, not Azure route measurements",
@@ -548,6 +578,7 @@ def reduce(out):
             group.sort(key=lambda r: r["draw"])
             groups.setdefault(key, []).append({
                 "watts": np.array([r["shed_w"] for r in group]),
+                "fractions": np.array([r["shed_fraction"] for r in group]),
                 "completed": np.array([r["completed_sessions"] for r in group]),
                 "success": np.mean([r["full_plan_success"] for r in group]),
                 "actions": np.mean([r["action_counts"] for r in group], axis=0),
@@ -580,6 +611,7 @@ def reduce(out):
         summary.append({**dict(zip(grouping, key)), "draws": len(watts), "snapshots": len(group), "status": status,
                         "p05_shed_mw": float(np.quantile(watts, .05) / 1e6),
                         "median_shed_mw": float(np.median(watts) / 1e6), "p95_shed_mw": float(np.quantile(watts, .95) / 1e6),
+                        "median_shed_fraction": float(np.median(np.concatenate([r["fractions"] for r in group]))),
                         "workload_p05_mw": float(np.quantile(snapshot_medians, .05) / 1e6),
                         "workload_p95_mw": float(np.quantile(snapshot_medians, .95) / 1e6),
                         "median_calibration_width_mw": float(np.median(calibration_width) / 1e6),
@@ -633,7 +665,7 @@ def plot(summary, out):
         models = [m for m in MODELS if any(r["model"] == m for r in selected)]
         wan_points = list(dict.fromkeys(r["wan_gbps"] for r in selected))
         fig, axes = plt.subplots(len(models), len(wan_points), squeeze=False,
-                                 figsize=(3.5 * len(wan_points), 2.8 * len(models)), sharex=True, sharey="row")
+                                 figsize=(3.5 * len(wan_points), max(4.2, 2.8 * len(models))), sharex=True, sharey="row")
         for ax, (model, wan_gbps) in zip(axes.flat, product(models, wan_points)):
             for policy in POLICIES:
                 series = sorted((r for r in selected if (r["model"], r["wan_gbps"], r["policy"]) == (model, wan_gbps, policy)), key=lambda r: r["deadline_s"])
@@ -647,14 +679,14 @@ def plot(summary, out):
             ax.set(title=f"{model}\nshared {budget:.3g} Gbit/s", xscale="log", xlabel="Deadline (s)")
         handles, labels = axes.flat[0].get_legend_handles_labels()
         fig.legend(handles, labels, loc="outside lower center", ncol=3, fontsize=9)
-        fig.suptitle(f"Ideal flow timing; assumed bandwidth budgets\n{workload}, {density} sessions/GPU; bands: paired draw p05–p95", fontsize=11)
+        fig.suptitle(f"GPT-OSS/A100; provisional power and pooled compute\n{workload}, {density} sessions/GPU; bands: paired draw p05–p95", fontsize=11)
         fig.supylabel("Attained shed (MW)")
         fig.tight_layout(rect=(.03, .1, 1, .94))
         for suffix in ("png", "pdf"):
             fig.savefig(out / f"frontier-{workload}-{density}.{suffix}", bbox_inches="tight")
         plt.close(fig)
         for wan_gbps, metric in product(wan_points, ("sessions", "watts")):
-            fig, axes = plt.subplots(len(models), len(POLICIES), squeeze=False, figsize=(17.5, 2.8 * len(models)), sharey="row")
+            fig, axes = plt.subplots(len(models), len(POLICIES), squeeze=False, figsize=(17.5, max(4.2, 2.8 * len(models))), sharey="row")
             actions = (*ACTIONS, "not_moved") if metric == "sessions" else ACTIONS
             for ax, (model, policy) in zip(axes.flat, product(models, POLICIES)):
                 series = sorted((r for r in selected if (r["model"], r["wan_gbps"], r["policy"]) == (model, wan_gbps, policy)), key=lambda r: r["deadline_s"])
@@ -670,7 +702,7 @@ def plot(summary, out):
                        ylabel="Session share" if metric == "sessions" else "Mean shed (MW)")
             fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=5, fontsize=9)
             caption = "measured endpoint reference" if wan_gbps == "reference" else f"assumed shared WAN {wan_gbps:g} Gbit/s"
-            fig.suptitle(f"Ideal flow timing; {workload}, {density} sessions/GPU; {caption}")
+            fig.suptitle(f"A100; provisional power/compute; {workload}, {density} sessions/GPU; {caption}", fontsize=11)
             fig.tight_layout(rect=(0, .1, 1, .96))
             for suffix in ("png", "pdf"):
                 fig.savefig(out / f"actions-{workload}-{density}-{wan_gbps}-{metric}.{suffix}", bbox_inches="tight")
