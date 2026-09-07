@@ -18,13 +18,13 @@ import numpy as np
 from scipy.optimize import linprog
 from scipy.sparse import csr_matrix
 
-from pool_shed_calibration import calibration, replay_seconds
+from pool_shed_calibration import calibration, regional_check, replay_seconds
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "outputs/a100-batch-shed-corrected"
+OUT = ROOT / "outputs/a100-batch-shed-node-network"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-batch-shed-v2"
+SCHEMA = "queue-haul-a100-batch-shed-v3"
 GPUS, SOURCE_LOAD = 66666, .8
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
 ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
@@ -58,10 +58,10 @@ def network_samples():
     return np.column_stack((routes, shared)) * 125_000
 
 
-def bandwidth(endpoint, gpus, wan_gbps):
-    if gpus < 1 or np.any(np.asarray(endpoint) <= 0):
+def bandwidth(endpoint, nodes, wan_gbps):
+    if nodes < 1 or np.any(np.asarray(endpoint) <= 0):
         raise ValueError("invalid endpoint capacity")
-    return endpoint.copy() if wan_gbps == "reference" else np.minimum(endpoint * gpus, float(wan_gbps) * 1e9 / 8)
+    return endpoint.copy() if wan_gbps == "reference" else np.minimum(endpoint * nodes, float(wan_gbps) * 1e9 / 8)
 
 
 @dataclass
@@ -78,6 +78,11 @@ class Fleet:
     gpus: int
     kv_capacity: float
     metadata: dict
+    gpus_per_node: int = 1
+
+    @property
+    def nodes(self):
+        return (self.gpus + self.gpus_per_node - 1) // self.gpus_per_node
 
     @property
     def gain(self):
@@ -93,7 +98,7 @@ class Fleet:
 
 
 @cache
-def sample_fleet(workload, snapshot=0, gpus=GPUS):
+def sample_fleet(workload, snapshot=0, gpus=GPUS, gpus_per_node=8):
     c = calibration(0)
     rng = np.random.default_rng(1001 + snapshot)
     if workload == "measured_pack":
@@ -130,7 +135,7 @@ def sample_fleet(workload, snapshot=0, gpus=GPUS):
     return Fleet(count, context, prompt, output, replay_seconds(context, c),
                  np.ceil(context / c["kv_block_tokens"]) * c["kv_block_bytes"], 2 * context,
                  work * cadence, [list(range(i, i + 8)) for i in range(0, len(count), 8)],
-                 gpus, gpus * c["kv_capacity_tokens"], evidence)
+                 gpus, gpus * c["kv_capacity_tokens"], evidence, gpus_per_node)
 
 
 def batch_time(replay, t1, beta, kappa, load):
@@ -201,7 +206,7 @@ class Table:
 
 
 def isolated_methods(fleet, load, endpoint, budgets, timing):
-    budgets = np.minimum(budgets, endpoint * fleet.gpus)
+    budgets = np.minimum(budgets, endpoint * fleet.nodes)
     rate = max(min(endpoint[j], budgets[j], budgets[2]) for j in (0, 1))
     return fleet.log / rate + fleet.t1 * np.exp(timing["beta"] * load) < fleet.kv / rate + timing["kv_completion_s"]
 
@@ -218,7 +223,7 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
             or not np.isfinite(np.r_[deadline, load, tails, endpoint, budgets]).all()
             or np.any(replay < 0) or np.any(kv < 0) or np.any(kv != np.floor(kv)) or replay.shape != kv.shape):
         raise ValueError("invalid scheduling inputs")
-    budgets = np.minimum(budgets, endpoint * fleet.gpus)
+    budgets = np.minimum(budgets, endpoint * fleet.nodes)
     fastest = isolated_methods(fleet, load, endpoint, budgets, timing)
     r, k = np.tile(replay, (2, 1)), np.tile(kv, (2, 1))
     route = np.repeat([0, 1], len(replay))
@@ -350,6 +355,7 @@ def compare(table):
 
 def configuration(smoke=False):
     return {"schema": SCHEMA, "gpus": GPUS, "installed_gpu_w": GPUS * 300, "source_load": SOURCE_LOAD,
+            "gpus_per_node": 8,
             "resident_loads": [.25, .95] if smoke else list(LOADS),
             "deadlines": [1, 10, 60] if smoke else list(DEADLINES),
             "wan_gbps": [40] if smoke else ["reference", 10, 40, 100, 400],
@@ -366,15 +372,16 @@ def provenance(c):
     return {**c["sources"], **{str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
 
 
-def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, wan_gbps=None):
+def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, wan_gbps=None, gpus_per_node=None):
     started = time.perf_counter()
     config = configuration(smoke)
-    for key, value in (("resident_loads", resident_loads), ("snapshots", snapshots), ("draws", draws)):
+    for key, value in (("resident_loads", resident_loads), ("snapshots", snapshots), ("draws", draws), ("gpus_per_node", gpus_per_node)):
         if value is not None:
             config[key] = value
     if wan_gbps is not None:
         config["wan_gbps"] = ["reference", *wan_gbps]
-    if (config["snapshots"] < 1 or config["draws"] < 0 or not config["resident_loads"]
+    if (not isinstance(config["gpus_per_node"], int) or isinstance(config["gpus_per_node"], bool)
+            or config["gpus_per_node"] < 1 or config["snapshots"] < 1 or config["draws"] < 0 or not config["resident_loads"]
             or len(set(config["resident_loads"])) != len(config["resident_loads"])
             or any(not 0 <= u < 1 for u in config["resident_loads"])
             or len(set(config["wan_gbps"])) != len(config["wan_gbps"])
@@ -401,6 +408,7 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
                             "only replay-containing batches reserve migration compute slots; KV retains network/memory/serving limits",
                             "replay logs assume two bytes/token; KV uses loaded-runtime serialized geometry",
                             "WAN allocations are scenarios, not measurements of backbone capacity",
+                            "measured single-A100-VM endpoints are pooled per node, shared by its GPUs and both destinations; eight GPUs/node is a transfer assumption",
                             "power is linear workload-share allocation of direct coding active-to-awake-idle anchors"],
             "resource_rows": "one source-cohort row per state, then " + ", ".join(
                 [f"{resource}_{route}" for resource in ("migration_replicas", "serving_reference", "kv_tokens", "network")
@@ -423,12 +431,12 @@ def load_plan(out):
 
 def run_cell(plan, cell, expanded=False):
     (workload, snapshot), load, draw, wan, deadline = cell
-    fleet = sample_fleet(workload, snapshot, plan["config"]["gpus"])
+    fleet = sample_fleet(workload, snapshot, plan["config"]["gpus"], plan["config"]["gpus_per_node"])
     samples = network_samples()
     endpoint = samples[plan["network_indices"][draw]].copy() if draw else np.r_[np.median(samples[:, :2], axis=0), 0.]
     if not draw:
         endpoint[2] = endpoint[:2].sum()
-    budgets = bandwidth(endpoint, fleet.gpus, wan)
+    budgets = bandwidth(endpoint, fleet.nodes, wan)
     r, k = patterns(workload, snapshot, fleet.gpus, expanded)
     start = time.perf_counter()
     timing = plan["calibration"]["timing"][draw]
@@ -621,13 +629,27 @@ def validate(out):
     for cell in cells(config):
         a, b = run_cell(plan, cell), run_cell(plan, cell, expanded=True)
         errors.append(abs(a["results"]["queue_haul"]["shed_fraction"] - b["results"]["queue_haul"]["shed_fraction"]))
-    report = {"calibration": c["evidence"], "library_audit_cells": len(errors),
+    scales = []
+    for scope, gpus in product(("fixed_total_wan", "fixed_wan_per_node"), (8, 64, 512, 4096, 66664)):
+        plan["config"] = {**config, "gpus": gpus}
+        wan = 40 if scope == "fixed_total_wan" else 40 * (gpus // config["gpus_per_node"])
+        result = run_cell(plan, (("measured_pack", 0), .5, 0, wan, 3))["results"]
+        qh = result["queue_haul"]
+        scales.append({"scope": scope, "source_gpus": gpus, "gpus_per_node": config["gpus_per_node"],
+                       "wan_gbps": wan, "qh_shed_fraction": qh["shed_fraction"],
+                       "replay_shed_fraction": result["replay_only"]["shed_fraction"],
+                       "qh_kv_sessions": sum(qh["action_counts"][1::2])})
+    report = {"sources": provenance(c), "calibration": c["evidence"], "regional_fidelity": regional_check(c), "library_audit_cells": len(errors),
+              "scale_comparison": scales,
+              "scale_scope": "Measured-pack workload, 3s deadline, .5 load; fixed WAN vs constant network/compute ratio. Scaled budgets are diagnostics, not inferred WAN allocations.",
               "library_p95_difference_fraction": float(np.quantile(errors, .95)),
               "library_max_difference_fraction": max(errors), "seconds": time.perf_counter() - started,
               "scope": "library sensitivity, not a bound on global scheduling optimality"}
     write_json(out / "validation.json", report)
     if np.quantile(errors, .95) > .01 or max(errors) > .02:
         raise RuntimeError("batch-library sensitivity exceeds the promotion gate")
+    if not report["regional_fidelity"]["current_pool"]["gate_pass"]:
+        raise RuntimeError("pool timing fails the regional hardware holdout; see validation.json")
     return report
 
 
@@ -640,13 +662,14 @@ def main():
     parser.add_argument("--wan-gbps", type=float, nargs="+")
     parser.add_argument("--snapshots", type=int)
     parser.add_argument("--draws", type=int)
+    parser.add_argument("--gpus-per-node", type=int)
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=1)
     args = parser.parse_args()
-    if args.command != "prepare" and any(v is not None for v in (args.resident_loads, args.wan_gbps, args.snapshots, args.draws)):
+    if args.command != "prepare" and any(v is not None for v in (args.resident_loads, args.wan_gbps, args.snapshots, args.draws, args.gpus_per_node)):
         parser.error("grid overrides apply only to prepare")
     if args.command == "prepare":
-        plan = prepare(args.out, args.smoke, args.resident_loads, args.snapshots, args.draws, args.wan_gbps)
+        plan = prepare(args.out, args.smoke, args.resident_loads, args.snapshots, args.draws, args.wan_gbps, args.gpus_per_node)
         print(f"Prepared {len(cells(plan['config']))} cells")
     elif args.command == "run":
         run(args.out, args.shard, args.shards)

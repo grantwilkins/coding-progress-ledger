@@ -19,6 +19,12 @@ Sweden Central and each destination in East US 2 and Germany West Central contai
 66,666 A100s: **19.9998 MW of installed GPU capacity per site**. This is neither
 measured operating draw nor removable power.
 
+**Fleet fidelity is not established.** Validation now includes the 24 frozen
+prospective Azure regional holdouts and fails if their declared timing gate
+fails. The current pool timing has 8.39 s MAE and R² 0.355, versus the frozen
+whole-episode oracle's 1.21 s and 0.984. The oracle's family factors are not
+portable local GPU service rates and are not substituted into the LP.
+
 ### Workload and load definition
 
 The primary workload samples 24 trajectories and joint context/prompt/output
@@ -104,9 +110,28 @@ shutdown.
 Reservations start together and only decrease, so route/shared peak-rate rows
 certify the network schedule without time bins or packet events. Shared WAN
 allocations are the measured-endpoint reference case plus assumed 10, 40, 100,
-and 400 Gbit/s budgets. Each route and the shared budget also respect paired
-measured endpoint ceilings, including the per-batch endpoint ceiling. GPU count
-never scales the assumed WAN allocation. KV wire geometry comes from the loaded
+and 400 Gbit/s **whole-shed** budgets; these are sensitivities, not established
+datacenter allocations. The model explicitly groups eight GPUs per node by
+default (`--gpus-per-node`): 66,666 GPUs occupy 8,334 modeled nodes. Endpoint
+ceilings scale with **node count**, with a shared source-node budget across
+East and Germany, while the allocated WAN budget remains separate. The eight
+GPUs share their node's networking; multiplying the endpoint ceiling once per
+GPU would overcount it. Our measured endpoints were single-A100 VMs, so applying
+their goodput per eight-GPU node is a conservative grouping assumption, not an
+eight-GPU Azure SKU measurement. The per-batch endpoint ceiling also remains.
+
+Azure [VM bandwidth](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-machine-network-throughput)
+is allocated across all NICs and destinations. Internal GPU InfiniBand links
+do not establish inter-region WAN capacity. Thousands of nodes can have aggregate
+endpoint capacity measured in Tbit/s: for example, 8,333 nodes at 10 Gbit/s sum
+to 83.33 Tbit/s, before any shared WAN limitation. Microsoft’s
+[SWAN paper](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/swan-sigcomm13.pdf)
+treats inter-datacenter bandwidth as a shared, allocated resource. Neither node
+NIC rates nor our endpoint measurements determine the allocation for this shed.
+Holding WAN fixed while increasing compute changes the experiment's resource
+ratio; it does not preserve the hardware experiment's KV/replay tradeoff.
+
+KV wire geometry comes from the loaded
 runtime profile; replay logs retain the explicit two-bytes-per-context-token
 assumption. KV and ongoing serving are aggregate pool resources, without
 session-to-GPU placement or fragmentation optimization.
@@ -152,8 +177,10 @@ groups; the idle anchor is held fixed.
 ### Run and inspect
 
 ```bash
-# Software validation and a 24-cell end-to-end smoke run; no hardware acquisition.
+# Validation currently FAILS the regional timing gate after writing diagnostics.
 uv run python pool_shed_campaign.py validate
+
+# Diagnostic simulations only until the regional timing gate passes.
 uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-batch-shed-corrected-smoke
 uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-corrected-smoke
 uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-corrected-smoke
@@ -164,7 +191,8 @@ uv run python pool_shed_campaign.py run
 uv run python pool_shed_campaign.py reduce
 ```
 
-Preparation accepts `--resident-loads`, `--snapshots`, `--draws`, and `--wan-gbps`;
+Preparation accepts `--resident-loads`, `--snapshots`, `--draws`, `--wan-gbps`,
+and `--gpus-per-node`;
 `run` retains `--shard`/`--shards`. Inputs, code, seeds, and assumptions are pinned
 in `plan.json`; changing them requires a new output directory. Valid checkpoints
 can be resumed. Reduction rejects missing or stale cells and failed feasibility,
@@ -176,9 +204,14 @@ and `paired_differences.csv` contain reduced shed, action, and policy comparison
 `dominance-audit.json` and `validation.json` expose correctness and library checks.
 Shed and action figures use the canonical shared plot styles. Compressed cell
 checkpoints remain local; compact summaries, audits, and figures are tracked.
-Current outputs use `outputs/a100-batch-shed-corrected`; `performance.json`
-records validation, preparation, all 56,250 policy evaluations, I/O, reduction,
-and 20 PNG/PDF figures. The full run took **164.94 seconds** on the current
+Current code defaults to `outputs/a100-batch-shed-node-network`. Its
+`validation.json` records the failed regional gate and a scale comparison that
+holds either total WAN or WAN per node fixed. Scaled diagnostic budgets are not
+recommended allocations. A passing LP audit cannot override a failed timing gate.
+
+The historical `outputs/a100-batch-shed-corrected/performance.json` records
+all 56,250 policy evaluations, I/O, reduction, and 20 PNG/PDF figures under the
+earlier per-GPU endpoint scaling. That run took **164.94 seconds** on the current
 10-core macOS/arm64 machine. All 11,250 scenarios passed the shared feasibility
 and LP-dominance checks, with zero deadline regressions; the expanded-library
 maximum difference was 0.3486 percentage points across 72 cases. The 40 Gbit/s

@@ -52,6 +52,67 @@ def _metrics(observed, predicted):
             "false_feasible_25s": int(np.sum((predicted <= 25) & (observed > 25)))}
 
 
+def regional_check(value):
+    from scipy.optimize import brentq
+    from pool_shed_campaign import batch_time
+
+    root = ROOT / "outputs/a100-parity-20260907/timing"
+    paths = [root / name for name in ("plan.json", "results.csv", "scale-protocol.json", "scale-fit.json")]
+    hashes = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    plan, protocol, frozen = [json.loads(path.read_text()) for path in (paths[0], paths[2], paths[3])]
+    scenarios = {row["scenario_id"]: row for row in plan["scenarios"]}
+    oracle = {row["scenario_id"]: row["predicted_s"] for row in frozen["predictions"]}
+    if (protocol["plan_sha256"] != hashes[str(paths[0].relative_to(ROOT))]
+            or frozen["protocol_sha256"] != hashes[str(paths[2].relative_to(ROOT))]
+            or set(oracle) != set(protocol["holdout_ids"]) or len(oracle) != 24):
+        raise ValueError("regional prospective holdout provenance changed")
+    rows, timing = [], value["timing"][0]
+    for row in _read(paths[1]):
+        if row["scenario_id"] not in oracle:
+            continue
+        if row["status"] != "complete" or int(row["started_wall_ns"]) <= frozen["frozen_wall_ns"]:
+            raise ValueError("regional holdout was incomplete or observed before freezing predictions")
+        scenario, routes = scenarios[row["scenario_id"]], []
+        contexts = {s["session_id"]: s["initial_tokens"] for s in scenario["sessions"]}
+        for destination in ("east", "germany"):
+            moves = [m for m in scenario["moves"] if m["destination_instance"] == destination]
+            replay, kv = [np.array([contexts[m["session_id"]] for m in moves if m["method"] == method])
+                          for method in ("replay", "kv_transfer")]
+            work = replay_seconds(replay, value)
+            kappa = np.ones_like(work) if np.any(replay > value["batch_context_limit"]) else np.interp(
+                replay, value["packing_context_tokens"], timing["packing_kappa"])
+            duration = float(batch_time(np.ones((1, len(work))), work, timing["beta"], kappa,
+                                       scenario["background"][destination][0])[0]) if len(work) else 0.
+            tail = np.interp(len(kv), [0, 1, 8], [0, timing["kv_completion_s"], timing["kv_batch_completion_s"]])
+            state = (np.ceil(kv / value["kv_block_tokens"]) * value["kv_block_bytes"]).sum()
+            routes.append((duration, tail, 2 * replay.sum(), state, scenario["bandwidth_mbps"][destination] * 125_000))
+        shared = plan["network_contract"]["aggregate"]["natural_mbps"] * 125_000
+
+        def excess(deadline):
+            rates = np.array([logs / (deadline - duration) + state / (deadline - tail)
+                              for duration, tail, logs, state, _ in routes])
+            return max(np.max(rates / np.array([r[4] for r in routes])), rates.sum() / shared) - 1
+
+        lower = max(max(r[:2]) for r in routes) + 1e-8
+        upper = lower + sum(r[2] + r[3] for r in routes) / min(shared, *(r[4] for r in routes)) + 1
+        rows.append((row["policy"], float(row["migration_s"]), brentq(excess, lower, upper), oracle[row["scenario_id"]]))
+    policies = sorted({r[0] for r in rows})
+    if len(rows) != 24 or len(policies) != 3 or any(sum(r[0] == p for r in rows) != 8 for p in policies):
+        raise ValueError("regional holdout requires eight episodes per action family")
+    reports = {}
+    for name, column in (("current_pool", 2), ("frozen_oracle", 3)):
+        reports[name] = {}
+        for policy in [*policies, "aggregate"]:
+            selected = [r for r in rows if policy == "aggregate" or r[0] == policy]
+            observed, predicted = np.array([r[1] for r in selected]), np.array([r[column] for r in selected])
+            reports[name][policy] = {**_metrics(observed, predicted), "mae_s": float(np.mean(abs(predicted - observed))),
+                "r2": float(1 - np.sum((predicted - observed) ** 2) / np.sum((observed - observed.mean()) ** 2))}
+        aggregate = reports[name]["aggregate"]
+        reports[name]["gate_pass"] = aggregate["mae_s"] <= protocol["gates"]["mae_s"] and aggregate["r2"] >= protocol["gates"]["r2"]
+    return {**reports, "sources": hashes, "gates": protocol["gates"],
+            "scope": "Fixed recorded actions/routes/loads; one GPU per destination; final migration completion; 24 prospective episodes; timing transfer diagnostic, not optimizer or fleet-admission validation; frozen oracle is a queue-family fit"}
+
+
 def _kv_completion(value, draws):
     singleton = [[float(r["initial_response_s"]) + float(r["initial_validation_s"])
                   for r in _read(CROSSOVER / "migrations.csv")

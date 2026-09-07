@@ -111,6 +111,16 @@ def test_wan_budget_does_not_multiply_with_the_number_of_source_gpus():
         np.testing.assert_allclose(c.bandwidth(endpoint, gpus, "reference"), endpoint)
 
 
+def test_gpus_on_one_node_share_its_network_budget():
+    f = fleet()
+    f.gpus, f.gpus_per_node = 8, 8
+    t = table(f, [[0, 0]], [[1, 1]], endpoint=(1., 2., 3.))
+    np.testing.assert_allclose(t.budgets, [1., 2., 3.])
+    f.gpus = 16
+    t = table(f, [[0, 0]], [[1, 1]], endpoint=(1., 2., 3.))
+    np.testing.assert_allclose(t.budgets, [2., 4., 6.])
+
+
 def test_ninety_five_percent_load_keeps_fractional_pooled_admission():
     f = fleet(count=(4,), demand=(.2,), t1=(1.,), log=(0.,), kv=(1.,))
     t = table(f, [[0]], [[1]], load=.95)

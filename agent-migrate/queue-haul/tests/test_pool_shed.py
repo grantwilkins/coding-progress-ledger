@@ -54,6 +54,26 @@ def test_lp_scaling_preserves_source_counts_in_the_loaded_coding_case(tmp_path):
     assert max(r['max_relative_residual'] for r in result['results'].values()) <= 1e-8
 
 
+def test_scaling_nodes_and_network_together_preserves_the_policy_tradeoff():
+    plan = {'identity': 'scaling', 'config': c.configuration(), 'calibration': calibration(0), 'network_indices': [-1]}
+    results = []
+    for gpus in (8, 80):
+        plan['config']['gpus'] = gpus
+        results.append(c.run_cell(plan, (('measured_pack', 0), .5, 0, 5 * gpus / 8, 3))['results'])
+    for policy in c.POLICIES:
+        assert results[0][policy]['shed_fraction'] == pytest.approx(results[1][policy]['shed_fraction'])
+    assert results[0]['queue_haul']['shed_fraction'] > results[0]['replay_only']['shed_fraction']
+    assert sum(results[0]['queue_haul']['action_counts'][1::2]) > 0
+
+
+def test_regional_fidelity_gate_rejects_the_current_timing_transfer(tmp_path):
+    with pytest.raises(RuntimeError, match='regional hardware holdout'):
+        c.validate(tmp_path)
+    report = json.loads((tmp_path / 'validation.json').read_text())['regional_fidelity']
+    assert report['current_pool']['aggregate']['episodes'] == 24
+    assert not report['current_pool']['gate_pass'] and report['frozen_oracle']['gate_pass']
+
+
 def test_isolated_fastest_masks_exist_in_the_common_library():
     fleet = c.sample_fleet('coding')
     r, k = c.library(fleet)
@@ -92,7 +112,7 @@ def test_campaign_reduction_checks_all_cells_and_policies(tmp_path, monkeypatch)
 
 def test_configuration_and_provenance_fail_closed(tmp_path):
     for options in ({'resident_loads': [1.]}, {'resident_loads': [.5, .5]}, {'draws': -1},
-                    {'snapshots': 0}, {'wan_gbps': [float('nan')]}):
+                    {'snapshots': 0}, {'wan_gbps': [float('nan')]}, {'gpus_per_node': 0}, {'gpus_per_node': 1.5}):
         with pytest.raises(ValueError):
             c.prepare(tmp_path, **options)
     c.prepare(tmp_path, smoke=True)
