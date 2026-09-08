@@ -2369,6 +2369,12 @@ The H100 movement plan and 50-episode offline check are in
 `/datadrive/dm09` with log `/datadrive/dm09.log`. The offline check selects 315
 admitted actions and 85 forced actions across the 400 movements. These are
 predictions, not completed hardware observations.
+Launch is pending restoration of South Central (`10.13.0.4`): SSH timed out
+during deployment on 2026-09-08, and Azure resource inspection returned HTTP
+403 for the source's managed identity. The reviewed executor is staged at
+`/tmp/qhm09/agent-migrate` on the source and Australia East. Eleven drain tests
+pass; the wider network/wrapper suite has 82 passes and the same five existing
+simulation failures observed before this change.
 
 `matched_action_campaign.py` is the narrow cross-hardware/cross-model decision
 demonstration. It freezes completed A100 East/Germany frontier scenario
