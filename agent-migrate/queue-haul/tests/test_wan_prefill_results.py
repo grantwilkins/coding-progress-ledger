@@ -6,15 +6,17 @@ import pytest
 from plot_wan_prefill_results import pooled
 
 
-def test_completion_pool_retains_late_failed_and_unselected_sessions():
-    row = dict(campaign="wan", policy="greedy", not_moved_count="5", decisions=json.dumps([
-        dict(session_id="a", action="replay", completion_s=10, error=None),
-        dict(session_id="b", action="kv_transfer", completion_s=35, error=None),
-        dict(session_id="c", action="replay", completion_s=None, error="failed"),
-    ]))
-    x, y, counts, total = pooled([row], "wan", "greedy")
+def test_episode_ecdf_uses_last_completion_and_retains_incomplete_episodes():
+    rows = []
+    for times in ([10] * 8, [10] * 7 + [35], [10] * 7 + [None], [10] * 7):
+        rows.append(dict(campaign="wan", policy="greedy", not_moved_count=8 - len(times),
+                         decisions=json.dumps([
+                             dict(session_id=str(i), action="replay", completion_s=t,
+                                  error="failed" if t is None else None)
+                             for i, t in enumerate(times)])))
+    x, y, counts, total = pooled(rows, "wan", "greedy")
     np.testing.assert_array_equal(x, [0, 10, 35])
-    np.testing.assert_array_equal(y, [0, 1 / 8, 2 / 8])
-    assert total == 8 and counts == dict(replay=2, kv_transfer=1, not_selected=5)
+    np.testing.assert_array_equal(y, [0, 1 / 4, 2 / 4])
+    assert total == 32 and counts == dict(replay=31, not_selected=1)
     with pytest.raises(ValueError, match="missing episodes"):
-        pooled([row], "prefill", "greedy")
+        pooled(rows, "prefill", "greedy")

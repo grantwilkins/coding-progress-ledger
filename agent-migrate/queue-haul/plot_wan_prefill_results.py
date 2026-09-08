@@ -1,4 +1,4 @@
-"""Pool recorded WAN/prefill session completions and policy action counts."""
+"""Pool recorded WAN/prefill episode completions and policy action counts."""
 
 import argparse
 import csv
@@ -30,15 +30,18 @@ def pooled(rows, campaign, policy):
         if size != 8 or len({d["session_id"] for d in decisions}) != len(decisions):
             raise ValueError("expected eight distinct source sessions per episode")
         total += size
+        completed = []
         for decision in decisions:
             at = decision["completion_s"]
             if at is not None and not decision["error"]:
                 if not np.isfinite(at) or at < 0:
                     raise ValueError("invalid completion time")
-                events.append(at)
+                completed.append(at)
+        if len(completed) == size:
+            events.append(max(completed))
     if counts.keys() - {"replay", "kv_transfer", "not_selected"}:
         raise ValueError("unknown action")
-    return np.r_[0, sorted(events)], np.arange(len(events) + 1) / total, counts, total
+    return np.r_[0, sorted(events)], np.arange(len(events) + 1) / len(episodes), counts, total
 
 
 def save(fig, out):
@@ -70,12 +73,12 @@ def plot(source, out):
             ax.step(np.r_[x, horizon], np.r_[y, y[-1]], where="post",
                     **plot_style.policy_style(STYLE_IDS[policy]))
             summaries.append(dict(campaign=campaign, policy=policy, episodes=total // 8,
-                                  sessions=total, completed=len(x) - 1,
-                                  completed_by_30s=int(np.count_nonzero(x[1:] <= 30)),
+                                  sessions=total, completed_episodes=len(x) - 1,
+                                  episodes_completed_by_30s=int(np.count_nonzero(x[1:] <= 30)),
                                   replay=counts["replay"], kv_transfer=counts["kv_transfer"],
                                   not_selected=counts["not_selected"]))
         ax.axvline(30, color="black", linestyle=":", linewidth=1, label="30 s deadline")
-        ax.set(xlabel="Time since migration start (s)", ylabel="Fraction of migrations finished",
+        ax.set(xlabel="Time since migration start (s)", ylabel="Fraction of episodes finished",
                title=title, xlim=(0, horizon), ylim=(0, 1.02))
         ax.grid(alpha=.2)
         ax.legend(loc="upper left")

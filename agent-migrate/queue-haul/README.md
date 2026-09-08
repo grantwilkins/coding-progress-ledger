@@ -2642,11 +2642,13 @@ initial and additional episodes, with `campaign`, `phase`, and `source_csv`
 columns identifying provenance. Per-batch raw JSONL, normalized CSVs, plan
 hashes, and diagnostic PNGs are included alongside the initial campaign data.
 Existing `target_attainment.png` plots show full-target attainment over time;
-the pooled session-completion plots use all eight sessions per episode as the
-denominator, including unsubmitted sessions. Recorded completions after the
-30-second deadline remain visible in the tail; they do not count as deadline
-successes. Completion times are measured from the common episode migration
-start to route switch completion, without adding the five-second power window.
+the pooled episode-completion ECDFs count each episode once (65 WAN or 52
+prefill episodes per policy). An episode finishes when all eight source sessions
+complete their route switches; its time is the last completion measured from
+the common migration start, without adding the five-second power window.
+Episodes with unsubmitted or failed sessions remain in the denominator as
+incomplete mass. Completions after the 30-second deadline remain visible in
+the tail but do not count as deadline successes.
 
 Regenerate the two single-panel ECDFs and pooled action mix with
 `uv run python plot_wan_prefill_results.py`. PNG/PDF figures and
@@ -2657,5 +2659,4 @@ action mix weights WAN/prefill 5:4 and counts selected replay/KV actions across
 936 source sessions per policy. `per_session_greedy` is displayed as Isolated
 Fastest because it picks each session's fastest isolated action. Unselected
 sessions remain visible as a separate action category if present.
-These are descriptive session ECDFs, not independent-session confidence
-intervals or evidence of a causal prefill transition.
+These are descriptive episode ECDFs, not evidence of a causal prefill transition.
