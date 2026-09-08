@@ -5,13 +5,14 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+from dataclasses import asdict
 from functools import cache
 from pathlib import Path
 
 import numpy as np
 
 import loaded_service_model as loaded
-from profiles import ModelProfile
+from profiles import KVTransfer, ModelProfile
 
 ROOT = Path(__file__).resolve().parent
 POWER_POINTS = ROOT / "outputs/azure-compact-calibration-20260813/pack-power-gated-points.csv"
@@ -20,8 +21,10 @@ TRANSITIONS = ROOT / "outputs/service-admission-transition-a100-20260816/summary
 CROSSOVER = ROOT / "outputs/policy-hardware-crossover-20260730"
 LONG_PACKS = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
 PACKING = ROOT / "outputs/policy-hardware-width8-packing-20260730"
+REGIONAL = ROOT / "outputs/a100-parity-20260907/timing"
+SERVICE_REFERENCE = ROOT / "outputs/destination-v7-20260722/baseline-profile.json"
 PATHS = (Path(__file__), ROOT / "loaded_service_model.py", ROOT / "profiles.py",
-         loaded.PROFILE, loaded.OUT, POWER_POINTS, POWER_PROFILE, TRANSITIONS,
+         loaded.PROFILE, loaded.OUT, POWER_POINTS, POWER_PROFILE, TRANSITIONS, SERVICE_REFERENCE,
          loaded.TRAINING, *loaded.BLOCKS, loaded.STANDALONE,
          CROSSOVER / "migrations.csv", CROSSOVER / "run_metadata.json",
          LONG_PACKS / "migrations.csv", LONG_PACKS / "scenarios.csv", LONG_PACKS / "policy_episodes.csv", LONG_PACKS / "run_metadata.json",
@@ -39,6 +42,16 @@ def replay_seconds(contexts, calibration):
     return context / rate + calibration["replay_completion_s"]
 
 
+def kv_state(contexts, calibration):
+    """Native sealed payload and residual tokens; the latter still require replay."""
+    context = np.asarray(contexts, dtype=float)
+    if not np.isfinite(context).all() or np.any(context < 0) or np.any(context != np.floor(context)):
+        raise ValueError("KV contexts must be finite nonnegative token counts")
+    transfer = KVTransfer.parse(calibration["kv_transfer"])
+    return tuple(np.fromiter((method(int(n)) for n in context.flat), dtype=np.int64).reshape(context.shape)
+                 for method in (transfer.sealed_bytes, transfer.tail_tokens))
+
+
 def _read(path):
     with path.open(newline="") as handle:
         return list(csv.DictReader(handle))
@@ -50,6 +63,96 @@ def _metrics(observed, predicted):
     return {"episodes": len(observed), "median_relative_error": float(np.median(errors)),
             "p90_relative_error": float(np.quantile(errors, .9)),
             "false_feasible_25s": int(np.sum((predicted <= 25) & (observed > 25)))}
+
+
+def _regional_components(value):
+    """Fit primitive regional rates on the existing pure-action training split."""
+    paths = [REGIONAL / name for name in ("plan.json", "scale-protocol.json", "scale-fit.json", "results.csv")]
+    plan, protocol, frozen = [json.loads(path.read_text()) for path in paths[:3]]
+    if (hashlib.sha256(paths[0].read_bytes()).hexdigest() != protocol["plan_sha256"]
+            or hashlib.sha256(paths[1].read_bytes()).hexdigest() != frozen["protocol_sha256"]
+            or set(protocol["training_ids"]) & set(protocol["holdout_ids"])):
+        raise ValueError("regional component split provenance changed")
+    scenarios = {row["scenario_id"]: row for row in plan["scenarios"]}
+    rows, timing = [], value["timing"][0]
+    for row in _read(paths[3]):
+        training = row["scenario_id"] in protocol["training_ids"]
+        if not training and row["scenario_id"] not in protocol["holdout_ids"] or training and row["policy"] == "fixed_mixed":
+            continue
+        candidates = sorted((REGIONAL / "scenarios" / row["scenario_id"]).glob("attempt-*/result.json"))
+        path = candidates[-1]
+        actual = json.loads(path.read_text())
+        if (row["status"] != "complete" or actual["status"] != "complete"
+                or abs(actual["migration_s"] - float(row["migration_s"])) > 1e-8):
+            raise ValueError("regional component observations must match completed results")
+        paths.append(path)
+        scenario, features, observed, descriptors = scenarios[row["scenario_id"]], [], [], []
+        contexts = {s["session_id"]: s["initial_tokens"] for s in scenario["sessions"]}
+        for destination in ("east", "germany"):
+            moves = [m for m in scenario["moves"] if m["destination_instance"] == destination]
+            replay, kv = [np.array([contexts[m["session_id"]] for m in moves if m["method"] == method])
+                          for method in ("replay", "kv_transfer")]
+            work = replay_seconds(replay, value)
+            kappa = np.ones_like(work) if np.any(replay > value["batch_context_limit"]) else np.interp(
+                replay, value["packing_context_tokens"], timing["packing_kappa"])
+            duration = float(np.exp(timing["beta"] * scenario["background"][destination][0])
+                             * (np.sum(kappa * work) + max((1 - kappa) * work, default=0)))
+            state, residual = kv_state(kv, value)
+            tail = np.interp(len(kv), [0, 1, 8], [0, timing["kv_completion_s"], timing["kv_batch_completion_s"]])
+            features.append((duration, state.sum(), tail + residual.sum() / value["kv_tail_replay_tps"]))
+            descriptors.append((replay, scenario["background"][destination][0], len(kv), residual.sum()))
+            requests = [m["request"] for m in actual["requests"] if m["destination_instance"] == destination]
+            observed.append((max(r["end_ns"] for r in requests) - actual["started_ns"]) / 1e9)
+        rows.append((training, row["policy"], features, observed, float(row["migration_s"]), descriptors))
+    if sum(r[0] for r in rows) != 53 or sum(not r[0] for r in rows) != 24:
+        raise ValueError("regional components require 53 pure-action training and 24 validation episodes")
+    def fit(training, timing_draw):
+        replay_factors, rates = [], []
+        for destination in range(2):
+            for policy, column, output in (("fixed_replay", 0, replay_factors), ("fixed_kv_transfer", 1, rates)):
+                selected = [r for r in training if r[1] == policy]
+                features = []
+                for row in selected:
+                    context, load, count, residual = row[5][destination]
+                    if column:
+                        features.append((row[2][destination][1], np.interp(count, [0, 1, 8],
+                            [0, timing_draw["kv_completion_s"], timing_draw["kv_batch_completion_s"]]) + residual / value["kv_tail_replay_tps"]))
+                    else:
+                        work = replay_seconds(context, value)
+                        kappa = np.ones_like(work) if np.any(context > value["batch_context_limit"]) else np.interp(
+                            context, value["packing_context_tokens"], timing_draw["packing_kappa"])
+                        features.append((np.exp(timing_draw["beta"] * load) * (np.sum(kappa * work)
+                                         + max((1 - kappa) * work, default=0)), 0.))
+                x, tail = np.asarray(features, dtype=float).T
+                y = np.array([r[3][destination] for r in selected]) - tail
+                coefficient = float(x @ y / (x @ x))
+                if not np.isfinite(coefficient) or coefficient <= 0:
+                    raise ValueError("regional primitive calibration must be finite and positive")
+                output.append(1 / coefficient if column else coefficient)
+        return replay_factors, rates
+
+    training = [r for r in rows if r[0]]
+    rng = np.random.default_rng(5)
+    for draw, timing_draw in enumerate(value["timing"]):
+        selected = training if not draw else [training[i] for policy in ("fixed_replay", "fixed_kv_transfer")
+            for i in rng.choice([i for i, r in enumerate(training) if r[1] == policy], sum(r[1] == policy for r in training))]
+        timing_draw["regional_replay_factor"], timing_draw["regional_kv_bytes_per_s"] = fit(selected, timing_draw)
+    replay_factors, rates = fit(training, value["timing"][0])
+    reports = {}
+    for policy in ("fixed_replay", "fixed_kv_transfer", "fixed_mixed", "aggregate"):
+        selected = [r for r in rows if not r[0] and (policy == "aggregate" or r[1] == policy)]
+        observed = np.array([r[4] for r in selected])
+        predicted = np.array([max(max(f[0] * replay_factors[d], f[1] / rates[d] + f[2])
+                                  for d, f in enumerate(r[2])) for r in selected])
+        reports[policy] = {**_metrics(observed, predicted), "mae_s": float(np.mean(abs(predicted - observed))),
+            "r2": float(1 - np.sum((predicted - observed) ** 2) / np.sum((observed - observed.mean()) ** 2)),
+            "residual_s": (observed - predicted).tolist()}
+    reports["gate_pass"] = reports["aggregate"]["mae_s"] <= protocol["gates"]["mae_s"] and reports["aggregate"]["r2"] >= protocol["gates"]["r2"]
+    return {"replay_factor": replay_factors, "endpoint_bytes_per_s": rates, "validation": reports,
+            "gates": protocol["gates"], "training_episodes": 53, "heldout_episodes": 24,
+            "bootstrap_seed": 5, "bootstrap_scope": "Resample complete training episodes within each pure action; routes remain paired; refit features using each draw's batch/completion parameters; no heldout residuals enter the fits",
+            "sources": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
+            "scope": "Retrospective fixed-split component calibration: 26 pure replay and 27 pure KV episodes fit regional replay work scales and application transfer rates after measured completion cost; all 27 mixed training episodes unused; 24 pre-existing holdouts check max-overlapped route completion. Effective node rates include application transport overhead, not backbone capacity or a KV ingest constraint. This check does not validate fleet scheduling or changing-load execution."}
 
 
 def regional_check(value):
@@ -84,7 +187,9 @@ def regional_check(value):
             duration = float(batch_time(np.ones((1, len(work))), work, timing["beta"], kappa,
                                        scenario["background"][destination][0])[0]) if len(work) else 0.
             tail = np.interp(len(kv), [0, 1, 8], [0, timing["kv_completion_s"], timing["kv_batch_completion_s"]])
-            state = (np.ceil(kv / value["kv_block_tokens"]) * value["kv_block_bytes"]).sum()
+            state, residual = kv_state(kv, value)
+            tail += residual.sum() / value["kv_tail_replay_tps"]
+            state = state.sum()
             routes.append((duration, tail, 2 * replay.sum(), state, scenario["bandwidth_mbps"][destination] * 125_000))
         shared = plan["network_contract"]["aggregate"]["natural_mbps"] * 125_000
 
@@ -111,6 +216,38 @@ def regional_check(value):
         reports[name]["gate_pass"] = aggregate["mae_s"] <= protocol["gates"]["mae_s"] and aggregate["r2"] >= protocol["gates"]["r2"]
     return {**reports, "sources": hashes, "gates": protocol["gates"],
             "scope": "Fixed recorded actions/routes/loads; one GPU per destination; final migration completion; 24 prospective episodes; timing transfer diagnostic, not optimizer or fleet-admission validation; frozen oracle is a queue-family fit"}
+
+
+def loaded_execution_check(value):
+    """Check base loaded-batch progress through the independent execution engine."""
+    from types import SimpleNamespace
+    from pool_shed_execution import execute_pooled
+
+    _, validation, _ = loaded.load_evidence()
+    context = np.array(loaded.CONTEXTS, dtype=float)
+    fleet = SimpleNamespace(count=np.ones(8), context=context, demand=np.zeros(8), gain=np.ones(8) / 8,
+        memory_tokens=context, baseline_kv=0., kv_capacity=1e12, gpus=1, nodes=1,
+        t1=replay_seconds(context, value), log=2 * context, kv=kv_state(context, value)[0],
+        metadata={"turn_sequences": [[] for _ in context], "source_session_rps": 0.,
+                  "batch_context_limit": max(context)})
+    timing = {**value["timing"][0], "regional_replay_factor": [1., 1.]}
+    base = {**value, "regional_components": {"replay_factor": [1., 1.]}}
+    observed, predicted = [], []
+    for row in validation:
+        if row["method"] != "replay":
+            continue
+        endpoint = np.full(2, row["bandwidth_mbps"] * 125_000)
+        table = SimpleNamespace(fleet=fleet, replay=np.ones((1, 8)), kv=np.zeros((1, 8)), route=np.array([0]),
+            deadline=300., endpoint=endpoint, budgets=np.r_[endpoint, endpoint.sum()], load=row["rho"])
+        result = execute_pooled(table, np.ones(1), timing, base)
+        if result["completed_sessions"] != 8:
+            raise RuntimeError("loaded execution check did not finish all recorded sessions")
+        observed.append(row["commit_s"])
+        predicted.append(result["last_completion_s"])
+    report = _metrics(observed, predicted)
+    return {**report, "gate_pass": report["episodes"] == 220 and report["p90_relative_error"] <= .05
+            and report["false_feasible_25s"] == 0,
+            "scope": "220 pre-existing replay holdouts; original fixed eight-context batch, resident offered-load reference, frozen source. Regional compute factors disabled to reproduce the original runtime. This validates base loaded progress, not its composition with regional scaling or changing-load admission."}
 
 
 def _kv_completion(value, draws):
@@ -174,8 +311,10 @@ def _policy_checks(value):
             kappa = np.ones_like(work)
         duration = float((kappa * work).sum() + max((1 - kappa) * work, default=0))
         logs = 2 * context[replay].sum()
-        state = (np.ceil(context[~replay] / value["kv_block_tokens"]) * value["kv_block_bytes"]).sum()
-        tail = np.interp((~replay).sum(), [1, 8], [timing["kv_completion_s"], timing["kv_batch_completion_s"]]) if state else 0
+        state, residual = kv_state(context[~replay], value)
+        state = state.sum()
+        tail = (np.interp((~replay).sum(), [1, 8], [timing["kv_completion_s"], timing["kv_batch_completion_s"]])
+                + residual.sum() / value["kv_tail_replay_tps"]) if (~replay).any() else 0
         bandwidth = scenario["bandwidth_mbps"] * 125_000
         a = duration + tail + (logs + state) / bandwidth
         discriminant = (duration - tail + (logs - state) / bandwidth) ** 2 + 4 * logs * state / bandwidth ** 2
@@ -291,14 +430,19 @@ def calibration(draws=8):
     profile = ModelProfile.load(loaded.PROFILE)
     case, physics = profile.case(), loaded._physics(profile)
     reference = json.loads((loaded.TRAINING.parent / "live_plan.json").read_text())["calibration"]["service_calibration"]
+    if hashlib.sha256(SERVICE_REFERENCE.read_bytes()).hexdigest() != reference["sha256"]:
+        raise ValueError("loaded serving reference profile changed")
     x, y = case.replay.by_concurrency[1]
     result = {"schema": "queue-haul-pool-calibration-v1", "model": profile.model,
               "replay_context_tokens": x.tolist(), "replay_tps": y.tolist(),
               "replay_completion_s": case.replay_completion_s, "switch_s": case.switch_s,
               "kv_block_tokens": case.kv_transfer.block_tokens, "kv_block_bytes": case.kv_transfer.block_bytes,
+              "kv_transfer": asdict(case.kv_transfer), "kv_tail_replay_tps": case.kv_transfer.tail_replay_tps,
               "kv_capacity_tokens": profile.kv_capacity_tokens,
               "F": reference["prefill_tokens_per_s"], "G": reference["decode_tokens_per_s"],
               "reference_request_tokens": [2048, 32], "reference_rps": 1 / reference["total_s"],
+              "service_reference": {"profile_sha256": reference["sha256"], "request_tokens": [2048, 32],
+                  "scope": "Measured loaded-replay offered-rate reference; phase costs normalize request demand, not context-dependent saturation or GPU utilization. Long-context resident mixtures are a declared transfer. Historical decode peaks change concurrency and include >300W samples; they are not a compatible replacement."},
               "calibration_contexts": list(loaded.CONTEXTS), "load_range": [0., .975]}
     singleton = replay_seconds(loaded.CONTEXTS, result)
     if not np.isclose(singleton.sum(), physics["endpoint_work_s"]["replay"], rtol=0, atol=1e-12):
@@ -319,6 +463,7 @@ def calibration(draws=8):
                                               for row in training if row["repeat"] == repeat]) for _ in range(draws)]
     packing = _packing(result, draws)
     kv_completion = _kv_completion(result, draws)
+    result["regional_components"] = _regional_components(result)
     timing = result["timing"][0]
     batch = singleton.max() + timing["kappa"] * (singleton.sum() - singleton.max())
     observed, predicted = [], []
@@ -365,5 +510,6 @@ def calibration(draws=8):
         "transition_limit": "Three discrete eager-A100/4K recipes at combined W=.50; no generic SLO cap or transfer to new mixtures",
         "loaded_validation": model["width8_relative_factor_validation"]["replay"],
         "historical_transfer_checks": _transfer_checks(result)}
-    result["sources"] = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in PATHS}
+    result["sources"] = {**{str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in PATHS},
+                         **result["regional_components"]["sources"]}
     return result
