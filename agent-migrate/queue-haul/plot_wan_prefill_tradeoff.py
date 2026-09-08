@@ -51,6 +51,8 @@ def plot(root, out):
                                             frozen["constants"]["power_window_s"])
                 points.append({**{k: row[k] for k in ("campaign", "episode_id", "state_id", "pack_id",
                                                      "policy", "repeat", "phase")},
+                               "wan_mbps": float(row["wan_mbps"]),
+                               "prefill_rps": json.loads(row["capacity_inputs"])["background_rps"],
                                "kv_share_percent": share, "attainment_time_s": "" if time is None else time})
     counts = Counter((p["campaign"], p["state_id"], p["pack_id"], p["policy"]) for p in points)
     if any(n != 13 for n in counts.values()):
@@ -59,31 +61,48 @@ def plot(root, out):
     not_met = horizon + 7
     out.mkdir(parents=True, exist_ok=True)
     for campaign in ("wan", "prefill"):
-        fig, ax = plt.subplots(figsize=(2.1, 1.75))
-        for policy in POLICIES:
-            selected = [r for r in points if r["campaign"] == campaign and r["policy"] == policy]
-            identity = STYLE_IDS[policy]
-            ax.scatter([r["kv_share_percent"] for r in selected],
-                       [r["attainment_time_s"] if r["attainment_time_s"] != "" else not_met for r in selected],
-                       marker=plot_style.POLICY_MARKERS[identity], s=7, alpha=.55,
-                       facecolors="none" if policy == "greedy" else plot_style.POLICY_COLORS[identity],
-                       edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.45,
-                       label=plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
-        ax.axhspan(horizon + 3, not_met + 3, color=".94", zorder=0)
-        ax.axhline(30, color="black", linestyle=":", linewidth=.8)
-        ax.text(3, 31, "30 s deadline", fontsize=6, fontstyle="italic")
-        ax.set(xlabel="KV-transfer share (%)", ylabel="Time to target (s)",
-               xlim=(-5, 105), ylim=(0, not_met + 3), xticks=(0, 50, 100),
-               yticks=(0, 15, 30, not_met), yticklabels=("0", "15", "30", "Not met"))
-        plot_style.half_column(ax)
-        ax.tick_params(axis="y", labelsize=6)
-        ax.xaxis.labelpad = ax.yaxis.labelpad = 2
-        ax.grid(alpha=.2, linewidth=.5)
-        ax.set_axisbelow(True)
-        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.61, .01),
-                   ncol=2, frameon=False, fontsize=5.5, handlelength=1.2,
-                   handletextpad=.3, columnspacing=.7, labelspacing=.3)
-        fig.subplots_adjust(left=.27, right=.96, bottom=.43, top=.97)
+        cases = sorted({(r["wan_mbps"], r["prefill_rps"], r["state_id"]) for r in points
+                        if r["campaign"] == campaign})
+        nrows = (len(cases) + 1) // 2
+        fig, axes = plt.subplots(nrows, 2, figsize=(3.5, 1.45 * nrows + .8), sharex=True, sharey=True)
+        for ax, (wan, prefill, state) in zip(axes.flat, cases):
+            case_points = [r for r in points if r["campaign"] == campaign and r["state_id"] == state]
+            for policy in POLICIES:
+                selected = sorted((r for r in case_points if r["policy"] == policy), key=lambda r: int(r["repeat"]))
+                identity = STYLE_IDS[policy]
+                offsets = np.linspace(-4, 4, len(selected))
+                if policy == "greedy":
+                    offsets = offsets[::-1]
+                ax.scatter(np.array([r["kv_share_percent"] for r in selected]) + offsets,
+                           [r["attainment_time_s"] if r["attainment_time_s"] != "" else not_met for r in selected],
+                           marker=plot_style.POLICY_MARKERS[identity], s=9, alpha=.7,
+                           facecolors="none" if policy == "greedy" else plot_style.POLICY_COLORS[identity],
+                           edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.5,
+                           label=plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
+            ax.axhspan(horizon + 3, not_met + 3, color=".94", zorder=0)
+            ax.axhline(30, color="black", linestyle=":", linewidth=.8)
+            ax.text(50, 31, "30 s deadline", ha="center", fontsize=6, fontstyle="italic")
+            title = (f"{wan / 1000:g} Gb/s" + (" · control" if wan == 10000 else " · constrained")
+                     if campaign == "wan" else f"{prefill:g} prefill req/s" + (" · control" if prefill == 0 else ""))
+            ax.set_title(title, fontsize=7.5, pad=5)
+            ax.set(xlim=(-7, 107), ylim=(0, not_met + 3), xticks=(0, 50, 100),
+                   yticks=(0, 15, 30, not_met), yticklabels=("0", "15", "30", "Not met"))
+            plot_style.half_column(ax)
+            ax.tick_params(axis="y", labelsize=6)
+            ax.grid(alpha=.2, linewidth=.5)
+            ax.set_axisbelow(True)
+            ax.text(.5, .04, "13 episodes per policy", transform=ax.transAxes,
+                    ha="center", fontsize=5.5, color=".35")
+        for ax in list(axes.flat)[len(cases):]:
+            ax.set_visible(False)
+        fig.supylabel("Time to requested power reduction (s)", x=.01, y=.59, fontsize=8)
+        fig.supxlabel("KV-transfer share (%)", x=.58, y=.155, fontsize=8)
+        fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.55, .045),
+                   ncol=3, frameon=False, fontsize=6, handlelength=1.2,
+                   handletextpad=.3, columnspacing=.7, labelspacing=.4)
+        fig.text(.5, .012, "Horizontal offsets ±4 pp separate repeats; time values are exact.",
+                 ha="center", fontsize=5.5)
+        fig.subplots_adjust(left=.20, right=.97, bottom=.22, top=.95, hspace=.38, wspace=.18)
         save(fig, out / f"{campaign}_action_attainment")
     with (out / "action_attainment.csv").open("w") as stream:
         writer = csv.DictWriter(stream, fieldnames=points[0], lineterminator="\n")
