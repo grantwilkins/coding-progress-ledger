@@ -2709,7 +2709,7 @@ These are descriptive episode ECDFs, not evidence of a causal prefill transition
 `wan_action_attainment` and `prefill_action_attainment` PDFs/PNGs plus
 `action_attainment.csv` in the same `pooled/` directory. Each point is one
 full-plan episode: 156 WAN and 117 prefill points, with 13 repeats per case
-for QH LP, QH Greedy, and Isolated Fastest. Each class is pooled into one
+for QH LP, QH Greedy, and True Greedy. Each class is pooled into one
 2.1 × 1.6 inch scatter, excluding the 10 Gb/s WAN and zero-load prefill controls.
 Small translucent markers have deterministic horizontal display offsets of
 at most ±1 percentage point; attainment times and CSV KV shares remain exact.
@@ -2719,7 +2719,7 @@ eight sessions, so attainment is the last successful completion plus the
 five-second power window. This agrees with archived on-time attainment and
 extends late completions beyond the horizontal 30-second deadline.
 
-Isolated Fastest's 0% and 100% KV episodes are the observed all-eight-replay
+True Greedy's 0% and 100% KV episodes are the observed all-eight-replay
 and all-eight-KV executions for those same cases. Pure-action markers overlay those same
 endpoint observations, sharing both their times and their display offsets.
 The CSV records each source episode once; the overlays are reused timings,
