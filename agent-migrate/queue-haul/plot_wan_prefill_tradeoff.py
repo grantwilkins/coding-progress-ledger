@@ -113,7 +113,7 @@ def plot(root, out):
                 continue
             ax.scatter(np.array([r["kv_share_percent"] for r in selected]) + offsets,
                        [r["attainment_time_s"] for r in selected],
-                       marker=plot_style.POLICY_MARKERS[identity], s=20 if shared else 7, alpha=.45 if shared else .6,
+                       marker=plot_style.POLICY_MARKERS[identity], s=30 if shared else 12, alpha=.45 if shared else .6,
                        facecolors="none" if shared or policy == "greedy" else plot_style.POLICY_COLORS[identity],
                        edgecolors=plot_style.POLICY_COLORS[identity], linewidths=1 if shared else .8,
                        label=plot_style.STRESS_POLICY_NAMES[identity] if policy == "per_session_greedy" else plot_style.PAPER_POLICY_NAMES[identity],
