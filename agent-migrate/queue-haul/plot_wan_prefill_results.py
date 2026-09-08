@@ -54,9 +54,8 @@ def replay_interval(rows, campaign, policy):
 
 
 def save(fig, out):
-    fig.tight_layout()
     for suffix in ("png", "pdf"):
-        fig.savefig(out.with_suffix(f".{suffix}"), bbox_inches="tight")
+        fig.savefig(out.with_suffix(f".{suffix}"), dpi=plot_style.SAVE_DPI)
     plt.close(fig)
 
 
@@ -71,29 +70,34 @@ def plot(source, out):
     out.mkdir(parents=True, exist_ok=True)
     summaries = []
     horizon = max(x[-1] for x, _, _, _ in groups.values()) * 1.04
-    for campaign, title in (("wan", "WAN constrained"), ("prefill", "Prefill / compute headroom constrained")):
+    for campaign in ("wan", "prefill"):
         coverage = [Counter((r["state_id"], r["pack_id"], r["repeat"]) for r in rows
                             if r["campaign"] == campaign and r["policy"] == p) for p in POLICIES]
         if any(c != coverage[0] for c in coverage):
             raise ValueError("policies must cover the same cases and repeats")
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(2.1, 1.75))
         for policy in POLICIES:
             x, y, counts, total = groups[campaign, policy]
             ax.step(np.r_[x, horizon], np.r_[y, y[-1]], where="post",
-                    **plot_style.policy_style(STYLE_IDS[policy]))
+                    **{**plot_style.policy_style(STYLE_IDS[policy], plot_style.PAPER_POLICY_NAMES), "linewidth": 1.2})
             summaries.append(dict(campaign=campaign, policy=policy, episodes=total // 8,
                                   sessions=total, completed_episodes=len(x) - 1,
                                   episodes_completed_by_30s=int(np.count_nonzero(x[1:] <= 30)),
                                   replay=counts["replay"], kv_transfer=counts["kv_transfer"],
                                   not_selected=counts["not_selected"]))
         ax.axvline(30, color="black", linestyle=":", linewidth=1, label="30 s deadline")
-        ax.set(xlabel="Time since migration start (s)", ylabel="Fraction of episodes finished",
-               title=title, xlim=(0, horizon), ylim=(0, 1.02))
+        ax.set(xlabel="Time since migration start (s)", ylabel="Episodes finished",
+               xlim=(0, horizon), ylim=(0, 1.02), xticks=(0, 10, 20, 30), yticks=(0, .5, 1))
         ax.grid(alpha=.2)
-        ax.legend(loc="upper left")
+        plot_style.half_column(ax)
+        ax.xaxis.labelpad = ax.yaxis.labelpad = 2
+        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.60, .01),
+                   ncol=2, frameon=False, fontsize=5.5, handlelength=1.6,
+                   handletextpad=.4, columnspacing=.8, labelspacing=.3)
+        fig.subplots_adjust(left=.23, right=.97, bottom=.43, top=.97)
         save(fig, out / f"{campaign}_completion_ecdf")
     policies = POLICIES[:3]
-    for campaign, title in (("wan", "WAN"), ("prefill", "Prefill / compute")):
+    for campaign in ("wan", "prefill"):
         fig, ax = plt.subplots(figsize=(2.1, 1.75))
         left = np.zeros(len(policies))
         for action in ("replay", "kv_transfer", "not_selected"):
@@ -113,14 +117,13 @@ def plot(source, out):
                                           for p in policies], xlim=(0, 100), xticks=(0, 50, 100),
                xlabel="Actions (%)", ylim=(2.5, -.5))
         plot_style.half_column(ax)
-        ax.set_title(title, fontsize=plot_style.HALF_COLUMN_FONT_SIZE, pad=4)
         ax.xaxis.labelpad = 2
         ax.grid(axis="x", alpha=.2, linewidth=.5)
         ax.set_axisbelow(True)
         fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.64, .02),
                    ncol=2, frameon=False, fontsize=6,
                    handlelength=.9, handletextpad=.4, columnspacing=.7, labelspacing=.3)
-        fig.subplots_adjust(left=.36, right=.92, bottom=.31, top=.86)
+        fig.subplots_adjust(left=.36, right=.92, bottom=.31, top=.97)
         for suffix in ("png", "pdf"):
             fig.savefig(out / f"{campaign}_action_mix.{suffix}")
         plt.close(fig)

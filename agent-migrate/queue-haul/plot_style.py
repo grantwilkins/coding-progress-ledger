@@ -34,7 +34,8 @@ STRESS_POLICY_NAMES = {**POLICY_NAMES, "isolated_fastest": "True Greedy"}
 COMPACT_POLICY_NAMES = {
     **POLICY_NAMES, "kv_only": "KV Migrate", "replay_only": "Replay Context",
 }
-PAPER_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "QH LP", "greedy": "QH Greedy"}
+PAPER_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "QH LP", "greedy": "QH Greedy",
+                      "kv_only": "KV only", "replay_only": "Replay only"}
 SHORT_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "Queue-Haul"}
 POLICY_COLORS = dict(zip(POLICIES, (
     "#0072B2", "#E69F00", "#F0E442", "#D55E00",
