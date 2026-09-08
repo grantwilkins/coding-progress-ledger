@@ -52,6 +52,69 @@ def kv_state(contexts, calibration):
                  for method in (transfer.sealed_bytes, transfer.tail_tokens))
 
 
+def service_work(context, prompt, output, calibration):
+    """Request demand in units of the measured normal serving envelope."""
+    contract = calibration["resident_service"]
+    context, prompt, output = np.broadcast_arrays(context, prompt, output)
+    if not np.isfinite([context, prompt, output]).all() or np.any(context <= 0) or np.any(prompt < 0) or np.any(output < 0):
+        raise ValueError("invalid resident request shape")
+    rates = [np.interp(context, *np.asarray(contract[phase]).T,
+                       left=min(row[1] for row in contract[phase]), right=min(row[1] for row in contract[phase]))
+             for phase in ("prefill", "decode")]
+    return (prompt / rates[0] + output / rates[1]) / contract["bound"]
+
+
+def source_power(fleet, calibration):
+    """Existing phase-power curve at the source's cycle-average offered token rates."""
+    if hashlib.sha256(POWER_PROFILE.read_bytes()).hexdigest() != calibration["sources"][str(POWER_PROFILE.relative_to(ROOT))]:
+        raise ValueError("source power calibration changed")
+    power = ModelProfile.load(POWER_PROFILE).case().phase_power
+    means = np.array([[np.mean([r[key] for r in sequence]) for key in ("prompt", "output")]
+                      for sequence in fleet.metadata["turn_sequences"]])
+    rates = fleet.count @ means * fleet.metadata["source_session_rps"] / fleet.gpus
+    if not np.isfinite(rates).all() or not power.contains(*rates):
+        raise ValueError("source token rates lie outside the measured power hull")
+    load = power.load(*rates)
+    if not power.measured_power_bootstrap or any(load > curve[-1][0] for curve in power.measured_power_bootstrap):
+        raise ValueError("source power lacks supported measured bootstrap curves")
+    active, idle = power.power(load), power.power(0.)
+    draws = [float(np.interp(load, *np.asarray(curve).T) - curve[0][1]) for curve in power.measured_power_bootstrap]
+    return {"active_w": active, "idle_w": idle, "delta_w": active - idle, "delta_draws_w": draws,
+            "prefill_tokens_per_s_per_gpu": float(rates[0]), "decode_tokens_per_s_per_gpu": float(rates[1]),
+            "power_load": load, "grouped_cv_rmse_w": power.grouped_cv_rmse_w,
+            "within_5w_fraction": power.within_5w_fraction,
+            "scope": "Whole-GPU cycle-average active power at the declared source rates minus awake idle; within the measured phase-rate hull. Bootstrap samples curve uncertainty, not the reported grouped-CV model error or trajectory transfer. Multiplying this full delta by shed fraction is a separate linear allocation proxy, not evaluation of the nonlinear remaining-workload power."}
+
+
+def _resident_service():
+    root = ROOT / "outputs/destination-v7-20260722"
+    paths = [root / name for name in ("plan.json", "baseline-profile.json", "anchor-gate.json", "service/frontier.json", "acceptance.json")]
+    plan, profile, anchors, frontier, acceptance = [json.loads(path.read_text()) for path in paths]
+    if hashlib.sha256(paths[1].read_bytes()).hexdigest() != plan["baseline_profile"]["sha256"] or not anchors["within_limit"]:
+        raise ValueError("resident service normalization or anchor gate changed")
+    curves = {phase: dict(profile["cases"]["central"][f"{phase}_tps"]["1"]) for phase in ("prefill", "decode")}
+    for row in anchors["anchors"]:
+        curves[row["metric"]][row["context_tokens"]] = row["observed_tokens_per_s"]
+    cases = []
+    for split in ("tune", "validation"):
+        for path in sorted((root / "service" / split / "coding").glob("normal-*/result.json")):
+            row = json.loads(path.read_text())
+            if row["status"] != "complete" or not row["classification"]["normal"] or not row["drained"]:
+                raise ValueError("recorded coding resident service check failed")
+            cases.append({"path": str(path.relative_to(ROOT)), **row})
+            paths.append(path)
+    bound = frontier["nested_bounds"]["normal"]
+    if len(cases) != 4 or not min(row["radius"] for row in cases) <= bound <= max(row["radius"] for row in cases):
+        raise ValueError("resident service requires four bracketing coding checks")
+    return {"bound": bound, **{phase: sorted(values.items()) for phase, values in curves.items()},
+            "context_limit": min(max(values) for values in curves.values()),
+            "targets": plan["service"]["slos"]["normal"], "evidence": cases,
+            "full_profile_accepted": acceptance["accepted"],
+            "scope": "Retrospective coding serving envelope with its original context-dependent baseline curves and live anchor replacements; four recorded tuning/validation checks pass. Full destination profile was not accepted. Other request mixtures and shared migration occupancy are declared transfers, not a generic TTFT/TPOT guarantee.",
+            "extrapolation": "Outside measured context curves hold the slowest measured phase rate; explicit sensitivity, not a validated bound.",
+            "sources": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}}
+
+
 def _read(path):
     with path.open(newline="") as handle:
         return list(csv.DictReader(handle))
@@ -619,6 +682,8 @@ def calibration(draws=8):
         "transition_limit": "Three discrete eager-A100/4K recipes at combined W=.50; no generic SLO cap or transfer to new mixtures",
         "loaded_validation": model["width8_relative_factor_validation"]["replay"],
         "historical_transfer_checks": _transfer_checks(result)}
+    result["resident_service"] = _resident_service()
     result["sources"] = {**{str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in PATHS},
+                         **result["resident_service"]["sources"],
                          **result["regional_components"]["sources"], **result["resident_interference"]["sources"]}
     return result

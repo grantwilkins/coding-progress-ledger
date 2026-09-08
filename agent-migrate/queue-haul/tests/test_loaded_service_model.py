@@ -101,3 +101,59 @@ def test_artifact_validator_rejects_a_tampered_curve():
         math.exp(roundoff["selected_commit_log_slope_per_rho"]["replay"] * rho)
         for rho in roundoff["rho_grid"]]
     validate_model({**roundoff, "provenance": provenance})
+
+
+def test_engine_replays_both_loaded_actions_mixed_policies_and_long_contexts():
+    from loaded_service_model import historical_execution_check
+    from pool_shed_calibration import calibration
+
+    report = historical_execution_check(calibration(0))
+    assert report["gate_pass"]
+    assert not report["loaded_transferred_tail"]["gate_pass"]
+    for method in ("replay", "kv_transfer"):
+        assert report["loaded_matched_runtime"]["metrics"][method]["episodes"] == 220
+    assert sum(m["episodes"] for m in report["policy_matched_runtime"]["metrics"].values()) == 160
+    assert report["long_context"]["metrics"]["replay"]["episodes"] == 72
+    for group in ("loaded_matched_runtime", "policy_matched_runtime", "long_context"):
+        assert all(m["false_feasible_25s"] == 0 for m in report[group]["metrics"].values())
+
+
+def test_historical_tail_fit_never_reads_the_heldout_response(monkeypatch):
+    import loaded_service_model as model
+    from pool_shed_calibration import PACKING, calibration
+
+    value = calibration(0)
+    baseline = model.historical_execution_check(value)
+    read = model._read
+    groups = {}
+    for row in read(PACKING / "policy_episodes.csv"):
+        groups.setdefault((row["policy"], row["condition"]), []).append(row)
+    heldout = {max(rows, key=lambda r: int(r["episode"]))["scenario_id"] for rows in groups.values()}
+
+    def changed(path):
+        rows = read(path)
+        if path == PACKING / "policy_episodes.csv":
+            for row in rows:
+                if row["scenario_id"] in heldout:
+                    row["commit_100_s"] = str(100 * float(row["commit_100_s"]))
+        return rows
+
+    monkeypatch.setattr(model, "_read", changed)
+    result = model.historical_execution_check(value)
+    assert result["policy_local_tail_s"] == baseline["policy_local_tail_s"]
+    assert result["loaded_local_tail_s"] == baseline["loaded_local_tail_s"]
+    assert not result["policy_matched_runtime"]["gate_pass"] and not result["gate_pass"]
+
+
+def test_historical_execution_fails_on_incomplete_recorded_actions(monkeypatch):
+    import pool_shed_execution as engine
+    from loaded_service_model import historical_execution_check
+    from pool_shed_calibration import calibration
+
+    def incomplete(table, *args, **kwargs):
+        assert table.fleet.metadata["protect_resident"] is False
+        return {"completed_sessions": 0}
+
+    monkeypatch.setattr(engine, "execute_pooled", incomplete)
+    with pytest.raises(RuntimeError, match="recorded actions"):
+        historical_execution_check(calibration(0))

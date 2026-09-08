@@ -3,7 +3,42 @@
 import numpy as np
 import pytest
 
-from pool_shed_calibration import CROSSOVER, LONG_PACKS, _read, calibration, kv_state, loaded_execution_check, resident_execution_check
+from pool_shed_calibration import CROSSOVER, LONG_PACKS, _read, calibration, kv_state, loaded_execution_check, resident_execution_check, service_work
+
+
+def test_source_power_uses_declared_rates_and_per_draw_idle_without_extrapolation():
+    from dataclasses import replace
+    from pool_shed_campaign import sample_fleet
+    from pool_shed_calibration import POWER_PROFILE, source_power
+    from profiles import ModelProfile
+
+    fleet, measured = sample_fleet("coding"), calibration(0)
+    actual, curve = source_power(fleet, measured), ModelProfile.load(POWER_PROFILE).case().phase_power
+    assert actual["active_w"] < measured["active_w"]
+    assert actual["delta_w"] == pytest.approx(actual["active_w"] - actual["idle_w"])
+    np.testing.assert_allclose(actual["delta_draws_w"], [np.interp(actual["power_load"], *np.asarray(c).T) - c[0][1]
+                                                       for c in curve.measured_power_bootstrap])
+    idle = replace(fleet, metadata={**fleet.metadata, "source_session_rps": 0.})
+    assert source_power(idle, measured)["delta_w"] == 0
+    assert not np.any(source_power(idle, measured)["delta_draws_w"])
+    overloaded = replace(fleet, metadata={**fleet.metadata, "source_session_rps": 1e9})
+    with pytest.raises(ValueError, match="power hull"):
+        source_power(overloaded, measured)
+
+
+def test_resident_service_uses_matched_context_anchors_and_explicit_evidence_scope():
+    value = calibration(0)
+    service = value["resident_service"]
+    expected = (2048 / np.array([5550.823048297525, 4376.4708558464745, 5337.344115334956])
+                + 32 / np.array([1109.6084258150277, 317.97384033307566, 174.8848660847107])) / .1140625
+    np.testing.assert_allclose(service_work([4096, 16384, 24576], 2048, 32, value), expected)
+    assert service_work(4096, 2048, 32, value) == pytest.approx(expected[0])
+    assert len(service["evidence"]) == 4 and service["full_profile_accepted"] is False
+    assert service["context_limit"] == 31562 and service["sources"].items() <= value["sources"].items()
+    assert service_work(100000, 2048, 32, value) >= expected.max()
+    for context, prompt, output in ((0, 1, 1), (4096, -1, 1), (4096, 1, np.nan)):
+        with pytest.raises(ValueError, match="resident request shape"):
+            service_work(context, prompt, output, value)
 
 
 def test_sealed_payload_matches_hardware_and_preserves_partial_tokens():

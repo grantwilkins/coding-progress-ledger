@@ -314,6 +314,99 @@ def validate_model(value: dict) -> dict:
     return value
 
 
+def historical_execution_check(value):
+    """Execute recorded actions; local training adapters do not alter fleet calibration."""
+    from types import SimpleNamespace
+    from pool_shed_calibration import PACKING, LONG_PACKS, kv_state, replay_seconds, _metrics
+    from pool_shed_execution import execute_pooled
+
+    def execute(context, replay, bandwidth, load, tail=None, packing=True):
+        context, replay = np.asarray(context, float), np.asarray(replay, float)[None, :]
+        endpoint = np.full(2, bandwidth * 125_000)
+        timing = {**value["timing"][0], "regional_replay_factor": [1., 1.],
+                  "regional_kv_bytes_per_s": endpoint.tolist()}
+        if tail is not None:
+            timing["kv_batch_completion_s"] = tail
+            if not replay.any():
+                timing["beta"] = 0.
+        metadata = {"turn_sequences": [[] for _ in context], "source_session_rps": 0.,
+                    "batch_context_limit": value["batch_context_limit"], "protect_resident": False}
+        if packing:
+            metadata["packing_context_tokens"] = value["packing_context_tokens"]
+        fleet = SimpleNamespace(count=np.ones(len(context)), context=context, demand=np.zeros(len(context)),
+            gain=np.ones(len(context)) / len(context), memory_tokens=context, baseline_kv=0., kv_capacity=1e12,
+            gpus=1, nodes=1, t1=replay_seconds(context, value), log=2 * context,
+            kv=kv_state(context, value)[0], metadata=metadata)
+        table = SimpleNamespace(fleet=fleet, replay=replay, kv=1 - replay, route=np.array([0]),
+            deadline=300., endpoint=endpoint, budgets=np.r_[endpoint, endpoint.sum()], load=load)
+        result = execute_pooled(table, np.ones(1), timing, value, chunks=1)
+        if result["completed_sessions"] != len(context):
+            raise RuntimeError("historical execution failed to complete recorded actions")
+        return result["last_completion_s"]
+
+    def summarize(rows, key, limits):
+        metrics = {group: _metrics([r["observed_s"] for r in rows if r[key] == group],
+                                  [r["predicted_s"] for r in rows if r[key] == group]) for group in limits}
+        return {"metrics": metrics, "predictions": rows, "p90_relative_error_limits": limits,
+                "gate_pass": all(not m["false_feasible_25s"] and m["p90_relative_error"] <= limits[g]
+                                 for g, m in metrics.items())}
+
+    training, heldout, provenance = load_evidence()
+    physics = _physics(ModelProfile.load(PROFILE))
+    loaded_tail = physics["endpoint_work_s"]["kv_transfer"] * _fits(training, physics, "commit_s")["kv_transfer"][0]
+    report = {}
+    for mode, tail in (("loaded_transferred_tail", None), ("loaded_matched_runtime", loaded_tail)):
+        rows = [{"scenario_id": r["scenario_id"], "method": r["method"], "observed_s": r["commit_s"],
+                 "predicted_s": execute(CONTEXTS, [r["method"] == "replay"] * 8, r["bandwidth_mbps"],
+                                        r["rho"], tail, packing=False)} for r in heldout]
+        report[mode] = summarize(rows, "method", {"replay": .05, "kv_transfer": .15})
+    report["loaded_local_tail_s"] = loaded_tail
+    scenarios = {r["scenario_id"]: r for r in json.loads((PACKING / "plan.json").read_text())["scenarios"]}
+    moves, groups = {}, {}
+    for r in _read(PACKING / "policy_migrations.csv"):
+        moves.setdefault(r["scenario_id"], []).append(r)
+    for r in _read(PACKING / "policy_episodes.csv"):
+        groups.setdefault((r["policy"], r["condition"]), []).append(r)
+    if len(groups) != 160 or any(len(rows) != 3 for rows in groups.values()):
+        raise ValueError("historical policy execution requires 160 three-repeat conditions")
+    training = [r for rows in groups.values() for r in sorted(rows, key=lambda r: int(r["episode"]))[:2]]
+    heldout = [max(rows, key=lambda r: int(r["episode"])) for rows in groups.values()]
+    residuals = []
+    for r in training:
+        if r["policy"] == "kv_only":
+            context = [int(m["context_tokens"]) for m in moves[r["scenario_id"]]]
+            state, partial = kv_state(context, value)
+            residuals.append(float(r["commit_100_s"]) - state.sum() / (scenarios[r["scenario_id"]]["bandwidth_mbps"] * 125_000)
+                             - partial.sum() / value["kv_tail_replay_tps"] - value["switch_s"])
+    policy_tail = float(np.median(residuals))
+    if len(residuals) != 80 or not np.isfinite(policy_tail) or policy_tail <= 0:
+        raise ValueError("historical policy tail requires 80 valid pure-KV training episodes")
+    limits = {p: m["p90_relative_error"] for p, m in value["evidence"]["recorded_policy_checks"]["heldout_third_repeat"].items()}
+    for mode, tail in (("policy_transferred_tail", None), ("policy_matched_runtime", policy_tail)):
+        rows = []
+        for r in heldout:
+            selected = moves[r["scenario_id"]]
+            rows.append({"scenario_id": r["scenario_id"], "policy": r["policy"], "observed_s": float(r["commit_100_s"]),
+                "predicted_s": execute([int(m["context_tokens"]) for m in selected], [m["method"] == "replay" for m in selected],
+                    scenarios[r["scenario_id"]]["bandwidth_mbps"], 0., tail)})
+        report[mode] = summarize(rows, "policy", limits)
+    report["policy_local_tail_s"] = policy_tail
+    moves, rows = {}, []
+    for r in _read(LONG_PACKS / "migrations.csv"):
+        moves.setdefault(r["scenario_id"], []).append(r)
+    for r in _read(LONG_PACKS / "scenarios.csv"):
+        if (r["kind"], r["method"], r["activity"], int(r["concurrency"])) == ("migration", "replay", "none", 8):
+            rows.append({"scenario_id": r["scenario_id"], "method": "replay", "observed_s": float(r["migration_s"]),
+                "predicted_s": execute([int(m["measured_prompt_tokens"]) for m in moves[r["scenario_id"]]],
+                                       [True] * 8, float(r["bandwidth_mbps"]), 0.)})
+    if len(rows) != 72:
+        raise ValueError("historical long-context execution requires 72 recorded batches")
+    report["long_context"] = summarize(rows, "method", {"replay": .20})
+    report["gate_pass"] = all(report[k]["gate_pass"] for k in ("loaded_matched_runtime", "policy_matched_runtime", "long_context"))
+    return {**report, "loaded_provenance": provenance,
+        "scope": "Recorded one-GPU actions, original unprotected resident offered load, frozen source; local endpoint and training-only tail adapters. Loaded/long gates are existing gates; policy limits preserve analytic-reference error. Transferred-tail failures remain visible. This validates engine progress, not protected serving, moving trajectories, fleet SLOs or new policy decisions."}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=OUT)

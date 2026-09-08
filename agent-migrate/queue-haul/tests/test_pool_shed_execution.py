@@ -412,3 +412,83 @@ def test_observable_phase_progress_accumulates_across_interrupts_and_resets():
     execution.advance(20.)
     assert execution.state.tolist() == [6, 6]
     assert execution.phase_replica_seconds == pytest.approx([0., 0.])
+
+
+def test_protected_compute_shares_one_safe_occupancy_budget():
+    from pool_shed_execution import compute_allocation
+    assert compute_allocation(.5, 1., 1., 1., .9, True) == pytest.approx((.25, .5))
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      load=.25, demand=(0., 0.), deadline=30.)
+    table.fleet.log[0] = 0
+    table.fleet.metadata.update(protect_resident=True, timing_load_factor=.5)
+    timing.update(beta=2., resident_replay_loss=.9)
+    result = run(table, timing, calibration)
+    assert result["last_completion_s"] == pytest.approx(8 * np.exp(.25) / .75)
+    assert result["resident_debt_generated_work_s"] == [0, 0]
+    assert result["batch_replica_seconds"][0] == pytest.approx(8 * np.exp(.25))
+
+
+def test_protected_source_quiesces_immediately_between_requests():
+    table, _, _ = case()
+    table.fleet.metadata.update(protect_resident=True, source_session_rps=.1, sequence_cycle=True,
+        turn_sequences=[[{"context": 100, "prompt": 1, "output": 0}], []], turn_duration_s=[[.1], []])
+    assert _quiesce(table.fleet, np.array([1, 0]), .05)[0] == .1
+    assert _quiesce(table.fleet, np.array([1, 0]), 2.)[0] == 2.
+    assert _quiesce(table.fleet, np.array([1, 0]), 10.)[0] == 10.1
+
+
+@pytest.mark.parametrize("load,completed,pending", [(.25, 1., 0.), (.75, 0., .5)])
+def test_protected_handoff_waits_for_buffer_and_never_strands_it_at_destination(load, completed, pending):
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
+                                      load=load, demand=(.25, 0.), deadline=4.)
+    table.fleet.metadata.update(protect_resident=True, source_session_rps=1., sequence_cycle=True,
+        turn_sequences=[[{"context": 1, "prompt": 1, "output": 0}], []], turn_duration_s=[[.25], []])
+    calibration["resident_service"] = {"prefill": [[1, 4], [100, 4]], "decode": [[1, 4], [100, 4]], "bound": 1.}
+    execution = PooledExecution(table, timing, calibration)
+    execution.admit([1.])
+    execution.state[:], execution.remaining[:], execution.release[:], execution.now = 5, 0., 2., 2.
+    execution.advance(4.)
+    result = execution.result()
+    assert result["completed_sessions"] == completed
+    assert result["pending_source_buffer_work_s"] == pytest.approx(pending)
+    assert result["pending_backlog_reference_work_s"] == 0
+    assert result["resident_debt_generated_work_s"] == [0, 0]
+    assert result["buffered_requests"] == pytest.approx(result["completed_buffered_requests"] + result["pending_buffered_requests"])
+    assert result["buffered_requests"] == pytest.approx(result["transferred_buffered_requests"] + result["source_buffered_requests"])
+    if completed:
+        assert result["last_completion_s"] == 3.
+        assert result["service_ready_s"] == 3.
+
+
+def test_protected_gate_buffer_has_priority_over_other_replay():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(route=(0, 0), load=.25, demand=(.25, 0.), deadline=4.)
+    table.fleet.metadata.update(protect_resident=True, source_session_rps=1.,
+        turn_sequences=[[{"context": 1, "prompt": 1, "output": 0}] * 4, []], turn_duration_s=[[.25] * 4, []])
+    calibration["resident_service"] = {"prefill": [[1, 4], [100, 4]], "decode": [[1, 4], [100, 4]], "bound": 1.}
+    execution = PooledExecution(table, timing, calibration)
+    execution.admit([1., 1.])
+    execution.state[:], execution.remaining[:], execution.release[:], execution.now = [5, 1], [0., 8.], [2., 0.], 2.
+    execution.advance(2.5)
+    assert execution.backlog[0] == pytest.approx(.25)
+    assert execution.remaining[1] == 8.
+    assert execution.serving_load() == pytest.approx([.5, .25])
+    assert execution.result()["pending_source_buffer_work_s"] == pytest.approx(.25)
+    assert execution.result()["pending_backlog_reference_work_s"] == 0
+
+
+def test_scoped_primitive_cache_preserves_interrupted_execution_exactly():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((0., 0.), (0., 1.)), kv=((1., 0.), (0., 0.)),
+                                      route=(0, 0), load=.25, demand=(.2, .2), deadline=30.)
+    timing.update(beta=1., resident_replay_loss=.9)
+    engines = [PooledExecution(table, timing, calibration, chunks=16) for _ in range(2)]
+    engines[1].primitive_cache = None
+    for engine in engines:
+        engine.admit([1., 1.])
+    for end in (3., 10., 30.):
+        for engine in engines:
+            engine.advance(end)
+        assert engines[0].result() == engines[1].result()
+    assert engines[0].primitive_cache
