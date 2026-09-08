@@ -4,7 +4,7 @@ Queue-Haul plans request-boundary migration of stateful LLM sessions to reduce
 source accelerator power before a deadline. It jointly chooses sessions,
 replay or full-KV transfer, and compatible destination serving pools.
 
-The planner emits a fixed plan naming each migrated session, replay or KV
+For live experiments, the planner emits a fixed plan naming each migrated session, replay or KV
 transfer, destination pool and replica, route, and order. Execution adds phase
 timing, commit, observed first-token timing, source transitions, resource use,
 debt, recovery, achieved shed, and unmet shed. A requirement frontier summarizes
@@ -16,141 +16,90 @@ contract, not an inferred GPU inventory.
 `pool_shed_campaign.py` compares QH LP, QH greedy, KV-only, replay-only, and
 isolated-fastest. Sweden Central and each destination (East US 2 and Germany
 West Central) have 66,666 A100 GPUs at 300 W installed capacity: 19.9998 MW per
-site, excluding CPUs and peripherals. This is installed capacity, not removable
-power. Shed is completed-handoff workload share times the measured active to
-awake-idle power difference; no GPU shutdown trajectory is claimed.
+site, excluding CPUs and peripherals. Shed credits completed handoff times the
+measured active-to-awake-idle power difference, with a maximum of approximately
+11.935 MW. Handoff is the objective; resident debt, buffered work, and service
+recovery are reported separately. No GPU shutdown trajectory is claimed.
 
-The planner is a **nominal volume/work LP**, with common source-population,
-compute-seconds, serving, memory, node/application transfer and shared WAN
-constraints. Replay and KV completion consume reusable pooled compute. Greedy
-prices canonical resource groups without charging the same network traffic
-again for every overlapping constraint. QH LP must dominate restricted baseline
-LPs in this model. Nominal costs include live catch-up and source-buffer work.
-After maximizing planned shed, every LP minimizes gross predicted serving debt;
-this is not a policy-specific KV reward or a pooled recovery-time optimum.
-Its choices are independently executed by
-`pool_shed_execution.py`; actual deadline completion, action counts and timing
-are not inferred from the LP matrix. Plots separate selected actions from completed actions. Execution can expose a planning loss, which
-is reported without replacing the LP choice with a baseline. Optimal-face
-min/max KV diagnostics fix maximum shed while leaving debt unconstrained.
+All five methods receive the same queue and migration-phase feedback.
+Isolated-fastest refreshes each session type's replay/KV choice from its current
+isolated singleton timing, taking the best destination for each action.
+`pool_shed_planner.py` builds time-indexed batch admission profiles using central
+hardware calibration. It projects resident-first debt recovery, uses that
+recovery load to update subsequent replay rates, and resolves a bounded number
+of times (three by default). Each solve considers the next three admission
+times; its phase profiles extend to the deadline. The common feedback clock has
+short early intervals and geometrically longer later intervals. Only the next
+admissions are committed. The existing pooled executor
+retains in-flight work, source snapshots, reservations, imported serving demand,
+and debt between decisions. Cumulative admissions cannot reuse source sessions.
+Plans do not receive hidden calibration draws or future execution costs.
+
+This is a **receding-horizon LP approximation**, not a globally optimal dynamic
+schedule. Measured load slowdown, source context resets, and processor sharing
+are nonlinear. Iteration residuals are reported; bounded iteration does not
+establish convergence. QH contains restricted baselines only on the same frozen
+planning matrix. Different feedback trajectories need not preserve that ranking.
+The initial static LP remains a diagnostic, not the policy being executed.
+Figures distinguish admitted actions from completed handoffs.
+Forecasts average arrivals within intervals and convert observed past compute
+time using the current observed load; execution retains exact event timing.
+Feedback-frequency and iteration-budget sensitivity are reported separately
+from execution-wave refinement.
 
 Execution pipelines divisible batch populations through initial transfer/replay,
-source turn-boundary quiescence, final delta, catch-up and handoff. It redistributes
-released bandwidth and compute. Each action/cohort has bounded waves. A
-bandwidth-based active window admits enough waves to use available transfer
-capacity; wave count controls completion resolution. Final deltas take priority
-using residual shared network budgets. Initial snapshots
-remain fixed while queued source sessions continue. This common dispatcher
-avoids a whole-cohort completion barrier. Imported serving and buffered requests compete
-with unfinished migrations. Measured replay interference also creates resident
-queue debt, which consumes subsequent recovery capacity and affects migration
-slowdown. KV network time does not occupy compute. Complete recorded coding trajectories retain their
-turns and resets. Their missing timestamps require an explicit equal-cadence
-assumption; complete trajectories cycle with a reset on wrap. Trajectories that
-exceed calibrated context support are excluded with counts. The separate measured
-pack uses synthetic repeated request shapes. No individual GPU, packet or session
-objects are created. This is a fluid batch approximation, not discrete placement.
+source turn-boundary quiescence, final delta, catch-up, and handoff. Released
+bandwidth and compute are reused. Final deltas have priority within the shared
+network budgets. Measured replay interference creates resident queue debt;
+recovery consumes subsequent capacity and changes migration slowdown. KV network
+waiting consumes no compute, and KV ingest is omitted. This remains an aggregate
+flow/work model, without individual GPU, packet, or request objects.
 
-Source offered load is 0.8 and destination load sweeps 0.25, 0.50, 0.75, 0.90 and
-0.95. Load is cycle-average fresh-prefill/decode work relative to the pinned
-measured phase rates (5581.107/2563.503 tokens/s), **not FLOPs or GPU activity**.
-Eight resident sessions per GPU and conservative peak-cycle KV reservations are retained at
-every load. This reference is a declared serving contract, not a measured
-long-context saturation or SLO boundary. Measured loaded replay uses
-`exp(beta * load)`; service is not also divided by `1-load`.
+Source offered load is 0.8; destination loads are 0.25, 0.50, 0.75, 0.90, and
+0.95. Load means cycle-average fresh-prefill/decode work relative to pinned
+measured rates (5581.107/2563.503 tokens/s), not FLOPs, GPU activity, or a validated
+serving SLO. Eight resident sessions per GPU and conservative peak-cycle KV
+reservations remain at every load. Complete recorded coding trajectories cycle
+with a reset on wrap. Missing timestamps require an explicit equal-cadence
+assumption; trajectories exceeding measured context support are excluded and
+counted. The measured-pack workload repeats synthetic measured request shapes.
 
-KV bytes use native sealed blocks (256 tokens, 12,582,912 bytes); partial tails
-and catch-up are separate. KV ingest is omitted. Large replay rebuilds use the
-full-context profile, not the small partial-block replay rate. Bulk endpoint
-measurements remain paired (approximately 2.280/8.733 Gbps); application KV
-transfer adds independently fitted per-node limits around 1.304/4.204 Gbps.
-Eight GPUs share a node endpoint. Shared WAN sensitivities are 40, 100, 400 and
-1000 Gbps, plus the measured single-node reference. None is asserted to be the
-capacity of a particular Azure region pair.
+Networking separates measured endpoint throughput from assumed shared WAN
+budgets. Paired bulk endpoints are approximately 2.280/8.733 Gbps; application KV
+limits are approximately 1.304/4.204 Gbps per node. Eight GPUs share a node.
+The shared WAN sweep is 40, 100, 400, and 1000 Gbps, plus the measured single-node
+reference. These are sensitivity scenarios, not asserted Azure region-pair
+capacities. KV uses measured native sealed blocks (256 tokens, 12,582,912 bytes),
+with partial tails and live catch-up charged separately. Large replay rebuilds
+use the full-context profile.
 
-Calibration reuses existing data only. Regional component fits use the fixed
-53 pure-action training episodes; mixed cases do not fit policy multipliers.
-The independent executor is checked against the fixed 24 regional episodes using
-the original MAE <= 3 s and R² >= 0.8 gates, and against 220 loaded-replay
-holdouts. Regional executor MAE is 1.243 s, R² is 0.9854, and one case is
-false-feasible at 25 s. Loaded holdouts have 2.28% p90 relative error and no
-false-feasible 25 s cases. Regional results are retrospective reuse of an
-inspected partition.
-Fixed-context timing checks do not establish fleet-scale fidelity, dynamic
-admission accuracy or a long-context serving SLO. Validation also compares
-dispatch resolutions using fixed central plans in
-24 representative scenarios. The campaign uses 32 pieces per action/cohort;
-32 versus 128 pieces changes shed by at most 1.83 percentage points and a
-QH-versus-baseline gap by at most 1.66 points on that grid. This numerical
-sensitivity is separate from measurement intervals; narrow policy advantages
-need a finer-resolution check.
-Validation reports preserve per-action errors and false-feasible deadline
-counts. Resident completion loss
-during replay is fitted from 31 initially unbacklogged regional routes in 23
-episodes at offered loads 0.25 and 0.50 (central loss 89.65%). Independent engine
-debt at handoff has MAE
-0.847 requests / normalized MAE 3.29% across six validation routes. This measures
-completion-throughput loss, not GPU occupation; recovery under continued arrivals
-and transfer to other resident mixtures remain model assumptions.
-
-Plans are frozen at central calibration and network estimates, then evaluated
-under paired measurement draws. Plotted p05–p95 bands show this empirical
-sensitivity and sampled workload variation; they are not confidence bounds on
-unmeasured model-transfer error. Regional timing residuals are reported separately.
+Calibration reuses existing measurements. The unchanged execution primitives
+have a 24-episode regional check (MAE 1.243 s, R² 0.9854, one false-feasible case
+at 25 s), 220 loaded-replay holdouts (2.28% p90 relative error, no false-feasible
+25 s cases), and six resident-debt validation routes (MAE 0.847 requests).
+The fitted 89.65% resident completion-throughput loss comes from 31 initially
+unbacklogged routes in 23 episodes; it is not GPU occupation. Continued-arrival
+recovery and transfer to other resident mixtures remain model assumptions.
+These component checks do not establish fleet-scale SLO fidelity.
 
 ```bash
-uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-execution-validation
-uv run python pool_shed_campaign.py prepare --out outputs/a100-pooled-execution
-uv run python pool_shed_campaign.py run --out outputs/a100-pooled-execution
-uv run python pool_shed_campaign.py reduce --out outputs/a100-pooled-execution
+uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-feedback-validation
+uv run python pool_shed_campaign.py prepare --out outputs/a100-pooled-feedback
+uv run python pool_shed_campaign.py run --out outputs/a100-pooled-feedback
+uv run python pool_shed_campaign.py reduce --out outputs/a100-pooled-feedback
 ```
 
-The completed campaign evaluates **11,250 scenarios / 56,250 policy results**
-in 18.8 minutes with eight process shards (19.5 minutes including reduction and
-16 PNG/PDF figure pairs). All **87 focused tests** pass. The measured-pack
-scaling check evaluates all five methods in about 0.22 s at both 6,400 and
-640,000 GPUs, with identical results. Validation adds two figure pairs.
-Handoff and service recovery are separate outputs: source-power completion does
-not imply an empty queue. `--require-recovery` on `prepare` adds nominal recovery
-budgets, but only execution establishes whether selected migrations and their
-debt clear by the deadline. The default metric remains completed handoff.
-Nominal forecasts use isolated timing; pooled queues can change quiescence,
-context resets and final-copy costs, so planned dominance does not guarantee
-executed dominance. Maximum source-power credit is approximately **11.935 MW**.
+The full grid contains 11,250 scenarios / 56,250 policy results. `--smoke` on
+`prepare` selects 24 scenarios. `run --shard N --shards K` supports independent
+process shards and validated checkpoint resume. Code and calibration hashes
+prevent mixing revisions. Bands show empirical p05–p95 sensitivity across paired
+execution draws and workload snapshots; they do not cover unmeasured model error.
+Feedback can change later admissions across draws even though the forecast
+calibration and observation rules are identical.
 
-The independent full-grid audit finds no conservation, capacity, event-time,
-provenance or nominal-containment violations. QH selects KV in **9,765** cells
-and completes KV in **9,279**; **486** select KV but complete none. Replay still
-beats QH in executed handoff in **8,830** cells, including **1,803** losses larger
-than two percentage points. These are reported planning/dispatch outcomes, not
-removed by a baseline fallback. The two-point category is a magnitude threshold,
-not a global numerical error bound. Late source growth and shared replay compute
-can invalidate isolated timing forecasts; gross-debt minimization also does not
-optimize regional recovery headroom. This campaign does not establish that the
-nominal LP maximizes executed shed.
-
-Replay reaches full handoff with unresolved serving work in **2,951** cells.
-For coding snapshot 0, load 0.5 and 1000 Gbps, replay hands off everything but
-leaves about 624,293 reference GPU-seconds of resident debt and transferred
-buffer work even at 3600 s. Greedy balances the destinations and recovers by
-80.87 s. At 3600 s QH hands off 74.49%, with 57.93% of source workload using KV;
-its remaining migrations exhaust the shared WAN. `critic-audit.json` records
-both the accounting checks and these optimizer limitations.
-
-Buffered serving work drains only within the advertised reference headroom;
-its utilization enters the measured migration slowdown. Source-held buffers,
-destination-held buffers and resident debt are reported separately. At full offered load,
-queue debt can persist. This does not establish incoming-request latency or
-resident SLOs. Applying the measured load response above its 0.975 training
-limit, up to 1.0, is a small explicit extrapolation.
-
-Use `--smoke` with `prepare` for a small grid. `run --shard N --shards K` supports
-independent process shards and validated checkpoint resume. Source hashes prevent
-mixing results across code or calibration changes. Reduction writes executed
-shed/action figures, paired differences, planning/execution gaps and audit data.
-The old `pool_shed_long_context.py` and `plot_pool_shed_bottleneck.py` producers
-are retired: their archived reservation-model figures are historical, not results
-from the new executor.
+`outputs/a100-pooled-execution` contains the archived v6 fixed-plan campaign;
+its plots and audit describe that earlier policy, not the feedback planner.
+The older reservation-model plot producers remain retired.
 
 ## Current evidence
 

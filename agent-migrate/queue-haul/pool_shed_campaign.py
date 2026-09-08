@@ -20,12 +20,13 @@ from scipy.sparse import csr_matrix
 
 from pool_shed_calibration import calibration, regional_check, replay_seconds, kv_state, loaded_execution_check, resident_execution_check
 from pool_shed_execution import DISPATCH_CHUNKS
+from pool_shed_planner import PLANNING_ITERATIONS, PLANNING_RESOLUTION
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "outputs/a100-pooled-execution"
+OUT = ROOT / "outputs/a100-pooled-feedback"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-pooled-execution-v6"
+SCHEMA = "queue-haul-a100-pooled-feedback-v7"
 GPUS, SOURCE_LOAD = 66666, .8
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
 ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
@@ -349,19 +350,24 @@ def policy_mask(table, policy):
 
 def solve_lp(table, allowed, objective, primary=None):
     chosen = np.zeros(len(table.gains))
-    if not allowed.any():
+    ids = np.flatnonzero(allowed & ~np.any((table.matrix > 0) & (table.capacities[:, None] == 0), axis=0))
+    if not len(ids):
+        if primary is not None and primary > PRIMARY_TOL:
+            raise RuntimeError("positive primary objective has no feasible variables")
         return chosen
-    ids = np.flatnonzero(allowed)
     scale = np.where(table.capacities > 0, table.capacities, 1)
     matrix = table.matrix[:, ids] * table.fleet.gpus / scale[:, None]
     column_scale = np.maximum(matrix.max(0), 1.)
     cost = objective[ids] * table.fleet.gpus / column_scale
     constraints, limits = matrix / column_scale, (table.capacities > 0).astype(float)
+    upper = np.min(np.divide(limits[:, None], constraints, out=np.full_like(constraints, np.inf), where=constraints > 0), axis=0)
     if primary is not None:
-        constraints = np.vstack((constraints, -table.gains[ids] * table.fleet.gpus / column_scale))
-        limits = np.r_[limits, -max(0., primary - PRIMARY_TOL)]
+        primary_row = table.gains[ids] * table.fleet.gpus / column_scale
+        primary_scale = max(abs(primary_row).max(), 1e-30)
+        constraints = np.vstack((constraints, -primary_row / primary_scale))
+        limits = np.r_[limits, -max(0., primary - PRIMARY_TOL) / primary_scale]
     result = linprog(cost / max(abs(cost).max(), 1e-30), A_ub=csr_matrix(constraints), b_ub=limits,
-                     bounds=(0, None), method="highs-ipm",
+                     bounds=np.c_[np.zeros(len(ids)), upper], method="highs-ipm",
                      options={"primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9,
                               "ipm_optimality_tolerance": 1e-12})
     if not result.success:
@@ -474,6 +480,7 @@ def configuration(smoke=False):
     return {"schema": SCHEMA, "gpus": GPUS, "installed_gpu_w": GPUS * 300, "source_load": SOURCE_LOAD,
             "gpus_per_node": 8,
             "dispatch_chunks": DISPATCH_CHUNKS,
+            "planning_iterations": PLANNING_ITERATIONS, "planning_resolution": PLANNING_RESOLUTION,
             "require_recovery": False,
             "resident_loads": [.25, .95] if smoke else list(LOADS),
             "deadlines": [1, 10, 60] if smoke else list(DEADLINES),
@@ -487,7 +494,7 @@ def cells(config):
 
 
 def provenance(c):
-    paths = [Path(__file__), ROOT / "pool_shed_calibration.py", ROOT / "pool_shed_execution.py", ROOT / "plot_style.py", NETWORK, MANIFEST]
+    paths = [Path(__file__), ROOT / "pool_shed_calibration.py", ROOT / "pool_shed_execution.py", ROOT / "pool_shed_planner.py", ROOT / "plot_style.py", NETWORK, MANIFEST]
     return {**c["sources"], **{str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
 
 
@@ -495,6 +502,8 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
     started = time.perf_counter()
     config = configuration(smoke)
     config["require_recovery"] = require_recovery
+    if require_recovery:
+        raise ValueError("feedback campaign optimizes handoff; service recovery is reported separately")
     for key, value in (("resident_loads", resident_loads), ("snapshots", snapshots), ("draws", draws), ("gpus_per_node", gpus_per_node)):
         if value is not None:
             config[key] = value
@@ -516,7 +525,7 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
             "network_indices": indices, "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
             "git_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], text=True)),
             "assumptions": ["continuous pooled populations; optimum only within the common finite batch library",
-                            "plans fixed at central calibration/network; paired execution draws perturb measurements without replanning",
+                            "all methods receive the same queue/phase feedback; future rates use central calibration, not hidden execution draws",
                             "source swedencentral; equal-size eastus2 and germanywestcentral destinations",
                             "resident load uses derived phase-reference work, not FLOPs, busy time, or validated SLO capacity",
                             "coding uses measured singleton support and transferred batch/background response",
@@ -525,9 +534,9 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
                             "ongoing serving and KV are pooled; no discrete placement or local fragmentation model",
                             "KV ingest and GPU shutdown omitted; sealed KV, partial tails and live catch-up charged",
                             "KV response/validation tail is measured separately; batch/load overlap is a transfer assumption",
-                            "LP forecasts isolated live catch-up and minimizes gross serving debt after maximizing shed; pooled queues can change actual catch-up",
+                            "receding-horizon LP uses time-indexed phase profiles and projected debt/recovery to update future rates; iterative approximation, not a global execution optimum",
                             "measured replay-induced resident service loss generates recoverable queue debt; WAN-only KV time does not occupy compute",
-                            "handoff and service recovery are separate; require_recovery adds nominal recovery constraints, not an execution guarantee",
+                            "handoff is the primary objective; outstanding serving debt and recovery are separate outputs",
                             "replay and KV completion share reusable fluid batch compute; dynamic load factor is not also divided by idle fraction",
                             "common bounded-wave dispatcher maintains a bandwidth-based active window and prioritizes final deltas; frozen initial snapshots while source sessions continue",
                             "replay logs assume two bytes/token; KV uses loaded-runtime serialized geometry",
@@ -577,12 +586,60 @@ def forecast(workload, snapshot, gpus, gpus_per_node, load, wan, deadline, expan
     return table, choices, certificates
 
 
+@lru_cache(maxsize=512)
+def initial_admission(workload, snapshot, gpus, gpus_per_node, load, wan, deadline, expanded, policy, resolution, iterations):
+    from pool_shed_execution import PooledExecution
+    from pool_shed_planner import plan_admission
+
+    table = forecast(workload, snapshot, gpus, gpus_per_node, load, wan, deadline, expanded)[0]
+    measured = calibration(0)
+    return plan_admission(PooledExecution(table, table.timing, measured), table, policy,
+                          calibration=measured, resolution=resolution, iterations=iterations)
+
+
+def execute_feedback(table, realized, policy, timing, measured, chunks=DISPATCH_CHUNKS,
+                     resolution=PLANNING_RESOLUTION, iterations=PLANNING_ITERATIONS, initial=None):
+    from pool_shed_execution import PooledExecution
+    from pool_shed_planner import plan_admission
+
+    engine = PooledExecution(realized, timing, measured, chunks)
+    diagnostics, planning_s = [], 0.
+    for _ in range(1024):
+        if engine.now >= table.deadline:
+            break
+        remaining = table.fleet.count - (table.replay + table.kv).T @ engine.selected_total
+        if remaining @ table.fleet.gain <= 1e-8:
+            engine.advance(table.deadline)
+            break
+        started = time.perf_counter()
+        chosen, until, audit = initial if engine.now == 0 and initial is not None else plan_admission(
+            engine, table, policy, calibration=calibration(0), resolution=resolution, iterations=iterations)
+        planning_s += time.perf_counter() - started
+        if not engine.now < until <= table.deadline:
+            raise RuntimeError("feedback planner failed to advance time")
+        diagnostics.append({"time_s": engine.now, "admitted_shed_fraction": float(table.gains @ chosen), **audit})
+        engine.admit(chosen)
+        engine.advance(until)
+    else:
+        raise RuntimeError("feedback planner exceeded 1024 decisions")
+    action_counts = [engine.selected_total[table.route == r] @ action[table.route == r]
+                     for r in (0, 1) for action in (table.replay, table.kv)]
+    return {**engine.result(),
+            "admitted_shed_fraction": float(table.gains @ engine.selected_total),
+            "admitted_action_counts": [float(counts.sum()) for counts in action_counts],
+            "admitted_action_fractions": [float(counts @ table.fleet.gain) for counts in action_counts],
+            "max_relative_residual": max((d["max_relative_residual"] for d in diagnostics), default=0.),
+            "planning_steps": len(diagnostics), "planning_s": planning_s,
+            "planning_diagnostics": diagnostics,
+            "solver_status": "feedback_greedy" if policy == "greedy" else "receding_horizon_lp",
+            "planning_scope": "common observed queue feedback; central future rates; iterative temporal approximation, no global execution optimality guarantee"}
+
+
 def run_cell(plan, cell, expanded=False):
-    from pool_shed_execution import execute_pooled
 
     (workload, snapshot), load, draw, wan, deadline = cell
     start = time.perf_counter()
-    table, choices, certificates = forecast(workload, snapshot, plan["config"]["gpus"],
+    table, _, certificates = forecast(workload, snapshot, plan["config"]["gpus"],
         plan["config"]["gpus_per_node"], load, wan, deadline, expanded, plan["config"]["require_recovery"])
     build_s = time.perf_counter() - start
     endpoint = network_samples()[plan["network_indices"][draw]].copy() if draw else table.endpoint
@@ -591,15 +648,16 @@ def run_cell(plan, cell, expanded=False):
     start = time.perf_counter()
     results = {}
     for policy in POLICIES:
-        executed = execute_pooled(realized, choices[policy], plan["calibration"]["timing"][draw], plan["calibration"], chunks=plan["config"]["dispatch_chunks"])
-        results[policy] = {**executed, "planned_shed_fraction": certificates[policy]["shed_fraction"],
-                          "planned_action_counts": certificates[policy]["action_counts"],
-                          "planned_action_fractions": certificates[policy]["action_fractions"],
-                          "forecast_induced_serving_work_s": certificates[policy]["forecast_induced_serving_work_s"],
-                          "forecast_service_volume_deficit_work_s": certificates[policy]["forecast_service_volume_deficit_work_s"],
-                          "max_relative_residual": certificates[policy]["max_relative_residual"],
-                          "resource_utilization": certificates[policy]["resource_utilization"],
-                          "solver_status": "greedy_planned" if policy == "greedy" else "optimal_nominal_plan"}
+        initial_started = time.perf_counter()
+        initial = initial_admission(workload, snapshot, plan["config"]["gpus"], plan["config"]["gpus_per_node"],
+                                    load, wan, deadline, expanded, policy, plan["config"]["planning_resolution"],
+                                    plan["config"]["planning_iterations"])
+        initial_s = time.perf_counter() - initial_started
+        executed = execute_feedback(table, realized, policy, plan["calibration"]["timing"][draw],
+                                    plan["calibration"], plan["config"]["dispatch_chunks"],
+                                    plan["config"]["planning_resolution"], plan["config"]["planning_iterations"], initial)
+        executed["planning_s"] += initial_s
+        results[policy] = {**executed, "initial_nominal_shed_fraction": certificates[policy]["shed_fraction"]}
     return {"identity": plan["identity"], "cell": list(cell), "status": "complete", "results": results,
             "columns": len(table.gains), "eligible_columns": int(table.eligible.sum()),
             "budgets_gbps": (budgets * 8e-9).tolist(), "endpoint_gbps": (endpoint * 8e-9).tolist(),
@@ -613,8 +671,10 @@ def run(out, shard=0, shards=1):
     if not 0 <= shard < shards:
         raise ValueError("invalid shard")
     work = cells(plan["config"])
+    variants = len(plan["config"]["wan_gbps"]) * len(plan["config"]["deadlines"])
     for index, cell in enumerate(work):
-        if index % shards != shard:
+        scenario = index // ((plan["config"]["draws"] + 1) * variants) * variants + index % variants
+        if scenario % shards != shard:
             continue
         path = out / "cells" / f"{index:06d}.json.gz"
         if path.exists():
@@ -645,7 +705,9 @@ def reduce(out):
     if [p.name for p in paths] != [f"{i:06d}.json.gz" for i in range(len(expected))]:
         raise ValueError("missing or unexpected cells")
     rows, groups, differences, regressions = [], {}, [], []
-    maxima = {"residual": 0., "columns": 0, "lp_loss": 0., "executed_lp_loss": 0.}
+    maxima = {"residual": 0., "columns": 0, "initial_nominal_lp_loss": 0., "executed_lp_loss": 0.,
+              "planning_steps": 0, "queue_iteration_residual": 0.}
+    unsettled, decisions = 0, 0
     build_s = solve_s = 0.
     for i, path in enumerate(paths):
         with gzip.open(path, "rt") as handle:
@@ -656,36 +718,49 @@ def reduce(out):
         if set(value["results"]) != set(POLICIES):
             raise ValueError("missing policy")
         qh = value["results"]["queue_haul"]["shed_fraction"]
-        planned_qh = value["results"]["queue_haul"]["planned_shed_fraction"]
+        nominal_qh = value["results"]["queue_haul"]["initial_nominal_shed_fraction"]
         maxima["columns"] = max(maxima["columns"], value["columns"])
         build_s += value["build_s"]
         solve_s += value["solve_evaluate_s"]
         for policy, result in value["results"].items():
             maxima["residual"] = max(maxima["residual"], result["max_relative_residual"])
-            maxima["lp_loss"] = max(maxima["lp_loss"], result["planned_shed_fraction"] - planned_qh)
+            maxima["initial_nominal_lp_loss"] = max(maxima["initial_nominal_lp_loss"], result["initial_nominal_shed_fraction"] - nominal_qh)
+            maxima["planning_steps"] = max(maxima["planning_steps"], result["planning_steps"])
+            iteration_residual = max((d["fixed_point_residual"] for d in result["planning_diagnostics"]), default=0.)
+            maxima["queue_iteration_residual"] = max(maxima["queue_iteration_residual"], iteration_residual)
+            decisions += result["planning_steps"]
+            unsettled += sum(d["fixed_point_residual"] >= 1e-3 for d in result["planning_diagnostics"])
             maxima["executed_lp_loss"] = max(maxima["executed_lp_loss"], result["shed_fraction"] - qh)
             if (not np.isfinite(result["shed_fraction"]) or result["shed_fraction"] < -1e-8
-                    or result["shed_fraction"] > value["serving_ceiling"] + 1e-8):
+                    or result["shed_fraction"] > value["serving_ceiling"] + 1e-8
+                    or result["shed_fraction"] > result["admitted_shed_fraction"] + 1e-8):
                 raise ValueError("invalid shed or serving ceiling")
+            if not np.allclose(np.array(result["resident_debt_generated_work_s"]) - result["resident_debt_recovered_work_s"],
+                               result["pending_resident_debt_work_s"], rtol=1e-8, atol=1e-6):
+                raise ValueError("resident debt conservation failed")
+            if result["last_completion_s"] > deadline + 1e-8:
+                raise ValueError("handoff after deadline")
             row = {"workload": workload, "snapshot": snapshot, "load": load, "draw": draw, "wan_gbps": wan,
                    "deadline_s": deadline, "policy": policy, "shed_fraction": result["shed_fraction"],
-                   "planned_shed_fraction": result["planned_shed_fraction"],
-                   "planning_execution_gap": result["planned_shed_fraction"] - result["shed_fraction"],
+                   "admitted_shed_fraction": result["admitted_shed_fraction"],
+                   "admitted_unfinished_fraction": result["admitted_shed_fraction"] - result["shed_fraction"],
+                   "initial_nominal_shed_fraction": result["initial_nominal_shed_fraction"],
                    "last_completion_s": result["last_completion_s"], "unfinished_batch_mass": result["unfinished_batch_mass"],
                    "action_counts": result["action_counts"], "action_fractions": result["action_fractions"],
-                   "planned_action_counts": result["planned_action_counts"], "planned_action_fractions": result["planned_action_fractions"],
+                   "admitted_action_counts": result["admitted_action_counts"], "admitted_action_fractions": result["admitted_action_fractions"],
                    "buffered_requests": result["buffered_requests"], "pending_buffered_requests": result["pending_buffered_requests"],
                    "pending_resident_debt_work_s": sum(result["pending_resident_debt_work_s"]),
                    "resident_debt_generated_work_s": sum(result["resident_debt_generated_work_s"]),
                    "pending_source_buffer_work_s": result["pending_source_buffer_work_s"],
                    "pending_destination_buffer_work_s": result["pending_backlog_reference_work_s"],
                    "service_ready_s": result["service_ready_s"],
-                   "forecast_induced_serving_work_s": result["forecast_induced_serving_work_s"],
-                   "resource_utilization": result["resource_utilization"], "batch_replica_seconds": result["batch_replica_seconds"],
+                   "planning_steps": result["planning_steps"], "planning_s": result["planning_s"],
+                   "maximum_queue_iteration_residual": iteration_residual,
+                   "batch_replica_seconds": result["batch_replica_seconds"],
                    "serving_ceiling": value["serving_ceiling"], "qh_minus_policy_fraction": qh - result["shed_fraction"]}
             rows.append(row)
             groups.setdefault((workload, load, wan, deadline, policy), []).append(row)
-    if maxima["residual"] > 1e-8 or maxima["lp_loss"] > 1e-8:
+    if maxima["residual"] > 1e-8 or maxima["initial_nominal_lp_loss"] > 1e-8:
         raise RuntimeError("campaign feasibility/dominance audit failed")
     curves = {}
     for row in rows:
@@ -693,8 +768,6 @@ def reduce(out):
             curves.setdefault((row["workload"], row["snapshot"], row["load"], row["draw"], row["wan_gbps"]), []).append(row)
     for curve in curves.values():
         curve.sort(key=lambda row: row["deadline_s"])
-        if np.any(np.diff([r["planned_shed_fraction"] for r in curve]) < -1e-8):
-            raise RuntimeError("planned LP shed declined with deadline")
         if np.any(np.diff([r["shed_fraction"] for r in curve]) < -1e-8):
             regressions.append(curve[0])
     power = np.array(plan["calibration"]["power_draws_w"]) * plan["config"]["gpus"] / 1e6
@@ -711,14 +784,14 @@ def reduce(out):
                         **dict(zip(("p05_shed_mw", "median_shed_mw", "p95_shed_mw"), map(float, np.quantile(mw, [.05, .5, .95])))),
                         "action_counts_mean": np.mean([r["action_counts"] for r in sampled], axis=0).tolist(),
                         "action_fractions_mean": np.mean([r["action_fractions"] for r in sampled], axis=0).tolist(),
-                        "planned_action_fractions_mean": np.mean([r["planned_action_fractions"] for r in sampled], axis=0).tolist(),
-                        "planned_shed_fraction": float(np.median([r["planned_shed_fraction"] for r in values])),
+                        "admitted_action_fractions_mean": np.mean([r["admitted_action_fractions"] for r in sampled], axis=0).tolist(),
+                        "admitted_shed_fraction": float(np.median([r["admitted_shed_fraction"] for r in values])),
                         "median_pending_resident_debt_work_s": float(np.median([r["pending_resident_debt_work_s"] for r in sampled])),
                         "median_pending_source_buffer_work_s": float(np.median([r["pending_source_buffer_work_s"] for r in sampled])),
                         "median_pending_destination_buffer_work_s": float(np.median([r["pending_destination_buffer_work_s"] for r in sampled])),
                         "service_ready_fraction": float(np.mean([r["service_ready_s"] is not None for r in sampled])),
                         "serving_ceiling": sampled[0]["serving_ceiling"],
-                        "resource_utilization_mean": np.mean([r["resource_utilization"] for r in sampled], axis=0).tolist(),
+                        "planning_steps_mean": float(np.mean([r["planning_steps"] for r in sampled])),
                         "workload_central_range_mw": [min(r["shed_fraction"] for r in central) * central_power,
                                                      max(r["shed_fraction"] for r in central) * central_power],
                         "timing_network_range_fraction": [float(fractions.min()), float(fractions.max())]})
@@ -730,7 +803,9 @@ def reduce(out):
     write_csv(out / "summary.csv", summary)
     write_csv(out / "paired_differences.csv", differences)
     write_json(out / "dominance-audit.json", {"identity": plan["identity"], "cells": len(paths), "maxima": maxima,
-                                            "planned_deadline_regressions": 0, "executed_deadline_regressions": len(regressions)})
+                                            "scope": "initial static LP containment; feedback outcomes have no cross-policy optimality guarantee",
+                                            "planning_decisions": decisions, "unsettled_queue_iterations": unsettled,
+                                            "executed_deadline_regressions": len(regressions)})
     plot_start = time.perf_counter()
     plot(summary, out)
     plot_debt(summary, out, plan["config"]["gpus"])
@@ -739,7 +814,7 @@ def reduce(out):
                 "workloads": {f"{w}-{s}": sample_fleet(w, s, plan["config"]["gpus"]).metadata
                               for w, s in {cell[0] for cell in expected}},
                 "power_scope": "linear measured-anchor proxy; workload transfer; no shutdown",
-                "interval_scope": "fixed central plans, paired calibration/network draws and workload snapshots; empirical sensitivity, not coverage of unmeasured fleet transfer error",
+                "interval_scope": "identical feedback rules and central forecast calibration, paired execution draws and workload snapshots; empirical sensitivity, not coverage of unmeasured fleet transfer error",
                 "timing_s": {"preparation": plan["preparation_s"], "pattern_tables": build_s, "solves_evaluation": solve_s,
                              "plotting": time.perf_counter() - plot_start, "reduction": time.perf_counter() - started}}
     write_json(out / "summary.json", metadata)
@@ -769,7 +844,7 @@ def plot(summary, out):
             ax.set(title=f"{workload.replace('_', ' ')}; load {load:g}", xscale="log", xlabel="Deadline (s)")
         fig.supylabel("Shed power proxy (MW)")
         network_label = "measured endpoint reference" if wan == "reference" else f"assumed shared WAN {wan / 1000:g} Tbit/s" if wan >= 1000 else f"assumed shared WAN {wan:g} Gbit/s"
-        fig.suptitle(f"{model_label}; {network_label}; fixed-plan p05–p95 sensitivity\nIndependent pooled execution; fleet transfer assumptions apply")
+        fig.suptitle(f"{model_label}; {network_label}; feedback-policy p05–p95 sensitivity\nHandoff attainment; fleet transfer assumptions apply")
         fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=5, fontsize=9)
         fig.tight_layout(rect=(.02, .08, 1, .90))
         for extension in ("png", "pdf"):
@@ -779,15 +854,15 @@ def plot(summary, out):
     action_wans = dict.fromkeys(([40] if 40 in numeric_wans else []) + [max(numeric_wans) if numeric_wans else "reference"])
     for wan, load in product(action_wans, loads):
         fig, axes = plt.subplots(4, 5, figsize=(16, 11), sharey=True)
-        for ax, (workload, scope, policy) in zip(axes.flat, product(workloads, ("planned", "completed"), POLICIES)):
+        for ax, (workload, scope, policy) in zip(axes.flat, product(workloads, ("admitted", "completed"), POLICIES)):
             series = sorted((r for r in summary if (r["workload"], r["load"], r["wan_gbps"], r["policy"]) ==
                              (workload, load, wan, policy)), key=lambda r: r["deadline_s"])
-            field = "planned_action_fractions_mean" if scope == "planned" else "action_fractions_mean"
+            field = "admitted_action_fractions_mean" if scope == "admitted" else "action_fractions_mean"
             ax.stackplot([r["deadline_s"] for r in series], np.array([r[field] for r in series]).T,
                          labels=[plot_style.ACTION_NAMES[a] for a in ACTIONS], colors=[plot_style.ACTION_COLORS[a] for a in ACTIONS])
             ax.set(title=f"{workload.replace('_', ' ')}\n{scope}: {plot_style.POLICY_NAMES[policy]}", xscale="log", xlabel="Deadline (s)", ylim=(0, 1))
             ax.title.set_fontsize(8)
-        fig.supylabel("Source workload fraction: selected vs completed")
+        fig.supylabel("Source workload fraction: admitted vs completed")
         network_label = f"{wan / 1000:g} Tbit/s" if isinstance(wan, (int, float)) and wan >= 1000 else f"{wan} Gbit/s" if wan != "reference" else "measured reference"
         fig.suptitle(f"Action breakdown; resident load {load:g}; WAN budget {network_label}\nIndependent pooled execution; fleet transfer assumptions apply")
         fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=4, fontsize=9)
@@ -870,34 +945,35 @@ def plot_scale(scales, out):
 
 
 def resolution_check(c):
-    from pool_shed_execution import execute_pooled
-
     rows, differences = [], []
-    for workload, load, wan, deadline in product(("measured_pack", "coding"), (.5, .95), (40, 1000), (30, 300, 3600)):
-        table, choices, _ = forecast(workload, 0, GPUS, 8, load, wan, deadline)
+    cases = (("measured_pack", .5, 1000, 30), ("coding", .5, 1000, 60),
+             ("coding", .95, 40, 3600), ("coding", .5, 1000, 3600))
+    settings = {"default": (DISPATCH_CHUNKS, 1., 3), "dispatch": (2 * DISPATCH_CHUNKS, 1., 3),
+                "feedback": (DISPATCH_CHUNKS, .5, 3), "iterations": (DISPATCH_CHUNKS, 1., 6),
+                "combined": (2 * DISPATCH_CHUNKS, .5, 6)}
+    for workload, load, wan, deadline in cases:
+        table, _, _ = forecast(workload, 0, GPUS, 8, load, wan, deadline)
         results = {}
-        for chunks in (DISPATCH_CHUNKS // 2, DISPATCH_CHUNKS, 2 * DISPATCH_CHUNKS, 4 * DISPATCH_CHUNKS):
+        for name, (chunks, resolution, iterations) in settings.items():
             started = time.perf_counter()
-            evaluated = {p: execute_pooled(table, choices[p], c["timing"][0], c, chunks=chunks) for p in POLICIES}
-            results[chunks] = {p: r["shed_fraction"] for p, r in evaluated.items()}
+            evaluated = {p: execute_feedback(table, table, p, c["timing"][0], c, chunks, resolution, iterations) for p in POLICIES}
+            results[name] = {p: r["shed_fraction"] for p, r in evaluated.items()}
             rows.append({"workload": workload, "load": load, "wan_gbps": wan, "deadline_s": deadline,
-                         "chunks": chunks, "seconds": time.perf_counter() - started, "shed_fraction": results[chunks],
+                         "setting": name, "chunks": chunks, "planning_resolution": resolution, "iterations": iterations,
+                         "seconds": time.perf_counter() - started, "shed_fraction": results[name],
                          "resident_debt_work_s_per_gpu": {p: sum(r["pending_resident_debt_work_s"]) / (2 * GPUS) for p, r in evaluated.items()},
-                         "buffer_work_s_per_gpu": {p: r["pending_buffered_work_s"] / (2 * GPUS) for p, r in evaluated.items()}})
-        for coarse, fine in ((DISPATCH_CHUNKS // 2, DISPATCH_CHUNKS), (DISPATCH_CHUNKS, 2 * DISPATCH_CHUNKS),
-                             (DISPATCH_CHUNKS, 4 * DISPATCH_CHUNKS), (2 * DISPATCH_CHUNKS, 4 * DISPATCH_CHUNKS)):
+                         "maximum_iteration_residual": max((d["fixed_point_residual"] for r in evaluated.values() for d in r["planning_diagnostics"]), default=0.)})
+        for setting in settings.keys() - {"default"}:
             for policy in POLICIES:
-                gap = lambda k: results[k]["queue_haul"] - results[k][policy]
+                gap = lambda name: results[name]["queue_haul"] - results[name][policy]
                 differences.append({"workload": workload, "load": load, "wan_gbps": wan, "deadline_s": deadline,
-                                    "policy": policy, "chunks": coarse, "fine_chunks": fine,
-                                    "absolute_shed_difference": abs(results[coarse][policy] - results[fine][policy]),
-                                    "absolute_qh_gap_difference": abs(gap(coarse) - gap(fine))})
-    maximum = max(r["absolute_shed_difference"] for r in differences if r["chunks"] == DISPATCH_CHUNKS)
-    gap_maximum = max(r["absolute_qh_gap_difference"] for r in differences if r["chunks"] == DISPATCH_CHUNKS)
+                                    "policy": policy, "setting": setting,
+                                    "absolute_shed_difference": abs(results["default"][policy] - results[setting][policy]),
+                                    "absolute_qh_gap_difference": abs(gap("default") - gap(setting))})
+    maximum = max(max(r["absolute_shed_difference"], r["absolute_qh_gap_difference"]) for r in differences if r["setting"] == "dispatch")
     return {"rows": rows, "differences": differences, "default_chunks": DISPATCH_CHUNKS,
-            "maximum_default_to_fine_shed_difference": maximum, "maximum_default_to_fine_qh_gap_difference": gap_maximum,
-            "gate_pass": max(maximum, gap_maximum) <= .02,
-            "scope": "24 representative central scenarios, all five fixed plans; empirical dispatch-resolution sensitivity, not a rigorous error bound or measurement interval"}
+            "maximum_dispatch_shed_or_gap_difference": maximum, "gate_pass": maximum <= .02,
+            "scope": "Four central replay/debt/WAN cases, all five policies. Dispatch refinement tests numerical sensitivity; feedback cadence and iteration changes test policy sensitivity. Neither bounds global optimality or hardware-transfer error."}
 
 
 def validate(out):
@@ -911,8 +987,10 @@ def validate(out):
     plan = {"identity": "validation", "config": config, "calibration": c, "network_indices": [-1]}
     errors = []
     for cell in cells(config):
-        a, b = run_cell(plan, cell), run_cell(plan, cell, expanded=True)
-        errors.append(abs(a["results"]["queue_haul"]["planned_shed_fraction"] - b["results"]["queue_haul"]["planned_shed_fraction"]))
+        (workload, snapshot), load, _, wan, deadline = cell
+        a, b = [forecast(workload, snapshot, config["gpus"], config["gpus_per_node"], load, wan, deadline, expanded)[2]
+                for expanded in (False, True)]
+        errors.append(abs(a["queue_haul"]["shed_fraction"] - b["queue_haul"]["shed_fraction"]))
     scales = []
     for scope, gpus in product(("fixed_total_wan", "fixed_wan_per_node"), (8, 64, 512, 4096, 66664)):
         plan["config"] = {**config, "gpus": gpus}

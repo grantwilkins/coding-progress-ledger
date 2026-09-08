@@ -50,7 +50,7 @@ def test_default_grid_and_paired_endpoints():
 def test_lp_scaling_preserves_source_counts_in_the_loaded_coding_case(tmp_path):
     plan = c.prepare(tmp_path)
     result = c.run_cell(plan, (('coding', 1), .75, 4, 100, 30))
-    assert result['results']['queue_haul']['planned_shed_fraction'] == pytest.approx(.625)
+    assert result['results']['queue_haul']['initial_nominal_shed_fraction'] == pytest.approx(.625)
     assert result['results']['queue_haul']['shed_fraction'] <= .625 + 1e-8
     assert max(r['max_relative_residual'] for r in result['results'].values()) <= 1e-8
 
@@ -63,7 +63,7 @@ def test_scaling_nodes_and_network_together_preserves_the_policy_tradeoff():
         results.append(c.run_cell(plan, (('measured_pack', 0), .5, 0, 5 * gpus / 8, 30))['results'])
     for policy in c.POLICIES:
         assert results[0][policy]['shed_fraction'] == pytest.approx(results[1][policy]['shed_fraction'])
-        assert results[0][policy]['planned_shed_fraction'] == pytest.approx(results[1][policy]['planned_shed_fraction'])
+        assert results[0][policy]['admitted_shed_fraction'] == pytest.approx(results[1][policy]['admitted_shed_fraction'])
     assert results[0]['replay_only']['shed_fraction'] > 0
 
 
@@ -93,13 +93,14 @@ def test_isolated_fastest_masks_exist_in_the_common_library():
             assert tuple(desired) in signatures
 
 
-def test_execution_draws_keep_forecast_choices_fixed():
-    plan = {'identity': 'fixed-plan', 'config': c.configuration(), 'calibration': calibration(2), 'network_indices': [-1, 0, 1]}
+def test_execution_draws_preserve_initial_information_and_admission_accounting():
+    plan = {'identity': 'feedback', 'config': c.configuration(), 'calibration': calibration(2), 'network_indices': [-1, 0, 1]}
     results = [c.run_cell(plan, (('coding', 0), .5, draw, 1000, 30))['results'] for draw in range(3)]
     for policy in c.POLICIES:
         for result in results[1:]:
-            np.testing.assert_array_equal(result[policy]['planned_action_counts'], results[0][policy]['planned_action_counts'])
-        assert sum(results[0][policy]['action_fractions']) <= sum(results[0][policy]['planned_action_fractions']) + 1e-8
+            assert result[policy]['initial_nominal_shed_fraction'] == results[0][policy]['initial_nominal_shed_fraction']
+            assert result[policy]['planning_diagnostics'][0] == results[0][policy]['planning_diagnostics'][0]
+        assert sum(results[0][policy]['action_fractions']) <= sum(results[0][policy]['admitted_action_fractions']) + 1e-8
 
 
 def test_campaign_reduction_checks_all_cells_and_policies(tmp_path, monkeypatch):
@@ -112,7 +113,7 @@ def test_campaign_reduction_checks_all_cells_and_policies(tmp_path, monkeypatch)
     summary = c.reduce(tmp_path)
     assert summary['cells'] == 24
     audit = json.loads((tmp_path / 'dominance-audit.json').read_text())
-    assert audit['maxima']['lp_loss'] <= 1e-8
+    assert audit['maxima']['initial_nominal_lp_loss'] <= 1e-8
     c.run(tmp_path)  # Provenance-valid checkpoints may be resumed.
     path = tmp_path / 'cells/000000.json.gz'
     with gzip.open(path, 'rt') as handle:
