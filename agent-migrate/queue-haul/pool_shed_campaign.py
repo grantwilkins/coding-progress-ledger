@@ -9,13 +9,14 @@ import hashlib
 import json
 import subprocess
 import time
+import warnings
 from dataclasses import dataclass, replace
 from functools import cache, lru_cache
 from itertools import product
 from pathlib import Path
 
+import highspy
 import numpy as np
-from scipy.optimize import linprog
 from scipy.sparse import csr_matrix
 
 from pool_shed_calibration import calibration, regional_check, replay_seconds, kv_state, loaded_execution_check, resident_execution_check
@@ -348,6 +349,28 @@ def policy_mask(table, policy):
     return mask
 
 
+def _bounded_lp(cost, matrix, rhs, upper):
+    matrix, model, solver = csr_matrix(matrix), highspy.HighsLp(), highspy.Highs()
+    model.num_col_, model.num_row_ = matrix.shape[1], matrix.shape[0]
+    model.col_cost_, model.col_lower_, model.col_upper_ = cost, np.zeros(len(cost)), upper
+    model.row_lower_, model.row_upper_ = np.full(len(rhs), -highspy.kHighsInf), rhs
+    model.a_matrix_.format_ = highspy.MatrixFormat.kRowwise
+    model.a_matrix_.start_, model.a_matrix_.index_, model.a_matrix_.value_ = matrix.indptr, matrix.indices, matrix.data
+    for key, value in {"output_flag": False, "threads": 1, "solver": "simplex", "presolve": "on",
+                       "simplex_scale_strategy": 2, "small_matrix_value": 1e-12,
+                       "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9}.items():
+        if solver.setOptionValue(key, value) != highspy.HighsStatus.kOk:
+            raise RuntimeError(f"HiGHS rejected option {key}")
+    status = solver.passModel(model)
+    if status == highspy.HighsStatus.kError:
+        raise RuntimeError("HiGHS rejected the LP model")
+    if status == highspy.HighsStatus.kWarning:
+        warnings.warn("HiGHS model import warning; original constraints are checked after solving", RuntimeWarning, stacklevel=2)
+    if solver.run() != highspy.HighsStatus.kOk or solver.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+        raise RuntimeError(solver.modelStatusToString(solver.getModelStatus()))
+    return np.asarray(solver.getSolution().col_value)
+
+
 def solve_lp(table, allowed, objective, primary=None):
     chosen = np.zeros(len(table.gains))
     ids = np.flatnonzero(allowed & ~np.any((table.matrix > 0) & (table.capacities[:, None] == 0), axis=0))
@@ -366,15 +389,10 @@ def solve_lp(table, allowed, objective, primary=None):
         primary_scale = max(abs(primary_row).max(), 1e-30)
         constraints = np.vstack((constraints, -primary_row / primary_scale))
         limits = np.r_[limits, -max(0., primary - PRIMARY_TOL) / primary_scale]
-    result = linprog(cost / max(abs(cost).max(), 1e-30), A_ub=csr_matrix(constraints), b_ub=limits,
-                     bounds=np.c_[np.zeros(len(ids)), upper], method="highs-ds",
-                     options={"presolve": False, "simplex_scale_strategy": 0,
-                              "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9})
-    if not result.success:
-        raise RuntimeError(result.message)
-    if np.min(result.x) < -1e-9:
-        raise RuntimeError("LP returned negative replica fractions")
-    chosen[ids] = np.maximum(result.x, 0) * table.fleet.gpus / column_scale
+    result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper)
+    if not np.isfinite(result).all() or np.min(result) < -1e-9:
+        raise RuntimeError("LP returned invalid replica fractions")
+    chosen[ids] = np.maximum(result, 0) * table.fleet.gpus / column_scale
     if np.max((table.matrix @ chosen - table.capacities) / np.maximum(table.capacities, 1)) > 1e-8:
         raise RuntimeError("LP returned an infeasible resource allocation")
     if primary is not None and table.gains @ chosen < primary - PRIMARY_TOL - 1e-8:
@@ -480,6 +498,7 @@ def compare(table):
 
 def configuration(smoke=False):
     return {"schema": SCHEMA, "gpus": GPUS, "installed_gpu_w": GPUS * 300, "source_load": SOURCE_LOAD,
+            "solver_version": highspy.Highs().version(),
             "gpus_per_node": 8,
             "dispatch_chunks": DISPATCH_CHUNKS,
             "planning_iterations": PLANNING_ITERATIONS, "planning_resolution": PLANNING_RESOLUTION,
@@ -558,6 +577,8 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
 
 def load_plan(out):
     plan = json.loads((out / "plan.json").read_text())
+    if plan["config"].get("solver_version") != highspy.Highs().version():
+        raise ValueError("stale LP solver version")
     if plan["config"]["schema"] != SCHEMA or plan["sources"] != provenance(calibration(plan["config"]["draws"])):
         raise ValueError("stale schema, code, or calibration")
     if plan["identity"] != digest({"config": plan["config"], "sources": plan["sources"]}):
@@ -1019,7 +1040,7 @@ def validate(out):
             "shed": {p: r["shed_fraction"] for p, r in result["results"].items()}})
     if any(abs(row["shed"][p] - runtime_scaling[0]["shed"][p]) > 1e-8 for row in runtime_scaling for p in POLICIES):
         raise RuntimeError("proportional pooled scaling changed executed outcomes")
-    report = {"sources": provenance(c), "calibration": c["evidence"], "regional_fidelity": regional_check(c),
+    report = {"sources": provenance(c), "solver_version": highspy.Highs().version(), "calibration": c["evidence"], "regional_fidelity": regional_check(c),
               "regional_execution": regional_execution_check(c), "loaded_execution": loaded_execution_check(c),
               "regional_components": c["regional_components"]["validation"],
               "library_audit_cells": len(errors), "optimal_kv_ranges": faces, "runtime_scaling": runtime_scaling,

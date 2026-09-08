@@ -91,7 +91,7 @@ uv run python pool_shed_campaign.py reduce --out outputs/a100-pooled-feedback
 
 The full grid contains 11,250 scenarios / 56,250 policy results. `--smoke` on
 `prepare` selects 24 scenarios. `run --shard N --shards K` supports independent
-process shards and validated checkpoint resume. Code and calibration hashes
+process shards and validated checkpoint resume. The native HiGHS version and code/calibration hashes
 prevent mixing revisions. Bands show empirical p05–p95 sensitivity across paired
 execution draws, workload snapshots, and measured power samples; they do not
 cover unmeasured model error.

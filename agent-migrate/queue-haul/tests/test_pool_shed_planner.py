@@ -22,18 +22,18 @@ def test_secondary_lp_preserves_primary_below_solver_coefficient_cutoff():
 def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypatch):
     import pool_shed_campaign as campaign
 
-    original, bounds = campaign.linprog, []
+    original, bounds = campaign._bounded_lp, []
 
-    def record(*args, **kwargs):
-        bounds.append(kwargs["bounds"].copy())
-        return original(*args, **kwargs)
+    def record(cost, matrix, rhs, upper):
+        bounds.append(upper.copy())
+        return original(cost, matrix, rhs, upper)
 
-    monkeypatch.setattr(campaign, "linprog", record)
+    monkeypatch.setattr(campaign, "_bounded_lp", record)
     table = SimpleNamespace(matrix=np.eye(2), capacities=np.array([1e6, 0.]),
                             gains=np.array([1e-10, 1.]), fleet=SimpleNamespace(gpus=1))
     primary = table.gains @ campaign.solve_lp(table, np.ones(2, bool), -table.gains)
     chosen = campaign.solve_lp(table, np.ones(2, bool), np.ones(2), primary)
-    assert bounds == pytest.approx(np.array([[[0., 1e6]], [[0., 1e6]]]))
+    assert bounds == pytest.approx(np.array([[1e6], [1e6]]))
     assert table.gains @ chosen == pytest.approx(primary - campaign.PRIMARY_TOL, abs=1e-13)
     assert chosen[1] == 0
 
@@ -50,7 +50,7 @@ def test_loaded_coding_secondary_face_solves_without_backend_failure(wan, deadli
 def test_secondary_lp_rejects_a_lost_primary_even_with_optimal_status(monkeypatch):
     import pool_shed_campaign as campaign
 
-    monkeypatch.setattr(campaign, 'linprog', lambda *args, **kwargs: SimpleNamespace(success=True, x=np.zeros(1)))
+    monkeypatch.setattr(campaign, '_bounded_lp', lambda *args: np.zeros(1))
     table = SimpleNamespace(matrix=np.ones((1, 1)), capacities=np.ones(1), gains=np.ones(1), fleet=SimpleNamespace(gpus=1))
     with pytest.raises(RuntimeError, match='preserve the primary'):
         campaign.solve_lp(table, np.array([True]), np.ones(1), primary=.5)

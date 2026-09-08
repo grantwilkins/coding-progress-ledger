@@ -133,6 +133,14 @@ def test_configuration_and_provenance_fail_closed(tmp_path):
     with pytest.raises(ValueError, match='different inputs'):
         c.prepare(tmp_path, smoke=True, draws=2)
     plan = json.loads((tmp_path / 'plan.json').read_text())
+    version = plan['config']['solver_version']
+    plan['config']['solver_version'] = 'stale'
+    plan['identity'] = c.digest({'config': plan['config'], 'sources': plan['sources']})
+    c.write_json(tmp_path / 'plan.json', plan)
+    with pytest.raises(ValueError, match='solver version'):
+        c.load_plan(tmp_path)
+    plan['config']['solver_version'] = version
+    plan['identity'] = c.digest({'config': plan['config'], 'sources': plan['sources']})
     plan['config']['source_load'] = .9
     c.write_json(tmp_path / 'plan.json', plan)
     with pytest.raises(ValueError, match='identity'):
