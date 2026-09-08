@@ -2322,8 +2322,11 @@ The 2026-09-08 H100 run uses the existing
 `network_campaign.py prepare --design drain` followed by `network_campaign.py
 run`. This is the same 10-pack, five-repeat executor used by the model/hardware
 wrapper, without requiring an architecture-gated profile. Its configuration
-and plan are in `outputs/model-hardware-drain-h100-20260908/`; the intended raw
-run root is `/datadrive/queue-haul-network/model-hardware-drain-h100-20260908`.
+and plan are in `outputs/model-hardware-drain-h100-20260908/`; the raw run root
+is `/datadrive/queue-haul-network/model-hardware-drain-h100-20260908` and the
+launch log is the adjacent `.log` file. The campaign launched on West US 3 at
+02:35 UTC after all three host checks passed. Australia East's existing XFS
+data disk was remounted and its missing runtime restored from the source.
 The staged executor is an unchanged snapshot of source commit
 `3abb1ac6080a3e49e0b5ac14428fe79928c21f4d`, deployed with snapshot commit
 `b75461cd34bc5e34ca1f8a680df78dce971e3b43` on all three nodes. H100 uses native
