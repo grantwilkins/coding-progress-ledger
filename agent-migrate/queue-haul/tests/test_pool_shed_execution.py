@@ -322,3 +322,93 @@ def test_final_delta_priority_does_not_duplicate_application_node_capacity():
     assert result["completed_sessions"] == 1
     assert result["last_completion_s"] == 2
     assert result["transferred_bytes"] == pytest.approx([2, 0, 2])
+
+
+@pytest.mark.parametrize("chunks", [1, 8])
+def test_interrupted_execution_preserves_handoff_debt_and_recovery(chunks):
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.), (0., 1.)), kv=((0., 0.), (0., 0.)),
+                                      route=(0, 0), load=.25, demand=(.1, .1), deadline=40.)
+    timing.update(resident_replay_loss=.9, beta=.4)
+    expected = execute_pooled(table, np.ones(2), timing, calibration, chunks)
+    execution = PooledExecution(table, timing, calibration, chunks)
+    execution.admit(np.ones(2))
+    for until in (.1, 1., 2., 3., 6., 10., 20., 40.):
+        execution.advance(until)
+    actual = execution.result()
+    for key in ("shed_fraction", "last_completion_s", "service_ready_s", "resident_debt_generated_work_s",
+                "resident_debt_recovered_work_s", "pending_resident_debt_work_s", "transferred_bytes",
+                "batch_replica_seconds", "final_destination_load", "action_counts"):
+        assert actual[key] == pytest.approx(expected[key])
+    assert execution.now == 40.
+
+
+def test_later_admission_preserves_debt_and_source_reservations():
+    from copy import deepcopy
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.), (0., 1.)), kv=((0., 0.), (0., 0.)),
+                                      route=(0, 0), load=.5, demand=(0., 0.), work=(1., 1.), deadline=20.)
+    timing.update(resident_replay_loss=1., beta=.5)
+    execution = PooledExecution(table, timing, calibration)
+    execution.advance(2.)
+    execution.admit([1., 0.])
+    execution.advance(3.5)
+    assert execution.result()["completed_sessions"] == 1
+    assert execution.resident_debt[0] > 0
+    clear = deepcopy(execution)
+    clear.resident_debt[:] = 0
+    debt = execution.resident_debt.copy()
+    execution.admit([0., .25])
+    assert execution.resident_debt == pytest.approx(debt)
+    assert execution.selected_total == pytest.approx([1, .25])
+    with pytest.raises(ValueError, match="duplicated source"):
+        execution.admit([1., 0.])
+    clear.admit([0., .25])
+    execution.advance(20.)
+    clear.advance(20.)
+    assert execution.result()["last_completion_s"] > clear.result()["last_completion_s"]
+    assert execution.result()["pending_resident_debt_work_s"] == [0, 0]
+    assert execution.result()["resident_debt_generated_work_s"] == pytest.approx(execution.result()["resident_debt_recovered_work_s"])
+
+
+def test_later_admission_keeps_original_snapshot_and_current_source_context():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(context=(1., 100.), replay=((0., 0.),), kv=((1., 0.),),
+                                      route=(0,), demand=(0., 0.), deadline=10.)
+    table.fleet.kv[0] = 1.
+    table.fleet.metadata.update(source_session_rps=1., turn_sequences=[[
+        {"context": 1 + i, "prompt": 1, "output": 0} for i in range(20)], []])
+    calibration.update(F=1., G=1.)
+    execution = PooledExecution(table, timing, calibration)
+    execution.advance(3.)
+    execution.admit([1.])
+    execution.advance(10.)
+    assert execution.result()["transferred_bytes"] == pytest.approx([5., 0., 5.])
+    assert execution.result()["last_completion_s"] == pytest.approx(4.4)
+    with pytest.raises(ValueError, match="current time"):
+        execution.advance(9.)
+    with pytest.raises(ValueError, match="deadline"):
+        execution.advance(11.)
+
+
+def test_observable_phase_progress_accumulates_across_interrupts_and_resets():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.), (0., 1.)), kv=((0., 0.), (0., 0.)),
+                                      route=(0, 0), demand=(0., 0.), work=(8., 8.), deadline=20.)
+    execution = PooledExecution(table, timing, calibration)
+    execution.advance(2.)
+    execution.admit([1., 1.])
+    execution.advance(2.2)
+    assert execution.phase_started == pytest.approx([2., 2.])
+    assert execution.phase_transferred_bytes == pytest.approx([1., 1.])
+    assert execution.phase_replica_seconds == pytest.approx([0., 0.])
+    execution.advance(2.8)
+    assert execution.state.tolist() == [1, 1]
+    assert execution.phase_started == pytest.approx([2.4, 2.4])
+    assert execution.phase_transferred_bytes == pytest.approx([0., 0.])
+    assert execution.phase_replica_seconds == pytest.approx([.2, .2])
+    execution.advance(3.2)
+    assert execution.phase_replica_seconds == pytest.approx([.4, .4])
+    execution.advance(20.)
+    assert execution.state.tolist() == [6, 6]
+    assert execution.phase_replica_seconds == pytest.approx([0., 0.])
