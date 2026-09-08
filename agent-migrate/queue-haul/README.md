@@ -2087,3 +2087,19 @@ prefill causal control. Final CDFs and descriptive error bars should group by
 case and policy, retain deadline misses, and treat each eight-session episode
 as one repeat. The original three trials should remain identifiable as pilot
 measurements when combined with the ten fresh repeats.
+
+Job array `42334565` completed all 450 additional episodes without action
+errors in 14h47m of batch runtime. Both QH variants attained the full target
+in all 90 new trials each. Isolated greedy passed the ten WAN controls and
+ten highest-prefill trials, missing the other 70. KV-only and replay-only
+completed admitted subsets but never attained the full eight-session target.
+The prefill zero-load control still fails for isolated greedy, so these
+results do not establish a separate causal prefill transition.
+
+The combined `outputs/robustness-a100-20260907/episodes.csv` contains all 585
+initial and additional episodes, with `campaign`, `phase`, and `source_csv`
+columns identifying provenance. Per-batch raw JSONL, normalized CSVs, plan
+hashes, and diagnostic PNGs are included alongside the initial campaign data.
+Existing `target_attainment.png` plots show full-target attainment over time;
+session-completion CDFs must use all eight sessions as the denominator,
+including unsubmitted sessions, and retain incomplete mass at 30 seconds.
