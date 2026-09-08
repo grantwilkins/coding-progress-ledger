@@ -360,13 +360,16 @@ def solve_lp(table, allowed, objective, primary=None):
         constraints = np.vstack((constraints, -table.gains[ids] * table.fleet.gpus / column_scale))
         limits = np.r_[limits, -max(0., primary - PRIMARY_TOL)]
     result = linprog(cost / max(abs(cost).max(), 1e-30), A_ub=csr_matrix(constraints), b_ub=limits,
-                     bounds=(0, None), method="highs",
-                     options={"primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9})
+                     bounds=(0, None), method="highs-ipm",
+                     options={"primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9,
+                              "ipm_optimality_tolerance": 1e-12})
     if not result.success:
         raise RuntimeError(result.message)
     if np.min(result.x) < -1e-9:
         raise RuntimeError("LP returned negative replica fractions")
     chosen[ids] = np.maximum(result.x, 0) * table.fleet.gpus / column_scale
+    if np.max((table.matrix @ chosen - table.capacities) / np.maximum(table.capacities, 1)) > 1e-8:
+        raise RuntimeError("LP returned an infeasible resource allocation")
     return chosen
 
 
