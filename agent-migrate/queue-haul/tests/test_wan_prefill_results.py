@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from plot_wan_prefill_results import pooled
+from plot_wan_prefill_results import pooled, replay_interval
 
 
 def test_episode_ecdf_uses_last_completion_and_retains_incomplete_episodes():
@@ -20,3 +20,13 @@ def test_episode_ecdf_uses_last_completion_and_retains_incomplete_episodes():
     assert total == 32 and counts == dict(replay=31, not_selected=1)
     with pytest.raises(ValueError, match="missing episodes"):
         pooled(rows, "prefill", "greedy")
+
+
+def test_action_interval_resamples_episodes_and_preserves_constant_mix():
+    def row(replays):
+        return dict(campaign="wan", policy="greedy", decisions=json.dumps([
+            dict(action="replay" if i < replays else "kv_transfer") for i in range(8)]))
+    np.testing.assert_array_equal(replay_interval([row(4)] * 13, "wan", "greedy"), [.5, .5])
+    lo, hi = replay_interval([row(0)] * 13 + [row(8)] * 13, "wan", "greedy")
+    assert 0 <= lo < .5 < hi <= 1
+    assert hi - lo > .25

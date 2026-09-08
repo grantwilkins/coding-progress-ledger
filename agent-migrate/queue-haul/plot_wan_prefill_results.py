@@ -44,6 +44,15 @@ def pooled(rows, campaign, policy):
     return np.r_[0, sorted(events)], np.arange(len(events) + 1) / len(episodes), counts, total
 
 
+def replay_interval(rows, campaign, policy):
+    shares = np.array([sum(d["action"] == "replay" for d in json.loads(r["decisions"])) / 8
+                       for r in rows if r["campaign"] == campaign and r["policy"] == policy])
+    if len(shares) < 2:
+        raise ValueError("replay confidence interval needs at least two episodes")
+    means = np.random.default_rng(0).choice(shares, (10000, len(shares))).mean(axis=1)
+    return np.quantile(means, [.025, .975])
+
+
 def save(fig, out):
     fig.tight_layout()
     for suffix in ("png", "pdf"):
@@ -95,12 +104,17 @@ def plot(source, out):
                    color=plot_style.ACTION_COLORS[action])
             for i, share in enumerate(shares):
                 if share:
-                    ax.text(i, bottom[i] + share / 2, f"{share:.1%}", ha="center", va="center", color="white")
+                    ax.text(i, bottom[i] + share * (.8 if action == "kv_transfer" else .5), f"{share:.1%}", ha="center", va="center", color="white")
             bottom += shares
+        boundaries = np.array([groups[campaign, p][2]["replay"] / groups[campaign, p][3] for p in policies])
+        intervals = np.array([replay_interval(rows, campaign, p) for p in policies]).T
+        ax.errorbar(range(3), boundaries, yerr=np.vstack((boundaries - intervals[0], intervals[1] - boundaries)),
+                    fmt="none", ecolor="#333333", elinewidth=1.5, capsize=5, capthick=1.5)
         ax.set(xticks=range(3), xticklabels=["\n".join(plot_style.POLICY_NAMES[STYLE_IDS[p]].rsplit(" ", 1))
                                            for p in policies], ylim=(0, 1), title=title)
         ax.legend(loc="upper center", bbox_to_anchor=(.5, -.18), ncol=3, frameon=False)
     axes[0].set_ylabel("Share of source sessions")
+    fig.suptitle("Boundary bars: 95% bootstrap CI across episodes", fontsize=plot_style.LEGEND_FONT_SIZE)
     save(fig, out / "pooled_action_mix")
     with (out / "pooled_summary.csv").open("w") as stream:
         writer = csv.DictWriter(stream, fieldnames=summaries[0], lineterminator="\n")

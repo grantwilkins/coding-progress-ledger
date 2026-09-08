@@ -2677,5 +2677,8 @@ rates (including zero load). Each case has 13 repeats per policy. The
 `pooled_action_mix` figure has separate WAN and prefill panels, pooling cases
 within each class: 520 WAN and 416 prefill source sessions per policy. `per_session_greedy` is displayed as Isolated
 Fastest because it picks each session's fastest isolated action. Unselected
-sessions remain visible as a separate action category if present.
+sessions remain visible as a separate action category if present. Boundary error
+bars show percentile 95% bootstrap confidence intervals for mean replay share,
+using 10,000 whole-episode resamples within each class/policy (seed 0). They
+include variation across pooled cases, not just repeat noise within a case.
 These are descriptive episode ECDFs, not evidence of a causal prefill transition.
