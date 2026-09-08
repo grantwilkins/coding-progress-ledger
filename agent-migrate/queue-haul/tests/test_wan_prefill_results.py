@@ -52,7 +52,7 @@ def test_action_attainment_keeps_late_targets_and_partial_plan_endpoints():
         episode_point(row, pack, 156, 5)
 
 
-def test_tradeoff_draws_all_585_episodes_in_case_panels(tmp_path, monkeypatch):
+def test_tradeoff_pools_all_noncontrol_episodes(tmp_path, monkeypatch):
     import csv
     from pathlib import Path
     from matplotlib.axes import Axes
@@ -66,8 +66,10 @@ def test_tradeoff_draws_all_585_episodes_in_case_panels(tmp_path, monkeypatch):
     monkeypatch.setattr(Axes, "scatter", record)
     root = Path(__file__).resolve().parents[1] / "outputs/robustness-a100-20260907"
     plot(root, tmp_path)
-    assert counts == [13] * 45
+    assert counts == [52] * 5 + [39] * 5
     with (tmp_path / "action_attainment.csv").open() as stream:
         points = list(csv.DictReader(stream))
-    assert len({p["episode_id"] for p in points}) == 585
-    assert {float(p["kv_share_percent"]) for p in points} == {0, 25, 37.5, 50, 62.5, 87.5, 100}
+    assert len({p["episode_id"] for p in points}) == 455
+    assert {float(p["kv_share_percent"]) for p in points} == {0, 37.5, 50, 62.5, 100}
+    assert all(float(p["wan_mbps"]) != 10000 if p["campaign"] == "wan"
+               else float(p["prefill_rps"]) > 0 for p in points)
