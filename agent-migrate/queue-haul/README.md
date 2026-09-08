@@ -1752,6 +1752,21 @@ prefill/decode boundary. `pareto-hero.png` shows one explicitly scoped example:
 interactive-coding seed 1 at 10 Gb/s. Repeated identical frontier points are
 collapsed, and the endpoint shared by all four frontier policies is labeled.
 
+`fleet_shed_frontier_campaign.py` evaluates every policy on the same ten fixed
+fractions of removable power and selects the largest contract-respecting
+executed shed; it does not assume feasibility is monotone in the ask.
+`queue_haul` is an LP-led portfolio from 120 seconds onward and retains the
+KV-only and replay-only solvers with matched randomness. Complete curves stay
+on one shard in deadline order; each solver's best lawful concrete plan is
+re-executed at every longer deadline. The reducer hard-fails any deadline
+regression or matched Queue-Haul loss, including sensitivity rows, and reports
+fleet invariance per policy. The greedy baseline never invokes exact integer
+recovery when it misses an ask. Below 120 seconds the equivalent replay/KV
+portfolio skips the degenerate LP. Submit `fleet_shed_frontier.sbatch` as
+prepare, headline and sensitivity arrays, then reduce, with one fresh shared
+`FRONTIER_OUT` and `afterok` dependencies.
+
+
 `requirement_frontier.py` computes destination requirements without constructing
 a destination inventory. `pool_planner.py` compares those requirements with
 concrete pool contracts and emits physical use/capacity rows. Pool admission
@@ -2688,3 +2703,195 @@ either a confidence-separated 10-point action-share change or a feasibility
 flip. Execute each live plan with `run-profile`, then pass the six
 `--run MODEL HARDWARE ROOT` arguments to `validate-live`. Interpret accepted
 differences as architecture/deployment behavior, not a causal sparsity effect.
+
+
+## 2×A100 marginal bottleneck comparison
+
+`marginal_state_campaign.py` replaces the exhaustive 7,400-episode sweep with
+six offline-selected points: slack control, WAN, prefill, HBM, serving, and
+combined WAN/prefill. Each uses the fixed eight-session `large-r0` pack, all
+five policies, and three paired repeats: **90 live episodes**. The repeat order
+covers every point once before the next repeat. Policy order is seeded and
+randomized within each point/repeat.
+
+Preparation reuses the existing frozen profile and measured background
+capacities. It places residual budgets just below full-pack demand, verifies
+actual LP and greedy action changes offline, and requires a full mixed-action
+plan at the combined bottleneck. These are predicted capacities; every live
+policy measures its actual background and records the resulting decisions.
+Live outcomes never determine which points are retained. HBM and serving may
+produce ties because their demands do not depend on migration action.
+
+The shared runner preserves loaded models while WAN and HBM settings stay
+fixed. Each policy still resets caches and starts a fresh background with a
+30-second observation window. Fractional background rates and HBM units allow
+points between the former integer rungs. HBM allocations are actual held worker
+memory, with corresponding destination KV blocks removed.
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
+export QH_LMCACHE_MODE=mp
+uv run python marginal_state_campaign.py prepare \
+  --source-plan outputs/constrained-resource-a100-20260905/prepared/plan.json \
+  --out outputs/marginal-resource-a100-20260905/prepared
+sbatch marginal_state_campaign.sbatch
+```
+
+The batch job has a six-hour limit and runs the repeated comparison followed
+by live action-shift validation. `offline_decisions.csv` records predicted
+policy actions. The run retains every episode, actual capacities, request and
+power evidence, attainment plots, and the final per-point robustness summary.
+A failed action-shift validation remains visible rather than being discarded.
+Rerunning with the same run root resumes only the exact hashed schedule prefix;
+interrupted attempts remain intact. The old `constrained_state_campaign.py
+prepare` command still reproduces the exhaustive historical design and is not
+used by this comparison.
+
+## Calibrated WAN/replay contention deadline sensitivity
+
+`contention_campaign.py` searches heterogeneous eight-session packs, shaped
+WAN rates, and explicit per-case deadlines in simulation before selecting live
+cases. It fits aggregate replay throughput and the KV completion tail from the
+completed marginal campaign. The simulation shares WAN bandwidth across
+transfers and replay capacity across simultaneous replays; both resources can
+operate concurrently. The planner profile remains unchanged.
+
+Selection requires predicted full-target attainment by both QH variants,
+prefers full attainment across all three timing variants, then maximizes
+improvement over per-session greedy. Both QH variants must tie or beat all
+three baselines in windowed relief at nominal and ±15% replay/tail durations. The live schedule contains
+the selected case, three nearby qualifying settings, and a slack control, each
+with all five policies and three fresh repeats: at most 75 episodes. Every
+simulated candidate, including baseline winners, remains in `simulation.csv`;
+`calibration.json` identifies the measurements and fitted values. Calibration
+uses equal-context measurements, so heterogeneous performance remains a
+prediction to be tested on hardware.
+
+This snapshot experiment tests WAN/replay contention, not persistent HBM
+residency or sustained serving capacity. The preceding marginal experiment
+confirmed action shifts but did not beat per-session greedy, and its HBM and
+serving admission assumptions did not match physical snapshot execution.
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
+uv run python contention_campaign.py prepare \
+  --source-plan outputs/constrained-resource-a100-20260905/prepared/plan.json \
+  --calibration-plan outputs/marginal-resource-a100-20260905/prepared/plan.json \
+  --calibration-raw outputs/marginal-resource-a100-20260905/run/raw_episodes.jsonl \
+  --out outputs/contention-a100-20260905/prepared
+sbatch contention_campaign.sbatch
+```
+
+The six-hour batch job runs the frozen cases, then writes `comparisons.csv`
+and `validation.json` alongside the episode evidence and canonical plots.
+Comparisons pair each QH variant with each baseline at the same case and repeat;
+losses remain in the outputs. The primary validation requires three repeats,
+no paired full-target attainment losses, and at least one strict attainment win
+over per-session greedy for each QH variant. Partial windowed relief is a
+secondary diagnostic. Completion time alone is insufficient: full relief must
+hold over the final five-second window of the declared deadline.
+The shared runner uses each state's deadline for planning and each scheduled
+policy's deadline for measurement reduction; the historical default is 30s.
+
+The frozen `outputs/contention-a100-20260905/prepared` plan uses paired 16K,
+24K, 28K, and 31,562-token sessions. Its five settings are 5Gbps/20s,
+4Gbps/20s, 6Gbps/20s, 5Gbps/22s, and the 10Gbps/25s slack control. These are
+simulation-selected predictions; the batch job independently tests their
+attainment on hardware. The search retained 5,670 timing/policy outcomes.
+
+## Original 30-second contract
+
+`contention_campaign.py prepare --original-contract` fixes every candidate and
+control to the original 30-second deadline and five-second relief window.
+It retains eight sessions, the two-A100 runtime, the model profile, and the
+full-shed power target. Only context lengths and shaped WAN rates change.
+The shorter-deadline experiment above is a separate sensitivity study, not
+validation of this original contract.
+
+The `outputs/contention-original-a100-20260906/prepared` plan uses eight
+31,562-token contexts at 2.5, 3, 3.25, 3.5, and 10Gbps, all at 30 seconds.
+Each of the five policies gets three fresh repeats (75 episodes). Concurrent
+execution is calibrated from the completed heterogeneous-context campaign;
+all candidate outcomes and calibration measurements remain in the prepared
+output. Simulation predicts mixed QH actions meet the full-target deadline
+while isolated greedy's eight replays exceed the 25-second migration cutoff
+needed for five seconds of full relief. The completed 75-episode run
+validated both QH variants at all four constrained rates (3/3 each), with
+isolated greedy missing every constrained case and tying at the 10Gbps
+control. The original deadline stayed fixed.
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
+uv run python contention_campaign.py prepare --original-contract \
+  --source-plan outputs/constrained-resource-a100-20260905/prepared/plan.json \
+  --calibration-plan outputs/contention-a100-20260905/prepared/plan.json \
+  --calibration-raw outputs/contention-a100-20260905/run/raw_episodes.jsonl \
+  --out outputs/contention-original-a100-20260906/prepared
+sbatch --job-name=qh-original-30s \
+  --output=outputs/contention-original-a100-20260906/job-%j.log \
+  contention_campaign.sbatch outputs/contention-original-a100-20260906
+```
+
+## Controlled prefill-pressure probe
+
+`prefill_pressure_campaign.py` tests a narrow simulation-predicted transition
+at fixed 4Gbps WAN, eight 27,360-token sessions, the original 30-second deadline,
+and the five-second relief window. Only the background prefill rate changes:
+0, 0.4, 0.5, and 0.6 requests/second. All five policies run three fresh repeats
+at each rate (60 episodes). HBM allocations and serving backgrounds remain zero.
+
+The timing model uses prior heterogeneous migration measurements and the
+observed effect of prefill load from the earlier marginal campaign, rather
+than treating inverse remaining prefill capacity as measured slowdown.
+The completed 60-episode probe passed all 12 trials for each QH variant,
+but isolated greedy missed all three zero-load controls by 0.35–0.47 seconds.
+The control failure prevents attributing its misses specifically to prefill.
+`prefill_validation.json` explicitly checks the zero-load control before
+attributing any isolated-greedy miss to background prefill. A robust transition
+requires all three control trials to pass and all three loaded trials to favor
+both QH variants; unsuccessful probes and baseline wins remain in the outputs.
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28 uv/0.10.8
+uv run python prefill_pressure_campaign.py prepare \
+  --out outputs/prefill-pressure-a100-20260906/prepared
+sbatch --job-name=qh-prefill-probe \
+  --output=outputs/prefill-pressure-a100-20260906/job-%j.log \
+  contention_campaign.sbatch outputs/prefill-pressure-a100-20260906 \
+  prefill_pressure_campaign.py
+```
+
+## Additional fixed-case repeats
+
+`outputs/robustness-a100-20260907` freezes ten additional paired repeats
+(IDs 3–12) for every original-contract WAN and prefill case and all five
+policies: 450 new episodes, giving 13 observations per case and policy with
+the existing runs. Workloads, capacities, deadline, and relief window are
+unchanged. Policy order is randomized within each repeat. Five sequential
+array tasks each run two repeats of both campaigns, with a six-hour limit
+per task; sequential execution avoids shared testbed port conflicts.
+
+Submit with `sbatch outputs/robustness-a100-20260907/run.sbatch`.
+Each task retains raw episodes and produces normalized CSVs and existing
+diagnostic plots. Runs resume from their saved schedule prefix. These are
+distribution measurements, so execution does not require QH wins or a passing
+prefill causal control. Final CDFs and descriptive error bars should group by
+case and policy, retain deadline misses, and treat each eight-session episode
+as one repeat. The original three trials should remain identifiable as pilot
+measurements when combined with the ten fresh repeats.
+
+Job array `42334565` completed all 450 additional episodes without action
+errors in 14h47m of batch runtime. Both QH variants attained the full target
+in all 90 new trials each. Isolated greedy passed the ten WAN controls and
+ten highest-prefill trials, missing the other 70. KV-only and replay-only
+completed admitted subsets but never attained the full eight-session target.
+The prefill zero-load control still fails for isolated greedy, so these
+results do not establish a separate causal prefill transition.
+
+The combined `outputs/robustness-a100-20260907/episodes.csv` contains all 585
+initial and additional episodes, with `campaign`, `phase`, and `source_csv`
+columns identifying provenance. Per-batch raw JSONL, normalized CSVs, plan
+hashes, and diagnostic PNGs are included alongside the initial campaign data.
+Existing `target_attainment.png` plots show full-target attainment over time;
+session-completion CDFs must use all eight sessions as the denominator,
+including unsubmitted sessions, and retain incomplete mass at 30 seconds.

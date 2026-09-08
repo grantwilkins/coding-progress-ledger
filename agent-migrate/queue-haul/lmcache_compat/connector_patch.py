@@ -10,6 +10,25 @@ import threading
 import time
 
 
+class ConstrainedHBM:
+    def qh_hbm(self, allocated_bytes=None):
+        import torch
+
+        held = getattr(self, "_qh_hbm", None)
+        if held is None:
+            torch.cuda.empty_cache()
+        if allocated_bytes is not None:
+            if held is not None:
+                raise ValueError("HBM is already allocated")
+            if int(allocated_bytes) <= 0:
+                raise ValueError("HBM allocation must be positive")
+            held = self._qh_hbm = torch.zeros(
+                int(allocated_bytes), dtype=torch.uint8, device=self.device)
+        torch.cuda.synchronize(self.device)
+        return {"pid": os.getpid(), "allocated_bytes": held.numel() if held is not None else 0,
+                "torch_allocated_bytes": torch.cuda.memory_allocated(self.device)}
+
+
 def bypass_lmcache(request) -> bool:
     direct = getattr(request, "kv_transfer_params", None)
     extra = getattr(getattr(request, "sampling_params", None), "extra_args", None) or {}

@@ -46,6 +46,13 @@ POLICY_LINESTYLES = dict(zip(POLICIES, (
 POLICY_NAMES.update(lp_bound="QH continuous volume bound", lp_plan="QH LP-derived integer plan")
 POLICY_COLORS.update(lp_bound=POLICY_COLORS["queue_haul"], lp_plan="#009E73")
 POLICY_LINESTYLES.update(lp_bound=POLICY_LINESTYLES["queue_haul"], lp_plan=(0, (3, 1)))
+REFERENCE = "exact_modeled_milp_optimum"
+POLICY_NAMES[REFERENCE] = "Exact modeled MILP optimum"
+POLICY_COLORS[REFERENCE] = "#000000"
+POLICY_LINESTYLES[REFERENCE] = "-"
+POLICY_NAMES["per_session_greedy"] = "Per-session greedy"
+POLICY_COLORS["per_session_greedy"] = POLICY_COLORS["isolated_fastest"]
+POLICY_LINESTYLES["per_session_greedy"] = POLICY_LINESTYLES["isolated_fastest"]
 ACTION_NAMES = {
     "replay": "Replay", "kv_transfer": "KV transfer",
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",
@@ -85,6 +92,7 @@ SERVICE_LOAD_LINESTYLES = {
     "prefill_heavy": "--",
     "decode_heavy": "-",
 }
+
 SERVICE_LOAD_MARKERS = {"prefill_heavy": "o", "decode_heavy": "s"}
 SERVICE_MIXES = ("prefill_heavy", "balanced", "decode_heavy")
 SERVICE_MIX_NAMES = {

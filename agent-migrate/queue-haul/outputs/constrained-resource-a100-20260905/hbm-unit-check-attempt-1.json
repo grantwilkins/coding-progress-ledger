@@ -1,0 +1,65 @@
+{
+  "capacity_inputs": {
+    "background_kind": "none",
+    "background_output_forcing": false,
+    "background_rps": 0.0,
+    "baseline_kv_tokens": 0,
+    "baseline_work": [
+      0.0,
+      0.0
+    ],
+    "hbm_allocation": {
+      "allocated_bytes": 4294967296,
+      "before": {
+        "allocated_bytes": 0,
+        "checked_monotonic_ns": 1703271001997536,
+        "pid": 7175,
+        "process_gpu_memory_bytes": 59244544000,
+        "torch_allocated_bytes": 58587329536
+      },
+      "checked_monotonic_ns": 1703313729587341,
+      "pid": 7175,
+      "process_gpu_memory_bytes": 63921192960,
+      "torch_allocated_bytes": 62882297344
+    },
+    "kv_capacity_tokens": 875760,
+    "post_hbm_telemetry": {
+      "allocated_bytes": 4294967296,
+      "before": {
+        "allocated_bytes": 0,
+        "checked_monotonic_ns": 1703271001997536,
+        "pid": 7175,
+        "process_gpu_memory_bytes": 59244544000,
+        "torch_allocated_bytes": 58587329536
+      },
+      "checked_monotonic_ns": 1703313756055841,
+      "pid": 7175,
+      "process_gpu_memory_bytes": 63921192960,
+      "torch_allocated_bytes": 62882297344
+    },
+    "resources": {
+      "hbm": 875760,
+      "prefill": 30.0,
+      "service": 30.0,
+      "wan": 37500000000.0
+    },
+    "stack_provenance": {
+      "reset_end_ns": 1703283656148710,
+      "reset_start_ns": 1703283618974499,
+      "root": "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/constrained-resource-a100-20260905/hbm-unit-check-attempt-1/testbed"
+    },
+    "telemetry": {
+      "vllm:gpu_cache_usage_perc": 0.0,
+      "vllm:num_requests_running": 0.0,
+      "vllm:num_requests_waiting": 0.0
+    },
+    "wan_mbps": 10000.0
+  },
+  "family": "hbm",
+  "n_hbm": 1,
+  "n_prefill": 0,
+  "n_serving": 0,
+  "operational": true,
+  "state_id": "hbm-unit-check",
+  "wan_mbps": 10000
+}
