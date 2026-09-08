@@ -94,14 +94,14 @@ def plot(source, out):
         save(fig, out / f"{campaign}_completion_ecdf")
     policies = POLICIES[:3]
     for campaign, title in (("wan", "WAN"), ("prefill", "Prefill / compute")):
-        fig, ax = plt.subplots(figsize=(1.65, 1.75))
+        fig, ax = plt.subplots(figsize=(1.9, 1.75))
         left = np.zeros(len(policies))
         for action in ("replay", "kv_transfer", "not_selected"):
             shares = np.array([groups[campaign, p][2][action] / groups[campaign, p][3] for p in policies])
             if not any(shares):
                 continue
             ax.barh(range(3), 100 * shares, left=100 * left, height=.65,
-                    label=plot_style.ACTION_NAMES[action], color=plot_style.ACTION_COLORS[action],
+                    label=plot_style.ACTION_NAMES[action], color=plot_style.PAPER_ACTION_COLORS[action],
                     hatch=plot_style.ACTION_HATCHES.get(action, ""), edgecolor="white", linewidth=.4)
             left += shares
         boundaries = np.array([groups[campaign, p][2]["replay"] / groups[campaign, p][3] for p in policies])
@@ -118,9 +118,9 @@ def plot(source, out):
         ax.grid(axis="x", alpha=.2, linewidth=.5)
         ax.set_axisbelow(True)
         fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.5, .02),
-                   ncol=1, frameon=False, fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE,
-                   handlelength=1.3, handletextpad=.5, labelspacing=.3)
-        fig.subplots_adjust(left=.42, right=.90, bottom=.36, top=.86)
+                   ncol=2, frameon=False, fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE,
+                   handlelength=1.3, handletextpad=.5, columnspacing=1, labelspacing=.3)
+        fig.subplots_adjust(left=.36, right=.92, bottom=.31, top=.86)
         for suffix in ("png", "pdf"):
             fig.savefig(out / f"{campaign}_action_mix.{suffix}")
         plt.close(fig)
