@@ -85,7 +85,11 @@ def plot(source, out):
                                   episodes_completed_by_30s=int(np.count_nonzero(x[1:] <= 30)),
                                   replay=counts["replay"], kv_transfer=counts["kv_transfer"],
                                   not_selected=counts["not_selected"]))
-        ax.axvline(30, color="black", linestyle=":", linewidth=1, label="30 s deadline")
+        ax.axvline(30, color="black", linestyle=":", linewidth=1)
+        ax.text(30, .5, "30 s deadline", transform=ax.get_xaxis_transform(),
+                ha="center", va="center", rotation=90, fontstyle="italic",
+                fontsize=plot_style.HALF_COLUMN_ANNOTATION_FONT_SIZE,
+                bbox={"facecolor": "white", "edgecolor": "none", "pad": 1})
         ax.set(xlabel="Time since migration start (s)", ylabel="Episodes finished",
                xlim=(0, horizon), ylim=(0, 1.02), xticks=(0, 10, 20, 30), yticks=(0, .5, 1))
         ax.grid(alpha=.2)
