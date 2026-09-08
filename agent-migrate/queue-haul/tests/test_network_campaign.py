@@ -1459,6 +1459,34 @@ def test_drain_planner_rejects_a_partial_deadline_plan(monkeypatch):
     assert calls == [30]
 
 
+def test_forced_drain_preserves_admission_and_moves_all_eight(monkeypatch):
+    admitted = n.PlannedMove("s0", "east", "replay", 0, ("link/east",),
+                             destination_pool="pool/east")
+    monkeypatch.setattr(n, "solve", lambda *_args, **_kwargs:
+                        SimpleNamespace(moves=[admitted]))
+    scenario = {
+        "design": "drain", "force_movement": True, "policy": "greedy",
+        "deadline_s": 30, "requested_shed_fraction": 1,
+        "sessions": [{"session_id": f"s{i}", "initial_tokens": 8192}
+                     for i in range(8)],
+        "bandwidth_mbps": {"east": 600, "germany": 4300},
+        "background": {"east": (0, 0), "germany": (0, 0)},
+    }
+    snapshots = {node: {"kv_fraction": 0} for node in scenario["background"]}
+    profile = n.ModelProfile.load(n.MODEL_PATH)
+    moves = n.plan_joint_scenario(scenario, snapshots, profile, 1)
+    assert [move["session_id"] for move in moves] == [f"s{i}" for i in range(8)]
+    assert [move["order"] for move in moves] == list(range(8))
+    assert moves[0]["deadline_admitted"] and not moves[0]["forced_movement"]
+    assert moves[0]["destination_instance"] == "east"
+    assert all(move["forced_movement"] and not move["deadline_admitted"]
+               for move in moves[1:])
+    assert scenario["deadline_s"] == 30
+    with pytest.raises(RuntimeError, match="destination KV capacity"):
+        n.plan_joint_scenario(scenario, {node: {"kv_fraction": 1}
+                             for node in snapshots}, profile, 1)
+
+
 def test_deadline_blind_planner_uses_nonbinding_horizon(monkeypatch):
     seen = {}
     monkeypatch.setattr(n, "solve", lambda problem, *_args, **_kwargs:
@@ -1918,6 +1946,10 @@ def test_drain_evidence_allows_deadline_misses_but_rejects_dispatch_skew():
     }
 
     assert n._valid_drain_evidence({"sessions": sessions}, result)
+    result["requests"][0].update(deadline_admitted=False, forced_movement=True)
+    assert not n._valid_drain_evidence({"sessions": sessions}, result)
+    assert n._valid_drain_evidence({"sessions": sessions, "force_movement": True}, result)
+    result["requests"][0].update(deadline_admitted=True, forced_movement=False)
     result["requests"][0].update(method="kv_transfer")
     result["requests"][0]["request"]["cached_tokens"] = 1024
     assert n._valid_drain_evidence({"sessions": sessions}, result)

@@ -154,7 +154,7 @@ def _rows(run_roots: list[Path]) -> list[dict]:
                            for row in rows):
                 raise ValueError(f"invalid drain arm: {arm}")
             arms.add(key)
-            matrices.add((plan["manifest"]["sha256"], tuple(sorted(
+            matrices.add((plan["manifest"]["sha256"], plan.get("force_movement", False), tuple(sorted(
                 (row["condition_index"], row["repeat"], tuple(
                     item["initial_tokens"] for item in row["sessions"]))
                 for row in plan["scenarios"]))))

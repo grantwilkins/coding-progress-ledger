@@ -2352,6 +2352,24 @@ rates, and hardware execution measures reconstruction rather than ongoing
 source service. Comparative drain is pending corrected, validated data setup;
 retain the failed run as evidence.
 
+For an eight-session movement experiment that must execute planner-rejected
+sessions, pass `--force-movement` to `network_campaign.py prepare --design drain`.
+The standard profile, workload, and 30-second measurement deadline stay fixed.
+Greedy-admitted actions are retained; missing sessions use a deterministic
+base-profile timing heuristic to choose a method and destination with enough
+profiled free KV capacity. This heuristic balances estimated serialized work;
+all eight requests still dispatch concurrently. Added actions retain
+`deadline_admitted=false` and `forced_movement=true`. Results export separate
+`admitted_*` and `forced_*` action counts alongside totals. This is a hybrid
+movement policy, not an all-admitted greedy plan. The combined reducer rejects
+mixing movement-mode and admission-only arms. Movement mode uses literal token
+streaming, retaining exact token/cache evidence and measured deadline misses.
+The H100 movement plan and 50-episode offline check are in
+`outputs/model-hardware-movement-h100-20260908/`; the run uses
+`/datadrive/dm09` with log `/datadrive/dm09.log`. The offline check selects 315
+admitted actions and 85 forced actions across the 400 movements. These are
+predictions, not completed hardware observations.
+
 `matched_action_campaign.py` is the narrow cross-hardware/cross-model decision
 demonstration. It freezes completed A100 East/Germany frontier scenario
 `4ce7626a1f20a5c3`: eight 16K sessions, 80% requested shed, a 30-second

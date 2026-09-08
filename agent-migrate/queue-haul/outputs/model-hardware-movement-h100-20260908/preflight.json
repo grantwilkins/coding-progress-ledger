@@ -1,0 +1,658 @@
+{
+  "schema": "queue-haul-movement-preflight-v1",
+  "episodes": 50,
+  "profile_sha256": "9f18941768a3eb7854387685c7c2e17209bee30a3c269044ab33843222e5b5bf",
+  "assumption": "idle destinations; runtime capacity is checked again before each episode",
+  "rows": [
+    {
+      "scenario_id": "52ec08bc10c0058f",
+      "pack": "pack-06",
+      "repeat": 0,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "888d2bf470679e79",
+      "pack": "pack-08",
+      "repeat": 0,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "3114c817bf5083f3",
+      "pack": "pack-09",
+      "repeat": 0,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "a0e6353c54e18418",
+      "pack": "pack-07",
+      "repeat": 0,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "0cf60f33566b2552",
+      "pack": "pack-05",
+      "repeat": 0,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "23dddab1942480e5",
+      "pack": "pack-03",
+      "repeat": 0,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "d9756621035bd2fd",
+      "pack": "pack-00",
+      "repeat": 0,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "4a1e02734573d03f",
+      "pack": "pack-04",
+      "repeat": 0,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "6b211618b0d2cb3d",
+      "pack": "pack-01",
+      "repeat": 0,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 3,
+        "east_replay": 1,
+        "east_kv_transfer": 0,
+        "germany_replay": 4
+      }
+    },
+    {
+      "scenario_id": "27463cc152bb7ac9",
+      "pack": "pack-02",
+      "repeat": 0,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "ed360c966dfd8cb6",
+      "pack": "pack-04",
+      "repeat": 1,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "e65fdc063b9a17ef",
+      "pack": "pack-08",
+      "repeat": 1,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "b2867d5ce3ef5aa8",
+      "pack": "pack-02",
+      "repeat": 1,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "b1f8229b3d580eca",
+      "pack": "pack-06",
+      "repeat": 1,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "2f2fcd1a2c430e5c",
+      "pack": "pack-05",
+      "repeat": 1,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "2ea7fd3d4119073b",
+      "pack": "pack-09",
+      "repeat": 1,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "be2a7b975c295e61",
+      "pack": "pack-00",
+      "repeat": 1,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "98150c227ff91a51",
+      "pack": "pack-07",
+      "repeat": 1,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "010dd59c2c83f8bb",
+      "pack": "pack-01",
+      "repeat": 1,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 3,
+        "east_replay": 1,
+        "east_kv_transfer": 0,
+        "germany_replay": 4
+      }
+    },
+    {
+      "scenario_id": "0cd651237b4b9b25",
+      "pack": "pack-03",
+      "repeat": 1,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "7a5f2f6dd163eb6f",
+      "pack": "pack-07",
+      "repeat": 2,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "c80735907b56ea62",
+      "pack": "pack-08",
+      "repeat": 2,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "29cdb67c44f3c573",
+      "pack": "pack-06",
+      "repeat": 2,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "12e7b13808352b22",
+      "pack": "pack-09",
+      "repeat": 2,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "258a22b2ee3869a7",
+      "pack": "pack-05",
+      "repeat": 2,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "5bea31b042ed45a2",
+      "pack": "pack-00",
+      "repeat": 2,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "d451894ce40eb23f",
+      "pack": "pack-02",
+      "repeat": 2,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "cd288898f9729ef5",
+      "pack": "pack-01",
+      "repeat": 2,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 3,
+        "east_replay": 1,
+        "east_kv_transfer": 0,
+        "germany_replay": 4
+      }
+    },
+    {
+      "scenario_id": "14e11a7b5e7f5c33",
+      "pack": "pack-03",
+      "repeat": 2,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "0a7c9882f4a5bf7c",
+      "pack": "pack-04",
+      "repeat": 2,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "b54b18670a6566f1",
+      "pack": "pack-07",
+      "repeat": 3,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "69c105d9c16b5ef9",
+      "pack": "pack-02",
+      "repeat": 3,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "57f7622d42ad2cef",
+      "pack": "pack-08",
+      "repeat": 3,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "76cd230e25f9a28e",
+      "pack": "pack-01",
+      "repeat": 3,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 3,
+        "east_replay": 1,
+        "east_kv_transfer": 0,
+        "germany_replay": 4
+      }
+    },
+    {
+      "scenario_id": "f255692922ef1ad7",
+      "pack": "pack-04",
+      "repeat": 3,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "df773229f0274e0b",
+      "pack": "pack-00",
+      "repeat": 3,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "861d2822cb0eb48c",
+      "pack": "pack-05",
+      "repeat": 3,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "6f64dfc5154175e2",
+      "pack": "pack-09",
+      "repeat": 3,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "31057cb2e6ca8308",
+      "pack": "pack-03",
+      "repeat": 3,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "f34d63a31a3b6220",
+      "pack": "pack-06",
+      "repeat": 3,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "437fb55b84a5ef7f",
+      "pack": "pack-02",
+      "repeat": 4,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "2e51a9786686d137",
+      "pack": "pack-00",
+      "repeat": 4,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "088dd123feeb937e",
+      "pack": "pack-04",
+      "repeat": 4,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "4983ce32789f4494",
+      "pack": "pack-09",
+      "repeat": 4,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "38f667c3ad50b1c3",
+      "pack": "pack-06",
+      "repeat": 4,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "35ba61fdcdb1cee7",
+      "pack": "pack-07",
+      "repeat": 4,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 5,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 1
+      }
+    },
+    {
+      "scenario_id": "eadfb658ba8a3415",
+      "pack": "pack-01",
+      "repeat": 4,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 3,
+        "east_replay": 1,
+        "east_kv_transfer": 0,
+        "germany_replay": 4
+      }
+    },
+    {
+      "scenario_id": "5851b4ece4bf20c7",
+      "pack": "pack-05",
+      "repeat": 4,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    },
+    {
+      "scenario_id": "4b3edc10953a0f96",
+      "pack": "pack-03",
+      "repeat": 4,
+      "admitted": 7,
+      "forced": 1,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 4,
+        "east_kv_transfer": 0,
+        "germany_replay": 0
+      }
+    },
+    {
+      "scenario_id": "c16a246f7390c455",
+      "pack": "pack-08",
+      "repeat": 4,
+      "admitted": 6,
+      "forced": 2,
+      "actions": {
+        "germany_kv_transfer": 4,
+        "east_replay": 2,
+        "east_kv_transfer": 0,
+        "germany_replay": 2
+      }
+    }
+  ]
+}

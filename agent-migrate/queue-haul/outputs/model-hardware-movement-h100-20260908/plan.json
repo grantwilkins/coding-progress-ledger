@@ -1,0 +1,4667 @@
+{
+  "calibration": {
+    "path": "/datadrive/queue-haul-network/control/calibration-h100-westus3-australia-southcentral-001.json",
+    "sha256": "2f694a20c14eb20674a38655d438cb7aadcff3cfb0e7a721b8d006cd0a29da82"
+  },
+  "cluster": {
+    "destinations": [
+      {
+        "host": "10.12.0.4",
+        "id": "east",
+        "region": "australiaeast",
+        "repo_root": "/tmp/qhm09/agent-migrate",
+        "run_root": "/datadrive/queue-haul-network",
+        "ssh_port": 22,
+        "ssh_user": "azureuser"
+      },
+      {
+        "host": "10.13.0.4",
+        "id": "germany",
+        "region": "southcentralus",
+        "repo_root": "/tmp/qhm09/agent-migrate",
+        "run_root": "/datadrive/queue-haul-network",
+        "ssh_port": 22,
+        "ssh_user": "azureuser"
+      }
+    ],
+    "schema": "queue-haul-azure-cluster-v1",
+    "source": {
+      "host": "10.11.0.4",
+      "id": "westus3",
+      "region": "westus3",
+      "repo_root": "/tmp/qhm09/agent-migrate",
+      "run_root": "/datadrive/queue-haul-network",
+      "ssh_port": 22,
+      "ssh_user": "azureuser"
+    }
+  },
+  "conditions": [
+    {
+      "contexts": [
+        30720,
+        31488,
+        31488,
+        30720,
+        14080,
+        30720,
+        30720,
+        31488
+      ],
+      "pack": "pack-00"
+    },
+    {
+      "contexts": [
+        14080,
+        31488,
+        30720,
+        14080,
+        30720,
+        30720,
+        14080,
+        14080
+      ],
+      "pack": "pack-01"
+    },
+    {
+      "contexts": [
+        30720,
+        31488,
+        30720,
+        14080,
+        14080,
+        31488,
+        30720,
+        30720
+      ],
+      "pack": "pack-02"
+    },
+    {
+      "contexts": [
+        31488,
+        30720,
+        14080,
+        14080,
+        14080,
+        30720,
+        14080,
+        31488
+      ],
+      "pack": "pack-03"
+    },
+    {
+      "contexts": [
+        14080,
+        31488,
+        31488,
+        31488,
+        31488,
+        31488,
+        30720,
+        30720
+      ],
+      "pack": "pack-04"
+    },
+    {
+      "contexts": [
+        14080,
+        31488,
+        14080,
+        30720,
+        31488,
+        30720,
+        31488,
+        31488
+      ],
+      "pack": "pack-05"
+    },
+    {
+      "contexts": [
+        31488,
+        30720,
+        14080,
+        14080,
+        31488,
+        31488,
+        31488,
+        31488
+      ],
+      "pack": "pack-06"
+    },
+    {
+      "contexts": [
+        14080,
+        30720,
+        31488,
+        31488,
+        30720,
+        31488,
+        31488,
+        31488
+      ],
+      "pack": "pack-07"
+    },
+    {
+      "contexts": [
+        30720,
+        30720,
+        14080,
+        14080,
+        30720,
+        31488,
+        30720,
+        30720
+      ],
+      "pack": "pack-08"
+    },
+    {
+      "contexts": [
+        30720,
+        14080,
+        30720,
+        14080,
+        14080,
+        30720,
+        14080,
+        31488
+      ],
+      "pack": "pack-09"
+    }
+  ],
+  "design": "drain",
+  "force_movement": true,
+  "manifest": {
+    "path": "/tmp/qhm09/agent-migrate/queue-haul/coding-manifest.json",
+    "sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435"
+  },
+  "model_profile": {
+    "path": "/tmp/qhm09/agent-migrate/queue-haul/profiles/gpt_oss_20b_h100_tp1.json",
+    "sha256": "9f18941768a3eb7854387685c7c2e17209bee30a3c269044ab33843222e5b5bf"
+  },
+  "network_contract": {
+    "aggregate": {
+      "controlled_mbps": {
+        "40": 4900,
+        "80": 9800
+      },
+      "natural_mbps": 12322.282702439763
+    },
+    "paths": {
+      "east": {
+        "controlled_mbps": {
+          "40": 600,
+          "80": 1200
+        },
+        "natural_mbps": 1512.6771092106105,
+        "rtt_ms": 142.0
+      },
+      "germany": {
+        "controlled_mbps": {
+          "40": 4300,
+          "80": 8600
+        },
+        "natural_mbps": 10811.283731372238,
+        "rtt_ms": 18.1
+      }
+    },
+    "schema": "queue-haul-network-contract-v1"
+  },
+  "policies": [
+    "greedy"
+  ],
+  "repeats": 5,
+  "scenarios": [
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-06",
+      "condition_index": 6,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-06",
+      "planner_seed": 14286857514171740022,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "52ec08bc10c0058f",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-08",
+      "condition_index": 8,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-08",
+      "planner_seed": 15018845399422828841,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "888d2bf470679e79",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-09",
+      "condition_index": 9,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-09",
+      "planner_seed": 16396138382109898517,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "3114c817bf5083f3",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-07",
+      "condition_index": 7,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-07",
+      "planner_seed": 14961876280499470147,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "a0e6353c54e18418",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-05",
+      "condition_index": 5,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-05",
+      "planner_seed": 12718922498914662583,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "0cf60f33566b2552",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-03",
+      "condition_index": 3,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-03",
+      "planner_seed": 4166430916828810875,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "23dddab1942480e5",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-00",
+      "condition_index": 0,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-00",
+      "planner_seed": 15240081888365576333,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "d9756621035bd2fd",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-04",
+      "condition_index": 4,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-04",
+      "planner_seed": 4605285001531924955,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "4a1e02734573d03f",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-01",
+      "condition_index": 1,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-01",
+      "planner_seed": 14999686281931423746,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "6b211618b0d2cb3d",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-02",
+      "condition_index": 2,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-02",
+      "planner_seed": 8260681228058605578,
+      "policy": "greedy",
+      "repeat": 0,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "27463cc152bb7ac9",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 0,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-04",
+      "condition_index": 4,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-04",
+      "planner_seed": 16790584452258078534,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "ed360c966dfd8cb6",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-08",
+      "condition_index": 8,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-08",
+      "planner_seed": 17445592612101131535,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "e65fdc063b9a17ef",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-02",
+      "condition_index": 2,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-02",
+      "planner_seed": 8487987575424874657,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "b2867d5ce3ef5aa8",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-06",
+      "condition_index": 6,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-06",
+      "planner_seed": 5002180928741270909,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "b1f8229b3d580eca",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-05",
+      "condition_index": 5,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-05",
+      "planner_seed": 16523147664231629359,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "2f2fcd1a2c430e5c",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-09",
+      "condition_index": 9,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-09",
+      "planner_seed": 4605051758379416468,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "2ea7fd3d4119073b",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-00",
+      "condition_index": 0,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-00",
+      "planner_seed": 17861871215628170537,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "be2a7b975c295e61",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-07",
+      "condition_index": 7,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-07",
+      "planner_seed": 4053909316946578481,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "98150c227ff91a51",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-01",
+      "condition_index": 1,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-01",
+      "planner_seed": 7015785938381130430,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "010dd59c2c83f8bb",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-03",
+      "condition_index": 3,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-03",
+      "planner_seed": 553047307246150904,
+      "policy": "greedy",
+      "repeat": 1,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "0cd651237b4b9b25",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 1,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-07",
+      "condition_index": 7,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-07",
+      "planner_seed": 353814279256168154,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "7a5f2f6dd163eb6f",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-08",
+      "condition_index": 8,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-08",
+      "planner_seed": 3503990070248774174,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "c80735907b56ea62",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-06",
+      "condition_index": 6,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-06",
+      "planner_seed": 2730122978714106486,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "29cdb67c44f3c573",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-09",
+      "condition_index": 9,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-09",
+      "planner_seed": 2036851841948770449,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "12e7b13808352b22",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-05",
+      "condition_index": 5,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-05",
+      "planner_seed": 9707348304032076497,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "258a22b2ee3869a7",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-00",
+      "condition_index": 0,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-00",
+      "planner_seed": 5040348596604747785,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "5bea31b042ed45a2",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-02",
+      "condition_index": 2,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-02",
+      "planner_seed": 10503071109141622844,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "d451894ce40eb23f",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-01",
+      "condition_index": 1,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-01",
+      "planner_seed": 4554369310791352024,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "cd288898f9729ef5",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-03",
+      "condition_index": 3,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-03",
+      "planner_seed": 3122107008850701208,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "14e11a7b5e7f5c33",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-04",
+      "condition_index": 4,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-04",
+      "planner_seed": 17359638669308471287,
+      "policy": "greedy",
+      "repeat": 2,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "0a7c9882f4a5bf7c",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 2,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-07",
+      "condition_index": 7,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-07",
+      "planner_seed": 7363369304936611202,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "b54b18670a6566f1",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-02",
+      "condition_index": 2,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-02",
+      "planner_seed": 2391810499511553690,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "69c105d9c16b5ef9",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-08",
+      "condition_index": 8,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-08",
+      "planner_seed": 931109681279272365,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "57f7622d42ad2cef",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-01",
+      "condition_index": 1,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-01",
+      "planner_seed": 9208848883555007836,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "76cd230e25f9a28e",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-04",
+      "condition_index": 4,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-04",
+      "planner_seed": 12466224750947970541,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "f255692922ef1ad7",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-00",
+      "condition_index": 0,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-00",
+      "planner_seed": 2948575225719503701,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "df773229f0274e0b",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-05",
+      "condition_index": 5,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-05",
+      "planner_seed": 17116889428606704963,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "861d2822cb0eb48c",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-09",
+      "condition_index": 9,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-09",
+      "planner_seed": 16156299761017942385,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "6f64dfc5154175e2",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-03",
+      "condition_index": 3,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-03",
+      "planner_seed": 17912956693544560666,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "31057cb2e6ca8308",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-06",
+      "condition_index": 6,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-06",
+      "planner_seed": 13807069640843234248,
+      "policy": "greedy",
+      "repeat": 3,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "f34d63a31a3b6220",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 3,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-02",
+      "condition_index": 2,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-02",
+      "planner_seed": 544056109999819100,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "437fb55b84a5ef7f",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-00",
+      "condition_index": 0,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-00",
+      "planner_seed": 200316104530303607,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "2e51a9786686d137",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-04",
+      "condition_index": 4,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-04",
+      "planner_seed": 13138348079721626296,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "088dd123feeb937e",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-09",
+      "condition_index": 9,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-09",
+      "planner_seed": 9054572727920707777,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "4983ce32789f4494",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-06",
+      "condition_index": 6,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-06",
+      "planner_seed": 2197371194418014239,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "38f667c3ad50b1c3",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-07",
+      "condition_index": 7,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-07",
+      "planner_seed": 9943621640914373780,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "35ba61fdcdb1cee7",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-01",
+      "condition_index": 1,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-01",
+      "planner_seed": 17998715311058908011,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "eadfb658ba8a3415",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-05",
+      "condition_index": 5,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-05",
+      "planner_seed": 13807298713965912795,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "5851b4ece4bf20c7",
+      "sessions": [
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-03",
+      "condition_index": 3,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-03",
+      "planner_seed": 10696591990499110190,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "4b3edc10953a0f96",
+      "sessions": [
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ],
+        "germany": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": {
+        "east": 600,
+        "germany": 4300
+      },
+      "condition_id": "pack-08",
+      "condition_index": 8,
+      "deadline_s": 30,
+      "design": "drain",
+      "force_movement": true,
+      "pack": "pack-08",
+      "planner_seed": 13664534080341087397,
+      "policy": "greedy",
+      "repeat": 4,
+      "requested_shed_fraction": 1.0,
+      "scenario_id": "c16a246f7390c455",
+      "sessions": [
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 2,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 14080,
+          "job_class": "coding",
+          "order": 3,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 4,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 31488,
+          "job_class": "coding",
+          "order": 5,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 6,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        },
+        {
+          "initial_tokens": 30720,
+          "job_class": "coding",
+          "order": 7,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "source_load": 0.8,
+      "stack_block": 4,
+      "workload": "agentic_tool_loop"
+    }
+  ],
+  "schema": "queue-haul-network-plan-v2",
+  "seed": 1,
+  "sessions_per_scenario": 8
+}

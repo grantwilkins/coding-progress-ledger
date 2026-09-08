@@ -31,7 +31,7 @@ from destination_runner import MetricsSampler, _completion, exact_completion
 from destination import (DestinationArchitecture, DestinationPool,
                          DestinationReplica, MigrationComponents,
                          dedicated_sink_architecture)
-from planner import _expected_scenario, plan as solve, source_power
+from planner import _duration, _expected_scenario, plan as solve, source_power
 from pool_planner import candidate_table, phase_one_capacity_duals
 from power_model import ExpectedPower
 from prefill_gateway import CONTROL_PATH as PREFILL_CONTROL_PATH, PrefillGateway
@@ -963,6 +963,8 @@ def validate_plan(plan: dict) -> None:
         return
     if design == "drain":
         contract = plan["network_contract"]
+        if type(plan.get("force_movement", False)) is not bool:
+            raise ValueError("force_movement must be boolean")
         groups = {}
         for row in scenarios:
             groups.setdefault(row["condition_index"], set()).add(tuple(
@@ -971,6 +973,7 @@ def validate_plan(plan: dict) -> None:
             if row["scenario_id"] != _hash([
                     design, row["condition_index"], row["repeat"],
                     row["sessions"]])[:16] \
+                    or row.get("force_movement", False) != plan.get("force_movement", False) \
                     or row["policy"] != "greedy" \
                     or row["bandwidth"] != "controlled_40" \
                     or row["bandwidth_mbps"] != _bandwidths(
@@ -2144,9 +2147,36 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     planned = list(result.moves)
     admitted = {move.session_id for move in planned}
     missing = tuple(row for row in problem.sessions if row.session_id not in admitted)
-    if missing and scenario.get("design") == "drain":
+    force = scenario.get("design") == "drain" and scenario.get("force_movement", False)
+    if missing and scenario.get("design") == "drain" and not force:
         raise RuntimeError("greedy plan cannot drain all sessions by 30 seconds")
-    if missing and not partial:
+    if missing and force:
+        links = {link.link_id: link.bytes_per_s for link in problem.links}
+        sessions = {row.session_id: row for row in problem.sessions}
+        work = {node: 0.0 for node in scenario["bandwidth_mbps"]}
+        free = {node: int(profile.kv_capacity_tokens * (1 - snapshots[node]["kv_fraction"]))
+                for node in work}
+        for move in planned:
+            work[move.destination_instance] += _duration(
+                sessions[move.session_id], move.method, profile.case(), move.path, links)
+            free[move.destination_instance] -= profile.kv_admission_tokens(
+                sessions[move.session_id].context_tokens + 128)
+        for session in missing:
+            tokens = profile.kv_admission_tokens(session.context_tokens + 128)
+            choices = [
+                (work[node] + _duration(session, method, profile.case(), path, links),
+                 node, method, path)
+                for node in sorted(work) if free[node] >= tokens
+                for path in [routes[session.source_instance, node]]
+                for method in ("replay", "kv_transfer")]
+            if not choices:
+                raise RuntimeError("forced movement exceeds destination KV capacity")
+            duration, node, method, path = min(choices)
+            planned.append(PlannedMove(session.session_id, node, method, len(planned),
+                                       path, destination_pool=f"pool/{node}"))
+            work[node] = duration
+            free[node] -= tokens
+    elif missing and not partial:
         late = replace(problem, sessions=missing, deadline_s=600, end_s=600)
         planned.extend(replace(move, order=move.order + len(planned)) for move in solve(
             late, profile, routes, solver, seed=seed, destination=architecture,
@@ -2161,6 +2191,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
         "planned_rate_limit_bytes_per_s": move.rate_limit_bytes_per_s,
         "planned_quiesce_s": move.quiesce_s,
         "deadline_admitted": move.session_id in admitted,
+        **({"forced_movement": move.session_id not in admitted} if force else {}),
     } for move in planned]
     if not partial and {row["session_id"] for row in moves} != {
             row["session_id"] for row in scenario["sessions"]}:
@@ -4402,7 +4433,8 @@ def _valid_drain_evidence(scenario: dict, result: dict) -> bool:
         testbed.model_campaign_config(profile.model))
     return len(moves) == len(targets) == 8 \
         and {row["session_id"] for row in moves} == set(targets) \
-        and all(row.get("deadline_admitted") and "request" in row
+        and all((row.get("deadline_admitted") or scenario.get("force_movement")
+                 and row.get("forced_movement") is True) and "request" in row
                 and row["request"].get("exact_token_timestamps")
                 and row["request"].get("done")
                 and row["request"].get("finish_reason") == "length"
@@ -4599,7 +4631,14 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
                 and row.get("output_tokens", 0) > 1]
         actions = (_constraint_action_counts(moves) if drain and moves
                    else dict.fromkeys(CONSTRAINT_ACTIONS, ""))
+        if drain:
+            actions.update({f"{kind}_{action}": value if moves else ""
+                            for kind, flag in (("admitted", "deadline_admitted"),
+                                               ("forced", "forced_movement"))
+                            for action, value in _constraint_action_counts(
+                                [move for move in moves if move.get(flag)]).items()})
         rows.append({
+            **({"force_movement": scenario.get("force_movement", False)} if drain else {}),
             "scenario_id": scenario["scenario_id"],
             "plan_order": plan_order,
             "condition_index": scenario["condition_index"],
@@ -4848,6 +4887,7 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                     kv_capacity_fraction=scenario.get(
                         "kv_capacity_fraction"),
                     model=model,
+                    literal_token_timing=bool(scenario.get("force_movement")),
                 )
             if timing_only:
                 stack.cfg = replace(stack.cfg, timing_only=True)
@@ -4892,13 +4932,19 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
 
 def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
             out: Path, seed: int = 1, sessions: int = 8,
-            design: str = "joint") -> dict:
+            design: str = "joint", force_movement: bool = False) -> dict:
+    if force_movement and design != "drain":
+        raise ValueError("force_movement requires a drain design")
     cluster = Cluster.load(cluster_path)
     calibration = json.loads(calibration_path.read_text())
     if design == "drain":
         validate_calibration_cluster(calibration, cluster)
     plan = make_plan(manifest_path, freeze_contract(calibration), seed, sessions,
                      design)
+    if force_movement:
+        plan["force_movement"] = True
+        for scenario in plan["scenarios"]:
+            scenario["force_movement"] = True
     plan["cluster"] = cluster.as_dict()
     plan["calibration"] = {
         "path": str(calibration_path),
@@ -4926,6 +4972,8 @@ def parse_args(argv=None):
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--seed", type=int, default=1)
     command.add_argument("--sessions", type=int, default=8)
+    command.add_argument("--force-movement", action="store_true",
+                         help="execute all eight drain moves, marking planner-rejected fallbacks")
     command.add_argument("--design",
                          choices=("joint", "isolated", "frontier", "constraint",
                                   "separation", "drain"),
@@ -5031,7 +5079,7 @@ def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
         prepare(args.cluster, args.calibration, args.manifest, args.out,
-                args.seed, args.sessions, args.design)
+                args.seed, args.sessions, args.design, args.force_movement)
     elif args.command == "node-check":
         print(json.dumps(node_report(), sort_keys=True))
     elif args.command == "check":
