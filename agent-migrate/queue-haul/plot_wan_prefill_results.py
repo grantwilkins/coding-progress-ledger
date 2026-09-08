@@ -117,9 +117,9 @@ def plot(source, out):
         ax.xaxis.labelpad = 2
         ax.grid(axis="x", alpha=.2, linewidth=.5)
         ax.set_axisbelow(True)
-        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.5, .02),
-                   ncol=2, frameon=False, fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE,
-                   handlelength=1.3, handletextpad=.5, columnspacing=1, labelspacing=.3)
+        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.64, .02),
+                   ncol=2, frameon=False, fontsize=6,
+                   handlelength=.9, handletextpad=.4, columnspacing=.7, labelspacing=.3)
         fig.subplots_adjust(left=.36, right=.92, bottom=.31, top=.86)
         for suffix in ("png", "pdf"):
             fig.savefig(out / f"{campaign}_action_mix.{suffix}")
