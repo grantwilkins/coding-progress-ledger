@@ -38,12 +38,22 @@ def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypa
     assert chosen[1] == 0
 
 
-def test_loaded_coding_secondary_face_solves_without_presolve_failure():
+@pytest.mark.parametrize('wan,deadline', [(100, 30), (400, 600)])
+def test_loaded_coding_secondary_face_solves_without_backend_failure(wan, deadline):
     from pool_shed_campaign import GPUS, initial_admission
 
-    chosen, _, info = initial_admission('coding', 0, GPUS, 8, .25, 100, 30, False, 'isolated_fastest', 1., 3)
+    chosen, _, info = initial_admission('coding', 0, GPUS, 8, .25, wan, deadline, False, 'isolated_fastest', 1., 3)
     assert chosen.sum() > 0
     assert info['max_relative_residual'] <= 1e-8
+
+
+def test_secondary_lp_rejects_a_lost_primary_even_with_optimal_status(monkeypatch):
+    import pool_shed_campaign as campaign
+
+    monkeypatch.setattr(campaign, 'linprog', lambda *args, **kwargs: SimpleNamespace(success=True, x=np.zeros(1)))
+    table = SimpleNamespace(matrix=np.ones((1, 1)), capacities=np.ones(1), gains=np.ones(1), fleet=SimpleNamespace(gpus=1))
+    with pytest.raises(RuntimeError, match='preserve the primary'):
+        campaign.solve_lp(table, np.array([True]), np.ones(1), primary=.5)
 
 
 def case(deadline=20.):

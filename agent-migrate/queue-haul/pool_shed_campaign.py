@@ -367,9 +367,8 @@ def solve_lp(table, allowed, objective, primary=None):
         constraints = np.vstack((constraints, -primary_row / primary_scale))
         limits = np.r_[limits, -max(0., primary - PRIMARY_TOL) / primary_scale]
     result = linprog(cost / max(abs(cost).max(), 1e-30), A_ub=csr_matrix(constraints), b_ub=limits,
-                     bounds=np.c_[np.zeros(len(ids)), upper], method="highs-ipm",
-                     options={"presolve": False, "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9,
-                              "ipm_optimality_tolerance": 1e-12})
+                     bounds=np.c_[np.zeros(len(ids)), upper], method="highs-ds",
+                     options={"presolve": False, "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9})
     if not result.success:
         raise RuntimeError(result.message)
     if np.min(result.x) < -1e-9:
@@ -377,6 +376,8 @@ def solve_lp(table, allowed, objective, primary=None):
     chosen[ids] = np.maximum(result.x, 0) * table.fleet.gpus / column_scale
     if np.max((table.matrix @ chosen - table.capacities) / np.maximum(table.capacities, 1)) > 1e-8:
         raise RuntimeError("LP returned an infeasible resource allocation")
+    if primary is not None and table.gains @ chosen < primary - PRIMARY_TOL - 1e-8:
+        raise RuntimeError("LP failed to preserve the primary objective")
     return chosen
 
 
