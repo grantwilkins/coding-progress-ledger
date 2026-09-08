@@ -229,7 +229,31 @@ under the assumed proportional WAN budget; QH uses KV. With 40 Gbit/s total WAN,
 both reach 7.11 MW and QH uses no KV. These are experimental scenario comparisons,
 not validated fleet predictions or evidence of an available WAN allocation.
 
-For a compact bottleneck illustration, run `uv run python plot_pool_shed_bottleneck.py`.
+For the **full-fleet, longer-deadline** diagnostic, run
+`uv run python pool_shed_long_context.py`. It retains the 66,666-GPU source and
+both equal destinations at 50% resident load, comparing the original coding
+population with 24K–32K existing cohorts at eight and sixteen sessions/GPU.
+The long-context populations reweight supported cohorts from each original
+snapshot; they are declared stress cases, not the natural trace distribution.
+Cadence is adjusted to preserve source reference load. Sixteen sessions/GPU
+uses 45.6–49.2% of resident KV capacity across snapshots; destination admission
+also checks imported KV and serving demand. No replay slowdown multiplier is added.
+
+`outputs/a100-full-fleet-long-context/` contains the input/provenance report,
+paired results, and plots at 400, 40,000, and 333,360 Gbit/s assumed shared WAN.
+At the existing largest WAN scenario, the sixteen-session long-context case
+has median QH LP/replay shed of **87.3%/75.4% at 20 seconds**, **94.6%/83.3%
+at 25 seconds**, and **99.6%/91.7% at 30 seconds**, across four snapshots and
+nine central/resampled calibrations. QH also exceeds the optimistic replay
+GPU-time relaxation in every case at these three deadlines. Replay catches
+up by 45 seconds. Greedy does not consistently beat replay in this stress case.
+The smaller WAN controls retain the KV-volume bottleneck; no large gain is
+established with a few hundred Gbit/s. The regional timing gate still fails,
+and above-16K batch serialization remains a modeling transfer. Increasing density
+beyond sixteen would require extending the one-batch-per-replica library to
+avoid an artificial permanent replay ceiling.
+
+For the earlier **small-pool** illustration, run `uv run python plot_pool_shed_bottleneck.py`.
 It reuses the pinned campaign calibration and writes
 `outputs/a100-pool-shed-bottleneck/{bottleneck.png,bottleneck.pdf,example.json,sensitivity.csv}`.
 The measured-pack case sheds a **64-GPU pool**, with 64 GPUs per destination,
