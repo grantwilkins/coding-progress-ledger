@@ -72,17 +72,23 @@ Calibration reuses existing data only. Regional component fits use the fixed
 53 pure-action training episodes; mixed cases do not fit policy multipliers.
 The independent executor is checked against the fixed 24 regional episodes using
 the original MAE <= 3 s and R² >= 0.8 gates, and against 220 loaded-replay
-holdouts. Regional results are retrospective reuse of an inspected partition.
+holdouts. Regional executor MAE is 1.243 s, R² is 0.9854, and one case is
+false-feasible at 25 s. Loaded holdouts have 2.28% p90 relative error and no
+false-feasible 25 s cases. Regional results are retrospective reuse of an
+inspected partition.
 Fixed-context timing checks do not establish fleet-scale fidelity, dynamic
-admission accuracy or a long-context serving SLO. Validation also compares dispatch resolutions using fixed central plans in
+admission accuracy or a long-context serving SLO. Validation also compares
+dispatch resolutions using fixed central plans in
 24 representative scenarios. The campaign uses 32 pieces per action/cohort;
 32 versus 128 pieces changes shed by at most 1.83 percentage points and a
 QH-versus-baseline gap by at most 1.66 points on that grid. This numerical
 sensitivity is separate from measurement intervals; narrow policy advantages
 need a finer-resolution check.
-Validation reports preserve per-action errors and false-feasible deadline counts. Resident completion loss
+Validation reports preserve per-action errors and false-feasible deadline
+counts. Resident completion loss
 during replay is fitted from 31 initially unbacklogged regional routes in 23
-episodes at offered loads 0.25 and 0.50 (central loss 89.65%). Independent engine debt at handoff has MAE
+episodes at offered loads 0.25 and 0.50 (central loss 89.65%). Independent engine
+debt at handoff has MAE
 0.847 requests / normalized MAE 3.29% across six validation routes. This measures
 completion-throughput loss, not GPU occupation; recovery under continued arrivals
 and transfer to other resident mixtures remain model assumptions.
@@ -99,7 +105,11 @@ uv run python pool_shed_campaign.py run --out outputs/a100-pooled-execution
 uv run python pool_shed_campaign.py reduce --out outputs/a100-pooled-execution
 ```
 
-The campaign grid evaluates **11,250 scenarios / 56,250 policy results**.
+The completed campaign evaluates **11,250 scenarios / 56,250 policy results**
+in 18.8 minutes with eight process shards (19.5 minutes including reduction and
+16 PNG/PDF figure pairs). All **87 focused tests** pass. The measured-pack
+scaling check evaluates all five methods in about 0.22 s at both 6,400 and
+640,000 GPUs, with identical results. Validation adds two figure pairs.
 Handoff and service recovery are separate outputs: source-power completion does
 not imply an empty queue. `--require-recovery` on `prepare` adds nominal recovery
 budgets, but only execution establishes whether selected migrations and their
@@ -107,6 +117,25 @@ debt clear by the deadline. The default metric remains completed handoff.
 Nominal forecasts use isolated timing; pooled queues can change quiescence,
 context resets and final-copy costs, so planned dominance does not guarantee
 executed dominance. Maximum source-power credit is approximately **11.935 MW**.
+
+The independent full-grid audit finds no conservation, capacity, event-time,
+provenance or nominal-containment violations. QH selects KV in **9,765** cells
+and completes KV in **9,279**; **486** select KV but complete none. Replay still
+beats QH in executed handoff in **8,830** cells, including **1,803** losses larger
+than two percentage points. These are reported planning/dispatch outcomes, not
+removed by a baseline fallback. The two-point category is a magnitude threshold,
+not a global numerical error bound. Late source growth and shared replay compute
+can invalidate isolated timing forecasts; gross-debt minimization also does not
+optimize regional recovery headroom. This campaign does not establish that the
+nominal LP maximizes executed shed.
+
+Replay reaches full handoff with unresolved serving work in **2,951** cells.
+For coding snapshot 0, load 0.5 and 1000 Gbps, replay hands off everything but
+leaves about 624,293 reference GPU-seconds of resident debt and transferred
+buffer work even at 3600 s. Greedy balances the destinations and recovers by
+80.87 s. At 3600 s QH hands off 74.49%, with 57.93% of source workload using KV;
+its remaining migrations exhaust the shared WAN. `critic-audit.json` records
+both the accounting checks and these optimizer limitations.
 
 Buffered serving work drains only within the advertised reference headroom;
 its utilization enters the measured migration slowdown. Source-held buffers,
