@@ -2334,9 +2334,23 @@ The staged executor is an unchanged snapshot of source commit
 vLLM 0.22.0 and LMCache 0.5.1. The standard profile retains A100-derived timing
 estimates alongside measured H100 compute/power values; it is not a newly
 validated H100 timing fit. Compare its four action-count columns only after
-the A100 run finishes and its manifest/context packs have been matched.
+the A100 run finishes and its manifest/context packs, load definition, and
+runtime/timing assumptions have been checked for comparability.
 The strict model/hardware reducer still requires gated profiles; this run's
 episode table is produced by the network executor.
+
+This run stopped before migration: zero completed episodes, one planner
+admission failure, and 49 unrun episodes. It produced no measured action mix.
+The independent setup review is recorded in
+`outputs/model-hardware-drain-h100-20260908/audit.json`. The standard H100
+profile's context service and migration tables are inherited A100 estimates.
+Aggregate anchor throughput and context-conditioned service throughput are different
+quantities; substituting a constant aggregate rate is not a validated fix.
+Timing collection and drain must also use matching scheduling/streaming flags.
+The existing contract matches relative aggregate load, not absolute arrival
+rates, and hardware execution measures reconstruction rather than ongoing
+source service. Comparative drain is pending corrected, validated data setup;
+retain the failed run as evidence.
 
 `matched_action_campaign.py` is the narrow cross-hardware/cross-model decision
 demonstration. It freezes completed A100 East/Germany frontier scenario

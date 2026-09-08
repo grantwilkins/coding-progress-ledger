@@ -1,0 +1,55 @@
+{
+  "schema": "queue-haul-drain-setup-audit-v1",
+  "status": "not_ready_for_comparative_drain",
+  "failed_run": "/datadrive/dh-0908",
+  "observed_progress": {"completed": 0, "failed": 1, "unrun": 49},
+  "failure_stage": "planner admission before session warming and migration",
+  "manifest_sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435",
+  "shared_design": {
+    "seed": 1,
+    "context_packs": 10,
+    "repeats": 5,
+    "sessions_per_episode": 8,
+    "context_tokens": [14080, 30720, 31488],
+    "deadline_s": 30,
+    "policy": "greedy",
+    "bandwidth": "controlled_40",
+    "modeled_source_load": 0.8,
+    "load_definition": "relative aggregate F/G load; absolute offered token demand differs by profile",
+    "hardware_endpoint": "concurrent reconstruction of warmed sessions; ongoing offered demand and power attainment are modeled"
+  },
+  "findings": [
+    "The standard H100 profile inherits A100 context service and migration timing tables.",
+    "Aggregate anchor throughput differs legitimately from context-conditioned service throughput; flattening the context curves is not a validated correction. The inherited decode curve itself uses aggregate measurements across concurrency levels.",
+    "The separate contextual admission envelope rejects two first-pack sessions; the error does not establish a measured migration deadline failure.",
+    "Normalizing demand against contextual throughput instead would change the workload contract and must not be done only on H100.",
+    "The timing collector enables literal token timing and disables asynchronous scheduling; drain currently does not.",
+    "The historical H100 timing regression failed its separate live pilot validation and is not a validated replacement.",
+    "A100 is collecting regional calibration before its queued drain run; its prospective profile also combines aggregate normalization with contextual admission.",
+    "Physical network routes and vLLM versions differ across hardware arms. The comparison is a configuration comparison, not an isolated hardware-speed experiment."
+  ],
+  "required_measurements": {
+    "scope": "Initial route timing calibration, not validation of timing tails or concurrent eight-session capacity",
+    "bandwidth": "controlled_40",
+    "context_tokens": [14080, 30720, 31488],
+    "methods": ["replay", "kv_transfer"],
+    "h100_destination_regions": ["australiaeast", "southcentralus"],
+    "repeats": [0, 1, 2],
+    "route_timing_rows": 36,
+    "fit_repeats": [0, 1],
+    "validation_repeats": [2],
+    "runtime_prerequisite": "Explicitly match calibration and drain scheduling, token streaming, model revision, KV representation and launch flags before collecting calibration.",
+    "evidence": ["runtime identity", "exact prompt and output token counts", "token timestamps", "TTFT", "mean TPOT", "cached tokens", "KV and API bytes", "failure records"],
+    "capacity_prerequisite": "Document the admission model and audit every pack offline. Standard estimates remain permitted for explicitly exploratory runs. Validated physical-capacity claims require measurements at the actual contexts and eight-session configuration; single-request TPOT is not aggregate capacity.",
+    "timing_interpretation": "Route-inclusive TTFT is not pure GPU prefill time; do not count route overhead twice."
+  },
+  "before_relaunch": [
+    "Resolve the missing repository-required research-test-creator skill before source changes.",
+    "Match timing and drain runtime flags and retain complete measurement evidence.",
+    "Freeze profiles, workload/load definition, runtime identities and network contracts for both arms.",
+    "Audit all ten packs offline, retaining demand, service utilization, candidate rejection reasons and selected actions.",
+    "Check the same policy against the queued A100 configuration without interrupting its calibration.",
+    "Run regression tests and independent critic review; use a fresh output root and retain the failed run."
+  ],
+  "critic_reviews": ["model_critic", "experiment_critic", "a100_critic"]
+}
