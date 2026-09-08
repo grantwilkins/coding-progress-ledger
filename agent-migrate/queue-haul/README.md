@@ -79,6 +79,25 @@ uv run python pool_shed_campaign.py run --out outputs/a100-pooled-execution
 uv run python pool_shed_campaign.py reduce --out outputs/a100-pooled-execution
 ```
 
+The completed campaign evaluates **11,250 scenarios / 56,250 policy results**
+and writes 15 PNG/PDF figure pairs. The 66 focused tests pass. Regional executor
+validation has MAE **1.243 s**, R² **0.9854**, and one false-feasible 25-second
+case; the 220 loaded holdouts have p90 relative error **2.28%**, with none.
+
+The raw LP underperforms replay during execution in **799 scenarios** despite
+planned dominance. In **540 QH scenarios**, KV is selected but none finishes by
+the deadline. Source-power completion also does not imply an empty queue:
+**4,818 policy evaluations** reach full shed with buffered work pending. These
+are recorded outcomes, not hidden baseline fallbacks. The initial-phase planning
+relaxation omits live catch-up, and tied batching/routing choices can execute
+differently. Maximum source-power credit is approximately **11.935 MW**.
+
+Buffered serving work drains only within the advertised reference headroom;
+its utilization enters the measured migration slowdown. At full offered load,
+queue debt can persist. This does not establish incoming-request latency or
+resident SLOs. Applying the measured load response above its 0.975 training
+limit, up to 1.0, is a small explicit extrapolation.
+
 Use `--smoke` with `prepare` for a small grid. `run --shard N --shards K` supports
 independent process shards and validated checkpoint resume. Source hashes prevent
 mixing results across code or calibration changes. Reduction writes executed

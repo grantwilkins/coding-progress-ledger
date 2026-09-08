@@ -693,7 +693,8 @@ def plot(summary, out):
             field = "planned_action_fractions_mean" if scope == "planned" else "action_fractions_mean"
             ax.stackplot([r["deadline_s"] for r in series], np.array([r[field] for r in series]).T,
                          labels=[plot_style.ACTION_NAMES[a] for a in ACTIONS], colors=[plot_style.ACTION_COLORS[a] for a in ACTIONS])
-            ax.set(title=f"{workload.replace('_', ' ')}; {scope}\n{plot_style.POLICY_NAMES[policy]}", xscale="log", xlabel="Deadline (s)", ylim=(0, 1))
+            ax.set(title=f"{workload.replace('_', ' ')}\n{scope}: {plot_style.POLICY_NAMES[policy]}", xscale="log", xlabel="Deadline (s)", ylim=(0, 1))
+            ax.title.set_fontsize(8)
         fig.supylabel("Source workload fraction: selected vs completed")
         network_label = f"{wan / 1000:g} Tbit/s" if isinstance(wan, (int, float)) and wan >= 1000 else f"{wan} Gbit/s" if wan != "reference" else "measured reference"
         fig.suptitle(f"Action breakdown; resident load {load:g}; WAN budget {network_label}\nIndependent pooled execution; fleet transfer assumptions apply")
