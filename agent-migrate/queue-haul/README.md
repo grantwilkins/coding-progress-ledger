@@ -2693,3 +2693,16 @@ bars show percentile 95% bootstrap confidence intervals for mean replay share,
 using 10,000 whole-episode resamples within each class/policy (seed 0). They
 include variation across pooled cases, not just repeat noise within a case.
 These are descriptive episode ECDFs, not evidence of a causal prefill transition.
+
+`uv run python plot_wan_prefill_tradeoff.py` writes separate
+`wan_action_attainment` and `prefill_action_attainment` PDFs/PNGs plus
+`action_attainment.csv` in the same `pooled/` directory. Each point averages
+13 episodes of one case and policy. The x-axis is KV transfer as a percentage
+of selected actions; the y-axis is time to the requested full power reduction.
+The frozen target requires all eight sessions, so attainment is the last
+successful completion plus the five-second power window. This agrees with
+archived on-time attainment and extends late completions beyond 30 seconds.
+The horizontal 30-second line marks the deadline. A shaded categorical
+“Not met” row retains policies that leave sessions unselected or unfinished;
+it is not a finite attainment time. Replay-only and KV-only remain at 0% and
+100% KV share. Colors and distinct policy markers come from `plot_style.py`.

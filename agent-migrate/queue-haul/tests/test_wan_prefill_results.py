@@ -30,3 +30,23 @@ def test_action_interval_resamples_episodes_and_preserves_constant_mix():
     lo, hi = replay_interval([row(0)] * 13 + [row(8)] * 13, "wan", "greedy")
     assert 0 <= lo < .5 < hi <= 1
     assert hi - lo > .25
+
+
+def test_action_attainment_keeps_late_targets_and_partial_plan_endpoints():
+    from plot_wan_prefill_tradeoff import episode_point
+
+    pack = dict(sessions=[dict(session_id=str(i)) for i in range(8)],
+                power_gains=[0] * 255 + [156])
+    decisions = [dict(session_id=str(i), action="kv_transfer", completion_s=25, error=None)
+                 for i in range(8)]
+    row = dict(decisions=json.dumps(decisions), target_time_s="30", deadline_s="30",
+               target_attained="True")
+    assert episode_point(row, pack, 156, 5) == (100, 30)
+    decisions[-1]["completion_s"] = 31
+    row.update(decisions=json.dumps(decisions), target_time_s="", target_attained="False")
+    assert episode_point(row, pack, 156, 5) == (100, 36)
+    row["decisions"] = json.dumps(decisions[:4])
+    assert episode_point(row, pack, 156, 5) == (100, None)
+    row["target_attained"] = "True"
+    with pytest.raises(ValueError, match="deadline attainment"):
+        episode_point(row, pack, 156, 5)
