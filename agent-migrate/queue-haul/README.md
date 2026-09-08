@@ -106,6 +106,43 @@ cover unmeasured model error.
 Feedback can change later admissions across draws even though the forecast
 calibration and observation rules are identical.
 
+The completed v7 campaign took 89.9 minutes on eight workers; all 111 relevant
+tests pass. Results include [deadline versus shed](outputs/a100-pooled-feedback/shed-400.png),
+[admitted/completed actions](outputs/a100-pooled-feedback/actions-1000-0.5.png),
+and [remaining resident debt](outputs/a100-pooled-feedback/resident-debt.png).
+There is no meaningful median QH handoff advantage over replay-only at deadlines
+of 30 seconds or longer in this grid. A matched-shed debt benefit appears in the
+coding workload at 95% load, 1000 Gbit/s, and 300 seconds: both methods have median
+shed of 1.492 MW, while QH has 12,028 reference GPU-seconds of remaining resident
+debt versus replay-only's 23,137 (48% less). Debt medians cover paired execution
+draws and four coding snapshots; shed also incorporates measured power samples.
+
+These are handoff results with permitted service disruption, not SLO-preserving
+shed. Each destination has as many GPUs as the source, and replay may occupy
+the entire destination pool, including capacity serving residents. Debt enters
+forecasts and the secondary objective but has no hard admission ceiling; no
+TTFT/TPOT limit is enforced. For coding snapshot 0 at 50% load, central timing,
+1000 Gbit/s, and a 30-second deadline, replay finishes handoff at 14.01 seconds
+yet leaves 278,406 reference GPU-seconds of resident debt and 95,514 of buffered
+work. At the serving ceiling, admitted arrivals can also consume all recovery
+headroom. A handoff plateau therefore does not imply queues have recovered.
+
+The [2 MW diagnostic](outputs/a100-pooled-feedback/scale-diagnostic.json) runs
+all five policies in ten central cells (52 seconds), shrinking all three fleets
+together. Replay still finishes full handoff near 14 seconds at 50% load.
+Keeping 1000 Gbit/s WAN fixed increases QH's KV share of completed shed from
+0.21% to 3.64% at 50% load/30 seconds, and from 5.08% to 50.84% at 95% load/300
+seconds; the latter still ties replay at the 12.5% serving ceiling. Scaling WAN
+proportionally largely preserves outcomes. These checks isolate bandwidth per
+GPU, not a serving-SLO guarantee; neither QH nor replay has recovered all queues
+by these deadlines. Coding snapshot and timing uncertainty are not swept in
+this diagnostic, and fleet-size sampling slightly changes cohort proportions.
+
+At the default iteration budget, 69,259 of 326,697 planning decisions remain
+above the 0.001 load-update threshold. Adaptive QH has 474 deadline curves with
+decreasing attainment at a longer deadline. These outcomes and baseline losses
+are retained in the audits; this planner does not certify maximum achievable shed.
+
 `outputs/a100-pooled-execution` contains the archived v6 fixed-plan campaign;
 its plots and audit describe that earlier policy, not the feedback planner.
 The older reservation-model plot producers remain retired.
