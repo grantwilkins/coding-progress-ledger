@@ -2674,8 +2674,10 @@ Regenerate the two single-panel ECDFs and the action mix split by bottleneck wit
 `pooled_summary.csv` are under `outputs/robustness-a100-20260907/pooled/`.
 WAN pools all five cases (including the slack control); prefill pools all four
 rates (including zero load). Each case has 13 repeats per policy. The
-`pooled_action_mix` figure has separate WAN and prefill panels, pooling cases
-within each class: 520 WAN and 416 prefill source sessions per policy. `per_session_greedy` is displayed as Isolated
+`wan_action_mix` and `prefill_action_mix` figures use horizontal stacked bars
+in separate 1.65 × 1.75 inch PDFs/PNGs for placement side by side in one
+paper column. Canonical method colors and hatches identify the actions.
+Each figure pools cases within its class: 520 WAN and 416 prefill source sessions per policy. `per_session_greedy` is displayed as Isolated
 Fastest because it picks each session's fastest isolated action. Unselected
 sessions remain visible as a separate action category if present. Boundary error
 bars show percentile 95% bootstrap confidence intervals for mean replay share,

@@ -92,30 +92,38 @@ def plot(source, out):
         ax.grid(alpha=.2)
         ax.legend(loc="upper left")
         save(fig, out / f"{campaign}_completion_ecdf")
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
     policies = POLICIES[:3]
-    for ax, campaign, title in zip(axes, ("wan", "prefill"), ("WAN", "Prefill / compute headroom")):
-        bottom = np.zeros(len(policies))
+    for campaign, title in (("wan", "WAN"), ("prefill", "Prefill / compute")):
+        fig, ax = plt.subplots(figsize=(1.65, 1.75))
+        left = np.zeros(len(policies))
         for action in ("replay", "kv_transfer", "not_selected"):
-            shares = [groups[campaign, p][2][action] / groups[campaign, p][3] for p in policies]
+            shares = np.array([groups[campaign, p][2][action] / groups[campaign, p][3] for p in policies])
             if not any(shares):
                 continue
-            ax.bar(range(3), shares, bottom=bottom, label=plot_style.ACTION_NAMES[action],
-                   color=plot_style.ACTION_COLORS[action])
-            for i, share in enumerate(shares):
-                if share:
-                    ax.text(i, bottom[i] + share * (.8 if action == "kv_transfer" else .5), f"{share:.1%}", ha="center", va="center", color="white")
-            bottom += shares
+            ax.barh(range(3), 100 * shares, left=100 * left, height=.65,
+                    label=plot_style.ACTION_NAMES[action], color=plot_style.ACTION_COLORS[action],
+                    hatch=plot_style.ACTION_HATCHES.get(action, ""), edgecolor="white", linewidth=.4)
+            left += shares
         boundaries = np.array([groups[campaign, p][2]["replay"] / groups[campaign, p][3] for p in policies])
         intervals = np.array([replay_interval(rows, campaign, p) for p in policies]).T
-        ax.errorbar(range(3), boundaries, yerr=np.vstack((boundaries - intervals[0], intervals[1] - boundaries)),
-                    fmt="none", ecolor="#333333", elinewidth=1.5, capsize=5, capthick=1.5)
-        ax.set(xticks=range(3), xticklabels=["\n".join(plot_style.POLICY_NAMES[STYLE_IDS[p]].rsplit(" ", 1))
-                                           for p in policies], ylim=(0, 1), title=title)
-        ax.legend(loc="upper center", bbox_to_anchor=(.5, -.18), ncol=3, frameon=False)
-    axes[0].set_ylabel("Share of source sessions")
-    fig.suptitle("Boundary bars: 95% bootstrap CI across episodes", fontsize=plot_style.LEGEND_FONT_SIZE)
-    save(fig, out / "pooled_action_mix")
+        ax.errorbar(100 * boundaries, range(3),
+                    xerr=100 * np.vstack((boundaries - intervals[0], intervals[1] - boundaries)),
+                    fmt="none", ecolor="#222222", elinewidth=.7, capsize=2, capthick=.7)
+        ax.set(yticks=range(3), yticklabels=[plot_style.PAPER_POLICY_NAMES[STYLE_IDS[p]].replace("Isolated ", "Isolated\n")
+                                          for p in policies], xlim=(0, 100), xticks=(0, 50, 100),
+               xlabel="Actions (%)", ylim=(2.5, -.5))
+        plot_style.half_column(ax)
+        ax.set_title(title, fontsize=plot_style.HALF_COLUMN_FONT_SIZE, pad=4)
+        ax.xaxis.labelpad = 2
+        ax.grid(axis="x", alpha=.2, linewidth=.5)
+        ax.set_axisbelow(True)
+        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.5, .02),
+                   ncol=1, frameon=False, fontsize=plot_style.HALF_COLUMN_LEGEND_FONT_SIZE,
+                   handlelength=1.3, handletextpad=.5, labelspacing=.3)
+        fig.subplots_adjust(left=.42, right=.90, bottom=.36, top=.86)
+        for suffix in ("png", "pdf"):
+            fig.savefig(out / f"{campaign}_action_mix.{suffix}")
+        plt.close(fig)
     with (out / "pooled_summary.csv").open("w") as stream:
         writer = csv.DictWriter(stream, fieldnames=summaries[0], lineterminator="\n")
         writer.writeheader()
