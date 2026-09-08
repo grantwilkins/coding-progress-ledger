@@ -2726,7 +2726,7 @@ The CSV records each source episode once; the overlays are reused timings,
 not extra baseline measurements. The separately recorded deadline-admitted
 KV-only/replay-only policies move only subsets and are excluded from this
 full-plan comparison. Four all-KV WAN endpoints are back-of-the-envelope
-estimates, shown as hollow squares labeled `KV est.` and recorded separately
+estimates, shown as hollow squares labeled `KV only` and recorded separately
 in `wan_kv_estimates.csv`. The frozen pack has 12,381,585,408 KV bytes. The
 13 all-KV 10 Gb/s control runs average 13.4219 s to completion, giving a fixed
 overhead of 3.5166 s after subtracting byte-transfer time. Thus estimated

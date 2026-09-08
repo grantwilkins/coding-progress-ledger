@@ -113,10 +113,10 @@ def plot(root, out):
                 continue
             ax.scatter(np.array([r["kv_share_percent"] for r in selected]) + offsets,
                        [r["attainment_time_s"] for r in selected],
-                       marker=plot_style.POLICY_MARKERS[identity], s=20 if shared else 7, alpha=.6,
+                       marker=plot_style.POLICY_MARKERS[identity], s=20 if shared else 7, alpha=1 if shared else .75,
                        facecolors="none" if shared or policy == "greedy" else plot_style.POLICY_COLORS[identity],
-                       edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.5,
-                       label=plot_style.KV_ESTIMATE_NAME if estimated else plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
+                       edgecolors=plot_style.POLICY_COLORS[identity], linewidths=1 if shared else .8,
+                       label=plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
         ax.axhline(30, color="black", linestyle=":", linewidth=.8)
         ax.text(50, 31, "30 s deadline", ha="center", fontsize=6, fontstyle="italic")
         ax.set(xlim=(-5, 105), ylim=(0, horizon + 2), xticks=(0, 50, 100),
