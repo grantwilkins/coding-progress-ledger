@@ -58,28 +58,36 @@ def plot(root, out):
     if any(n != 13 for n in counts.values()):
         raise ValueError("expected 13 repeats per case and policy")
     points = [p for p in points if (p["wan_mbps"] != 10000 if p["campaign"] == "wan" else p["prefill_rps"] > 0)]
-    horizon = max(r["attainment_time_s"] for r in points if r["attainment_time_s"] != "")
-    not_met = horizon + 7
+    points = [p for p in points if p["policy"] in POLICIES[:3]]
+    if any(p["attainment_time_s"] == "" for p in points):
+        raise ValueError("full-plan episode has no finite attainment time")
+    horizon = max(r["attainment_time_s"] for r in points)
     out.mkdir(parents=True, exist_ok=True)
     for campaign in ("wan", "prefill"):
         selected_campaign = [r for r in points if r["campaign"] == campaign]
         fig, ax = plt.subplots(figsize=(2.1, 1.6))
         for policy in POLICIES:
-            selected = sorted((r for r in selected_campaign if r["policy"] == policy),
+            shared = policy in ("kv_only", "replay_only")
+            source_policy = "per_session_greedy" if shared else policy
+            selected = sorted((r for r in selected_campaign if r["policy"] == source_policy),
                               key=lambda r: (r["state_id"], int(r["repeat"])))
             identity = STYLE_IDS[policy]
             offsets = np.random.default_rng(0).permutation(np.linspace(-1, 1, len(selected)))
+            if shared:
+                keep = [i for i, r in enumerate(selected) if r["kv_share_percent"] == (100 if policy == "kv_only" else 0)]
+                selected, offsets = [selected[i] for i in keep], offsets[keep]
+            if not selected:
+                continue
             ax.scatter(np.array([r["kv_share_percent"] for r in selected]) + offsets,
-                       [r["attainment_time_s"] if r["attainment_time_s"] != "" else not_met for r in selected],
-                       marker=plot_style.POLICY_MARKERS[identity], s=7, alpha=.6,
-                       facecolors="none" if policy == "greedy" else plot_style.POLICY_COLORS[identity],
+                       [r["attainment_time_s"] for r in selected],
+                       marker=plot_style.POLICY_MARKERS[identity], s=20 if shared else 7, alpha=.6,
+                       facecolors="none" if shared or policy == "greedy" else plot_style.POLICY_COLORS[identity],
                        edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.5,
                        label=plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
-        ax.axhspan(horizon + 3, not_met + 3, color=".94", zorder=0)
         ax.axhline(30, color="black", linestyle=":", linewidth=.8)
         ax.text(50, 31, "30 s deadline", ha="center", fontsize=6, fontstyle="italic")
-        ax.set(xlim=(-5, 105), ylim=(0, not_met + 3), xticks=(0, 50, 100),
-               yticks=(0, 15, 30, not_met), yticklabels=("0", "15", "30", "Not met"),
+        ax.set(xlim=(-5, 105), ylim=(0, horizon + 2), xticks=(0, 50, 100),
+               yticks=(0, 15, 30),
                xlabel="KV-transfer share (%)", ylabel="Time to target (s)")
         plot_style.half_column(ax)
         ax.tick_params(axis="y", labelsize=6)

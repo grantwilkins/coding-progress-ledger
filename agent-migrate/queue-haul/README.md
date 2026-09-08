@@ -2707,20 +2707,24 @@ These are descriptive episode ECDFs, not evidence of a causal prefill transition
 
 `uv run python plot_wan_prefill_tradeoff.py` writes separate
 `wan_action_attainment` and `prefill_action_attainment` PDFs/PNGs plus
-`action_attainment.csv` in the same `pooled/` directory. Each point is one episode: 260 WAN and
-195 prefill points, with 13 repeats per case and policy. Each class is pooled
-into one 2.1 × 1.6 inch scatter, excluding the 10 Gb/s WAN control and zero-load
-prefill control. Small translucent markers show every non-control episode with
-deterministic horizontal offsets of at most ±1 percentage point to expose
-overlapping choices; attainment times and CSV KV shares remain exact.
-The publication figures omit explanatory annotations; controls are excluded
-and the horizontal offsets are display-only.
-The x-axis is KV transfer as a percentage
-of selected actions; the y-axis is time to the requested full power reduction.
-The frozen target requires all eight sessions, so attainment is the last
-successful completion plus the five-second power window. This agrees with
-archived on-time attainment and extends late completions beyond 30 seconds.
-The horizontal 30-second line marks the deadline. A shaded categorical
-“Not met” row retains policies that leave sessions unselected or unfinished;
-it is not a finite attainment time. Replay-only and KV-only remain at 0% and
-100% KV share. Colors and distinct policy markers come from `plot_style.py`.
+`action_attainment.csv` in the same `pooled/` directory. Each point is one
+full-plan episode: 156 WAN and 117 prefill points, with 13 repeats per case
+for QH LP, QH Greedy, and Isolated Fastest. Each class is pooled into one
+2.1 × 1.6 inch scatter, excluding the 10 Gb/s WAN and zero-load prefill controls.
+Small translucent markers have deterministic horizontal display offsets of
+at most ±1 percentage point; attainment times and CSV KV shares remain exact.
+The x-axis is KV transfer as a percentage of selected actions; the y-axis is
+time to the requested full power reduction. The frozen target requires all
+eight sessions, so attainment is the last successful completion plus the
+five-second power window. This agrees with archived on-time attainment and
+extends late completions beyond the horizontal 30-second deadline.
+
+Isolated Fastest's 0% and 100% KV episodes are the observed all-eight-replay
+and all-eight-KV executions for those same cases. Pure-action markers overlay those same
+endpoint observations, sharing both their times and their display offsets.
+The CSV records each source episode once; the overlays are reused timings,
+not extra baseline measurements. The separately recorded deadline-admitted
+KV-only/replay-only policies move only subsets and are excluded from this
+full-plan comparison. There is no observed full-eight-KV timing for the
+non-control WAN cases, so no 100% WAN endpoint is invented. Colors and distinct
+policy markers come from `plot_style.py`.
