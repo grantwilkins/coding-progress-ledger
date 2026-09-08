@@ -2696,8 +2696,10 @@ These are descriptive episode ECDFs, not evidence of a causal prefill transition
 
 `uv run python plot_wan_prefill_tradeoff.py` writes separate
 `wan_action_attainment` and `prefill_action_attainment` PDFs/PNGs plus
-`action_attainment.csv` in the same `pooled/` directory. Each point averages
-13 episodes of one case and policy. The x-axis is KV transfer as a percentage
+`action_attainment.csv` in the same `pooled/` directory. Each point is one episode: 325 WAN and
+260 prefill points, with 13 repeats per case and policy. Small translucent
+markers show repeat variation at the actual KV shares; no jitter is added.
+Identical measurements overlap, and eight-session packs give discrete shares. The x-axis is KV transfer as a percentage
 of selected actions; the y-axis is time to the requested full power reduction.
 The frozen target requires all eight sessions, so attainment is the last
 successful completion plus the five-second power window. This agrees with

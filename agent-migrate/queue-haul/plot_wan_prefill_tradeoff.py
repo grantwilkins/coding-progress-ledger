@@ -3,7 +3,7 @@
 import argparse
 import csv
 import json
-from collections import defaultdict
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -41,37 +41,33 @@ def plot(root, out):
         rows = list(csv.DictReader(stream))
     if len({(r["campaign"], r["episode_id"]) for r in rows}) != len(rows):
         raise ValueError("duplicate episodes")
-    summaries = []
+    points = []
     for campaign in ("wan", "prefill"):
         frozen = json.loads((root / "0" / campaign / "prepared/plan.json").read_text())["frozen"]
         packs = {p["pack_id"]: p for p in frozen["inputs"]["packs"]}
-        grouped = defaultdict(list)
         for row in rows:
             if row["campaign"] == campaign:
-                grouped[row["state_id"], row["pack_id"], row["policy"]].append(
-                    episode_point(row, packs[row["pack_id"]], frozen["inputs"]["target"],
-                                  frozen["constants"]["power_window_s"]))
-        for (state, pack, policy), points in grouped.items():
-            times = [t for _, t in points if t is not None]
-            if len(points) != 13:
-                raise ValueError("expected 13 repeats per case and policy")
-            summaries.append(dict(campaign=campaign, state_id=state, pack_id=pack, policy=policy,
-                                  episodes=len(points), attained=len(times),
-                                  kv_share_percent=np.mean([x for x, _ in points]),
-                                  attainment_time_s=np.mean(times) if len(times) == len(points) else ""))
-    horizon = max(r["attainment_time_s"] for r in summaries if r["attainment_time_s"] != "")
+                share, time = episode_point(row, packs[row["pack_id"]], frozen["inputs"]["target"],
+                                            frozen["constants"]["power_window_s"])
+                points.append({**{k: row[k] for k in ("campaign", "episode_id", "state_id", "pack_id",
+                                                     "policy", "repeat", "phase")},
+                               "kv_share_percent": share, "attainment_time_s": "" if time is None else time})
+    counts = Counter((p["campaign"], p["state_id"], p["pack_id"], p["policy"]) for p in points)
+    if any(n != 13 for n in counts.values()):
+        raise ValueError("expected 13 repeats per case and policy")
+    horizon = max(r["attainment_time_s"] for r in points if r["attainment_time_s"] != "")
     not_met = horizon + 7
     out.mkdir(parents=True, exist_ok=True)
     for campaign in ("wan", "prefill"):
         fig, ax = plt.subplots(figsize=(2.1, 1.75))
         for policy in POLICIES:
-            points = [r for r in summaries if r["campaign"] == campaign and r["policy"] == policy]
+            selected = [r for r in points if r["campaign"] == campaign and r["policy"] == policy]
             identity = STYLE_IDS[policy]
-            ax.scatter([r["kv_share_percent"] for r in points],
-                       [r["attainment_time_s"] if r["attainment_time_s"] != "" else not_met for r in points],
-                       marker=plot_style.POLICY_MARKERS[identity], s=20,
+            ax.scatter([r["kv_share_percent"] for r in selected],
+                       [r["attainment_time_s"] if r["attainment_time_s"] != "" else not_met for r in selected],
+                       marker=plot_style.POLICY_MARKERS[identity], s=7, alpha=.55,
                        facecolors="none" if policy == "greedy" else plot_style.POLICY_COLORS[identity],
-                       edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.7,
+                       edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.45,
                        label=plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
         ax.axhspan(horizon + 3, not_met + 3, color=".94", zorder=0)
         ax.axhline(30, color="black", linestyle=":", linewidth=.8)
@@ -90,9 +86,9 @@ def plot(root, out):
         fig.subplots_adjust(left=.27, right=.96, bottom=.43, top=.97)
         save(fig, out / f"{campaign}_action_attainment")
     with (out / "action_attainment.csv").open("w") as stream:
-        writer = csv.DictWriter(stream, fieldnames=summaries[0], lineterminator="\n")
+        writer = csv.DictWriter(stream, fieldnames=points[0], lineterminator="\n")
         writer.writeheader()
-        writer.writerows(summaries)
+        writer.writerows(points)
 
 
 if __name__ == "__main__":
