@@ -229,6 +229,24 @@ under the assumed proportional WAN budget; QH uses KV. With 40 Gbit/s total WAN,
 both reach 7.11 MW and QH uses no KV. These are experimental scenario comparisons,
 not validated fleet predictions or evidence of an available WAN allocation.
 
+For a compact bottleneck illustration, run `uv run python plot_pool_shed_bottleneck.py`.
+It reuses the pinned campaign calibration and writes
+`outputs/a100-pool-shed-bottleneck/{bottleneck.png,bottleneck.pdf,example.json,sensitivity.csv}`.
+The measured-pack case sheds a **64-GPU pool**, with 64 GPUs per destination,
+50% resident load, eight GPUs/node, and an assumed **40 Gbit/s shared WAN**.
+At three seconds, QH LP sheds **89.36%**, greedy **80.93%**, replay-only **75%**,
+and KV-only/isolated-fastest **18.22%**. Replay occupies all 128 migration batch
+slots while reserving only 0.93% of WAN capacity; QH retains 384 replays and
+adds 73.54 KV session equivalents. This is deadline-limited replay batch capacity,
+not measured FLOP saturation. An optimistic GPU-time relaxation raises replay
+to 80.72%, still below the original QH solution; removing migration limits lets
+both reach 100%. These checks apply within the common pattern library.
+The script retains nearby pool-size, load, WAN, and deadline controls, all nine
+central/resampled calibrations, full-fleet comparisons, and an expanded-library
+check. Replay catches up at four seconds; at 75% resident load, both hit the
+62.5% serving ceiling. The example remains experimental and does not establish
+the same gain for a simultaneous 20 MW shed.
+
 The historical `outputs/a100-batch-shed-corrected/performance.json` records
 all 56,250 policy evaluations, I/O, reduction, and 20 PNG/PDF figures under the
 earlier per-GPU endpoint scaling. That run took **164.94 seconds** on the current
