@@ -107,6 +107,8 @@ def phase_profile(table, counts, action, route, start, edges, loads, timing, cal
         phase(delta - (transferred if state == 3 else 0.))
     if state <= 4:
         phase(tail - (completed_work if state == 4 else 0.), True)
+    if fleet.metadata.get("protect_resident"):
+        now = max(now, compute_after)
     now += max(calibration.get("switch_s", 0.) - (elapsed if state == 5 else 0.), 0.)
     profile["serving"] = _overlap(edges, now, edges[-1]) * float(counts @ fleet.demand)
     profile["service_peak"] = (profile["serving"] > 0) * float(counts @ fleet.demand) * np.diff(edges)

@@ -322,3 +322,18 @@ def test_long_context_feedback_preserves_admitted_short_deadline_handoffs(policy
     assert result["shed_fraction"] > .8
     assert result["shed_fraction"] == pytest.approx(result["admitted_shed_fraction"], abs=1e-8)
     assert result["max_relative_residual"] <= 1e-8
+
+
+def test_zero_nominal_tail_cannot_overlap_mandatory_recovery_prefix():
+    table, timing, calibration = case(30.)
+    table.fleet.gpus = 1
+    table.fleet.metadata["protect_resident"] = True
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit(np.array([1., 1., 0., 0.]))
+    engine.state[:] = [4, 5]
+    engine.remaining[:] = [1e-4, 0.]
+    engine.phase_replica_seconds[0] = 100.
+    engine.gated[1], engine.backlog[1] = True, .2
+    _, _, info = plan_admission(engine, table, "greedy")
+    assert info["fixed_obligation_overload"] <= 1e-8
+    assert info["max_relative_residual"] <= 1e-8

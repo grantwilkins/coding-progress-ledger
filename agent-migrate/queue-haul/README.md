@@ -58,7 +58,9 @@ request shapes. Conservative peak-cycle KV reservations remain at every load.
 `pool_shed_planner.py` uses receding-horizon batch admissions with common queue
 and migration-phase feedback for all five methods. Only the next admissions
 are committed. Future rates use central calibration, never hidden execution
-draws. Ongoing migrations, imported service, and mandatory buffer recovery enter
+draws. Recorded future request shapes and resets are known to every planner;
+unknown future prompts and arrival-phase uncertainty are not sampled.
+Ongoing migrations, imported service, and mandatory buffer recovery enter
 later reservations. New admissions use the same per-batch compute/recovery rate
 forecast as existing work. If the conservative forecast leaves an existing
 migration unfinished at the deadline, that route accepts no new starts at that
