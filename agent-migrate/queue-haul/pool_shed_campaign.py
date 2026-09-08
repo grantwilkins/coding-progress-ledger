@@ -21,7 +21,7 @@ from scipy.sparse import csr_matrix
 from pool_shed_calibration import calibration, regional_check, replay_seconds
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "outputs/a100-batch-shed-node-network"
+OUT = ROOT / "outputs/a100-batch-shed-wan-sweep"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
 SCHEMA = "queue-haul-a100-batch-shed-v3"
@@ -280,7 +280,7 @@ def select(table, policy):
         objective = gains[ids] / column_scale
         result = linprog(-objective / objective.max(), A_ub=csr_matrix(matrix[:, ids] / column_scale), b_ub=limits,
                          bounds=(0, None), method="highs",
-                         options={"primal_feasibility_tolerance": 1e-9, "dual_feasibility_tolerance": 1e-9})
+                         options={"primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9})
         if not result.success:
             raise RuntimeError(result.message)
         if np.min(result.x) < -1e-9:
@@ -358,7 +358,7 @@ def configuration(smoke=False):
             "gpus_per_node": 8,
             "resident_loads": [.25, .95] if smoke else list(LOADS),
             "deadlines": [1, 10, 60] if smoke else list(DEADLINES),
-            "wan_gbps": [40] if smoke else ["reference", 10, 40, 100, 400],
+            "wan_gbps": [40] if smoke else ["reference", 40, 100, 400, 1000],
             "snapshots": 1 if smoke else 4, "draws": 1 if smoke else 8, "seed": 2001}
 
 

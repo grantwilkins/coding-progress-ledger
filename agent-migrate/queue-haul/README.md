@@ -109,8 +109,8 @@ shutdown.
 
 Reservations start together and only decrease, so route/shared peak-rate rows
 certify the network schedule without time bins or packet events. Shared WAN
-allocations are the measured-endpoint reference case plus assumed 10, 40, 100,
-and 400 Gbit/s **whole-shed** budgets; these are sensitivities, not established
+allocations are the measured-endpoint reference case plus assumed 40, 100, 400,
+and 1,000 Gbit/s **whole-shed** budgets; these are sensitivities, not established
 datacenter allocations. The model explicitly groups eight GPUs per node by
 default (`--gpus-per-node`): 66,666 GPUs occupy 8,334 modeled nodes. Endpoint
 ceilings scale with **node count**, with a shared source-node budget across
@@ -124,10 +124,27 @@ Azure [VM bandwidth](https://learn.microsoft.com/en-us/azure/virtual-network/vir
 is allocated across all NICs and destinations. Internal GPU InfiniBand links
 do not establish inter-region WAN capacity. Thousands of nodes can have aggregate
 endpoint capacity measured in Tbit/s: for example, 8,333 nodes at 10 Gbit/s sum
-to 83.33 Tbit/s, before any shared WAN limitation. Microsoft’s
-[SWAN paper](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/swan-sigcomm13.pdf)
-treats inter-datacenter bandwidth as a shared, allocated resource. Neither node
-NIC rates nor our endpoint measurements determine the allocation for this shed.
+to 83.33 Tbit/s, before any shared WAN limitation.
+[SWAN, §6.1](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/swan-sigcomm13.pdf)
+describes a production WAN with more than forty datacenters and inter-DC
+capacities ranging from tens of Gbit/s to Tbit/s. This supports the scale of
+our sensitivity sweep; it does not identify a current Azure region-pair
+allocation or establish 1 Tbit/s as a physical maximum. The modeled WAN budget
+is the capacity allocated to this migration after other traffic, shared across
+**both** destinations, rather than a separate allowance for each pair.
+Neither node NIC rates nor our endpoint measurements determine this allocation.
+For `N` nodes, route limits are `min(N * b_route, W)` and the shared limit is
+`min(N * (b_east + b_germany), W)`; the reference case uses one measured pair.
+
+[Lai et al., HotCloud 2018](https://www.usenix.org/system/files/conference/hotcloud18/hotcloud18-paper-lai.pdf)
+measured forty cloud datacenters and found that multi-connection VM throughput
+could be stable and limited by the VM, unlike individual TCP-flow throughput.
+This motivates separating endpoint goodput from WAN allocation; it does not
+prove the bottleneck or rate of our current VMs. Our pinned paired calibration
+has central route rates of **2.280 Gbit/s to East and 8.733 Gbit/s to Germany**,
+with **10.967 Gbit/s combined**, so a suggested 2.9 Gbit/s shared VM limit is not
+substituted for these observations. The 40,000/333,360 Gbit/s cases in older
+plots remain optimistic diagnostics, outside the primary literature-informed sweep.
 Holding WAN fixed while increasing compute changes the experiment's resource
 ratio; it does not preserve the hardware experiment's KV/replay tradeoff.
 
@@ -181,20 +198,15 @@ groups; the idle anchor is held fixed.
 uv run python pool_shed_campaign.py validate
 
 # Diagnostic simulations only until the regional timing gate passes.
-uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-batch-shed-node-network-smoke
-uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-node-network-smoke
-uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-node-network-smoke
+uv run python pool_shed_campaign.py prepare --smoke --out outputs/a100-batch-shed-wan-sweep-smoke
+uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-wan-sweep-smoke
+uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-wan-sweep-smoke
 
-# Default: 11,250 scenario cells, five policies per cell.
-uv run python pool_shed_campaign.py prepare --out outputs/a100-batch-shed-node-network-default
-uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-node-network-default
-uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-node-network-default
-
-# Full node-aware comparison in a fresh directory, including the proportional
-# upper diagnostic: 8,334 nodes * 40 Gbit/s = 333,360 Gbit/s nominal WAN budget.
-uv run python pool_shed_campaign.py prepare --wan-gbps 10 40 100 400 333360 --out outputs/a100-batch-shed-node-network-repeat
-uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-node-network-repeat
-uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-node-network-repeat
+# Default: measured reference + 40/100/400/1,000 Gbit/s shared WAN;
+# 11,250 scenario cells, five policies per cell. Use a fresh directory to repeat.
+uv run python pool_shed_campaign.py prepare --out outputs/a100-batch-shed-wan-sweep-repeat
+uv run python pool_shed_campaign.py run --out outputs/a100-batch-shed-wan-sweep-repeat
+uv run python pool_shed_campaign.py reduce --out outputs/a100-batch-shed-wan-sweep-repeat
 ```
 
 Preparation accepts `--resident-loads`, `--snapshots`, `--draws`, `--wan-gbps`,
@@ -210,7 +222,7 @@ and `paired_differences.csv` contain reduced shed, action, and policy comparison
 `dominance-audit.json` and `validation.json` expose correctness and library checks.
 Shed and action figures use the canonical shared plot styles. Compressed cell
 checkpoints remain local; compact summaries, audits, and figures are tracked.
-Current code defaults to `outputs/a100-batch-shed-node-network`. Its
+Current code defaults to `outputs/a100-batch-shed-wan-sweep`. Its
 `validation.json` records the failed regional gate and a scale comparison that
 holds either total WAN or WAN per node fixed. Scaled diagnostic budgets are not
 recommended allocations. A passing LP audit cannot override a failed timing gate.
@@ -219,7 +231,13 @@ show every policy's shed curve; action breakdowns cover both 40 Gbit/s total
 WAN and the largest numeric WAN scenario. All plots identify their experimental
 status and the outstanding regional timing failure.
 
-The completed node-aware comparison in that directory contains **13,500 scenario
+The completed primary WAN sweep contains **11,250 scenarios and 56,250 policy
+evaluations**. Preparation, simulation, reduction, and campaign plots took
+**171.35 seconds**, with the long-context diagnostic running concurrently.
+All campaign feasibility and LP-dominance checks pass, with zero deadline
+regressions. The separate regional hardware timing gate remains failed.
+
+The historical `outputs/a100-batch-shed-node-network` comparison contains **13,500 scenario
 cells and 67,500 policy evaluations**, including the proportional upper diagnostic.
 Preparation, simulation, reduction, and campaign plots took **205.16 seconds**;
 validation took another 2.59 seconds. All cells passed feasibility and LP dominance,
@@ -239,9 +257,22 @@ Cadence is adjusted to preserve source reference load. Sixteen sessions/GPU
 uses 45.6–49.2% of resident KV capacity across snapshots; destination admission
 also checks imported KV and serving demand. No replay slowdown multiplier is added.
 
-`outputs/a100-full-fleet-long-context/` contains the input/provenance report,
-paired results, and plots at 400, 40,000, and 333,360 Gbit/s assumed shared WAN.
-At the existing largest WAN scenario, the sixteen-session long-context case
+`outputs/a100-full-fleet-long-context-wan-sweep/` contains the input/provenance
+report, paired results, and plots at 40, 100, 400, and 1,000 Gbit/s assumed
+shared WAN. The completed diagnostic evaluates 20,736 policy/bound combinations
+in 55.91 seconds, excluding plotting. At 1 Tbit/s and 30 seconds, the dense
+long-context case has median shed of **91.77% for QH LP versus 91.69% for replay**;
+the median paired advantage is **0.075 percentage points**. Thus the earlier
+large gain does not survive this WAN range. A 1 Tbit/s allocation can move at
+most 3.75 TB in 30 seconds before completion tails and replay traffic, against
+1.45–1.56 PB of full source KV in the dense case. The constrained-WAN sweep also
+exposed a numerical feasibility failure; tightening only the LP's primal tolerance
+to `1e-10` fixes its regression case while retaining the `1e-8` physical check.
+
+The historical `outputs/a100-full-fleet-long-context/` retains
+the earlier 400, 40,000, and 333,360 Gbit/s diagnostics. These larger allocations
+are not justified by the region-pair evidence and are not primary scenarios.
+At that historical largest WAN scenario, the sixteen-session long-context case
 has median QH LP/replay shed of **87.3%/75.4% at 20 seconds**, **94.6%/83.3%
 at 25 seconds**, and **99.6%/91.7% at 30 seconds**, across four snapshots and
 nine central/resampled calibrations. QH also exceeds the optimistic replay

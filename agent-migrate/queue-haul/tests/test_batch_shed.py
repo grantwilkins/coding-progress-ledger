@@ -30,6 +30,24 @@ def test_batch_wall_time_preserves_singletons_and_counts_repeated_requests():
                                expected * np.sqrt(2))
 
 
+def test_tight_wan_long_context_lp_preserves_physical_feasibility():
+    from dataclasses import replace
+
+    base = c.sample_fleet("coding")
+    ids = np.resize(np.flatnonzero(base.context >= 24000), 24)
+    counts = np.full(24, c.GPUS * 16 // 24)
+    counts[-1] += c.GPUS * 16 - counts.sum()
+    fields = {key: getattr(base, key)[ids] for key in ("context", "prompt", "output", "t1", "kv", "log", "demand")}
+    fields["demand"] *= c.SOURCE_LOAD * c.GPUS / (counts @ fields["demand"])
+    f = replace(base, **fields, count=counts)
+    samples = c.network_samples()
+    endpoint = samples[np.random.default_rng(2001).integers(len(samples), size=8)[3]]
+    budgets, timing = c.bandwidth(endpoint, f.nodes, 100), c.calibration(8)["timing"][4]
+    r, k = c.include_isolated(*c.library(f), c.isolated_methods(f, .5, endpoint, budgets, timing))
+    results = c.compare(c.schedule_table(f, r, k, .5, 35, endpoint, budgets, timing))
+    assert max(v["max_relative_residual"] for v in results.values()) <= 1e-8
+
+
 def test_serial_batch_limit_adds_wall_service_without_a_free_gpu_factor():
     replay, t1 = np.array([[1, 1], [2, 1]]), np.array([1., 3.])
     np.testing.assert_allclose(c.batch_time(replay, t1, 0., 1., .95), [4., 5.])

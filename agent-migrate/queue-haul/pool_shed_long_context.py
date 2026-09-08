@@ -10,10 +10,10 @@ import numpy as np
 
 import pool_shed_campaign as c
 
-OUT = c.ROOT / "outputs/a100-full-fleet-long-context"
+OUT = c.ROOT / "outputs/a100-full-fleet-long-context-wan-sweep"
 CASES = (("original", 8, 0), ("long8", 8, 24000), ("long16", 16, 24000))
 DEADLINES = (10, 20, 25, 30, 35, 40, 45, 60)
-WANS = (400, 40000, 333360)
+WANS = (40, 100, 400, 1000)
 
 
 def main():
