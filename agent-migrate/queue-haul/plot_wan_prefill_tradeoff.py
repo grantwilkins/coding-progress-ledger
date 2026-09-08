@@ -35,6 +35,35 @@ def episode_point(row, pack, target, window):
     return 100 * sum(d["action"] == "kv_transfer" for d in decisions) / len(decisions), time
 
 
+def kv_estimates(root, rows):
+    frozen = json.loads((root / "0/wan/prepared/plan.json").read_text())["frozen"]
+    controls = [r for r in rows if r["campaign"] == "wan" and float(r["wan_mbps"]) == 10000
+                and r["policy"] == "per_session_greedy"]
+    if len(controls) != 13 or len({r["pack_id"] for r in controls}) != 1:
+        raise ValueError("expected thirteen matched all-KV control episodes")
+    demands = [d for d in frozen["inputs"]["action_demands"]
+               if d["pack_id"] == controls[0]["pack_id"] and d["action"] == "kv_transfer"]
+    if len(demands) != 8:
+        raise ValueError("expected eight KV byte demands")
+    total_bytes = sum(d["d_wan"] for d in demands)
+    control_times = []
+    for row in controls:
+        decisions = json.loads(row["decisions"])
+        if len(decisions) != 8 or any(d["action"] != "kv_transfer" or d["error"] for d in decisions):
+            raise ValueError("control must complete all eight sessions with KV")
+        control_times.append(max(d["completion_s"] for d in decisions))
+    overhead = float(np.mean(control_times)) - 8 * total_bytes / 1e10
+    if overhead < 0:
+        raise ValueError("control transfer faster than its byte budget")
+    rates = sorted({float(r["wan_mbps"]) for r in rows if r["campaign"] == "wan" and float(r["wan_mbps"]) != 10000})
+    return [dict(wan_mbps=rate, kv_share_percent=100, total_kv_bytes=total_bytes,
+                 control_mean_completion_s=float(np.mean(control_times)), overhead_s=overhead,
+                 completion_time_s=8 * total_bytes / (rate * 1e6) + overhead,
+                 power_window_s=frozen["constants"]["power_window_s"],
+                 attainment_time_s=8 * total_bytes / (rate * 1e6) + overhead + frozen["constants"]["power_window_s"])
+            for rate in rates]
+
+
 def plot(root, out):
     plot_style.apply()
     with (root / "episodes.csv").open() as stream:
@@ -61,7 +90,8 @@ def plot(root, out):
     points = [p for p in points if p["policy"] in POLICIES[:3]]
     if any(p["attainment_time_s"] == "" for p in points):
         raise ValueError("full-plan episode has no finite attainment time")
-    horizon = max(r["attainment_time_s"] for r in points)
+    estimates = kv_estimates(root, rows)
+    horizon = max(r["attainment_time_s"] for r in points + estimates)
     out.mkdir(parents=True, exist_ok=True)
     for campaign in ("wan", "prefill"):
         selected_campaign = [r for r in points if r["campaign"] == campaign]
@@ -76,6 +106,9 @@ def plot(root, out):
             if shared:
                 keep = [i for i, r in enumerate(selected) if r["kv_share_percent"] == (100 if policy == "kv_only" else 0)]
                 selected, offsets = [selected[i] for i in keep], offsets[keep]
+            estimated = campaign == "wan" and policy == "kv_only"
+            if estimated:
+                selected, offsets = estimates, np.zeros(len(estimates))
             if not selected:
                 continue
             ax.scatter(np.array([r["kv_share_percent"] for r in selected]) + offsets,
@@ -83,11 +116,11 @@ def plot(root, out):
                        marker=plot_style.POLICY_MARKERS[identity], s=20 if shared else 7, alpha=.6,
                        facecolors="none" if shared or policy == "greedy" else plot_style.POLICY_COLORS[identity],
                        edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.5,
-                       label=plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
+                       label=plot_style.KV_ESTIMATE_NAME if estimated else plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
         ax.axhline(30, color="black", linestyle=":", linewidth=.8)
         ax.text(50, 31, "30 s deadline", ha="center", fontsize=6, fontstyle="italic")
         ax.set(xlim=(-5, 105), ylim=(0, horizon + 2), xticks=(0, 50, 100),
-               yticks=(0, 15, 30),
+               yticks=(0, 15, 30, 45),
                xlabel="KV-transfer share (%)", ylabel="Time to target (s)")
         plot_style.half_column(ax)
         ax.tick_params(axis="y", labelsize=6)
@@ -99,6 +132,10 @@ def plot(root, out):
                    handletextpad=.3, columnspacing=.4, labelspacing=.4)
         fig.subplots_adjust(left=.27, right=.96, bottom=.38, top=.97)
         save(fig, out / f"{campaign}_action_attainment")
+    with (out / "wan_kv_estimates.csv").open("w") as stream:
+        writer = csv.DictWriter(stream, fieldnames=estimates[0], lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(estimates)
     with (out / "action_attainment.csv").open("w") as stream:
         writer = csv.DictWriter(stream, fieldnames=points[0], lineterminator="\n")
         writer.writeheader()
