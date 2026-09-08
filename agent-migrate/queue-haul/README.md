@@ -2642,7 +2642,7 @@ initial and additional episodes, with `campaign`, `phase`, and `source_csv`
 columns identifying provenance. Per-batch raw JSONL, normalized CSVs, plan
 hashes, and diagnostic PNGs are included alongside the initial campaign data.
 Existing `target_attainment.png` plots show full-target attainment over time;
-The pooled session-completion plots use all eight sessions per episode as the
+the pooled session-completion plots use all eight sessions per episode as the
 denominator, including unsubmitted sessions. Recorded completions after the
 30-second deadline remain visible in the tail; they do not count as deadline
 successes. Completion times are measured from the common episode migration
