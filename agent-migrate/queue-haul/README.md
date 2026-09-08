@@ -2317,6 +2317,23 @@ all differ, so action mix alone does not isolate KV encoding.
 Raw GPU power traces are observational; shed and power-attainment fields are
 explicitly model-derived.
 
+The 2026-09-08 H100 run uses the existing
+`profiles/gpt_oss_20b_h100_tp1.json` and coding manifest through
+`network_campaign.py prepare --design drain` followed by `network_campaign.py
+run`. This is the same 10-pack, five-repeat executor used by the model/hardware
+wrapper, without requiring an architecture-gated profile. Its configuration
+and plan are in `outputs/model-hardware-drain-h100-20260908/`; the intended raw
+run root is `/datadrive/queue-haul-network/model-hardware-drain-h100-20260908`.
+The staged executor is an unchanged snapshot of source commit
+`3abb1ac6080a3e49e0b5ac14428fe79928c21f4d`, deployed with snapshot commit
+`b75461cd34bc5e34ca1f8a680df78dce971e3b43` on all three nodes. H100 uses native
+vLLM 0.22.0 and LMCache 0.5.1. The standard profile retains A100-derived timing
+estimates alongside measured H100 compute/power values; it is not a newly
+validated H100 timing fit. Compare its four action-count columns only after
+the A100 run finishes and its manifest/context packs have been matched.
+The strict model/hardware reducer still requires gated profiles; this run's
+episode table is produced by the network executor.
+
 `matched_action_campaign.py` is the narrow cross-hardware/cross-model decision
 demonstration. It freezes completed A100 East/Germany frontier scenario
 `4ce7626a1f20a5c3`: eight 16K sessions, 80% requested shed, a 30-second
