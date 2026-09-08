@@ -2698,7 +2698,7 @@ These are descriptive episode ECDFs, not evidence of a causal prefill transition
 `wan_action_attainment` and `prefill_action_attainment` PDFs/PNGs plus
 `action_attainment.csv` in the same `pooled/` directory. Each point is one episode: 260 WAN and
 195 prefill points, with 13 repeats per case and policy. Each class is pooled
-into one 2.1 × 1.75 inch scatter, excluding the 10 Gb/s WAN control and zero-load
+into one 2.1 × 1.6 inch scatter, excluding the 10 Gb/s WAN control and zero-load
 prefill control. Small translucent markers show every non-control episode with
 deterministic horizontal offsets of at most ±1 percentage point to expose
 overlapping choices; attainment times and CSV KV shares remain exact.

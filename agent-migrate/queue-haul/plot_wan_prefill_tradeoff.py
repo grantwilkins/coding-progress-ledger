@@ -63,7 +63,7 @@ def plot(root, out):
     out.mkdir(parents=True, exist_ok=True)
     for campaign in ("wan", "prefill"):
         selected_campaign = [r for r in points if r["campaign"] == campaign]
-        fig, ax = plt.subplots(figsize=(2.1, 1.75))
+        fig, ax = plt.subplots(figsize=(2.1, 1.6))
         for policy in POLICIES:
             selected = sorted((r for r in selected_campaign if r["policy"] == policy),
                               key=lambda r: (r["state_id"], int(r["repeat"])))
@@ -86,10 +86,10 @@ def plot(root, out):
         ax.xaxis.labelpad = ax.yaxis.labelpad = 2
         ax.grid(alpha=.2, linewidth=.5)
         ax.set_axisbelow(True)
-        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.61, .01),
-                   ncol=2, frameon=False, fontsize=5.5, handlelength=1.2,
-                   handletextpad=.3, columnspacing=.7, labelspacing=.4)
-        fig.subplots_adjust(left=.27, right=.96, bottom=.43, top=.97)
+        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.5, .01),
+                   ncol=3, frameon=False, fontsize=5.5, handlelength=.8,
+                   handletextpad=.3, columnspacing=.4, labelspacing=.4)
+        fig.subplots_adjust(left=.27, right=.96, bottom=.38, top=.97)
         save(fig, out / f"{campaign}_action_attainment")
     with (out / "action_attainment.csv").open("w") as stream:
         writer = csv.DictWriter(stream, fieldnames=points[0], lineterminator="\n")
