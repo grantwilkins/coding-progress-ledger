@@ -59,19 +59,22 @@ def test_scaling_nodes_and_network_together_preserves_the_policy_tradeoff():
     results = []
     for gpus in (8, 80):
         plan['config']['gpus'] = gpus
-        results.append(c.run_cell(plan, (('measured_pack', 0), .5, 0, 5 * gpus / 8, 3))['results'])
+        results.append(c.run_cell(plan, (('measured_pack', 0), .5, 0, 5 * gpus / 8, 30))['results'])
     for policy in c.POLICIES:
         assert results[0][policy]['shed_fraction'] == pytest.approx(results[1][policy]['shed_fraction'])
-    assert results[0]['queue_haul']['shed_fraction'] > results[0]['replay_only']['shed_fraction']
-    assert sum(results[0]['queue_haul']['action_counts'][1::2]) > 0
+        assert results[0][policy]['planned_shed_fraction'] == pytest.approx(results[1][policy]['planned_shed_fraction'])
+    assert results[0]['replay_only']['shed_fraction'] > 0
 
 
-def test_regional_fidelity_gate_rejects_the_current_timing_transfer(tmp_path):
-    with pytest.raises(RuntimeError, match='regional hardware holdout'):
-        c.validate(tmp_path)
-    report = json.loads((tmp_path / 'validation.json').read_text())['regional_fidelity']
+def test_independent_regional_fidelity_passes_without_hiding_the_old_error(tmp_path):
+    c.validate(tmp_path)
+    validation = json.loads((tmp_path / 'validation.json').read_text())
+    report = validation['regional_fidelity']
     assert report['current_pool']['aggregate']['episodes'] == 24
     assert not report['current_pool']['gate_pass'] and report['frozen_oracle']['gate_pass']
+    assert validation['regional_execution']['gate_pass']
+    assert validation['regional_execution']['aggregate']['mae_s'] < 3
+    assert validation['regional_execution']['aggregate']['false_feasible_25s'] == 1
 
 
 def test_isolated_fastest_masks_exist_in_the_common_library():
@@ -87,6 +90,15 @@ def test_isolated_fastest_masks_exist_in_the_common_library():
         for counts in r + k:
             desired = np.r_[counts * table.fastest, counts * ~table.fastest]
             assert tuple(desired) in signatures
+
+
+def test_execution_draws_keep_forecast_choices_fixed():
+    plan = {'identity': 'fixed-plan', 'config': c.configuration(), 'calibration': calibration(2), 'network_indices': [-1, 0, 1]}
+    results = [c.run_cell(plan, (('coding', 0), .5, draw, 1000, 30))['results'] for draw in range(3)]
+    for policy in c.POLICIES:
+        for result in results[1:]:
+            np.testing.assert_array_equal(result[policy]['planned_action_counts'], results[0][policy]['planned_action_counts'])
+        assert sum(results[0][policy]['action_fractions']) <= sum(results[0][policy]['planned_action_fractions']) + 1e-8
 
 
 def test_campaign_reduction_checks_all_cells_and_policies(tmp_path, monkeypatch):
