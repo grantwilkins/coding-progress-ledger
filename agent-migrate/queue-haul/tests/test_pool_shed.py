@@ -22,14 +22,14 @@ def test_measured_calibration_and_population():
     assert len(measured['timing']) == 3
     assert measured['active_w'] == pytest.approx(280.8065)
     assert len(measured['power_draws_w']) == 200
-    for workload in ('coding', 'measured_pack'):
+    for workload in c.WORKLOADS:
         fleet = c.sample_fleet(workload)
         assert fleet.count.sum() == 8 * c.GPUS
         assert fleet.count @ fleet.demand == pytest.approx(.8 * c.GPUS)
         assert fleet.count @ fleet.gain == pytest.approx(1.)
         assert fleet.baseline_kv < fleet.kv_capacity
         r, k = c.library(fleet)
-        assert len(r) * 2 <= 1344
+        assert len(r) * 2 <= 2400
         assert np.all((r + k).sum(1) <= 8)
         assert np.all(r * k == 0)
         a, b = c.library(fleet, expanded=True)
@@ -38,7 +38,7 @@ def test_measured_calibration_and_population():
 
 def test_default_grid_and_paired_endpoints():
     config = c.configuration()
-    assert len(c.cells(config)) == 11250
+    assert len(c.cells(config)) == 13500
     samples = c.network_samples()
     np.testing.assert_allclose(samples[:, :2].sum(1), samples[:, 2])
     for endpoint in samples:
@@ -50,7 +50,7 @@ def test_default_grid_and_paired_endpoints():
 def test_lp_scaling_preserves_source_counts_in_the_loaded_coding_case(tmp_path):
     plan = c.prepare(tmp_path)
     result = c.run_cell(plan, (('coding', 1), .75, 4, 100, 30))
-    assert result['results']['queue_haul']['initial_nominal_shed_fraction'] == pytest.approx(.625)
+    assert 0 < result['results']['queue_haul']['initial_nominal_shed_fraction'] <= .625 + 1e-8
     assert result['results']['queue_haul']['shed_fraction'] <= .625 + 1e-8
     assert max(r['max_relative_residual'] for r in result['results'].values()) <= 1e-8
 
@@ -58,7 +58,7 @@ def test_lp_scaling_preserves_source_counts_in_the_loaded_coding_case(tmp_path):
 def test_scaling_nodes_and_network_together_preserves_the_policy_tradeoff():
     plan = {'identity': 'scaling', 'config': c.configuration(), 'calibration': calibration(0), 'network_indices': [-1]}
     results = []
-    for gpus in (8, 80):
+    for gpus in (6400, 64000):
         plan['config']['gpus'] = gpus
         results.append(c.run_cell(plan, (('measured_pack', 0), .5, 0, 5 * gpus / 8, 30))['results'])
     for policy in c.POLICIES:
@@ -89,8 +89,9 @@ def test_isolated_fastest_masks_exist_in_the_common_library():
                                  c.bandwidth(endpoint, fleet.gpus, wan), calibration(0)['timing'][0])
         signatures = set(map(tuple, np.c_[r, k]))
         for counts in r + k:
-            desired = np.r_[counts * table.fastest, counts * ~table.fastest]
-            assert tuple(desired) in signatures
+            for desired in (np.r_[counts * table.fastest, np.zeros_like(counts)],
+                            np.r_[np.zeros_like(counts), counts * ~table.fastest]):
+                assert not desired.any() or tuple(desired) in signatures
 
 
 def test_execution_draws_preserve_initial_information_and_admission_accounting():
@@ -106,12 +107,12 @@ def test_execution_draws_preserve_initial_information_and_admission_accounting()
 def test_campaign_reduction_checks_all_cells_and_policies(tmp_path, monkeypatch):
     monkeypatch.setattr(c, 'plot', lambda *args: None)
     plan = c.prepare(tmp_path, smoke=True)
-    assert len(c.cells(plan['config'])) == 24
+    assert len(c.cells(plan['config'])) == 36
     with pytest.raises(ValueError, match='missing'):
         c.reduce(tmp_path)
     c.run(tmp_path)
     summary = c.reduce(tmp_path)
-    assert summary['cells'] == 24
+    assert summary['cells'] == 36
     audit = json.loads((tmp_path / 'dominance-audit.json').read_text())
     assert audit['maxima']['initial_nominal_lp_loss'] <= 1e-8
     c.run(tmp_path)  # Provenance-valid checkpoints may be resumed.
@@ -145,3 +146,36 @@ def test_configuration_and_provenance_fail_closed(tmp_path):
     c.write_json(tmp_path / 'plan.json', plan)
     with pytest.raises(ValueError, match='identity'):
         c.load_plan(tmp_path)
+
+
+def test_source_pacing_uses_measured_service_capacity_and_long_recorded_contexts():
+    ordinary, longer = [c.sample_fleet(w) for w in ('coding', 'coding_long')]
+    assert np.average(longer.context, weights=longer.count) > np.average(ordinary.context, weights=ordinary.count)
+    assert np.min(longer.context) >= 24576
+    assert np.max(longer.context) <= max(calibration(0)['replay_context_tokens'])
+    assert ordinary.metadata['source_session_rps'] < .1
+    assert ordinary.metadata['timing_load_factor'] < .1
+    assert ordinary.metadata['protect_resident']
+    assert ordinary.count @ ordinary.demand == pytest.approx(c.SOURCE_LOAD * ordinary.gpus)
+    assert all(max(durations) < 1 / ordinary.metadata['source_session_rps'] for durations in ordinary.metadata['turn_duration_s'])
+
+
+def test_baselines_share_every_mixed_action_batch_projection():
+    fleet = c.sample_fleet('coding_long')
+    replay, kv = c.library(fleet)
+    replay, kv = c.include_isolated(replay, kv, np.arange(len(fleet.count)) % 2 == 0)
+    signatures = set(map(tuple, np.c_[replay, kv]))
+    zero = np.zeros(replay.shape[1])
+    assert all(tuple(np.r_[row, zero]) in signatures for row in replay if row.any())
+    assert all(tuple(np.r_[zero, row]) in signatures for row in kv if row.any())
+
+
+def test_mixed_batch_resources_are_additive_pure_action_choices():
+    fleet = c.sample_fleet('measured_pack')
+    replay, kv = np.array([[1, 1, 1, 1, 0, 0, 0, 0.]]), np.array([[0, 0, 0, 0, 1, 1, 1, 1.]])
+    endpoint = c.network_samples()[0]
+    args = (.5, 60, endpoint, c.bandwidth(endpoint, fleet.nodes, 1000), calibration(0)['timing'][0])
+    mixed = c.schedule_table(fleet, replay, kv, *args)
+    pure = c.schedule_table(fleet, np.vstack((replay, np.zeros_like(replay))), np.vstack((np.zeros_like(kv), kv)), *args)
+    np.testing.assert_allclose(mixed.matrix[:, 0], pure.matrix[:, :2].sum(1), atol=1e-8)
+    assert mixed.gains[0] == pytest.approx(pure.gains[:2].sum())

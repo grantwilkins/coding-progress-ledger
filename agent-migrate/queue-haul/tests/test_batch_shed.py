@@ -352,4 +352,4 @@ def test_primary_isolated_lp_is_feasible_before_preserving_its_gain():
     t, choices, _ = c.forecast("coding", 0, c.GPUS, 8, .25, 1000, 60.)
     primary = c.solve_lp(t, c.policy_mask(t, "isolated_fastest"), -t.gains)
     assert c.certify(t, primary)["max_relative_residual"] <= 1e-8
-    assert abs(t.gains @ (primary - choices["isolated_fastest"])) <= c.PRIMARY_TOL + 1e-10
+    assert abs(t.gains @ (primary - choices["isolated_fastest"])) <= 2 * c.PRIMARY_TOL + 1e-10

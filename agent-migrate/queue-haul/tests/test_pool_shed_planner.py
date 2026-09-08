@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from pool_shed_execution import PooledExecution
-from pool_shed_planner import phase_profile, plan_admission, planning_grid, project_queues
+from pool_shed_planner import phase_profile, plan_admission, planning_grid, project_queues, recovery_prefix
 
 
 def test_secondary_lp_preserves_primary_below_solver_coefficient_cutoff():
@@ -76,6 +76,33 @@ def case(deadline=20.):
         deadline=deadline, endpoint=np.array([100., 100., 200.]), budgets=np.array([200., 200., 200.]),
         timing=timing, nominal_commit=np.array([6., 3., 6., 3.]), gains=np.full(4, .1), fastest=np.array([False]))
     return table, timing, calibration
+
+
+def test_protected_recovery_prefix_preserves_weighted_per_batch_limits():
+    engine = SimpleNamespace(now=0., fleet=SimpleNamespace(gpus=1), route=np.array([0, 0]),
+        gated=np.ones(2, bool), backlog=np.array([10., 1.]), mass=np.array([.1, 10.]), serving_load=lambda: np.zeros(2))
+    edges = np.array([0., 1., 10.1, 19.1, 20.])
+    work, end = recovery_prefix(engine, edges)
+    assert end == pytest.approx([19.1, 0.])
+    assert work.sum() == pytest.approx(11.)
+    assert np.all(work <= np.diff(edges) + 1e-12)
+    np.testing.assert_array_equal(engine.backlog, [10., 1.])
+
+
+def test_protected_fixed_gate_and_replay_do_not_double_book_capacity():
+    table, timing, calibration = case(30.)
+    table.fleet.gpus = 1
+    table.fleet.metadata["protect_resident"] = True
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit(np.array([1., 1., 0., 0.]))
+    engine.state[:] = [1, 5]
+    engine.remaining[:] = [4., 0.]
+    engine.gated[1], engine.backlog[1] = True, .2
+    chosen, _, diagnostic = plan_admission(engine, table, "queue_haul")
+    assert diagnostic["fixed_obligation_overload"] <= 1e-8
+    assert diagnostic["max_relative_residual"] <= 1e-8
+    assert np.isfinite(chosen).all()
+    np.testing.assert_array_equal(engine.backlog, [0., .2])
 
 
 def test_generated_replay_debt_changes_later_calibrated_compute_time():
@@ -237,3 +264,61 @@ def test_qh_contains_restricted_actions_on_the_same_frozen_temporal_matrix(monke
     for action in (0, 1):
         restricted = gains * (np.arange(len(gains)) % 2 == action)
         assert restricted @ original(matrix, capacity, restricted, debt, fleet, False) <= optimum + 1e-8
+
+
+def test_compute_peaks_reserve_short_bursts_without_inflating_network_or_work():
+    table, timing, calibration = case(20.)
+    table.fleet.metadata["protect_resident"] = True
+    edges = np.array([0., 20.])
+    profile = phase_profile(table, np.ones(1), 0, 0, 0., edges, np.full((2, 1), .5), timing, calibration)
+    assert profile["occupancy"] == pytest.approx([20.])
+    assert profile["replay"].sum() < 10.
+    assert profile["network"].sum() == pytest.approx(table.fleet.log[0])
+    assert profile["service_peak"] == pytest.approx([table.fleet.demand[0] * 20.])
+    assert profile["serving"].sum() < profile["service_peak"].sum()
+
+
+def test_gate_prefix_event_edges_keep_sequential_recovery_and_compute_disjoint():
+    engine = SimpleNamespace(now=0., fleet=SimpleNamespace(gpus=1), route=np.array([0]),
+        gated=np.ones(1, bool), backlog=np.array([.2]), mass=np.array([1.]), serving_load=lambda: np.zeros(2))
+    edges, events = np.array([0., 2.]), []
+    recovery_prefix(engine, edges, events)
+    edges = np.unique(np.r_[edges, events])
+    recovery, end = recovery_prefix(engine, edges)
+    compute = (edges[:-1] >= end[0]) * np.diff(edges)
+    assert end[0] == pytest.approx(.2)
+    assert recovery[0] + compute == pytest.approx(np.diff(edges))
+
+
+def test_secondary_primary_row_margin_stays_bounded_for_large_gain():
+    from pool_shed_campaign import PRIMARY_TOL, solve_lp
+
+    table = SimpleNamespace(matrix=np.ones((1, 1)), capacities=np.ones(1), gains=np.array([100.]), fleet=SimpleNamespace(gpus=1))
+    chosen = solve_lp(table, np.ones(1, bool), np.ones(1), primary=100.)
+    assert 0 <= 100. - table.gains @ chosen <= 2 * PRIMARY_TOL + 1e-12
+
+
+@pytest.mark.parametrize("policy", ["queue_haul", "greedy", "kv_only", "isolated_fastest"])
+def test_new_admission_cannot_sacrifice_mandatory_route_deadline(policy):
+    table, timing, calibration = case(5.)
+    table.fleet.metadata["protect_resident"] = True
+    table.fleet.t1[:] = 20.
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit(np.array([1., 0., 0., 0.]))
+    chosen, _, info = plan_admission(engine, table, policy, calibration=calibration)
+    assert info["mandatory_forecast_finish_s"][0] > table.deadline
+    assert chosen[table.route == 0].sum() == 0
+    assert chosen[table.route == 1].sum() > 0
+
+
+@pytest.mark.parametrize("policy", ["queue_haul", "replay_only"])
+def test_long_context_feedback_preserves_admitted_short_deadline_handoffs(policy):
+    from pool_shed_calibration import calibration
+    from pool_shed_campaign import execute_feedback, forecast
+
+    central = calibration(0)
+    table = forecast("coding_long", 0, 66666, 8, .5, 1000, 30)[0]
+    result = execute_feedback(table, table, policy, table.timing, central)
+    assert result["shed_fraction"] > .8
+    assert result["shed_fraction"] == pytest.approx(result["admitted_shed_fraction"], abs=1e-8)
+    assert result["max_relative_residual"] <= 1e-8

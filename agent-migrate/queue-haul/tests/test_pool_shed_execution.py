@@ -492,3 +492,17 @@ def test_scoped_primitive_cache_preserves_interrupted_execution_exactly():
             engine.advance(end)
         assert engines[0].result() == engines[1].result()
     assert engines[0].primitive_cache
+
+
+@pytest.mark.parametrize("protected,cycle", [(False, False), (False, True), (True, False), (True, True)])
+def test_cached_quiescence_preserves_idle_gaps_boundaries_and_resets(protected, cycle):
+    table, _, _ = case()
+    table.fleet.metadata.update(protect_resident=protected, sequence_cycle=cycle, source_session_rps=.1,
+        turn_sequences=[[{"context": 100, "prompt": 10, "output": 2},
+                         {"context": 0, "prompt": 5, "output": 1, "reset": True}], []],
+        turn_duration_s=[[.2, .1], []], turn_offset=[1, 0])
+    cache, counts = {}, np.array([1, 0])
+    for now in (2., 0., .05, .1, .2, 9.999999, 10., 10.05, 10.2, 20., 21., 40., 40.1):
+        cached, plain = _quiesce(table.fleet, counts, now, cache), _quiesce(table.fleet, counts, now)
+        assert cached[0] == plain[0] and cached[3] == plain[3]
+        assert np.array_equal(cached[1], plain[1]) and np.array_equal(cached[2], plain[2])

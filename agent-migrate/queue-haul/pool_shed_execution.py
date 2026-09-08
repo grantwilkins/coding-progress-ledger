@@ -40,7 +40,7 @@ def _flow_with_caps(mass, route, caps, budgets, kv=None, application=None, nodes
     raise RuntimeError("network sharing failed to exhaust a resource")
 
 
-def _quiesce(fleet, counts, now):
+def _quiesce(fleet, counts, now, cache=None):
     sequences = fleet.metadata.get("turn_sequences")
     if sequences is None:
         raise ValueError("pooled execution requires explicit finite source turn sequences")
@@ -56,8 +56,12 @@ def _quiesce(fleet, counts, now):
     protected = fleet.metadata.get("protect_resident", False)
     if protected and cadence:
         step = int(np.floor(now * cadence + 1e-10)) + 1
+    key = ("quiesce", counts.astype(float, copy=False).tobytes(), step)
+    if cache is not None and key in cache:
+        end, context, reset, terminal = cache[key]
+        return max(now, end), context, reset, terminal
     completed = np.full_like(lengths, step) if cycle else np.minimum(lengths, step)
-    end = now if protected else max(now, float(completed.max(initial=0) / cadence)) if cadence else now
+    end = 0. if protected or not cadence else float(completed.max(initial=0) / cadence)
     if protected and cadence:
         durations = fleet.metadata["turn_duration_s"]
         for i, n, length in zip(active, completed, lengths):
@@ -76,7 +80,10 @@ def _quiesce(fleet, counts, now):
             context[i] = row["context"] + row["prompt"] + row["output"]
             reset[i] = (cycle and offset + n > len(sequences[i])) or any(
                 sequences[i][(offset + j) % len(sequences[i])].get("reset", False) for j in range(min(n, len(sequences[i]))))
-    return end, context, reset, bool(not cycle and np.all(completed == lengths))
+    terminal = bool(not cycle and np.all(completed == lengths))
+    if cache is not None:
+        cache[key] = end, context, reset, terminal
+    return max(now, end), context, reset, terminal
 
 
 def _buffered(fleet, counts, start, end, calibration, cache=None):
@@ -277,7 +284,7 @@ class PooledExecution:
                     if self.state[i] == 0 and a == 0:
                         self.state[i], self.remaining[i] = 1, self.tail[i]
                     elif self.state[i] in (0, 1):
-                        self.release[i], context, reset, terminal = _quiesce(self.fleet, c, self.now)
+                        self.release[i], context, reset, terminal = _quiesce(self.fleet, c, self.now, self.primitive_cache)
                         self.quiesced[i] = self.release[i]
                         self.exhausted += int(terminal)
                         required = self.mass[i] * (c @ np.maximum(self.memory_tokens, np.ceil(context / 16) * 16))
