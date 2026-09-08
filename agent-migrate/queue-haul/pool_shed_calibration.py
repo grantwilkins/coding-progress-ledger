@@ -316,7 +316,7 @@ def loaded_execution_check(value):
         endpoint = np.full(2, row["bandwidth_mbps"] * 125_000)
         table = SimpleNamespace(fleet=fleet, replay=np.ones((1, 8)), kv=np.zeros((1, 8)), route=np.array([0]),
             deadline=300., endpoint=endpoint, budgets=np.r_[endpoint, endpoint.sum()], load=row["rho"])
-        result = execute_pooled(table, np.ones(1), timing, base)
+        result = execute_pooled(table, np.ones(1), timing, base, chunks=1)
         if result["completed_sessions"] != 8:
             raise RuntimeError("loaded execution check did not finish all recorded sessions")
         observed.append(row["commit_s"])

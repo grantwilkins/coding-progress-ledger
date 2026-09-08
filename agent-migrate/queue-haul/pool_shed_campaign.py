@@ -19,12 +19,13 @@ from scipy.optimize import linprog
 from scipy.sparse import csr_matrix
 
 from pool_shed_calibration import calibration, regional_check, replay_seconds, kv_state, loaded_execution_check, resident_execution_check
+from pool_shed_execution import DISPATCH_CHUNKS
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "outputs/a100-pooled-execution"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-pooled-execution-v5"
+SCHEMA = "queue-haul-a100-pooled-execution-v6"
 GPUS, SOURCE_LOAD = 66666, .8
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
 ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
@@ -472,6 +473,7 @@ def compare(table):
 def configuration(smoke=False):
     return {"schema": SCHEMA, "gpus": GPUS, "installed_gpu_w": GPUS * 300, "source_load": SOURCE_LOAD,
             "gpus_per_node": 8,
+            "dispatch_chunks": DISPATCH_CHUNKS,
             "require_recovery": False,
             "resident_loads": [.25, .95] if smoke else list(LOADS),
             "deadlines": [1, 10, 60] if smoke else list(DEADLINES),
@@ -527,6 +529,7 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
                             "measured replay-induced resident service loss generates recoverable queue debt; WAN-only KV time does not occupy compute",
                             "handoff and service recovery are separate; require_recovery adds nominal recovery constraints, not an execution guarantee",
                             "replay and KV completion share reusable fluid batch compute; dynamic load factor is not also divided by idle fraction",
+                            "common bounded-wave dispatcher maintains a bandwidth-based active window and prioritizes final deltas; frozen initial snapshots while source sessions continue",
                             "replay logs assume two bytes/token; KV uses loaded-runtime serialized geometry",
                             "WAN allocations are scenarios, not measurements of backbone capacity",
                             "measured single-A100-VM endpoints are pooled per node, shared by its GPUs and both destinations; eight GPUs/node is a transfer assumption",
@@ -588,7 +591,7 @@ def run_cell(plan, cell, expanded=False):
     start = time.perf_counter()
     results = {}
     for policy in POLICIES:
-        executed = execute_pooled(realized, choices[policy], plan["calibration"]["timing"][draw], plan["calibration"])
+        executed = execute_pooled(realized, choices[policy], plan["calibration"]["timing"][draw], plan["calibration"], chunks=plan["config"]["dispatch_chunks"])
         results[policy] = {**executed, "planned_shed_fraction": certificates[policy]["shed_fraction"],
                           "planned_action_counts": certificates[policy]["action_counts"],
                           "planned_action_fractions": certificates[policy]["action_fractions"],
@@ -811,7 +814,7 @@ def plot_debt(rows, out, gpus):
             ax.plot([r["deadline_s"] for r in series], [r["median_pending_resident_debt_work_s"] / (2 * gpus) for r in series], **plot_style.policy_style(policy))
         ax.set(title=f"Coding; load {load:g}; {wan} Gbit/s", xscale="log", xlabel="Shed deadline (s)")
     fig.supylabel("Remaining resident queue work\n(reference GPU-seconds / destination GPU)")
-    fig.suptitle("Replay-induced resident debt remaining at the deadline\nSource-buffer debt is recorded separately")
+    fig.suptitle("Migration-induced resident debt remaining at the deadline\nSource-buffer debt is recorded separately")
     fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=3, fontsize=9)
     fig.tight_layout(rect=(.03, .09, 1, .90))
     for extension in ("png", "pdf"):
@@ -866,6 +869,37 @@ def plot_scale(scales, out):
     plt.close(fig)
 
 
+def resolution_check(c):
+    from pool_shed_execution import execute_pooled
+
+    rows, differences = [], []
+    for workload, load, wan, deadline in product(("measured_pack", "coding"), (.5, .95), (40, 1000), (30, 300, 3600)):
+        table, choices, _ = forecast(workload, 0, GPUS, 8, load, wan, deadline)
+        results = {}
+        for chunks in (DISPATCH_CHUNKS // 2, DISPATCH_CHUNKS, 2 * DISPATCH_CHUNKS, 4 * DISPATCH_CHUNKS):
+            started = time.perf_counter()
+            evaluated = {p: execute_pooled(table, choices[p], c["timing"][0], c, chunks=chunks) for p in POLICIES}
+            results[chunks] = {p: r["shed_fraction"] for p, r in evaluated.items()}
+            rows.append({"workload": workload, "load": load, "wan_gbps": wan, "deadline_s": deadline,
+                         "chunks": chunks, "seconds": time.perf_counter() - started, "shed_fraction": results[chunks],
+                         "resident_debt_work_s_per_gpu": {p: sum(r["pending_resident_debt_work_s"]) / (2 * GPUS) for p, r in evaluated.items()},
+                         "buffer_work_s_per_gpu": {p: r["pending_buffered_work_s"] / (2 * GPUS) for p, r in evaluated.items()}})
+        for coarse, fine in ((DISPATCH_CHUNKS // 2, DISPATCH_CHUNKS), (DISPATCH_CHUNKS, 2 * DISPATCH_CHUNKS),
+                             (DISPATCH_CHUNKS, 4 * DISPATCH_CHUNKS), (2 * DISPATCH_CHUNKS, 4 * DISPATCH_CHUNKS)):
+            for policy in POLICIES:
+                gap = lambda k: results[k]["queue_haul"] - results[k][policy]
+                differences.append({"workload": workload, "load": load, "wan_gbps": wan, "deadline_s": deadline,
+                                    "policy": policy, "chunks": coarse, "fine_chunks": fine,
+                                    "absolute_shed_difference": abs(results[coarse][policy] - results[fine][policy]),
+                                    "absolute_qh_gap_difference": abs(gap(coarse) - gap(fine))})
+    maximum = max(r["absolute_shed_difference"] for r in differences if r["chunks"] == DISPATCH_CHUNKS)
+    gap_maximum = max(r["absolute_qh_gap_difference"] for r in differences if r["chunks"] == DISPATCH_CHUNKS)
+    return {"rows": rows, "differences": differences, "default_chunks": DISPATCH_CHUNKS,
+            "maximum_default_to_fine_shed_difference": maximum, "maximum_default_to_fine_qh_gap_difference": gap_maximum,
+            "gate_pass": max(maximum, gap_maximum) <= .02,
+            "scope": "24 representative central scenarios, all five fixed plans; empirical dispatch-resolution sensitivity, not a rigorous error bound or measurement interval"}
+
+
 def validate(out):
     from pool_shed_execution import regional_execution_check
 
@@ -917,6 +951,8 @@ def validate(out):
               "scope": "library sensitivity, not a bound on global scheduling optimality"}
     report["resident_interference"] = c["resident_interference"]
     report["resident_execution"] = resident_execution_check(c, report["regional_execution"])
+    report["execution_resolution"] = resolution_check(c)
+    report["seconds"] = time.perf_counter() - started
     write_json(out / "validation.json", report)
     plot_scale(scales, out)
     plot_optimal_kv(faces, out)
@@ -926,6 +962,8 @@ def validate(out):
         raise RuntimeError("pool timing fails the regional hardware holdout; see validation.json")
     if not report["loaded_execution"]["gate_pass"]:
         raise RuntimeError("pool timing fails the loaded replay holdout; see validation.json")
+    if not report["execution_resolution"]["gate_pass"]:
+        raise RuntimeError("dispatch-resolution sensitivity exceeds two percentage points; see validation.json")
     return report
 
 

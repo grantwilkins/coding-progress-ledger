@@ -268,3 +268,57 @@ def test_uncommitted_source_buffer_work_is_separate_from_destination_backlog():
     assert result["pending_source_buffer_work_s"] == 2
     assert result["pending_backlog_reference_work_s"] == 0
     assert result["pending_buffered_work_s"] == 2
+
+
+def test_pipelined_kv_dispatch_matches_fifo_without_whole_population_barrier():
+    table, timing, calibration = case(context=(1., 100.), replay=((0., 0.),), kv=((1., 0.),),
+                                      route=(0,), gpus=100, demand=(0., 0.), deadline=10.)
+    table.fleet.count[:] = [100, 0]
+    table.fleet.gain[:] = [.01, 0]
+    table.fleet.kv[0] = 1
+    timing["kv_completion_s"] = .1
+    result = execute_pooled(table, np.array([100.]), timing, calibration, chunks=100)
+    assert result["completed_sessions"] == pytest.approx(99)
+    assert result["shed_fraction"] == pytest.approx(.99)
+    assert result["transferred_bytes"] == pytest.approx([100, 0, 100])
+    assert len(result["completion_events"]) == 1
+    assert result["completion_events"][0]["multiplicity"] == 99
+    assert result["completion_events"][0]["first_completion_s"] == pytest.approx(.2)
+    assert execute_pooled(table, np.array([100.]), timing, calibration, chunks=1)["completed_sessions"] == 0
+
+
+@pytest.mark.parametrize("chunks", [64, 128, 256, 512])
+def test_finer_dispatch_keeps_enough_endpoint_concurrency_to_fill_wan(chunks):
+    table, timing, calibration = case(context=(1., 100.), replay=((0., 0.),), kv=((1., 0.),),
+                                      route=(0,), gpus=100, demand=(0., 0.), deadline=10.)
+    table.fleet.count[:], table.fleet.kv[0], table.endpoint[:] = [100, 0], 1., 1.
+    timing["kv_completion_s"] = .1
+    result = execute_pooled(table, np.array([100.]), timing, calibration, chunks=chunks)
+    assert result["transferred_bytes"][0] >= 98
+    assert result["completed_sessions"] >= 90
+
+
+def test_zero_byte_initial_waves_need_no_network_admission():
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      gpus=100, demand=(0., 0.), deadline=9.)
+    table.fleet.count[:] = [100, 0]
+    table.fleet.log[0] = 0
+    result = execute_pooled(table, np.array([100.]), timing, calibration, chunks=16)
+    assert result["completed_sessions"] == 100
+    assert result["last_completion_s"] == 8
+
+
+def test_final_delta_priority_does_not_duplicate_application_node_capacity():
+    table, timing, calibration = case(context=(1., 100.), replay=((0., 0.),), kv=((1., 0.),),
+                                      route=(0,), demand=(0., 0.), deadline=2.)
+    table.fleet.count[:] = [2, 0]
+    table.fleet.kv[0] = 1
+    table.endpoint[:], table.budgets[:] = 100, 100
+    table.fleet.metadata.update(source_session_rps=1., turn_sequences=[[
+        {"context": 1 + i, "prompt": 1, "output": 0} for i in range(10)], []])
+    timing["regional_kv_bytes_per_s"] = [1., 1.]
+    calibration.update(F=1., G=1.)
+    result = execute_pooled(table, np.array([2.]), timing, calibration, chunks=2)
+    assert result["completed_sessions"] == 1
+    assert result["last_completion_s"] == 2
+    assert result["transferred_bytes"] == pytest.approx([2, 0, 2])

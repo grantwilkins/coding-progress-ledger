@@ -34,9 +34,14 @@ are not inferred from the LP matrix. Plots separate selected actions from comple
 is reported without replacing the LP choice with a baseline. Optimal-face
 min/max KV diagnostics fix maximum shed while leaving debt unconstrained.
 
-Execution advances divisible batch populations through initial transfer/replay,
+Execution pipelines divisible batch populations through initial transfer/replay,
 source turn-boundary quiescence, final delta, catch-up and handoff. It redistributes
-released bandwidth and compute; imported serving and buffered requests compete
+released bandwidth and compute. Each action/cohort has bounded waves. A
+bandwidth-based active window admits enough waves to use available transfer
+capacity; wave count controls completion resolution. Final deltas take priority
+using residual shared network budgets. Initial snapshots
+remain fixed while queued source sessions continue. This common dispatcher
+avoids a whole-cohort completion barrier. Imported serving and buffered requests compete
 with unfinished migrations. Measured replay interference also creates resident
 queue debt, which consumes subsequent recovery capacity and affects migration
 slowdown. KV network time does not occupy compute. Complete recorded coding trajectories retain their
@@ -69,8 +74,13 @@ The independent executor is checked against the fixed 24 regional episodes using
 the original MAE <= 3 s and R² >= 0.8 gates, and against 220 loaded-replay
 holdouts. Regional results are retrospective reuse of an inspected partition.
 Fixed-context timing checks do not establish fleet-scale fidelity, dynamic
-admission accuracy or a long-context serving SLO. Validation reports preserve
-per-action errors and false-feasible deadline counts. Resident completion loss
+admission accuracy or a long-context serving SLO. Validation also compares dispatch resolutions using fixed central plans in
+24 representative scenarios. The campaign uses 32 pieces per action/cohort;
+32 versus 128 pieces changes shed by at most 1.83 percentage points and a
+QH-versus-baseline gap by at most 1.66 points on that grid. This numerical
+sensitivity is separate from measurement intervals; narrow policy advantages
+need a finer-resolution check.
+Validation reports preserve per-action errors and false-feasible deadline counts. Resident completion loss
 during replay is fitted from 31 initially unbacklogged regional routes in 23
 episodes at offered loads 0.25 and 0.50 (central loss 89.65%). Independent engine debt at handoff has MAE
 0.847 requests / normalized MAE 3.29% across six validation routes. This measures
@@ -99,7 +109,8 @@ context resets and final-copy costs, so planned dominance does not guarantee
 executed dominance. Maximum source-power credit is approximately **11.935 MW**.
 
 Buffered serving work drains only within the advertised reference headroom;
-its utilization enters the measured migration slowdown. At full offered load,
+its utilization enters the measured migration slowdown. Source-held buffers,
+destination-held buffers and resident debt are reported separately. At full offered load,
 queue debt can persist. This does not establish incoming-request latency or
 resident SLOs. Applying the measured load response above its 0.975 training
 limit, up to 1.0, is a small explicit extrapolation.

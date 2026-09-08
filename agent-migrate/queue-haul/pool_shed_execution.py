@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
+DISPATCH_CHUNKS = 32
+
 
 def flow_rates(mass, route, endpoint, budgets):
     """Weighted max-min per-batch rates under endpoint, route and shared caps."""
@@ -109,12 +111,14 @@ def catchup(fleet, counts, action, route, context, reset, timing, calibration):
     return float(2 * (counts @ changed)), float(idle)
 
 
-def execute_pooled(table, chosen, timing, calibration=None):
+def execute_pooled(table, chosen, timing, calibration=None, chunks=1):
     """Time-share batch mass; imported serving starts at each committed handoff."""
     if calibration is None:
         from pool_shed_calibration import calibration as load_calibration
         calibration = load_calibration(0)
     fleet, chosen = table.fleet, np.asarray(chosen, float)
+    if not isinstance(chunks, (int, np.integer)) or isinstance(chunks, bool) or chunks < 1:
+        raise ValueError("dispatch chunks must be a positive integer")
     if (fleet.gpus <= 0 or np.any(~np.isin(table.route, [0, 1]))
             or not np.isfinite(np.r_[np.ravel(table.load), table.deadline, table.endpoint, table.budgets, timing["beta"]]).all()
             or np.any(np.asarray(table.load) < 0) or np.any(np.asarray(table.load) > 1)
@@ -125,9 +129,13 @@ def execute_pooled(table, chosen, timing, calibration=None):
     if (chosen.shape != (len(table.route),) or not np.isfinite(chosen).all() or np.any(chosen < 0)
             or np.any((table.replay + table.kv).T @ chosen > fleet.count * (1 + 1e-8) + 1e-8)):
         raise ValueError("invalid or duplicated source migration mass")
-    selected = [(j, action, counts) for j in np.flatnonzero(chosen > 1e-10)
-                for action, counts in enumerate((table.replay[j], table.kv[j])) if counts.any()]
-    mass = np.array([chosen[j] for j, _, _ in selected])
+    selected, mass = [], []
+    for j in np.flatnonzero(chosen > 1e-10):
+        for action, counts in enumerate((table.replay[j], table.kv[j])):
+            if counts.any():
+                selected.extend([(j, action, counts)] * chunks)
+                mass.extend([chosen[j] / chunks] * chunks)
+    mass = np.array(mass)
     route = np.array([table.route[j] for j, _, _ in selected], int)
     action = np.array([a for _, a, _ in selected], int)
     counts = np.array([c for _, _, c in selected]).reshape(-1, len(fleet.count))
@@ -140,6 +148,7 @@ def execute_pooled(table, chosen, timing, calibration=None):
                 or mass[ids] @ memory[ids] > free_memory + 1e-7 * fleet.kv_capacity):
             raise ValueError("selected migrations exceed destination serving or memory capacity")
     n = len(selected)
+    group, initial_ready = np.arange(n) // chunks, np.zeros(n, bool)
     state, remaining, release = np.zeros(n, int), np.zeros(n), np.zeros(n)
     tail, delta, compute_used, idle_work = np.zeros(n), np.zeros(n), np.zeros(2), np.zeros(2)
     quiesced, buffered, backlog, backlog_total = (np.zeros(n) for _ in range(4))
@@ -150,7 +159,7 @@ def execute_pooled(table, chosen, timing, calibration=None):
     committed, network_used, loads = np.zeros((4, len(fleet.count))), np.zeros(3), initial_load.copy()
     reserved = mass * memory
     peak_memory = np.array([reserved[route == r].sum() for r in (0, 1)])
-    peak_load, events, exhausted = loads.copy(), [], 0
+    peak_load, events, exhausted = loads.copy(), {}, 0
     tail_rate = calibration["kv_tail_replay_tps"]
     if tail_rate <= 0 or table.deadline <= 0:
         raise ValueError("positive tail service and deadline required")
@@ -163,6 +172,7 @@ def execute_pooled(table, chosen, timing, calibration=None):
             packing = np.ones_like(kappa) if np.any((c > 0) & (fleet.context > fleet.metadata.get("batch_context_limit", np.inf))) else kappa
             tail[i] = (c @ (packing * fleet.t1) + np.max(np.where(c > 0, (1 - packing) * fleet.t1, 0))) * regional[route[i]]
     now, iterations = 0., 0
+    network_key, network_rates = None, np.zeros(n)
     while (np.any(state < 6) or np.any(backlog > 1e-9) or np.any(resident_debt > 1e-9)) and now <= table.deadline:
         iterations += 1
         if iterations > 20 * n + 20:
@@ -199,21 +209,47 @@ def execute_pooled(table, chosen, timing, calibration=None):
                     buffered[i], backlog[i] = _buffered(fleet, c, quiesced[i], now, calibration)
                     backlog_total[i] = backlog[i]
                     peak_load[r] = max(peak_load[r], loads[r])
-                    events.append({"column": int(selected[i][0]), "action": "replay" if a == 0 else "kv_transfer",
-                                   "route": int(r), "multiplicity": float(mass[i]), "completion_s": float(now),
-                                   "resident_debt_work_s": float(resident_debt[r]),
-                                   "source_buffer_work_s": float(mass[route == r] @ backlog[route == r])})
+                    event = events.setdefault((int(selected[i][0]), int(a)), {
+                        "column": int(selected[i][0]), "action": "replay" if a == 0 else "kv_transfer", "route": int(r),
+                        "multiplicity": 0., "first_completion_s": float(now)})
+                    event.update(multiplicity=event["multiplicity"] + float(mass[i]), completion_s=float(now),
+                                 resident_debt_work_s=float(resident_debt[r]), source_buffer_work_s=float(mass[route == r] @ backlog[route == r]))
             continue
         rates = np.zeros(n)
         transfers = np.flatnonzero((state == 0) | (state == 3))
         endpoint = np.asarray(table.endpoint)
         application = timing.get("regional_kv_bytes_per_s", calibration.get("regional_components", {}).get("endpoint_bytes_per_s", endpoint[:2]))
         # A KV application cap is additional to the measured bulk endpoint cap.
-        if len(transfers):
-            caps = np.where(action[transfers] == 1, np.minimum(endpoint[route[transfers]], np.asarray(application)[route[transfers]]),
-                            endpoint[route[transfers]])
-            rates[transfers] = _flow_with_caps(mass[transfers], route[transfers], caps, table.budgets,
-                action[transfers] == 1, application, getattr(fleet, "nodes", fleet.gpus))
+        key = (transfers.tobytes(), state[transfers].tobytes())
+        if len(transfers) and key != network_key:
+            nodes = getattr(fleet, "nodes", fleet.gpus)
+            residual, app_residual = np.array(table.budgets, float), np.asarray(application) * nodes
+            for phase in (3, 0):
+                ids = transfers[state[transfers] == phase]
+                if not len(ids):
+                    continue
+                if phase == 0:
+                    routes, actions = route[::chunks], action[::chunks]
+                    caps = np.where(actions == 1, np.minimum(endpoint[routes], np.asarray(application)[routes]), endpoint[routes])
+                    pending = np.bincount(group[ids], weights=mass[ids], minlength=n // chunks)
+                    virtual = _flow_with_caps(pending, routes, caps, residual, actions == 1, app_residual / nodes, nodes)
+                    active = ids[initial_ready[ids]]
+                    admitted = np.bincount(group[active], weights=mass[active], minlength=n // chunks)
+                    needed = np.ceil(np.maximum(pending * virtual / caps - admitted, 0.) / mass[::chunks] - 1e-12).astype(int)
+                    for g in np.flatnonzero(needed > 0):
+                        start = g * chunks
+                        waiting = np.flatnonzero((state[start:start + chunks] == 0) & ~initial_ready[start:start + chunks]) + start
+                        initial_ready[waiting[:needed[g]]] = True
+                    ids = ids[initial_ready[ids]]
+                    if not len(ids):
+                        continue
+                caps = np.where(action[ids] == 1, np.minimum(endpoint[route[ids]], np.asarray(application)[route[ids]]), endpoint[route[ids]])
+                rates[ids] = _flow_with_caps(mass[ids], route[ids], caps, residual, action[ids] == 1, app_residual / nodes, nodes)
+                used = mass[ids] * rates[ids]
+                residual = np.maximum(residual - np.r_[[used[route[ids] == r].sum() for r in (0, 1)], used.sum()], 0.)
+                app_residual = np.maximum(app_residual - [used[(route[ids] == r) & (action[ids] == 1)].sum() for r in (0, 1)], 0.)
+            network_key, network_rates = key, rates.copy()
+        rates[transfers] = network_rates[transfers]
         computing = (state == 1) | (state == 4)
         backlog_rates = np.zeros(n)
         resident_growth, resident_recovery = np.zeros(2), np.zeros(2)
@@ -251,6 +287,7 @@ def execute_pooled(table, chosen, timing, calibration=None):
         remaining = np.maximum(remaining - rates * step, 0)
         now += step
     fractions, numbers = committed @ fleet.gain, committed.sum(1)
+    events = list(events.values())
     pending = float(mass @ (buffered * np.divide(backlog, backlog_total, out=np.zeros(n), where=backlog_total > 0)))
     source_buffered, source_work = sum((mass[i] * np.array(_buffered(fleet, counts[i], quiesced[i], now, calibration))
                                        for i in np.flatnonzero((state >= 3) & (state < 6))), start=np.zeros(2))
@@ -274,7 +311,9 @@ def execute_pooled(table, chosen, timing, calibration=None):
             "pending_source_buffer_work_s": float(source_work),
             "pending_buffered_work_s": float(source_work + mass @ backlog),
             "unfinished_batch_mass": float(mass[state != 6].sum()), "memory_blocked_batch_mass": float(mass[state == 7].sum()),
-            "trace_exhausted_action_groups": exhausted,
+            "trace_exhausted_waves": exhausted,
+            "dispatch_chunks": int(chunks), "dispatch_wave_count": n,
+            "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; frozen initial snapshot while source continues",
             "execution_model": "independent_event_fluid_batch_mass_finite_trace",
             "source_pacing": ("paced recorded trajectories; explicit reset on cyclic wrap" if fleet.metadata.get("sequence_cycle")
                               else "finite recorded turns at explicit equal cadence; terminal context retained"),
@@ -320,7 +359,7 @@ def regional_execution_check(calibration):
                 deadline=float(scenario["deadline_s"]), endpoint=endpoint,
                 load=np.array([scenario["background"][r][0] for r in ("east", "germany")]),
                 budgets=np.r_[endpoint, plan["network_contract"]["aggregate"]["natural_mbps"] * 125_000])
-            result = execute_pooled(table, np.ones(2), calibration["timing"][0], calibration)
+            result = execute_pooled(table, np.ones(2), calibration["timing"][0], calibration, chunks=1)
             if result["completed_sessions"] != len(context):
                 raise RuntimeError("regional execution did not complete the recorded actions")
             rows.append({"scenario_id": row["scenario_id"], "policy": row["policy"],
