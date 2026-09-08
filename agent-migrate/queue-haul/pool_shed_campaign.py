@@ -18,18 +18,19 @@ import numpy as np
 from scipy.optimize import linprog
 from scipy.sparse import csr_matrix
 
-from pool_shed_calibration import calibration, regional_check, replay_seconds, kv_state, loaded_execution_check
+from pool_shed_calibration import calibration, regional_check, replay_seconds, kv_state, loaded_execution_check, resident_execution_check
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "outputs/a100-pooled-execution"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-pooled-execution-v4"
+SCHEMA = "queue-haul-a100-pooled-execution-v5"
 GPUS, SOURCE_LOAD = 66666, .8
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
 ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
 DEADLINES = (1, 3, 10, 30, 60, 120, 300, 600, 1800, 3600)
 LOADS = (.25, .5, .75, .9, .95)
+PRIMARY_TOL = 1e-9
 
 
 def digest(value):
@@ -223,6 +224,30 @@ class Table:
     endpoint: np.ndarray
     budgets: np.ndarray
     timing: dict
+    debt: np.ndarray
+    nominal_commit: np.ndarray
+    service_time: np.ndarray
+    require_recovery: bool = False
+
+
+def nominal_action(fleet, counts, action, route, rate, timing, measured):
+    from pool_shed_execution import _quiesce, _buffered, catchup
+
+    if not counts.any():
+        return 0., 0., 0., 0.
+    knots = fleet.metadata.get("packing_context_tokens")
+    kappa = np.interp(fleet.context, knots, timing["packing_kappa"]) if knots else timing["kappa"]
+    if np.any((counts > 0) & (fleet.context > fleet.metadata.get("batch_context_limit", np.inf))):
+        kappa = 1.
+    work = float(batch_time(counts[None, :], fleet.t1, timing["beta"], kappa, 0.)[0]) if action == 0 else 0.
+    work *= timing.get("regional_replay_factor", [1., 1.])[route]
+    volume = float(counts @ (fleet.log if action == 0 else fleet.kv))
+    load_factor = np.exp(timing["beta"] * measured["forecast_load"])
+    pause, context, reset, _ = _quiesce(fleet, counts, volume / rate + work * load_factor)
+    delta, tail = catchup(fleet, counts, action, route, context, reset, timing, measured)
+    commit = pause + delta / rate + tail * load_factor + measured.get("switch_s", 0.)
+    _, buffered = _buffered(fleet, counts, pause, commit, measured)
+    return volume + delta, (work + tail) * load_factor, commit, buffered
 
 
 def isolated_methods(fleet, load, endpoint, budgets, timing):
@@ -231,6 +256,11 @@ def isolated_methods(fleet, load, endpoint, budgets, timing):
     kv_rates = np.minimum(rates, timing.get("regional_kv_bytes_per_s", rates))
     replay = fleet.log / rates[:, None] + fleet.t1 * np.exp(timing["beta"] * load) * np.asarray(timing.get("regional_replay_factor", [1., 1.]))[:, None]
     kv = fleet.kv / kv_rates[:, None] + (timing["kv_completion_s"] + np.asarray(fleet.metadata.get("kv_partial_s", np.zeros(len(fleet.count))))) * np.exp(timing["beta"] * load)
+    if "turn_sequences" in fleet.metadata:
+        measured = {**calibration(0), "forecast_load": load}
+        shapes = np.eye(len(fleet.count))
+        replay = np.array([[nominal_action(fleet, c, 0, route, rates[route], timing, measured)[2] for c in shapes] for route in (0, 1)])
+        kv = np.array([[nominal_action(fleet, c, 1, route, kv_rates[route], timing, measured)[2] for c in shapes] for route in (0, 1)])
     return replay.min(0) < kv.min(0)
 
 
@@ -261,12 +291,35 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
     rates = (logs + state) / deadline
     per_batch = np.minimum(endpoint[route], np.minimum(budgets[route], budgets[2]))
     kv_per_batch = np.minimum(per_batch, np.asarray(timing.get("regional_kv_bytes_per_s", endpoint[:2]))[route])
+    r_commit, k_commit = logs / per_batch + duration, state / kv_per_batch + deadline - kv_release
+    buffered = np.zeros(len(route))
+    if "turn_sequences" in fleet.metadata:
+        measured, cache = {**calibration(0), "forecast_load": load}, {}
+        estimates = []
+        for action, counts, speed in ((0, r, per_batch), (1, k, kv_per_batch)):
+            rows = []
+            for j, c in enumerate(counts):
+                key = (action, int(route[j]), tuple(c))
+                if key not in cache:
+                    cache[key] = nominal_action(fleet, c, action, route[j], speed[j], timing, measured)
+                rows.append(cache[key])
+            estimates.append(np.array(rows).T)
+        logs, duration, r_commit, r_buffer = estimates[0]
+        state, k_work, k_commit, k_buffer = estimates[1]
+        release, kv_release = deadline - duration, deadline - k_work
+        buffered = r_buffer + k_buffer
+        rates = (logs + state) / deadline
     eligible = ((duration <= deadline) & ((logs == 0) | (release > 0)) & (kv_release >= 0)
-                & ((state == 0) | (kv_release > 0)) & (logs / per_batch + duration <= deadline + 1e-12)
-                & (state / kv_per_batch <= kv_release + 1e-12) & (rates <= per_batch * (1 + 1e-12)))
+                & ((state == 0) | (kv_release > 0)) & (r_commit <= deadline + 1e-12)
+                & (k_commit <= deadline + 1e-12) & (rates <= per_batch * (1 + 1e-12)))
     total = r + k
     row_masks = np.array([route == j for j in (0, 1)])
     compute = duration + deadline - kv_release
+    loss = timing.get("resident_replay_loss", 0.)
+    debt = load * (loss * duration + deadline - kv_release) + buffered
+    service_time = ((1 - load * (1 - loss)) * duration + deadline - kv_release + buffered
+                    + (r @ fleet.demand) * np.maximum(deadline - r_commit, 0)
+                    + (k @ fleet.demand) * np.maximum(deadline - k_commit, 0))
     matrix = np.vstack((total.T, row_masks * compute, row_masks * (total @ fleet.demand),
                         row_masks * (total @ fleet.memory_tokens), row_masks * rates, row_masks * (state / deadline), rates))
     capacities = np.r_[fleet.count, [fleet.gpus * deadline] * 2, [fleet.gpus * (1 - load)] * 2,
@@ -275,7 +328,8 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
     if np.any(capacities < 0):
         raise ValueError("resident state exceeds pooled KV capacity")
     return Table(fleet, r, k, route, duration, release, kv_release, logs, state, rates, eligible, fastest,
-                 matrix, capacities, total @ fleet.gain, deadline, load, endpoint, budgets, timing)
+                 matrix, capacities, total @ fleet.gain, deadline, load, endpoint, budgets, timing,
+                 debt, np.maximum(r_commit, k_commit), service_time)
 
 
 def policy_mask(table, policy):
@@ -301,10 +355,12 @@ def solve_lp(table, allowed, objective, primary=None):
     matrix = table.matrix[:, ids] * table.fleet.gpus / scale[:, None]
     column_scale = np.maximum(matrix.max(0), 1.)
     cost = objective[ids] * table.fleet.gpus / column_scale
-    equality = None if primary is None else (table.gains[ids] * table.fleet.gpus / column_scale)[None, :]
-    result = linprog(cost / max(abs(cost).max(), 1e-30), A_ub=csr_matrix(matrix / column_scale),
-                     b_ub=(table.capacities > 0).astype(float), A_eq=equality,
-                     b_eq=None if primary is None else [primary], bounds=(0, None), method="highs",
+    constraints, limits = matrix / column_scale, (table.capacities > 0).astype(float)
+    if primary is not None:
+        constraints = np.vstack((constraints, -table.gains[ids] * table.fleet.gpus / column_scale))
+        limits = np.r_[limits, -max(0., primary - PRIMARY_TOL)]
+    result = linprog(cost / max(abs(cost).max(), 1e-30), A_ub=csr_matrix(constraints), b_ub=limits,
+                     bounds=(0, None), method="highs",
                      options={"primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9})
     if not result.success:
         raise RuntimeError(result.message)
@@ -324,13 +380,15 @@ def optimal_kv_range(table):
             raise RuntimeError("KV diagnostic changed the primary optimum")
     return {"planned_shed_fraction": primary, "selected_kv_fraction": float(kv_gain @ chosen),
             "minimum_kv_fraction": float(kv_gain @ endpoints[0]), "maximum_kv_fraction": float(kv_gain @ endpoints[1]),
-            "scope": "fixed primary optimum in the planning relaxation; not an execution guarantee"}
+            "primary_shed_tolerance": PRIMARY_TOL,
+            "scope": "primary optimum within numerical tolerance in the planning model; not an execution guarantee"}
 
 
 def select(table, policy):
     allowed = policy_mask(table, policy)
     if policy != "greedy":
-        return solve_lp(table, allowed, -table.gains)
+        chosen = solve_lp(table, allowed, -table.gains)
+        return solve_lp(table, allowed, table.debt, float(table.gains @ chosen)) if table.debt.any() else chosen
     chosen = np.zeros(len(table.gains))
     if not allowed.any():
         return chosen
@@ -346,7 +404,11 @@ def select(table, policy):
                 break
             prices = matrix / np.maximum(remaining[:, None], 1e-30)
             n = len(table.fleet.count)
-            cost = sum(prices[a:b].max(0) for a, b in ((0, n), (n, n+2), (n+2, n+4), (n+4, n+6), (n+6, len(limits))))
+            groups = [(0, n), (n, n+2), (n+2, n+4), (n+4, n+6), (n+6, n+11)]
+            if table.require_recovery:
+                groups.append((n+11, n+13))
+            cost = sum(prices[a:b].max(0) for a, b in groups)
+            cost += table.debt / ((1 - table.load) * table.deadline)
             score = np.where(feasible, gains / np.maximum(cost, 1e-30), -np.inf)
             j = int(np.argmax(score))
             twin = (j + len(gains) // 2) % len(gains)
@@ -383,7 +445,10 @@ def certify(table, chosen):
             "resource_utilization": (used / np.maximum(table.capacities, 1e-30)).tolist(),
             "binding_rows": np.flatnonzero((table.capacities > 0) & np.isclose(used, table.capacities, rtol=1e-7, atol=0)).tolist(),
             "batch_replica_seconds": [float((chosen * table.duration)[table.route == r].sum()) for r in (0, 1)],
-            "scope": "volume/work planning relaxation; no execution certificate",
+            "forecast_induced_serving_work_s": float(table.debt @ chosen),
+            "forecast_service_volume_deficit_work_s": [max(0., float((chosen * table.service_time)[table.route == r].sum())
+                - table.fleet.gpus * (1 - table.load) * table.deadline) for r in (0, 1)],
+            "scope": "nominal volume/work plan including catch-up and gross serving debt; no execution certificate",
             "patterns": [{"column": int(j), "multiplicity": float(chosen[j]), "route": int(table.route[j]),
                           "replay_counts": table.replay[j].tolist(), "kv_counts": table.kv[j].tolist(),
                           "replay_release_s": float(table.release[j]), "batch_duration_s": float(table.duration[j]),
@@ -394,7 +459,7 @@ def certify(table, chosen):
 def compare(table):
     results = {policy: certify(table, select(table, policy)) for policy in POLICIES}
     for policy, result in results.items():
-        result["solver_status"] = "greedy_planned" if policy == "greedy" else "optimal_planning_relaxation"
+        result["solver_status"] = "greedy_planned" if policy == "greedy" else "optimal_nominal_plan"
     qh = results["queue_haul"]["shed_fraction"]
     if any(r["shed_fraction"] > qh + 1e-8 for r in results.values()):
         raise RuntimeError("QH LP is below a feasible baseline in the same schedule library")
@@ -404,6 +469,7 @@ def compare(table):
 def configuration(smoke=False):
     return {"schema": SCHEMA, "gpus": GPUS, "installed_gpu_w": GPUS * 300, "source_load": SOURCE_LOAD,
             "gpus_per_node": 8,
+            "require_recovery": False,
             "resident_loads": [.25, .95] if smoke else list(LOADS),
             "deadlines": [1, 10, 60] if smoke else list(DEADLINES),
             "wan_gbps": [40] if smoke else ["reference", 40, 100, 400, 1000],
@@ -420,9 +486,10 @@ def provenance(c):
     return {**c["sources"], **{str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
 
 
-def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, wan_gbps=None, gpus_per_node=None):
+def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, wan_gbps=None, gpus_per_node=None, require_recovery=False):
     started = time.perf_counter()
     config = configuration(smoke)
+    config["require_recovery"] = require_recovery
     for key, value in (("resident_loads", resident_loads), ("snapshots", snapshots), ("draws", draws), ("gpus_per_node", gpus_per_node)):
         if value is not None:
             config[key] = value
@@ -453,7 +520,9 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
                             "ongoing serving and KV are pooled; no discrete placement or local fragmentation model",
                             "KV ingest and GPU shutdown omitted; sealed KV, partial tails and live catch-up charged",
                             "KV response/validation tail is measured separately; batch/load overlap is a transfer assumption",
-                            "LP uses network volume and compute work relaxation; independent event execution determines deadline completion",
+                            "LP forecasts isolated live catch-up and minimizes gross serving debt after maximizing shed; pooled queues can change actual catch-up",
+                            "measured replay-induced resident service loss generates recoverable queue debt; WAN-only KV time does not occupy compute",
+                            "handoff and service recovery are separate; require_recovery adds nominal recovery constraints, not an execution guarantee",
                             "replay and KV completion share reusable fluid batch compute; dynamic load factor is not also divided by idle fraction",
                             "replay logs assume two bytes/token; KV uses loaded-runtime serialized geometry",
                             "WAN allocations are scenarios, not measurements of backbone capacity",
@@ -461,7 +530,8 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
                             "power is linear workload-share allocation of direct coding active-to-awake-idle anchors"],
             "resource_rows": "one source-cohort row per state, then " + ", ".join(
                 [f"{resource}_{route}" for resource in ("migration_replica_seconds", "serving_reference", "kv_tokens", "network", "kv_application_network")
-                 for route in ("east", "germany")] + ["network_shared"]),
+                 for route in ("east", "germany")] + ["network_shared"]
+                + (["service_recovery_east", "service_recovery_germany"] if require_recovery else [])),
             "preparation_s": time.perf_counter() - started}
     if (out / "plan.json").exists() and json.loads((out / "plan.json").read_text())["identity"] != identity:
         raise ValueError("existing output uses different inputs; choose a new directory")
@@ -479,7 +549,7 @@ def load_plan(out):
 
 
 @lru_cache(maxsize=64)
-def forecast(workload, snapshot, gpus, gpus_per_node, load, wan, deadline, expanded=False):
+def forecast(workload, snapshot, gpus, gpus_per_node, load, wan, deadline, expanded=False, require_recovery=False):
     fleet = sample_fleet(workload, snapshot, gpus, gpus_per_node)
     samples = network_samples()
     endpoint = np.r_[np.median(samples[:, :2], axis=0), 0.]
@@ -490,6 +560,9 @@ def forecast(workload, snapshot, gpus, gpus_per_node, load, wan, deadline, expan
     fastest = isolated_methods(fleet, load, endpoint, budgets, timing)
     r, k = include_isolated(r, k, fastest)
     table = schedule_table(fleet, r, k, load, deadline, endpoint, budgets, timing)
+    if require_recovery:
+        table = replace(table, matrix=np.vstack((table.matrix, np.array([table.route == r for r in (0, 1)]) * table.service_time)),
+                        capacities=np.r_[table.capacities, [fleet.gpus * (1 - load) * deadline] * 2], require_recovery=True)
     choices = {policy: select(table, policy) for policy in POLICIES}
     certificates = {policy: certify(table, choice) for policy, choice in choices.items()}
     primary = certificates["queue_haul"]["shed_fraction"]
@@ -504,7 +577,7 @@ def run_cell(plan, cell, expanded=False):
     (workload, snapshot), load, draw, wan, deadline = cell
     start = time.perf_counter()
     table, choices, certificates = forecast(workload, snapshot, plan["config"]["gpus"],
-        plan["config"]["gpus_per_node"], load, wan, deadline, expanded)
+        plan["config"]["gpus_per_node"], load, wan, deadline, expanded, plan["config"]["require_recovery"])
     build_s = time.perf_counter() - start
     endpoint = network_samples()[plan["network_indices"][draw]].copy() if draw else table.endpoint
     budgets = bandwidth(endpoint, table.fleet.nodes, wan)
@@ -516,9 +589,11 @@ def run_cell(plan, cell, expanded=False):
         results[policy] = {**executed, "planned_shed_fraction": certificates[policy]["shed_fraction"],
                           "planned_action_counts": certificates[policy]["action_counts"],
                           "planned_action_fractions": certificates[policy]["action_fractions"],
+                          "forecast_induced_serving_work_s": certificates[policy]["forecast_induced_serving_work_s"],
+                          "forecast_service_volume_deficit_work_s": certificates[policy]["forecast_service_volume_deficit_work_s"],
                           "max_relative_residual": certificates[policy]["max_relative_residual"],
                           "resource_utilization": certificates[policy]["resource_utilization"],
-                          "solver_status": "greedy_planned" if policy == "greedy" else "optimal_planning_relaxation"}
+                          "solver_status": "greedy_planned" if policy == "greedy" else "optimal_nominal_plan"}
     return {"identity": plan["identity"], "cell": list(cell), "status": "complete", "results": results,
             "columns": len(table.gains), "eligible_columns": int(table.eligible.sum()),
             "budgets_gbps": (budgets * 8e-9).tolist(), "endpoint_gbps": (endpoint * 8e-9).tolist(),
@@ -594,6 +669,12 @@ def reduce(out):
                    "action_counts": result["action_counts"], "action_fractions": result["action_fractions"],
                    "planned_action_counts": result["planned_action_counts"], "planned_action_fractions": result["planned_action_fractions"],
                    "buffered_requests": result["buffered_requests"], "pending_buffered_requests": result["pending_buffered_requests"],
+                   "pending_resident_debt_work_s": sum(result["pending_resident_debt_work_s"]),
+                   "resident_debt_generated_work_s": sum(result["resident_debt_generated_work_s"]),
+                   "pending_source_buffer_work_s": result["pending_source_buffer_work_s"],
+                   "pending_destination_buffer_work_s": result["pending_backlog_reference_work_s"],
+                   "service_ready_s": result["service_ready_s"],
+                   "forecast_induced_serving_work_s": result["forecast_induced_serving_work_s"],
                    "resource_utilization": result["resource_utilization"], "batch_replica_seconds": result["batch_replica_seconds"],
                    "serving_ceiling": value["serving_ceiling"], "qh_minus_policy_fraction": qh - result["shed_fraction"]}
             rows.append(row)
@@ -626,6 +707,10 @@ def reduce(out):
                         "action_fractions_mean": np.mean([r["action_fractions"] for r in sampled], axis=0).tolist(),
                         "planned_action_fractions_mean": np.mean([r["planned_action_fractions"] for r in sampled], axis=0).tolist(),
                         "planned_shed_fraction": float(np.median([r["planned_shed_fraction"] for r in values])),
+                        "median_pending_resident_debt_work_s": float(np.median([r["pending_resident_debt_work_s"] for r in sampled])),
+                        "median_pending_source_buffer_work_s": float(np.median([r["pending_source_buffer_work_s"] for r in sampled])),
+                        "median_pending_destination_buffer_work_s": float(np.median([r["pending_destination_buffer_work_s"] for r in sampled])),
+                        "service_ready_fraction": float(np.mean([r["service_ready_s"] is not None for r in sampled])),
                         "serving_ceiling": sampled[0]["serving_ceiling"],
                         "resource_utilization_mean": np.mean([r["resource_utilization"] for r in sampled], axis=0).tolist(),
                         "workload_central_range_mw": [min(r["shed_fraction"] for r in central) * central_power,
@@ -642,6 +727,7 @@ def reduce(out):
                                             "planned_deadline_regressions": 0, "executed_deadline_regressions": len(regressions)})
     plot_start = time.perf_counter()
     plot(summary, out)
+    plot_debt(summary, out, plan["config"]["gpus"])
     metadata = {"identity": plan["identity"], "cells": len(paths), "summary": summary,
                 "calibration_evidence": plan["calibration"]["evidence"],
                 "workloads": {f"{w}-{s}": sample_fleet(w, s, plan["config"]["gpus"]).metadata
@@ -705,6 +791,31 @@ def plot(summary, out):
         plt.close(fig)
 
 
+def plot_debt(rows, out, gpus):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import plot_style
+    plot_style.apply()
+    wans = [w for w in (40, 1000) if any(r["wan_gbps"] == w for r in rows)]
+    loads = [u for u in (.5, .95) if any(r["load"] == u for r in rows)]
+    if not wans or not loads:
+        return
+    fig, axes = plt.subplots(len(loads), len(wans), squeeze=False, figsize=(5 * len(wans), 3.5 * len(loads)))
+    for ax, (load, wan) in zip(axes.flat, product(loads, wans)):
+        for policy in POLICIES:
+            series = sorted((r for r in rows if (r["workload"], r["load"], r["wan_gbps"], r["policy"]) == ("coding", load, wan, policy)), key=lambda r: r["deadline_s"])
+            ax.plot([r["deadline_s"] for r in series], [r["median_pending_resident_debt_work_s"] / (2 * gpus) for r in series], **plot_style.policy_style(policy))
+        ax.set(title=f"Coding; load {load:g}; {wan} Gbit/s", xscale="log", xlabel="Shed deadline (s)")
+    fig.supylabel("Remaining resident queue work\n(reference GPU-seconds / destination GPU)")
+    fig.suptitle("Replay-induced resident debt remaining at the deadline\nSource-buffer debt is recorded separately")
+    fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=3, fontsize=9)
+    fig.tight_layout(rect=(.03, .09, 1, .90))
+    for extension in ("png", "pdf"):
+        fig.savefig(out / f"resident-debt.{extension}", bbox_inches="tight")
+    plt.close(fig)
+
+
 def plot_optimal_kv(rows, out):
     import matplotlib
     matplotlib.use("Agg")
@@ -716,7 +827,7 @@ def plot_optimal_kv(rows, out):
         series = sorted((r for r in rows if (r["workload"], r["wan_gbps"], r["load"]) == (workload, wan, .5)), key=lambda r: r["deadline_s"])
         x = [r["deadline_s"] for r in series]
         ax.fill_between(x, [r["minimum_kv_fraction"] for r in series], [r["maximum_kv_fraction"] for r in series],
-                        color=plot_style.ACTION_COLORS["kv_transfer"], alpha=.25, label="KV range at the same planned optimum")
+                        color=plot_style.ACTION_COLORS["kv_transfer"], alpha=.25, label="Same maximum planned shed; debt unconstrained")
         ax.plot(x, [r["selected_kv_fraction"] for r in series], **plot_style.policy_style("queue_haul"))
         ax.set(title=f"{workload.replace('_', ' ')}; {wan} Gbit/s", xscale="log", xlabel="Deadline (s)", ylim=(0, 1))
     fig.supylabel("Source workload assigned to KV")
@@ -781,7 +892,7 @@ def validate(out):
         faces.append({"workload": workload, "load": load, "wan_gbps": wan, "deadline_s": deadline, **optimal_kv_range(table)})
     write_csv(out / "optimal-kv-ranges.csv", faces)
     runtime_scaling = []
-    for gpus in (64, 6400, 640000):
+    for gpus in (6400, 64000, 640000):
         forecast.cache_clear()
         plan["config"] = {**config, "gpus": gpus}
         before = time.perf_counter()
@@ -795,11 +906,14 @@ def validate(out):
               "regional_execution": regional_execution_check(c), "loaded_execution": loaded_execution_check(c),
               "regional_components": c["regional_components"]["validation"],
               "library_audit_cells": len(errors), "optimal_kv_ranges": faces, "runtime_scaling": runtime_scaling,
+              "runtime_scaling_scope": "Proportional GPU/WAN scaling above the per-batch endpoint bottleneck boundary; 100-fold fleet range with unchanged nominal action costs",
               "scale_comparison": scales,
               "scale_scope": "Measured-pack workload, 30s deadline, .5 load; fixed WAN vs constant network/compute ratio. Scaled budgets are diagnostics, not inferred WAN allocations.",
               "library_p95_difference_fraction": float(np.quantile(errors, .95)),
               "library_max_difference_fraction": max(errors), "seconds": time.perf_counter() - started,
               "scope": "library sensitivity, not a bound on global scheduling optimality"}
+    report["resident_interference"] = c["resident_interference"]
+    report["resident_execution"] = resident_execution_check(c, report["regional_execution"])
     write_json(out / "validation.json", report)
     plot_scale(scales, out)
     plot_optimal_kv(faces, out)
@@ -822,13 +936,14 @@ def main():
     parser.add_argument("--snapshots", type=int)
     parser.add_argument("--draws", type=int)
     parser.add_argument("--gpus-per-node", type=int)
+    parser.add_argument("--require-recovery", action="store_true", help="budget nominal serving and recovery work within the deadline (execution checks actual recovery)")
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=1)
     args = parser.parse_args()
-    if args.command != "prepare" and any(v is not None for v in (args.resident_loads, args.wan_gbps, args.snapshots, args.draws, args.gpus_per_node)):
+    if args.command != "prepare" and (args.require_recovery or any(v is not None for v in (args.resident_loads, args.wan_gbps, args.snapshots, args.draws, args.gpus_per_node))):
         parser.error("grid overrides apply only to prepare")
     if args.command == "prepare":
-        plan = prepare(args.out, args.smoke, args.resident_loads, args.snapshots, args.draws, args.wan_gbps, args.gpus_per_node)
+        plan = prepare(args.out, args.smoke, args.resident_loads, args.snapshots, args.draws, args.wan_gbps, args.gpus_per_node, args.require_recovery)
         print(f"Prepared {len(cells(plan['config']))} cells")
     elif args.command == "run":
         run(args.out, args.shard, args.shards)

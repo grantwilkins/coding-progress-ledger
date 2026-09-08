@@ -50,7 +50,8 @@ def test_default_grid_and_paired_endpoints():
 def test_lp_scaling_preserves_source_counts_in_the_loaded_coding_case(tmp_path):
     plan = c.prepare(tmp_path)
     result = c.run_cell(plan, (('coding', 1), .75, 4, 100, 30))
-    assert result['results']['queue_haul']['shed_fraction'] == pytest.approx(.625)
+    assert result['results']['queue_haul']['planned_shed_fraction'] == pytest.approx(.625)
+    assert result['results']['queue_haul']['shed_fraction'] <= .625 + 1e-8
     assert max(r['max_relative_residual'] for r in result['results'].values()) <= 1e-8
 
 

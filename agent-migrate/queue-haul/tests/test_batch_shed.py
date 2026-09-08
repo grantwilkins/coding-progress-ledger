@@ -307,3 +307,42 @@ def test_redundant_network_constraints_do_not_change_greedy_prices():
     t.capacities = np.r_[t.capacities, np.repeat(t.capacities[-1], 4)]
     np.testing.assert_allclose(c.select(t, "greedy"), chosen)
     c.certify(t, chosen)
+
+
+def test_nominal_forecast_includes_final_delta_and_buffered_turns():
+    f = fleet(count=(1,), demand=(.2,), t1=(1.,), log=(0.,), kv=(100.,))
+    f.context[:] = 100
+    f.metadata = {"source_session_rps": 1., "turn_sequences": [[
+        {"context": 100, "prompt": 10, "output": 0},
+        {"context": 110, "prompt": 20, "output": 0}]]}
+    timing = {"beta": 0., "kappa": 1., "kv_completion_s": .5, "kv_batch_completion_s": .5}
+    measured = {"forecast_load": .5, "replay_context_tokens": [100., 200.], "replay_tps": [100., 100.],
+        "replay_completion_s": 0., "kv_block_tokens": 10, "kv_block_bytes": 10,
+        "kv_tail_replay_tps": 10., "F": 10., "G": 10.}
+    np.testing.assert_allclose(c.nominal_action(f, np.ones(1), 0, 0, 100., timing, measured),
+                               [20., 1.1, 1.3, 2.])
+    np.testing.assert_allclose(c.nominal_action(f, np.ones(1), 1, 0, 100., timing, measured),
+                               [110., .5, 1.6, 2.])
+
+
+@pytest.mark.parametrize("kv_tail,selected_action", [(.5, "kv"), (2., "replay")])
+def test_debt_tiebreak_preserves_primary_gain_and_has_no_fixed_action_preference(kv_tail, selected_action):
+    f = fleet(count=(4,), demand=(.2,), t1=(1.,), log=(0.,), kv=(1.,))
+    t = c.schedule_table(f, np.array([[1], [0]]), np.array([[0], [1]]), .5, 4.,
+        np.full(3, 100.), np.full(3, 100.), {"beta": 0., "kappa": 1., "resident_replay_loss": .9,
+        "kv_completion_s": kv_tail, "kv_batch_completion_s": kv_tail})
+    primary = c.solve_lp(t, c.policy_mask(t, "queue_haul"), -t.gains)
+    chosen = c.select(t, "queue_haul")
+    assert t.gains @ chosen == pytest.approx(t.gains @ primary)
+    assert t.gains @ chosen == pytest.approx(1.)
+    assert float(chosen @ getattr(t, selected_action)[:, 0]) == pytest.approx(4.)
+    c.certify(t, chosen)
+
+
+def test_service_work_charges_ongoing_arrivals_only_after_nominal_commit():
+    f = fleet(count=(4,), demand=(.2,), t1=(1.,), log=(0.,), kv=(10.,))
+    t = c.schedule_table(f, np.array([[1], [0]]), np.array([[0], [1]]), .5, 10.,
+        np.full(3, 100.), np.full(3, 100.), {"beta": 0., "kappa": 1., "resident_replay_loss": .8,
+        "kv_completion_s": .5, "kv_batch_completion_s": .5})
+    np.testing.assert_allclose(t.service_time, [2.7, 2.38, 2.7, 2.38])
+    np.testing.assert_allclose(t.debt, [.4, .25, .4, .25])

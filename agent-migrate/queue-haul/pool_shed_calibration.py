@@ -103,7 +103,7 @@ def _regional_components(value):
             descriptors.append((replay, scenario["background"][destination][0], len(kv), residual.sum()))
             requests = [m["request"] for m in actual["requests"] if m["destination_instance"] == destination]
             observed.append((max(r["end_ns"] for r in requests) - actual["started_ns"]) / 1e9)
-        rows.append((training, row["policy"], features, observed, float(row["migration_s"]), descriptors))
+        rows.append((training, row["policy"], features, observed, float(row["migration_s"]), descriptors, row["scenario_id"]))
     if sum(r[0] for r in rows) != 53 or sum(not r[0] for r in rows) != 24:
         raise ValueError("regional components require 53 pure-action training and 24 validation episodes")
     def fit(training, timing_draw):
@@ -133,10 +133,12 @@ def _regional_components(value):
 
     training = [r for r in rows if r[0]]
     rng = np.random.default_rng(5)
+    bootstrap_ids = []
     for draw, timing_draw in enumerate(value["timing"]):
         selected = training if not draw else [training[i] for policy in ("fixed_replay", "fixed_kv_transfer")
             for i in rng.choice([i for i, r in enumerate(training) if r[1] == policy], sum(r[1] == policy for r in training))]
         timing_draw["regional_replay_factor"], timing_draw["regional_kv_bytes_per_s"] = fit(selected, timing_draw)
+        bootstrap_ids.append([r[6] for r in selected])
     replay_factors, rates = fit(training, value["timing"][0])
     reports = {}
     for policy in ("fixed_replay", "fixed_kv_transfer", "fixed_mixed", "aggregate"):
@@ -150,9 +152,84 @@ def _regional_components(value):
     reports["gate_pass"] = reports["aggregate"]["mae_s"] <= protocol["gates"]["mae_s"] and reports["aggregate"]["r2"] >= protocol["gates"]["r2"]
     return {"replay_factor": replay_factors, "endpoint_bytes_per_s": rates, "validation": reports,
             "gates": protocol["gates"], "training_episodes": 53, "heldout_episodes": 24,
+            "bootstrap_episode_ids": bootstrap_ids,
             "bootstrap_seed": 5, "bootstrap_scope": "Resample complete training episodes within each pure action; routes remain paired; refit features using each draw's batch/completion parameters; no heldout residuals enter the fits",
             "sources": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
             "scope": "Retrospective fixed-split component calibration: 26 pure replay and 27 pure KV episodes fit regional replay work scales and application transfer rates after measured completion cost; all 27 mixed training episodes unused; 24 pre-existing holdouts check max-overlapped route completion. Effective node rates include application transport overhead, not backbone capacity or a KV ingest constraint. This check does not validate fleet scheduling or changing-load execution."}
+
+
+def _resident_interference(value):
+    """Resident completion deficit during replay, normalized by same-episode service."""
+    plan, protocol = [json.loads((REGIONAL / name).read_text()) for name in ("plan.json", "scale-protocol.json")]
+    profile_path = ROOT / "profiles" / Path(plan["model_profile"]["path"]).name
+    if hashlib.sha256(profile_path.read_bytes()).hexdigest() != plan["model_profile"]["sha256"]:
+        raise ValueError("resident interference service reference changed")
+    profile = ModelProfile.load(profile_path).case()
+    work = 604 / profile.prefill.rate(604, 1) + 64 / profile.decode.rate(604, 1)
+    scenarios = {r["scenario_id"]: r for r in plan["scenarios"]}
+    rows, excluded, sources = [], [], {str(profile_path.relative_to(ROOT)): hashlib.sha256(profile_path.read_bytes()).hexdigest()}
+    for name, checksum in value["regional_components"]["sources"].items():
+        if not name.endswith("/result.json"):
+            continue
+        path = ROOT / name
+        actual = json.loads(path.read_text())
+        scenario = scenarios[actual["scenario_id"]]
+        if scenario["policy"] == "fixed_mixed":
+            continue
+        sources[name] = checksum
+        for route in ("east", "germany"):
+            load = scenario["background"][route][0]
+            if not load:
+                continue
+            trace = path.parent / f"sink_load_{route}.jsonl"
+            sources[str(trace.relative_to(ROOT))] = hashlib.sha256(trace.read_bytes()).hexdigest()
+            requests = [json.loads(line) for line in trace.read_text().splitlines()]
+            if any(r["status_code"] != 200 or (r["prompt_tokens"], r["output_tokens"]) != (604, 64) for r in requests):
+                raise ValueError("resident interference requests violate the fixed 604/64 contract")
+            ends = (np.array([r["end_ns"] for r in requests], dtype=np.int64) - actual["started_ns"]) / 1e9
+            baseline = ends[(ends >= -20) & (ends < 0)]
+            rate = (len(baseline) - 1) / np.ptp(baseline) if len(baseline) >= 3 and np.ptp(baseline) > 0 else 0.
+            if not rate or abs(rate / (load / work) - 1) > .1:
+                excluded.append({"scenario_id": actual["scenario_id"], "route": route, "load": load,
+                                 "observed_rps": float(rate), "intended_rps": load / work})
+                continue
+            duration = (max(m["request"]["end_ns"] for m in actual["requests"] if m["destination_instance"] == route)
+                        - actual["started_ns"]) / 1e9
+            expected, completed = rate * duration, int(np.sum((ends >= 0) & (ends < duration)))
+            rows.append({"scenario_id": actual["scenario_id"], "route": route, "policy": scenario["policy"],
+                "training": actual["scenario_id"] in protocol["training_ids"], "load": load,
+                "baseline_rps": float(rate), "duration_s": float(duration), "expected_completions": float(expected),
+                "observed_completions": completed, "deficit_requests": float(expected - completed)})
+
+    def fit(selected):
+        x = np.array([r["expected_completions"] for r in selected])
+        y = np.array([r["deficit_requests"] for r in selected])
+        loss = float(x @ y / (x @ x))
+        if not np.isfinite(loss) or not 0 <= loss <= 1:
+            raise ValueError("resident replay loss must be a measured fraction between zero and one")
+        return loss
+
+    training = [r for r in rows if r["training"] and r["policy"] == "fixed_replay"]
+    if len(training) != 31 or len({r["scenario_id"] for r in training}) != 23:
+        raise ValueError("resident replay calibration requires 31 routes across 23 training episodes")
+    for timing, ids in zip(value["timing"], value["regional_components"]["bootstrap_episode_ids"], strict=True):
+        timing["resident_replay_loss"] = fit([r for scenario_id in ids for r in training if r["scenario_id"] == scenario_id])
+    validation = {}
+    for policy in ("fixed_replay", "fixed_kv_transfer"):
+        selected = [r for r in rows if not r["training"] and r["policy"] == policy]
+        expected = np.array([r["expected_completions"] for r in selected])
+        actual = np.array([r["deficit_requests"] for r in selected])
+        prediction = fit(training) * expected if policy == "fixed_replay" else np.zeros(len(selected))
+        validation[policy] = {"routes": len(selected), "episodes": len({r["scenario_id"] for r in selected}),
+            "mae_requests": float(np.mean(abs(prediction - actual))),
+            "normalized_mae": float(np.mean(abs(prediction - actual) / expected)),
+            "median_observed_loss": float(np.median(actual / expected)), "residual_requests": (actual - prediction).tolist()}
+    return {"replay_loss": fit(training), "training_routes": 31, "training_episodes": 23,
+            "validation": validation, "measurements": rows, "excluded_baselines": excluded, "sources": sources,
+            "reference_request_tokens": [604, 64], "reference_work_s": work,
+            "selection": "At least three baseline completions in the preceding 20 seconds; observed baseline rate within 10% of intended rate excludes client-backpressured cases; accepted loads are 0.25 and 0.5",
+            "bootstrap_scope": "Same complete training-episode resamples as regional timing; both routes stay paired; no heldout observations fit the coefficient",
+            "scope": "Retrospective resident completion deficit relative to same-episode baseline throughput; not GPU occupancy. KV is a zero-loss negative-control diagnostic, not a fitted GPU cost throughout network transfer. Shape/batch/load transfer is assumed. Post-replay recovery uses the declared reference service capacity; continued-arrival recovery is not measured because episode shutdown stops load generation."}
 
 
 def regional_check(value):
@@ -248,6 +325,37 @@ def loaded_execution_check(value):
     return {**report, "gate_pass": report["episodes"] == 220 and report["p90_relative_error"] <= .05
             and report["false_feasible_25s"] == 0,
             "scope": "220 pre-existing replay holdouts; original fixed eight-context batch, resident offered-load reference, frozen source. Regional compute factors disabled to reproduce the original runtime. This validates base loaded progress, not its composition with regional scaling or changing-load admission."}
+
+
+def resident_execution_check(value, executed=None):
+    """Compare engine debt at its handoff with recorded resident completion deficits."""
+    from pool_shed_execution import regional_execution_check
+
+    episodes = {r["scenario_id"]: r for r in (executed or regional_execution_check(value))["predictions"]}
+    rows = []
+    for observed in value["resident_interference"]["measurements"]:
+        if observed["training"] or observed["policy"] != "fixed_replay":
+            continue
+        route = int(observed["route"] == "germany")
+        events = [e for e in episodes[observed["scenario_id"]]["completion_events"] if e["route"] == route]
+        event = max(events, key=lambda e: e["completion_s"])
+        predicted = event["resident_debt_work_s"] * observed["baseline_rps"] / observed["load"]
+        rows.append({"scenario_id": observed["scenario_id"], "route": observed["route"],
+            "observed_deficit_requests": observed["deficit_requests"], "predicted_deficit_requests": predicted,
+            "observed_migration_s": observed["duration_s"], "predicted_migration_s": event["completion_s"],
+            "resident_debt_work_s": event["resident_debt_work_s"],
+            "baseline_rps": observed["baseline_rps"], "offered_load": observed["load"],
+            "normalization_completions": observed["expected_completions"]})
+    if (len(rows) != 6 or not np.isfinite([[r[k] for k in ("predicted_deficit_requests", "observed_deficit_requests",
+            "normalization_completions", "resident_debt_work_s")] for r in rows]).all()
+            or any(not 0 <= r["resident_debt_work_s"] <= r["offered_load"] * r["predicted_migration_s"] + 1e-8 for r in rows)):
+        raise ValueError("resident execution check requires six finite heldout route observations")
+    errors = np.array([r["predicted_deficit_requests"] - r["observed_deficit_requests"] for r in rows])
+    return {"routes": len(rows), "episodes": len({r["scenario_id"] for r in rows}),
+            "mae_requests": float(np.mean(abs(errors))),
+            "normalized_mae": float(np.mean(abs(errors) / [r["normalization_completions"] for r in rows])),
+            "predictions": rows,
+            "scope": "Independent engine debt at each predicted regional replay handoff versus six pre-existing route deficits at observed handoff. Reference work converts to requests using each route's baseline completion rate / offered load. Timing-window mismatch is retained. This checks replay-created debt, not post-migration recovery under continuing arrivals."}
 
 
 def _kv_completion(value, draws):
@@ -464,6 +572,7 @@ def calibration(draws=8):
     packing = _packing(result, draws)
     kv_completion = _kv_completion(result, draws)
     result["regional_components"] = _regional_components(result)
+    result["resident_interference"] = _resident_interference(result)
     timing = result["timing"][0]
     batch = singleton.max() + timing["kappa"] * (singleton.sum() - singleton.max())
     observed, predicted = [], []
@@ -511,5 +620,5 @@ def calibration(draws=8):
         "loaded_validation": model["width8_relative_factor_validation"]["replay"],
         "historical_transfer_checks": _transfer_checks(result)}
     result["sources"] = {**{str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in PATHS},
-                         **result["regional_components"]["sources"]}
+                         **result["regional_components"]["sources"], **result["resident_interference"]["sources"]}
     return result

@@ -20,21 +20,26 @@ site, excluding CPUs and peripherals. This is installed capacity, not removable
 power. Shed is completed-handoff workload share times the measured active to
 awake-idle power difference; no GPU shutdown trajectory is claimed.
 
-The planner is a **volume/work LP relaxation**, with common source-population,
+The planner is a **nominal volume/work LP**, with common source-population,
 compute-seconds, serving, memory, node/application transfer and shared WAN
 constraints. Replay and KV completion consume reusable pooled compute. Greedy
 prices canonical resource groups without charging the same network traffic
 again for every overlapping constraint. QH LP must dominate restricted baseline
-LPs in this model. Its choices are independently executed by
+LPs in this model. Nominal costs include live catch-up and source-buffer work.
+After maximizing planned shed, every LP minimizes gross predicted serving debt;
+this is not a policy-specific KV reward or a pooled recovery-time optimum.
+Its choices are independently executed by
 `pool_shed_execution.py`; actual deadline completion, action counts and timing
 are not inferred from the LP matrix. Plots separate selected actions from completed actions. Execution can expose a planning loss, which
 is reported without replacing the LP choice with a baseline. Optimal-face
-min/max KV diagnostics distinguish arbitrary action ties from exclusion of KV.
+min/max KV diagnostics fix maximum shed while leaving debt unconstrained.
 
 Execution advances divisible batch populations through initial transfer/replay,
 source turn-boundary quiescence, final delta, catch-up and handoff. It redistributes
 released bandwidth and compute; imported serving and buffered requests compete
-with unfinished migrations. Complete recorded coding trajectories retain their
+with unfinished migrations. Measured replay interference also creates resident
+queue debt, which consumes subsequent recovery capacity and affects migration
+slowdown. KV network time does not occupy compute. Complete recorded coding trajectories retain their
 turns and resets. Their missing timestamps require an explicit equal-cadence
 assumption; complete trajectories cycle with a reset on wrap. Trajectories that
 exceed calibrated context support are excluded with counts. The separate measured
@@ -65,7 +70,12 @@ the original MAE <= 3 s and R² >= 0.8 gates, and against 220 loaded-replay
 holdouts. Regional results are retrospective reuse of an inspected partition.
 Fixed-context timing checks do not establish fleet-scale fidelity, dynamic
 admission accuracy or a long-context serving SLO. Validation reports preserve
-per-action errors and false-feasible deadline counts.
+per-action errors and false-feasible deadline counts. Resident completion loss
+during replay is fitted from 31 initially unbacklogged regional routes in 23
+episodes at offered loads 0.25 and 0.50 (central loss 89.65%). Independent engine debt at handoff has MAE
+0.847 requests / normalized MAE 3.29% across six validation routes. This measures
+completion-throughput loss, not GPU occupation; recovery under continued arrivals
+and transfer to other resident mixtures remain model assumptions.
 
 Plans are frozen at central calibration and network estimates, then evaluated
 under paired measurement draws. Plotted p05–p95 bands show this empirical
@@ -79,18 +89,14 @@ uv run python pool_shed_campaign.py run --out outputs/a100-pooled-execution
 uv run python pool_shed_campaign.py reduce --out outputs/a100-pooled-execution
 ```
 
-The completed campaign evaluates **11,250 scenarios / 56,250 policy results**
-and writes 15 PNG/PDF figure pairs. The 66 focused tests pass. Regional executor
-validation has MAE **1.243 s**, R² **0.9854**, and one false-feasible 25-second
-case; the 220 loaded holdouts have p90 relative error **2.28%**, with none.
-
-The raw LP underperforms replay during execution in **799 scenarios** despite
-planned dominance. In **540 QH scenarios**, KV is selected but none finishes by
-the deadline. Source-power completion also does not imply an empty queue:
-**4,818 policy evaluations** reach full shed with buffered work pending. These
-are recorded outcomes, not hidden baseline fallbacks. The initial-phase planning
-relaxation omits live catch-up, and tied batching/routing choices can execute
-differently. Maximum source-power credit is approximately **11.935 MW**.
+The campaign grid evaluates **11,250 scenarios / 56,250 policy results**.
+Handoff and service recovery are separate outputs: source-power completion does
+not imply an empty queue. `--require-recovery` on `prepare` adds nominal recovery
+budgets, but only execution establishes whether selected migrations and their
+debt clear by the deadline. The default metric remains completed handoff.
+Nominal forecasts use isolated timing; pooled queues can change quiescence,
+context resets and final-copy costs, so planned dominance does not guarantee
+executed dominance. Maximum source-power credit is approximately **11.935 MW**.
 
 Buffered serving work drains only within the advertised reference headroom;
 its utilization enters the measured migration slowdown. At full offered load,

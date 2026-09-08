@@ -184,3 +184,87 @@ def test_buffered_serving_cannot_drain_without_reference_headroom():
     assert result["buffered_requests"] > 0
     assert result["completed_buffered_requests"] == 0
     assert result["pending_buffered_requests"] == result["buffered_requests"]
+
+
+def test_replay_resident_debt_accumulates_and_recovers_after_handoff():
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      load=.25, demand=(0., 0.), deadline=30.)
+    timing["resident_replay_loss"] = .9
+    result = run(table, timing, calibration)
+    assert result["last_completion_s"] == pytest.approx(8.2)
+    assert result["resident_debt_generated_work_s"] == pytest.approx([1.8, 0])
+    assert result["resident_debt_recovered_work_s"] == pytest.approx([1.8, 0])
+    assert result["pending_resident_debt_work_s"] == pytest.approx([0, 0])
+    assert result["service_ready_s"] == pytest.approx(10.6)
+
+
+def test_handoff_before_deadline_does_not_imply_resident_debt_is_cleared():
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      load=.25, demand=(0., 0.), deadline=9.)
+    timing["resident_replay_loss"] = .9
+    result = run(table, timing, calibration)
+    assert result["shed_fraction"] == .5
+    assert result["service_ready_s"] is None
+    assert result["pending_resident_debt_work_s"] == pytest.approx([1.2, 0])
+    assert np.array(result["resident_debt_generated_work_s"]) == pytest.approx(
+        np.array(result["resident_debt_recovered_work_s"]) + result["pending_resident_debt_work_s"])
+
+
+def test_kv_network_wait_does_not_consume_resident_service():
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
+                                      load=.25, demand=(0., 0.), deadline=5.)
+    timing.update(resident_replay_loss=.9, kv_completion_s=2.)
+    assert run(table, timing, calibration)["resident_debt_generated_work_s"] == [0, 0]
+    table.deadline = 30
+    result = run(table, timing, calibration)
+    assert result["resident_debt_generated_work_s"] == pytest.approx([.5, 0])
+    assert result["service_ready_s"] == pytest.approx(12 + 2 / 3)
+
+
+def test_nonmigrating_replica_capacity_absorbs_displaced_resident_work():
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      gpus=2, load=.25, demand=(0., 0.), deadline=30.)
+    timing["resident_replay_loss"] = .9
+    result = run(table, timing, calibration)
+    assert result["resident_debt_generated_work_s"] == [0, 0]
+    assert result["service_ready_s"] == result["last_completion_s"]
+
+
+def test_resident_debt_recovers_before_migrated_source_buffers():
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
+                                      load=.25, demand=(0., 0.), deadline=3.3)
+    table.fleet.kv[0] = 1
+    table.fleet.metadata.update(source_session_rps=1., turn_sequences=[[
+        {"context": 100 + i, "prompt": 1, "output": 0} for i in range(20)], []])
+    timing.update(resident_replay_loss=.9, kv_completion_s=2.)
+    calibration.update(F=1., G=1.)
+    result = run(table, timing, calibration)
+    assert result["last_completion_s"] == pytest.approx(3.1)
+    assert result["pending_resident_debt_work_s"] == pytest.approx([.35, 0])
+    assert result["pending_destination_buffered_requests"] == result["transferred_buffered_requests"]
+
+
+def test_admission_roundoff_does_not_generate_fictitious_resident_debt():
+    table, timing, calibration = case(replay=((0., 0.), (0., 0.)), kv=((1., 0.), (0., 1.)),
+                                      gpus=66666, load=.5, demand=(33333. + 1e-8, 0.), deadline=3600.)
+    table.fleet.kv[0] = 1
+    timing["resident_replay_loss"] = .9
+    result = run(table, timing, calibration)
+    assert result["final_destination_load"] == [1., .5]
+    assert result["pending_resident_debt_work_s"] == [0., 0.]
+    assert result["service_ready_s"] == result["last_completion_s"]
+
+
+def test_uncommitted_source_buffer_work_is_separate_from_destination_backlog():
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
+                                      demand=(0., 0.), deadline=2.5)
+    table.fleet.kv[0] = 1
+    table.fleet.metadata.update(source_session_rps=1., turn_sequences=[[
+        {"context": 100 + i, "prompt": 1, "output": 0} for i in range(20)], []])
+    timing["kv_completion_s"] = 2
+    calibration.update(F=1., G=1.)
+    result = run(table, timing, calibration)
+    assert result["completed_sessions"] == 0
+    assert result["pending_source_buffer_work_s"] == 2
+    assert result["pending_backlog_reference_work_s"] == 0
+    assert result["pending_buffered_work_s"] == 2
