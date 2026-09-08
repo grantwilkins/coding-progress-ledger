@@ -93,7 +93,8 @@ The full grid contains 11,250 scenarios / 56,250 policy results. `--smoke` on
 `prepare` selects 24 scenarios. `run --shard N --shards K` supports independent
 process shards and validated checkpoint resume. Code and calibration hashes
 prevent mixing revisions. Bands show empirical p05–p95 sensitivity across paired
-execution draws and workload snapshots; they do not cover unmeasured model error.
+execution draws, workload snapshots, and measured power samples; they do not
+cover unmeasured model error.
 Feedback can change later admissions across draws even though the forecast
 calibration and observation rules are identical.
 

@@ -368,7 +368,8 @@ def solve_lp(table, allowed, objective, primary=None):
         limits = np.r_[limits, -max(0., primary - PRIMARY_TOL) / primary_scale]
     result = linprog(cost / max(abs(cost).max(), 1e-30), A_ub=csr_matrix(constraints), b_ub=limits,
                      bounds=np.c_[np.zeros(len(ids)), upper], method="highs-ds",
-                     options={"presolve": False, "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9})
+                     options={"presolve": False, "simplex_scale_strategy": 0,
+                              "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9})
     if not result.success:
         raise RuntimeError(result.message)
     if np.min(result.x) < -1e-9:
@@ -913,7 +914,7 @@ def plot_optimal_kv(rows, out):
         ax.plot(x, [r["selected_kv_fraction"] for r in series], **plot_style.policy_style("queue_haul"))
         ax.set(title=f"{workload.replace('_', ' ')}; {wan} Gbit/s", xscale="log", xlabel="Deadline (s)", ylim=(0, 1))
     fig.supylabel("Source workload assigned to KV")
-    fig.suptitle("Action ambiguity in the planning LP; resident load 50%\nRanges do not certify equivalent executed completion")
+    fig.suptitle("Action ambiguity in the initial static LP; resident load 50%\nRanges do not certify equivalent executed completion")
     fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=2)
     fig.tight_layout(rect=(0, .07, 1, .91))
     for extension in ("png", "pdf"):

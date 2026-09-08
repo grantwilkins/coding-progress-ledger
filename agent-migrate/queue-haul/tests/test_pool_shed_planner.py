@@ -56,6 +56,14 @@ def test_secondary_lp_rejects_a_lost_primary_even_with_optimal_status(monkeypatc
         campaign.solve_lp(table, np.array([True]), np.ones(1), primary=.5)
 
 
+def test_native_scaling_preserves_recorded_coding_source_capacity():
+    from pool_shed_campaign import GPUS, POLICIES, initial_admission
+
+    for policy in POLICIES:
+        _, _, info = initial_admission('coding', 1, GPUS, 8, .5, 400, 1800, False, policy, 1., 3)
+        assert info['max_relative_residual'] <= 1e-8
+
+
 def case(deadline=20.):
     fleet = SimpleNamespace(count=np.array([10.]), context=np.array([100.]), demand=np.array([.05]),
         memory_tokens=np.array([100.]), baseline_kv=0., kv_capacity=1e6, gpus=10, nodes=2,
