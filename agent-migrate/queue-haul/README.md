@@ -82,6 +82,14 @@ unbacklogged routes in 23 episodes; it is not GPU occupation. Continued-arrival
 recovery and transfer to other resident mixtures remain model assumptions.
 These component checks do not establish fleet-scale SLO fidelity.
 
+Across four central validation cases, doubling execution waves from 32 to 64
+changes shed or the QH gap by at most 0.49 percentage points. Halving feedback
+intervals changes the QH gap by up to 14.70 points; increasing projection
+iterations from three to six changes it by up to 8.90 points. These measured
+sensitivities apply to the checked cases; policy convergence remains unproven.
+The proportional GPU/WAN scaling check takes 2.13–2.28 seconds for all five
+methods across 6,400–640,000 GPUs on this machine, with unchanged shed fractions.
+
 ```bash
 uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-feedback-validation
 uv run python pool_shed_campaign.py prepare --out outputs/a100-pooled-feedback
