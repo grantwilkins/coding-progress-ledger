@@ -63,36 +63,33 @@ def plot(root, out):
     out.mkdir(parents=True, exist_ok=True)
     for campaign in ("wan", "prefill"):
         selected_campaign = [r for r in points if r["campaign"] == campaign]
-        fig, ax = plt.subplots(figsize=(3.5, 2.8))
+        fig, ax = plt.subplots(figsize=(2.1, 1.75))
         for policy in POLICIES:
             selected = sorted((r for r in selected_campaign if r["policy"] == policy),
                               key=lambda r: (r["state_id"], int(r["repeat"])))
             identity = STYLE_IDS[policy]
-            offsets = np.random.default_rng(0).permutation(np.linspace(-4, 4, len(selected)))
+            offsets = np.random.default_rng(0).permutation(np.linspace(-1, 1, len(selected)))
             ax.scatter(np.array([r["kv_share_percent"] for r in selected]) + offsets,
                        [r["attainment_time_s"] if r["attainment_time_s"] != "" else not_met for r in selected],
-                       marker=plot_style.POLICY_MARKERS[identity], s=12, alpha=.6,
+                       marker=plot_style.POLICY_MARKERS[identity], s=7, alpha=.6,
                        facecolors="none" if policy == "greedy" else plot_style.POLICY_COLORS[identity],
                        edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.5,
                        label=plot_style.PAPER_POLICY_NAMES[identity], zorder=3)
         ax.axhspan(horizon + 3, not_met + 3, color=".94", zorder=0)
         ax.axhline(30, color="black", linestyle=":", linewidth=.8)
-        ax.text(50, 31, "30 s deadline", ha="center", fontsize=7, fontstyle="italic")
-        ax.set(xlim=(-7, 107), ylim=(0, not_met + 3), xticks=(0, 50, 100),
+        ax.text(50, 31, "30 s deadline", ha="center", fontsize=6, fontstyle="italic")
+        ax.set(xlim=(-5, 105), ylim=(0, not_met + 3), xticks=(0, 50, 100),
                yticks=(0, 15, 30, not_met), yticklabels=("0", "15", "30", "Not met"),
                xlabel="KV-transfer share (%)", ylabel="Time to target (s)")
         plot_style.half_column(ax)
-        ax.tick_params(axis="y", labelsize=7)
+        ax.tick_params(axis="y", labelsize=6)
+        ax.xaxis.labelpad = ax.yaxis.labelpad = 2
         ax.grid(alpha=.2, linewidth=.5)
         ax.set_axisbelow(True)
-        ax.text(.5, .04, f"{len(selected_campaign)} episodes · controls excluded", transform=ax.transAxes,
-                ha="center", fontsize=6, color=".35")
-        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.55, .045),
-                   ncol=3, frameon=False, fontsize=6.5, handlelength=1.2,
+        fig.legend(*ax.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(.61, .01),
+                   ncol=2, frameon=False, fontsize=5.5, handlelength=1.2,
                    handletextpad=.3, columnspacing=.7, labelspacing=.4)
-        fig.text(.5, .012, "Horizontal offsets ±4 pp separate repeats; time values are exact.",
-                 ha="center", fontsize=5.5)
-        fig.subplots_adjust(left=.20, right=.97, bottom=.31, top=.97)
+        fig.subplots_adjust(left=.27, right=.96, bottom=.43, top=.97)
         save(fig, out / f"{campaign}_action_attainment")
     with (out / "action_attainment.csv").open("w") as stream:
         writer = csv.DictWriter(stream, fieldnames=points[0], lineterminator="\n")

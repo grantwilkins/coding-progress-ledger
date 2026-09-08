@@ -2698,11 +2698,12 @@ These are descriptive episode ECDFs, not evidence of a causal prefill transition
 `wan_action_attainment` and `prefill_action_attainment` PDFs/PNGs plus
 `action_attainment.csv` in the same `pooled/` directory. Each point is one episode: 260 WAN and
 195 prefill points, with 13 repeats per case and policy. Each class is pooled
-into one 3.5 × 2.8 inch scatter, excluding the 10 Gb/s WAN control and zero-load
+into one 2.1 × 1.75 inch scatter, excluding the 10 Gb/s WAN control and zero-load
 prefill control. Small translucent markers show every non-control episode with
-deterministic horizontal offsets of at most ±4 percentage points to expose
+deterministic horizontal offsets of at most ±1 percentage point to expose
 overlapping choices; attainment times and CSV KV shares remain exact.
-The plotted episode count and control exclusion appear inside each panel.
+The publication figures omit explanatory annotations; controls are excluded
+and the horizontal offsets are display-only.
 The x-axis is KV transfer as a percentage
 of selected actions; the y-axis is time to the requested full power reduction.
 The frozen target requires all eight sessions, so attainment is the last
