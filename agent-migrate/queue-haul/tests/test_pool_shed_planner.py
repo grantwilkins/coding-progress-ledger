@@ -38,6 +38,14 @@ def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypa
     assert chosen[1] == 0
 
 
+def test_loaded_coding_secondary_face_solves_without_presolve_failure():
+    from pool_shed_campaign import GPUS, initial_admission
+
+    chosen, _, info = initial_admission('coding', 0, GPUS, 8, .25, 100, 30, False, 'isolated_fastest', 1., 3)
+    assert chosen.sum() > 0
+    assert info['max_relative_residual'] <= 1e-8
+
+
 def case(deadline=20.):
     fleet = SimpleNamespace(count=np.array([10.]), context=np.array([100.]), demand=np.array([.05]),
         memory_tokens=np.array([100.]), baseline_kv=0., kv_capacity=1e6, gpus=10, nodes=2,

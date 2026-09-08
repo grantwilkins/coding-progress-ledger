@@ -368,7 +368,7 @@ def solve_lp(table, allowed, objective, primary=None):
         limits = np.r_[limits, -max(0., primary - PRIMARY_TOL) / primary_scale]
     result = linprog(cost / max(abs(cost).max(), 1e-30), A_ub=csr_matrix(constraints), b_ub=limits,
                      bounds=np.c_[np.zeros(len(ids)), upper], method="highs-ipm",
-                     options={"primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9,
+                     options={"presolve": False, "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9,
                               "ipm_optimality_tolerance": 1e-12})
     if not result.success:
         raise RuntimeError(result.message)
