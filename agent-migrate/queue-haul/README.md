@@ -2650,13 +2650,13 @@ Episodes with unsubmitted or failed sessions remain in the denominator as
 incomplete mass. Completions after the 30-second deadline remain visible in
 the tail but do not count as deadline successes.
 
-Regenerate the two single-panel ECDFs and pooled action mix with
+Regenerate the two single-panel ECDFs and the action mix split by bottleneck with
 `uv run python plot_wan_prefill_results.py`. PNG/PDF figures and
 `pooled_summary.csv` are under `outputs/robustness-a100-20260907/pooled/`.
 WAN pools all five cases (including the slack control); prefill pools all four
-rates (including zero load). Each case has 13 repeats per policy, so the pooled
-action mix weights WAN/prefill 5:4 and counts selected replay/KV actions across
-936 source sessions per policy. `per_session_greedy` is displayed as Isolated
+rates (including zero load). Each case has 13 repeats per policy. The
+`pooled_action_mix` figure has separate WAN and prefill panels, pooling cases
+within each class: 520 WAN and 416 prefill source sessions per policy. `per_session_greedy` is displayed as Isolated
 Fastest because it picks each session's fastest isolated action. Unselected
 sessions remain visible as a separate action category if present.
 These are descriptive episode ECDFs, not evidence of a causal prefill transition.

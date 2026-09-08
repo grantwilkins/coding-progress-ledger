@@ -83,23 +83,24 @@ def plot(source, out):
         ax.grid(alpha=.2)
         ax.legend(loc="upper left")
         save(fig, out / f"{campaign}_completion_ecdf")
-    fig, ax = plt.subplots()
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
     policies = POLICIES[:3]
-    bottom = np.zeros(len(policies))
-    for action in ("replay", "kv_transfer", "not_selected"):
-        shares = [sum(groups[c, p][2][action] for c in ("wan", "prefill")) /
-                  sum(groups[c, p][3] for c in ("wan", "prefill")) for p in policies]
-        if not any(shares):
-            continue
-        ax.bar(range(3), shares, bottom=bottom, label=plot_style.ACTION_NAMES[action],
-               color=plot_style.ACTION_COLORS[action])
-        for i, share in enumerate(shares):
-            if share:
-                ax.text(i, bottom[i] + share / 2, f"{share:.1%}", ha="center", va="center", color="white")
-        bottom += shares
-    ax.set(xticks=range(3), xticklabels=[plot_style.POLICY_NAMES[STYLE_IDS[p]] for p in policies],
-           ylabel="Share of source sessions", ylim=(0, 1), title="Action mix · WAN + prefill cases pooled")
-    ax.legend(loc="upper center", bbox_to_anchor=(.5, -.12), ncol=3, frameon=False)
+    for ax, campaign, title in zip(axes, ("wan", "prefill"), ("WAN", "Prefill / compute headroom")):
+        bottom = np.zeros(len(policies))
+        for action in ("replay", "kv_transfer", "not_selected"):
+            shares = [groups[campaign, p][2][action] / groups[campaign, p][3] for p in policies]
+            if not any(shares):
+                continue
+            ax.bar(range(3), shares, bottom=bottom, label=plot_style.ACTION_NAMES[action],
+                   color=plot_style.ACTION_COLORS[action])
+            for i, share in enumerate(shares):
+                if share:
+                    ax.text(i, bottom[i] + share / 2, f"{share:.1%}", ha="center", va="center", color="white")
+            bottom += shares
+        ax.set(xticks=range(3), xticklabels=["\n".join(plot_style.POLICY_NAMES[STYLE_IDS[p]].rsplit(" ", 1))
+                                           for p in policies], ylim=(0, 1), title=title)
+        ax.legend(loc="upper center", bbox_to_anchor=(.5, -.18), ncol=3, frameon=False)
+    axes[0].set_ylabel("Share of source sessions")
     save(fig, out / "pooled_action_mix")
     with (out / "pooled_summary.csv").open("w") as stream:
         writer = csv.DictWriter(stream, fieldnames=summaries[0], lineterminator="\n")
