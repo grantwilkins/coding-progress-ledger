@@ -2675,7 +2675,7 @@ Regenerate the two single-panel ECDFs and the action mix split by bottleneck wit
 WAN pools all five cases (including the slack control); prefill pools all four
 rates (including zero load). Each case has 13 repeats per policy. The
 `wan_action_mix` and `prefill_action_mix` figures use horizontal stacked bars
-in separate 1.9 × 1.75 inch PDFs/PNGs for placement side by side, scaled to the
+in separate 2.1 × 1.75 inch PDFs/PNGs for placement side by side, scaled to the
 paper column width. A single-row legend uses the shared paper action palette
 (purple replay, green KV transfer) and canonical method hatches.
 Each figure pools cases within its class: 520 WAN and 416 prefill source sessions per policy. `per_session_greedy` is displayed as Isolated

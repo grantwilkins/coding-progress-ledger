@@ -94,7 +94,7 @@ def plot(source, out):
         save(fig, out / f"{campaign}_completion_ecdf")
     policies = POLICIES[:3]
     for campaign, title in (("wan", "WAN"), ("prefill", "Prefill / compute")):
-        fig, ax = plt.subplots(figsize=(1.9, 1.75))
+        fig, ax = plt.subplots(figsize=(2.1, 1.75))
         left = np.zeros(len(policies))
         for action in ("replay", "kv_transfer", "not_selected"):
             shares = np.array([groups[campaign, p][2][action] / groups[campaign, p][3] for p in policies])
