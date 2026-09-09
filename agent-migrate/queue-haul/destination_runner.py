@@ -234,9 +234,10 @@ def completion_row(status: int, start_ns: int, end_ns: int, usage: dict,
                    finish_reason: str | None = None, error: str = "") -> dict:
     prompt_tokens = int(usage.get("prompt_tokens", 0))
     output_tokens = int(usage.get("completion_tokens", 0))
-    cached = int((usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0))
+    cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+    cached = int(cached) if cached is not None else None
     token_ids = [int(token) for event in events for token in event["token_ids"]]
-    exact = len(token_ids) == output_tokens and all(len(event["token_ids"]) == 1
+    exact = output_tokens > 0 and len(token_ids) == output_tokens and all(len(event["token_ids"]) == 1
                                                     for event in events)
     timestamps = [int(event["monotonic_ns"]) for event in events for _ in event["token_ids"]]
     first = timestamps[0] if timestamps else None
@@ -793,6 +794,8 @@ def integrity_preflight(cfg: testbed.Config, plan: dict, smoke: dict,
     first = _completion(cfg.host, cfg.sink_port, cfg.model, a, 1, forced, 720)
     same = _completion(cfg.host, cfg.sink_port, cfg.model, a, 1, forced, 720)
     cross = _completion(cfg.host, cfg.sink_port, cfg.model, b, 1, forced, 720)
+    if any(row["cached_tokens"] is None for row in (first, same, cross)):
+        raise RuntimeError("cache integrity preflight omitted cache telemetry")
     tokenized = testbed.http_json(cfg.host, cfg.sink_port, "POST", "/tokenize",
                                  {"model": cfg.model, "prompt": "queue haul"})
     report = {"image_sha256": plan["image_sha256"], "gpu_count": 2,

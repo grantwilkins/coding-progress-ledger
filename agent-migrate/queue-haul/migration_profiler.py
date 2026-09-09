@@ -663,6 +663,7 @@ def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int,
                  cache_salt: str | None = None,
                  ignore_eos: bool = False) -> dict:
     payload = {"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "reasoning_effort": "low", "stream": True, "stream_options": {"include_usage": True}}
+    payload["return_token_ids"] = True
     if bypass_lmcache:
         payload["vllm_xargs"] = {"qh_bypass_lmcache": 1}
     if cache_salt:
@@ -686,6 +687,7 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
                 cache_salt: str | None = None,
                 ignore_eos: bool = False,
                 request_headers: dict[str, str] | None = None,
+                event_sink=None,
                 ) -> tuple[RequestResult, str]:
     body = json.dumps(chat_payload(
         cfg, messages, max_tokens, bypass_lmcache, cache_salt, ignore_eos,
@@ -699,7 +701,8 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
     except (http.client.HTTPException, OSError) as exc:
         conn.close()
         raise RetryableStreamError("chat transport failed") from exc
-    chunks, text, request_id, first, prompt_tokens, output_tokens, cached_tokens = [], [], "", None, 0, 0, 0
+    chunks, text, request_id, first, prompt_tokens, output_tokens, cached_tokens = [], [], "", None, 0, 0, None
+    token_events = []
     done = usage_seen = False
     if response.status != 200:
         error = response.read().decode(errors="ignore")
@@ -713,6 +716,9 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
                 continue
             chunks.append(StreamChunk(now, len(line)))
             data = line.strip()[5:].strip()
+            if event_sink is not None:
+                event_sink({"monotonic_ns": now, "data": data.decode(),
+                            "clock": "client_monotonic", "timestamp_basis": "client_receive"})
             if data == b"[DONE]":
                 done = True
                 break
@@ -728,13 +734,16 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
             usage_seen |= isinstance(raw_usage, dict) and "prompt_tokens" in raw_usage
             prompt_tokens = int(usage.get("prompt_tokens", prompt_tokens))
             output_tokens = int(usage.get("completion_tokens", output_tokens))
-            cached_tokens = int(
-                (usage.get("prompt_tokens_details") or {}).get(
-                    "cached_tokens", cached_tokens,
-                )
-            )
-            content = (item.get("choices") or [{}])[0].get("delta", {}).get("content") or ""
-            if content and first is None:
+            reported_cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+            if reported_cached is not None:
+                cached_tokens = int(reported_cached)
+            choice = (item.get("choices") or [{}])[0]
+            delta = choice.get("delta") or {}
+            ids = choice.get("token_ids") or []
+            if ids:
+                token_events.append({"monotonic_ns": now, "token_ids": ids})
+            content = delta.get("content") or ""
+            if (ids or content or delta.get("reasoning") or delta.get("reasoning_content")) and first is None:
                 first = now
             text.append(content)
     except (http.client.HTTPException, OSError) as exc:
@@ -745,10 +754,15 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
         raise RetryableStreamError(
             "chat stream ended without terminal usage")
     end = time.monotonic_ns()
+    token_ids = tuple(int(token) for event in token_events for token in event["token_ids"])
     return RequestResult(
-        request_id, response.status, context_hash, start, end, first or end,
+        request_id, response.status, context_hash, start, end, first,
         prompt_tokens, output_tokens, cached_tokens,
         stream_chunks=tuple(chunks),
+        token_events=tuple(token_events), token_ids=token_ids,
+        last_token_ns=token_events[-1]["monotonic_ns"] if token_events else None,
+        exact_token_timestamps=output_tokens > 0 and len(token_ids) == output_tokens
+        and all(len(event["token_ids"]) == 1 for event in token_events),
     ), "".join(text)
 
 
@@ -864,9 +878,11 @@ class LiveSession:
 
     def request(self, port: int, messages: list[dict], label: str, prompt: str | None = None, bypass_lmcache: bool = False) -> tuple[RequestResult, str]:
         context_hash = messages_hash(messages)
-        self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash)
-        result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s, bypass_lmcache)
-        self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks])
+        self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash,
+                             messages=self.probe(messages, prompt), max_tokens=PROBE_MAX_TOKENS)
+        result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s, bypass_lmcache,
+            event_sink=lambda event: self.event_log.write("response_event", session_id=self.session_id, request_label=label, route_port=port, **event))
+        self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks], result=asdict(result))
         if result.status_code != 200:
             raise RuntimeError(
                 f"{label} failed for {self.session_id}: HTTP {result.status_code}"
@@ -943,6 +959,8 @@ class LiveSession:
                     user["content"],
                 )
                 if port == self.cfg.src_port and b.lmcache_mode() == "mp":
+                    if result.cached_tokens is None:
+                        raise RuntimeError("source activity omitted cache telemetry")
                     keys = b.mp_wait_source_keys(
                         self.source_log, log_offset,
                         self.cache_log, transfer_offset,
@@ -1117,6 +1135,8 @@ class LiveRuntime:
                 self.chunk_tokens,
             )
             hit = result.cached_tokens
+            if hit is None:
+                raise RuntimeError("KV request omitted cache telemetry")
             if hit < len(tokens) // self.chunk_tokens * self.chunk_tokens:
                 raise RuntimeError(
                     f"request-time WAN or cache accounting mismatch for "
@@ -1150,7 +1170,9 @@ class LiveRuntime:
             if move.method == "kv_transfer" and self.mp_layout
             else kv_metrics(hit, layout) if layout else (0, 0)
         )
-        result = replace(result, processed_tokens=total - max(hit, result.cached_tokens), logical_kv_chunks=logical_chunks, logical_kv_bytes=logical_bytes)
+        result = replace(result, processed_tokens=None if result.cached_tokens is None else total - max(hit, result.cached_tokens),
+                         processed_tokens_basis="derived_prompt_minus_cache" if result.cached_tokens is not None else None,
+                         logical_kv_chunks=logical_chunks, logical_kv_bytes=logical_bytes)
         with self.lock:
             self.requests.write(json.dumps({"move_id": move.order, "session_id": move.session_id, "method": move.method, "phase": phase, "kv_layout": layout, **asdict(result)}, separators=(",", ":")) + "\n")
         self.event_log.write("copy_end", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase, processed_tokens=result.processed_tokens, logical_kv_bytes=logical_bytes, logical_kv_chunks=result.logical_kv_chunks, kv_layout=layout)
@@ -1968,7 +1990,8 @@ def request_measurements(prefix: str, request: dict | None, controller_end_ns: i
     first = first_stream_ns(request)
     return {
         f"{prefix}_prompt_tokens": int(request.get("prompt_tokens", 0)),
-        f"{prefix}_processed_tokens": int(request.get("processed_tokens", 0)),
+        f"{prefix}_processed_tokens": request.get("processed_tokens"),
+        f"{prefix}_processed_tokens_basis": request.get("processed_tokens_basis"),
         f"{prefix}_kv_chunks": int(request.get("logical_kv_chunks", 0)),
         f"{prefix}_kv_bytes": int(request.get("logical_kv_bytes", 0)),
         f"{prefix}_request_s": duration(request["start_ns"], request["end_ns"]),
@@ -1987,7 +2010,6 @@ def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
     ]
     initial_metrics = request_measurements("initial", initial, row["initial_end_ns"])
     catch_up_metrics = request_measurements("catch_up", catch_up, row.get("catch_up_end_ns"))
-    catch_up_metrics.pop("catch_up_processed_tokens")
     return {
         "scenario_id": scenario["scenario_id"], "match_id": scenario["match_id"], "job_class": session.get("job_class", ""),
         "session_id": row["move"]["session_id"], "method": row["move"]["method"], "order": row["move"]["order"],
@@ -2286,9 +2308,10 @@ def migration_stage_rows(scenario: dict, result: dict, move: dict,
             "pause_ns": move["pause_start_ns"],
             "route_switch_ns": move["switch_start_ns"],
             "commit_ns": move["switch_end_ns"],
-            "cache_hit_tokens": request.get("prompt_tokens", 0)
-                - request.get("processed_tokens", 0),
-            "processed_tail_tokens": request.get("processed_tokens", 0),
+            "cache_hit_tokens": (request.get("prompt_tokens", 0) - request["processed_tokens"]
+                                 if request.get("processed_tokens") is not None else None),
+            "processed_tail_tokens": request.get("processed_tokens"),
+            "processed_tokens_basis": request.get("processed_tokens_basis"),
             "success": not move.get("error"), "error": move.get("error"),
         })
     return rows

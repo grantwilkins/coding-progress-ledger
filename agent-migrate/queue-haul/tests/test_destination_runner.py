@@ -1023,3 +1023,10 @@ def test_prepared_issue_moves_prompt_work_before_dispatch(monkeypatch):
     assert row["prompt_sha256"] == prepared["prompt_sha256"]
     assert prepared["body"]
     assert calls[0]["prepared_body"] == prepared["body"]
+
+
+def test_completion_row_missing_cache_and_empty_timing_are_unknown():
+    row = runner.completion_row(200, 1, 2, {}, [], True)
+    assert row['cached_tokens'] is None
+    assert not row['exact_token_timestamps']
+    assert row['mean_tpot_s'] is None

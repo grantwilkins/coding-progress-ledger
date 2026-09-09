@@ -560,11 +560,11 @@ def test_session_request_requires_http_success_not_exact_model_text(monkeypatch)
     session.session_id, session.timeout_s = "session", 1
     session.event_log = SimpleNamespace(write=lambda *_args, **_kwargs: None)
     result = c.RequestResult("request", 200, "hash", 1, 2)
-    monkeypatch.setattr(c, "stream_chat", lambda *_args: (result, "valid reply"))
+    monkeypatch.setattr(c, "stream_chat", lambda *_args, **_kwargs: (result, "valid reply"))
 
     assert session.request(1, [], "probe") == (result, "valid reply")
     failed = c.RequestResult("request", 500, "hash", 1, 2)
-    monkeypatch.setattr(c, "stream_chat", lambda *_args: (failed, "CODE"))
+    monkeypatch.setattr(c, "stream_chat", lambda *_args, **_kwargs: (failed, "CODE"))
     with pytest.raises(RuntimeError, match="HTTP 500"):
         session.request(1, [], "probe")
 
@@ -737,6 +737,7 @@ def test_reduction_separates_transferred_kv_from_catch_up_cache_hits():
     assert row["measured_prompt_tokens"] == 120
     assert row["measured_processed_tokens"] == 0
     assert row["catch_up_new_tokens"] == 10
+    assert row["catch_up_processed_tokens"] == 10
     assert row["initial_time_to_first_response_s"] == pytest.approx(.6)
     assert row["initial_response_s"] == pytest.approx(.4)
 
@@ -1382,3 +1383,41 @@ def test_reduce_validates_and_writes_interpretable_tables_and_plots(
     assert "continuation_difference_s" in table
     assert "measured_prompt_tokens" in table
     assert "context_size" not in table
+
+
+@pytest.mark.parametrize('reasoning', ['reasoning', 'reasoning_content'])
+@pytest.mark.parametrize('ids', [[], [17], [17, 18]])
+def test_stream_chat_records_reasoning_tokens_and_unknown_cache(monkeypatch, reasoning, ids):
+    from io import BytesIO
+    events = [
+        {'choices': [{'delta': {'role': 'assistant'}}]},
+        {'choices': [{'delta': {reasoning: 'thinking'}, 'token_ids': ids}]},
+        {'choices': [{'delta': {'content': 'answer'}, 'token_ids': [19]}]},
+        {'choices': [], 'usage': {'prompt_tokens': 8, 'completion_tokens': 2}},
+    ]
+    response = BytesIO((''.join('data: ' + json.dumps(e) + '\n' for e in events)
+                        + 'data: [DONE]\n').encode())
+    response.status = 200
+    sent, raw = [], []
+    monkeypatch.setattr(c.http.client, 'HTTPConnection', lambda *a, **k: SimpleNamespace(
+        request=lambda *a: sent.append(json.loads(a[2])), getresponse=lambda: response,
+        close=lambda: None))
+    result, text = c.stream_chat(c.b.Config(), 1, [], c.PROBE_MAX_TOKENS, 'hash', 1,
+                                 event_sink=raw.append)
+    assert result.first_byte_ns == raw[1]['monotonic_ns']
+    assert result.last_token_ns == raw[2]['monotonic_ns']
+    assert result.token_ids == tuple(ids + [19])
+    assert result.exact_token_timestamps == (ids == [17])
+    assert result.cached_tokens is None and result.processed_tokens is None
+    assert text == 'answer' and len(raw) == 5
+    assert sent[0]['return_token_ids'] and sent[0]['max_tokens'] == 512
+    assert sent[0]['temperature'] == 0 and sent[0]['reasoning_effort'] == 'low'
+
+
+def test_request_measurements_preserve_unknown_and_derived_catchup_work():
+    request = {'start_ns': 1, 'end_ns': 2, 'processed_tokens': None}
+    assert c.request_measurements('catch_up', request, 3)['catch_up_processed_tokens'] is None
+    request.update(processed_tokens=32, processed_tokens_basis='derived_prompt_minus_cache')
+    row = c.request_measurements('catch_up', request, 3)
+    assert row['catch_up_processed_tokens'] == 32
+    assert row['catch_up_processed_tokens_basis'] == 'derived_prompt_minus_cache'
