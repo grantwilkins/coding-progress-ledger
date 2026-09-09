@@ -591,3 +591,43 @@ def test_network_bin_time_equivalence_does_not_skip_a_bin_or_move_backwards(offs
     assert profile["finish"] == expected
     assert profile["finish"] >= start + table.fleet.kv[0]
     assert profile["network"].sum() == pytest.approx(table.fleet.kv[0])
+
+
+def test_captured_secondary_lp_recovers_with_valid_dual_and_original_resource_certificate():
+    from pathlib import Path
+    from pool_shed_campaign import PRIMARY_TOL, _bounded_lp
+
+    data = np.load(Path(__file__).parent / 'fixtures/pool_shed_secondary3104.npz')
+    cost, matrix, rhs, upper = (data[k] for k in ('cost', 'matrix', 'rhs', 'upper'))
+    with pytest.warns(RuntimeWarning, match='retrying the same LP with IPM'):
+        chosen = _bounded_lp(cost, matrix, rhs, upper)
+    row_dual, col_dual = data['row_dual'], data['col_dual']
+    assert row_dual.max() <= 0
+    assert matrix.T @ row_dual + col_dual == pytest.approx(cost, abs=1e-10)
+    dual_bound = rhs @ row_dual + upper @ np.minimum(col_dual, 0)
+    assert dual_bound == pytest.approx(2.3106690901477123, abs=1e-10)
+    assert cost @ chosen == pytest.approx(dual_bound, abs=1e-9)
+    assert chosen.min() >= -1e-10 and np.max(chosen - upper) <= 1e-10
+    assert np.max(matrix @ chosen - rhs) <= 1e-10
+    replicas = chosen * data['gpus'] / data['column_scale']
+    assert np.max((data['original_matrix'][:, data['ids']] @ replicas - data['capacities']) / np.maximum(data['capacities'], 1)) <= 1e-8
+    assert data['gains'][data['ids']] @ replicas >= data['primary'] - PRIMARY_TOL - 1e-8
+
+
+def test_both_native_algorithms_nonoptimal_still_fail(monkeypatch):
+    import pool_shed_campaign as campaign
+
+    original, attempts = campaign.highspy.Highs, []
+    class FailedSolver:
+        def __init__(self):
+            self.solver = original()
+            attempts.append(self)
+        def __getattr__(self, name):
+            return getattr(self.solver, name)
+        def run(self):
+            return campaign.highspy.HighsStatus.kWarning
+    monkeypatch.setattr(campaign.highspy, 'Highs', FailedSolver)
+    with pytest.warns(RuntimeWarning, match='retrying the same LP with IPM'), pytest.raises(RuntimeError):
+        campaign._bounded_lp(-np.ones(1), np.ones((1, 1)), np.ones(1), np.ones(1))
+    assert len(attempts) == 2
+    assert [item.getOptionValue('solver')[1] for item in attempts] == ['simplex', 'ipm']

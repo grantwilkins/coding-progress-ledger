@@ -195,7 +195,12 @@ snapshots, one long-context cohort, one measured-pack cohort, five destination
 loads, five WAN settings, ten deadlines from 1 to 3600 seconds, and central plus
 eight paired timing/network draws. `prepare --smoke` selects 36 scenarios.
 `run --shard N --shards K` supports process shards and checkpoint resume;
-code, solver, calibration, and grid identities must match. Bands show empirical
+code, solver, calibration, and grid identities must match. A reviewed numerical
+recovery retries a nonoptimal simplex solve once with a fresh interior-point
+solver; both must satisfy the same original resource and objective checks.
+Successful earlier checkpoints may be reused only through an explicit manifest
+pinning their original identities and exact bytes; the summary reports this
+execution lineage separately from the current source identity. Bands show empirical
 p05–p95 sensitivity across execution draws, snapshots, and measured power curves,
 not coverage of unmeasured transfer error or formal SLO compliance.
 

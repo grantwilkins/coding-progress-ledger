@@ -374,30 +374,25 @@ def policy_mask(table, policy):
 
 
 def _bounded_lp(cost, matrix, rhs, upper):
-    matrix = csr_matrix(matrix)
-    for algorithm in ("simplex", "ipm"):
-        model, solver = highspy.HighsLp(), highspy.Highs()
-        model.num_col_, model.num_row_ = matrix.shape[1], matrix.shape[0]
-        model.col_cost_, model.col_lower_, model.col_upper_ = cost, np.zeros(len(cost)), upper
-        model.row_lower_, model.row_upper_ = np.full(len(rhs), -highspy.kHighsInf), rhs
-        model.a_matrix_.format_ = highspy.MatrixFormat.kRowwise
-        model.a_matrix_.start_, model.a_matrix_.index_, model.a_matrix_.value_ = matrix.indptr, matrix.indices, matrix.data
-        for key, value in {"output_flag": False, "threads": 1, "solver": algorithm, "presolve": "on",
-                           "simplex_scale_strategy": 0, "small_matrix_value": 1e-12,
-                           "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9}.items():
-            if solver.setOptionValue(key, value) != highspy.HighsStatus.kOk:
-                raise RuntimeError(f"HiGHS rejected option {key}")
-        status = solver.passModel(model)
-        if status == highspy.HighsStatus.kError:
-            raise RuntimeError("HiGHS rejected the LP model")
-        if status == highspy.HighsStatus.kWarning:
-            warnings.warn("HiGHS model import warning; original constraints are checked after solving", RuntimeWarning, stacklevel=2)
-        status = solver.run()
-        if status == highspy.HighsStatus.kOk and solver.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-            return np.asarray(solver.getSolution().col_value)
-        if algorithm == "simplex":
-            warnings.warn(f"HiGHS simplex returned {solver.modelStatusToString(solver.getModelStatus())}; retrying the same LP with IPM", RuntimeWarning, stacklevel=2)
-    raise RuntimeError(solver.modelStatusToString(solver.getModelStatus()))
+    matrix, model, solver = csr_matrix(matrix), highspy.HighsLp(), highspy.Highs()
+    model.num_col_, model.num_row_ = matrix.shape[1], matrix.shape[0]
+    model.col_cost_, model.col_lower_, model.col_upper_ = cost, np.zeros(len(cost)), upper
+    model.row_lower_, model.row_upper_ = np.full(len(rhs), -highspy.kHighsInf), rhs
+    model.a_matrix_.format_ = highspy.MatrixFormat.kRowwise
+    model.a_matrix_.start_, model.a_matrix_.index_, model.a_matrix_.value_ = matrix.indptr, matrix.indices, matrix.data
+    for key, value in {"output_flag": False, "threads": 1, "solver": "simplex", "presolve": "on",
+                       "simplex_scale_strategy": 0, "small_matrix_value": 1e-12,
+                       "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9}.items():
+        if solver.setOptionValue(key, value) != highspy.HighsStatus.kOk:
+            raise RuntimeError(f"HiGHS rejected option {key}")
+    status = solver.passModel(model)
+    if status == highspy.HighsStatus.kError:
+        raise RuntimeError("HiGHS rejected the LP model")
+    if status == highspy.HighsStatus.kWarning:
+        warnings.warn("HiGHS model import warning; original constraints are checked after solving", RuntimeWarning, stacklevel=2)
+    if solver.run() != highspy.HighsStatus.kOk or solver.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+        raise RuntimeError(solver.modelStatusToString(solver.getModelStatus()))
+    return np.asarray(solver.getSolution().col_value)
 
 
 def solve_lp(table, allowed, objective, primary=None):
@@ -607,44 +602,13 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
 
 def load_plan(out):
     plan = json.loads((out / "plan.json").read_text())
-    if "inherited_checkpoints" in plan:
-        raise ValueError("inherited checkpoint metadata must come from the pinned manifest")
     if plan["config"].get("solver_version") != highspy.Highs().version():
         raise ValueError("stale LP solver version")
     if plan["config"]["schema"] != SCHEMA or plan["sources"] != provenance(calibration(plan["config"]["draws"])):
         raise ValueError("stale schema, code, or calibration")
     if plan["identity"] != digest({"config": plan["config"], "sources": plan["sources"]}):
         raise ValueError("invalid plan identity")
-    if "inherited_checkpoints_sha256" in plan:
-        payload = (out / "inherited-checkpoints.json").read_bytes()
-        if hashlib.sha256(payload).hexdigest() != plan["inherited_checkpoints_sha256"]:
-            raise ValueError("inherited checkpoint manifest changed")
-        inherited = json.loads(payload)
-        if (inherited["parent_config"] != plan["config"] or inherited["parent_identity"] == plan["identity"]
-                or inherited["parent_identity"] != digest({"config": inherited["parent_config"], "sources": inherited["parent_sources"]})):
-            raise ValueError("invalid inherited execution provenance")
-        expected = {f"{i:06d}.json.gz" for i in range(len(cells(plan["config"])))}
-        if (not set(inherited["cells_sha256"]) <= expected
-                or any(not isinstance(h, str) or len(h) != 64 or any(c not in "0123456789abcdef" for c in h)
-                       for h in inherited["cells_sha256"].values())):
-            raise ValueError("unexpected inherited checkpoint or checksum")
-        plan["inherited_checkpoints"] = inherited
     return plan
-
-
-def read_checkpoint(path, plan, expected):
-    payload = path.read_bytes()
-    value = json.loads(gzip.decompress(payload))
-    inherited = plan.get("inherited_checkpoints", {})
-    checksum = inherited.get("cells_sha256", {}).get(path.name)
-    identity = inherited["parent_identity"] if checksum is not None else plan["identity"]
-    if checksum is not None and hashlib.sha256(payload).hexdigest() != checksum:
-        raise ValueError("inherited checkpoint bytes changed")
-    if value["identity"] != identity or value["cell"] != json.loads(json.dumps(expected)) or value["status"] != "complete":
-        raise ValueError("invalid cell checkpoint")
-    if set(value["results"]) != set(POLICIES):
-        raise ValueError("missing policy")
-    return value
 
 
 @lru_cache(maxsize=64)
@@ -762,10 +726,11 @@ def run(out, shard=0, shards=1):
             continue
         path = out / "cells" / f"{index:06d}.json.gz"
         if path.exists():
-            read_checkpoint(path, plan, cell)
+            with gzip.open(path, "rt") as handle:
+                previous = json.load(handle)
+            if previous["identity"] != plan["identity"] or previous["cell"] != json.loads(json.dumps(cell)):
+                raise ValueError("stale cell checkpoint")
             continue
-        if path.name in plan.get("inherited_checkpoints", {}).get("cells_sha256", {}):
-            raise ValueError("missing inherited checkpoint")
         write_json(path, run_cell(plan, cell))
         if index % 250 == 0:
             print(f"{index + 1}/{len(work)} cells; {time.perf_counter() - started:.1f}s", flush=True)
@@ -793,8 +758,13 @@ def reduce(out):
     unsettled, decisions = 0, 0
     build_s = solve_s = 0.
     for i, path in enumerate(paths):
-        value = read_checkpoint(path, plan, expected[i])
+        with gzip.open(path, "rt") as handle:
+            value = json.load(handle)
+        if value["identity"] != plan["identity"] or value["cell"] != json.loads(json.dumps(expected[i])) or value["status"] != "complete":
+            raise ValueError("invalid cell checkpoint")
         (workload, snapshot), load, draw, wan, deadline = value["cell"]
+        if set(value["results"]) != set(POLICIES):
+            raise ValueError("missing policy")
         qh = value["results"]["queue_haul"]["shed_fraction"]
         nominal_qh = value["results"]["queue_haul"]["initial_nominal_shed_fraction"]
         maxima["columns"] = max(maxima["columns"], value["columns"])
@@ -900,12 +870,6 @@ def reduce(out):
                 "interval_scope": "identical feedback rules and central forecast calibration, paired execution draws and workload snapshots; empirical sensitivity, not coverage of unmeasured fleet transfer error",
                 "timing_s": {"preparation": plan["preparation_s"], "pattern_tables": build_s, "solves_evaluation": solve_s,
                              "plotting": time.perf_counter() - plot_start, "reduction": time.perf_counter() - started}}
-    if "inherited_checkpoints" in plan:
-        metadata["inherited_execution"] = {"identity": plan["inherited_checkpoints"]["parent_identity"],
-            "cells": len(plan["inherited_checkpoints"]["cells_sha256"]),
-            "new_cells": len(paths) - len(plan["inherited_checkpoints"]["cells_sha256"]),
-            "parent_sources_sha256": digest(plan["inherited_checkpoints"]["parent_sources"]),
-            "manifest_sha256": plan["inherited_checkpoints_sha256"]}
     write_json(out / "summary.json", metadata)
     return metadata
 

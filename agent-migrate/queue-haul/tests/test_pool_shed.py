@@ -179,3 +179,84 @@ def test_mixed_batch_resources_are_additive_pure_action_choices():
     pure = c.schedule_table(fleet, np.vstack((replay, np.zeros_like(replay))), np.vstack((np.zeros_like(kv), kv)), *args)
     np.testing.assert_allclose(mixed.matrix[:, 0], pure.matrix[:, :2].sum(1), atol=1e-8)
     assert mixed.gains[0] == pytest.approx(pure.gains[:2].sum())
+
+
+def inherited_case(tmp_path, monkeypatch):
+    import hashlib
+
+    config = c.configuration(smoke=True)
+    sources, parent_sources = {'pool_shed_campaign.py': 'current'}, {'pool_shed_campaign.py': 'previous'}
+    plan = {'config': config, 'sources': sources, 'identity': c.digest({'config': config, 'sources': sources})}
+    parent = c.digest({'config': config, 'sources': parent_sources})
+    cell = c.cells(config)[0]
+    path = tmp_path / 'cells/000000.json.gz'
+    c.write_json(path, {'identity': parent, 'cell': cell, 'status': 'complete', 'results': dict.fromkeys(c.POLICIES, {})})
+    manifest = {'parent_identity': parent, 'parent_config': dict(config), 'parent_sources': parent_sources,
+                'cells_sha256': {path.name: hashlib.sha256(path.read_bytes()).hexdigest()}}
+    c.write_json(tmp_path / 'inherited-checkpoints.json', manifest)
+    plan['inherited_checkpoints_sha256'] = hashlib.sha256((tmp_path / 'inherited-checkpoints.json').read_bytes()).hexdigest()
+    c.write_json(tmp_path / 'plan.json', plan)
+    monkeypatch.setattr(c, 'calibration', lambda *args: {})
+    monkeypatch.setattr(c, 'provenance', lambda *args: sources)
+    return plan, manifest, path, cell
+
+
+def test_inherited_checkpoint_requires_pinned_bytes_and_preserves_original_identity(tmp_path, monkeypatch):
+    plan, manifest, path, cell = inherited_case(tmp_path, monkeypatch)
+    before = path.read_bytes()
+    loaded = c.load_plan(tmp_path)
+    value = c.read_checkpoint(path, loaded, cell)
+    assert value['identity'] == manifest['parent_identity'] != loaded['identity']
+    assert path.read_bytes() == before
+    unlisted = path.with_name('000001.json.gz')
+    unlisted.write_bytes(before)
+    with pytest.raises(ValueError, match='invalid cell'):
+        c.read_checkpoint(unlisted, loaded, cell)
+    value['identity'] = plan['identity']
+    c.write_json(path, value)
+    with pytest.raises(ValueError, match='bytes changed'):
+        c.read_checkpoint(path, loaded, cell)
+
+
+@pytest.mark.parametrize('change', ['manifest', 'config', 'parent_identity', 'filename'])
+def test_inherited_manifest_fails_closed(tmp_path, monkeypatch, change):
+    import hashlib
+
+    plan, manifest, path, cell = inherited_case(tmp_path, monkeypatch)
+    if change == 'config':
+        manifest['parent_config']['source_load'] = .7
+    elif change == 'parent_identity':
+        manifest['parent_identity'] = 'unknown'
+    elif change == 'filename':
+        manifest['cells_sha256']['../000000.json.gz'] = manifest['cells_sha256'][path.name]
+    else:
+        manifest['cells_sha256'][path.name] = 'changed'
+    c.write_json(tmp_path / 'inherited-checkpoints.json', manifest)
+    if change != 'manifest':
+        plan['inherited_checkpoints_sha256'] = hashlib.sha256((tmp_path / 'inherited-checkpoints.json').read_bytes()).hexdigest()
+        c.write_json(tmp_path / 'plan.json', plan)
+    with pytest.raises(ValueError, match='inherited'):
+        c.load_plan(tmp_path)
+
+
+def test_unpinned_parent_checkpoint_is_rejected_and_missing_inherited_cell_not_recomputed(tmp_path, monkeypatch):
+    plan, manifest, path, cell = inherited_case(tmp_path, monkeypatch)
+    loaded = c.load_plan(tmp_path)
+    del plan['inherited_checkpoints_sha256']
+    c.write_json(tmp_path / 'plan.json', plan)
+    with pytest.raises(ValueError, match='invalid cell'):
+        c.read_checkpoint(path, c.load_plan(tmp_path), cell)
+    path.unlink()
+    monkeypatch.setattr(c, 'load_plan', lambda out: loaded)
+    monkeypatch.setattr(c, 'run_cell', lambda *args: pytest.fail('must not replace missing inherited bytes'))
+    with pytest.raises(ValueError, match='missing inherited'):
+        c.run(tmp_path)
+
+
+def test_unpinned_serialized_inheritance_cache_is_rejected(tmp_path, monkeypatch):
+    plan, manifest, path, cell = inherited_case(tmp_path, monkeypatch)
+    plan["inherited_checkpoints"] = manifest
+    del plan["inherited_checkpoints_sha256"]
+    c.write_json(tmp_path / "plan.json", plan)
+    with pytest.raises(ValueError, match="pinned manifest"):
+        c.load_plan(tmp_path)
