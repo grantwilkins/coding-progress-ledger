@@ -149,8 +149,10 @@ validate protected fleet-scale service. The validation report records per-case
 errors, false-feasible deadlines, original reference errors, library expansion,
 execution refinement, feedback sensitivity, and proportional scaling.
 
-The current [validation](outputs/a100-pooled-service-validation/critic-summary.json)
-passes 218 focused tests and all required validation gates. Across six central
+The [hardware and resolution validation](outputs/a100-pooled-service-validation/critic-summary.json)
+records the protected-service model before its numerical solver recovery; the
+[final focused suite](outputs/a100-pooled-service-validation/solver-failure-3104/focused-tests-final.log)
+passes 227 tests. The recovery leaves the measured model and validation gates unchanged. Across six central
 cases, doubling dispatch resolution changes shed or the QH gap by at most
 0.0743 percentage points. Changing the planning grid changes results by up to
 8.152 points, so small policy advantages are not grid-robust. Runtime-matched
@@ -203,6 +205,14 @@ pinning their original identities and exact bytes; the summary reports this
 execution lineage separately from the current source identity. Bands show empirical
 p05–p95 sensitivity across execution draws, snapshots, and measured power curves,
 not coverage of unmeasured transfer error or formal SLO compliance.
+
+The resumed campaign retains 3,012 successful executions under their original
+source identity through a checked inheritance manifest. All campaign executions
+use the local Mac: a [Linux comparison](outputs/a100-pooled-service-validation/solver-failure-3104/current-platform-comparison.json)
+found a 1.045-point greedy difference on one of two checked cases, despite
+matching initial feedback and agreement for the other four policies. Its
+near-tied temporal choices are platform-sensitive; this failed comparison is
+retained rather than treating the two platforms as interchangeable.
 
 `outputs/a100-pooled-feedback` archives the v7 campaign, which permitted
 resident displacement and used the old service/power normalization. Its results

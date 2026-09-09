@@ -1,0 +1,24 @@
+/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py:417: RuntimeWarning: HiGHS model import warning; original constraints are checked after solving
+  result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper)
+2251/13500 cells; 1899.7s
+2501/13500 cells; 3129.2s
+Traceback (most recent call last):
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py", line 1141, in <module>
+    main()
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py", line 1133, in main
+    run(args.out, args.shard, args.shards)
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py", line 734, in run
+    write_json(path, run_cell(plan, cell))
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py", line 704, in run_cell
+    executed = execute_feedback(table, realized, policy, plan["calibration"]["timing"][draw],
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py", line 663, in execute_feedback
+    chosen, until, audit = initial if engine.now == 0 and initial is not None else plan_admission(
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_planner.py", line 371, in plan_admission
+    chosen = _choose(matrix, limits, gains, debt, fleet, policy == "greedy") if len(original) else np.zeros(0)
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_planner.py", line 197, in _choose
+    return solve_lp(table, allowed, debt, float(gains @ chosen)) if debt.any() else chosen
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py", line 417, in solve_lp
+    result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper)
+  File "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py", line 394, in _bounded_lp
+    raise RuntimeError(solver.modelStatusToString(solver.getModelStatus()))
+RuntimeError: Unknown
