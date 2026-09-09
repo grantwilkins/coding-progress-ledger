@@ -465,3 +465,23 @@ def test_small_fleet_qh_does_not_reserve_wan_for_compute_only_replicas():
     assert result["shed_fraction"] > .99
     assert result["max_relative_residual"] <= 1e-8
     assert max(result["resident_debt_generated_work_s"]) == 0.
+
+
+def test_observed_recovery_boundary_is_a_feedback_and_candidate_start_time(monkeypatch):
+    import pool_shed_planner as planner
+
+    table, timing, calibration = case(3600.)
+    table.fleet.metadata["protect_resident"] = True
+    engine = PooledExecution(table, timing, calibration)
+    engine.now = 600.
+    engine.admit(np.array([0., 1., 0., 0.]))
+    engine.state[:], engine.gated[:], engine.backlog[:], engine.remaining[:] = 5, True, 3., 0.
+    starts, original = [], planner.phase_profile
+    def record(*args, **kwargs):
+        starts.append(args[4])
+        return original(*args, **kwargs)
+    monkeypatch.setattr(planner, "phase_profile", record)
+    _, until, _ = planner.plan_admission(engine, table, "queue_haul", iterations=1)
+    assert until == 603. and 603. in starts
+    assert planner.planning_grid(engine.now, table.deadline, table.nominal_commit, .5)[1] == 864.
+    assert engine.now == 600. and engine.backlog.tolist() == [3.]

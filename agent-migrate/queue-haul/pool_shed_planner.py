@@ -243,11 +243,11 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
     if iterations < 1 or engine.now >= table.deadline:
         raise ValueError("planning needs a positive iteration budget and remaining time")
     edges = planning_grid(engine.now, table.deadline, table.nominal_commit, resolution)
-    next_decision, start_times = float(edges[1]), edges[:-1][:3].copy()
     if fleet.metadata.get("protect_resident"):
         events = []
         recovery_prefix(engine, edges, events)
         edges = np.unique(np.r_[edges, events])
+    next_decision, start_times = float(edges[1]), edges[:-1][:3].copy()
     bins, columns = len(edges) - 1, len(table.route)
     total, route_masks = table.replay + table.kv, np.array([table.route == r for r in (0, 1)])
     available = np.maximum(fleet.count - total.T @ engine.selected_total, 0.)
