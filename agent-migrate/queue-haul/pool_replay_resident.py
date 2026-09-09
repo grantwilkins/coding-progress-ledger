@@ -112,8 +112,9 @@ class ResidentAcquisition(Acquisition):
             trace += [{**r,'cohort':'incoming'} for r in arrival_trace(incoming_rate,[1]*len(incoming),spec['seed']+1,duration,60, spec.get('burst',False))]
         trace.sort(key=lambda r:(r['offset_s'],r['cohort'],r['session'],r['turn']))
         write(root/'offered-trace.json',trace)
-        ready = asyncio.Event()
-        if not migration or spec['arm'] == 'control':ready.set()
+        ready = [asyncio.Event() for _ in incoming]
+        if spec['arm'] == 'control':
+            for event in ready:event.set()
         histories = []
         if migration:
             for i,t in enumerate(incoming):
@@ -163,7 +164,7 @@ class ResidentAcquisition(Acquisition):
                 try:
                     await asyncio.sleep(max(0,(scheduled_ns-time.monotonic_ns())/1e9))
                     self.record(self.events,{**tags,'kind':'scheduled_arrival','client_wakeup_ns':time.monotonic_ns()})
-                    if item['cohort']=='incoming':await ready.wait()
+                    if item['cohort']=='incoming':await ready[item['session']].wait()
                     async with t.lock:
                         if t.failed:
                             row.update(status='dependency_failed');return
@@ -185,7 +186,7 @@ class ResidentAcquisition(Acquisition):
                         row={**tags,**result}
                         t.accept(prompt,row)
                 except asyncio.CancelledError:
-                    row.update(status='censored',end_ns=boundary,cancellation='observation_boundary')
+                    row.update(status='censored',end_ns=min(boundary,time.monotonic_ns()),cancellation='observation_boundary' if time.monotonic_ns()>=boundary else 'acquisition_interruption')
                     raise
                 except Exception as exc:
                     row.update(status='failed',error=f'{type(exc).__name__}: {exc}',end_ns=time.monotonic_ns())
@@ -194,20 +195,24 @@ class ResidentAcquisition(Acquisition):
                     rows.append(row);self.record(self.requests,row)
             async def migrate():
                 await asyncio.sleep(max(0,(epoch+60_000_000_000-time.monotonic_ns())/1e9))
-                migration_events.append({'kind':'initial_start','monotonic_ns':time.monotonic_ns(),'source_active':False})
-                if spec['arm']=='replay':
-                    results=await asyncio.gather(*(asyncio.to_thread(self.chat,messages,code,
-                        {**spec,'phase':'initial','cohort':'migration','session':i},f"{spec['episode']}-incoming-{i}")
-                        for i,(messages,code) in enumerate(histories)))
-                    migration_events.append({'kind':'initial_end','monotonic_ns':time.monotonic_ns(),'requests':[r['request_id'] for r in results]})
-                    # Controlled append sensitivity; no source GPU or source-idle claim.
-                    results=await asyncio.gather(*(asyncio.to_thread(self.chat,self.append(messages,code,32),code,
-                        {**spec,'phase':'catch_up','cohort':'migration','session':i},f"{spec['episode']}-incoming-{i}")
-                        for i,(messages,code) in enumerate(histories)))
-                    if any(r['status']!='complete' for r in results):raise RuntimeError('destination replay failed')
-                migration_events.append({'kind':'destination_admission','monotonic_ns':time.monotonic_ns(),
-                    'source_quiescence_validated':False,'kv_transfer_validated':False})
-                ready.set()
+                async def move_one(i,messages,code):
+                    migration_events.append({'kind':'initial_start','session':i,'monotonic_ns':time.monotonic_ns(),'source_active':False})
+                    if spec['arm']=='replay':
+                        initial=await asyncio.to_thread(self.chat,messages,code,
+                            {**spec,'phase':'initial','cohort':'migration','session':i},f"{spec['episode']}-incoming-{i}")
+                        if initial['status']!='complete':raise RuntimeError('initial replay failed')
+                        migration_events.append({'kind':'initial_end','session':i,'monotonic_ns':time.monotonic_ns(),'request_id':initial['request_id']})
+                        migration_events.append({'kind':'catch_up_start','session':i,'monotonic_ns':time.monotonic_ns()})
+                        result=await asyncio.to_thread(self.chat,self.append(messages,code,32),code,
+                            {**spec,'phase':'catch_up','cohort':'migration','session':i},f"{spec['episode']}-incoming-{i}")
+                        if result['status']!='complete':raise RuntimeError('destination catch-up failed')
+                        migration_events.append({'kind':'catch_up_end','session':i,'monotonic_ns':time.monotonic_ns(),'request_id':result['request_id']})
+                    migration_events.append({'kind':'destination_admission','session':i,'monotonic_ns':time.monotonic_ns(),
+                        'source_quiescence_validated':False,'kv_transfer_validated':False})
+                    ready[i].set()
+                outcomes=await asyncio.gather(*(move_one(i,messages,code) for i,(messages,code) in enumerate(histories)),return_exceptions=True)
+                for i,outcome in enumerate(outcomes):
+                    if isinstance(outcome,BaseException):migration_events.append({'kind':'migration_failed','session':i,'error':str(outcome)})
             tasks=[asyncio.create_task(one(item)) for item in trace]
             mover=asyncio.create_task(migrate()) if migration else None
             try:
@@ -239,10 +244,11 @@ class ResidentAcquisition(Acquisition):
         return result
 
     def scout(self,plan):
-        results=[]
+        results=json.loads((self.out/'scout-results.json').read_text()) if (self.out/'scout-results.json').exists() else []
         for workload in ('coding','coding_long'):
             rate=plan['workloads'][workload]['initial_scout_rps_per_gpu']
-            for probe in range(4):
+            first = max((int(path.name.rsplit('-',1)[1]) for path in self.out.glob(f'scout-{workload}-*') if path.is_dir()),default=-1)+1
+            for probe in range(first,4):
                 self.remaining()
                 spec={'episode':f'scout-{workload}-{probe}','trace_id':f'scout-{workload}-{probe}',
                       'seed':7101,'workload':workload,'rate':rate,'arm':'resident','probe':probe}
@@ -250,14 +256,17 @@ class ResidentAcquisition(Acquisition):
                 results.append(result);write(self.out/'scout-results.json',results)
                 screen=result['summaries']['resident']['30-90']
                 print(spec['episode'],rate,json.dumps(screen),flush=True)
+                if screen['exact_timing_coverage'] < .99:
+                    raise RuntimeError('scout timing prerequisite failed; no service degradation inferred')
                 rate*=2 if screen['screen_pass'] else .5
         selection={}
         for workload in ('coding','coding_long'):
             trials=[r for r in results if r['spec']['workload']==workload]
             stable=sorted({r['spec']['rate'] for r in trials if r['summaries']['resident']['30-90']['screen_pass']})
             tested=sorted({r['spec']['rate'] for r in trials})
+            if len(tested)<2:raise RuntimeError('two distinct resident rates have not been tested')
             selection[workload]={'rates':stable[-2:] if len(stable)>=2 else tested[-2:],
-                'stable_rates':stable,'boundary_bracketed':bool(stable) and any(not r['summaries']['resident']['30-90']['screen_pass'] for r in trials),
+                'stable_rates':stable,'boundary_bracketed':bool(stable) and any(r['summaries']['resident']['30-90']['exact_timing_coverage']>=.99 and not r['summaries']['resident']['30-90']['screen_pass'] for r in trials),
                 'validated_capacity_boundary':False}
         write(self.out/'resident-rate-selection.json',selection)
 
@@ -268,7 +277,8 @@ def main():
     parser.add_argument('--out',type=Path,required=True)
     parser.add_argument('--plan',type=Path,required=True)
     args=parser.parse_args();plan=json.loads(args.plan.read_text());a=ResidentAcquisition(args.out)
-    write(args.out/f'{args.stage}-launch.json',{'argv':__import__('sys').argv,'source_sha256':profiler.file_hash(Path(__file__)),
+    write(args.out/f'{args.stage}-launch-{time.monotonic_ns()}.json',{'argv':__import__('sys').argv,'source_sha256':profiler.file_hash(Path(__file__)),
+        'runtime_patch':json.loads((args.out/'stream-patch.json').read_text()) if (args.out/'stream-patch.json').exists() else None,
         'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
         'plan_sha256':profiler.file_hash(args.plan),'start_ns':time.monotonic_ns()})
     if args.stage=='scout':a.scout(plan)
@@ -283,7 +293,7 @@ def main():
         for row in episodes:
             if row['arm']=='kv_transfer':continue
             w=row['workload'];slot=row['rate_slot'];seed=row['seed']
-            spec={**row,'episode':f"{args.stage}-{w}-{slot}-{row['arm']}-{seed}",
+            spec={**row,'episode':f"{args.stage}-{w}-{slot}-{row['arm']}-{seed}" + (f"-w{row.get('width',8)}" if args.stage=='followups' else '') + ('-burst' if row.get('burst') else ''),
                 'rate':selection[w]['rates'][slot],'incoming_session_rps':pool.sample_fleet(w).metadata['source_session_rps']}
             result=asyncio.run(a.episode(spec,plan['workloads'][w],180,True))
             print(spec['episode'],'complete',flush=True)
