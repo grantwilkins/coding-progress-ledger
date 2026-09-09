@@ -1,0 +1,15 @@
+{
+  "status": "pass",
+  "scope": "Synthetic metadata/files only; no simulation or incomplete full audit executed. Complete5-group fixture includes original local/remote, replayed publication journal, failed remote, unpublished local, and neverassigned groups.",
+  "rejected_corruptions": [
+    "overlapping_replacement",
+    "wrong_remote_owner",
+    "missing_unstarted_group",
+    "missing_original_hash",
+    "negative_recovery_time",
+    "live_publisher",
+    "changed_original_cell_bytes"
+  ],
+  "fixture": "/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/qh-recovery-audit-fixture-1ne92v8d",
+  "auditor_sha256": "8cc6e61ebd2c75dd27f10a75bf790caee560061b654781798700e0cd9769dad6"
+}

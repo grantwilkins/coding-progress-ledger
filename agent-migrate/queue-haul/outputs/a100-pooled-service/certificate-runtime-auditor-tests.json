@@ -1,0 +1,15 @@
+{
+  "status": "pass",
+  "scope": "Metadata-only fixture using nine synthetic runtime records and authentic read-only parent provenance. No simulated cells, incomplete full audit, or source/archive mutations.",
+  "rejected_corruptions": [
+    "wrong_runtime_identity",
+    "duplicate_runtime_shard",
+    "wrong_new_cell_count",
+    "planned_count_as_completed",
+    "wrong_total_wall",
+    "current_remote_claim",
+    "wrong_proof_hash"
+  ],
+  "auditor_sha256": "76c6522a17832706215f13c537ad050dd9619a6129a5275dd7ce0f8a7d1b93ba",
+  "fixture": "/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/qh-certificate-runtime-fixture-na4_oym0"
+}
