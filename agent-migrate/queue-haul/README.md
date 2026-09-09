@@ -328,6 +328,32 @@ Before resuming the campaign, specify actual
 destination availability and resident traffic, then validate concurrent resident
 TTFT/TPOT and source quiescence/buffer recovery under that same contract.
 
+The follow-up measurement inventory finds 336 historical replay catch-ups in
+[`coding-run`](outputs/coding-run/migrations.csv) and
+[`bounded-hardware-campaign-run`](outputs/bounded-hardware-campaign-run/migrations.csv).
+Both record a vLLM 0.10.1.1 runtime, so they are diagnostics for the current
+0.22 stack. The 108 concurrency-one coding cases append only 31–35 tokens but
+have a median catch-up duration of 2.681 s. Their raw per-scenario `result.json`
+files retain catch-up request records; the flattened CSV omits processed-token
+counts, and historical inferred counts do not establish native cache hits.
+The current coding manifest has no arrival timestamp for any of its 1,655
+records. Independent seeded arrival phases can remove artificial synchrony,
+but measured burstiness requires source request timestamps. Across 23,324
+regional resident request records from all retained attempts, 17,279 have
+`first_byte_ns == end_ns`. Their stream chunks retain times and byte counts;
+the meaning of the first-token field, including reasoning output, needs checking
+before fitting TTFT/TPOT. Continued-arrival recovery also needs resident traffic
+that remains active after migration. The existing transition study covers its
+three discrete 4K recipes, not this general long-context recovery model.
+
+The proposed 20 MW source with two 10 MW destinations would have a **62.5%**
+standing-service handoff ceiling at the current source/destination loads of
+80%/50%. This is capacity arithmetic, not an executed asymmetric-fleet result;
+the simulator currently shares one GPU count across all sites. Independent
+destination counts must scale their compute, memory and endpoint inventory
+without changing source population or assuming a larger shared WAN. Reducing
+destination size can leave both methods tied at that common service ceiling.
+
 ```bash
 uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-service-validation
 uv run python pool_shed_campaign.py prepare --out outputs/a100-pooled-service
