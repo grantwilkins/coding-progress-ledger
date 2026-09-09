@@ -128,7 +128,7 @@ def service(out, raw):
         metrics=[{k:float(v) for k,v in r.items() if v} for r in csv.DictReader((path.parent/'engine.csv').open())]
         power=[r for r in csv.DictReader((path.parent/'power.csv').open()) if r['valid']=='1']
         epoch=result['epoch_ns'];duration=(result['boundary_ns']-epoch)/1e9
-        intervals=[(30,90)] if spec['arm']=='resident' else [(0,60),(60,90),(90,120),(120,150),(150,180)]
+        intervals=[(30,90)] if spec['arm']=='resident' else [(0,60),(60,90),(90,120),(120,150),(150,180),(60,180)]
         for cohort in ('resident','incoming'):
             cohort_rows=[r for r in rows if r['cohort']==cohort]
             offered=[r for r in trace if r['cohort']==cohort]
@@ -185,7 +185,7 @@ def service(out, raw):
         if control is None:continue
         assert replay['trace_sha256']==control['trace_sha256'],'paired offered arrivals differ'
         for row in [r for r in windows if r['episode']==replay['spec']['episode']]:
-            reference=next(r for r in windows if r['episode']==control['spec']['episode'] and r['cohort']==row['cohort'] and r['window_start_s']==row['window_start_s'])
+            reference=next(r for r in windows if r['episode']==control['spec']['episode'] and r['cohort']==row['cohort'] and (r['window_start_s'],r['window_end_s'])==(row['window_start_s'],row['window_end_s']))
             admitted=[sum(t<=row['window_start_s'] for t in r['admission_times_s']) for r in (control,replay)]
             pairs.append({k:row[k] for k in ('episode','workload','seed','rate','cohort','window_start_s','window_end_s')} | {
                 'control_admitted_at_window_start':admitted[0],'replay_admitted_at_window_start':admitted[1],
@@ -204,10 +204,18 @@ def service(out, raw):
         'prompt_tokens','output_tokens','cached_tokens','derived_prompt_minus_cache_tokens',
         'start_ns','end_ns','ttft_s','mean_tpot_s','exact_token_timestamps','state_code_valid','context_hash')}
         for r in raw if r.get('cohort')=='migration' and r.get('episode','').startswith(('episodes-','followups-'))]
+    boundaries={r['spec']['episode']:r['epoch_ns']+round(r['duration_s']*1e9) for r in records}
+    for row in migrations:
+        boundary=boundaries.get(row['episode'])
+        row['observation_boundary_ns']=boundary
+        row['completed_within_observation']=row['status']=='complete' and boundary is not None and row['end_ns']<=boundary
+        row['observation_status']=('unknown_incomplete_episode' if boundary is None else
+            'censored_at_boundary' if row['end_ns']>boundary else row['status'])
     csv_rows(out/'migration-observations.csv',migrations)
     write(out/'service-analysis.json',{'episodes':records,'windows':windows,'pairs':pairs,
         'scope':'Destination-only synthetic content with recorded evolving shapes; paired arrivals and demand. No active source, ownership transfer or source quiescence measurement.',
         'recovery_scope':'Outstanding arrivals and completion deficit relative to matched control while arrivals continue; no cleanup-drain recovery claim.',
+        'censoring_scope':'Migration HTTP threads can finish after episode cancellation. Their actual completion records are retained but marked censored_at_boundary in migration-observations.csv; they do not count as admitted sessions or recovery. The additional60..180 arrival-cohort window captures delayed completions that cross30-second windows, with remaining requests still censored.',
         'latency_scope':'Original-arrival TTFT and P90 per-request mean TPOT; exact client token-event coverage, not server execution timestamps. Short windows do not validate tails.',
         'client_timing_scope':'Send lateness is scheduled arrival to send; scheduling lateness is scheduled arrival to client wakeup; client queue is wakeup to dispatch and includes prompt preparation. Earlier inline summaries labelled total send lateness as client queue; this reduction uses the retained wakeup events to separate them.',
         'engine_scope':'Queue/prefill/decode and computed-token counters are aggregate engine histogram deltas across all populations, repeated on cohort rows for context. Request histograms become visible on completion; their accounting interval is not an exact execution-time partition. Prompt-minus-cache counts are derived only for known usage fields. No per-request queue attribution or queue inferred from TTFT. KV usage gauge excludes free evictable cached blocks; it is not resident tensor allocation.'})
