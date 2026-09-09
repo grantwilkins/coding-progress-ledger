@@ -269,7 +269,10 @@ class ResidentAcquisition(Acquisition):
             tested=sorted({r['spec']['rate'] for r in trials})
             if len(tested)<2:raise RuntimeError('two distinct resident rates have not been tested')
             selection[workload]={'rates':[stable[0],stable[-1]] if len(stable)>=2 else tested[-2:],
-                'stable_rates':stable,'boundary_bracketed':bool(stable) and any(r['summaries']['resident']['30-90']['exact_timing_coverage']>=.99 and not r['summaries']['resident']['30-90']['screen_pass'] for r in trials),
+                'stable_rates':stable,'boundary_bracketed':bool(stable) and any(
+                    s['exact_timing_coverage']>=.99 and ((s['p90_arrival_ttft_s'] or 0)>1 or
+                    (s['p90_request_mean_tpot_s'] or 0)>.1 or (s['queue_growth_requests'] or 0)>1)
+                    for s in (r['summaries']['resident']['30-90'] for r in trials)),
                 'validated_capacity_boundary':False}
         write(self.out/'resident-rate-selection.json',selection)
 
