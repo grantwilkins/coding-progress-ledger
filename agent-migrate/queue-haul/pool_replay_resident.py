@@ -126,7 +126,7 @@ class ResidentAcquisition(Acquisition):
                 with __import__('concurrent.futures',fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=len(incoming)) as executor:
                     futures=[]
                     for i,t in enumerate(incoming):
-                        prompt,shape,_,_,_=t.prompt()
+                        prompt=t.initial_history
                         body=serving.completion_payload(self.cfg.model,prompt,1,None,True)
                         body['cache_salt']=f"{spec['episode']}-incoming-{i}"
                         futures.append(executor.submit(serving._completion,self.cfg.host,self.cfg.sink_port,self.cfg.model,
@@ -134,6 +134,19 @@ class ResidentAcquisition(Acquisition):
                     prewarm=[f.result() for f in futures]
                 write(root/'control-prewarm.json',prewarm)
                 if any(r['status']!=200 or not r['done'] for r in prewarm):raise RuntimeError('control materialization failed')
+        # Establish continuing resident state before the prescribed traffic warmup/baseline.
+        with __import__('concurrent.futures',fromlist=['ThreadPoolExecutor']).ThreadPoolExecutor(max_workers=8) as executor:
+            futures=[]
+            for i,t in enumerate(trajectories):
+                prompt,shape,_,_,_=t.prompt()
+                prefix=prompt[:int(shape['context'])]
+                body=serving.completion_payload(self.cfg.model,prefix,1,None,True)
+                body['cache_salt']=f"{spec['episode']}-resident-{i}"
+                futures.append(executor.submit(serving._completion,self.cfg.host,self.cfg.sink_port,self.cfg.model,
+                    prefix,1,None,min(120,self.remaining()),True,prepared_body=json.dumps(body)))
+            prewarm=[f.result() for f in futures]
+        write(root/'resident-prewarm.json',prewarm)
+        if any(r['status']!=200 or not r['done'] for r in prewarm):raise RuntimeError('resident materialization failed')
         metrics=serving.MetricsSampler(self.cfg.host,self.cfg.sink_port,root/'engine.csv',.5)
         power=profiler.PowerSampler(root/'power.csv',.5)
         metrics.start();power.start()
@@ -164,7 +177,7 @@ class ResidentAcquisition(Acquisition):
                             actual_new_tokens_excluding_retained_output=added,recorded_append_tokens=shape['prompt'],
                             client_dispatch_ns=time.monotonic_ns())
                         row.update(tags,start_ns=time.monotonic_ns())
-                        self.record(self.events,{**row,'kind':'request_dispatch'})
+                        self.record(self.events,{k:v for k,v in {**row,'kind':'request_dispatch'}.items() if k!='full_prompt_token_ids'})
                         result=await headroom.async_completion(client,self.cfg.host,self.cfg.sink_port,prepared,scheduled_ns,
                             max(.001,min(180,(boundary-time.monotonic_ns())/1e9,self.remaining())),
                             event_sink=lambda event:self.record(self.events,{**spec,'cohort':item['cohort'],
@@ -251,7 +264,7 @@ class ResidentAcquisition(Acquisition):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('stage',choices=['scout','episodes'])
+    parser.add_argument('stage',choices=['scout','episodes','followups'])
     parser.add_argument('--out',type=Path,required=True)
     parser.add_argument('--plan',type=Path,required=True)
     args=parser.parse_args();plan=json.loads(args.plan.read_text());a=ResidentAcquisition(args.out)
@@ -262,10 +275,15 @@ def main():
     else:
         import pool_shed_campaign as pool
         selection=json.loads((args.out/'resident-rate-selection.json').read_text())
-        for row in plan['main_episodes']:
+        episodes = plan['main_episodes'] if args.stage=='episodes' else [
+            {'workload':'coding_long','rate_slot':1,'seed':seed,'arm':'replay','width':16,
+             'trace_id':f'width16-{seed}'} for seed in (7101,7102)] + [
+            {'workload':'coding_long','rate_slot':1,'seed':7102,'arm':arm,'width':8,
+             'trace_id':'burst-7102','burst':True} for arm in ('control','replay')]
+        for row in episodes:
             if row['arm']=='kv_transfer':continue
             w=row['workload'];slot=row['rate_slot'];seed=row['seed']
-            spec={**row,'episode':f"episode-{w}-{slot}-{row['arm']}-{seed}",
+            spec={**row,'episode':f"{args.stage}-{w}-{slot}-{row['arm']}-{seed}",
                 'rate':selection[w]['rates'][slot],'incoming_session_rps':pool.sample_fleet(w).metadata['source_session_rps']}
             result=asyncio.run(a.episode(spec,plan['workloads'][w],180,True))
             print(spec['episode'],'complete',flush=True)
