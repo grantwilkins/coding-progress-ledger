@@ -38,10 +38,12 @@ class Acquisition:
     def __init__(self, out):
         self.out, self.cfg = out, replace(b.Config(), src_port=b.Config().sink_port)
         self.launch = json.loads((out / 'runtime-launch.json').read_text())
-        self.deadline = self.launch['start_monotonic_ns'] / 1e9 + 9000
+        self.deadline = time.monotonic() + self.launch['start_wall_ns']/1e9 + 9000 - time.time()
         self.lock = threading.Lock()
-        self.requests = (out / 'requests.jsonl').open('a', buffering=1)
-        self.events = (out / 'request-events.jsonl').open('a', buffering=1)
+        self.boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        suffix = '-recovered' if (out/'node-recovery.json').exists() else ''
+        self.requests = (out / f'requests{suffix}.jsonl').open('a', buffering=1)
+        self.events = (out / f'request-events{suffix}.jsonl').open('a', buffering=1)
 
     def remaining(self):
         seconds = self.deadline - time.monotonic()
@@ -51,7 +53,7 @@ class Acquisition:
 
     def record(self, handle, row):
         with self.lock:
-            handle.write(json.dumps(row, separators=(',', ':')) + '\n')
+            handle.write(json.dumps({'boot_id':self.boot_id,**row}, separators=(',', ':')) + '\n')
 
     def probe(self, messages, code):
         session = p.LiveSession.__new__(p.LiveSession)
@@ -101,6 +103,9 @@ class Acquisition:
                        external_retrieval_basis='request explicitly bypasses LMCache; engine metrics retained')
             if result.prompt_tokens != len(tokens):
                 row['status'] = 'render_mismatch'
+            row.update(expected_state_code=code, state_code_valid=code in text)
+            if not row['state_code_valid']:
+                row['status'] = 'validation_failed'
             if result.first_byte_ns is not None:
                 row['ttft_s'] = (result.first_byte_ns-result.start_ns)/1e9
             row['mean_tpot_s'] = ((result.last_token_ns-result.first_byte_ns)/1e9/(result.output_tokens-1)
