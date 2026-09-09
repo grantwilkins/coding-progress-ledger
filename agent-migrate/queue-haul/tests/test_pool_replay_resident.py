@@ -36,3 +36,12 @@ def test_window_retains_late_work_and_counts_completions_by_completion_time():
     after=summarize([row],trace,0,(60,90),[])
     assert before['unfinished_or_failed_requests']==1 and before['completed_rps']==0
     assert after['completions_in_window']==1 and after['completed_rps']==1/30
+
+
+def test_client_queue_excludes_scheduler_wakeup_lateness():
+    row={'scheduled_ns':0,'client_wakeup_ns':100_000_000,'client_dispatch_ns':250_000_000,
+         'end_ns':600_000_000,'first_ns':400_000_000,'done':True,'status':200,
+         'exact_token_timestamps':True,'send_lateness_s':.3,'prompt_tokens':100,'output_tokens':2,'mean_tpot_s':.1}
+    summary=summarize([row],[{'offset_s':0}],0,(0,60),[])
+    assert summary['p90_client_queue_s']==.15
+    assert summary['p90_client_schedule_lateness_s']==.1 and summary['p90_client_send_lateness_s']==.3

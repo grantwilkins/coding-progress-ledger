@@ -103,6 +103,18 @@ def unloaded(out, raw, calibration):
 
 def service(out, raw):
     records, windows, pairs = [], [], []
+    wakeups={}
+    recovery=json.loads((out/'node-recovery.json').read_text())
+    for name in ('request-events.jsonl','request-events-recovered.jsonl'):
+        data=(out/name).read_bytes()
+        if name in recovery['raw_pre_reboot']:data=data[:recovery['raw_pre_reboot'][name]['valid_prefix_bytes']]
+        for line in data.splitlines():
+            if b'"kind":"scheduled_arrival"' not in line:continue
+            r=json.loads(line)
+            wakeups[(r['episode'],r['cohort'],r['session'],r['turn'])]=r['client_wakeup_ns']
+    for r in raw:
+        key=tuple(r.get(k) for k in ('episode','cohort','session','turn'))
+        if key in wakeups:r['client_wakeup_ns']=wakeups[key]
     for path in sorted(out.glob('*/result.json')):
         result=json.loads(path.read_text());spec=result['spec'];episode=spec['episode']
         trace=json.loads((path.parent/'offered-trace.json').read_text())
@@ -173,6 +185,7 @@ def service(out, raw):
         'scope':'Destination-only synthetic content with recorded evolving shapes; paired arrivals and demand. No active source, ownership transfer or source quiescence measurement.',
         'recovery_scope':'Outstanding arrivals and completion deficit relative to matched control while arrivals continue; no cleanup-drain recovery claim.',
         'latency_scope':'Original-arrival TTFT and P90 per-request mean TPOT; exact client token-event coverage, not server execution timestamps. Short windows do not validate tails.',
+        'client_timing_scope':'Send lateness is scheduled arrival to send; scheduling lateness is scheduled arrival to client wakeup; client queue is wakeup to dispatch and includes prompt preparation. Earlier inline summaries labelled total send lateness as client queue; this reduction uses the retained wakeup events to separate them.',
         'engine_scope':'Queue time is directly measured aggregate engine histogram delta across all populations; no per-request queue attribution or queue inferred from TTFT. KV usage gauge excludes free evictable cached blocks; it is not resident tensor allocation.'})
     return records
 
