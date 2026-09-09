@@ -312,7 +312,7 @@ def test_new_admission_cannot_sacrifice_mandatory_route_deadline(policy):
 
 
 @pytest.mark.parametrize("policy", ["queue_haul", "replay_only"])
-def test_short_deadline_guard_preserves_original_32_wave_trajectory(policy):
+def test_short_deadline_handoff_preserves_source_and_destination_queue_contract(policy):
     from pool_shed_calibration import calibration
     from pool_shed_campaign import execute_feedback, forecast
 
@@ -320,7 +320,10 @@ def test_short_deadline_guard_preserves_original_32_wave_trajectory(policy):
     table = forecast("coding_long", 0, 66666, 8, .5, 1000, 30)[0]
     result = execute_feedback(table, table, policy, table.timing, central, chunks=32, resolution=1.)
     assert result["shed_fraction"] > .8
-    assert result["shed_fraction"] == pytest.approx(result["admitted_shed_fraction"], abs=1e-8)
+    assert result["shed_fraction"] <= result["admitted_shed_fraction"] + 1e-8
+    assert max(result["resident_debt_generated_work_s"]) == 0.
+    assert abs(result["pending_backlog_reference_work_s"]) <= 1e-8
+    assert all(event["completion_s"] <= table.deadline for event in result["completion_events"])
     assert result["max_relative_residual"] <= 1e-8
 
 
@@ -395,3 +398,60 @@ def test_greedy_uses_work_per_gain_only_to_break_equal_primary_density(second_ga
     chosen = _choose(np.array([[1., 2.]]), np.ones(1), np.array([1., second_gain]),
                      np.array([10., second_work]), SimpleNamespace(gpus=1), True)
     assert np.flatnonzero(chosen).tolist() == [winner]
+
+
+def test_mandatory_profile_counts_resident_occupancy_once():
+    from pool_shed_planner import mandatory_profile
+
+    table, timing, calibration = case()
+    table.fleet.metadata["protect_resident"] = True
+    fixed, finish = mandatory_profile(PooledExecution(table, timing, calibration), table, timing, calibration, np.array([0., 1., 3.]))
+    np.testing.assert_allclose(fixed["occupancy"], [[5., 10.], [5., 10.]])
+    assert not fixed["serving"].any() and not fixed["service_peak"].any()
+    assert finish.tolist() == [0., 0.]
+
+
+def test_mandatory_forecast_marks_deadline_truncated_compute_unfinished():
+    from pool_shed_planner import mandatory_profile
+
+    table, timing, calibration = case(1.)
+    table.fleet.metadata["protect_resident"] = True
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit(np.array([1., 0., 0., 0.]))
+    engine.state[:] = 1
+    fixed, finish = mandatory_profile(engine, table, timing, calibration, np.array([0., 1.]))
+    assert finish.tolist() == [table.deadline + 1., 0.]
+    assert fixed["occupancy"][0, 0] > table.fleet.gpus * table.load
+
+
+def test_mandatory_continuation_reserves_later_tails_sharing_current_transfers(monkeypatch):
+    import pool_shed_execution as execution
+    from pool_shed_planner import mandatory_profile
+
+    table, timing, calibration = case()
+    table.fleet.metadata["protect_resident"] = True
+    timing["beta"] = 0.
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit(np.array([2., 2., 0., 0.]))
+    engine.state[:], engine.phase_nominal_work[:] = [1, 0], [4., 0.]
+    monkeypatch.setattr(execution, "catchup", lambda *args, **kwargs: (100., 1.))
+    edges = np.array([0., .5, 1., 2., 3., 10., 20.])
+    fixed, finish = mandatory_profile(engine, table, timing, calibration, edges)
+    assert fixed["network"].sum() == pytest.approx(600.)
+    assert fixed["application"].sum() == pytest.approx(400.)
+    assert np.all(fixed["network"].sum(0) <= table.budgets[2] * np.diff(edges) + 1e-9)
+    assert np.all(fixed["occupancy"] <= table.fleet.gpus * np.diff(edges) + 1e-9)
+    assert 3. <= finish[0] < table.deadline
+    np.testing.assert_array_equal(engine.state, [1, 0])
+
+
+def test_small_fleet_qh_does_not_reserve_wan_for_compute_only_replicas():
+    from pool_shed_calibration import calibration
+    from pool_shed_campaign import execute_feedback, forecast
+
+    central = calibration(0)
+    table = forecast("coding", 0, 6666, 8, .5, 1000, 30)[0]
+    result = execute_feedback(table, table, "queue_haul", table.timing, central)
+    assert result["shed_fraction"] > .99
+    assert result["max_relative_residual"] <= 1e-8
+    assert max(result["resident_debt_generated_work_s"]) == 0.

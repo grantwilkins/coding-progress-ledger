@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from copy import copy
+
 import numpy as np
 
 DISPATCH_CHUNKS = 64
@@ -212,7 +214,8 @@ class PooledExecution:
         self.knots = self.fleet.metadata.get("packing_context_tokens")
         self.kappa = np.interp(self.fleet.context, self.knots, self.timing["packing_kappa"]) if self.knots else np.full(len(self.fleet.count), self.timing["kappa"])
         self.regional = self.timing.get("regional_replay_factor", self.calibration.get("regional_components", {}).get("replay_factor", [1., 1.]))
-        self.phase_started, self.phase_replica_seconds, self.phase_transferred_bytes = (np.zeros(self.n) for _ in range(3))
+        self.nominal_beta = self.calibration.get("timing", [self.timing])[0]["beta"]
+        self.phase_started, self.phase_replica_seconds, self.phase_transferred_bytes, self.phase_nominal_work = (np.zeros(self.n) for _ in range(4))
         self.now = 0.
         self.network_key, self.network_rates = None, np.zeros(self.n)
         self.selected_total = np.zeros(len(self.table.route))
@@ -249,7 +252,7 @@ class PooledExecution:
                       counts=counts, demand=demand, memory=memory, reserved=mass * memory,
                       group=np.arange(self.n, self.n + n) // self.chunks, initial_ready=np.zeros(n, bool), gated=np.zeros(n, bool),
                       state=np.zeros(n, int), remaining=remaining, tail=tail, phase_started=np.full(n, self.now))
-        for name in ("release", "delta", "quiesced", "buffered", "backlog", "backlog_total", "phase_replica_seconds", "phase_transferred_bytes"):
+        for name in ("release", "delta", "quiesced", "buffered", "backlog", "backlog_total", "phase_replica_seconds", "phase_transferred_bytes", "phase_nominal_work"):
             values[name] = np.zeros(n)
         for name, value in values.items():
             setattr(self, name, np.concatenate((getattr(self, name), value)))
@@ -267,9 +270,36 @@ class PooledExecution:
             raise RuntimeError("handoff gate exceeded safe serving capacity")
         return np.minimum(1., load)
 
-    def advance(self, until):
+    def nominal_continuation(self, table, timing, calibration):
+        central = PooledExecution(table, timing, calibration, self.chunks)
+        clone = copy(self)
+        clone.__dict__ = {name: value.copy() if isinstance(value, np.ndarray) else value for name, value in vars(self).items()}
+        for name in ("table", "timing", "calibration", "fleet", "kappa", "regional", "nominal_beta", "resident_loss", "tail_rate", "knots", "timing_load_factor", "primitive_cache"):
+            setattr(clone, name, getattr(central, name))
+        clone.events, clone.selected = {key: value.copy() for key, value in self.events.items()}, self.selected.copy()
+        clone.network_key, clone.network_rates = None, np.zeros(self.n)
+        clone.remaining[:], clone.tail[:], clone.delta[:] = 0., 0., 0.
+        for i in np.flatnonzero(self.state < 6):
+            c, a, r, phase = clone.counts[i], clone.action[i], clone.route[i], clone.state[i]
+            if phase <= 1:
+                packing = np.ones_like(clone.kappa) if np.any((c > 0) & (clone.fleet.context > clone.fleet.metadata.get("batch_context_limit", np.inf))) else clone.kappa
+                clone.tail[i] = (c @ (packing * clone.fleet.t1) + np.max(np.where(c > 0, (1 - packing) * clone.fleet.t1, 0))) * clone.regional[r] if not a else 0.
+                clone.remaining[i] = max(float(c @ (clone.fleet.kv if a else clone.fleet.log)) - clone.phase_transferred_bytes[i], 0.) if phase == 0 else max(clone.tail[i] - clone.phase_nominal_work[i], 0.)
+            else:
+                _, context, reset, _ = _quiesce(clone.fleet, c, clone.quiesced[i], clone.primitive_cache)
+                clone.delta[i], clone.tail[i] = catchup(clone.fleet, c, a, r, context, reset, timing, calibration, clone.primitive_cache)
+                if phase == 3:
+                    clone.remaining[i] = max(clone.delta[i] - clone.phase_transferred_bytes[i], 0.)
+                elif phase == 4:
+                    clone.remaining[i] = max(clone.tail[i] - clone.phase_nominal_work[i], 0.)
+                elif phase == 5 and not clone.gated[i]:
+                    clone.release[i] = clone.phase_started[i] + calibration.get("switch_s", 0.)
+        return clone
+
+    def advance(self, until, collect=False):
         if not np.isfinite(until) or until < self.now or until > self.table.deadline:
             raise ValueError("advance requires current time <= until <= deadline")
+        usage = {name: np.zeros(3 if name == "network" else 2) for name in ("network", "application", "migration", "recovery", "serving", "peak", "service_peak")} if collect else None
         iterations = 0
         while (np.any(self.state < 6) or np.any(self.backlog > 1e-9) or np.any(self.resident_debt > 1e-9)) and self.now <= until:
             iterations += 1
@@ -279,7 +309,7 @@ class PooledExecution:
                                   & ~(self.gated & (self.backlog > 1e-9)))
             if len(ready):
                 for i in ready:
-                    self.phase_started[i], self.phase_replica_seconds[i], self.phase_transferred_bytes[i] = self.now, 0., 0.
+                    self.phase_started[i], self.phase_replica_seconds[i], self.phase_transferred_bytes[i], self.phase_nominal_work[i] = self.now, 0., 0., 0.
                     a, c, r = self.action[i], self.counts[i], self.route[i]
                     if self.state[i] == 0 and a == 0:
                         self.state[i], self.remaining[i] = 1, self.tail[i]
@@ -362,6 +392,7 @@ class PooledExecution:
             computing = (self.state == 1) | (self.state == 4)
             backlog_rates = np.zeros(self.n)
             resident_growth, resident_recovery, compute_shares = np.zeros(2), np.zeros(2), np.zeros(2)
+            nominal_rates = np.zeros(2)
             serving_load = self.serving_load()
             for r in (0, 1):
                 active = computing & (self.route == r)
@@ -383,6 +414,7 @@ class PooledExecution:
                 effective_load = serving_load[r] + (resident_recovery[r] + float(self.mass[queued] @ backlog_rates[queued])) / self.fleet.gpus
                 self.peak_load[r] = max(self.peak_load[r], effective_load)
                 rates[active] = sharing * np.exp(-self.timing["beta"] * effective_load * self.timing_load_factor)
+                nominal_rates[r] = sharing * np.exp(-self.nominal_beta * effective_load * self.timing_load_factor)
             completions = np.divide(self.remaining, rates, out=np.full(self.n, np.inf), where=rates > 0)
             waiting = ((self.state == 2) | (self.state == 5)) & (self.release > self.now)
             step = min(until - self.now, float(completions.min(initial=np.inf)),
@@ -394,10 +426,21 @@ class PooledExecution:
                 break
             progress = np.where(completions <= step, self.remaining, np.minimum(self.remaining, rates * step))
             self.phase_replica_seconds[computing] += compute_shares[self.route[computing]] * step
+            self.phase_nominal_work[computing] += nominal_rates[self.route[computing]] * step
             self.phase_transferred_bytes[transfers] += progress[transfers]
             sent = self.mass[transfers] * progress[transfers]
             self.network_used += [sent[self.route[transfers] == 0].sum(), sent[self.route[transfers] == 1].sum(), sent.sum()]
             self.compute_used += [compute_shares[r] * float(self.mass[computing & (self.route == r)].sum()) * step for r in (0, 1)]
+            if collect:
+                migration = np.array([compute_shares[r] * self.mass[computing & (self.route == r)].sum() for r in (0, 1)])
+                recovery = resident_recovery + np.array([self.mass[self.route == r] @ backlog_rates[self.route == r] for r in (0, 1)])
+                ordinary = self.fleet.gpus * serving_load
+                usage["network"] += [sent[self.route[transfers] == 0].sum(), sent[self.route[transfers] == 1].sum(), sent.sum()]
+                usage["application"] += [sent[(self.route[transfers] == r) & (self.action[transfers] == 1)].sum() for r in (0, 1)]
+                for name, value in (("migration", migration), ("recovery", recovery), ("serving", ordinary)):
+                    usage[name] += value * step
+                usage["peak"] = np.maximum(usage["peak"], ordinary + recovery + migration)
+                usage["service_peak"] = np.maximum(usage["service_peak"], ordinary + recovery)
             self.idle_work += [float(self.mass[computing & (self.route == r)] @ progress[computing & (self.route == r)]) for r in (0, 1)]
             self.resident_generated += resident_growth * step
             self.resident_recovered += resident_recovery * step
@@ -410,7 +453,12 @@ class PooledExecution:
             self.now += step
         if np.all(self.state == 6) and np.all(self.backlog <= 1e-9) and np.all(self.resident_debt <= 1e-9) and self.service_ready_s is None:
             self.service_ready_s = float(self.now)
+        if collect and until > self.now:
+            ordinary = self.fleet.gpus * self.serving_load()
+            usage["serving"] += ordinary * (until - self.now)
+            usage["peak"], usage["service_peak"] = np.maximum(usage["peak"], ordinary), np.maximum(usage["service_peak"], ordinary)
         self.now = float(until)
+        return usage
 
     def result(self):
         fractions, numbers = self.committed @ self.fleet.gain, self.committed.sum(1)

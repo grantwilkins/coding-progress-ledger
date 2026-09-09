@@ -213,6 +213,27 @@ def _choose(matrix, capacity, gains, debt, fleet, greedy):
     raise RuntimeError("temporal greedy failed to exhaust a constraint")
 
 
+def mandatory_profile(engine, table, timing, calibration, edges):
+    forecast = engine.nominal_continuation(table, timing, calibration)
+    fixed = {name: np.zeros((2, len(edges) - 1)) for name in
+             ("replay", "kv", "network", "application", "serving", "buffers", "recovery", "occupancy", "service_peak")}
+    queued = np.array([forecast.mass[forecast.route == r] @ forecast.backlog[forecast.route == r] for r in (0, 1)])
+    for k, (start, end) in enumerate(zip(edges[:-1], edges[1:])):
+        usage = forecast.advance(end, collect=True)
+        pending = np.array([forecast.mass[forecast.route == r] @ forecast.backlog[forecast.route == r] for r in (0, 1)])
+        fixed["recovery"][:, k] = usage["recovery"]
+        fixed["network"][:, k], fixed["application"][:, k] = usage["network"][:2], usage["application"]
+        fixed["serving"][:, k] = usage["serving"] - engine.loads * engine.fleet.gpus * (end - start)
+        fixed["service_peak"][:, k] = np.maximum(usage["service_peak"] - engine.loads * engine.fleet.gpus, 0.) * (end - start)
+        fixed["occupancy"][:, k] = usage["peak"] * (end - start)
+        fixed["buffers"][:, k] = np.maximum(pending - queued + usage["recovery"], 0.)
+        queued = pending
+    finish = np.array([table.deadline + 1. if np.any((forecast.route == r) & (forecast.state < 6)) else
+                       max((e["completion_s"] for e in forecast.events.values() if e["route"] == r), default=engine.now)
+                       for r in (0, 1)])
+    return fixed, finish
+
+
 def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
                    iterations=PLANNING_ITERATIONS, resolution=PLANNING_RESOLUTION):
     """Plan starts over a geometric horizon; commit only starts in its first interval."""
@@ -271,24 +292,22 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
     predicted, debt_history = engine.resident_debt + queued, np.zeros((bins, 4))
     protected = fleet.metadata.get("protect_resident", False)
     prefix, compute_after = recovery_prefix(engine, edges) if protected else (np.zeros((2, bins)), np.full(2, engine.now))
-    active = np.flatnonzero((engine.state < 6) & (~engine.gated if protected else True))
+    mandatory, mandatory_finish = mandatory_profile(engine, table, timing, calibration, edges) if protected else (None, None)
+    active = np.flatnonzero((engine.state < 6) & (not protected))
     active_mass = np.array([engine.mass[active[engine.route[active] == r]].sum() for r in (0, 1)])
     reserved_load = engine.loads + np.array([engine.mass[(engine.route == r) & (engine.state < 6)] @ engine.demand[(engine.route == r) & (engine.state < 6)] for r in (0, 1)]) / fleet.gpus
     fixed_sharing = np.minimum(1., fleet.gpus * np.maximum(1 - reserved_load if protected else np.ones(2), 0.) / np.maximum(active_mass, 1e-30))
     for iteration in range(iterations):
         fixed = {name: np.zeros((2, bins)) for name in ("replay", "kv", "network", "application", "serving", "buffers", "recovery", "occupancy", "service_peak")}
         if protected:
-            fixed["recovery"] = prefix.copy()
-            fixed["serving"] = (engine.serving_load() - engine.loads)[:, None] * fleet.gpus * np.diff(edges)
-            fixed["occupancy"] = fixed["serving"] + prefix
-            fixed["service_peak"] = fixed["occupancy"].copy()
+            fixed = mandatory
         active_rate = flow_rates(active_mass, np.arange(2), table.endpoint[:2], table.budgets)
         active_kv = np.array([engine.mass[active[(engine.route[active] == r) & (engine.action[active] == 1)]].sum() for r in (0, 1)])
         app = np.asarray(timing.get("regional_kv_bytes_per_s", table.endpoint[:2])) * fleet.nodes
         active_rate = np.minimum(active_rate, app / np.maximum(active_kv, 1e-30))
         buffer_groups = [(int(engine.route[i]), -1, float(engine.backlog[i]), float(engine.mass[i]))
                          for i in np.flatnonzero(engine.backlog > 1e-12)]
-        profiles, fixed_finish = {}, compute_after.copy()
+        profiles, fixed_finish = {}, mandatory_finish.copy() if protected else compute_after.copy()
         for i in active:
             key = (int(engine.selected[i][0]), int(engine.action[i]), int(engine.state[i]), float(engine.quiesced[i]),
                    float(engine.phase_transferred_bytes[i]), float(engine.phase_replica_seconds[i]), float(engine.phase_started[i]),
@@ -334,7 +353,7 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         compute_limit = np.tile(fleet.gpus * dt, 2)
         if fleet.metadata.get("protect_resident"):
             compute, fixed_compute = data["occupancy"], fixed["occupancy"]
-            compute_limit = (fleet.gpus * (1 - engine.loads[:, None]) * dt).ravel()
+            compute_limit = np.tile(fleet.gpus * dt, 2)
         resource = np.vstack((compute.reshape(2 * bins, -1), data["network"].reshape(2 * bins, -1),
                               data["network"].sum(0), data["application"].reshape(2 * bins, -1)))
         fixed_resource = np.r_[fixed_compute.ravel(), fixed["network"].ravel(),
@@ -374,4 +393,4 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         "fixed_point_residual": change, "fixed_obligation_overload": overload,
         "mandatory_forecast_finish_s": fixed_finish.tolist(),
         "predicted_shed_fraction": float(gains @ chosen), "variables": len(original),
-        "time_bins": bins, "planning_scope": "successive central-calibration temporal LPs; bounded queue/load iteration; protected compute peak envelopes and network volumes; handoff objective"}
+        "time_bins": bins, "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"}

@@ -545,3 +545,100 @@ def test_streamed_kv_completion_is_invariant_to_proportional_fleet_scale():
         assert result["pending_backlog_reference_work_s"] <= 1e-8
         results.append(result["shed_fraction"])
     assert abs(results[0] - results[1]) <= 1e-8
+
+
+def test_nominal_progress_integrates_observed_load_with_central_beta():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,), load=.2, demand=(0., 0.))
+    table.fleet.log[:] = 0.
+    table.fleet.metadata["protect_resident"] = True
+    timing["beta"], calibration["timing"] = 5., [{"beta": 2.}]
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1.])
+    engine.advance(1.)
+    engine.loads[0] = .4
+    engine.advance(2.)
+    expected = .8 * np.exp(-.4) + .6 * np.exp(-.8)
+    assert engine.phase_nominal_work[0] == pytest.approx(expected)
+    clone = engine.nominal_continuation(table, {**timing, "beta": 2.}, calibration)
+    assert clone.remaining[0] == pytest.approx(8. - expected)
+    assert clone.remaining[0] < engine.remaining[0]
+
+
+def test_nominal_continuation_ignores_latent_draw_state_and_is_isolated():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(deadline=30., demand=(0., 0.))
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1., 1.])
+    engine.advance(1.)
+    first = engine.nominal_continuation(table, timing, calibration)
+    engine.remaining[:] = 123456.
+    engine.tail[:], engine.delta[:] = 987654., 456789.
+    engine.timing = {**timing, "beta": 999., "kv_completion_s": 999.}
+    second = engine.nominal_continuation(table, timing, calibration)
+    for end in (3., 30.):
+        left, right = first.advance(end, collect=True), second.advance(end, collect=True)
+        for key in left:
+            np.testing.assert_array_equal(left[key], right[key])
+        assert first.result() == second.result()
+    assert engine.now == 1. and np.all(engine.remaining == 123456.)
+
+
+def test_resource_collector_conserves_work_and_counts_idle_standing():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      load=.25, demand=(0., 0.), work=(1.5, 1.), deadline=10.)
+    table.fleet.log[:] = 0.
+    table.fleet.metadata["protect_resident"] = True
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1.])
+    busy = engine.advance(2., collect=True)
+    assert engine.state[0] == 6
+    assert busy["migration"] == pytest.approx([1.5, 0.])
+    assert busy["serving"] == pytest.approx([.5, .5])
+    assert busy["peak"] == pytest.approx([1., .25])
+    assert busy["service_peak"] == pytest.approx([.25, .25])
+    idle = engine.advance(10., collect=True)
+    assert idle["serving"] == pytest.approx([2., 2.])
+    assert idle["migration"] == pytest.approx([0., 0.])
+    assert idle["peak"] == pytest.approx([.25, .25])
+
+
+def test_resource_collector_tracks_only_kv_bytes_as_application_traffic():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(demand=(0., 0.))
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1., 1.])
+    usage = engine.advance(10., collect=True)
+    assert usage["network"] == pytest.approx(engine.network_used)
+    assert usage["migration"] == pytest.approx(engine.compute_used)
+    assert usage["application"] == pytest.approx([0., 98.])
+
+
+@pytest.mark.parametrize("at,phase,gated", [(.1, 0, False), (.25, 1, False), (.4, 2, False),
+                                          (1., 3, False), (4.51, 4, False), (5., 5, False), (6., 5, True)])
+def test_central_continuation_matches_every_phase_reset_and_partial_gate(at, phase, gated):
+    from copy import deepcopy
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      load=.25, demand=(.2, 0.), work=(.1, 1.), deadline=12.)
+    table.fleet.metadata.update(protect_resident=True, source_session_rps=1., sequence_cycle=True,
+        turn_sequences=[[{"context": 0, "prompt": 20, "output": 0, "reset": True}], []],
+        turn_duration_s=[[.5], []], turn_work_s=[[.2], []])
+    calibration.update(replay_context_tokens=[20., 100.], replay_tps=[1000., 1000.], replay_completion_s=0., switch_s=1.)
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1.])
+    engine.advance(at)
+    assert engine.state[0] == phase and engine.gated[0] == gated
+    baseline = deepcopy(engine)
+    first = engine.nominal_continuation(table, timing, calibration)
+    engine.remaining[:], engine.tail[:], engine.delta[:] = 123456., 987654., 456789.
+    engine.timing = {**timing, "beta": 999.}
+    second = engine.nominal_continuation(table, timing, calibration)
+    left, right = first.advance(12., collect=True), second.advance(12., collect=True)
+    for key in left:
+        np.testing.assert_array_equal(left[key], right[key])
+    baseline.advance(12.)
+    for key in ("shed_fraction", "last_completion_s", "transferred_bytes", "batch_replica_seconds", "completed_buffered_requests"):
+        assert first.result()[key] == pytest.approx(baseline.result()[key], abs=1e-10)
+    assert engine.now == at and np.all(engine.remaining == 123456.)
