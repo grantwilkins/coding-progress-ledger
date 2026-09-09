@@ -9,3 +9,5 @@ Do not write extra markdown files unless explicitly told to do so.
 Prioritize hard fails as compared to error suppression.
 
 Always add and commit after completing each task. Add a descriptive commit message for every change.
+
+Always run tests after every change using `uv run pytest`.
