@@ -111,8 +111,37 @@ def test_fixed_clock_keeps_replay_control_independent_of_kv_costs():
     assert original[2] == changed[2]
 
 
+def test_shared_continuation_reserves_replay_without_turning_resident_recovery_into_new_arrivals():
+    from pool_shed_planner import mandatory_profile
+    table, timing, calibration = case()
+    table.fleet.metadata["paced_source"] = True
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([10., 0., 0., 0.])
+    engine.advance(1.)
+    assert engine.resident_debt[0] > 0
+    fixed, _ = mandatory_profile(engine, table, timing, calibration, np.array([1., 5., 20.]))
+    assert fixed["replay"].sum() > 0 and fixed["recovery"].sum() > 0
+    assert fixed["buffers"].sum() == pytest.approx(0., abs=1e-8)
+    assert engine.now == 1.
+
+
+def test_late_buffers_cannot_borrow_earlier_idle_service(monkeypatch):
+    import pool_shed_planner as planner
+    table, timing, calibration = case(10.)
+    table.fleet.metadata["paced_source"] = True
+    table.fleet.demand[:] = 0.
+    monkeypatch.setattr(planner, "planning_grid", lambda *args: np.array([0., 9., 10.]))
+    def late_buffer(*args, **kwargs):
+        profile = {name: np.zeros(2) for name in ("replay", "kv", "network", "application", "serving", "buffers", "recovery", "occupancy", "service_peak")}
+        profile["buffers"][-1], profile["finish"] = 20., 9.
+        return profile
+    monkeypatch.setattr(planner, "phase_profile", late_buffer)
+    _, _, audit = plan_admission(PooledExecution(table, timing, calibration), table, "replay_only", calibration=calibration)
+    assert audit["predicted_shed_fraction"] == pytest.approx(.05)
+
+
 def test_protected_recovery_prefix_preserves_weighted_per_batch_limits():
-    engine = SimpleNamespace(now=0., fleet=SimpleNamespace(gpus=1), route=np.array([0, 0]),
+    engine = SimpleNamespace(now=0., gpus=1, fleet=SimpleNamespace(gpus=1), route=np.array([0, 0]),
         gated=np.ones(2, bool), backlog=np.array([10., 1.]), mass=np.array([.1, 10.]), serving_load=lambda: np.zeros(2))
     edges = np.array([0., 1., 10.1, 19.1, 20.])
     work, end = recovery_prefix(engine, edges)
@@ -312,7 +341,7 @@ def test_compute_peaks_reserve_short_bursts_without_inflating_network_or_work():
 
 
 def test_gate_prefix_event_edges_keep_sequential_recovery_and_compute_disjoint():
-    engine = SimpleNamespace(now=0., fleet=SimpleNamespace(gpus=1), route=np.array([0]),
+    engine = SimpleNamespace(now=0., gpus=1, fleet=SimpleNamespace(gpus=1), route=np.array([0]),
         gated=np.ones(1, bool), backlog=np.array([.2]), mass=np.array([1.]), serving_load=lambda: np.zeros(2))
     edges, events = np.array([0., 2.]), []
     recovery_prefix(engine, edges, events)
@@ -364,8 +393,9 @@ def test_short_deadline_handoff_preserves_source_and_destination_queue_contract(
     result = execute_feedback(table, table, policy, table.timing, central, chunks=32, resolution=1.)
     assert result["shed_fraction"] > .8
     assert result["shed_fraction"] <= result["admitted_shed_fraction"] + 1e-8
-    assert max(result["resident_debt_generated_work_s"]) == 0.
-    assert abs(result["pending_backlog_reference_work_s"]) <= 1e-8
+    assert max(result["resident_debt_generated_work_s"]) > 0.
+    assert np.array(result["resident_debt_generated_work_s"]) - result["resident_debt_recovered_work_s"] == pytest.approx(result["pending_resident_debt_work_s"], abs=1e-7)
+    assert not result["resident_latency_validated"]
     assert all(event["completion_s"] <= table.deadline for event in result["completion_events"])
     assert result["max_relative_residual"] <= 1e-8
 
@@ -407,7 +437,7 @@ def test_secondary_per_batch_cost_is_invariant_to_fleet_scale(monkeypatch):
         costs.append(debt.copy())
         return np.zeros(len(gains))
     monkeypatch.setattr(planner, "_choose", capture)
-    for scale in (1., 100.):
+    for scale in (1, 100):
         table, timing, calibration = case()
         table.fleet.metadata["protect_resident"] = True
         table.fleet.gpus *= scale
@@ -497,7 +527,7 @@ def test_small_fleet_qh_does_not_reserve_wan_for_compute_only_replicas():
     result = execute_feedback(table, table, "queue_haul", table.timing, central)
     assert result["shed_fraction"] > .99
     assert result["max_relative_residual"] <= 1e-8
-    assert max(result["resident_debt_generated_work_s"]) == 0.
+    assert np.array(result["resident_debt_generated_work_s"]) - result["resident_debt_recovered_work_s"] == pytest.approx(result["pending_resident_debt_work_s"], abs=1e-7)
 
 
 def test_observed_recovery_boundary_is_a_feedback_and_candidate_start_time(monkeypatch):
@@ -569,7 +599,7 @@ def test_mid_bin_delta_wait_is_included_in_source_buffer_interval(monkeypatch):
     observed = []
     monkeypatch.setattr(planner, "_quiesce", lambda *args, **kwargs: (.6, table.fleet.context, np.zeros(1, bool), False))
     monkeypatch.setattr(planner, "catchup", lambda *args, **kwargs: (.4, 0.))
-    monkeypatch.setattr(planner, "_buffered", lambda fleet, counts, begin, end, *args: (observed.append((begin, end)) or 0., 0.))
+    monkeypatch.setattr(planner, "_buffered", lambda fleet, counts, begin, end, *args, **kwargs: (observed.append((begin, end)) or 0., 0.))
     profile = phase_profile(table, np.ones(1), 1, 0, 0., np.arange(4.), np.zeros((2, 3)), timing, calibration, causal_network=True)
     assert profile["network"] == pytest.approx([0., .4, 0.])
     assert profile["finish"] == 2. and observed == [(.6, 2.)]

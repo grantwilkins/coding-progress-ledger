@@ -74,9 +74,9 @@ def check(value):
             raise ValueError("invalid handoff fractions")
         if result["max_relative_residual"] > 1e-8 or result["last_completion_s"] > deadline + 1e-8:
             raise ValueError("resource or deadline violation")
-        if np.any(np.array(result["resident_debt_generated_work_s"]) != 0) or sum(result["pending_resident_debt_work_s"]) > 1e-8 or result["pending_backlog_reference_work_s"] > 1e-8:
-            raise ValueError("resident displacement or imported buffer")
-        if np.max(result["peak_destination_load"] + result["protected_serving_load"]) > 1 + 1e-8 or np.max(result["batch_replica_seconds"]) > .5 * gpus * deadline * (1 + 1e-8):
+        if not np.allclose(np.asarray(result["resident_debt_generated_work_s"]) - result["resident_debt_recovered_work_s"], result["pending_resident_debt_work_s"], rtol=1e-8, atol=1e-6):
+            raise ValueError("resident debt conservation failed")
+        if np.max(result["peak_destination_load"] + result["protected_serving_load"]) > 1 + 1e-8 or np.max(result["batch_replica_seconds"]) > gpus * deadline * (1 + 1e-8):
             raise ValueError("destination compute capacity exceeded")
         if np.any(np.array(result["transferred_bytes"]) > np.array(value["budgets_bytes_per_s"]) * deadline * (1 + 1e-8)):
             raise ValueError("network capacity exceeded")

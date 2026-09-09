@@ -20,14 +20,14 @@ import numpy as np
 from scipy.sparse import csr_matrix
 
 from pool_shed_calibration import calibration, regional_check, replay_seconds, kv_state, loaded_execution_check, resident_execution_check, service_work, source_power
-from pool_shed_execution import DISPATCH_CHUNKS
+from pool_shed_execution import DISPATCH_CHUNKS, destination_gpus, network_nodes
 from pool_shed_planner import PLANNING_ITERATIONS, PLANNING_RESOLUTION
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "outputs/a100-pooled-service"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
-SCHEMA = "queue-haul-a100-pooled-service-v8"
+SCHEMA = "queue-haul-a100-pooled-service-v9"
 WORKLOADS = ("measured_pack", "coding", "coding_long")
 GPUS, SOURCE_LOAD = 66666, .8
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
@@ -155,12 +155,14 @@ def sample_fleet(workload, snapshot=0, gpus=GPUS, gpus_per_node=8):
     cadence = SOURCE_LOAD * gpus / (count @ work)
     evidence.update(reference_rps=float(count.sum() / (count @ work)), source_session_rps=float(cadence),
                     reference_basis="cycle-average context-dependent work / measured normal coding service bound",
-                    protect_resident=True, timing_load_factor=float((count @ old_work) / (count @ work)),
+                    protect_resident=False, paced_source=True,
+                    source_phase_s=((np.random.default_rng(2001 + snapshot).permutation(len(count)) + .5) / (len(count) * cadence)).tolist(),
+                    timing_load_factor=float((count @ old_work) / (count @ work)),
                     service_context_limit=c["resident_service"]["context_limit"],
                     service_context_extrapolated=any(r["context"] + r["prompt"] > c["resident_service"]["context_limit"]
                                                      for sequence in evidence["turn_sequences"] for r in sequence),
                     serving_work_s=work.tolist(),
-                    arrivals="equal paced session cadence and synchronized request starts; trace timestamps unavailable", initial_migration_queue=0,
+                    arrivals="equal cadence, seeded stratified cohort phases, current cycle starts before time zero; trace timestamps unavailable", initial_migration_queue=0,
                     batch_context_limit=c["batch_context_limit"],
                     packing_context_tokens=c["packing_context_tokens"] if workload != "measured_pack" else None)
     evidence["kv_partial_s"] = (kv_state(context, c)[1] / c["kv_tail_replay_tps"]).tolist()
@@ -247,27 +249,24 @@ class Table:
 
 
 def nominal_action(fleet, counts, action, route, rate, timing, measured):
-    from pool_shed_execution import _quiesce, _buffered, catchup
+    from pool_shed_execution import _quiesce, _buffered, catchup, initial_work, source_snapshot
 
     if not counts.any():
         return 0., 0., 0., 0.
-    knots = fleet.metadata.get("packing_context_tokens")
-    kappa = np.interp(fleet.context, knots, timing["packing_kappa"]) if knots else timing["kappa"]
-    if np.any((counts > 0) & (fleet.context > fleet.metadata.get("batch_context_limit", np.inf))):
-        kappa = 1.
-    work = float(batch_time(counts[None, :], fleet.t1, timing["beta"], kappa, 0.)[0]) if action == 0 else 0.
-    work *= timing.get("regional_replay_factor", [1., 1.])[route]
-    volume = float(counts @ (fleet.log if action == 0 else fleet.kv))
+    origin, turns = source_snapshot(fleet, 0.)
+    volume, work = initial_work(fleet, counts, action, route, origin, timing, measured)
     load_factor = np.exp(timing["beta"] * measured["forecast_load"] * fleet.metadata.get("timing_load_factor", 1.))
-    pause, context, reset, _ = _quiesce(fleet, counts, volume / rate + work * load_factor)
-    delta, tail = catchup(fleet, counts, action, route, context, reset, timing, measured)
+    pause_requested = volume / rate + work * load_factor
+    pause, context, reset, _ = _quiesce(fleet, counts, pause_requested, origin_turn=turns)
+    delta, tail = catchup(fleet, counts, action, route, context, reset, timing, measured, origin_context=origin)
     commit = pause + delta / rate + tail * load_factor + measured.get("switch_s", 0.)
-    _, buffered = _buffered(fleet, counts, pause, commit, measured)
+    quiescing = fleet.metadata.get("paced_source", False)
+    _, buffered = _buffered(fleet, counts, pause_requested if quiescing else pause, commit, measured, quiescing=quiescing)
     return volume + delta, (work + tail) * load_factor, commit, buffered
 
 
 def isolated_methods(fleet, load, endpoint, budgets, timing):
-    budgets = np.minimum(budgets, endpoint * fleet.nodes)
+    budgets = np.minimum(budgets, endpoint * network_nodes(fleet))
     rates = np.minimum(endpoint[:2], np.minimum(budgets[:2], budgets[2]))
     kv_rates = np.minimum(rates, timing.get("regional_kv_bytes_per_s", rates))
     replay = fleet.log / rates[:, None] + fleet.t1 * np.exp(timing["beta"] * load * fleet.metadata.get("timing_load_factor", 1.)) * np.asarray(timing.get("regional_replay_factor", [1., 1.]))[:, None]
@@ -298,7 +297,7 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
             or not np.isfinite(np.r_[deadline, load, tails, endpoint, budgets]).all()
             or np.any(replay < 0) or np.any(kv < 0) or np.any(kv != np.floor(kv)) or replay.shape != kv.shape):
         raise ValueError("invalid scheduling inputs")
-    budgets = np.minimum(budgets, endpoint * fleet.nodes)
+    budgets = np.minimum(budgets, endpoint * network_nodes(fleet))
     fastest = isolated_methods(fleet, load, endpoint, budgets, timing)
     r, k = np.tile(replay, (2, 1)), np.tile(kv, (2, 1))
     route = np.repeat([0, 1], len(replay))
@@ -344,13 +343,14 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
                     + (k @ fleet.demand) * np.maximum(deadline - k_commit, 0))
     matrix = np.vstack((total.T, row_masks * compute, row_masks * (total @ fleet.demand),
                         row_masks * (total @ fleet.memory_tokens), row_masks * rates, row_masks * (state / deadline), rates))
-    capacities = np.r_[fleet.count, [fleet.gpus * deadline] * 2, [fleet.gpus * (1 - load)] * 2,
-                       [fleet.kv_capacity - fleet.baseline_kv] * 2, budgets[:2],
-                       np.asarray(timing.get("regional_kv_bytes_per_s", endpoint[:2])) * fleet.nodes, budgets[2]]
+    gpus = destination_gpus(fleet)
+    capacities = np.r_[fleet.count, [gpus * deadline] * 2, [gpus * (1 - load)] * 2,
+                       [(fleet.kv_capacity - fleet.baseline_kv) * gpus / fleet.gpus] * 2, budgets[:2],
+                       np.asarray(timing.get("regional_kv_bytes_per_s", endpoint[:2])) * network_nodes(fleet)[:2], budgets[2]]
     if fleet.metadata.get("protect_resident"):
         service_time = compute + buffered + (r @ fleet.demand) * np.maximum(deadline - r_commit, 0) + (k @ fleet.demand) * np.maximum(deadline - k_commit, 0)
         matrix = np.vstack((matrix, row_masks * service_time))
-        capacities = np.r_[capacities, [fleet.gpus * (1 - load) * deadline] * 2]
+        capacities = np.r_[capacities, [gpus * (1 - load) * deadline] * 2]
         debt = compute + buffered
     if np.any(capacities < 0):
         raise ValueError("resident state exceeds pooled KV capacity")
@@ -515,7 +515,7 @@ def certify(table, chosen):
             "batch_replica_seconds": [float((chosen * table.duration)[table.route == r].sum()) for r in (0, 1)],
             "forecast_induced_serving_work_s": float(table.debt @ chosen),
             "forecast_service_volume_deficit_work_s": [max(0., float((chosen * table.service_time)[table.route == r].sum())
-                - table.fleet.gpus * (1 - table.load) * table.deadline) for r in (0, 1)],
+                - destination_gpus(table.fleet) * (1 - table.load) * table.deadline) for r in (0, 1)],
             "scope": "nominal volume/work plan including catch-up and shared service occupancy; no execution certificate",
             "patterns": [{"column": int(j), "multiplicity": float(chosen[j]), "route": int(table.route[j]),
                           "replay_counts": table.replay[j].tolist(), "kv_counts": table.kv[j].tolist(),
@@ -562,7 +562,7 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
     config = configuration(smoke)
     config["require_recovery"] = require_recovery
     if require_recovery:
-        raise ValueError("buffer recovery is already required before protected handoff; the legacy recovery option is unsupported")
+        raise ValueError("the legacy static recovery constraint does not certify dynamic recovery or resident SLOs")
     for key, value in (("resident_loads", resident_loads), ("snapshots", snapshots), ("draws", draws), ("gpus_per_node", gpus_per_node)):
         if value is not None:
             config[key] = value
@@ -589,16 +589,16 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
                             "resident load is a fraction of the measured coding normal service envelope using its original contextual phase rates; no FLOP or busy-time interpretation",
                             "coding and 24K-plus coding cohorts use recorded trajectories within measured replay support; serving-context extrapolation and mixture transfers are explicit",
                             "eight resident sessions/GPU at every load; no invented initial migration backlog",
-                            "paced recorded trajectories, reset on wrap; source request duration is separate from idle spacing; buffered work clears before ownership handoff",
+                            "paced recorded trajectories with seeded stratified phases, reset on wrap; request-duration proxies are separate from idle spacing; paused requests queue at destination after handoff",
                             "ongoing serving and KV are pooled; no discrete placement or local fragmentation model",
                             "KV ingest and GPU shutdown omitted; sealed KV, partial tails and live catch-up charged",
                             "KV response/validation tail is measured separately; batch/load overlap is a transfer assumption",
-                            "receding-horizon LP uses time-indexed phase profiles and projected protected buffer recovery to update future rates; iterative approximation, not a global execution optimum",
-                            "resident serving, replay, KV catch-up and buffer recovery share one measured-capacity reservation; no new resident debt is permitted; WAN-only transfer occupies no compute",
-                            "handoff is primary and occupied migration/recovery compute is secondary; unfinished buffers remain source-owned",
-                            "replay and KV completion share the remaining fluid compute; safe occupancy converts to the original offered-work reference for measured timing slowdown",
+                            "receding-horizon LP uses time-indexed phase profiles and projected resident and source-buffer recovery; iterative approximation, not a global execution optimum",
+                            "replay displaces resident throughput using the existing measured loss; spare compute repays debt before migrated request buffers; WAN-only transfer occupies no compute",
+                            "handoff is primary, induced resident deficit and buffered work secondary; service recovery and resident latency validity are separate outputs, not handoff guarantees",
+                            "replay and KV completion share pooled compute; contextual service load converts to the original offered-work reference for measured timing slowdown; neither is measured GPU utilization",
                             "common bounded-wave dispatcher maintains a bandwidth-based active window and prioritizes final deltas; each wave snapshots current completed source state at first dispatch and catches up relative to that snapshot",
-                            "replay logs assume two bytes/token; KV uses loaded-runtime serialized geometry",
+                            "initial replay and changed-state catch-up submit full context at measured full-context timing, without an assumed retained-prefix hit; two bytes/token; KV uses loaded-runtime serialized geometry",
                             "WAN allocations are scenarios, not measurements of backbone capacity",
                             "measured single-A100-VM endpoints are pooled per node, shared by its GPUs and both destinations; eight GPUs/node is a transfer assumption",
                             "power uses measured context/rate-dependent phase-power calibration and bootstrap curves; partial shed allocates the modeled active-to-idle difference by released serving fraction"],
@@ -735,7 +735,7 @@ def run_cell(plan, cell, expanded=False):
         plan["config"]["gpus_per_node"], load, wan, deadline, expanded, plan["config"]["require_recovery"])
     build_s = time.perf_counter() - start
     endpoint = network_samples()[plan["network_indices"][draw]].copy() if draw else table.endpoint
-    budgets = bandwidth(endpoint, table.fleet.nodes, wan)
+    budgets = np.minimum(bandwidth(endpoint, table.fleet.nodes, wan), endpoint * network_nodes(table.fleet))
     realized = replace(table, endpoint=endpoint, budgets=budgets)
     start = time.perf_counter()
     results = {}
@@ -753,7 +753,7 @@ def run_cell(plan, cell, expanded=False):
     return {"identity": plan["identity"], "cell": list(cell), "status": "complete", "results": results,
             "columns": len(table.gains), "eligible_columns": int(table.eligible.sum()),
             "budgets_gbps": (budgets * 8e-9).tolist(), "endpoint_gbps": (endpoint * 8e-9).tolist(),
-            "serving_ceiling": min(1., 2 * (1 - load) / SOURCE_LOAD),
+            "serving_ceiling": min(1., 2 * destination_gpus(table.fleet) * (1 - load) / (table.fleet.gpus * SOURCE_LOAD)),
             "build_s": build_s, "solve_evaluate_s": time.perf_counter() - start}
 
 
@@ -824,13 +824,12 @@ def reduce(out):
             if not np.allclose(np.array(result["resident_debt_generated_work_s"]) - result["resident_debt_recovered_work_s"],
                                result["pending_resident_debt_work_s"], rtol=1e-8, atol=1e-6):
                 raise ValueError("resident debt conservation failed")
-            if sum(result["resident_debt_generated_work_s"]) > plan["config"]["gpus"] * deadline * 1e-10:
-                raise ValueError("protected campaign displaced resident service")
-            if result["pending_backlog_reference_work_s"] > 1e-8:
-                raise ValueError("protected handoff left an imported buffer")
+            if result["resident_latency_validated"]:
+                raise ValueError("aggregate queue accounting cannot validate resident latency")
             if result["last_completion_s"] > deadline + 1e-8:
                 raise ValueError("handoff after deadline")
             row = {"workload": workload, "snapshot": snapshot, "load": load, "draw": draw, "wan_gbps": wan,
+                   "resident_latency_validated": False, "service_recovered_by_deadline": result["service_recovered_by_deadline"],
                    "deadline_s": deadline, "policy": policy, "shed_fraction": result["shed_fraction"],
                    "admitted_shed_fraction": result["admitted_shed_fraction"],
                    "admitted_unfinished_fraction": result["admitted_shed_fraction"] - result["shed_fraction"],
@@ -990,7 +989,7 @@ def plot_debt(rows, out, gpus):
                 ax.plot([r["deadline_s"] for r in series], [r[field] / (2 * gpus) for r in series], **plot_style.policy_style(policy))
             ax.set(title=f"{workload.replace('_', ' ')}; load {load:g}; {wan} Gbit/s", xscale="log", xlabel="Shed deadline (s)")
         fig.supylabel(f"{label}\n(safe-capacity seconds / destination GPU)")
-        fig.suptitle(f"{label} at the deadline; resident service is protected")
+        fig.suptitle(f"{label} at the deadline; shared resident service and migration")
         fig.legend(*axes.flat[0].get_legend_handles_labels(), loc="outside lower center", ncol=3, fontsize=9)
         fig.tight_layout(rect=(.03, .04, 1, .95))
         for extension in ("png", "pdf"):
@@ -1164,7 +1163,7 @@ def main():
     parser.add_argument("--snapshots", type=int)
     parser.add_argument("--draws", type=int)
     parser.add_argument("--gpus-per-node", type=int)
-    parser.add_argument("--require-recovery", action="store_true", help="legacy option; rejected because buffer recovery is already mandatory before protected handoff")
+    parser.add_argument("--require-recovery", action="store_true", help="legacy static option; dynamic recovery is modeled and reported separately")
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=1)
     args = parser.parse_args()

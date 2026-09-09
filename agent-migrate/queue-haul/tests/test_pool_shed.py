@@ -155,7 +155,9 @@ def test_source_pacing_uses_measured_service_capacity_and_long_recorded_contexts
     assert np.max(longer.context) <= max(calibration(0)['replay_context_tokens'])
     assert ordinary.metadata['source_session_rps'] < .1
     assert ordinary.metadata['timing_load_factor'] < .1
-    assert ordinary.metadata['protect_resident']
+    assert not ordinary.metadata['protect_resident'] and ordinary.metadata['paced_source']
+    assert len(set(ordinary.metadata['source_phase_s'])) == len(ordinary.count)
+    assert 0 < min(ordinary.metadata['source_phase_s']) < max(ordinary.metadata['source_phase_s']) < 1 / ordinary.metadata['source_session_rps']
     assert ordinary.count @ ordinary.demand == pytest.approx(c.SOURCE_LOAD * ordinary.gpus)
     assert all(max(durations) < 1 / ordinary.metadata['source_session_rps'] for durations in ordinary.metadata['turn_duration_s'])
 

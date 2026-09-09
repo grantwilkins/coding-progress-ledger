@@ -1,0 +1,14 @@
+........................................................................ [ 39%]
+........................................................................ [ 79%]
+.....................................                                    [100%]
+=============================== warnings summary ===============================
+queue-haul/tests/test_pool_shed_planner.py::test_small_fleet_qh_does_not_reserve_wan_for_compute_only_replicas
+  /Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py:434: RuntimeWarning: HiGHS model import warning; original constraints are checked after solving
+    result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper, certificate)
+
+queue-haul/tests/test_pool_shed_planner.py::test_optimal_secondary_lp_is_retried_until_original_certificate_passes
+  /Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py:434: RuntimeWarning: HiGHS simplex failed: LP returned an infeasible resource allocation; retrying the same LP with IPM
+    result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper, certificate)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+181 passed, 3 deselected, 2 warnings in 78.82s (0:01:18)

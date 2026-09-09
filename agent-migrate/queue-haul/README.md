@@ -19,13 +19,94 @@ West Central) have 66,666 A100 GPUs at 300 W nameplate: 19.9998 MW per site,
 excluding CPUs and peripherals. This is the requested A100 study, not the
 original H100 configuration. Eight GPUs share each modeled node.
 
-Resident service is protected. Existing residents, imported standing demand,
-replay, KV catch-up, and buffered-request recovery share one compute budget.
-Replay cannot borrow occupied resident capacity and repay it later. Buffered
-requests accumulated during migration must clear before ownership handoff and
-shed credit; an unfinished buffer remains source-owned. New resident service
-deficit or an imported unrecovered buffer makes campaign reduction fail.
-KV network waiting uses no compute; KV ingest is omitted.
+Resident service shares compute with migration. Replay uses the existing measured
+resident-throughput loss; spare capacity repays resident debt before migrated
+request buffers. Requests arriving after source quiescence are buffered and move
+to the destination at handoff. There is no default isolation reservation or
+pre-handoff buffer gate. The planner reserves recovery work over every remaining
+time interval so earlier idle service cannot pay for later arrivals. This is an
+aggregate recovery approximation: executed handoff, `service_ready_s`,
+`service_recovered_by_deadline`, and resident latency validity are separate
+outputs. **Resident TTFT/TPOT is not validated.** KV network waiting uses no
+compute; KV ingest is omitted.
+
+`Fleet.metadata["destination_gpus"]` independently sets the GPU count at each of
+the two equally sized destinations; it defaults to the source count. The bounded
+audit also uses 33,333 GPUs (10 MW nameplate) per destination with the source
+unchanged at 66,666. Destination compute, resident memory, and endpoint inventory
+scale together. Route endpoints use the smaller source/destination node inventory;
+the shared source egress and configured WAN caps remain in force.
+
+The [current bounded realism audit](outputs/a100-replay-realism/audit.json)
+uses the width-eight packing, loaded/full-drain, regional interference, and SLO
+campaigns without refitting their coefficients. Run
+`python pool_shed_replay_audit.py` to reproduce it; the large campaign remains
+stopped. The prior v8 sensitivity/audit artifacts remain unchanged.
+[181 focused tests pass](outputs/a100-replay-realism/focused-tests.log), with
+the same three broader integration tests excluded. A separate
+[single-cell prepare/run/reduce check](outputs/a100-replay-realism/reduction-smoke.log)
+completed all five policies in temporary outputs; the audit also reruns the
+existing hardware timing and regional resident-deficit checks.
+
+The corrections remove synchronized starts, delta-length replay timing and
+implicit resident isolation. For a 256-token append, the old catch-up rule had
+the same cost at a 2K or 30K retained context. Full-context catch-up now costs
+about **0.557 s at 2,304 tokens and 3.489 s at 30,256 tokens** on the East route,
+including the existing measured regional factor. Its request overhead remains
+intact. Native cache hits in a real warm-prefix catch-up can change those times;
+no synthetic reuse fraction is added.
+
+The 30-second comparisons below use the 0.80 GB/32K effective KV-wire anchor,
+shared 1,000 Gbit/s WAN, the existing coding service rates, and a common candidate
+library and planning clock within each pair. Numbers are **raw handoff fractions**:
+
+| Source / each destination GPU IT | Workload | Replay-only | QH LP |
+|---|---|---:|---:|
+| 20 / 20 MW | coding | 100.00% | 99.82% |
+| 20 / 10 MW | coding | 58.68% | 59.72% |
+| 2 / 2 MW | coding | 96.30% | 100.00% |
+| 20 / 20 MW | coding, initially 24K+ | 87.61% | 86.03% |
+
+Every one of these paired outcomes retains buffered work at 30 seconds. For
+example, the 20/20-MW replay case hands off by 26.04 s but still has about
+2,611 normalized work-seconds of buffered requests. The 20/10-MW standing-service
+ceiling is 62.5%, shared by all methods. The audit also runs KV-only, QH greedy,
+and isolated-fastest in the two 20-MW-source scenarios. No baseline result is
+substituted for QH. These outcomes do not establish SLO-feasible shedding or a
+reliable QH advantage; even the revised temporal recovery constraints can leave
+queues after execution changes the forecast's timing.
+
+The stronger measurement warning is the resident load definition. Coding at its
+simulated 50% offers about **0.221 requests/s/GPU**, or 112.9 prompt and 8.85
+output tokens/s/GPU. The newer A100 SLO campaign's 4K normalizer assigns those
+token rates about **0.0092 total offered phase work**, while its confirmed
+transition recipes are near 0.50. This comparison is not a coding utilization
+estimate: contexts, mixtures and normalizations differ. The SLO confirmation
+supports three discrete 4K recipes at 1-second P90 TTFT and 100-ms P90 mean TPOT;
+it did not confirm a universal scalar headroom bound. The current simulator
+retains the older contextual coding normalization and its explicit transfer gap.
+
+The independent cold-burst evidence also shows real queueing: at 32,256 prompt
+tokens, the A100 had at most ten GPT-OSS requests running concurrently, and a
+width-16 burst had 65.03-second P90 TTFT. Those requests generated 32 output
+tokens; their timing cannot be substituted directly for a migration probe.
+Source request durations in the simulator remain throughput-derived proxies.
+They are not validated per-request latencies or a source queue model.
+
+The primary references support separating prefill contention, decode latency and
+actual prefix reuse. [vLLM's scheduler documentation](https://docs.vllm.ai/en/stable/configuration/optimization/)
+describes decode priority with chunked prefill and latency effects from prefill
+budgets and recomputation. [Automatic prefix caching](https://docs.vllm.ai/en/v0.10.1/features/automatic_prefix_caching.html)
+skips cached-prefix prefill work without eliminating decode.
+[Sarathi-Serve](https://www.usenix.org/conference/osdi24/presentation/agrawal)
+measures the throughput/latency tradeoff from interleaving prefill and decode.
+These sources explain mechanisms; they supply no new simulator coefficients.
+
+Before another large campaign, the missing validation is a matched current-stack
+resident/replay run with continuing arrivals, exact token timing, and native
+prefix-hit evidence across retained context and append size. Existing frozen
+migration timing checks still pass; they do not establish live catch-up, shared
+resident SLOs, or per-GPU placement and queueing fidelity.
 
 Load is a fraction of the measured coding **normal serving envelope**, not
 FLOPs or GPU busy time. Request work uses the original context-dependent
@@ -38,7 +119,7 @@ and to shared migration occupancy is explicit. Contexts outside the serving
 curves use the slowest measured phase rate and are flagged as extrapolated.
 
 Source load is 0.8; destination loads are 0.25, 0.50, 0.75, 0.90, and 0.95.
-Each destination is as large as the source, so the standing-service shed ceiling
+At equal source/destination sizes, the standing-service shed ceiling
 is `min(1, 2 * (1 - destination_load) / 0.8)`: 100% at 50% destination load,
 62.5% at 75%, 25% at 90%, and 12.5% at 95%. Methods can therefore tie at long
 deadlines after reaching that common ceiling.
@@ -50,12 +131,19 @@ reset on wrap. A separate `coding_long` cohort starts at measured contexts of
 at least 24,576 tokens and follows the complete supported recorded trajectories.
 Source request duration uses a contextual phase-work proxy, separate from
 interarrival spacing; quiescence waits for an active request. Missing timestamps
-require an explicit equal-cadence assumption with synchronized source request
-starts; burst phases are a scenario, not a measured arrival distribution.
+require an explicit equal-cadence assumption. Seeded, stratified phases spread
+cohort starts across the period, including requests started before time zero.
+These phases remove the common quiet interval; they are not measured arrival
+statistics. Buffer accounting includes arrivals to already paused cohorts while
+other members of a batch finish quiescing.
 Each migration wave captures the last completed source request state when it
 enters the initial-transfer window, including waves that waited after admission.
-It retains that snapshot during its copy; catch-up charges only growth and
-resets since that capture. Planner candidates use their proposed start times,
+It retains that snapshot during its copy. Changed or reset replay state resubmits
+the full current context, using the existing context-dependent full-replay timing,
+packing, and completion overhead; unchanged state needs no second replay. KV
+catch-up still transfers the changed sealed blocks and computes the partial tail.
+No retained-prefix hit is assumed for replay catch-up. This full-rebuild model is
+an explicit transfer assumption, not a measured warm-prefix catch-up curve. Planner candidates use their proposed start times,
 and shared execution determines when queued waves actually capture.
 Trajectories exceeding replay
 context support are excluded and counted. `measured_pack` repeats the measured
@@ -75,28 +163,20 @@ draws. Planning runtime is reported separately and is not charged to the
 modeled migration deadline; these are offline policy simulations.
 Recorded future request shapes and resets are known to every planner;
 unknown future prompts and arrival-phase uncertainty are not sampled.
-Ongoing migrations, imported service, and mandatory buffer recovery enter
-later reservations. Once per decision, a central-calibration copy of the pooled
-executor continues already admitted work through shared network, compute, and
-recovery phases. Remaining work is reconstructed from observed phase progress
-and central primitives; hidden execution draws are replaced. New admissions use
-candidate phase profiles and the capacity left by this continuation's peak
-compute reservations and network volumes. Positive candidate transfers wait
-for a reservation-bin boundary before release; subsequent phases wait for the
-boundary after modeled delivery. Empty transfers add no wait. Every admitted
-obligation remains reserved, including work forecast to miss the deadline. Such unfinished work
-does not block other feasible handoffs: the objective is maximum completed
-handoffs, not completion of every admission. New admissions can change subsequent
-sharing, so the continuation does not certify their combined executed schedule.
-Compute reservations use peak occupancy within each time bin; networking
-remains a flow-volume model. Residual network volume does not fully describe
-the endpoint windows left by mandatory traffic within a bin, and new admissions
-can shift shared-flow timing. These candidate reservations are an approximation
-to the executed schedule. Recorded turns and resets, with
-modeled phase dependencies and recovery, are evaluated by the pooled event executor.
-There are no individual GPU, packet, or request objects. Replay and KV policies
-share the same applicable batch projections; redundant mixed columns are
-removed while QH can jointly select both action populations.
+A central-calibration copy of the executor forecasts already admitted work at
+every decision, retaining observed source captures and phase progress. New
+candidates reserve compute time, route/shared-WAN volume, standing service, and
+resident/buffer recovery. Recovery constraints cover each remaining suffix of
+the horizon; unused early capacity cannot be saved for a later queue. Actual
+queues retain their per-batch service limits. Source quiescence, resets and
+full-context catch-up remain causal.
+
+New admissions can change sharing and invalidate a forecast's finish or recovery
+time. All unfinished admissions remain reserved, and actual debt, buffered work,
+and recovery misses remain in the results. The executor does not certify resident
+latency from these work budgets. There are no individual GPU, packet, or token
+scheduler objects. Replay and KV policies share the same batch projections, while
+QH can jointly select both action populations.
 
 This is a **temporal LP approximation**, not a globally optimal dynamic
 schedule. Load interactions and source resets are nonlinear. Static LP
@@ -146,7 +226,7 @@ holdouts, 160 recorded policy cases, and 72 long-context batches, plus the
 24 regional episodes. Runtime-matched KV calibration is fitted only on the
 original local training split; the regional-to-local mismatch is also reported.
 These historical cases retain their original service contracts and do not
-validate protected fleet-scale service. The validation report records per-case
+validate fleet-scale resident latency or live source/recovery timing. The validation report records per-case
 errors, false-feasible deadlines, original reference errors, library expansion,
 execution refinement, feedback sensitivity, and proportional scaling.
 
@@ -242,7 +322,9 @@ The [validation record](outputs/a100-cache-sensitivity/validation.json) includes
 169 focused passing tests, 24 exact replay controls, 12 exact KV controls,
 resource residuals, and hashes for the preserved cases and corrected figures.
 
-This sensitivity does not validate the fast replay or resident SLO claims.
+The archived v8 cache sensitivity does not validate fast replay or resident SLOs.
+The following v8 audit records its original synchronized/isolation assumptions;
+its results are historical and do not describe the current executor.
 The simulated coding 50% point offers about 0.221 resident requests/s/GPU,
 versus 1.318 at the loaded experiment's 50% reference, with different request
 shapes. The extra fitted replay slowdown is approximately 0.7% versus 15.3%,
@@ -251,9 +333,8 @@ snapshot. Matching resident RPS, shape, context, and arrival timing remains
 necessary before interpreting the fleet results as deployment performance.
 
 The subsequent [replay/resident audit](outputs/a100-replay-audit/audit.json)
-keeps the large campaign stopped. `python pool_shed_replay_audit.py` reproduces
-the bounded audit, including twelve policy executions and the existing hardware
-timing checks. It changes no simulator calibration or production policy.
+kept the large campaign stopped. Its archived twelve policy executions and
+hardware timing checks retain their original source hashes. It changes no simulator calibration or production policy.
 **The fast replay is explainable under this scenario, but protected resident
 latency and realistic arrival behavior remain unvalidated.**
 
@@ -348,10 +429,9 @@ three discrete 4K recipes, not this general long-context recovery model.
 
 The proposed 20 MW source with two 10 MW destinations would have a **62.5%**
 standing-service handoff ceiling at the current source/destination loads of
-80%/50%. This is capacity arithmetic, not an executed asymmetric-fleet result;
-the simulator currently shares one GPU count across all sites. Independent
-destination counts must scale their compute, memory and endpoint inventory
-without changing source population or assuming a larger shared WAN. Reducing
+80%/50%. The current bounded audit executes this capacity scenario using the independent
+destination count; compute, memory and endpoint inventory shrink without changing
+source population or enlarging the shared WAN. Reducing
 destination size can leave both methods tied at that common service ceiling.
 
 ```bash
@@ -397,7 +477,7 @@ admission. The failed Linux comparison is retained as regression evidence.
 
 `outputs/a100-pooled-feedback` archives the v7 campaign, which permitted
 resident displacement and used the old service/power normalization. Its results
-are superseded for this protected-service question. The earlier fixed-plan
+use an obsolete normalization; they do not validate the current shared-service model. The earlier fixed-plan
 campaign is archived under `outputs/a100-pooled-execution`.
 
 ## Current evidence

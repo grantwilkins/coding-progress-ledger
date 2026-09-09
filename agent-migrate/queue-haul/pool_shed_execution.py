@@ -9,6 +9,31 @@ import numpy as np
 DISPATCH_CHUNKS = 64
 
 
+def destination_gpus(fleet):
+    count = fleet.metadata.get("destination_gpus", fleet.gpus)
+    if not isinstance(count, (int, np.integer)) or isinstance(count, bool) or count <= 0:
+        raise ValueError("destination GPU count must be a positive integer per site")
+    return count
+
+
+def network_nodes(fleet):
+    width = getattr(fleet, "gpus_per_node", 1)
+    source, sink = [(count + width - 1) // width for count in (fleet.gpus, destination_gpus(fleet))]
+    return np.array([min(source, sink), min(source, sink), source])
+
+
+def paced_source(fleet):
+    return fleet.metadata.get("paced_source", fleet.metadata.get("protect_resident", False))
+
+
+def _started_turns(fleet, now):
+    phases = np.asarray(fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count))))
+    cadence = fleet.metadata.get("source_session_rps", 0.)
+    if phases.shape != fleet.count.shape or not np.isfinite(phases).all() or np.any(phases < 0) or np.any(phases * cadence >= 1):
+        raise ValueError("source phases must have one finite offset per cohort within its period")
+    return np.floor((now + phases) * cadence + 1e-10).astype(int) + 1
+
+
 def compute_allocation(load, replay_mass, kv_mass, gpus, loss=None, protected=False):
     mass = replay_mass + kv_mass
     sharing = min(1., gpus * (1 - load if protected else 1.) / max(mass, 1e-30))
@@ -48,15 +73,17 @@ def source_snapshot(fleet, now, cache=None):
         return cache[key]
     context, completed = fleet.context.copy(), np.zeros(len(fleet.count), int)
     cadence, cycle = fleet.metadata.get("source_session_rps", 0.), fleet.metadata.get("sequence_cycle", False)
-    if fleet.metadata.get("protect_resident") and cadence:
+    if paced_source(fleet) and cadence:
+        started = _started_turns(fleet, now)
+        phases = fleet.metadata.get("source_phase_s", np.zeros(len(context)))
         for i, sequence in enumerate(fleet.metadata["turn_sequences"]):
             if not sequence:
                 continue
             offset = fleet.metadata.get("turn_offset", [0] * len(context))[i] if cycle else 0
-            n = int(np.floor(now * cadence + 1e-10)) + 1
+            n = started[i]
             if cycle or n <= len(sequence):
                 duration = fleet.metadata["turn_duration_s"][i][(offset + n - 1) % len(sequence)]
-                n -= (n - 1) / cadence + duration > now + 1e-10
+                n -= (n - 1) / cadence - phases[i] + duration > now + 1e-10
             completed[i] = n if cycle else min(n, len(sequence))
             if completed[i]:
                 row = sequence[(offset + completed[i] - 1) % len(sequence)]
@@ -111,30 +138,31 @@ def _quiesce(fleet, counts, now, cache=None, origin_turn=None):
         raise ValueError("invalid source trace pacing")
     active = np.flatnonzero(counts)
     lengths = np.array([len(sequences[i]) for i in active])
-    step = int(np.ceil(max(now * cadence - 1e-10, 0)))
+    steps = np.full(len(fleet.count), int(np.ceil(max(now * cadence - 1e-10, 0))))
     cycle = fleet.metadata.get("sequence_cycle", False)
     if cycle and np.any(lengths == 0):
         raise ValueError("cannot cycle an empty source trace")
-    protected = fleet.metadata.get("protect_resident", False)
-    if protected and cadence:
-        step = int(np.floor(now * cadence + 1e-10)) + 1
+    paced = paced_source(fleet)
+    if paced and cadence:
+        steps = _started_turns(fleet, now)
     origin_turn = np.zeros(len(fleet.count), int) if origin_turn is None else origin_turn
-    key = ("quiesce", counts.astype(float, copy=False).tobytes(), step, origin_turn.tobytes())
+    key = ("quiesce", counts.astype(float, copy=False).tobytes(), steps.tobytes(), origin_turn.tobytes())
     if cache is not None and key in cache:
         end, context, reset, terminal = cache[key]
         return max(now, end), context, reset, terminal
-    completed = np.full_like(lengths, step) if cycle else np.minimum(lengths, step)
-    end = 0. if protected or not cadence else float(completed.max(initial=0) / cadence)
-    if protected and cadence:
+    completed = steps[active] if cycle else np.minimum(lengths, steps[active])
+    end = 0. if paced or not cadence else float(completed.max(initial=0) / cadence)
+    if paced and cadence:
         durations = fleet.metadata["turn_duration_s"]
+        phases = fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count)))
         for i, n, length in zip(active, completed, lengths):
-            if not length or not cycle and step > length:
+            if not length or not cycle and steps[i] > length:
                 continue
             offset = fleet.metadata.get("turn_offset", [0] * len(sequences))[i] if cycle else 0
             duration = durations[i][(offset + n - 1) % length]
             if not np.isfinite(duration) or not 0 <= duration <= 1 / cadence:
                 raise ValueError("source request duration exceeds the paced single-request contract")
-            end = max(end, (step - 1) / cadence + duration)
+            end = max(end, (steps[i] - 1) / cadence - phases[i] + duration)
     context, reset = fleet.context.copy(), np.zeros(len(fleet.count), bool)
     for i, n in zip(active, completed):
         if n:
@@ -150,22 +178,24 @@ def _quiesce(fleet, counts, now, cache=None, origin_turn=None):
     return max(now, end), context, reset, terminal
 
 
-def _buffered(fleet, counts, start, end, calibration, cache=None):
+def _buffered(fleet, counts, start, end, calibration, cache=None, quiescing=False):
     cadence = fleet.metadata.get("source_session_rps", 0.)
-    first, last = int(np.ceil(start * cadence - 1e-9)), int(np.ceil(end * cadence - 1e-9))
+    phases = np.asarray(fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count))))
+    first = _started_turns(fleet, start) if quiescing else np.ceil((start + phases) * cadence - 1e-9).astype(int)
+    last = np.maximum(first, np.ceil((end + phases) * cadence - 1e-9).astype(int))
     if cache is not None:
-        key = ("buffer", counts.astype(float, copy=False).tobytes(), first, last)
+        key = ("buffer", counts.astype(float, copy=False).tobytes(), first.tobytes(), last.tobytes())
         if key not in cache:
-            cache[key] = _buffered(fleet, counts, start, end, calibration)
+            cache[key] = _buffered(fleet, counts, start, end, calibration, quiescing=quiescing)
         return cache[key]
     number, work = 0., 0.
     for i in np.flatnonzero(counts):
         sequence = fleet.metadata["turn_sequences"][i]
         if not sequence:
             continue
-        if fleet.metadata.get("protect_resident") and "turn_work_s" in fleet.metadata:
+        if paced_source(fleet) and "turn_work_s" in fleet.metadata:
             values = np.asarray(fleet.metadata["turn_work_s"][i])
-        elif fleet.metadata.get("protect_resident"):
+        elif paced_source(fleet):
             from pool_shed_calibration import service_work
             values = np.array([service_work(r["context"] + r["prompt"], r["prompt"], r["output"], calibration) for r in sequence])
         else:
@@ -173,11 +203,11 @@ def _buffered(fleet, counts, start, end, calibration, cache=None):
         prefix = np.r_[0., np.cumsum(values)]
         if fleet.metadata.get("sequence_cycle"):
             offset = fleet.metadata.get("turn_offset", [0] * len(counts))[i]
-            a, b = offset + first, offset + last
+            a, b = offset + first[i], offset + last[i]
             work += counts[i] * ((b // len(values) - a // len(values)) * prefix[-1] + prefix[b % len(values)] - prefix[a % len(values)])
-            number += counts[i] * (last - first)
+            number += counts[i] * (last[i] - first[i])
         else:
-            a, b = min(first, len(values)), min(last, len(values))
+            a, b = min(first[i], len(values)), min(last[i], len(values))
             work += counts[i] * (prefix[b] - prefix[a])
             number += counts[i] * (b - a)
     return number, work
@@ -201,27 +231,13 @@ def catchup(fleet, counts, action, route, context, reset, timing, calibration, c
                     [0, timing["kv_completion_s"], timing["kv_batch_completion_s"]])))
     if action != 0:
         raise ValueError("unknown catch-up action")
-    changed = np.where(reset, context, np.maximum(context - origin_context, 0))
-    rebuilding = (counts > 0) & (changed > 0)
-    idle = 0.
-    if rebuilding.any():
-        from pool_shed_calibration import replay_seconds
-        support = np.asarray(calibration["replay_context_tokens"])
-        if np.any(changed[rebuilding] > support.max()):
-            raise ValueError("source replay catch-up exceeds measured context support")
-        work = np.interp(changed[rebuilding], np.r_[0., support],
-                         np.r_[0., np.maximum.accumulate(replay_seconds(support, calibration))])
-        cached = np.broadcast_to(fleet.metadata.get("replay_cached_tokens", 0), context.shape)[rebuilding]
-        reuse = reset[rebuilding] & (cached > 0)
-        overhead = calibration.get("replay_completion_s", 0.) * np.minimum(changed[rebuilding][reuse] / support.min(), 1.)
-        work[reuse] -= np.maximum(work[reuse] - overhead, 0) * np.minimum(cached[reuse] / changed[rebuilding][reuse], 1.)
-        knots = fleet.metadata.get("packing_context_tokens")
-        packing = np.interp(changed[rebuilding], knots, timing["packing_kappa"]) if knots else np.full(len(work), timing["kappa"])
-        if np.any(changed[rebuilding] > fleet.metadata.get("batch_context_limit", np.inf)):
-            packing[:] = 1.
-        regional = timing.get("regional_replay_factor", calibration.get("regional_components", {}).get("replay_factor", [1., 1.]))
-        idle = (counts[rebuilding] @ (packing * work) + np.max((1 - packing) * work)) * regional[route]
-    return float(2 * (counts @ changed)), float(idle)
+    rebuilding = (counts > 0) & (context > 0) & (reset | (context != origin_context))
+    if not rebuilding.any():
+        return 0., 0.
+    if np.any(context[rebuilding] > max(calibration["replay_context_tokens"])):
+        raise ValueError("source replay catch-up exceeds measured context support")
+    _, work = initial_work(fleet, counts * rebuilding, 0, route, context, timing, calibration)
+    return float(2 * (counts * rebuilding @ context)), work
 
 
 def execute_pooled(table, chosen, timing, calibration=None, chunks=1):
@@ -242,8 +258,10 @@ class PooledExecution:
         self.table, self.timing, self.calibration, self.chunks = table, timing, calibration, chunks
         self.primitive_cache = {}  # One fixed fleet, timing and calibration for this execution.
         self.fleet = table.fleet
+        self.gpus = destination_gpus(self.fleet)
         self.protected = self.fleet.metadata.get("protect_resident", False)
-        self.timing_load_factor = self.fleet.metadata.get("timing_load_factor", 1.) if self.protected else 1.
+        self.paced = paced_source(self.fleet)
+        self.timing_load_factor = self.fleet.metadata.get("timing_load_factor", 1.)
         if not np.isfinite(self.timing_load_factor) or self.timing_load_factor <= 0:
             raise ValueError("invalid measured timing-load conversion")
         if not isinstance(self.chunks, (int, np.integer)) or isinstance(self.chunks, bool) or self.chunks < 1:
@@ -258,7 +276,8 @@ class PooledExecution:
         self.selected, self.mass = [], np.zeros(0)
         self.route, self.action = np.zeros(0, int), np.zeros(0, int)
         self.counts = np.zeros((0, len(self.fleet.count)))
-        self.memory_tokens, self.free_memory = self.fleet.memory_tokens, self.fleet.kv_capacity - self.fleet.baseline_kv
+        self.memory_tokens = self.fleet.memory_tokens
+        self.free_memory = (self.fleet.kv_capacity - self.fleet.baseline_kv) * self.gpus / self.fleet.gpus
         self.demand, self.memory = self.counts @ self.fleet.demand, self.counts @ self.memory_tokens
         self.initial_load = np.broadcast_to(np.asarray(self.table.load), (2,)).astype(float)
         self.n = len(self.selected)
@@ -267,6 +286,7 @@ class PooledExecution:
         self.state, self.remaining, self.release = np.zeros(self.n, int), np.zeros(self.n), np.zeros(self.n)
         self.tail, self.delta, self.compute_used, self.idle_work = np.zeros(self.n), np.zeros(self.n), np.zeros(2), np.zeros(2)
         self.quiesced, self.buffered, self.backlog, self.backlog_total = (np.zeros(self.n) for _ in range(4))
+        self.pause_requested = np.zeros(self.n)
         self.gated = np.zeros(self.n, bool)
         self.resident_debt, self.resident_generated, self.resident_recovered = (np.zeros(2) for _ in range(3))
         self.resident_loss = np.broadcast_to(np.asarray(self.timing.get("resident_replay_loss", 0.)), (2,))
@@ -303,7 +323,7 @@ class PooledExecution:
         demand, memory = counts @ self.fleet.demand, counts @ self.memory_tokens
         for r in (0, 1):
             ids, old = route == r, self.route == r
-            if (mass[ids] @ demand[ids] + self.mass[old] @ self.demand[old] > self.fleet.gpus * (1 - self.initial_load[r]) + 1e-7 * self.fleet.gpus
+            if (mass[ids] @ demand[ids] + self.mass[old] @ self.demand[old] > self.gpus * (1 - self.initial_load[r]) + 1e-7 * self.gpus
                     or mass[ids] @ memory[ids] + self.reserved[old].sum() > self.free_memory + 1e-7 * self.fleet.kv_capacity):
                 raise ValueError("selected migrations exceed destination serving or memory capacity")
         n = len(selected)
@@ -313,9 +333,9 @@ class PooledExecution:
         values = dict(mass=mass, route=route, action=np.array([a for _, a, _ in selected], int),
                       counts=counts, demand=demand, memory=memory, reserved=mass * memory,
                       group=np.arange(self.n, self.n + n) // self.chunks, initial_ready=np.zeros(n, bool), gated=np.zeros(n, bool),
-                      origin_time=np.full(n, np.nan if self.protected else 0.),
+                      origin_time=np.full(n, np.nan if self.paced else 0.),
                       state=np.zeros(n, int), remaining=remaining, tail=tail, phase_started=np.full(n, self.now))
-        for name in ("release", "delta", "quiesced", "buffered", "backlog", "backlog_total", "phase_replica_seconds", "phase_transferred_bytes", "phase_nominal_work"):
+        for name in ("release", "delta", "quiesced", "pause_requested", "buffered", "backlog", "backlog_total", "phase_replica_seconds", "phase_transferred_bytes", "phase_nominal_work"):
             values[name] = np.zeros(n)
         for name, value in values.items():
             setattr(self, name, np.concatenate((getattr(self, name), value)))
@@ -328,13 +348,18 @@ class PooledExecution:
 
     def serving_load(self):
         gate = (self.state == 5) & self.gated
-        load = self.loads + np.array([self.mass[gate & (self.route == r)] @ self.demand[gate & (self.route == r)] for r in (0, 1)]) / self.fleet.gpus
+        load = self.loads + np.array([self.mass[gate & (self.route == r)] @ self.demand[gate & (self.route == r)] for r in (0, 1)]) / self.gpus
         if self.protected and np.any(load > 1 + 1e-8):
             raise RuntimeError("handoff gate exceeded safe serving capacity")
         return np.minimum(1., load)
 
     def origin(self, i):
-        return source_snapshot(self.fleet, self.origin_time[i], self.primitive_cache) if self.protected and np.isfinite(self.origin_time[i]) else (self.fleet.context, np.zeros(len(self.fleet.count), int))
+        return source_snapshot(self.fleet, self.origin_time[i], self.primitive_cache) if self.paced and np.isfinite(self.origin_time[i]) else (self.fleet.context, np.zeros(len(self.fleet.count), int))
+
+    def buffered_work(self, i, until):
+        quiescing = self.fleet.metadata.get("paced_source", False)
+        return _buffered(self.fleet, self.counts[i], self.pause_requested[i] if quiescing else self.quiesced[i],
+                         until, self.calibration, self.primitive_cache, quiescing=quiescing)
 
     def nominal_continuation(self, table, timing, calibration):
         central = PooledExecution(table, timing, calibration, self.chunks)
@@ -352,7 +377,7 @@ class PooledExecution:
                 payload, clone.tail[i] = initial_work(clone.fleet, c, a, r, origin_context, timing, calibration, clone.primitive_cache)
                 clone.remaining[i] = max(payload - clone.phase_transferred_bytes[i], 0.) if phase == 0 else max(clone.tail[i] - clone.phase_nominal_work[i], 0.)
             else:
-                _, context, reset, _ = _quiesce(clone.fleet, c, clone.quiesced[i], clone.primitive_cache, origin_turn=origin_turn)
+                _, context, reset, _ = _quiesce(clone.fleet, c, clone.pause_requested[i], clone.primitive_cache, origin_turn=origin_turn)
                 clone.delta[i], clone.tail[i] = catchup(clone.fleet, c, a, r, context, reset, timing, calibration, clone.primitive_cache, origin_context=origin_context)
                 if phase == 3:
                     clone.remaining[i] = max(clone.delta[i] - clone.phase_transferred_bytes[i], 0.)
@@ -365,7 +390,7 @@ class PooledExecution:
     def advance(self, until, collect=False):
         if not np.isfinite(until) or until < self.now or until > self.table.deadline:
             raise ValueError("advance requires current time <= until <= deadline")
-        usage = {name: np.zeros(3 if name == "network" else 2) for name in ("network", "application", "migration", "recovery", "serving", "peak", "service_peak")} if collect else None
+        usage = {name: np.zeros(3 if name == "network" else 2) for name in ("network", "application", "migration", "replay", "kv", "recovery", "buffer_recovery", "serving", "peak", "service_peak")} if collect else None
         iterations = 0
         while (np.any(self.state < 6) or np.any(self.backlog > 1e-9) or np.any(self.resident_debt > 1e-9)) and self.now <= until:
             iterations += 1
@@ -381,6 +406,7 @@ class PooledExecution:
                         self.state[i], self.remaining[i] = 1, self.tail[i]
                     elif self.state[i] in (0, 1):
                         origin_context, origin_turn = self.origin(i)
+                        self.pause_requested[i] = self.now
                         self.release[i], context, reset, terminal = _quiesce(self.fleet, c, self.now, self.primitive_cache, origin_turn=origin_turn)
                         self.quiesced[i] = self.release[i]
                         self.exhausted += int(terminal)
@@ -402,17 +428,17 @@ class PooledExecution:
                     else:
                         if self.protected and not self.gated[i]:
                             self.gated[i] = True
-                            self.buffered[i], self.backlog[i] = _buffered(self.fleet, c, self.quiesced[i], self.now, self.calibration, self.primitive_cache)
+                            self.buffered[i], self.backlog[i] = self.buffered_work(i, self.now)
                             self.backlog_total[i] = self.backlog[i]
                             if self.backlog[i] > 1e-9:
                                 continue
                         self.state[i] = 6
                         self.committed[2 * r + a] += self.mass[i] * c
-                        if self.protected and self.loads[r] + self.mass[i] * self.demand[i] / self.fleet.gpus > 1 + 1e-8:
+                        if self.protected and self.loads[r] + self.mass[i] * self.demand[i] / self.gpus > 1 + 1e-8:
                             raise RuntimeError("handoff exceeded safe serving capacity")
-                        self.loads[r] = min(1., self.loads[r] + self.mass[i] * self.demand[i] / self.fleet.gpus)
+                        self.loads[r] = min(1., self.loads[r] + self.mass[i] * self.demand[i] / self.gpus)
                         if not self.protected:
-                            self.buffered[i], self.backlog[i] = _buffered(self.fleet, c, self.quiesced[i], self.now, self.calibration, self.primitive_cache)
+                            self.buffered[i], self.backlog[i] = self.buffered_work(i, self.now)
                             self.backlog_total[i] = self.backlog[i]
                         self.peak_load[r] = max(self.peak_load[r], self.loads[r])
                         event = self.events.setdefault((int(self.selected[i][0]), int(a)), {
@@ -428,7 +454,7 @@ class PooledExecution:
             # A KV application cap is additional to the measured bulk endpoint cap.
             key = (transfers.tobytes(), self.state[transfers].tobytes())
             if len(transfers) and key != self.network_key:
-                nodes = getattr(self.fleet, "nodes", self.fleet.gpus)
+                nodes = network_nodes(self.fleet)[:2]
                 residual, app_residual = np.array(self.table.budgets, float), np.asarray(application) * nodes
                 captured = False
                 for phase in (3, 0):
@@ -477,19 +503,19 @@ class PooledExecution:
                 queued = (self.backlog > 1e-9) & (self.route == r)
                 load = serving_load[r]
                 if self.protected:
-                    backlog_rates[queued] = min(1., self.fleet.gpus * (1 - load) / max(float(self.mass[queued].sum()), 1e-30))
-                    load = min(1., load + float(self.mass[queued] @ backlog_rates[queued]) / self.fleet.gpus)
+                    backlog_rates[queued] = min(1., self.gpus * (1 - load) / max(float(self.mass[queued].sum()), 1e-30))
+                    load = min(1., load + float(self.mass[queued] @ backlog_rates[queued]) / self.gpus)
                 sharing, capacity = compute_allocation(load, *[float(self.mass[active & (self.action == a)].sum()) for a in (0, 1)],
-                    self.fleet.gpus, self.resident_loss[r] if "resident_replay_loss" in self.timing else None, self.protected)
+                    self.gpus, self.resident_loss[r] if "resident_replay_loss" in self.timing else None, self.protected)
                 compute_shares[r] = sharing
-                if self.protected and capacity < load * self.fleet.gpus - 1e-9 * self.fleet.gpus:
+                if self.protected and capacity < load * self.gpus - 1e-9 * self.gpus:
                     raise RuntimeError("migration violated protected serving capacity")
-                resident_growth[r] = 0. if self.protected else max(load * self.fleet.gpus - capacity, 0.)
-                spare = max(capacity - load * self.fleet.gpus, 0.)
+                resident_growth[r] = 0. if self.protected else max(load * self.gpus - capacity, 0.)
+                spare = max(capacity - load * self.gpus, 0.)
                 resident_recovery[r] = spare if self.resident_debt[r] > 1e-9 else 0.
                 if not self.protected:
                     backlog_rates[queued] = min(1., (spare - resident_recovery[r]) / max(float(self.mass[queued].sum()), 1e-30))
-                effective_load = serving_load[r] + (resident_recovery[r] + float(self.mass[queued] @ backlog_rates[queued])) / self.fleet.gpus
+                effective_load = serving_load[r] + (resident_recovery[r] + float(self.mass[queued] @ backlog_rates[queued])) / self.gpus
                 self.peak_load[r] = max(self.peak_load[r], effective_load)
                 rates[active] = sharing * np.exp(-self.timing["beta"] * effective_load * self.timing_load_factor)
                 nominal_rates[r] = sharing * np.exp(-self.nominal_beta * effective_load * self.timing_load_factor)
@@ -512,11 +538,14 @@ class PooledExecution:
             if collect:
                 migration = np.array([compute_shares[r] * self.mass[computing & (self.route == r)].sum() for r in (0, 1)])
                 recovery = resident_recovery + np.array([self.mass[self.route == r] @ backlog_rates[self.route == r] for r in (0, 1)])
-                ordinary = self.fleet.gpus * serving_load
+                usage["buffer_recovery"] += (recovery - resident_recovery) * step
+                ordinary = self.gpus * serving_load
                 usage["network"] += [sent[self.route[transfers] == 0].sum(), sent[self.route[transfers] == 1].sum(), sent.sum()]
                 usage["application"] += [sent[(self.route[transfers] == r) & (self.action[transfers] == 1)].sum() for r in (0, 1)]
                 for name, value in (("migration", migration), ("recovery", recovery), ("serving", ordinary)):
                     usage[name] += value * step
+                for action, name in enumerate(("replay", "kv")):
+                    usage[name] += np.array([compute_shares[r] * self.mass[computing & (self.route == r) & (self.action == action)].sum() for r in (0, 1)]) * step
                 usage["peak"] = np.maximum(usage["peak"], ordinary + recovery + migration)
                 usage["service_peak"] = np.maximum(usage["service_peak"], ordinary + recovery)
             self.idle_work += [float(self.mass[computing & (self.route == r)] @ progress[computing & (self.route == r)]) for r in (0, 1)]
@@ -532,7 +561,7 @@ class PooledExecution:
         if np.all(self.state == 6) and np.all(self.backlog <= 1e-9) and np.all(self.resident_debt <= 1e-9) and self.service_ready_s is None:
             self.service_ready_s = float(self.now)
         if collect and until > self.now:
-            ordinary = self.fleet.gpus * self.serving_load()
+            ordinary = self.gpus * self.serving_load()
             usage["serving"] += ordinary * (until - self.now)
             usage["peak"], usage["service_peak"] = np.maximum(usage["peak"], ordinary), np.maximum(usage["service_peak"], ordinary)
         self.now = float(until)
@@ -545,11 +574,13 @@ class PooledExecution:
         pending_by_wave = self.mass * self.buffered * np.divide(self.backlog, self.backlog_total, out=np.zeros(self.n), where=self.backlog_total > 0)
         pending, gate_pending = float(pending_by_wave[~gate].sum()), float(pending_by_wave[gate].sum())
         gate_work = float(self.mass[gate] @ self.backlog[gate])
-        source_buffered, source_work = sum((self.mass[i] * np.array(_buffered(self.fleet, self.counts[i], self.quiesced[i], self.now, self.calibration, self.primitive_cache))
-                                           for i in np.flatnonzero((self.state >= 3) & (self.state < 6) & ~gate)), start=np.zeros(2))
+        source_buffered, source_work = sum((self.mass[i] * np.array(self.buffered_work(i, self.now))
+                                           for i in np.flatnonzero((self.state >= 2) & (self.state < 6) & ~gate)), start=np.zeros(2))
         source_buffered, source_work = source_buffered + gate_pending, source_work + gate_work
         transferred_buffered = float(self.mass @ self.buffered) - gate_pending
         return {"shed_fraction": float(fractions.sum()), "action_counts": numbers.tolist(),
+                "resident_latency_validated": False,
+                "service_recovered_by_deadline": self.service_ready_s is not None,
                 "action_fractions": fractions.tolist(), "completed_sessions": float(numbers.sum()),
                 "last_completion_s": max((e["completion_s"] for e in events), default=0.),
                 "service_ready_s": self.service_ready_s,
@@ -572,9 +603,9 @@ class PooledExecution:
                 "unfinished_batch_mass": float(self.mass[self.state != 6].sum()), "memory_blocked_batch_mass": float(self.mass[self.state == 7].sum()),
                 "trace_exhausted_waves": self.exhausted,
                 "dispatch_chunks": int(self.chunks), "dispatch_wave_count": self.n,
-                "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; " + ("capture current source state at each wave's first dispatch" if self.protected else "frozen initial snapshot while source continues"),
+                "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; " + ("capture current source state at each wave's first dispatch" if self.paced else "frozen initial snapshot while source continues"),
                 "execution_model": "independent_event_fluid_batch_mass_finite_trace",
-                "source_pacing": ("paced recorded trajectories with contextual request-duration proxy; gate arrivals use cycle-average fluid demand" if self.protected else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
+                "source_pacing": ("paced recorded trajectories with contextual request-duration proxy and declared arrival phases" if self.paced else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
                                   else "finite recorded turns at explicit equal cadence; terminal context retained"),
                 "compute_scope": ("shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion" if self.protected else "fractional batch processor sharing; dynamic measured load factor; no ingestion"),
                 "backlog_scope": ("ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears" if self.protected else "migration reduces ordinary service; spare capacity repays resident debt before source buffers; recovery utilization enters the measured migration load factor"),

@@ -41,7 +41,7 @@ def test_cache_sensitivity_preserves_context_rate_and_charges_new_private_tokens
     assert initial_work(fleet, counts, 1, 0, None, timing, calibration) == (25., 0.)
     assert initial_work(fleet, counts, 1, 0, np.array([203., 100.]), timing, calibration) == (75., 0.)
     assert catchup(fleet, counts, 1, 0, np.array([203., 100.]), np.array([False, False]), timing, calibration) == pytest.approx((50., .03))
-    assert catchup(fleet, counts, 0, 0, np.array([200., 100.]), np.array([False, False]), timing, calibration) == (200., 12.)
+    assert catchup(fleet, counts, 0, 0, np.array([200., 100.]), np.array([False, False]), timing, calibration) == (400., 32.)
     assert catchup(fleet, counts, 0, 0, fleet.context, np.array([True, False]), timing, calibration) == (200., 7.)
     assert catchup(fleet, counts, 1, 0, fleet.context, np.array([True, False]), timing, calibration) == (25., 0.)
     assert kv_transfer_bytes(fleet, [30, 40], calibration).tolist() == [0., 0.]
@@ -53,7 +53,7 @@ def test_cache_sensitivity_preserves_context_rate_and_charges_new_private_tokens
     fleet.metadata["replay_cached_tokens"] = [1e-12, 0.]
     assert catchup(fleet, counts, 0, 0, low, reset, timing, calibration)[1] == pytest.approx(baseline)
     fleet.metadata["replay_cached_tokens"] = [20., 0.]
-    assert catchup(fleet, counts, 0, 0, low, reset, timing, calibration)[1] == pytest.approx(.4)
+    assert catchup(fleet, counts, 0, 0, low, reset, timing, calibration)[1] == pytest.approx(2.)
 
 
 def test_reported_32k_wire_anchor_and_invalid_cache_assumptions():
@@ -72,6 +72,52 @@ def test_reported_32k_wire_anchor_and_invalid_cache_assumptions():
         table.fleet.metadata["kv_wire_scale"] = invalid
         with pytest.raises(ValueError, match="KV wire"):
             kv_transfer_bytes(table.fleet, [32768], calibration)
+
+
+def test_replay_catchup_charges_full_context_overhead_and_long_context_packing():
+    from pool_shed_execution import catchup
+    table, timing, calibration = case()
+    calibration.update(replay_context_tokens=[100, 200], replay_tps=[10, 5], replay_completion_s=2.)
+    fleet, counts, reset = table.fleet, np.array([8., 0.]), np.zeros(2, bool)
+    timing["kappa"] = .25
+    fleet.metadata["batch_context_limit"] = 150
+    short = catchup(fleet, counts, 0, 0, np.array([101., 100.]), reset, timing, calibration)
+    long = catchup(fleet, counts, 0, 0, np.array([191., 100.]), reset, timing, calibration, origin_context=np.array([190., 100.]))
+    assert short == pytest.approx((8 * 202, (8 * .25 + .75) * (101 / 9.95 + 2)))
+    assert long == pytest.approx((8 * 382, 8 * (191 / 5.45 + 2)))
+    assert catchup(fleet, counts, 0, 0, fleet.context, reset, timing, calibration) == (0., 0.)
+    with pytest.raises(ValueError, match="measured context support"):
+        catchup(fleet, counts, 0, 0, np.array([201., 100.]), reset, timing, calibration)
+
+
+def test_staggered_quiescence_counts_arrivals_before_the_batch_barrier():
+    from pool_shed_execution import source_snapshot
+    table, _, calibration = case()
+    table.fleet.metadata.update(paced_source=True, protect_resident=False, source_session_rps=1.,
+        sequence_cycle=True, source_phase_s=[.8, .1], turn_duration_s=[[.8], [.05]], turn_work_s=[[2.], [3.]],
+        turn_sequences=[[{"context": 100, "prompt": 1, "output": 0}]] * 2)
+    context, turns = source_snapshot(table.fleet, 0.)
+    assert context.tolist() == [101, 101] and turns.tolist() == [1, 1]
+    end, _, _, _ = _quiesce(table.fleet, np.ones(2), .3)
+    assert end == pytest.approx(1.)
+    assert _buffered(table.fleet, np.ones(2), .3, end, calibration, quiescing=True) == (1, 3)
+    assert _buffered(table.fleet, np.ones(2), .3, .9, calibration, quiescing=True) == (0, 0)
+    table.fleet.metadata["source_phase_s"] = [0., 1.]
+    with pytest.raises(ValueError, match="source phases"):
+        source_snapshot(table.fleet, 0.)
+
+
+def test_smaller_destinations_reduce_service_memory_and_endpoints_without_resizing_source():
+    from pool_shed_execution import PooledExecution, network_nodes
+    table, timing, calibration = case(gpus=4, load=.5, demand=(1.1, 0.))
+    table.fleet.gpus_per_node = 2
+    table.fleet.metadata["destination_gpus"] = 2
+    execution = PooledExecution(table, timing, calibration)
+    assert execution.gpus == 2 and table.fleet.gpus == 4
+    assert execution.free_memory == table.fleet.kv_capacity / 2
+    assert network_nodes(table.fleet).tolist() == [1, 1, 2]
+    with pytest.raises(ValueError, match="destination serving or memory capacity"):
+        execution.admit([1., 0.])
 
 
 def test_released_network_capacity_finishes_feasible_mixed_schedule():
@@ -591,7 +637,7 @@ def test_streamed_kv_completion_is_invariant_to_proportional_fleet_scale():
         table = forecast("measured_pack", 0, gpus, 8, .5, 5 * gpus / 8, 30)[0]
         result = execute_feedback(table, table, "kv_only", table.timing, central, chunks=64, resolution=.5)
         assert result["resident_debt_generated_work_s"] == [0, 0]
-        assert result["pending_backlog_reference_work_s"] <= 1e-8
+        assert result["buffered_requests"] == pytest.approx(result["completed_buffered_requests"] + result["pending_buffered_requests"])
         results.append(result["shed_fraction"])
     assert abs(results[0] - results[1]) <= 1e-8
 
