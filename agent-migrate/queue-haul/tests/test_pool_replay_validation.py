@@ -1,6 +1,8 @@
 from types import SimpleNamespace
+import json
 
 import numpy as np
+import pytest
 
 import pool_replay_validation as validation
 
@@ -52,3 +54,17 @@ def test_frozen_matrix_preserves_pairs_order_and_acquisition_limit():
     assert sum(budget[k] for k in ('unloaded_cap_s', 'scout_cap_s', 'main_cap_s',
                                   'followup_cap_s', 'startup_and_cleanup_reserve_s')) == 9000
     assert plan['simulator_verification']['evaluations'] == 20
+
+
+@pytest.mark.parametrize('vllm,returncode,exitcode', [('0.22.0', 0, 0), ('0.24.0', 0, 1), ('0.22.0', 1, 1)])
+def test_preflight_checks_available_reference_gpu_without_claiming_acquisition(tmp_path, monkeypatch, vllm, returncode, exitcode):
+    validation.write(tmp_path/'plan.json', {'input_hashes': {}, 'stack': {'runtime_versions': {'native': ['0.22.0', '0.5.1']}}})
+    (tmp_path/'plan.sha256').write_text(validation.profiler.file_hash(tmp_path/'plan.json'))
+    monkeypatch.setattr(validation.importlib.metadata, 'version', lambda name: vllm if name == 'vllm' else '0.5.1')
+    monkeypatch.setattr(validation, 'command', lambda argv: {'returncode': returncode,
+        'stdout': 'index, name, uuid, memory.total [MiB]\n0, NVIDIA A100 80GB PCIe, GPU-test, 81920 MiB\n'})
+    with pytest.raises(SystemExit) as exc:
+        validation.preflight(tmp_path)
+    assert exc.value.code == exitcode
+    result = json.loads((tmp_path/'preflight.jsonl').read_text())
+    assert not result['campaign_ready'] and result['measurements_launched_by_preflight'] == 0

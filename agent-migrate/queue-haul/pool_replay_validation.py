@@ -6,6 +6,7 @@ This preparation adapter does not launch serving engines or measurement sweeps.
 from __future__ import annotations
 
 import argparse
+import csv
 import importlib.metadata
 import json
 import platform
@@ -169,20 +170,24 @@ def preflight(out):
     versions = {name: importlib.metadata.version(name) for name in ('vllm', 'lmcache')}
     gpu = command(['nvidia-smi', '--query-gpu=index,name,uuid,memory.total', '--format=csv'])
     expected = plan['stack']['runtime_versions']['native']
+    a100 = gpu['returncode'] == 0 and any('A100' in row[1] and float(row[3].split()[0]) >= 80000
+        for row in list(csv.reader(gpu['stdout'].splitlines()))[1:])
+    ready = a100 and list(versions.values()) == expected and not changed
     report = {'utc': datetime.now(timezone.utc).isoformat(), 'python': sys.version,
               'executable': sys.executable, 'platform': platform.platform(), 'gpu_query': gpu,
               'versions': versions, 'expected_native_versions': expected, 'changed_inputs': changed,
               'runtime_versions_match': list(versions.values()) == expected,
-              'hardware_measurements': 0, 'campaign_ready': False,
+              'measurements_launched_by_preflight': 0, 'campaign_ready': False,
+              'static_prerequisites_pass': ready,
               'acquisition_status': 'not_started',
-              'remaining_prerequisites': ['trusted accessible A100 endpoint', 'verified reference runtime and scheduler',
-                  'retained-history rendering and causal arrival adapter', 'known cold/shared-prefix telemetry check',
-                  'measurement execution adapter with global acquisition deadline'],
+              'remaining_runtime_checks': ['actual serving configuration and GPU identity',
+                  'known cold/shared-prefix telemetry and exact token-event coverage',
+                  'original global acquisition deadline'],
               'launch_command': [sys.executable, *sys.argv]}
     with (out / 'preflight.jsonl').open('a') as handle:
         handle.write(json.dumps(report) + '\n')
     print(json.dumps(report, indent=2))
-    raise SystemExit(1)  # Preparation alone never establishes acquisition readiness.
+    raise SystemExit(0 if ready else 1)
 
 
 if __name__ == '__main__':
