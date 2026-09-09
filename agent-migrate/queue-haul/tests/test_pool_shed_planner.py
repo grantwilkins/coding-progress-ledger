@@ -631,3 +631,16 @@ def test_both_native_algorithms_nonoptimal_still_fail(monkeypatch):
         campaign._bounded_lp(-np.ones(1), np.ones((1, 1)), np.ones(1), np.ones(1))
     assert len(attempts) == 2
     assert [item.getOptionValue('solver')[1] for item in attempts] == ['simplex', 'ipm']
+
+
+@pytest.mark.parametrize('scale', [1e-6, 1., 1e6])
+@pytest.mark.parametrize('relative_saving,expected', [(0., 0), (1e-8, 1)])
+def test_greedy_secondary_ties_keep_earliest_start_across_roundoff_and_scaling(scale, relative_saving, expected):
+    from pool_shed_planner import _choose
+
+    first = 11.097339422110858
+    second = np.nextafter(first, -np.inf) if relative_saving == 0 else first * (1 - relative_saving)
+    chosen = _choose(np.ones((1, 2)) / scale, np.ones(1), np.full(2, 7.25e-6 / scale),
+                     np.array([first, second]) / scale, SimpleNamespace(gpus=1), True)
+    assert chosen[expected] == pytest.approx(scale)
+    assert chosen[1 - expected] == 0.

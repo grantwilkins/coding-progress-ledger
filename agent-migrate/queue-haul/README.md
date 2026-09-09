@@ -175,7 +175,7 @@ execution on one GPU remain imperfect transfers. The fixture also lacks an
 explicit 135-token verification prefix. These checks assess recorded actions,
 not the new planner's decisions, and do not establish universal ranking fidelity.
 
-The supplemental [2 MW comparison](outputs/a100-pooled-service/scale-diagnostic.json)
+The supplemental [2 MW comparison](outputs/a100-pooled-service-pre-stable-ties/scale-diagnostic.json)
 scales all three GPU fleets together. At 50% destination load and a 300 s
 deadline, QH completes coding KV handoffs for 1.41% of the original source at
 20 MW with a 1000 Gbps WAN budget, versus 11.80% at 2 MW with the same budget.
@@ -206,13 +206,13 @@ execution lineage separately from the current source identity. Bands show empiri
 p05–p95 sensitivity across execution draws, snapshots, and measured power curves,
 not coverage of unmeasured transfer error or formal SLO compliance.
 
-The resumed campaign retains 3,012 successful executions under their original
-source identity through a checked inheritance manifest. All campaign executions
-use the local Mac: a [Linux comparison](outputs/a100-pooled-service-validation/solver-failure-3104/current-platform-comparison.json)
-found a 1.045-point greedy difference on one of two checked cases, despite
-matching initial feedback and agreement for the other four policies. Its
-near-tied temporal choices are platform-sensitive; this failed comparison is
-retained rather than treating the two platforms as interchangeable.
+The numerical and scale diagnostics above precede the stable greedy secondary
+tie-breaker. Their 3,124 completed campaign checkpoints are archived intact in
+`outputs/a100-pooled-service-pre-stable-ties`; the corrected full campaign starts
+fresh. Greedy treats primary and secondary scores within the same relative
+1e-12 tolerance as tied and then selects the earliest candidate. This prevents
+a one-ULP work-cost difference from postponing an otherwise equivalent current
+admission. The failed Linux comparison is retained as regression evidence.
 
 `outputs/a100-pooled-feedback` archives the v7 campaign, which permitted
 resident displacement and used the old service/power normalization. Its results

@@ -205,7 +205,8 @@ def _choose(matrix, capacity, gains, debt, fleet, greedy):
         costs = np.max(normalized / np.maximum(remaining[:, None], 1e-30), axis=0)
         scores = np.where(feasible, gains / np.maximum(costs, 1e-30), -np.inf)
         tied = feasible & np.isclose(scores, scores.max(), rtol=1e-12, atol=0.)
-        j = int(np.argmin(np.where(tied, debt / np.maximum(gains, 1e-30), np.inf)))
+        secondary = np.where(tied, debt / np.maximum(gains, 1e-30), np.inf)
+        j = int(np.flatnonzero(tied & np.isclose(secondary, secondary.min(), rtol=1e-12, atol=0.))[0])
         used = normalized[:, j] > 0
         take = np.min(remaining[used] / normalized[used, j])
         chosen[j] += take
