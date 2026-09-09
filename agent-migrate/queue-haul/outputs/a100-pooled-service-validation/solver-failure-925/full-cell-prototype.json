@@ -1,0 +1,98 @@
+{
+  "scope": "Read-only global scale_strategy0 prototype; unchanged model and tolerances",
+  "source_identity": "2b697907b19f3d7d18c86b7c039953eb23cc6afa98a39f221e0b9f6331ac1ff4",
+  "results": [
+    {
+      "index": 925,
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.75,
+        0,
+        100,
+        120
+      ],
+      "elapsed_s": 10.782836499623954,
+      "results": {
+        "queue_haul": {
+          "shed_fraction": 0.6249821490931275,
+          "admitted_shed_fraction": 0.6249821490931244,
+          "max_relative_residual": 1.0801146343919717e-15,
+          "planning_steps": 42
+        },
+        "greedy": {
+          "shed_fraction": 0.6244092021267607,
+          "admitted_shed_fraction": 0.6244092021267623,
+          "max_relative_residual": 2.0643286206455799e-16,
+          "planning_steps": 15
+        },
+        "kv_only": {
+          "shed_fraction": 0.011696131927481705,
+          "admitted_shed_fraction": 0.011904294833494058,
+          "max_relative_residual": 2.3534780948093497e-16,
+          "planning_steps": 16
+        },
+        "replay_only": {
+          "shed_fraction": 0.6249861622038066,
+          "admitted_shed_fraction": 0.6249861622038082,
+          "max_relative_residual": 5.087237202485674e-12,
+          "planning_steps": 15
+        },
+        "isolated_fastest": {
+          "shed_fraction": 0.6249861622038066,
+          "admitted_shed_fraction": 0.6249861622038082,
+          "max_relative_residual": 5.087237202485674e-12,
+          "planning_steps": 15
+        }
+      }
+    },
+    {
+      "index": 854,
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.5,
+        8,
+        "reference",
+        60
+      ],
+      "elapsed_s": 19.666786208748817,
+      "results": {
+        "queue_haul": {
+          "shed_fraction": 0.9999894449056032,
+          "admitted_shed_fraction": 0.9999999989999653,
+          "max_relative_residual": 2.113829790619277e-11,
+          "planning_steps": 15
+        },
+        "greedy": {
+          "shed_fraction": 0.9999999999999998,
+          "admitted_shed_fraction": 0.9999999999999998,
+          "max_relative_residual": 2.0230775136549453e-16,
+          "planning_steps": 13
+        },
+        "kv_only": {
+          "shed_fraction": 0.0005947629153242501,
+          "admitted_shed_fraction": 0.0006176315664806703,
+          "max_relative_residual": 2.569664965335244e-16,
+          "planning_steps": 14
+        },
+        "replay_only": {
+          "shed_fraction": 0.9999999989939865,
+          "admitted_shed_fraction": 0.9999999989939863,
+          "max_relative_residual": 7.099892397095418e-16,
+          "planning_steps": 13
+        },
+        "isolated_fastest": {
+          "shed_fraction": 0.9999999989939865,
+          "admitted_shed_fraction": 0.9999999989939863,
+          "max_relative_residual": 7.099892397095418e-16,
+          "planning_steps": 13
+        }
+      }
+    }
+  ]
+}

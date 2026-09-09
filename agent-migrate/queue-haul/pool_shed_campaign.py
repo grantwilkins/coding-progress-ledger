@@ -381,7 +381,7 @@ def _bounded_lp(cost, matrix, rhs, upper):
     model.a_matrix_.format_ = highspy.MatrixFormat.kRowwise
     model.a_matrix_.start_, model.a_matrix_.index_, model.a_matrix_.value_ = matrix.indptr, matrix.indices, matrix.data
     for key, value in {"output_flag": False, "threads": 1, "solver": "simplex", "presolve": "on",
-                       "simplex_scale_strategy": 2, "small_matrix_value": 1e-12,
+                       "simplex_scale_strategy": 0, "small_matrix_value": 1e-12,
                        "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9}.items():
         if solver.setOptionValue(key, value) != highspy.HighsStatus.kOk:
             raise RuntimeError(f"HiGHS rejected option {key}")

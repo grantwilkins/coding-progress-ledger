@@ -64,6 +64,27 @@ def test_native_scaling_preserves_recorded_coding_source_capacity():
         assert info['max_relative_residual'] <= 1e-8
 
 
+def test_captured_primary_lp_matches_feasible_dual_certificate():
+    from pathlib import Path
+    from pool_shed_campaign import _bounded_lp
+
+    # Cell 925, QH at 86.583414979 s: internal rescaling produced an invalid x=-3.
+    data = np.load(Path(__file__).parent / 'fixtures/pool_shed_primary925.npz')
+    cost, matrix, rhs, upper = (data[k] for k in ('cost', 'matrix', 'rhs', 'upper'))
+    chosen = _bounded_lp(cost, matrix, rhs, upper)
+    row_dual, col_dual = data['row_dual'], data['col_dual']
+    assert np.max(row_dual) <= 0
+    assert matrix.T @ row_dual + col_dual == pytest.approx(cost, abs=1e-12)
+    dual_bound = rhs @ row_dual + upper @ np.minimum(col_dual, 0)
+    assert dual_bound == pytest.approx(-1.0000519451158267, abs=1e-12)
+    assert cost @ chosen == pytest.approx(dual_bound, abs=1e-10)
+    assert chosen.min() >= -1e-10 and np.max(chosen - upper) <= 1e-10
+    assert np.max(matrix @ chosen - rhs) <= 1e-10
+    replicas = chosen * data['gpus'] / data['column_scale']
+    residual = (data['original_matrix'][:, data['ids']] @ replicas - data['capacities']) / np.maximum(data['capacities'], 1)
+    assert residual.max() <= 1e-8
+
+
 def case(deadline=20.):
     fleet = SimpleNamespace(count=np.array([10.]), context=np.array([100.]), demand=np.array([.05]),
         memory_tokens=np.array([100.]), baseline_kv=0., kv_capacity=1e6, gpus=10, nodes=2,
