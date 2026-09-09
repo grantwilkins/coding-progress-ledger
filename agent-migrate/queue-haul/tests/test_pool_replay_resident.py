@@ -1,5 +1,5 @@
 import pytest
-from pool_replay_resident import Trajectory, arrival_trace
+from pool_replay_resident import Trajectory, arrival_trace, summarize
 
 
 def test_trajectory_retains_output_inside_next_recorded_append():
@@ -26,3 +26,13 @@ def test_dependency_failure_hard_fails_and_burst_preserves_offered_count():
     assert len(regular)==len(burst)
     for session in (0,1):
         assert [r['turn'] for r in burst if r['session']==session]==list(range(sum(r['session']==session for r in burst)))
+
+
+def test_window_retains_late_work_and_counts_completions_by_completion_time():
+    row={'scheduled_ns':59_000_000_000,'end_ns':61_000_000_000,'done':True,'status':200,
+         'exact_token_timestamps':False,'send_lateness_s':0,'prompt_tokens':100,'output_tokens':1}
+    trace=[{'offset_s':59}]
+    before=summarize([row],trace,0,(0,60),[])
+    after=summarize([row],trace,0,(60,90),[])
+    assert before['unfinished_or_failed_requests']==1 and before['completed_rps']==0
+    assert after['completions_in_window']==1 and after['completed_rps']==1/30

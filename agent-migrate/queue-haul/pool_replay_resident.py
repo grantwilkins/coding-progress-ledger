@@ -69,7 +69,9 @@ def arrival_trace(rate, counts, seed, duration, start=0., burst=False):
 
 def summarize(rows, scheduled, epoch, window, metrics):
     eligible = [r for r in rows if window[0] <= (r['scheduled_ns']-epoch)/1e9 < window[1]]
-    done = [r for r in eligible if r.get('done') and r.get('status') == 200]
+    completed = [r for r in rows if r.get('done') and r.get('status') == 200]
+    done = [r for r in eligible if r in completed and r['end_ns'] <= epoch+window[1]*1e9]
+    completions = sum(window[0] <= (r['end_ns']-epoch)/1e9 < window[1] for r in completed)
     exact = [r for r in done if r.get('exact_token_timestamps')]
     ttft = [(r['first_ns']-r['scheduled_ns'])/1e9 for r in exact if r['first_ns'] is not None]
     tpot = [r['mean_tpot_s'] for r in exact if r['mean_tpot_s'] is not None]
@@ -81,7 +83,8 @@ def summarize(rows, scheduled, epoch, window, metrics):
     ttft90, tpot90 = percentile(ttft), percentile(tpot)
     return {'offered_requests':offered,'completed_requests':len(done),'exact_requests':len(exact),
         'tpot_requests':len(tpot),'unfinished_or_failed_requests':offered-len(done),
-        'offered_rps':offered/(window[1]-window[0]), 'completed_rps':len(done)/(window[1]-window[0]),
+        'offered_rps':offered/(window[1]-window[0]), 'completed_rps':completions/(window[1]-window[0]),
+        'completions_in_window':completions, 'arrival_cohort_completion_cutoff_s':window[1],
         'exact_timing_coverage':coverage, 'p90_arrival_ttft_s':ttft90,'p90_request_mean_tpot_s':tpot90,
         'p90_client_queue_s':percentile([r['send_lateness_s'] for r in done]),
         'queue_growth_requests':growth,'max_engine_waiting':max(queue,default=None),
