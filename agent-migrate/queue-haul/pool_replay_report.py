@@ -91,6 +91,7 @@ def unloaded(out, raw, calibration):
         'timing_scope':'Elapsed client request interval includes validation/decode; server queue/prefill/decode sums are engine histogram deltas, not additive GPU work or per-request attribution.',
         'missing_phase_evidence':'Trial 08 seed 7101 aborted before its cold-updated batch; raw initial/catch-up requests survive but phase counter snapshots do not.',
         'state_validation':'HTTP completion and exact token timing do not establish a valid response; expected state code is checked independently.',
+        'probe_format_deviation':'Initial trials used 10 lowercase hex characters instead of the reference 12 uppercase state code; full-message probe construction and 512-token generation settings were retained. Actual output lengths are recorded; do not infer a reference completion-overhead correction.',
         'wire_scope':'No paired KV transfer measured. 800000000 decimal effective-wire bytes per32768 tokens remains an assumption, separate from 1610612736 native serialized bytes and resident KV footprint.'})
     return rows
 

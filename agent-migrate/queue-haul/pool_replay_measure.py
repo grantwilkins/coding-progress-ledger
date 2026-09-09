@@ -67,7 +67,7 @@ class Acquisition:
         return tokens
 
     def history(self, label, target):
-        row = {'id': label, 'state_code': hashlib.sha256(label.encode()).hexdigest()[:10]}
+        row = {'id': label, 'state_code': hashlib.sha256(label.encode()).hexdigest()[:12].upper()}
         return p.exact_calibration_messages(self.cfg, row, target), row['state_code']
 
     def append(self, messages, code, count):
