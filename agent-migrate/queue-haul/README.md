@@ -157,6 +157,32 @@ contract, not a general TTFT/TPOT guarantee. Transferring it to other mixtures
 and to shared migration occupancy is explicit. Contexts outside the serving
 curves use the slowest measured phase rate and are flagged as extrapolated.
 
+The [2026-09-09 bounded validation attempt](outputs/a100-replay-validation-20260909T185553Z/report.json)
+stopped before hardware acquisition: the local NVIDIA driver is unavailable,
+the installed vLLM is 0.24.0 rather than the required 0.22.0, and no trusted
+remote A100 endpoint was accessible. **Zero new GPU measurements were collected.**
+The [frozen plan](outputs/a100-replay-validation-20260909T185553Z/plan.json)
+records seeds 7101/7102, the 150-minute acquisition ceiling, exact sampled
+trajectories, exclusions, input hashes, and 0.221300/0.188178 RPS/GPU scout
+starts for coding/coding_long. These are starting rates, not validated capacity.
+`pool_replay_validation.py prepare --out NEW_DIRECTORY` freezes these inputs;
+its `preflight` command records prerequisites and exits unsuccessfully.
+This adapter does not execute measurements: retained-history rendering,
+causal arrivals and shared-service episode execution still require implementation
+and verification on the reference stack.
+
+The migration chat path now requests token IDs without changing its 512-token
+probe or generation settings, timestamps reasoning output, and retains raw
+response events. Missing cache counts remain unknown; derived catch-up processed
+counts survive CSV reduction. Hardware timing coverage and cache integrity still
+require measurement. [Instrumentation tests](outputs/a100-replay-validation-20260909T185553Z/instrumentation-tests.log)
+have 261 passes and one pre-existing queue-drift failure, reproduced on the
+unmodified checkout. [Focused simulator tests](outputs/a100-replay-validation-20260909T185553Z/focused-simulator-tests.log)
+have 181 passes with the three specified exclusions. Archived timing errors and
+nominal replay/catch-up predictions in that directory are explicitly unvalidated
+by this attempt. No simulator coefficients changed, and the twenty policy evaluations
+remain blocked on a measured resident operating point.
+
 Source load is 0.8; destination loads are 0.25, 0.50, 0.75, 0.90, and 0.95.
 At equal source/destination sizes, the standing-service shed ceiling
 is `min(1, 2 * (1 - destination_load) / 0.8)`: 100% at 50% destination load,

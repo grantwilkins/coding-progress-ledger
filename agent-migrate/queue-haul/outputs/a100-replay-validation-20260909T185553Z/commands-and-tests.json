@@ -1,0 +1,120 @@
+{
+  "environment": {
+    "UV_CACHE_DIR": "/tmp/qh-validation-uv-cache"
+  },
+  "cwd": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul",
+  "commands": [
+    {
+      "name": "prepare",
+      "argv": [
+        "/datadrive/queue-haul-tools/bin/uv",
+        "run",
+        "--no-project",
+        "--python",
+        "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+        "pool_replay_validation.py",
+        "prepare",
+        "--out",
+        "outputs/a100-replay-validation-20260909T185553Z"
+      ],
+      "exitcode": 0
+    },
+    {
+      "name": "preflight",
+      "argv": [
+        "/datadrive/queue-haul-tools/bin/uv",
+        "run",
+        "--no-project",
+        "--python",
+        "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+        "pool_replay_validation.py",
+        "preflight",
+        "--out",
+        "outputs/a100-replay-validation-20260909T185553Z"
+      ],
+      "exitcode": 1
+    },
+    {
+      "name": "analyze",
+      "argv": [
+        "/datadrive/queue-haul-tools/bin/uv",
+        "run",
+        "--no-project",
+        "--python",
+        "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+        "outputs/a100-replay-validation-20260909T185553Z/analyze.py"
+      ],
+      "exitcode": 0
+    },
+    {
+      "name": "instrumentation-tests",
+      "argv": [
+        "/datadrive/queue-haul-tools/bin/uv",
+        "run",
+        "--no-project",
+        "--python",
+        "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+        "pytest",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/qh-validation-pytest",
+        "tests/test_migration.py",
+        "tests/test_migration_profiler.py",
+        "tests/test_destination_runner.py",
+        "tests/test_migration_testbed.py",
+        "tests/test_service_headroom_campaign.py",
+        "tests/test_service_admission_transition_campaign.py",
+        "tests/test_migration_profile_fit.py",
+        "tests/test_destination_evaluation.py"
+      ],
+      "exitcode": 1,
+      "passed": 261,
+      "failed": 1,
+      "log": "instrumentation-tests.log"
+    },
+    {
+      "name": "focused-simulator-tests",
+      "argv": [
+        "/datadrive/queue-haul-tools/bin/uv",
+        "run",
+        "--no-project",
+        "--python",
+        "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+        "pytest",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/qh-validation-pytest",
+        "tests/test_pool_shed.py",
+        "tests/test_pool_shed_calibration.py",
+        "tests/test_pool_shed_execution.py",
+        "tests/test_pool_shed_planner.py",
+        "tests/test_loaded_service_model.py",
+        "-k",
+        "not independent_regional_fidelity and not campaign_reduction and not execution_draws"
+      ],
+      "exitcode": 0,
+      "passed": 181,
+      "failed": 0,
+      "log": "focused-simulator-tests.log"
+    },
+    {
+      "name": "plan-tests",
+      "argv": [
+        "/datadrive/queue-haul-tools/bin/uv",
+        "run",
+        "--no-project",
+        "--python",
+        "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+        "pytest",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/qh-validation-pytest",
+        "tests/test_pool_replay_validation.py"
+      ],
+      "exitcode": 0,
+      "passed": 2,
+      "failed": 0,
+      "log": "plan-tests.log"
+    }
+  ]
+}
