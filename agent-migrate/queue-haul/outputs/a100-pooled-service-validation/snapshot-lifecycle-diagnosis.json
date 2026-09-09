@@ -1,0 +1,79 @@
+{
+  "schema": "queue-haul-snapshot-lifecycle-diagnosis-v1",
+  "before_source_commit": "f9c9e2a11e640bf9b3f54169bf63c2f450363cc5",
+  "before_source_sha256": {
+    "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14",
+    "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+    "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+    "migration.py": "b03537904c0a0cbc845bdd99e2d3ed29e17b0df3f71f00b4746549b7c2437681",
+    "migration_profiler.py": "218230c33b91c71936d0a50c9b2e61f83006639e010fcaf5d251e6c5e7f24c66",
+    "migration_testbed.py": "777b24b0a943c1f85b14c3fbc7a5c4648e09c58a40fd6bfa1a3773c98238c9f4",
+    "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+  },
+  "evidence": [
+    {
+      "path": "migration.py",
+      "line": 132,
+      "claim": "Live controller snapshots when the worker/order slot begins, after queuing."
+    },
+    {
+      "path": "migration_profiler.py",
+      "line": 905,
+      "claim": "Snapshot reads stored messages and generation; activity publishes new state only after completed request at956\u2013962."
+    },
+    {
+      "path": "migration_profiler.py",
+      "line": 1096,
+      "claim": "Native KV migration requests the snapshot token blocks and checks cache availability/hits."
+    },
+    {
+      "path": "migration_testbed.py",
+      "line": 520,
+      "claim": "LMCache uses LRU; this is not evidence of hour-long pinned stale KV retention."
+    },
+    {
+      "path": "loaded_service_model.py",
+      "line": 329,
+      "claim": "Historical reproduction uses empty source trajectories; it does not test repeated reset lifecycle."
+    },
+    {
+      "path": "pool_shed_campaign.py",
+      "line": 587,
+      "claim": "The previous plan explicitly declared frozen initial snapshots while source sessions continue."
+    }
+  ],
+  "bookkeeping": {
+    "scope": "Static comparison at the same quiescent source contexts, not an end-to-end timing or same-duration migration experiment. Entire coding snapshot0 population of66666GPUs,8sessions/GPU.",
+    "frozen_bytes_formula": "sum(count * (initial_sealed_bytes + max(current_sealed_bytes - where(reset_since_study_start,0,initial_sealed_bytes),0)))",
+    "current_bytes_formula": "sum(count * current_sealed_bytes)",
+    "rows": [
+      {
+        "time_s": 30,
+        "reset_fraction": 0.041503540035400355,
+        "frozen_tb": 408.464237002752,
+        "current_tb": 380.054915776512,
+        "ratio": 1.0747505690544623
+      },
+      {
+        "time_s": 600,
+        "reset_fraction": 0.5834664596645966,
+        "frozen_tb": 594.703011545088,
+        "current_tb": 377.600404881408,
+        "ratio": 1.5749533206455772
+      },
+      {
+        "time_s": 2400,
+        "reset_fraction": 0.9584720847208472,
+        "frozen_tb": 729.678071463936,
+        "current_tb": 363.1274262528,
+        "ratio": 2.0094270460197983
+      }
+    ]
+  },
+  "interpretation": [
+    "After a reset, old replay also performs its initial rebuild plus a full current-context catch-up; the stale contract does not omit that giant replay rebuild.",
+    "Frozen KV can add substantial stale payload in a WAN-limited run. Timing-dependent quiescence/reset changes and nonlinear replay packing prevent a universal end-to-end bias bound.",
+    "Corrected workers capture the last-completed current source state when they enter the first transfer window; future candidate starts use the same helper, and catch-up checks resets relative to the captured origin."
+  ]
+}

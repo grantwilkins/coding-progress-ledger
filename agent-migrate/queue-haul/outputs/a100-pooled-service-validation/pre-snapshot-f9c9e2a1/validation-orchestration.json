@@ -1,0 +1,121 @@
+{
+  "scope": "Six spawned processes execute the original resolution_check function with only its cases tuple restricted to one original case. All original formulas, settings, policies and gates retained. Other validate checks run unchanged in the parent.",
+  "workers": 6,
+  "wall_seconds": 421.3852696251124,
+  "summed_worker_process_cpu_seconds": 1636.563854,
+  "summed_worker_wall_seconds": 1653.0348482066765,
+  "runs": [
+    {
+      "case": [
+        "measured_pack",
+        0.5,
+        1000,
+        30
+      ],
+      "wall_seconds": 28.882102166302502,
+      "process_cpu_seconds": 27.410436,
+      "source_sha256": {
+        "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+        "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14",
+        "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+        "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+        "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+      }
+    },
+    {
+      "case": [
+        "coding",
+        0.5,
+        1000,
+        60
+      ],
+      "wall_seconds": 342.3248930834234,
+      "process_cpu_seconds": 339.33995200000004,
+      "source_sha256": {
+        "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+        "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14",
+        "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+        "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+        "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+      }
+    },
+    {
+      "case": [
+        "coding",
+        0.95,
+        40,
+        3600
+      ],
+      "wall_seconds": 327.1066120415926,
+      "process_cpu_seconds": 323.420343,
+      "source_sha256": {
+        "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+        "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14",
+        "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+        "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+        "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+      }
+    },
+    {
+      "case": [
+        "coding",
+        0.5,
+        1000,
+        3600
+      ],
+      "wall_seconds": 421.0676149157807,
+      "process_cpu_seconds": 417.60171599999995,
+      "source_sha256": {
+        "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+        "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14",
+        "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+        "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+        "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+      }
+    },
+    {
+      "case": [
+        "coding_long",
+        0.5,
+        1000,
+        30
+      ],
+      "wall_seconds": 393.5882206251845,
+      "process_cpu_seconds": 390.594296,
+      "source_sha256": {
+        "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+        "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14",
+        "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+        "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+        "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+      }
+    },
+    {
+      "case": [
+        "coding_long",
+        0.95,
+        1000,
+        300
+      ],
+      "wall_seconds": 140.06540537439287,
+      "process_cpu_seconds": 138.197111,
+      "source_sha256": {
+        "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+        "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14",
+        "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+        "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+        "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+      }
+    }
+  ],
+  "rows": 30,
+  "comparisons": 120,
+  "coverage_pass": true,
+  "numerical_library_threads": {
+    "OPENBLAS_NUM_THREADS": 1,
+    "OMP_NUM_THREADS": 1,
+    "MKL_NUM_THREADS": 1,
+    "VECLIB_MAXIMUM_THREADS": 1,
+    "NUMEXPR_NUM_THREADS": 1
+  }
+}
