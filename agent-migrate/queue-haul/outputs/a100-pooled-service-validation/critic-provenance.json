@@ -1,0 +1,32 @@
+{
+  "wall_seconds": 614.6994482083246,
+  "before": {
+    "pool_shed_campaign.py": "8f06e7e30750ea7442c82786dec9b161b027a0693312bb81a392bf5d3cf103dc",
+    "pool_shed_planner.py": "a4c69fc4e586c1d3ea94189f277eb5ecfd5ddc3142127ca033244ac47ed7973a",
+    "pool_shed_execution.py": "82ad197e811377497107105aa37e3ed274cf646255a65dae3ef70b7176aa41bc",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+    "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+  },
+  "after": {
+    "pool_shed_campaign.py": "8f06e7e30750ea7442c82786dec9b161b027a0693312bb81a392bf5d3cf103dc",
+    "pool_shed_planner.py": "a4c69fc4e586c1d3ea94189f277eb5ecfd5ddc3142127ca033244ac47ed7973a",
+    "pool_shed_execution.py": "82ad197e811377497107105aa37e3ed274cf646255a65dae3ef70b7176aa41bc",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+    "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+  },
+  "source_hashes_verified": 220,
+  "solver_version": "1.14.0",
+  "artifacts": "outputs/a100-pooled-service-validation",
+  "orchestration": "validation-orchestration.json",
+  "wide_dispatch_artifact": "dispatch-wide-final.json",
+  "visual_checks_pass": true,
+  "visual_artifacts": [
+    "optimal-kv-ranges.png",
+    "scale-comparison.png"
+  ],
+  "wide_probe_current_source_verified": true,
+  "focused_test_artifact": "focused-tests.json",
+  "focused_test_source_hashes_verified": 227,
+  "solver_failure_925_trajectory_artifact": "solver-925-final-trajectory.json",
+  "solver_failure_925_current_source_verified": true
+}
