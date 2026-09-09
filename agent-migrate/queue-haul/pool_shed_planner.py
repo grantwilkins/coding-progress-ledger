@@ -46,7 +46,7 @@ def recovery_prefix(engine, edges, events=None):
 
 def phase_profile(table, counts, action, route, start, edges, loads, timing, calibration,
                   state=0, quiesced=0., transferred=0., completed_work=0., elapsed=0., rate=None, sharing=1., buffer_remaining=None,
-                  compute_after=0., recovery_sharing=1., primitive_cache=None):
+                  compute_after=0., recovery_sharing=1., primitive_cache=None, causal_network=False):
     """One central-calibration batch; phase dependencies and source resets remain causal."""
     fleet, bins = table.fleet, len(edges) - 1
     if fleet.metadata.get("protect_resident") and any((state, transferred, completed_work, elapsed)):
@@ -63,12 +63,14 @@ def phase_profile(table, counts, action, route, start, edges, loads, timing, cal
     def phase(work, compute=False):
         nonlocal now
         if not compute:
+            if causal_network and work > 0 and now < edges[-1]:
+                now = max(now, float(edges[np.searchsorted(edges, now - 1e-10, side="left")]))
             end = now + max(work, 0.) / endpoint
             sent = _overlap(edges, now, end) * endpoint
             profile["network"] += sent
             if action:
                 profile["application"] += sent
-            now = end
+            now = max(end, float(edges[np.searchsorted(edges, end - 1e-10, side="left")])) if causal_network and work > 0 and end <= edges[-1] else end
             return
         left = max(work, 0.)
         if left:
@@ -337,7 +339,7 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
                 if key not in profiles:
                     profiles[key] = phase_profile(table, counts, action, table.route[j], edges[k], edges, loads, timing, calibration,
                         compute_after=compute_after[table.route[j]],
-                        sharing=max(1e-30, fixed_sharing[table.route[j]]) if protected else 1.,
+                        sharing=max(1e-30, fixed_sharing[table.route[j]]) if protected else 1., causal_network=protected,
                         recovery_sharing=fixed_sharing[table.route[j]] if protected else 1., primitive_cache=primitive_cache)
                 profile = profiles[key]
                 finish[v] = max(finish[v], profile["finish"])

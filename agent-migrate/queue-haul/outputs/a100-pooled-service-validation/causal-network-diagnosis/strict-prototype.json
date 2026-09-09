@@ -1,0 +1,153 @@
+{
+  "scope": "Read-only candidate network dependency rounding prototype",
+  "prototype_sha256": "0edb2d1761a8c92aadadf29e88dd220ca9d89c7dfd69ff91176dacce32df046c",
+  "rows": [
+    {
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.5,
+        0,
+        40,
+        10
+      ],
+      "elapsed_s": 13.591796999797225,
+      "results": {
+        "queue_haul": {
+          "shed_fraction": 0.895305118761043,
+          "admitted_shed_fraction": 0.9152607136905649,
+          "max_relative_residual": 9.266656267224298e-16,
+          "planning_steps": 8
+        },
+        "greedy": {
+          "shed_fraction": 0.9012366702327531,
+          "admitted_shed_fraction": 0.9012366702327541,
+          "max_relative_residual": 1.619411191204225e-16,
+          "planning_steps": 8
+        },
+        "kv_only": {
+          "shed_fraction": 0.0002841095407488032,
+          "admitted_shed_fraction": 0.0002841095407488027,
+          "max_relative_residual": 2.830097880785115e-16,
+          "planning_steps": 8
+        },
+        "replay_only": {
+          "shed_fraction": 0.8954764633876205,
+          "admitted_shed_fraction": 0.915425186224017,
+          "max_relative_residual": 9.416440510151029e-15,
+          "planning_steps": 8
+        },
+        "isolated_fastest": {
+          "shed_fraction": 0.8954764633876205,
+          "admitted_shed_fraction": 0.915425186224017,
+          "max_relative_residual": 9.416440510151029e-15,
+          "planning_steps": 8
+        }
+      }
+    },
+    {
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.5,
+        3,
+        40,
+        10
+      ],
+      "elapsed_s": 12.103461000137031,
+      "results": {
+        "queue_haul": {
+          "shed_fraction": 0.8354555245361228,
+          "admitted_shed_fraction": 0.9152607390570194,
+          "max_relative_residual": 9.270582834995507e-16,
+          "planning_steps": 8
+        },
+        "greedy": {
+          "shed_fraction": 0.9011217879639213,
+          "admitted_shed_fraction": 0.9011217879639223,
+          "max_relative_residual": 1.619411191204225e-16,
+          "planning_steps": 8
+        },
+        "kv_only": {
+          "shed_fraction": 0.0002840532218866805,
+          "admitted_shed_fraction": 0.00028405322188668013,
+          "max_relative_residual": 2.830097880785115e-16,
+          "planning_steps": 8
+        },
+        "replay_only": {
+          "shed_fraction": 0.8356302948950101,
+          "admitted_shed_fraction": 0.9154251862406009,
+          "max_relative_residual": 5.017978106972675e-16,
+          "planning_steps": 8
+        },
+        "isolated_fastest": {
+          "shed_fraction": 0.8356302948950101,
+          "admitted_shed_fraction": 0.9154251862406009,
+          "max_relative_residual": 5.017978106972675e-16,
+          "planning_steps": 8
+        }
+      }
+    },
+    {
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.25,
+        5,
+        40,
+        10
+      ],
+      "elapsed_s": 11.79257491696626,
+      "results": {
+        "queue_haul": {
+          "shed_fraction": 0.9999999989999798,
+          "admitted_shed_fraction": 0.9999999989999784,
+          "max_relative_residual": 4.289393053345137e-14,
+          "planning_steps": 7
+        },
+        "greedy": {
+          "shed_fraction": 0.999999999999999,
+          "admitted_shed_fraction": 0.9999999999999998,
+          "max_relative_residual": 2.1671403692212222e-16,
+          "planning_steps": 7
+        },
+        "kv_only": {
+          "shed_fraction": 0.0002830191812761135,
+          "admitted_shed_fraction": 0.00028301918127611377,
+          "max_relative_residual": 2.8404858196033913e-16,
+          "planning_steps": 8
+        },
+        "replay_only": {
+          "shed_fraction": 0.9999999989772063,
+          "admitted_shed_fraction": 0.9999999989772073,
+          "max_relative_residual": 3.734907140007934e-16,
+          "planning_steps": 6
+        },
+        "isolated_fastest": {
+          "shed_fraction": 0.9999999989772063,
+          "admitted_shed_fraction": 0.9999999989772073,
+          "max_relative_residual": 3.734907140007934e-16,
+          "planning_steps": 6
+        }
+      }
+    }
+  ],
+  "sources_sha256": {
+    "pool_shed_campaign.py": "8f06e7e30750ea7442c82786dec9b161b027a0693312bb81a392bf5d3cf103dc",
+    "pool_shed_planner.py": "3e2f96dbbd52d4206ae55b17ad9d07d07dbba0d31708c94cd9675dd4c9a1841c",
+    "pool_shed_execution.py": "82ad197e811377497107105aa37e3ed274cf646255a65dae3ef70b7176aa41bc",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a"
+  },
+  "limitations": [
+    "A bin-volume constraint does not encode mandatory traffic priority or every per-node available subwindow.",
+    "The central .5/D10 example still has 0.0199555949295219 admitted source fraction unfinished.",
+    "This is a candidate phase-timing correction, not a global execution optimality or feasibility certificate."
+  ],
+  "prototype_script_sha256": "83c2b02b60029a36d69a1f79ee08571f09ff45da879f253912dad76e4aac42b3"
+}

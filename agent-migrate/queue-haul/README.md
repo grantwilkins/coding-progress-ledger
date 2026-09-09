@@ -79,13 +79,18 @@ executor continues already admitted work through shared network, compute, and
 recovery phases. Remaining work is reconstructed from observed phase progress
 and central primitives; hidden execution draws are replaced. New admissions use
 candidate phase profiles and the capacity left by this continuation's peak
-compute reservations and network volumes. Every admitted obligation remains
-reserved, including work forecast to miss the deadline. Such unfinished work
+compute reservations and network volumes. Positive candidate transfers wait
+for a reservation-bin boundary before release; subsequent phases wait for the
+boundary after modeled delivery. Empty transfers add no wait. Every admitted
+obligation remains reserved, including work forecast to miss the deadline. Such unfinished work
 does not block other feasible handoffs: the objective is maximum completed
 handoffs, not completion of every admission. New admissions can change subsequent
 sharing, so the continuation does not certify their combined executed schedule.
-Compute reservations use peak occupancy within each time
-bin; networking remains a flow-volume model. Recorded turns and resets, with
+Compute reservations use peak occupancy within each time bin; networking
+remains a flow-volume model. Residual network volume does not fully describe
+the endpoint windows left by mandatory traffic within a bin, and new admissions
+can shift shared-flow timing. These candidate reservations are an approximation
+to the executed schedule. Recorded turns and resets, with
 modeled phase dependencies and recovery, are evaluated by the pooled event executor.
 There are no individual GPU, packet, or request objects. Replay and KV policies
 share the same applicable batch projections; redundant mixed columns are
@@ -98,7 +103,8 @@ ranking of different executed feedback trajectories. Raw executed losses,
 iteration residuals, and deadline regressions remain in the audit. No baseline
 outcome is substituted for QH. Isolated-fastest chooses each session type's
 current isolated singleton action, which can differ from the best aggregate
-throughput choice. Figures distinguish admitted work from completed handoffs.
+throughput choice; this ranking uses unrounded isolated times, not the
+candidate network-bin barriers. Figures distinguish admitted work from completed handoffs.
 Greedy ranks shed per dominant remaining resource use; compute per unit shed
 breaks equal-score ties.
 
@@ -121,6 +127,11 @@ single-node reference. These are sensitivity scenarios, not asserted Azure
 region-pair capacities. KV uses measured native sealed blocks (256 tokens,
 12,582,912 bytes), with partial tails and live catch-up charged separately.
 Large replay rebuilds use the full-context profile.
+If any session in a replay batch exceeds 16,384 context tokens, the entire
+batch uses the conservative serial-work model instead of the calibrated
+packing curve. Long-batch measurements support this serial family, but do not
+establish a physical discontinuity at 16,384 tokens. This switching rule is a
+material modeling assumption: crossing it can sharply increase batch work.
 The sweep spans the production inter-DC capacity scale reported in
 [SWAN, §6.1 (SIGCOMM 2013)](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/swan-sigcomm13.pdf);
 it does not identify current available capacity for these Azure routes.

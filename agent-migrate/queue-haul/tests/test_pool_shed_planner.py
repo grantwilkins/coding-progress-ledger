@@ -531,3 +531,63 @@ def test_protected_phase_profile_cannot_resnapshot_an_active_migration(progress)
     table.fleet.metadata["protect_resident"] = True
     with pytest.raises(ValueError, match="observed-origin engine continuation"):
         phase_profile(table, np.ones(1), 0, 0, 1., np.array([1., 20.]), np.zeros((2, 1)), timing, calibration, **progress)
+
+
+@pytest.mark.parametrize("payload,expected_finish", [(.4, 2.), (0., .6)])
+def test_candidate_network_barriers_preserve_volume_and_zero_payload_timing(payload, expected_finish):
+    table, timing, calibration = case(3.)
+    table.fleet.metadata["protect_resident"] = True
+    table.fleet.kv[:], table.endpoint[:], table.budgets[:] = payload, 1., 1.
+    timing.update(beta=0., kv_completion_s=0., kv_batch_completion_s=0.)
+    args = (table, np.ones(1), 1, 0, .6, np.arange(4.), np.zeros((2, 3)), timing, calibration)
+    raw, causal = phase_profile(*args), phase_profile(*args, causal_network=True)
+    assert raw["finish"] == pytest.approx(.6 + payload)
+    assert causal["finish"] == pytest.approx(expected_finish)
+    assert causal["network"].sum() == pytest.approx(payload)
+    assert causal["network"][0] == 0.
+
+
+def test_mid_bin_delta_wait_is_included_in_source_buffer_interval(monkeypatch):
+    import pool_shed_planner as planner
+
+    table, timing, calibration = case(3.)
+    table.fleet.metadata["protect_resident"] = True
+    table.fleet.kv[:], table.endpoint[:], table.budgets[:] = 0., 1., 1.
+    timing["beta"] = 0.
+    observed = []
+    monkeypatch.setattr(planner, "_quiesce", lambda *args, **kwargs: (.6, table.fleet.context, np.zeros(1, bool), False))
+    monkeypatch.setattr(planner, "catchup", lambda *args, **kwargs: (.4, 0.))
+    monkeypatch.setattr(planner, "_buffered", lambda fleet, counts, begin, end, *args: (observed.append((begin, end)) or 0., 0.))
+    profile = phase_profile(table, np.ones(1), 1, 0, 0., np.arange(4.), np.zeros((2, 3)), timing, calibration, causal_network=True)
+    assert profile["network"] == pytest.approx([0., .4, 0.])
+    assert profile["finish"] == 2. and observed == [(.6, 2.)]
+
+
+def test_isolated_fastest_ranking_keeps_raw_singleton_times(monkeypatch):
+    import pool_shed_planner as planner
+
+    table, timing, calibration = case()
+    table.fleet.metadata["protect_resident"] = True
+    observed, original = [], planner.phase_profile
+    def record(*args, **kwargs):
+        observed.append(kwargs.get("causal_network", False))
+        return original(*args, **kwargs)
+    monkeypatch.setattr(planner, "phase_profile", record)
+    plan_admission(PooledExecution(table, timing, calibration), table, "isolated_fastest", calibration=calibration)
+    assert observed[:4 * len(table.fleet.count)] == [False] * (4 * len(table.fleet.count))
+    assert all(observed[4 * len(table.fleet.count):])
+
+
+@pytest.mark.parametrize("offset", [0., np.spacing(1.), 1e-8])
+@pytest.mark.parametrize("boundary", ["release", "completion"])
+def test_network_bin_time_equivalence_does_not_skip_a_bin_or_move_backwards(offset, boundary):
+    table, timing, calibration = case(4.)
+    table.endpoint[:], table.budgets[:] = 1., 1.
+    timing.update(beta=0., kv_completion_s=0., kv_batch_completion_s=0.)
+    table.fleet.kv[:] = .25 if boundary == "release" else 1. + offset
+    start = 1. + offset if boundary == "release" else 0.
+    profile = phase_profile(table, np.ones(1), 1, 0, start, np.arange(5.), np.zeros((2, 4)), timing, calibration, causal_network=True)
+    expected = (2. if offset <= 1e-10 else 3.) if boundary == "release" else (1. + offset if offset <= 1e-10 else 2.)
+    assert profile["finish"] == expected
+    assert profile["finish"] >= start + table.fleet.kv[0]
+    assert profile["network"].sum() == pytest.approx(table.fleet.kv[0])

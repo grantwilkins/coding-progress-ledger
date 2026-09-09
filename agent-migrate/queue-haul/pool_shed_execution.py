@@ -558,7 +558,7 @@ class PooledExecution:
                 "unfinished_batch_mass": float(self.mass[self.state != 6].sum()), "memory_blocked_batch_mass": float(self.mass[self.state == 7].sum()),
                 "trace_exhausted_waves": self.exhausted,
                 "dispatch_chunks": int(self.chunks), "dispatch_wave_count": self.n,
-                "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; frozen initial snapshot while source continues",
+                "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; " + ("capture current source state at each wave's first dispatch" if self.protected else "frozen initial snapshot while source continues"),
                 "execution_model": "independent_event_fluid_batch_mass_finite_trace",
                 "source_pacing": ("paced recorded trajectories with contextual request-duration proxy; gate arrivals use cycle-average fluid demand" if self.protected else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
                                   else "finite recorded turns at explicit equal cadence; terminal context retained"),
