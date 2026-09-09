@@ -66,6 +66,15 @@ def source_snapshot(fleet, now, cache=None):
     return context, completed
 
 
+def kv_transfer_bytes(fleet, contexts, calibration):
+    block = calibration["kv_block_tokens"]
+    shared = np.asarray(fleet.metadata.get("kv_shared_tokens", 0))
+    scale = fleet.metadata.get("kv_wire_scale", 1.)
+    if not np.isfinite(scale) or scale <= 0 or not np.isfinite(shared).all() or np.any(shared < 0):
+        raise ValueError("invalid KV wire scale or shared prefix")
+    return np.maximum(np.floor(np.asarray(contexts) / block) - np.floor(shared / block), 0) * calibration["kv_block_bytes"] * scale
+
+
 def initial_work(fleet, counts, action, route, contexts, timing, calibration, cache=None):
     contexts = fleet.context if contexts is None else contexts
     key = ("initial", counts.astype(float, copy=False).tobytes(), int(action), int(route), contexts.astype(float, copy=False).tobytes())
@@ -73,14 +82,15 @@ def initial_work(fleet, counts, action, route, contexts, timing, calibration, ca
         return cache[key]
     same = contexts == fleet.context
     if action:
-        result = float(counts @ np.where(same, fleet.kv, np.floor(contexts / calibration["kv_block_tokens"]) * calibration["kv_block_bytes"])), 0.
+        result = float(counts @ np.where(same, fleet.kv, kv_transfer_bytes(fleet, contexts, calibration))), 0.
     else:
         from pool_shed_calibration import replay_seconds
         work = np.array(fleet.t1, float)
         changed = ~same & (contexts > 0)
         work[~same & (contexts == 0)] = 0.
         if changed.any():
-            work[changed] = replay_seconds(contexts[changed], calibration)
+            cached = np.broadcast_to(fleet.metadata.get("replay_cached_tokens", 0), contexts.shape)
+            work[changed] = replay_seconds(contexts[changed], calibration, cached[changed])
         knots = fleet.metadata.get("packing_context_tokens")
         packing = np.interp(contexts, knots, timing["packing_kappa"]) if knots else np.full(len(counts), timing["kappa"])
         if np.any((counts > 0) & (contexts > fleet.metadata.get("batch_context_limit", np.inf))):
@@ -185,8 +195,8 @@ def catchup(fleet, counts, action, route, context, reset, timing, calibration, c
     if action == 1:
         block = calibration["kv_block_tokens"]
         sealed = np.floor(context / block) * block
-        old = np.where(reset, 0, np.floor(origin_context / block) * block)
-        return (float(counts @ np.maximum(sealed - old, 0) / block * calibration["kv_block_bytes"]),
+        old = np.where(reset, 0, kv_transfer_bytes(fleet, origin_context, calibration))
+        return (float(counts @ np.maximum(kv_transfer_bytes(fleet, context, calibration) - old, 0)),
                 float(counts @ (context - sealed) / calibration["kv_tail_replay_tps"] + np.interp(counts.sum(), [0, 1, 8],
                     [0, timing["kv_completion_s"], timing["kv_batch_completion_s"]])))
     if action != 0:
@@ -201,6 +211,10 @@ def catchup(fleet, counts, action, route, context, reset, timing, calibration, c
             raise ValueError("source replay catch-up exceeds measured context support")
         work = np.interp(changed[rebuilding], np.r_[0., support],
                          np.r_[0., np.maximum.accumulate(replay_seconds(support, calibration))])
+        cached = np.broadcast_to(fleet.metadata.get("replay_cached_tokens", 0), context.shape)[rebuilding]
+        reuse = reset[rebuilding] & (cached > 0)
+        overhead = calibration.get("replay_completion_s", 0.) * np.minimum(changed[rebuilding][reuse] / support.min(), 1.)
+        work[reuse] -= np.maximum(work[reuse] - overhead, 0) * np.minimum(cached[reuse] / changed[rebuilding][reuse], 1.)
         knots = fleet.metadata.get("packing_context_tokens")
         packing = np.interp(changed[rebuilding], knots, timing["packing_kappa"]) if knots else np.full(len(work), timing["kappa"])
         if np.any(changed[rebuilding] > fleet.metadata.get("batch_context_limit", np.inf)):

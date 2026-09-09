@@ -32,14 +32,17 @@ PATHS = (Path(__file__), ROOT / "loaded_service_model.py", ROOT / "profiles.py",
          *(p.parent / "live_plan.json" for p in (loaded.TRAINING, *loaded.BLOCKS, loaded.STANDALONE)))
 
 
-def replay_seconds(contexts, calibration):
+def replay_seconds(contexts, calibration, cached_tokens=0):
     """Match the historical profile's conservative singleton rate, including its tail."""
     context = np.asarray(contexts, dtype=float)
     if not np.all(np.isfinite(context)) or np.any(context <= 0):
         raise ValueError("replay contexts must be finite and positive")
+    cached = np.asarray(cached_tokens, dtype=float)
+    if not np.isfinite(cached).all() or np.any(cached < 0):
+        raise ValueError("cached tokens must be finite and nonnegative")
     x, y = np.asarray(calibration["replay_context_tokens"]), np.asarray(calibration["replay_tps"])
     rate = np.interp(context, x, y, left=y.min(), right=y.min())
-    return context / rate + calibration["replay_completion_s"]
+    return (context - np.minimum(cached, context)) / rate + calibration["replay_completion_s"]
 
 
 def kv_state(contexts, calibration):

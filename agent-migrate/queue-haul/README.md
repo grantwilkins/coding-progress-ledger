@@ -191,6 +191,65 @@ does not explain action selection. Across all 24 central scale cases, QH has 11 
 7 losses, and 6 ties against replay; all 120 policy executions protect the
 resident service budget.
 
+`pool_shed_cache_sensitivity.py` runs a separate 36-case, central-calibration
+comparison: coding snapshot 0, 20 MW and 2 MW A100 fleets, a 1000 Gbps shared WAN,
+50% of the serving envelope, and 30/120/300 s deadlines. Six variants separate
+the old payload, a user-reported **800,000,000 bytes per 32,768 tokens** effective
+wire anchor, and assumed replay-prefix/private-KV savings. The anchor is not
+reclassified as a measured full-cache geometry: additional private fractions
+describe initial snapshots and are sensitivities, since the anchor may already
+describe a private transfer. Prefix lengths are rounded down to sealed blocks.
+
+Replay reuse removes the assumed cached tokens' prefill work at the original
+full-context rate, retaining completion overhead and packing rules. Historical
+native cache hits are not fully observed, so these are additional assumed
+savings relative to the fitted timing. Shared prefixes are assumed already
+present at the destinations and reusable after resets, capped by current
+context; newly appended tokens beyond those fixed prefixes remain private.
+Wire savings do not change resident memory, source demand, or source power.
+Every variant receives the same union of candidate batches; reduction rejects
+any change in replay-only behavior caused solely by KV assumptions. A fixed
+1 s geometric base clock, subdivided at resolution 0.5, prevents KV durations
+from changing replay-only's decision times. Observed recovery feedback remains
+available to every method. The comparison's baseline therefore uses this common
+library and clock, rather than reproducing the stopped campaign's decisions.
+Run `python pool_shed_cache_sensitivity.py --case N` for indices 0–35, then
+`PYTHONPATH=. python outputs/a100-cache-sensitivity/render.py` to validate,
+reduce, and render the frozen grid with complete percentage axes.
+
+The completed [36-case results](outputs/a100-cache-sensitivity/summary.json)
+contain 180 policy evaluations, with [deadline/handoff](outputs/a100-cache-sensitivity/handoff_fraction.png),
+[deadline/power](outputs/a100-cache-sensitivity/power_mw.png), and
+[KV action fractions](outputs/a100-cache-sensitivity/kv_source_fraction.png).
+At 30 s, QH's completed KV fraction of original source workload is:
+
+| Initial cache assumption | 20 MW | 2 MW |
+| --- | ---: | ---: |
+| Original wire payload | 0.74% | 7.57% |
+| 0.80 GB/32K effective wire anchor | 1.25% | 11.70% |
+| Anchor + 25% replay reuse + 50% private KV | 2.68% | 18.96% |
+| Anchor + 25% replay reuse + 10% private KV | 10.76% | 35.81% |
+
+Replay-only reaches approximately 100% handoff in all 36 cases, so this shows
+changed actions and compute use, not additional shed over replay. At 20 MW and
+300 s, KV-only handoff increases from 28.42% to 44.34% with the wire anchor alone,
+and to 94.92% in the 10%-private sensitivity. The largest retained QH loss versus
+replay is 0.0394 percentage points; greedy's is 0.1918 points. All 24 paired
+replay-only controls are exactly equal. The final run spanned 11.6 minutes
+(28.2 summed case-minutes with three workers; setup and discarded diagnostic
+runs excluded). These are central scenario sensitivities, not confidence bounds.
+The [validation record](outputs/a100-cache-sensitivity/validation.json) includes
+169 focused passing tests, 24 exact replay controls, 12 exact KV controls,
+resource residuals, and hashes for the preserved cases and corrected figures.
+
+This sensitivity does not validate the fast replay or resident SLO claims.
+The simulated coding 50% point offers about 0.221 resident requests/s/GPU,
+versus 1.318 at the loaded experiment's 50% reference, with different request
+shapes. The extra fitted replay slowdown is approximately 0.7% versus 15.3%,
+respectively. Source requests also start synchronously every 22.63 s in this
+snapshot. Matching resident RPS, shape, context, and arrival timing remains
+necessary before interpreting the fleet results as deployment performance.
+
 ```bash
 uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-service-validation
 uv run python pool_shed_campaign.py prepare --out outputs/a100-pooled-service
@@ -223,8 +282,11 @@ The earlier 3,124 campaign checkpoints are archived intact in
 `outputs/a100-pooled-service-pre-stable-ties`. The subsequent campaign's 9,486
 completed checkpoints are preserved in `outputs/a100-pooled-service-pre-certificate-retry`.
 Their bytes and original identity are retained through explicit inheritance;
-the remaining 4,014 cases use the certificate-retry implementation. This changes
-only previously rejected solver attempts. Greedy treats primary and secondary scores within the same relative
+the remaining cases used the certificate-retry implementation until the campaign
+was stopped at the user's request with 12,011 of 13,500 checkpoints written.
+The campaign is incomplete and its saved checkpoints are preserved; it has not
+been restarted. The retry changes only previously rejected solver attempts.
+Greedy treats primary and secondary scores within the same relative
 1e-12 tolerance as tied and then selects the earliest candidate. This prevents
 a one-ULP work-cost difference from postponing an otherwise equivalent current
 admission. The failed Linux comparison is retained as regression evidence.

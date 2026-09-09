@@ -99,6 +99,18 @@ def case(deadline=20.):
     return table, timing, calibration
 
 
+def test_fixed_clock_keeps_replay_control_independent_of_kv_costs():
+    table, timing, calibration = case()
+    table.fleet.metadata["planning_reference_s"] = 4.
+    original = plan_admission(PooledExecution(table, timing, calibration), table, "replay_only", calibration=calibration)
+    table.nominal_commit[1::2] = .01
+    table.fleet.kv *= .01
+    changed = plan_admission(PooledExecution(table, timing, calibration), table, "replay_only", calibration=calibration)
+    np.testing.assert_array_equal(original[0], changed[0])
+    assert original[1] == changed[1] == .5
+    assert original[2] == changed[2]
+
+
 def test_protected_recovery_prefix_preserves_weighted_per_batch_limits():
     engine = SimpleNamespace(now=0., fleet=SimpleNamespace(gpus=1), route=np.array([0, 0]),
         gated=np.ones(2, bool), backlog=np.array([10., 1.]), mass=np.array([.1, 10.]), serving_load=lambda: np.zeros(2))

@@ -25,6 +25,55 @@ def run(table, timing, calibration, mass=None):
     return execute_pooled(table, np.ones(len(table.route)) if mass is None else mass, timing, calibration)
 
 
+def test_cache_sensitivity_preserves_context_rate_and_charges_new_private_tokens():
+    from pool_shed_calibration import replay_seconds
+    from pool_shed_execution import catchup, initial_work, kv_transfer_bytes
+
+    table, timing, calibration = case()
+    calibration.update(replay_context_tokens=[100, 200], replay_tps=[10, 5], replay_completion_s=2.,
+                       kv_block_tokens=10, kv_block_bytes=10)
+    fleet, counts = table.fleet, np.array([1., 0.])
+    fleet.metadata.update(replay_cached_tokens=[50, 50], kv_shared_tokens=[50, 50], kv_wire_scale=.5)
+    fleet.t1 = replay_seconds(fleet.context, calibration, fleet.metadata["replay_cached_tokens"])
+    fleet.kv = kv_transfer_bytes(fleet, fleet.context, calibration)
+    assert initial_work(fleet, counts, 0, 0, None, timing, calibration) == (2., 7.)
+    assert initial_work(fleet, counts, 0, 0, np.array([200., 100.]), timing, calibration) == (400., 32.)
+    assert initial_work(fleet, counts, 1, 0, None, timing, calibration) == (25., 0.)
+    assert initial_work(fleet, counts, 1, 0, np.array([203., 100.]), timing, calibration) == (75., 0.)
+    assert catchup(fleet, counts, 1, 0, np.array([203., 100.]), np.array([False, False]), timing, calibration) == pytest.approx((50., .03))
+    assert catchup(fleet, counts, 0, 0, np.array([200., 100.]), np.array([False, False]), timing, calibration) == (200., 12.)
+    assert catchup(fleet, counts, 0, 0, fleet.context, np.array([True, False]), timing, calibration) == (200., 7.)
+    assert catchup(fleet, counts, 1, 0, fleet.context, np.array([True, False]), timing, calibration) == (25., 0.)
+    assert kv_transfer_bytes(fleet, [30, 40], calibration).tolist() == [0., 0.]
+    assert fleet.context.tolist() == [100., 100.]
+    fleet.metadata["replay_cached_tokens"] = [0., 0.]
+    reset = np.array([True, False])
+    low = np.array([20., 100.])
+    baseline = catchup(fleet, counts, 0, 0, low, reset, timing, calibration)[1]
+    fleet.metadata["replay_cached_tokens"] = [1e-12, 0.]
+    assert catchup(fleet, counts, 0, 0, low, reset, timing, calibration)[1] == pytest.approx(baseline)
+    fleet.metadata["replay_cached_tokens"] = [20., 0.]
+    assert catchup(fleet, counts, 0, 0, low, reset, timing, calibration)[1] == pytest.approx(.4)
+
+
+def test_reported_32k_wire_anchor_and_invalid_cache_assumptions():
+    from pool_shed_calibration import replay_seconds
+    from pool_shed_execution import kv_transfer_bytes
+
+    table, _, calibration = case()
+    calibration.update(kv_block_tokens=256, kv_block_bytes=12582912,
+                       replay_context_tokens=[100], replay_tps=[10], replay_completion_s=2.)
+    table.fleet.metadata["kv_wire_scale"] = 800_000_000 / (32768 * 49152)
+    assert kv_transfer_bytes(table.fleet, [32768], calibration) == pytest.approx([800_000_000])
+    assert replay_seconds([100], calibration, [100]) == pytest.approx([2.])
+    for invalid in (-1., np.nan):
+        with pytest.raises(ValueError, match="cached tokens"):
+            replay_seconds([100], calibration, invalid)
+        table.fleet.metadata["kv_wire_scale"] = invalid
+        with pytest.raises(ValueError, match="KV wire"):
+            kv_transfer_bytes(table.fleet, [32768], calibration)
+
+
 def test_released_network_capacity_finishes_feasible_mixed_schedule():
     table, timing, calibration = case()
     result = run(table, timing, calibration)

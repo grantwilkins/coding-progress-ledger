@@ -243,7 +243,8 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
     primitive_cache = {}  # Scoped to this fixed nominal fleet, timing and calibration.
     if iterations < 1 or engine.now >= table.deadline:
         raise ValueError("planning needs a positive iteration budget and remaining time")
-    edges = planning_grid(engine.now, table.deadline, table.nominal_commit, resolution)
+    durations = np.atleast_1d(fleet.metadata.get("planning_reference_s", table.nominal_commit))
+    edges = planning_grid(engine.now, table.deadline, durations, resolution)
     if fleet.metadata.get("protect_resident"):
         events = []
         recovery_prefix(engine, edges, events)
