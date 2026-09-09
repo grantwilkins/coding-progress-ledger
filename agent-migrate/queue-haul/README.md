@@ -149,10 +149,11 @@ validate protected fleet-scale service. The validation report records per-case
 errors, false-feasible deadlines, original reference errors, library expansion,
 execution refinement, feedback sensitivity, and proportional scaling.
 
-The [hardware and resolution validation](outputs/a100-pooled-service-validation/critic-summary.json)
-records the protected-service model before its numerical solver recovery; the
-[final focused suite](outputs/a100-pooled-service-validation/solver-failure-3104/focused-tests-final.log)
-passes 227 tests. The recovery leaves the measured model and validation gates unchanged. Across six central
+The current [hardware and resolution validation](outputs/a100-pooled-service-validation/stable-greedy/critic-summary.json)
+passes all required gates and [233 focused tests](outputs/a100-pooled-service-validation/stable-greedy/focused-tests.log).
+A [strict three-case platform comparison](outputs/a100-pooled-service-validation/stable-greedy/platform-comparison.json)
+passes for all five policies after stabilizing greedy's secondary ties.
+Across six central
 cases, doubling dispatch resolution changes shed or the QH gap by at most
 0.0743 percentage points. Changing the planning grid changes results by up to
 8.152 points, so small policy advantages are not grid-robust. Runtime-matched
@@ -206,8 +207,7 @@ execution lineage separately from the current source identity. Bands show empiri
 p05–p95 sensitivity across execution draws, snapshots, and measured power curves,
 not coverage of unmeasured transfer error or formal SLO compliance.
 
-The numerical and scale diagnostics above precede the stable greedy secondary
-tie-breaker. Their 3,124 completed campaign checkpoints are archived intact in
+The earlier 3,124 campaign checkpoints are archived intact in
 `outputs/a100-pooled-service-pre-stable-ties`; the corrected full campaign starts
 fresh. Greedy treats primary and secondary scores within the same relative
 1e-12 tolerance as tied and then selects the earliest candidate. This prevents

@@ -1,0 +1,128 @@
+{
+  "status": "pass_with_declared_limitations",
+  "identity": "ab50712399d61c333e34f3709cdad20c58b8dd62ae56c6051fff10af6a4de3b0",
+  "source_hashes_verified": 220,
+  "source_hashes_match_frozen_campaign": true,
+  "required_gates": {
+    "historical_execution": true,
+    "loaded_execution": true,
+    "regional_components": true,
+    "regional_execution": true,
+    "execution_resolution": true
+  },
+  "focused_tests": {
+    "passed": 233,
+    "deselected": 2,
+    "wall_s": 147.59
+  },
+  "platform_bridge": {
+    "status": "pass",
+    "cells": [
+      "2252",
+      "3104",
+      "925"
+    ],
+    "scope": "Three matched macOS/Linux cases, all five policies; not universal platform equivalence."
+  },
+  "validation_wall_s": 618.7343156244606,
+  "parallel_refinement": {
+    "processes": 6,
+    "cases": 6,
+    "settings_per_case": 5,
+    "policy_comparisons": 120,
+    "wall_s": 548.0179232498631,
+    "summed_worker_cpu_s": 1717.164122
+  },
+  "refinement_bounds": {
+    "combined": {
+      "maximum_shed_difference_pp": 8.15240463254706,
+      "maximum_qh_gap_difference_pp": 8.152405022735332
+    },
+    "dispatch": {
+      "maximum_shed_difference_pp": 0.07421337392098937,
+      "maximum_qh_gap_difference_pp": 0.07421337392529426
+    },
+    "feedback": {
+      "maximum_shed_difference_pp": 8.151945698119345,
+      "maximum_qh_gap_difference_pp": 8.151946066172133
+    },
+    "iterations": {
+      "maximum_shed_difference_pp": 1.2627685992456783,
+      "maximum_qh_gap_difference_pp": 1.2627685992456783
+    }
+  },
+  "maximum_fixed_point_residual": 0.44549169953190004,
+  "wide_dispatch_current_source": "Not rerun at this pin; archived128-to512 probes are historical evidence only.",
+  "historical_execution": {
+    "loaded_matched_runtime": {
+      "cases": 440,
+      "p90_relative_error_percent": {
+        "kv_transfer": 11.917242873846964,
+        "replay": 2.2791646813871007
+      },
+      "false_feasible_25s": {
+        "kv_transfer": 0,
+        "replay": 0
+      }
+    },
+    "policy_matched_runtime": {
+      "cases": 160,
+      "p90_relative_error_percent": {
+        "greedy": 29.03667202069523,
+        "kv_only": 13.127010881140377,
+        "queue_haul": 26.373768639627098,
+        "replay_only": 18.669061839444613
+      },
+      "false_feasible_25s": {
+        "greedy": 0,
+        "kv_only": 0,
+        "queue_haul": 0,
+        "replay_only": 0
+      }
+    },
+    "long_context": {
+      "cases": 72,
+      "p90_relative_error_percent": {
+        "replay": 16.008520575123935
+      },
+      "false_feasible_25s": {
+        "replay": 0
+      }
+    }
+  },
+  "historical_outputs_exactly_equal_to_prior_archive": {
+    "historical_execution": true,
+    "loaded_execution": true,
+    "regional_execution": true,
+    "resident_execution": true
+  },
+  "regional_execution": {
+    "cases": 24,
+    "episodes": 24,
+    "false_feasible_25s": 1,
+    "mae_s": 1.2429944162432411,
+    "r2": 0.9854284531544539
+  },
+  "resident_execution": {
+    "mae_requests": 0.8467415061892248,
+    "normalized_mae": 0.032911800422802576
+  },
+  "library_sensitivity": {
+    "cases": 108,
+    "maximum_shed_difference_pp": 0.030094257356794163,
+    "p95_difference_pp": 0.0011216704157322697
+  },
+  "visual_review": {
+    "optimal-kv-ranges.png": "pass; explicitly initial static LP ambiguity, not executed equivalence",
+    "scale-comparison.png": "pass; proportional WAN explicitly diagnostic"
+  },
+  "limitations": [
+    "Planning-grid sensitivity reaches8.152 percentage points; bounded load iteration is not globally converged or globally optimal.",
+    "Historical execution checks replay recorded actions with local runtime adapters; they do not validate new planner decisions, protected fleet SLOs, or moving source trajectories.",
+    "The naive regional-tail-to-local-KV diagnostic still fails its15% gate with16.828% p90 error; the runtime-matched KV check passes11.917%.",
+    "The regional engine retains one false-feasible25s case; aggregate MAE/R2 gates still pass.",
+    "The72 long-context cases informed serial-family selection and are not an untouched model-selection holdout.",
+    "Previously documented repeat-stable one-GPU mixed QH/replay ranking reversal remains a hardware-transfer limitation; these numerical fixes do not change historical predictions.",
+    "coding_long starts at least24576 tokens but follows full recorded cycles, including shorter contexts after resets; actual first-dispatch payload bytes determine network work."
+  ]
+}
