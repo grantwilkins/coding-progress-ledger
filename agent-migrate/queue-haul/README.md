@@ -35,7 +35,7 @@ probes bracket this bound and meet their recorded RPS/latency classifications.
 The full destination profile was not accepted: this is a retrospective coding
 contract, not a general TTFT/TPOT guarantee. Transferring it to other mixtures
 and to shared migration occupancy is explicit. Contexts outside the serving
-curves use the slowest measured phase rate and are flagged as a sensitivity.
+curves use the slowest measured phase rate and are flagged as extrapolated.
 
 Source load is 0.8; destination loads are 0.25, 0.50, 0.75, 0.90, and 0.95.
 Each destination is as large as the source, so the standing-service shed ceiling
@@ -51,6 +51,11 @@ Source request duration uses a contextual phase-work proxy, separate from
 interarrival spacing; quiescence waits for an active request. Missing timestamps
 require an explicit equal-cadence assumption with synchronized source request
 starts; burst phases are a scenario, not a measured arrival distribution.
+Each migration wave captures the last completed source request state when it
+enters the initial-transfer window, including waves that waited after admission.
+It retains that snapshot during its copy; catch-up charges only growth and
+resets since that capture. Planner candidates use their proposed start times,
+and shared execution determines when queued waves actually capture.
 Trajectories exceeding replay
 context support are excluded and counted. `measured_pack` repeats the measured
 request shapes. Conservative peak-cycle KV reservations remain at every load.

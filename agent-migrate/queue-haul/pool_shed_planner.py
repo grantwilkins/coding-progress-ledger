@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from pool_shed_execution import _buffered, _quiesce, catchup, flow_rates, compute_allocation
+from pool_shed_execution import _buffered, _quiesce, catchup, flow_rates, compute_allocation, source_snapshot, initial_work
 
 PLANNING_RESOLUTION = .5
 PLANNING_ITERATIONS = 3
@@ -49,12 +49,16 @@ def phase_profile(table, counts, action, route, start, edges, loads, timing, cal
                   compute_after=0., recovery_sharing=1., primitive_cache=None):
     """One central-calibration batch; phase dependencies and source resets remain causal."""
     fleet, bins = table.fleet, len(edges) - 1
+    if fleet.metadata.get("protect_resident") and any((state, transferred, completed_work, elapsed)):
+        raise ValueError("active protected migrations require their observed-origin engine continuation")
     profile = {name: np.zeros(bins) for name in ("replay", "kv", "network", "application", "serving", "buffers", "recovery", "occupancy", "service_peak")}
     endpoint = min(table.endpoint[route], table.budgets[route], table.budgets[2])
     if action:
         endpoint = min(endpoint, timing.get("regional_kv_bytes_per_s", table.endpoint[:2])[route])
     endpoint = endpoint if rate is None else max(min(rate, endpoint), 1e-30)
     now = start
+    origin_context, origin_turn = source_snapshot(fleet, start, primitive_cache) if fleet.metadata.get("protect_resident") else (None, None)
+    initial_bytes, initial_compute = initial_work(fleet, counts, action, route, origin_context, timing, calibration, primitive_cache)
 
     def phase(work, compute=False):
         nonlocal now
@@ -83,26 +87,20 @@ def phase_profile(table, counts, action, route, start, edges, loads, timing, cal
             now += left * np.exp(timing["beta"] * loads[route, -1] * fleet.metadata.get("timing_load_factor", 1.)) / sharing
 
     if state == 0:
-        phase(float(counts @ (fleet.kv if action else fleet.log)) - transferred)
+        phase(initial_bytes - transferred)
     if state <= 1 and not action:
-        knots = fleet.metadata.get("packing_context_tokens")
-        packing = np.interp(fleet.context, knots, timing["packing_kappa"]) if knots else np.full(len(counts), timing["kappa"])
-        if np.any((counts > 0) & (fleet.context > fleet.metadata.get("batch_context_limit", np.inf))):
-            packing = np.ones(len(counts))
-        work = counts @ (packing * fleet.t1) + np.max(np.where(counts > 0, (1 - packing) * fleet.t1, 0.))
-        work *= timing.get("regional_replay_factor", [1., 1.])[route]
-        phase(float(work) - (completed_work if state == 1 else 0.), True)
+        phase(initial_compute - (completed_work if state == 1 else 0.), True)
     if now > edges[-1]:
         profile["finish"] = now
         return profile
     if state <= 1:
-        quiesced, context, reset, _ = _quiesce(fleet, counts, now, primitive_cache)
+        quiesced, context, reset, _ = _quiesce(fleet, counts, now, primitive_cache, origin_turn=origin_turn)
         now = quiesced
     else:
-        _, context, reset, _ = _quiesce(fleet, counts, quiesced, primitive_cache)
+        _, context, reset, _ = _quiesce(fleet, counts, quiesced, primitive_cache, origin_turn=origin_turn)
         if state == 2:
             now = max(now, quiesced)
-    delta, tail = catchup(fleet, counts, action, route, context, reset, timing, calibration, primitive_cache)
+    delta, tail = catchup(fleet, counts, action, route, context, reset, timing, calibration, primitive_cache, origin_context=origin_context)
     if state <= 3:
         phase(delta - (transferred if state == 3 else 0.))
     if state <= 4:

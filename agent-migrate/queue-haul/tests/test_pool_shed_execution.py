@@ -642,3 +642,61 @@ def test_central_continuation_matches_every_phase_reset_and_partial_gate(at, pha
     for key in ("shed_fraction", "last_completion_s", "transferred_bytes", "batch_replica_seconds", "completed_buffered_requests"):
         assert first.result()[key] == pytest.approx(baseline.result()[key], abs=1e-10)
     assert engine.now == at and np.all(engine.remaining == 123456.)
+
+
+def test_source_snapshot_excludes_inflight_request_and_catchup_uses_capture_generation():
+    from pool_shed_execution import source_snapshot, catchup, initial_work
+    table, timing, calibration = case()
+    table.fleet.metadata.update(protect_resident=True, source_session_rps=1., sequence_cycle=True,
+        turn_sequences=[[{"context": 0, "prompt": 20, "output": 0, "reset": True},
+                         {"context": 20, "prompt": 15, "output": 0}], []], turn_duration_s=[[.5, .5], []])
+    for now, expected, turns in [(0., 100, 0), (.5, 20, 1), (1.2, 20, 1), (1.5, 35, 2), (2.2, 35, 2), (2.5, 20, 3)]:
+        context, completed = source_snapshot(table.fleet, now)
+        assert context[0] == expected and completed[0] == turns
+    counts = np.array([1., 0.])
+    for start, expected in [(1.6, 20.), (2.6, 0.)]:
+        origin, turn = source_snapshot(table.fleet, start)
+        _, context, reset, _ = _quiesce(table.fleet, counts, 2.7, origin_turn=turn)
+        assert catchup(table.fleet, counts, 1, 0, context, reset, timing, calibration, origin_context=origin)[0] == expected
+    calibration.update(replay_context_tokens=[20., 100.], replay_tps=[1000., 1000.], replay_completion_s=0.)
+    assert initial_work(table.fleet, counts, 0, 0, np.array([20., 100.]), timing, calibration) == pytest.approx((40., .02))
+    assert initial_work(table.fleet, counts, 0, 0, np.array([0., 100.]), timing, calibration) == (0., 0.)
+
+
+def test_queued_wave_captures_at_first_dispatch_and_clone_preserves_uncaptured_origin():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
+                                      demand=(0., 0.), deadline=20.)
+    table.fleet.count[0] = 2.
+    table.fleet.metadata.update(protect_resident=True, source_session_rps=1., sequence_cycle=True,
+        turn_sequences=[[{"context": 0, "prompt": 10, "output": 0, "reset": True}], []],
+        turn_duration_s=[[.1], []], turn_work_s=[[0.], []])
+    engine = PooledExecution(table, timing, calibration, chunks=2)
+    engine.admit([2.])
+    engine.advance(9.9)
+    assert engine.origin_time[0] == 0. and np.isnan(engine.origin_time[1])
+    clone = engine.nominal_continuation(table, timing, calibration)
+    assert np.isnan(clone.origin_time[1])
+    for end in (10.05, 10.06, 20.):
+        engine.advance(end)
+        clone.advance(end)
+        assert engine.result() == clone.result()
+        assert engine.origin_time[1] == pytest.approx(10.)
+    assert engine.result()["transferred_bytes"] == pytest.approx([130., 0., 130.])
+
+
+def test_zero_byte_source_image_captures_before_entering_quiescence():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(context=(0., 0.), replay=((0., 0.),), kv=((1., 0.),),
+                                      route=(0,), demand=(0., 0.), deadline=2.)
+    table.fleet.kv[0] = 0.
+    table.fleet.metadata.update(protect_resident=True, source_session_rps=1., sequence_cycle=True,
+        turn_sequences=[[{"context": 0, "prompt": 5, "output": 0}], []],
+        turn_duration_s=[[.25], []], turn_work_s=[[0.], []])
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1.])
+    engine.advance(.1)
+    assert engine.origin_time[0] == 0. and engine.state[0] == 2
+    engine.advance(2.)
+    assert engine.result()["last_completion_s"] == pytest.approx(.75)
+    assert engine.result()["transferred_bytes"] == [5., 0., 5.]

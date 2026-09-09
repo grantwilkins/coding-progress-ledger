@@ -584,7 +584,7 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
                             "resident serving, replay, KV catch-up and buffer recovery share one measured-capacity reservation; no new resident debt is permitted; WAN-only transfer occupies no compute",
                             "handoff is primary and occupied migration/recovery compute is secondary; unfinished buffers remain source-owned",
                             "replay and KV completion share the remaining fluid compute; safe occupancy converts to the original offered-work reference for measured timing slowdown",
-                            "common bounded-wave dispatcher maintains a bandwidth-based active window and prioritizes final deltas; frozen initial snapshots while source sessions continue",
+                            "common bounded-wave dispatcher maintains a bandwidth-based active window and prioritizes final deltas; each wave snapshots current completed source state at first dispatch and catches up relative to that snapshot",
                             "replay logs assume two bytes/token; KV uses loaded-runtime serialized geometry",
                             "WAN allocations are scenarios, not measurements of backbone capacity",
                             "measured single-A100-VM endpoints are pooled per node, shared by its GPUs and both destinations; eight GPUs/node is a transfer assumption",

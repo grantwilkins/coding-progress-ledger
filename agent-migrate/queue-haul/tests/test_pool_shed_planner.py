@@ -485,3 +485,28 @@ def test_observed_recovery_boundary_is_a_feedback_and_candidate_start_time(monke
     assert until == 603. and 603. in starts
     assert planner.planning_grid(engine.now, table.deadline, table.nominal_commit, .5)[1] == 864.
     assert engine.now == 600. and engine.backlog.tolist() == [3.]
+
+
+@pytest.mark.parametrize("action,expected_bytes,expected_compute", [(0, 40., .2), (1, 20., 0.)])
+def test_delayed_candidate_snapshots_current_prefix_without_recharging_an_earlier_reset(action, expected_bytes, expected_compute):
+    table, timing, calibration = case(5.)
+    table.endpoint[:] = table.budgets[:] = 10000.
+    timing.update(beta=0., kv_completion_s=0., kv_batch_completion_s=0.)
+    calibration.update(replay_context_tokens=[1., 1000.], replay_tps=[100., 100.], replay_completion_s=0.)
+    table.fleet.metadata.update(protect_resident=True, source_session_rps=1., sequence_cycle=True,
+        turn_sequences=[[{"context": 100, "prompt": 20, "output": 0},
+                         {"context": 10, "prompt": 10, "output": 0, "reset": True},
+                         {"context": 20, "prompt": 20, "output": 0}]],
+        turn_duration_s=[[.1, .1, .1]], turn_work_s=[[.1, .1, .1]])
+    profile = phase_profile(table, np.ones(1), action, 0, 1.5, np.array([1.5, 5.]), np.zeros((2, 1)), timing, calibration)
+    assert profile["network"].sum() == pytest.approx(expected_bytes)
+    assert (profile["replay"] + profile["kv"]).sum() == pytest.approx(expected_compute)
+    assert profile["finish"] < 2.
+
+
+@pytest.mark.parametrize("progress", [{"state": 1}, {"transferred": 1.}])
+def test_protected_phase_profile_cannot_resnapshot_an_active_migration(progress):
+    table, timing, calibration = case()
+    table.fleet.metadata["protect_resident"] = True
+    with pytest.raises(ValueError, match="observed-origin engine continuation"):
+        phase_profile(table, np.ones(1), 0, 0, 1., np.array([1., 20.]), np.zeros((2, 1)), timing, calibration, **progress)
