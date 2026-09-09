@@ -62,7 +62,8 @@ request shapes. Conservative peak-cycle KV reservations remain at every load.
 
 `pool_shed_planner.py` uses receding-horizon batch admissions with common queue
 and migration-phase feedback for all five methods. Only the next admissions
-are committed. The default uses 64 execution waves and feedback resolution 0.5
+are committed. The default uses 64 execution waves per selected batch pattern
+per admission and feedback resolution 0.5
 (half the original geometric intervals). This resolution jointly changes
 geometric decision anchors, reservation bins, and candidate starts; its sensitivity check
 does not isolate feedback cadence. Observed buffer-recovery boundaries also
@@ -147,6 +148,24 @@ These historical cases retain their original service contracts and do not
 validate protected fleet-scale service. The validation report records per-case
 errors, false-feasible deadlines, original reference errors, library expansion,
 execution refinement, feedback sensitivity, and proportional scaling.
+
+The current [validation](outputs/a100-pooled-service-validation/critic-summary.json)
+passes 218 focused tests and all declared reproduction gates. Across six central
+cases, doubling dispatch resolution changes shed or the QH gap by at most
+0.0743 percentage points. Changing the planning grid changes results by up to
+8.152 points, so small policy advantages are not grid-robust. Runtime-matched
+loaded replay/KV p90 relative errors are 2.28%/11.92%; the regional cases have
+1.243 s mean absolute error and retain one false-feasible 25 s deadline.
+
+The supplemental [2 MW comparison](outputs/a100-pooled-service/scale-diagnostic.json)
+scales all three GPU fleets together. At 50% destination load and a 300 s
+deadline, QH completes coding KV handoffs for 1.41% of the original source at
+20 MW with a 1000 Gbps WAN budget, versus 11.80% at 2 MW with the same budget.
+Scaling WAN capacity proportionally reduces the latter to 1.23%. Downsizing
+with fixed WAN therefore changes bandwidth per GPU; GPU count alone does not
+explain action selection. Across all 24 central scale cases, QH has 11 wins,
+7 losses, and 6 ties against replay; all 120 policy executions protect the
+resident service budget.
 
 ```bash
 uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-service-validation
