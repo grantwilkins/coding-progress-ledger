@@ -1006,9 +1006,11 @@ def resolution_check(c):
     cases = (("measured_pack", .5, 1000, 30), ("coding", .5, 1000, 60),
              ("coding", .95, 40, 3600), ("coding", .5, 1000, 3600),
              ("coding_long", .5, 1000, 30), ("coding_long", .95, 1000, 300))
-    settings = {"default": (DISPATCH_CHUNKS, 1., 3), "dispatch": (2 * DISPATCH_CHUNKS, 1., 3),
-                "feedback": (DISPATCH_CHUNKS, .5, 3), "iterations": (DISPATCH_CHUNKS, 1., 6),
-                "combined": (2 * DISPATCH_CHUNKS, .5, 6)}
+    settings = {"default": (DISPATCH_CHUNKS, PLANNING_RESOLUTION, PLANNING_ITERATIONS),
+                "dispatch": (2 * DISPATCH_CHUNKS, PLANNING_RESOLUTION, PLANNING_ITERATIONS),
+                "feedback": (DISPATCH_CHUNKS, PLANNING_RESOLUTION / 2, PLANNING_ITERATIONS),
+                "iterations": (DISPATCH_CHUNKS, PLANNING_RESOLUTION, 2 * PLANNING_ITERATIONS),
+                "combined": (2 * DISPATCH_CHUNKS, PLANNING_RESOLUTION / 2, 2 * PLANNING_ITERATIONS)}
     for workload, load, wan, deadline in cases:
         table, _, _ = forecast(workload, 0, GPUS, 8, load, wan, deadline)
         results = {}

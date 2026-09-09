@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-DISPATCH_CHUNKS = 32
+DISPATCH_CHUNKS = 64
 
 
 def compute_allocation(load, replay_mass, kv_mass, gpus, loss=None, protected=False):
@@ -389,14 +389,16 @@ class PooledExecution:
                        float(np.min(np.divide(self.resident_debt, resident_recovery, out=np.full(2, np.inf), where=resident_recovery > 0))),
                        float(np.min(np.divide(self.backlog, backlog_rates, out=np.full(self.n, np.inf), where=backlog_rates > 0), initial=np.inf)),
                        float(np.min(self.release[waiting] - self.now, initial=np.inf)))
+            step = min(until - self.now, max(step, float(completions[completions <= step + 1e-10].max(initial=0.))))
             if not np.isfinite(step) or step <= 0:
                 break
+            progress = np.where(completions <= step, self.remaining, np.minimum(self.remaining, rates * step))
             self.phase_replica_seconds[computing] += compute_shares[self.route[computing]] * step
-            self.phase_transferred_bytes[transfers] += rates[transfers] * step
-            sent = self.mass[transfers] * rates[transfers] * step
+            self.phase_transferred_bytes[transfers] += progress[transfers]
+            sent = self.mass[transfers] * progress[transfers]
             self.network_used += [sent[self.route[transfers] == 0].sum(), sent[self.route[transfers] == 1].sum(), sent.sum()]
             self.compute_used += [compute_shares[r] * float(self.mass[computing & (self.route == r)].sum()) * step for r in (0, 1)]
-            self.idle_work += [float(self.mass[computing & (self.route == r)] @ rates[computing & (self.route == r)] * step) for r in (0, 1)]
+            self.idle_work += [float(self.mass[computing & (self.route == r)] @ progress[computing & (self.route == r)]) for r in (0, 1)]
             self.resident_generated += resident_growth * step
             self.resident_recovered += resident_recovery * step
             self.resident_debt = np.maximum(self.resident_debt + (resident_growth - resident_recovery) * step, 0.)
@@ -404,7 +406,7 @@ class PooledExecution:
             gate = (self.state == 5) & self.gated
             self.buffered[gate] += self.counts[gate].sum(1) * self.fleet.metadata.get("source_session_rps", 0.) * step
             self.backlog_total[gate] += self.demand[gate] * step
-            self.remaining = np.maximum(self.remaining - rates * step, 0)
+            self.remaining = np.maximum(self.remaining - progress, 0)
             self.now += step
         if np.all(self.state == 6) and np.all(self.backlog <= 1e-9) and np.all(self.resident_debt <= 1e-9) and self.service_ready_s is None:
             self.service_ready_s = float(self.now)

@@ -6,7 +6,7 @@ import numpy as np
 
 from pool_shed_execution import _buffered, _quiesce, catchup, flow_rates, compute_allocation
 
-PLANNING_RESOLUTION = 1.
+PLANNING_RESOLUTION = .5
 PLANNING_ITERATIONS = 3
 
 
@@ -234,7 +234,8 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
     static = np.vstack((total.T, serving, memory))
     capacity = np.r_[available, fleet.gpus * (1 - engine.initial_load) - serving @ engine.selected_total,
                      np.full(2, engine.free_memory) - np.array([engine.reserved[engine.route == r].sum() for r in (0, 1)])]
-    if np.min(capacity / np.maximum(np.r_[fleet.count, [fleet.gpus] * 2, [fleet.kv_capacity] * 2], 1.)) < -1e-8:
+    static_scale = np.maximum(np.r_[fleet.count, [fleet.gpus] * 2, [fleet.kv_capacity] * 2], 1.)
+    if np.min(capacity / static_scale) < -1e-8:
         raise RuntimeError("admitted migrations exceed static capacity")
     capacity = np.maximum(capacity, 0.)
     loss = np.broadcast_to(np.asarray(timing.get("resident_replay_loss", 0.)), (2,))
@@ -252,7 +253,7 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         finish = np.array([[[phase_profile(table, counts, action, route, engine.now, edges, isolated_load, timing, calibration, primitive_cache=primitive_cache)["finish"]
                             for counts in np.eye(len(fleet.count))] for route in (0, 1)] for action in (0, 1)])
         fastest = finish[0].min(0) < finish[1].min(0)
-    allowed = _allowed(table, policy, fastest) & ~np.any((static > 0) & (capacity[:, None] <= 1e-10), axis=0)
+    allowed = _allowed(table, policy, fastest) & ~np.any((static > 0) & (capacity[:, None] <= 1e-10 * static_scale[:, None]), axis=0)
     ids = np.flatnonzero(allowed)
     # ponytail: three upcoming start times; replan later starts after observing actual progress.
     start_bins = np.searchsorted(edges, start_times)
@@ -341,14 +342,14 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         limit = np.r_[compute_limit, (budgets[:2, None] * dt).ravel(), budgets[2] * dt, (app[:, None] * dt).ravel()]
         overload = max(overload, float(np.max((fixed_resource - limit) / np.maximum(limit, 1.), initial=0.)))
         matrix = np.vstack((static[:, original], resource))
-        limits = np.r_[capacity, np.maximum(limit - fixed_resource, 0.)]
+        limits = np.r_[capacity, np.where(limit - fixed_resource > 1e-10 * np.maximum(limit, 1.), limit - fixed_resource, 0.)]
         gains = table.gains[original] * (finish <= table.deadline + 1e-10)
         if protected:
             gains *= fixed_finish[table.route[original]] <= table.deadline + 1e-10
         debt = (data["replay"] * loads[:, :, None] * loss[:, None, None] + data["kv"] * loads[:, :, None] + data["buffers"]).sum((0, 1))
         if fleet.metadata.get("protect_resident"):
             debt = (data["replay"] + data["kv"] + data["recovery"]).sum((0, 1))
-        debt += table.gains[original] * (finish - engine.now) / max(table.deadline - engine.now, 1e-30) * 1e-6
+        debt += fleet.gpus * table.gains[original] * (finish - engine.now) / max(table.deadline - engine.now, 1e-30) * 1e-6
         chosen = _choose(matrix, limits, gains, debt, fleet, policy == "greedy") if len(original) else np.zeros(0)
         residual = max(residual, float(np.max((matrix @ chosen - limits) / np.maximum(limits, 1.), initial=0.)))
         aggregate = {name: fixed[name] + data[name] @ chosen for name in data}

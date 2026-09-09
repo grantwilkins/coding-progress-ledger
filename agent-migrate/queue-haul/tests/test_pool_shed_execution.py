@@ -506,3 +506,42 @@ def test_cached_quiescence_preserves_idle_gaps_boundaries_and_resets(protected, 
         cached, plain = _quiesce(table.fleet, counts, now, cache), _quiesce(table.fleet, counts, now)
         assert cached[0] == plain[0] and cached[3] == plain[3]
         assert np.array_equal(cached[1], plain[1]) and np.array_equal(cached[2], plain[2])
+
+
+def test_near_simultaneous_gigabyte_transfers_share_one_completion_event():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((0., 0.), (0., 0.)), kv=((1., 0.), (0., 1.)),
+                                      demand=(0., 0.), deadline=2.)
+    table.endpoint[:], table.budgets[:] = 1e9, [1e9, 1e9, 2e9]
+    table.fleet.kv[:] = [1e9, 1e9 + 5e-6]
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1., 1.])
+    engine.advance(2.)
+    assert engine.quiesced[0] == engine.quiesced[1]
+    assert engine.result()["transferred_bytes"] == [*table.fleet.kv, sum(table.fleet.kv)]
+    assert engine.result()["shed_fraction"] == 1.
+
+
+def test_completion_coalescing_never_crosses_requested_horizon():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
+                                      demand=(0., 0.), deadline=2.)
+    table.endpoint[:], table.budgets[:] = 1e9, 1e9
+    table.fleet.kv[0] = 1e9 + .01
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1.])
+    engine.advance(1.)
+    assert engine.state[0] == 0 and engine.remaining[0] > 0
+    assert engine.result()["transferred_bytes"][0] == 1e9
+
+
+def test_streamed_kv_completion_is_invariant_to_proportional_fleet_scale():
+    from pool_shed_campaign import calibration, execute_feedback, forecast
+    central, results = calibration(0), []
+    for gpus in (6400, 64000):
+        table = forecast("measured_pack", 0, gpus, 8, .5, 5 * gpus / 8, 30)[0]
+        result = execute_feedback(table, table, "kv_only", table.timing, central, chunks=64, resolution=.5)
+        assert result["resident_debt_generated_work_s"] == [0, 0]
+        assert result["pending_backlog_reference_work_s"] <= 1e-8
+        results.append(result["shed_fraction"])
+    assert abs(results[0] - results[1]) <= 1e-8

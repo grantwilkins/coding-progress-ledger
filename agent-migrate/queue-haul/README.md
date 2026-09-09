@@ -47,8 +47,8 @@ contract, coding snapshot 0 generates about 0.353 requests/s/GPU; the old
 normalization implied about 7.46. Recorded coding trajectories cycle with a
 reset on wrap. A separate `coding_long` cohort starts at measured contexts of
 at least 24,576 tokens and follows the complete supported recorded trajectories.
-Source request duration is separate from interarrival spacing; quiescence
-waits for an active request, not an entire idle interval. Missing timestamps
+Source request duration uses a contextual phase-work proxy, separate from
+interarrival spacing; quiescence waits for an active request. Missing timestamps
 require an explicit equal-cadence assumption with synchronized source request
 starts; burst phases are a scenario, not a measured arrival distribution.
 Trajectories exceeding replay
@@ -57,8 +57,11 @@ request shapes. Conservative peak-cycle KV reservations remain at every load.
 
 `pool_shed_planner.py` uses receding-horizon batch admissions with common queue
 and migration-phase feedback for all five methods. Only the next admissions
-are committed. Future rates use central calibration, never hidden execution
-draws. Recorded future request shapes and resets are known to every planner;
+are committed. The default uses 64 execution waves and feedback resolution 0.5
+(half the original geometric intervals). Future rates use central calibration, never hidden execution
+draws. Planning runtime is reported separately and is not charged to the
+modeled migration deadline; these are offline policy simulations.
+Recorded future request shapes and resets are known to every planner;
 unknown future prompts and arrival-phase uncertainty are not sampled.
 Ongoing migrations, imported service, and mandatory buffer recovery enter
 later reservations. New admissions use the same per-batch compute/recovery rate
@@ -66,8 +69,8 @@ forecast as existing work. If the conservative forecast leaves an existing
 migration unfinished at the deadline, that route accepts no new starts at that
 decision. This guard is conservative; it does not prove physical infeasibility.
 Compute reservations use peak occupancy within each time
-bin; networking remains a flow-volume model. Exact source turns, resets,
-phase dependencies, and recovery are evaluated by the pooled event executor.
+bin; networking remains a flow-volume model. Recorded turns and resets, with
+modeled phase dependencies and recovery, are evaluated by the pooled event executor.
 There are no individual GPU, packet, or request objects. Replay and KV policies
 share the same applicable batch projections; redundant mixed columns are
 removed while QH can jointly select both action populations.
@@ -100,6 +103,12 @@ single-node reference. These are sensitivity scenarios, not asserted Azure
 region-pair capacities. KV uses measured native sealed blocks (256 tokens,
 12,582,912 bytes), with partial tails and live catch-up charged separately.
 Large replay rebuilds use the full-context profile.
+The sweep spans the production inter-DC capacity scale reported in
+[SWAN, §6.1 (SIGCOMM 2013)](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/swan-sigcomm13.pdf);
+it does not identify current available capacity for these Azure routes.
+[Lai et al. (HotCloud 2018)](https://www.usenix.org/conference/hotcloud18/presentation/lai)
+report stable inter-VM WAN rates across public-cloud measurements, supporting
+the distinction between measured endpoint rates and shared WAN capacity.
 
 Hardware reproduction runs the pooled engine against 440 loaded replay/KV
 holdouts, 160 recorded policy cases, and 72 long-context batches, plus the
