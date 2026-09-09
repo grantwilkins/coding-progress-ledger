@@ -250,6 +250,84 @@ respectively. Source requests also start synchronously every 22.63 s in this
 snapshot. Matching resident RPS, shape, context, and arrival timing remains
 necessary before interpreting the fleet results as deployment performance.
 
+The subsequent [replay/resident audit](outputs/a100-replay-audit/audit.json)
+keeps the large campaign stopped. `python pool_shed_replay_audit.py` reproduces
+the bounded audit, including twelve policy executions and the existing hardware
+timing checks. It changes no simulator calibration or production policy.
+**The fast replay is explainable under this scenario, but protected resident
+latency and realistic arrival behavior remain unvalidated.**
+
+- The 20 MW source has **40 MW of installed destination GPUs**. At 50% load,
+  the two destinations supply 66,666 spare GPU equivalents, while imported
+  source service requires 53,332.8. Increasing all three fleets preserves
+  replay work per spare GPU. Holding total WAN fixed makes KV progressively
+  harder; increasing GPU count alone does not impose an additional replay
+  slowdown. Free pooling of fractional replicas also assumes schedulable
+  capacity without per-GPU placement, preemption, or kernel-level contention.
+- Coding snapshot 0 averages 14,690 initial context tokens. Its initial replay
+  logs are 15.67 GB; the effective 0.80 GB/32K anchor still gives **189.82 TB**
+  of initial KV snapshots. At 1000 Gbps these volumes alone require 0.125 s
+  and 1,518.6 s respectively. These are initial-snapshot byte bounds, not
+  predictions for a migration whose snapshots change with time and resets.
+  The preserved replay run transfers 16.06 GB and completes at **19.064 s**,
+  before the next 22.633 s source arrivals, with **zero buffered requests**.
+- The coding destination offers 0.221 requests/s/GPU at its 50% point, versus
+  1.318 for the loaded 2048/32 reference and 3.688 for the regional 604/64
+  reference. Different shapes prevent interpreting those ratios as utilization
+  ratios. The coding load conversion reduces the fitted extra replay slowdown
+  from 15.31% at offered-reference rho=0.5 to **0.68%**. The additional measured
+  regional factors are 0.779/0.776; these are timing scales, not cache fractions.
+- **Zero resident debt is enforced by construction.** The executor does not
+  produce resident TTFT or TPOT. Separate regional holdouts show median resident
+  completion losses of 91.03% during replay and 2.81% during KV; those checks use
+  the original unprotected execution contract. They do not validate the fleet's
+  fractional protected-compute model. The independent
+  [A100 service-headroom confirmation](outputs/service-headroom-a100-20260815/confirmed.json)
+  also leaves `planner_usable=false` and `supported_bound=null`.
+  Resident latency depends on actual prefill/decode scheduling; vLLM documents
+  the TTFT/ITL tradeoff from changing prefill chunk size in its
+  [tuning guide](https://docs.vllm.ai/en/stable/configuration/optimization/#chunked-prefill).
+- Initial replay charges full context at the measured context-dependent rate.
+  **Incremental replay catch-up is weaker:** appending 256 tokens costs the same
+  0.0692 s after a 2,048-token or 30,000-token prefix. Its rate and packing depend
+  only on the append length; below measured support, interpolation from zero
+  scales down the 0.5256 s singleton completion overhead too. No matched
+  context-by-append calibration validates that rule. Hardware catch-up submits
+  full messages, whereas the simulator additionally assumes delta-log transport.
+  Source request durations are throughput-based proxies without an executed
+  source queue. Cyclic resets and exclusion of trajectories beyond approximately
+  32K also prevent indefinitely growing contexts.
+
+The audit's 30-second completed workload fractions are:
+
+| Scenario or timing ablation | Replay-only | QH LP |
+| --- | ---: | ---: |
+| Effective wire anchor, current assumptions | 100.00% | 99.99% |
+| Offered-reference timing factor set to one | 96.09% | 99.83% |
+| Regional replay speedup removed | 96.00% | 99.26% |
+| All replay batches serialized | 100.00% | 100.00% |
+| Destination load 75% (62.5% standing-service ceiling) | 59.01% | 60.59% |
+| Recorded long-context cohort | 87.88% | 88.70% |
+
+All use the effective wire anchor without further private-KV or replay-cache
+discounts. The first five share candidate batches and the fixed planning clock;
+the long-context pair shares its own library. Timing ablations leave resident
+traffic and capacity fixed, so setting the timing factor to one is **not a
+hardware-load match**. These results do not select a replacement calibration
+or certify small policy gaps against the known planning-grid sensitivity.
+Serializing batches alone does not remove the fast replay outcome.
+
+Existing timing reproduction passes again: 220 loaded replay holdouts, 440
+loaded replay/KV cases, 160 recorded policy cases, 72 long-context batches, and
+24 regional episodes. The regional check retains one false-feasible 25-second
+deadline. Resident-debt reproduction covers six held-out routes. Those frozen
+source checks leave protected service, live catch-up, and arrival-phase behavior
+outside their validation scope. [176 focused tests pass](outputs/a100-replay-audit/focused-tests.log),
+with the same three campaign integration tests excluded as in the cache audit.
+Before resuming the campaign, specify actual
+destination availability and resident traffic, then validate concurrent resident
+TTFT/TPOT and source quiescence/buffer recovery under that same contract.
+
 ```bash
 uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-service-validation
 uv run python pool_shed_campaign.py prepare --out outputs/a100-pooled-service
