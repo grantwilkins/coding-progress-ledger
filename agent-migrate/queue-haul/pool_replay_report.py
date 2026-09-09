@@ -3,6 +3,9 @@ import argparse
 import csv
 import hashlib
 import json
+import subprocess
+import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,7 +13,9 @@ import numpy as np
 
 import pool_shed_campaign as q
 from pool_shed_calibration import replay_seconds
-from pool_shed_execution import initial_work
+from pool_shed_execution import initial_work, kv_transfer_bytes, regional_execution_check
+from pool_shed_calibration import loaded_execution_check, resident_execution_check
+from loaded_service_model import historical_execution_check
 from pool_replay_measure import write
 from pool_replay_resident import summarize
 
@@ -116,6 +121,14 @@ def service(out, raw):
                         'arm':spec['arm'],'cohort':cohort,'window_start_s':a,'window_end_s':z,**summary}
                 window['outstanding_all_prior_arrivals']=sum(item['offset_s']<z for item in offered)-sum(
                     r.get('done') and r.get('status')==200 and r['end_ns']<=epoch+z*1e9 for r in cohort_rows)
+                exact=[r for r in cohort_rows if r.get('done') and r.get('status')==200 and r.get('exact_token_timestamps')
+                       and a<=(r['scheduled_ns']-epoch)/1e9<z and r['end_ns']<=epoch+z*1e9]
+                window['ttft_over_1s_requests']=sum((r['first_ns']-r['scheduled_ns'])/1e9>1 for r in exact)
+                window['request_tpot_over_100ms_requests']=sum(r['mean_tpot_s'] is not None and r['mean_tpot_s']>.1 for r in exact)
+                window['exact_completed_fraction_of_arrivals']=len(exact)/summary['offered_requests'] if summary['offered_requests'] else None
+                observed_power=[r for r in power if a<=(int(r['monotonic_ns'])-epoch)/1e9<z]
+                window['mean_power_w']=float(np.mean([float(r['power_w']) for r in observed_power])) if observed_power else None
+                window['mean_gpu_utilization_pct']=float(np.mean([float(r['utilization_pct']) for r in observed_power])) if observed_power else None
                 windows.append(window)
         admission=[(event['monotonic_ns']-epoch)/1e9 for event in result['migration_events'] if event['kind']=='destination_admission']
         after60=[r for r in metrics if r['monotonic_ns']>=epoch+60e9]
@@ -151,6 +164,11 @@ def service(out, raw):
                 'replay_completed_n':row['completed_requests'],'control_completed_n':reference['completed_requests']})
     csv_rows(out/'service-windows.csv',windows)
     csv_rows(out/'service-paired.csv',pairs)
+    migrations=[{k:r.get(k) for k in ('episode','workload','seed','rate','width','phase','session','status',
+        'prompt_tokens','output_tokens','cached_tokens','derived_prompt_minus_cache_tokens',
+        'start_ns','end_ns','ttft_s','mean_tpot_s','exact_token_timestamps','state_code_valid','context_hash')}
+        for r in raw if r.get('cohort')=='migration' and r.get('episode','').startswith(('episodes-','followups-'))]
+    csv_rows(out/'migration-observations.csv',migrations)
     write(out/'service-analysis.json',{'episodes':records,'windows':windows,'pairs':pairs,
         'scope':'Destination-only synthetic content with recorded evolving shapes; paired arrivals and demand. No active source, ownership transfer or source quiescence measurement.',
         'recovery_scope':'Outstanding arrivals and completion deficit relative to matched control while arrivals continue; no cleanup-drain recovery claim.',
@@ -159,17 +177,89 @@ def service(out, raw):
     return records
 
 
+def policies(out, raw, calibration):
+    """Exactly four cells; qualification is a finite-window hardware screen."""
+    qualification={}
+    for workload in ('coding','coding_long'):
+        nominal=.5*q.sample_fleet(workload,gpus=6666,gpus_per_node=8).metadata['reference_rps']
+        qualification[workload]={'offered_rps_per_gpu':nominal,'repeats':{}}
+        for seed in (7101,7102):
+            rows=[r for r in raw if r.get('workload')==workload and r.get('arm')=='control'
+                  and r.get('seed')==seed and r.get('cohort')=='resident' and np.isclose(r['rate'],nominal)
+                  and r.get('episode','').startswith('episodes-')
+                  and 60 <= (r['scheduled_ns']-r['episode_epoch_ns'])/1e9 < 180]
+            done=[r for r in rows if r.get('done') and r.get('status')==200]
+            exact=[r for r in done if r['exact_token_timestamps']]
+            ttft=[(r['first_ns']-r['scheduled_ns'])/1e9 for r in exact]
+            tpot=[r['mean_tpot_s'] for r in exact if r['mean_tpot_s'] is not None]
+            coverage=len(exact)/len(done) if done else 0
+            p90=lambda values:float(np.quantile(values,.9)) if values else None
+            a,z=p90(ttft),p90(tpot)
+            qualification[workload]['repeats'][str(seed)]={'completed_requests':len(done),'offered_requests':len(rows),
+                'censored_or_failed':len(rows)-len(done),'exact_timing_coverage':coverage,'tpot_requests':len(tpot),
+                'p90_arrival_ttft_s':a,'p90_request_mean_tpot_s':z,
+                'completed_request_screen_pass':bool(coverage>=.99 and a is not None and a<=1 and z is not None and z<=.1)}
+    report={'qualification':qualification,'scope':'Four central-parameter cells, common candidates and traffic within each cell; observed completed-request service screen at the declared RPS. Finite 24-session hardware mixture does not validate fleet placement, tails, source quiescence or KV transfer.',
+        'campaign_ready':False,'fleet_latency_validated':False,'coefficient_changes':[],
+        'wire_bytes_per_32768_tokens':800000000,'native_serialized_bytes_per_32768_tokens':1610612736,
+        'wire_scope':'Decimal effective-wire assumption; no extra private-KV discount. Native resident memory unchanged.',
+        'source_gpus':6666,'destination_gpus_per_site':[6666,6666],'installed_gpu_nameplate_mw_per_site':1.9998,
+        'gpus_per_node':8,'shared_wan_gbps':1000,'sources':q.provenance(calibration),
+        'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'cells':[]}
+    if not all(r['completed_request_screen_pass'] for w in qualification.values() for r in w['repeats'].values()):
+        report['status']='unmeasured_qualified_operating_point_missing'
+        write(out/'policy-verification.json',report)
+        return
+    report['status']='running'
+    endpoint=np.r_[np.median(q.network_samples()[:,:2],axis=0),0.];endpoint[2]=endpoint[:2].sum()
+    timing=calibration['timing'][0]
+    for workload in ('coding','coding_long'):
+        fleet=q.sample_fleet(workload,gpus=6666,gpus_per_node=8)
+        fleet=replace(fleet,metadata={**fleet.metadata,'planning_reference_s':4.,
+            'kv_wire_scale':.8e9/(32768*49152),'replay_cached_tokens':np.zeros(len(fleet.count)).tolist(),
+            'kv_shared_tokens':np.zeros(len(fleet.count)).tolist()})
+        fleet=replace(fleet,kv=kv_transfer_bytes(fleet,fleet.context,calibration))
+        budgets=q.bandwidth(endpoint,fleet.nodes,1000)
+        replay,kv=q.library(fleet)
+        replay,kv=q.include_isolated(replay,kv,q.isolated_methods(fleet,.5,endpoint,budgets,timing))
+        candidate_hash=hashlib.sha256(replay.tobytes()+kv.tobytes()).hexdigest()
+        for deadline in (30,120):
+            table=q.schedule_table(fleet,replay,kv,.5,deadline,endpoint,budgets,timing)
+            cell={'workload':workload,'deadline_s':deadline,'candidate_sha256':candidate_hash,
+                  'resident_rps_per_gpu':qualification[workload]['offered_rps_per_gpu'],
+                  'results':{},'budgets_bytes_per_s':budgets.tolist(),'fleet_metadata':fleet.metadata}
+            report['cells'].append(cell)
+            for policy in q.POLICIES:
+                started=time.monotonic()
+                result=q.execute_feedback(table,table,policy,timing,calibration)
+                assert result['max_relative_residual']<=1e-8 and result['last_completion_s']<=deadline+1e-8
+                assert not result['resident_latency_validated']
+                cell['results'][policy]={**result,'verification_wall_s':time.monotonic()-started}
+                write(out/'policy-verification.json',report)
+                print(workload,deadline,policy,result['shed_fraction'],result['pending_buffered_requests'],flush=True)
+    report['status']='complete';report['policy_evaluations']=sum(len(cell['results']) for cell in report['cells'])
+    assert report['policy_evaluations']==20
+    write(out/'policy-verification.json',report)
+    regional=regional_execution_check(calibration)
+    write(out/'existing-holdouts.json',{'loaded':loaded_execution_check(calibration),'regional':regional,
+        'resident':resident_execution_check(calibration,regional),'historical':historical_execution_check(calibration),
+        'scope':'Existing hardware holdouts, unchanged coefficients; these do not validate the new fleet latency or recovery assumptions.'})
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out',type=Path,required=True)
     parser.add_argument('--service',action='store_true')
+    parser.add_argument('--policies',action='store_true')
     args=parser.parse_args()
     raw=requests(args.out)
-    rows=unloaded(args.out,raw,q.calibration(0))
+    calibration=q.calibration(0)
+    rows=unloaded(args.out,raw,calibration)
     print('Unloaded phase observations:',len(rows),'valid:',sum(r['phase_valid'] for r in rows))
-    if args.service:
+    if args.service or args.policies:
         raw += [json.loads(line) for line in (args.out/'requests-recovered.jsonl').read_text().splitlines()]
         print('Service episodes:',len(service(args.out,raw)))
+    if args.policies:policies(args.out,raw,calibration)
 
 
 if __name__=='__main__':main()
