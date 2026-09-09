@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import gzip
 import json
 import os
 import subprocess
@@ -20,6 +21,17 @@ import migration_testbed as b
 
 def write(path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False) + '\n')
+
+
+def cache_integrity(cold, warm, before, after):
+    queries = after['vllm:prefix_cache_queries_total'] - before['vllm:prefix_cache_queries_total']
+    hits = after['vllm:prefix_cache_hits_total'] - before['vllm:prefix_cache_hits_total']
+    external = after['vllm:external_prefix_cache_hits_total'] - before['vllm:external_prefix_cache_hits_total']
+    return {'cold_usage_cached_tokens': cold.get('cached_tokens'), 'warm_usage_cached_tokens': warm.get('cached_tokens'),
+            'isolated_cold_engine_queries': queries, 'isolated_cold_engine_hits': hits,
+            'isolated_cold_external_hits': external, 'cold_state_basis': 'independent isolated engine counter deltas',
+            'passed': queries == cold['prompt_tokens'] and hits == external == 0
+            and warm.get('cached_tokens') is not None and warm['cached_tokens'] > 0}
 
 
 class Acquisition:
@@ -100,18 +112,32 @@ class Acquisition:
         self.record(self.requests, row)
         return row
 
+    def engine_metrics(self):
+        return serving.parse_metrics(b.http_text(self.cfg.host, self.cfg.sink_port, 'GET', '/metrics'))
+
     def unloaded(self, plan):
-        root = self.out / 'unloaded'
+        previous = self.out / 'unloaded'
+        root = self.out / ('unloaded-matrix' if previous.exists() else 'unloaded')
         root.mkdir(exist_ok=False)
         metrics = serving.MetricsSampler(self.cfg.host, self.cfg.sink_port, root/'engine.csv', .5)
         power = p.PowerSampler(root/'power.csv', .5)
         metrics.start(); power.start()
         try:
-            messages, code = self.history('cache-verification-7101', 2048)
-            cold = self.chat(messages, code, {'episode':'cache-integrity','phase':'cold'}, 'integrity-7101')
-            warm = self.chat(messages, code, {'episode':'cache-integrity','phase':'shared_prefix'}, 'integrity-7101')
-            check = {'cold_cached_tokens': cold.get('cached_tokens'), 'warm_cached_tokens': warm.get('cached_tokens'),
-                     'passed': cold.get('cached_tokens') == 0 and warm.get('cached_tokens') is not None and warm['cached_tokens'] > 0}
+            if previous != root:
+                rows = [json.loads(line) for line in (self.out/'requests.jsonl').read_text().splitlines()]
+                cold, warm = [next(r for r in rows if r.get('episode') == 'cache-integrity' and r['phase'] == phase)
+                              for phase in ('cold', 'shared_prefix')]
+                samples = [json.loads(line) for line in gzip.open(previous/'engine.prom.jsonl.gz', 'rt')]
+                before = serving.parse_metrics(samples[0]['prometheus_text'])
+                after = serving.parse_metrics(max((r for r in samples if r['monotonic_ns'] < warm['start_ns']),
+                                                  key=lambda r:r['monotonic_ns'])['prometheus_text'])
+            else:
+                messages, code = self.history('cache-verification-7101', 2048)
+                before = self.engine_metrics()
+                cold = self.chat(messages, code, {'episode':'cache-integrity','phase':'cold'}, 'integrity-7101')
+                after = self.engine_metrics()
+                warm = self.chat(messages, code, {'episode':'cache-integrity','phase':'shared_prefix'}, 'integrity-7101')
+            check = cache_integrity(cold, warm, before, after)
             write(root/'cache-integrity.json', check)
             if not check['passed']:
                 raise RuntimeError('cold/shared-prefix cache telemetry verification failed')
@@ -125,6 +151,7 @@ class Acquisition:
                     pairs = cold_histories if phase == 'cold_updated' else histories
                     if phase == 'catch_up':
                         pairs = [(self.append(messages, code, trial['append_tokens']), code) for messages, code in histories]
+                    before_phase = self.engine_metrics()
                     phase_start = time.monotonic_ns()
                     with ThreadPoolExecutor(max_workers=trial['width']) as executor:
                         futures = [executor.submit(self.chat, messages, code,
@@ -134,7 +161,7 @@ class Acquisition:
                         rows = [f.result() for f in futures]
                     results.append({'phase':phase,'start_ns':phase_start,'end_ns':time.monotonic_ns(),
                         'request_ids':[r['request_id'] for r in rows], 'cached_tokens':[r.get('cached_tokens') for r in rows],
-                        'statuses':[r['status'] for r in rows]})
+                        'statuses':[r['status'] for r in rows], 'engine_before':before_phase, 'engine_after':self.engine_metrics()})
                 write(root/f'{episode}.json', {'trial':trial,'phases':results,'elapsed_s':time.monotonic()-started})
                 print(episode, 'complete', round(time.monotonic()-started,2), flush=True)
         finally:
