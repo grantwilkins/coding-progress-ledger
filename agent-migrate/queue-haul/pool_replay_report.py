@@ -1,6 +1,7 @@
 """Reduce bounded replay evidence without fitting simulator coefficients."""
 import argparse
 import csv
+import gzip
 import hashlib
 import json
 import subprocess
@@ -20,10 +21,15 @@ from pool_replay_measure import write
 from pool_replay_resident import summarize
 
 
+def raw_bytes(out,name):
+    path=out/name
+    return path.read_bytes() if path.exists() else gzip.decompress((out/(name+'.gz')).read_bytes())
+
+
 def requests(out):
     recovery = json.loads((out/'node-recovery.json').read_text())
     path = out/'requests.jsonl'
-    raw = path.read_bytes()
+    raw = raw_bytes(out,path.name)
     damaged = recovery['raw_pre_reboot'][path.name]
     assert hashlib.sha256(raw).hexdigest() == damaged['sha256']
     return [json.loads(line) for line in raw[:damaged['valid_prefix_bytes']].splitlines()]
@@ -106,7 +112,7 @@ def service(out, raw):
     wakeups={}
     recovery=json.loads((out/'node-recovery.json').read_text())
     for name in ('request-events.jsonl','request-events-recovered.jsonl'):
-        data=(out/name).read_bytes()
+        data=raw_bytes(out,name)
         if name in recovery['raw_pre_reboot']:data=data[:recovery['raw_pre_reboot'][name]['valid_prefix_bytes']]
         for line in data.splitlines():
             if b'"kind":"scheduled_arrival"' not in line:continue
@@ -276,7 +282,7 @@ def main():
     rows=unloaded(args.out,raw,calibration)
     print('Unloaded phase observations:',len(rows),'valid:',sum(r['phase_valid'] for r in rows))
     if args.service or args.policies:
-        raw += [json.loads(line) for line in (args.out/'requests-recovered.jsonl').read_text().splitlines()]
+        raw += [json.loads(line) for line in raw_bytes(args.out,'requests-recovered.jsonl').splitlines()]
         print('Service episodes:',len(service(args.out,raw)))
     if args.policies:policies(args.out,raw,calibration)
 
