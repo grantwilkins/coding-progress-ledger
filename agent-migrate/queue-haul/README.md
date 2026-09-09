@@ -176,8 +176,10 @@ execution on one GPU remain imperfect transfers. The fixture also lacks an
 explicit 135-token verification prefix. These checks assess recorded actions,
 not the new planner's decisions, and do not establish universal ranking fidelity.
 
-The supplemental [2 MW comparison](outputs/a100-pooled-service-pre-stable-ties/scale-diagnostic.json)
-scales all three GPU fleets together. At 50% destination load and a 300 s
+The supplemental [2 MW comparison](outputs/a100-pooled-service/scale-diagnostic.json)
+scales all three GPU fleets together; [30 s](outputs/a100-pooled-service/scale-comparison-30s.png)
+and [300 s](outputs/a100-pooled-service/scale-comparison-300s.png) figures show handoff and KV fractions.
+At 50% destination load and a 300 s
 deadline, QH completes coding KV handoffs for 1.41% of the original source at
 20 MW with a 1000 Gbps WAN budget, versus 11.80% at 2 MW with the same budget.
 Scaling WAN capacity proportionally reduces the latter to 1.23%. Downsizing
