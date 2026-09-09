@@ -1,0 +1,48 @@
+{
+  "spec": {
+    "episode": "scout-coding-0",
+    "trace_id": "scout-coding-0",
+    "seed": 7101,
+    "workload": "coding",
+    "rate": 0.22130012741816424,
+    "arm": "resident",
+    "probe": 0
+  },
+  "epoch_ns": 24498229977826,
+  "boundary_ns": 24588229977826,
+  "summaries": {
+    "resident": {
+      "30-90": {
+        "offered_requests": 15,
+        "completed_requests": 15,
+        "exact_requests": 8,
+        "tpot_requests": 1,
+        "unfinished_or_failed_requests": 0,
+        "offered_rps": 0.25,
+        "completed_rps": 0.25,
+        "exact_timing_coverage": 0.5333333333333333,
+        "p90_arrival_ttft_s": 0.125220987,
+        "p90_request_mean_tpot_s": 0.030949,
+        "p90_client_queue_s": 0.015214959,
+        "queue_growth_requests": 0.0,
+        "max_engine_waiting": 0.0,
+        "prompt_tokens": {
+          "min": 3491,
+          "median": 14923.0,
+          "max": 31548
+        },
+        "output_tokens": {
+          "median": 14.0,
+          "max": 66
+        },
+        "screen_pass": false,
+        "tail_guarantee": false,
+        "scope": "finite-window request-level screen; sample counts and censoring retained"
+      }
+    }
+  },
+  "migration_events": [],
+  "scope": "destination-only replay contention; no active source GPU or paired KV; synthetic content, recorded lengths and causal retained history",
+  "resident_population": 24,
+  "incoming_population": 0
+}

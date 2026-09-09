@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/datadrive/queue-haul-tools/bin/uv",
+    "run",
+    "--no-project",
+    "--python",
+    "/tmp/qh-replay-runtime/bin/python",
+    "pytest",
+    "-q",
+    "-o",
+    "cache_dir=/tmp/qh-validation-pytest",
+    "tests/test_service_headroom_campaign.py::test_async_trace_releases_many_queued_requests_without_thread_backpressure"
+  ],
+  "returncode": 0,
+  "elapsed_wall_s": 2.565544605255127,
+  "log": "isolated-dispatch-test.log",
+  "summary": "1 passed in 1.87s",
+  "scope": "One isolated diagnostic after CPU policy and focused-test jobs finished; original concurrent-host timing failure retained. No threshold or implementation changed."
+}

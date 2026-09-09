@@ -1,0 +1,103 @@
+{
+  "status": 200,
+  "error": "",
+  "request_id": "cmpl-aa6ae9d6c82febdc",
+  "start_ns": 25230462729471,
+  "first_ns": 25231307713356,
+  "last_token_ns": 25231567119487,
+  "end_ns": 25231567171745,
+  "prompt_tokens": 9391,
+  "output_tokens": 10,
+  "recorded_output_tokens": 10,
+  "cached_tokens": null,
+  "done": true,
+  "finish_reason": "length",
+  "token_events": [
+    {
+      "monotonic_ns": 25231307713356,
+      "token_ids": [
+        27
+      ]
+    },
+    {
+      "monotonic_ns": 25231333854008,
+      "token_ids": [
+        91
+      ]
+    },
+    {
+      "monotonic_ns": 25231366176714,
+      "token_ids": [
+        180870
+      ]
+    },
+    {
+      "monotonic_ns": 25231399716095,
+      "token_ids": [
+        105909
+      ]
+    },
+    {
+      "monotonic_ns": 25231433066390,
+      "token_ids": [
+        62
+      ]
+    },
+    {
+      "monotonic_ns": 25231465250777,
+      "token_ids": [
+        14785
+      ]
+    },
+    {
+      "monotonic_ns": 25231498252669,
+      "token_ids": [
+        9912
+      ]
+    },
+    {
+      "monotonic_ns": 25231532429897,
+      "token_ids": [
+        91
+      ]
+    },
+    {
+      "monotonic_ns": 25231567076606,
+      "token_ids": [
+        29
+      ]
+    },
+    {
+      "monotonic_ns": 25231567119487,
+      "token_ids": [
+        200054
+      ]
+    }
+  ],
+  "token_ids": [
+    27,
+    91,
+    180870,
+    105909,
+    62,
+    14785,
+    9912,
+    91,
+    29,
+    200054
+  ],
+  "token_itls_s": [
+    0.026140652,
+    0.032322706,
+    0.033539381,
+    0.033350295,
+    0.032184387,
+    0.033001892,
+    0.034177228,
+    0.034646709,
+    4.2881e-05
+  ],
+  "exact_token_timestamps": true,
+  "ttft_s": 0.844983885,
+  "mean_tpot_s": 0.028822903444444443
+}

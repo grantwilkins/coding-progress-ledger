@@ -1,0 +1,9 @@
+.                                                                        [100%]
+=============================== warnings summary ===============================
+queue-haul/tests/test_replay_stream_queue.py::test_native_delta_events_remain_distinct
+queue-haul/tests/test_replay_stream_queue.py::test_native_delta_events_remain_distinct
+  /tmp/qh-replay-runtime/lib/python3.12/site-packages/torch/cuda/__init__.py:1061: UserWarning: Can't initialize NVML
+    raw_cnt = _raw_device_count_nvml()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 2 warnings in 8.41s

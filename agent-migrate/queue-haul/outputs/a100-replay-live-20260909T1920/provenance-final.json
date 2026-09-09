@@ -1,0 +1,30 @@
+{
+  "commit_before_evidence_commit": "b9581212aa726988d26247e98c084366446254ea",
+  "dirty_state_before_evidence_commit": " M agent-migrate/queue-haul/README.md\n?? agent-migrate/queue-haul/outputs/a100-replay-live-20260909T1920/\n",
+  "baseline": "e68f1d26",
+  "autostash_fix": "35be3279",
+  "commits_since_autostash": [
+    "b9581212aa726988d26247e98c084366446254ea Censor cleanup-only migration completions and retain cross-window latency",
+    "b952d8c7acbad696bfe5abd31e9652deda894681 Report cache-derived work separately from engine completion counters",
+    "bd5864c9cf4b935f224022c8e5e9f0a02080c2ab Retain trailing queue growth in destination regression expectations",
+    "2017444e0e845e2ef14126c17619f5eb3e6e0431 Check actual replay prerequisites instead of unconditionally failing preflight",
+    "3309e11378519094d015c65e68273284034090d4 Read lossless archived request telemetry for reproducible analysis",
+    "f4084faa2acb7e93953f2bed1ba52034191c2b80 Flag recovery comparisons with incomplete incoming serving populations",
+    "23a380d63049d70cb1ca35a17ac37c8fdb69c7ab Separate client scheduling lateness from pre-dispatch queue delay",
+    "1f23bc1e1f14df401edc14d8d317c28813594336 Prepare gated twenty-policy verification and separate observed latency violations",
+    "c2166d70684d2f1954f84e7a93998dd7e392c97d Keep finite-window censoring separate from a measured service boundary",
+    "ae041a030bd43185884bb86692f3ebbf5b1417f6 Restore the reference replay state-code format and disclose early probe differences",
+    "21b1822f76d80fd39451d28d6621fb52452bc6c6 Report paired service recovery and reserve time for complete bounded episodes",
+    "c2f572925e43a498dcd8317c3f0de4e8e7845a69 Pair the lowest and heaviest tested stable resident rates",
+    "87e0c317ce0f9815b362051d043a1cf46386ff73 Report measured replay cache work and independent repeat errors without refitting",
+    "8de0dd6bfa05db3fb4e2247d45f1983df590b17e Preserve replay validity and the acquisition deadline across node restarts",
+    "1628a988ce3ff9576110e16f27c0dea5d3de4f8e Count service completions and outstanding work at each observation boundary",
+    "60fc361cde766d6a88079194b0b335eceb3827b6 Resume bounded scouts without treating telemetry gaps as service failures",
+    "60422a3816510e4abea32bb6a93c2d509357ac58 Match materialized incoming state and isolate resident episode cache histories",
+    "ee8505a2c981d1a10e335e1713e765a6413cb0b0 Add causal resident traffic and retain failed replay trials without retries",
+    "e40d956b564f34fdec0d40465bf2acbc99b53a61 Verify cold cache state from independent engine counters when usage is absent",
+    "72b0c374fd23f0d811ec2b296378960b54b473b4 Add bounded local A100 replay and warm catch-up acquisition",
+    "f3576158e2ef805e3aa1c816e95ce4f9919bb09c Record blocked A100 replay acquisition, frozen plan, and validation evidence",
+    "bf0abe9ca807c2407a4ce69c610bf591da97798f Preserve replay token and cache telemetry and freeze bounded validation inputs"
+  ]
+}

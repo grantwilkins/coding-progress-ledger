@@ -1,0 +1,47 @@
+{
+  "commands": {
+    "focused-simulator": [
+      "/datadrive/queue-haul-tools/bin/uv",
+      "run",
+      "--no-project",
+      "--python",
+      "/tmp/qh-replay-runtime/bin/python",
+      "pytest",
+      "-q",
+      "-o",
+      "cache_dir=/tmp/qh-validation-pytest",
+      "tests/test_pool_shed.py",
+      "tests/test_pool_shed_calibration.py",
+      "tests/test_pool_shed_execution.py",
+      "tests/test_pool_shed_planner.py",
+      "tests/test_loaded_service_model.py",
+      "-k",
+      "not independent_regional_fidelity and not campaign_reduction and not execution_draws"
+    ],
+    "instrumentation": [
+      "/datadrive/queue-haul-tools/bin/uv",
+      "run",
+      "--no-project",
+      "--python",
+      "/tmp/qh-replay-runtime/bin/python",
+      "pytest",
+      "-q",
+      "-o",
+      "cache_dir=/tmp/qh-validation-pytest",
+      "tests/test_migration.py",
+      "tests/test_migration_profiler.py",
+      "tests/test_migration_testbed.py",
+      "tests/test_destination_runner.py",
+      "tests/test_service_headroom_campaign.py",
+      "tests/test_service_admission_transition_campaign.py",
+      "tests/test_pool_replay_validation.py",
+      "tests/test_pool_replay_measure.py",
+      "tests/test_pool_replay_resident.py",
+      "tests/test_pool_replay_report.py"
+    ]
+  },
+  "environment": {
+    "UV_CACHE_DIR": "/tmp/qh-replay-uv-cache"
+  },
+  "wall_ns": 1788990569779823424
+}

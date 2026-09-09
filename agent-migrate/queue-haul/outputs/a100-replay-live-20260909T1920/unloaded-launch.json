@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "pool_replay_measure.py",
+    "unloaded",
+    "--out",
+    "outputs/a100-replay-live-20260909T1920",
+    "--plan",
+    "outputs/a100-replay-validation-20260909T185553Z/plan.json"
+  ],
+  "commit": "ee8505a2c981d1a10e335e1713e765a6413cb0b0",
+  "dirty": "?? agent-migrate/queue-haul/outputs/a100-replay-live-20260909T1920/\n",
+  "source_sha256": "98f8846ee141ba3bc2e2783a8860bcc69797114f09162e3f46d2a467ffccdc48",
+  "plan_sha256": "f8efef025f28eaf40c02af37083a4c593a0c8b40784e708460251acf57385b11",
+  "gpu": "name, uuid, memory.total [MiB]\nNVIDIA A100 80GB PCIe, GPU-d809b3d2-a896-24d6-65b3-48aae6e5ab86, 81920 MiB\n"
+}

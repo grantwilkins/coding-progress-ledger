@@ -1,0 +1,24 @@
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_shed_campaign.py:434: RuntimeWarning: HiGHS model import warning; original constraints are checked after solving
+  result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper, certificate)
+Unloaded phase observations: 72 valid: 64
+Service episodes: 26
+coding 30 queue_haul 0.9999999989995428 53.95592246579252
+coding 30 greedy 0.7764795976025716 4446.999472522026
+coding 30 kv_only 0.38233995222673933 164.7635419938735
+coding 30 replay_only 0.99999999797491 54.1832780926177
+coding 30 isolated_fastest 0.6581119063132606 0.0
+coding 120 queue_haul 0.9999999988591539 0.0
+coding 120 greedy 1.0 0.0
+coding 120 kv_only 0.9776180032869303 0.0006085613436356268
+coding 120 replay_only 0.9999999989621295 0.0
+coding 120 isolated_fastest 0.9776928205944178 0.34060960257329065
+coding_long 30 queue_haul 0.9396948319635757 1342.6199814671722
+coding_long 30 greedy 0.7884327476099617 1157.2944173267988
+coding_long 30 kv_only 0.18828959865651684 774.1074396331128
+coding_long 30 replay_only 0.8731156531720567 417.1018060381631
+coding_long 30 isolated_fastest 0.19628636679338346 115.1754717818289
+coding_long 120 queue_haul 0.9999999989999846 0.0035316269467375195
+coding_long 120 greedy 0.976370407952297 1369.807932403987
+coding_long 120 kv_only 0.7260200932986856 0.0
+coding_long 120 replay_only 0.9999999989993162 557.756466543824
+coding_long 120 isolated_fastest 0.7520357307068394 0.0

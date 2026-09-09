@@ -1,0 +1,14 @@
+{
+  "wall_ns": 1788985062107380451,
+  "previous_format": "10 lowercase hexadecimal characters",
+  "reference_and_remaining_format": "12 uppercase hexadecimal characters",
+  "affected_measurements": "unloaded trials and pre-main integrity checks; not resident completion traffic",
+  "unchanged_settings": {
+    "max_tokens": 512,
+    "temperature": 0,
+    "reasoning_effort": "low",
+    "ignore_eos": false,
+    "probe_construction": "LiveSession.probe with full retained messages"
+  },
+  "implication": "Actual rendered input and output token counts retained. Do not fit a reference completion-overhead correction from the initial trials; code format equivalence is not assumed. Native executed-token/cache evidence remains directly observed."
+}

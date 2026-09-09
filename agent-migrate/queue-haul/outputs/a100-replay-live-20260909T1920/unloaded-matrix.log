@@ -1,0 +1,30 @@
+unloaded-00-s7101 complete 11.48
+unloaded-01-s7101 complete 3.45
+unloaded-02-s7101 complete 7.93
+unloaded-03-s7101 complete 8.09
+unloaded-04-s7101 complete 4.54
+unloaded-05-s7101 complete 12.68
+unloaded-06-s7101 complete 78.67
+unloaded-07-s7101 complete 14.73
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_measure.py", line 189, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_measure.py", line 185, in main
+    acquisition.unloaded(plan)
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_measure.py", line 161, in unloaded
+    rows = [f.result() for f in futures]
+            ^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_measure.py", line 94, in chat
+    result, text = p.stream_chat(self.cfg, self.cfg.sink_port, self.probe(messages, code),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 730, in stream_chat
+    raise StreamResponseError(f"chat stream error: {item['error']}")
+migration_profiler.StreamResponseError: chat stream error: {'message': 'unexpected tokens remaining in message header: Some("<|constrain|>session state")', 'type': 'InternalServerError', 'param': None, 'code': 500}

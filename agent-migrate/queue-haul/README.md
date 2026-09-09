@@ -157,31 +157,72 @@ contract, not a general TTFT/TPOT guarantee. Transferring it to other mixtures
 and to shared migration occupancy is explicit. Contexts outside the serving
 curves use the slowest measured phase rate and are flagged as extrapolated.
 
-The [2026-09-09 bounded validation attempt](outputs/a100-replay-validation-20260909T185553Z/report.json)
-stopped before hardware acquisition: the local NVIDIA driver is unavailable,
-the installed vLLM is 0.24.0 rather than the required 0.22.0, and no trusted
-remote A100 endpoint was accessible. **Zero new GPU measurements were collected.**
-The [frozen plan](outputs/a100-replay-validation-20260909T185553Z/plan.json)
-records seeds 7101/7102, the 150-minute acquisition ceiling, exact sampled
-trajectories, exclusions, input hashes, and 0.221300/0.188178 RPS/GPU scout
-starts for coding/coding_long. These are starting rates, not validated capacity.
-`pool_replay_validation.py prepare --out NEW_DIRECTORY` freezes these inputs;
-its `preflight` command records prerequisites and exits unsuccessfully.
-This adapter does not execute measurements: retained-history rendering,
-causal arrivals and shared-service episode execution still require implementation
-and verification on the reference stack.
+The [2026-09-09 bounded A100 validation](outputs/a100-replay-live-20260909T1920/report.json)
+collected 24 unloaded trial attempts, eight scout attempts, 16 destination-only
+control/replay episodes and four targeted sensitivities. Acquisition, startup,
+reboot and cleanup took **148.6 minutes**, within the 150-minute cap. The GPU
+runtime was stopped afterward. Previous results remain preserved.
 
-The migration chat path now requests token IDs without changing its 512-token
-probe or generation settings, timestamps reasoning output, and retains raw
-response events. Missing cache counts remain unknown; derived catch-up processed
-counts survive CSV reduction. Hardware timing coverage and cache integrity still
-require measurement. [Instrumentation tests](outputs/a100-replay-validation-20260909T185553Z/instrumentation-tests.log)
-have 261 passes and one pre-existing queue-drift failure, reproduced on the
-unmodified checkout. [Focused simulator tests](outputs/a100-replay-validation-20260909T185553Z/focused-simulator-tests.log)
-have 181 passes with the three specified exclusions. Archived timing errors and
-nominal replay/catch-up predictions in that directory are explicitly unvalidated
-by this attempt. No simulator coefficients changed, and the twenty policy evaluations
-remain blocked on a measured resident operating point.
+Full-message catch-up naturally reused native prefixes. The second repeat at
+width eight produced the following elapsed times; the final column is the
+unchanged simulator's local full-rebuild catch-up prediction:
+
+| Retained tokens | Initial replay | Warm +32 | Cold updated | Full-rebuild prediction |
+|---:|---:|---:|---:|---:|
+| 2,048 | 2.07 s | 1.26 s | 2.12 s | 1.72 s |
+| 8,192 | 5.72 s | 1.12 s | 5.81 s | 6.07 s |
+| 30,000 | 32.50 s | 1.41 s | 32.43 s | 35.44 s |
+
+At 30K/width eight, a 2,048-token append took 5.03 s warm versus 35.94 s cold.
+[Per-condition observations](outputs/a100-replay-live-20260909T1920/unloaded-observations.csv)
+and [held-out errors](outputs/a100-replay-live-20260909T1920/unloaded-heldout.csv)
+retain invalid phases: 64 of 72 phases and 18 complete triplets were valid.
+Unloaded probes retained full messages and the 512-token generation limit but
+used a different state-code format; they do not calibrate reference completion
+overhead. Engine computed-token counters and derived prompt-minus-cache counts
+are separate, and missing cache usage fields remain unknown.
+
+Cheap warm work does not establish service feasibility. During width-eight replay,
+observed resident P90 arrival TTFT reached roughly 12–24 s. In both width-16
+sensitivities, zero sessions were admitted by the 30-second checkpoint; only
+4/16 and 5/16 were admitted by the observation boundary. Respectively 34/44 and
+33/46 post-migration resident arrivals remained unfinished. Catch-ups completing
+after the boundary are censored, including completions during cleanup.
+[Paired service windows](outputs/a100-replay-live-20260909T1920/service-paired.csv)
+report latency, outstanding work and recovery while arrivals continue; failed
+admissions prevent claims about equivalent full serving populations.
+
+The run used native vLLM 0.22.0/LMCache 0.5.1 with the reference configuration,
+plus a recorded FIFO token-event delivery patch. A node reboot changed the A100
+UUID; both identities and runtime differences are recorded. Early timing gaps
+and interrupted attempts remain in the package. Resident histories evolve through
+recorded turns and resets, with assumed causal arrivals. The 24-history mixture
+per GPU is not a validated physical placement of the modeled inventory. Tested
+resident rates were 0.110650/0.221300 RPS for coding and 0.188178/0.376357 for
+coding_long; neither scout established a capacity boundary.
+
+The [twenty-policy diagnostic](outputs/a100-replay-live-20260909T1920/policy-comparison.csv)
+uses the nominal tested rates, 30/120-second deadlines, 6,666 source GPUs and
+6,666 GPUs at each destination, and the shared 1,000-Gbit/s WAN assumption.
+Completed-request control screens passed, with censoring disclosed; this does
+not validate a fleet SLO operating point. The 0.80-GB decimal effective-wire
+anchor remains unvalidated on this path, separate from native KV geometry and
+resident memory. No timing, cache, normalization or policy-resource coefficient
+changed. **Full SLO-feasibility campaigns are not ready:** live source quiescence,
+paired KV transfer, physical cache placement and latency/recovery mappings remain
+open. A single destination GPU cannot validate source-active ownership transfer.
+
+The [focused tests](outputs/a100-replay-live-20260909T1920/focused-simulator-tests.log)
+passed 181 tests with the three requested exclusions. Host instrumentation checks
+passed 258 tests with one 50-ms dispatch-timing assertion failure during concurrent
+CPU verification; that test passed once in isolation, and both results are retained.
+The frozen plan, input/model hashes, exact launches, raw token/request events,
+metrics, power traces and reproduction commands are linked from the run report.
+`pool_replay_validation.py prepare` freezes inputs; `pool_replay_measure.py` and
+`pool_replay_resident.py` execute the bounded stages against a prepared runtime.
+`pool_replay_report.py --out RUN_DIRECTORY --policies` reproduces the reductions
+and the twenty evaluations. The saved 96.3% audit uses a different candidate union
+and is not a controlled reproduction of this bounded comparison.
 
 Source load is 0.8; destination loads are 0.25, 0.50, 0.75, 0.90, and 0.95.
 At equal source/destination sizes, the standing-service shed ceiling

@@ -1,0 +1,64 @@
+{
+  "detected_wall_ns": 1788984389796995491,
+  "boot_id": "f1ba9836-d827-406c-ad1b-add61b7f516e",
+  "uptime": "274.87 6379.53\n",
+  "gpu": "name, uuid, memory.total [MiB], driver_version\nNVIDIA A100 80GB PCIe, GPU-9af4716e-c476-2a4b-4c3f-f45323c0042c, 81920 MiB, 580.159.04\n",
+  "fixed_deadline_wall_s": 1788990612.7708035,
+  "remaining_s": 6222.950400829315,
+  "raw_pre_reboot": {
+    "requests.jsonl": {
+      "sha256": "395b6e5b81d02035d647429068412c4c6a57c601dfdc3d0168f75cfef00caf2c",
+      "bytes": 39759872,
+      "valid_prefix_bytes": 39757746,
+      "complete_records": 381,
+      "incomplete_trailing_bytes": 2126
+    },
+    "request-events.jsonl": {
+      "sha256": "7415999eb7647da1eae8567f54c37afa1d77106f8f28dc6192603a26d388ce81",
+      "bytes": 35573760,
+      "valid_prefix_bytes": 35569922,
+      "complete_records": 10912,
+      "incomplete_trailing_bytes": 3838
+    }
+  },
+  "interrupted_episode": "scout-coding_long-0",
+  "interruption": "node reboot; processes and tmpfs runtime lost; trailing writes incomplete",
+  "scope": "replacement A100 UUID differs; no cross-boot monotonic subtraction or GPU equivalence claimed; original deadline unchanged; interrupted probe counts against eight-probe limit; resume remaining long probes at original nominal rate",
+  "completed_A_response_validation_failures": [
+    [
+      "unloaded-02-s7101",
+      "initial",
+      4
+    ],
+    [
+      "unloaded-03-s7101",
+      "cold_updated",
+      5
+    ],
+    [
+      "unloaded-04-s7101",
+      "cold_updated",
+      0
+    ],
+    [
+      "unloaded-08-s7101",
+      "catch_up",
+      7
+    ],
+    [
+      "unloaded-20-s7102",
+      "cold_updated",
+      0
+    ],
+    [
+      "unloaded-22-s7102",
+      "cold_updated",
+      4
+    ],
+    [
+      "unloaded-22-s7102",
+      "catch_up",
+      2
+    ]
+  ]
+}
