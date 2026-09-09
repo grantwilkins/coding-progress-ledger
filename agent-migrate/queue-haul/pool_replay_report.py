@@ -147,6 +147,9 @@ def service(out, raw):
         record={'spec':spec,'epoch_ns':epoch,'duration_s':duration,'trace_sha256':hashlib.sha256((path.parent/'offered-trace.json').read_bytes()).hexdigest(),
             'admitted_by_90s':sum(v<=90 for v in admission),'admitted_by_boundary':len(admission),
             'admission_times_s':admission,'migration_events':result['migration_events'],
+            'first_incoming_service_token_s':{str(session):min((r['first_ns']-epoch)/1e9 for r in rows
+                if r.get('cohort')=='incoming' and r['session']==session and r.get('first_ns') is not None)
+                for session in {r['session'] for r in rows if r.get('cohort')=='incoming' and r.get('first_ns') is not None}},
             'engine_samples':len(metrics),'power_samples':len(power),
             'max_engine_sample_gap_s':max(np.diff([r['monotonic_ns'] for r in metrics]),default=0)/1e9,
             'max_power_sample_gap_s':max(np.diff([int(r['monotonic_ns']) for r in power]),default=0)/1e9,
@@ -165,7 +168,10 @@ def service(out, raw):
         assert replay['trace_sha256']==control['trace_sha256'],'paired offered arrivals differ'
         for row in [r for r in windows if r['episode']==replay['spec']['episode']]:
             reference=next(r for r in windows if r['episode']==control['spec']['episode'] and r['cohort']==row['cohort'] and r['window_start_s']==row['window_start_s'])
+            admitted=[sum(t<=row['window_start_s'] for t in r['admission_times_s']) for r in (control,replay)]
             pairs.append({k:row[k] for k in ('episode','workload','seed','rate','cohort','window_start_s','window_end_s')} | {
+                'control_admitted_at_window_start':admitted[0],'replay_admitted_at_window_start':admitted[1],
+                'equivalent_full_incoming_population':admitted[0]==admitted[1]==replay['spec'].get('width',8),
                 'replay_arrival_ttft_p90_s':row['p90_arrival_ttft_s'],'control_arrival_ttft_p90_s':reference['p90_arrival_ttft_s'],
                 'replay_request_tpot_p90_s':row['p90_request_mean_tpot_s'],'control_request_tpot_p90_s':reference['p90_request_mean_tpot_s'],
                 'replay_outstanding':row['outstanding_all_prior_arrivals'],'control_outstanding':reference['outstanding_all_prior_arrivals'],
