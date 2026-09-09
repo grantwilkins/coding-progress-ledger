@@ -373,3 +373,25 @@ def test_secondary_per_batch_cost_is_invariant_to_fleet_scale(monkeypatch):
         table.budgets *= scale
         planner.plan_admission(PooledExecution(table, timing, calibration), table, "queue_haul", iterations=1)
     np.testing.assert_allclose(costs[0], costs[1], rtol=1e-13, atol=1e-13)
+
+
+@pytest.mark.parametrize("scale", [1., 1e6])
+@pytest.mark.parametrize("columns", [2, 3])
+def test_greedy_unused_dominated_option_cannot_rescale_secondary_cost(scale, columns):
+    from pool_shed_planner import _choose
+
+    matrix = np.array([[1., 2., 2.]])[:, :columns]
+    gains = np.array([1., 1., 1e-6])[:columns] / scale
+    work = np.array([10., 0., 100.])[:columns]
+    chosen = _choose(matrix, np.array([scale]), gains, work, SimpleNamespace(gpus=scale), True)
+    np.testing.assert_allclose(chosen, np.r_[scale, np.zeros(columns - 1)])
+    assert gains @ chosen == pytest.approx(1.)
+
+
+@pytest.mark.parametrize("second_gain,second_work,winner", [(2., 5., 1), (2., 20., 0), (2. - 1e-8, 0., 0)])
+def test_greedy_uses_work_per_gain_only_to_break_equal_primary_density(second_gain, second_work, winner):
+    from pool_shed_planner import _choose
+
+    chosen = _choose(np.array([[1., 2.]]), np.ones(1), np.array([1., second_gain]),
+                     np.array([10., second_work]), SimpleNamespace(gpus=1), True)
+    assert np.flatnonzero(chosen).tolist() == [winner]

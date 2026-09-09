@@ -203,8 +203,9 @@ def _choose(matrix, capacity, gains, debt, fleet, greedy):
         if not feasible.any():
             return chosen
         costs = np.max(normalized / np.maximum(remaining[:, None], 1e-30), axis=0)
-        costs += debt / max(float(np.max(debt[feasible], initial=0.)), 1e-30) * np.max(costs[feasible], initial=0.)
-        j = int(np.argmax(np.where(feasible, gains / np.maximum(costs, 1e-30), -np.inf)))
+        scores = np.where(feasible, gains / np.maximum(costs, 1e-30), -np.inf)
+        tied = feasible & np.isclose(scores, scores.max(), rtol=1e-12, atol=0.)
+        j = int(np.argmin(np.where(tied, debt / np.maximum(gains, 1e-30), np.inf)))
         used = normalized[:, j] > 0
         take = np.min(remaining[used] / normalized[used, j])
         chosen[j] += take

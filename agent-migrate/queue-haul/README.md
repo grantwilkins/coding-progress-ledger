@@ -58,7 +58,9 @@ request shapes. Conservative peak-cycle KV reservations remain at every load.
 `pool_shed_planner.py` uses receding-horizon batch admissions with common queue
 and migration-phase feedback for all five methods. Only the next admissions
 are committed. The default uses 64 execution waves and feedback resolution 0.5
-(half the original geometric intervals). Future rates use central calibration, never hidden execution
+(half the original geometric intervals). This resolution jointly changes common
+decision times, reservation bins, and candidate starts; its sensitivity check
+does not isolate feedback cadence. Future rates use central calibration, never hidden execution
 draws. Planning runtime is reported separately and is not charged to the
 modeled migration deadline; these are offline policy simulations.
 Recorded future request shapes and resets are known to every planner;
@@ -83,6 +85,8 @@ iteration residuals, and deadline regressions remain in the audit. No baseline
 outcome is substituted for QH. Isolated-fastest chooses each session type's
 current isolated singleton action, which can differ from the best aggregate
 throughput choice. Figures distinguish admitted work from completed handoffs.
+Greedy ranks shed per dominant remaining resource use; compute per unit shed
+breaks equal-score ties.
 
 Shed power is a proxy: completed source workload fraction times the measured
 phase-power model's active-to-awake-idle difference at the declared request

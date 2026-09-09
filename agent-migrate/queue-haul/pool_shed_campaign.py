@@ -1033,7 +1033,7 @@ def resolution_check(c):
     maximum = max(max(r["absolute_shed_difference"], r["absolute_qh_gap_difference"]) for r in differences if r["setting"] == "dispatch")
     return {"rows": rows, "differences": differences, "default_chunks": DISPATCH_CHUNKS,
             "maximum_dispatch_shed_or_gap_difference": maximum, "gate_pass": maximum <= .02,
-            "scope": "Six central replay/buffer/WAN cases including long contexts, all five policies. Dispatch refinement tests numerical sensitivity; feedback cadence and iteration changes test policy sensitivity. Neither bounds global optimality or hardware-transfer error."}
+            "scope": "Six central replay/buffer/WAN cases including long contexts, all five policies. Dispatch refinement tests numerical sensitivity. The feedback setting jointly changes common decision times, reservation bins, and candidate starts; it is planning-grid sensitivity, not isolated feedback cadence. Iteration changes test policy sensitivity. None bounds global optimality or hardware-transfer error."}
 
 
 def validate(out):
