@@ -12,6 +12,7 @@ import pool_shed_campaign as q
 from pool_shed_calibration import replay_seconds
 from pool_shed_execution import initial_work
 from pool_replay_measure import write
+from pool_replay_resident import summarize
 
 
 def requests(out):
@@ -94,12 +95,80 @@ def unloaded(out, raw, calibration):
     return rows
 
 
+def service(out, raw):
+    records, windows, pairs = [], [], []
+    for path in sorted(out.glob('*/result.json')):
+        result=json.loads(path.read_text());spec=result['spec'];episode=spec['episode']
+        trace=json.loads((path.parent/'offered-trace.json').read_text())
+        rows=[r for r in raw if r.get('episode')==episode and r.get('cohort') in ('resident','incoming')]
+        metrics=[{k:float(v) for k,v in r.items() if v} for r in csv.DictReader((path.parent/'engine.csv').open())]
+        power=[r for r in csv.DictReader((path.parent/'power.csv').open()) if r['valid']=='1']
+        epoch=result['epoch_ns'];duration=(result['boundary_ns']-epoch)/1e9
+        intervals=[(30,90)] if spec['arm']=='resident' else [(0,60),(60,90),(90,120),(120,150),(150,180)]
+        for cohort in ('resident','incoming'):
+            cohort_rows=[r for r in rows if r['cohort']==cohort]
+            offered=[r for r in trace if r['cohort']==cohort]
+            if not offered:continue
+            for a,z in intervals:
+                summary=summarize(cohort_rows,offered,epoch,(a,z),metrics)
+                window={'episode':episode,'workload':spec['workload'],'seed':spec['seed'],'rate':spec['rate'],
+                        'arm':spec['arm'],'cohort':cohort,'window_start_s':a,'window_end_s':z,**summary}
+                window['outstanding_all_prior_arrivals']=sum(item['offset_s']<z for item in offered)-sum(
+                    r.get('done') and r.get('status')==200 and r['end_ns']<=epoch+z*1e9 for r in cohort_rows)
+                windows.append(window)
+        admission=[(event['monotonic_ns']-epoch)/1e9 for event in result['migration_events'] if event['kind']=='destination_admission']
+        after60=[r for r in metrics if r['monotonic_ns']>=epoch+60e9]
+        record={'spec':spec,'epoch_ns':epoch,'duration_s':duration,'trace_sha256':hashlib.sha256((path.parent/'offered-trace.json').read_bytes()).hexdigest(),
+            'admitted_by_90s':sum(v<=90 for v in admission),'admitted_by_boundary':len(admission),
+            'admission_times_s':admission,'migration_events':result['migration_events'],
+            'engine_samples':len(metrics),'power_samples':len(power),
+            'max_engine_sample_gap_s':max(np.diff([r['monotonic_ns'] for r in metrics]),default=0)/1e9,
+            'max_power_sample_gap_s':max(np.diff([int(r['monotonic_ns']) for r in power]),default=0)/1e9,
+            'max_running':max((r['vllm:num_requests_running'] for r in metrics),default=None),
+            'max_waiting':max((r['vllm:num_requests_waiting'] for r in metrics),default=None),
+            'mean_power_w':float(np.mean([float(r['power_w']) for r in power])) if power else None,
+            'mean_gpu_utilization_pct':float(np.mean([float(r['utilization_pct']) for r in power])) if power else None,
+            'post_60_engine_queue_time_sum_s':after60[-1]['vllm:request_queue_time_seconds_sum']-after60[0]['vllm:request_queue_time_seconds_sum'] if after60 else None,
+            'preemptions':metrics[-1]['vllm:num_preemptions_total']-metrics[0]['vllm:num_preemptions_total'],
+            'source_quiescence_validated':False,'paired_kv_validated':False,'latency_tail_guarantee':False}
+        records.append(record)
+    for replay in records:
+        if replay['spec']['arm']!='replay':continue
+        control=next((r for r in records if r['spec']['arm']=='control' and r['spec']['trace_id']==replay['spec']['trace_id']),None)
+        if control is None:continue
+        assert replay['trace_sha256']==control['trace_sha256'],'paired offered arrivals differ'
+        for row in [r for r in windows if r['episode']==replay['spec']['episode']]:
+            reference=next(r for r in windows if r['episode']==control['spec']['episode'] and r['cohort']==row['cohort'] and r['window_start_s']==row['window_start_s'])
+            pairs.append({k:row[k] for k in ('episode','workload','seed','rate','cohort','window_start_s','window_end_s')} | {
+                'replay_arrival_ttft_p90_s':row['p90_arrival_ttft_s'],'control_arrival_ttft_p90_s':reference['p90_arrival_ttft_s'],
+                'replay_request_tpot_p90_s':row['p90_request_mean_tpot_s'],'control_request_tpot_p90_s':reference['p90_request_mean_tpot_s'],
+                'replay_outstanding':row['outstanding_all_prior_arrivals'],'control_outstanding':reference['outstanding_all_prior_arrivals'],
+                'completion_deficit_requests':row['outstanding_all_prior_arrivals']-reference['outstanding_all_prior_arrivals'],
+                'replay_completed_rps':row['completed_rps'],'control_completed_rps':reference['completed_rps'],
+                'replay_screen_pass':row['screen_pass'],'control_screen_pass':reference['screen_pass'],
+                'replay_exact_coverage':row['exact_timing_coverage'],'control_exact_coverage':reference['exact_timing_coverage'],
+                'replay_completed_n':row['completed_requests'],'control_completed_n':reference['completed_requests']})
+    csv_rows(out/'service-windows.csv',windows)
+    csv_rows(out/'service-paired.csv',pairs)
+    write(out/'service-analysis.json',{'episodes':records,'windows':windows,'pairs':pairs,
+        'scope':'Destination-only synthetic content with recorded evolving shapes; paired arrivals and demand. No active source, ownership transfer or source quiescence measurement.',
+        'recovery_scope':'Outstanding arrivals and completion deficit relative to matched control while arrivals continue; no cleanup-drain recovery claim.',
+        'latency_scope':'Original-arrival TTFT and P90 per-request mean TPOT; exact client token-event coverage, not server execution timestamps. Short windows do not validate tails.',
+        'engine_scope':'Queue time is directly measured aggregate engine histogram delta across all populations; no per-request queue attribution or queue inferred from TTFT. KV usage gauge excludes free evictable cached blocks; it is not resident tensor allocation.'})
+    return records
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out',type=Path,required=True)
+    parser.add_argument('--service',action='store_true')
     args=parser.parse_args()
-    rows=unloaded(args.out,requests(args.out),q.calibration(0))
+    raw=requests(args.out)
+    rows=unloaded(args.out,raw,q.calibration(0))
     print('Unloaded phase observations:',len(rows),'valid:',sum(r['phase_valid'] for r in rows))
+    if args.service:
+        raw += [json.loads(line) for line in (args.out/'requests-recovered.jsonl').read_text().splitlines()]
+        print('Service episodes:',len(service(args.out,raw)))
 
 
 if __name__=='__main__':main()

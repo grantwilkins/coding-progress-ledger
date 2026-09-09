@@ -293,8 +293,13 @@ def main():
              'trace_id':f'width16-{seed}'} for seed in (7101,7102)] + [
             {'workload':'coding_long','rate_slot':1,'seed':7102,'arm':arm,'width':8,
              'trace_id':'burst-7102','burst':True} for arm in ('control','replay')]
-        for row in episodes:
+        for index,row in enumerate(episodes):
             if row['arm']=='kv_transfer':continue
+            reserve=630 if row.get('burst') and row['arm']=='control' else 300
+            if a.remaining()<reserve:
+                write(args.out/f'{args.stage}-budget-omissions.json',{'remaining_s':a.remaining(),
+                    'required_reserve_s':reserve,'unstarted':episodes[index:],'status':'unmeasured_budget_limit'})
+                break
             w=row['workload'];slot=row['rate_slot'];seed=row['seed']
             spec={**row,'episode':f"{args.stage}-{w}-{slot}-{row['arm']}-{seed}" + (f"-w{row.get('width',8)}" if args.stage=='followups' else '') + ('-burst' if row.get('burst') else ''),
                 'rate':selection[w]['rates'][slot],'incoming_session_rps':pool.sample_fleet(w).metadata['source_session_rps']}
