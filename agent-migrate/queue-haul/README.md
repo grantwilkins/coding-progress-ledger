@@ -162,6 +162,16 @@ Recorded policy-case p90 relative errors are 18.67% for replay, 13.13% for KV,
 26.37% for QH, and 29.04% for greedy. The 72 long-context batches have 16.01%
 p90 error; their serial model family was selected after inspecting those cases,
 so this is a calibration check rather than an untouched holdout.
+A [matched hardware-ranking audit](outputs/a100-pooled-service-validation/historical-ranking-audit.json)
+reproduces nine of ten QH/replay ranking signs when their recorded actions
+differ. One reversal persists across all three hardware repeats: seven replays
+plus one KV transfer take 3.03–3.88 s longer than eight replays, while the model
+predicts a 1.09 s advantage on the held-out repeat. The
+[phase audit](outputs/a100-pooled-service-validation/historical-mixed-phase-audit.json)
+confirms KV completion is charged compute, but seven-request packing and mixed
+execution on one GPU remain imperfect transfers. The fixture also lacks an
+explicit 135-token verification prefix. These checks assess recorded actions,
+not the new planner's decisions, and do not establish universal ranking fidelity.
 
 The supplemental [2 MW comparison](outputs/a100-pooled-service/scale-diagnostic.json)
 scales all three GPU fleets together. At 50% destination load and a 300 s
