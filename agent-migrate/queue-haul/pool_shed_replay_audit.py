@@ -69,7 +69,7 @@ def main():
     report = {"scope": "Full-context replay, shared resident contention and explicit recovery; central calibration, no refits or campaign restart.",
         "sources": sources, "resident_latency_validated": False, "campaign_ready": False,
         "solver_version": q.highspy.Highs().version(),
-        "fleets": {w: fleet_summary(q.sample_fleet(w), calibration) for w in q.WORKLOADS},
+        "fleets": {w: fleet_summary(q.sample_fleet(w, gpus=66666), calibration) for w in q.WORKLOADS},
         "historical_reference": {"path": "outputs/a100-replay-audit/audit.json",
             "scope": "Archived v8 isolation/synchronized-arrival results; not a matched ablation of the current source dynamics.",
             "results": archive["ablations"][0]["results"]},
@@ -106,7 +106,7 @@ def main():
     report["resident_execution_check"] = resident_execution_check(calibration, report["timing_checks"]["regional"])
     if not all(r["gate_pass"] for r in report["timing_checks"].values()):
         raise ValueError("existing hardware timing reproduction failed")
-    longer = q.sample_fleet("coding_long")
+    longer = q.sample_fleet("coding_long", gpus=66666)
     longer = replace(longer, metadata={**longer.metadata, "planning_reference_s": 4., "kv_wire_scale": fleet.metadata["kv_wire_scale"]})
     longer = replace(longer, kv=kv_transfer_bytes(longer, longer.context, calibration))
     variants = [("coding_20_to_20_20", fleet, q.POLICIES),

@@ -37,8 +37,17 @@ def test_measured_calibration_and_population():
 
 
 def test_default_grid_and_paired_endpoints():
+    from pool_shed_execution import destination_gpus
+
     config = c.configuration()
-    assert len(c.cells(config)) == 13500
+    assert config['gpus'] == 6666 and config['installed_gpu_w'] == 1999800
+    assert config['workloads'] == ['coding', 'coding_long']
+    assert {cell[0] for cell in c.cells(config)} == {('coding', i) for i in range(4)} | {('coding_long', 0)}
+    assert len(c.cells(config)) == 11250
+    assert len(c.cells(c.configuration(smoke=True))) == 24
+    for workload in config['workloads']:
+        fleet = c.sample_fleet(workload, gpus=config['gpus'])
+        assert destination_gpus(fleet) == fleet.gpus == 6666
     samples = c.network_samples()
     np.testing.assert_allclose(samples[:, :2].sum(1), samples[:, 2])
     for endpoint in samples:
@@ -107,12 +116,12 @@ def test_execution_draws_preserve_initial_information_and_admission_accounting()
 def test_campaign_reduction_checks_all_cells_and_policies(tmp_path, monkeypatch):
     monkeypatch.setattr(c, 'plot', lambda *args: None)
     plan = c.prepare(tmp_path, smoke=True)
-    assert len(c.cells(plan['config'])) == 36
+    assert len(c.cells(plan['config'])) == 24
     with pytest.raises(ValueError, match='missing'):
         c.reduce(tmp_path)
     c.run(tmp_path)
     summary = c.reduce(tmp_path)
-    assert summary['cells'] == 36
+    assert summary['cells'] == 24
     audit = json.loads((tmp_path / 'dominance-audit.json').read_text())
     assert audit['maxima']['initial_nominal_lp_loss'] <= 1e-8
     c.run(tmp_path)  # Provenance-valid checkpoints may be resumed.

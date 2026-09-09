@@ -1,4 +1,4 @@
-"""Measured batch schedules for a pooled 20 MW installed GPT-OSS/A100 fleet."""
+"""Measured batch schedules for a pooled 2 MW installed GPT-OSS/A100 fleet."""
 
 from __future__ import annotations
 
@@ -24,12 +24,12 @@ from pool_shed_execution import DISPATCH_CHUNKS, destination_gpus, network_nodes
 from pool_shed_planner import PLANNING_ITERATIONS, PLANNING_RESOLUTION
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "outputs/a100-pooled-service"
+OUT = ROOT / "outputs/a100-pooled-agentic-2mw"
 NETWORK = ROOT / "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json"
 MANIFEST = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
 SCHEMA = "queue-haul-a100-pooled-service-v9"
 WORKLOADS = ("measured_pack", "coding", "coding_long")
-GPUS, SOURCE_LOAD = 66666, .8
+GPUS, SOURCE_LOAD = 6666, .8
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only", "isolated_fastest")
 ACTIONS = ("east_replay", "east_kv_transfer", "germany_replay", "germany_kv_transfer")
 DEADLINES = (1, 3, 10, 30, 60, 120, 300, 600, 1800, 3600)
@@ -536,6 +536,7 @@ def compare(table):
 
 def configuration(smoke=False):
     return {"schema": SCHEMA, "gpus": GPUS, "installed_gpu_w": GPUS * 300, "source_load": SOURCE_LOAD,
+            "workloads": ["coding", "coding_long"],
             "solver_version": highspy.Highs().version(),
             "gpus_per_node": 8,
             "dispatch_chunks": DISPATCH_CHUNKS,
@@ -548,7 +549,7 @@ def configuration(smoke=False):
 
 
 def cells(config):
-    snapshots = [("measured_pack", 0)] + [("coding", i) for i in range(config["snapshots"])] + [("coding_long", 0)]
+    snapshots = [(w, i) for w in config["workloads"] for i in range(config["snapshots"] if w == "coding" else 1)]
     return list(product(snapshots, config["resident_loads"], range(config["draws"] + 1), config["wan_gbps"], config["deadlines"]))
 
 
@@ -924,7 +925,7 @@ def plot(summary, out):
     import plot_style
     plot_style.apply()
     model_label = plot_style.MODEL_NAMES["openai/gpt-oss-20b"] + " / " + plot_style.AGENTIC_HARDWARE_NAMES["a100"]
-    workloads = WORKLOADS
+    workloads = [w for w in WORKLOADS if any(r["workload"] == w for r in summary)]
     loads = sorted({r["load"] for r in summary})
     for wan in dict.fromkeys(r["wan_gbps"] for r in summary):
         fig, axes = plt.subplots(len(workloads), len(loads), squeeze=False, figsize=(3.2 * len(loads), 3 * len(workloads)), sharex=True, sharey=True)
@@ -974,15 +975,16 @@ def plot_debt(rows, out, gpus):
     import matplotlib.pyplot as plt
     import plot_style
     plot_style.apply()
+    workloads = [w for w in WORKLOADS if any(r["workload"] == w for r in rows)]
     wans = [w for w in (40, 1000) if any(r["wan_gbps"] == w for r in rows)]
     loads = [u for u in (.5, .95) if any(r["load"] == u for r in rows)]
     if not wans or not loads:
         return
     for field, label, name in (("median_pending_resident_debt_work_s", "Resident service deficit", "resident-debt"),
                                ("median_pending_source_buffer_work_s", "Source-owned buffered work", "source-buffer")):
-        fig, axes = plt.subplots(len(WORKLOADS) * len(loads), len(wans), squeeze=False,
-                                 figsize=(5 * len(wans), 3 * len(WORKLOADS) * len(loads)))
-        for ax, (workload, load, wan) in zip(axes.flat, product(WORKLOADS, loads, wans)):
+        fig, axes = plt.subplots(len(workloads) * len(loads), len(wans), squeeze=False,
+                                 figsize=(5 * len(wans), 3 * len(workloads) * len(loads)))
+        for ax, (workload, load, wan) in zip(axes.flat, product(workloads, loads, wans)):
             for policy in POLICIES:
                 series = sorted((r for r in rows if (r["workload"], r["load"], r["wan_gbps"], r["policy"]) ==
                                  (workload, load, wan, policy)), key=lambda r: r["deadline_s"])

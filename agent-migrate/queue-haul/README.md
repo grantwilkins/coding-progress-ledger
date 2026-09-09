@@ -11,13 +11,17 @@ debt, recovery, achieved shed, and unmet shed. A requirement frontier summarizes
 plans across source-power targets. Destination capacity is an advertised pool
 contract, not an inferred GPU inventory.
 
-## Pooled 20 MW GPT-OSS/A100 simulation
+## Pooled 2 MW agentic GPT-OSS/A100 simulation
 
 `pool_shed_campaign.py` compares QH LP, QH greedy, KV-only, replay-only, and
 isolated-fastest. Sweden Central and each destination (East US 2 and Germany
-West Central) have 66,666 A100 GPUs at 300 W nameplate: 19.9998 MW per site,
+West Central) each have 6,666 A100 GPUs at 300 W nameplate: 1.9998 MW per site,
 excluding CPUs and peripherals. This is the requested A100 study, not the
-original H100 configuration. Eight GPUs share each modeled node.
+original H100 configuration. Eight GPUs share each modeled node. The next campaign
+uses the recorded `coding` and `coding_long` agentic trajectories; `measured_pack`
+remains a hardware-validation workload. The default output is
+`outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped pending the
+validation below.
 
 Resident service shares compute with migration. Replay uses the existing measured
 resident-throughput loss; spare capacity repays resident debt before migrated
@@ -37,12 +41,12 @@ unchanged at 66,666. Destination compute, resident memory, and endpoint inventor
 scale together. Route endpoints use the smaller source/destination node inventory;
 the shared source egress and configured WAN caps remain in force.
 
-The [current bounded realism audit](outputs/a100-replay-realism/audit.json)
+The [bounded realism audit at commit 0614039d](outputs/a100-replay-realism/audit.json)
 uses the width-eight packing, loaded/full-drain, regional interference, and SLO
 campaigns without refitting their coefficients. Run
-`python pool_shed_replay_audit.py` to reproduce it; the large campaign remains
+`python pool_shed_replay_audit.py` at that revision to reproduce it; the large campaign remains
 stopped. The prior v8 sensitivity/audit artifacts remain unchanged.
-[181 focused tests pass](outputs/a100-replay-realism/focused-tests.log), with
+[181 focused tests passed at that revision](outputs/a100-replay-realism/focused-tests.log), with
 the same three broader integration tests excluded. A separate
 [single-cell prepare/run/reduce check](outputs/a100-replay-realism/reduction-smoke.log)
 completed all five policies in temporary outputs; the audit also reruns the
@@ -75,6 +79,10 @@ and isolated-fastest in the two 20-MW-source scenarios. No baseline result is
 substituted for QH. These outcomes do not establish SLO-feasible shedding or a
 reliable QH advantage; even the revised temporal recovery constraints can leave
 queues after execution changes the forecast's timing.
+The 2/2-MW replay and QH outcomes retain approximately 1,183 and 54.6 normalized
+work-seconds of buffered requests, respectively. Equal reductions in all three
+fleets preserve their standing-service capacity ratio; keeping the total WAN
+budget fixed increases available bandwidth per GPU.
 
 The stronger measurement warning is the resident load definition. Coding at its
 simulated 50% offers about **0.221 requests/s/GPU**, or 112.9 prompt and 8.85
@@ -96,17 +104,48 @@ They are not validated per-request latencies or a source queue model.
 The primary references support separating prefill contention, decode latency and
 actual prefix reuse. [vLLM's scheduler documentation](https://docs.vllm.ai/en/stable/configuration/optimization/)
 describes decode priority with chunked prefill and latency effects from prefill
-budgets and recomputation. [Automatic prefix caching](https://docs.vllm.ai/en/v0.10.1/features/automatic_prefix_caching.html)
+budgets and recomputation. [Automatic prefix caching](https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/)
 skips cached-prefix prefill work without eliminating decode.
 [Sarathi-Serve](https://www.usenix.org/conference/osdi24/presentation/agrawal)
 measures the throughput/latency tradeoff from interleaving prefill and decode.
 These sources explain mechanisms; they supply no new simulator coefficients.
 
-Before another large campaign, the missing validation is a matched current-stack
-resident/replay run with continuing arrivals, exact token timing, and native
-prefix-hit evidence across retained context and append size. Existing frozen
-migration timing checks still pass; they do not establish live catch-up, shared
-resident SLOs, or per-GPU placement and queueing fidelity.
+Before another large campaign:
+
+1. Match agentic resident context, appended/output tokens, request rate and active
+   concurrency to measured service. The old coding normalization and the newer
+   4K SLO recipes cannot be equated by calling both loads 50%. Validate the
+   transferred service rates before using them to set destination headroom.
+2. Check live replay and catch-up on the current runtime at short and long retained
+   contexts, small and large appends, and widths one and eight. Record native
+   cached/evaluated token counts, queue wait and exact token timestamps. Full
+   context remains the submitted request; actual prefix hits must be observed.
+   Historical catch-up timings on vLLM 0.10.1.1 do not validate the current stack.
+3. Validate source request durations and arrival timing, including tool pauses,
+   bursts, growth and resets. The 1,655 coding records contain no arrival times;
+   equal cadence and seeded phases remain assumptions. Report excluded trajectories
+   beyond the roughly 32K replay support, and keep any unmeasured arrival model
+   explicit in sensitivity results.
+4. Validate GPU queueing under sustained resident traffic and overlapping replay.
+   Width-eight completion fits alone do not establish that measured elapsed time
+   can be treated as divisible pooled GPU work. Use the existing long-context
+   overload cases to check queue delay, KV-memory pressure and scheduler effects;
+   add only the queue behavior required to reproduce those observations.
+5. Measure incumbent and migrated request latency before, during and after handoff,
+   with arrivals continuing through recovery. Use the existing 1-second P90 TTFT
+   and 100-ms P90 mean-TPOT targets as the initial validation contract. Resolve
+   missed recovery forecasts and report both populations' queues and SLO misses;
+   an empty final queue alone does not certify latency throughout migration.
+
+The next experiment should be a small matched agentic replay/KV validation block,
+followed by a bounded comparison of all five policies with common candidates and
+planning clocks. Lock coefficients before held-out checks; acceptance depends on
+timing, queue and service fidelity, not the QH/replay ranking. The existing frozen
+width-eight and regional timing checks remain necessary but do not cover these
+live-source and resident-service gaps. No synthetic replay-cache discount or
+policy-specific contention penalty is introduced. Keep the 0.80 GB/32K effective
+wire check explicit: the campaign's native serialized KV geometry is a different
+assumption, and a private-KV fraction must not discount the same measurement twice.
 
 Load is a fraction of the measured coding **normal serving envelope**, not
 FLOPs or GPU busy time. Request work uses the original context-dependent
@@ -193,7 +232,8 @@ breaks equal-score ties.
 Shed power is a proxy: completed source workload fraction times the measured
 phase-power model's active-to-awake-idle difference at the declared request
 rates. The supported coding points yield about 169 W active and 102 W idle,
-so full migration corresponds to roughly **4.5 MW**, not 20 MW. The old
+so full migration corresponds to roughly **0.45 MW** at the 2-MW installed fleet
+(about 4.5 MW in the archived 20-MW scenarios). The old
 11.935 MW result used an active anchor inconsistent with the corrected source
 cadence. The phase-power model's grouped cross-validation RMSE is 12.76 W;
 bootstrap bands do not include all this model error. Proportional allocation
@@ -427,24 +467,27 @@ before fitting TTFT/TPOT. Continued-arrival recovery also needs resident traffic
 that remains active after migration. The existing transition study covers its
 three discrete 4K recipes, not this general long-context recovery model.
 
-The proposed 20 MW source with two 10 MW destinations would have a **62.5%**
+The bounded 20 MW source with two 10 MW destinations has a **62.5%**
 standing-service handoff ceiling at the current source/destination loads of
 80%/50%. The current bounded audit executes this capacity scenario using the independent
 destination count; compute, memory and endpoint inventory shrink without changing
 source population or enlarging the shared WAN. Reducing
 destination size can leave both methods tied at that common service ceiling.
 
+After the live replay and service checks above, use the new output directory:
+
 ```bash
-uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-service-validation
-uv run python pool_shed_campaign.py prepare --out outputs/a100-pooled-service
-uv run python pool_shed_campaign.py run --out outputs/a100-pooled-service
-uv run python pool_shed_campaign.py reduce --out outputs/a100-pooled-service
+uv run python pool_shed_campaign.py validate --out outputs/a100-pooled-agentic-2mw-validation
+uv run python pool_shed_campaign.py prepare --out outputs/a100-pooled-agentic-2mw
+uv run python pool_shed_campaign.py run --out outputs/a100-pooled-agentic-2mw
+uv run python pool_shed_campaign.py reduce --out outputs/a100-pooled-agentic-2mw
 ```
 
-The default grid contains 13,500 scenarios / 67,500 policy results: four coding
-snapshots, one long-context cohort, one measured-pack cohort, five destination
-loads, five WAN settings, ten deadlines from 1 to 3600 seconds, and central plus
-eight paired timing/network draws. `prepare --smoke` selects 36 scenarios.
+The default grid contains 11,250 scenarios / 56,250 policy results: four coding
+snapshots, one long-context cohort, five destination loads, five WAN settings,
+ten deadlines from 1 to 3600 seconds, and central plus eight paired timing/network
+draws. `prepare --smoke` selects 24 scenarios. These defaults pin fleet size and
+workloads; they do not certify replay or resident-service fidelity.
 `run --shard N --shards K` supports process shards and checkpoint resume;
 code, solver, calibration, and grid identities must match. A reviewed numerical
 recovery retries a nonoptimal or independently uncertified simplex solve once
