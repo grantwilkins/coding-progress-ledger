@@ -150,12 +150,18 @@ errors, false-feasible deadlines, original reference errors, library expansion,
 execution refinement, feedback sensitivity, and proportional scaling.
 
 The current [validation](outputs/a100-pooled-service-validation/critic-summary.json)
-passes 218 focused tests and all declared reproduction gates. Across six central
+passes 218 focused tests and all required validation gates. Across six central
 cases, doubling dispatch resolution changes shed or the QH gap by at most
 0.0743 percentage points. Changing the planning grid changes results by up to
 8.152 points, so small policy advantages are not grid-robust. Runtime-matched
 loaded replay/KV p90 relative errors are 2.28%/11.92%; the regional cases have
 1.243 s mean absolute error and retain one false-feasible 25 s deadline.
+The unmatched regional-to-local KV transfer diagnostic remains above its 15%
+error threshold at 16.83%; the accepted local fit uses only local training data.
+Recorded policy-case p90 relative errors are 18.67% for replay, 13.13% for KV,
+26.37% for QH, and 29.04% for greedy. The 72 long-context batches have 16.01%
+p90 error; their serial model family was selected after inspecting those cases,
+so this is a calibration check rather than an untouched holdout.
 
 The supplemental [2 MW comparison](outputs/a100-pooled-service/scale-diagnostic.json)
 scales all three GPU fleets together. At 50% destination load and a 300 s
