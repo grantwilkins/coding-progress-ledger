@@ -150,7 +150,7 @@ validate protected fleet-scale service. The validation report records per-case
 errors, false-feasible deadlines, original reference errors, library expansion,
 execution refinement, feedback sensitivity, and proportional scaling.
 
-The current [hardware and resolution validation](outputs/a100-pooled-service-validation/stable-greedy/critic-summary.json)
+The stable-greedy [hardware and resolution validation](outputs/a100-pooled-service-validation/stable-greedy/critic-summary.json)
 passes all required gates and [233 focused tests](outputs/a100-pooled-service-validation/stable-greedy/focused-tests.log).
 A [strict three-case platform comparison](outputs/a100-pooled-service-validation/stable-greedy/platform-comparison.json)
 passes for all five policies after stabilizing greedy's secondary ties.
@@ -177,9 +177,9 @@ execution on one GPU remain imperfect transfers. The fixture also lacks an
 explicit 135-token verification prefix. These checks assess recorded actions,
 not the new planner's decisions, and do not establish universal ranking fidelity.
 
-The supplemental [2 MW comparison](outputs/a100-pooled-service/scale-diagnostic.json)
-scales all three GPU fleets together; [30 s](outputs/a100-pooled-service/scale-comparison-30s.png)
-and [300 s](outputs/a100-pooled-service/scale-comparison-300s.png) figures show handoff and KV fractions.
+The archived stable-greedy [2 MW comparison](outputs/a100-pooled-service-pre-certificate-retry/scale-diagnostic.json)
+scales all three GPU fleets together; [30 s](outputs/a100-pooled-service-pre-certificate-retry/scale-comparison-30s.png)
+and [300 s](outputs/a100-pooled-service-pre-certificate-retry/scale-comparison-300s.png) figures show handoff and KV fractions.
 At 50% destination load and a 300 s
 deadline, QH completes coding KV handoffs for 1.41% of the original source at
 20 MW with a 1000 Gbps WAN budget, versus 11.80% at 2 MW with the same budget.
@@ -204,8 +204,13 @@ loads, five WAN settings, ten deadlines from 1 to 3600 seconds, and central plus
 eight paired timing/network draws. `prepare --smoke` selects 36 scenarios.
 `run --shard N --shards K` supports process shards and checkpoint resume;
 code, solver, calibration, and grid identities must match. A reviewed numerical
-recovery retries a nonoptimal simplex solve once with a fresh interior-point
-solver; both must satisfy the same original resource and objective checks.
+recovery retries a nonoptimal or independently uncertified simplex solve once
+with a fresh interior-point solver; both must satisfy the same original resource
+and objective checks. Native solver status alone is insufficient for acceptance.
+The [certificate-retry tests](outputs/a100-pooled-service-validation/certificate-retry/qh-certificate-focused-tests.json)
+pass all 242 cases. The [independent numerical review](outputs/a100-pooled-service-validation/certificate-retry/success-path-review.json)
+verifies unchanged acceptance predicates and bitwise-identical prior successful
+fixtures, plus the corrected solver result for the newly captured failure.
 Successful earlier checkpoints may be reused only through an explicit manifest
 pinning their original identities and exact bytes; the summary reports this
 execution lineage separately from the current source identity. Bands show empirical
@@ -215,8 +220,11 @@ show medians; action stacks show mean fractions of the original source workload,
 not action shares conditional on completed handoffs.
 
 The earlier 3,124 campaign checkpoints are archived intact in
-`outputs/a100-pooled-service-pre-stable-ties`; the corrected full campaign starts
-fresh. Greedy treats primary and secondary scores within the same relative
+`outputs/a100-pooled-service-pre-stable-ties`. The subsequent campaign's 9,486
+completed checkpoints are preserved in `outputs/a100-pooled-service-pre-certificate-retry`.
+Their bytes and original identity are retained through explicit inheritance;
+the remaining 4,014 cases use the certificate-retry implementation. This changes
+only previously rejected solver attempts. Greedy treats primary and secondary scores within the same relative
 1e-12 tolerance as tied and then selects the earliest candidate. This prevents
 a one-ULP work-cost difference from postponing an otherwise equivalent current
 admission. The failed Linux comparison is retained as regression evidence.

@@ -373,7 +373,7 @@ def policy_mask(table, policy):
     return mask
 
 
-def _bounded_lp(cost, matrix, rhs, upper):
+def _bounded_lp(cost, matrix, rhs, upper, certificate=None):
     matrix = csr_matrix(matrix)
     for algorithm in ("simplex", "ipm"):
         model, solver = highspy.HighsLp(), highspy.Highs()
@@ -393,11 +393,15 @@ def _bounded_lp(cost, matrix, rhs, upper):
         if status == highspy.HighsStatus.kWarning:
             warnings.warn("HiGHS model import warning; original constraints are checked after solving", RuntimeWarning, stacklevel=2)
         status = solver.run()
+        failure = solver.modelStatusToString(solver.getModelStatus())
         if status == highspy.HighsStatus.kOk and solver.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-            return np.asarray(solver.getSolution().col_value)
+            result = np.asarray(solver.getSolution().col_value)
+            failure = certificate(result) if certificate is not None else None
+            if failure is None:
+                return result
         if algorithm == "simplex":
-            warnings.warn(f"HiGHS simplex returned {solver.modelStatusToString(solver.getModelStatus())}; retrying the same LP with IPM", RuntimeWarning, stacklevel=2)
-    raise RuntimeError(solver.modelStatusToString(solver.getModelStatus()))
+            warnings.warn(f"HiGHS simplex failed: {failure}; retrying the same LP with IPM", RuntimeWarning, stacklevel=2)
+    raise RuntimeError(failure)
 
 
 def solve_lp(table, allowed, objective, primary=None):
@@ -419,14 +423,18 @@ def solve_lp(table, allowed, objective, primary=None):
         constraints = np.vstack((constraints, -primary_row / primary_scale))
         # Keep the secondary face away from a numerically singular boundary; bound absolute shed loss.
         limits = np.r_[limits, -max(0., primary - PRIMARY_TOL) / primary_scale + min(PRIMARY_ROW_TOL, PRIMARY_TOL / primary_scale)]
-    result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper)
-    if not np.isfinite(result).all() or np.min(result) < -1e-9:
-        raise RuntimeError("LP returned invalid replica fractions")
-    chosen[ids] = np.maximum(result, 0) * table.fleet.gpus / column_scale
-    if np.max((table.matrix @ chosen - table.capacities) / np.maximum(table.capacities, 1)) > 1e-8:
-        raise RuntimeError("LP returned an infeasible resource allocation")
-    if primary is not None and table.gains @ chosen < primary - PRIMARY_TOL - 1e-8:
-        raise RuntimeError("LP failed to preserve the primary objective")
+    def certificate(result):
+        if not np.isfinite(result).all() or np.min(result) < -1e-9:
+            return "LP returned invalid replica fractions"
+        chosen[ids] = np.maximum(result, 0) * table.fleet.gpus / column_scale
+        if np.max((table.matrix @ chosen - table.capacities) / np.maximum(table.capacities, 1)) > 1e-8:
+            return "LP returned an infeasible resource allocation"
+        if primary is not None and table.gains @ chosen < primary - PRIMARY_TOL - 1e-8:
+            return "LP failed to preserve the primary objective"
+    result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper, certificate)
+    failure = certificate(result)
+    if failure is not None:
+        raise RuntimeError(failure)
     return chosen
 
 

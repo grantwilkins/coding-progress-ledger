@@ -24,9 +24,9 @@ def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypa
 
     original, bounds = campaign._bounded_lp, []
 
-    def record(cost, matrix, rhs, upper):
+    def record(cost, matrix, rhs, upper, certificate=None):
         bounds.append(upper.copy())
-        return original(cost, matrix, rhs, upper)
+        return original(cost, matrix, rhs, upper, certificate)
 
     monkeypatch.setattr(campaign, "_bounded_lp", record)
     table = SimpleNamespace(matrix=np.eye(2), capacities=np.array([1e6, 0.]),
@@ -644,3 +644,49 @@ def test_greedy_secondary_ties_keep_earliest_start_across_roundoff_and_scaling(s
                      np.array([first, second]) / scale, SimpleNamespace(gpus=1), True)
     assert chosen[expected] == pytest.approx(scale)
     assert chosen[1 - expected] == 0.
+
+
+def test_optimal_secondary_lp_is_retried_until_original_certificate_passes():
+    from pathlib import Path
+    from pool_shed_campaign import PRIMARY_TOL, solve_lp
+
+    data = np.load(Path(__file__).parent / 'fixtures/pool_shed_secondary9044.npz')
+    table = SimpleNamespace(matrix=data['original_matrix'], capacities=data['capacities'],
+                            gains=data['gains'], fleet=SimpleNamespace(gpus=int(data['gpus'])))
+    allowed = np.zeros(len(table.gains), bool)
+    allowed[data['ids']] = True
+    chosen = solve_lp(table, allowed, data['objective'], float(data['primary']))
+    assert np.max((table.matrix @ chosen - table.capacities) / np.maximum(table.capacities, 1)) <= 1e-8
+    assert table.gains @ chosen >= data['primary'] - PRIMARY_TOL - 1e-8
+    scaled = chosen[data['ids']] * data['column_scale'] / data['gpus']
+    assert np.max(data['row_dual']) <= 0
+    assert data['matrix'].T @ data['row_dual'] + data['col_dual'] == pytest.approx(data['cost'], abs=1e-10)
+    bound = data['rhs'] @ data['row_dual'] + data['upper'] @ np.minimum(data['col_dual'], 0)
+    assert bound == pytest.approx(2.5373245631700057, abs=1e-10)
+    assert data['cost'] @ scaled == pytest.approx(bound, abs=1e-9)
+
+
+@pytest.mark.parametrize('bad_value,error', [(np.nan, 'invalid replica'), (-1., 'invalid replica'), (2., 'infeasible resource'), (0., 'preserve the primary')])
+@pytest.mark.parametrize('both_fail', [False, True])
+def test_native_optimal_requires_original_certificate(monkeypatch, bad_value, error, both_fail):
+    import pool_shed_campaign as campaign
+
+    original, attempts = campaign.highspy.Highs, []
+    class UncertifiedSolver:
+        def __init__(self):
+            self.solver = original()
+            attempts.append(self)
+        def __getattr__(self, name):
+            return getattr(self.solver, name)
+        def getSolution(self):
+            return SimpleNamespace(col_value=[bad_value]) if both_fail or self is attempts[0] else self.solver.getSolution()
+    monkeypatch.setattr(campaign.highspy, 'Highs', UncertifiedSolver)
+    table = SimpleNamespace(matrix=np.ones((1, 1)), capacities=np.ones(1), gains=np.ones(1), fleet=SimpleNamespace(gpus=1))
+    with pytest.warns(RuntimeWarning, match='retrying the same LP with IPM'):
+        if both_fail:
+            with pytest.raises(RuntimeError, match=error):
+                campaign.solve_lp(table, np.ones(1, bool), np.ones(1), primary=.5)
+        else:
+            chosen = campaign.solve_lp(table, np.ones(1, bool), np.ones(1), primary=.5)
+            assert chosen[0] == pytest.approx(.5, abs=1e-8)
+    assert len(attempts) == 2

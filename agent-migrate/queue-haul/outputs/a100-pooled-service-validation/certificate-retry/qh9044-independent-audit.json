@@ -1,0 +1,47 @@
+[
+  {
+    "options": {
+      "simplex_scale_strategy": 0
+    },
+    "status": "HighsStatus.kOk",
+    "model": "Optimal",
+    "seconds": 0.007485625334084034,
+    "primal_objective": 2.537324563048971,
+    "dual_objective": 2.5373245508511926,
+    "duality_gap": 1.2197778342937227e-08,
+    "original_resource_residual": 5.391349782939386e-05,
+    "normalized_primal_residual": 0.04514595998799842,
+    "stationarity_residual": 1.2103593127754664e-10,
+    "row_dual_positive_violation": 0.0,
+    "native_primal_infeasibilities": 0,
+    "native_dual_infeasibilities": 0,
+    "native_max_primal": 0.0,
+    "native_max_dual": 8.137630415462353e-10,
+    "minimum_x": -0.0,
+    "primary_loss": 1.1755490053610984e-09,
+    "original_secondary_objective": 76589.74561735152
+  },
+  {
+    "options": {
+      "solver": "ipm",
+      "simplex_scale_strategy": 0
+    },
+    "status": "HighsStatus.kOk",
+    "model": "Optimal",
+    "seconds": 0.033346458338201046,
+    "primal_objective": 2.5373245631700065,
+    "dual_objective": 2.5373245631700057,
+    "duality_gap": 8.881784197001252e-16,
+    "original_resource_residual": 7.918110611626616e-12,
+    "normalized_primal_residual": 1.2160494833324265e-11,
+    "stationarity_residual": 2.7755575615628914e-16,
+    "row_dual_positive_violation": 0.0,
+    "native_primal_infeasibilities": 0,
+    "native_dual_infeasibilities": 0,
+    "native_max_primal": 1.2160494833324265e-11,
+    "native_max_dual": 0.0,
+    "minimum_x": -1.2160459850421415e-11,
+    "primary_loss": 1.0354615220808938e-09,
+    "original_secondary_objective": 76589.74562100504
+  }
+]
