@@ -139,8 +139,20 @@ def service(out, raw):
                         'arm':spec['arm'],'cohort':cohort,'window_start_s':a,'window_end_s':z,**summary}
                 window['outstanding_all_prior_arrivals']=sum(item['offset_s']<z for item in offered)-sum(
                     r.get('done') and r.get('status')==200 and r['end_ns']<=epoch+z*1e9 for r in cohort_rows)
-                exact=[r for r in cohort_rows if r.get('done') and r.get('status')==200 and r.get('exact_token_timestamps')
+                served=[r for r in cohort_rows if r.get('done') and r.get('status')==200
                        and a<=(r['scheduled_ns']-epoch)/1e9<z and r['end_ns']<=epoch+z*1e9]
+                exact=[r for r in served if r.get('exact_token_timestamps')]
+                cached=[r for r in served if r.get('cached_tokens') is not None]
+                window['requests_with_known_cache_count']=len(cached)
+                window['reported_cached_tokens_sum']=sum(r['cached_tokens'] for r in cached) if cached else None
+                window['derived_prompt_minus_cache_tokens_sum']=sum(r['prompt_tokens']-r['cached_tokens'] for r in cached) if cached else None
+                observed_metrics=[r for r in metrics if a<=(r['monotonic_ns']-epoch)/1e9<z]
+                window['engine_counter_interval_s']=(observed_metrics[-1]['monotonic_ns']-observed_metrics[0]['monotonic_ns'])/1e9 if len(observed_metrics)>1 else None
+                for metric in ('prefix_cache_queries_total','prefix_cache_hits_total','external_prefix_cache_hits_total',
+                    'request_prefill_kv_computed_tokens_sum','request_queue_time_seconds_sum','request_prefill_time_seconds_sum','request_decode_time_seconds_sum'):
+                    key='vllm:'+metric
+                    window['engine_all_cohorts_'+metric]=(observed_metrics[-1][key]-observed_metrics[0][key]
+                        if len(observed_metrics)>1 and all(key in r for r in (observed_metrics[0],observed_metrics[-1])) else None)
                 window['ttft_over_1s_requests']=sum((r['first_ns']-r['scheduled_ns'])/1e9>1 for r in exact)
                 window['request_tpot_over_100ms_requests']=sum(r['mean_tpot_s'] is not None and r['mean_tpot_s']>.1 for r in exact)
                 window['exact_completed_fraction_of_arrivals']=len(exact)/summary['offered_requests'] if summary['offered_requests'] else None
@@ -198,7 +210,7 @@ def service(out, raw):
         'recovery_scope':'Outstanding arrivals and completion deficit relative to matched control while arrivals continue; no cleanup-drain recovery claim.',
         'latency_scope':'Original-arrival TTFT and P90 per-request mean TPOT; exact client token-event coverage, not server execution timestamps. Short windows do not validate tails.',
         'client_timing_scope':'Send lateness is scheduled arrival to send; scheduling lateness is scheduled arrival to client wakeup; client queue is wakeup to dispatch and includes prompt preparation. Earlier inline summaries labelled total send lateness as client queue; this reduction uses the retained wakeup events to separate them.',
-        'engine_scope':'Queue time is directly measured aggregate engine histogram delta across all populations; no per-request queue attribution or queue inferred from TTFT. KV usage gauge excludes free evictable cached blocks; it is not resident tensor allocation.'})
+        'engine_scope':'Queue/prefill/decode and computed-token counters are aggregate engine histogram deltas across all populations, repeated on cohort rows for context. Request histograms become visible on completion; their accounting interval is not an exact execution-time partition. Prompt-minus-cache counts are derived only for known usage fields. No per-request queue attribution or queue inferred from TTFT. KV usage gauge excludes free evictable cached blocks; it is not resident tensor allocation.'})
     return records
 
 
