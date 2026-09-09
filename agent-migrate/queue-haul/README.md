@@ -42,7 +42,8 @@ Each destination is as large as the source, so the standing-service shed ceiling
 is `min(1, 2 * (1 - destination_load) / 0.8)`: 100% at 50% destination load,
 62.5% at 75%, 25% at 90%, and 12.5% at 95%. Methods can therefore tie at long
 deadlines after reaching that common ceiling.
-There are eight resident sessions per GPU at every load. Under the corrected
+There are eight source sessions per GPU at every load; destination residents
+are represented by their aggregate standing demand. Under the corrected
 contract, coding snapshot 0 generates about 0.353 requests/s/GPU; the old
 normalization implied about 7.46. Recorded coding trajectories cycle with a
 reset on wrap. A separate `coding_long` cohort starts at measured contexts of
@@ -209,7 +210,9 @@ Successful earlier checkpoints may be reused only through an explicit manifest
 pinning their original identities and exact bytes; the summary reports this
 execution lineage separately from the current source identity. Bands show empirical
 p05–p95 sensitivity across execution draws, snapshots, and measured power curves,
-not coverage of unmeasured transfer error or formal SLO compliance.
+not coverage of unmeasured transfer error or formal SLO compliance. Power curves
+show medians; action stacks show mean fractions of the original source workload,
+not action shares conditional on completed handoffs.
 
 The earlier 3,124 campaign checkpoints are archived intact in
 `outputs/a100-pooled-service-pre-stable-ties`; the corrected full campaign starts
