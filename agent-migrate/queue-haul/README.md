@@ -182,9 +182,11 @@ and [300 s](outputs/a100-pooled-service/scale-comparison-300s.png) figures show 
 At 50% destination load and a 300 s
 deadline, QH completes coding KV handoffs for 1.41% of the original source at
 20 MW with a 1000 Gbps WAN budget, versus 11.80% at 2 MW with the same budget.
-Scaling WAN capacity proportionally reduces the latter to 1.23%. Downsizing
-with fixed WAN therefore changes bandwidth per GPU; GPU count alone does not
-explain action selection. Across all 24 central scale cases, QH has 11 wins,
+Scaling WAN capacity proportionally reduces the latter to 1.23%. The 1000 Gbit/s
+shared budget supplies about 15 Mbit/s per source GPU at 20 MW, versus 150 Mbit/s
+at 2 MW. These fleet allocations are much smaller than the measured per-node
+rates. Downsizing with fixed WAN changes bandwidth per GPU; GPU count alone
+does not explain action selection. Across all 24 central scale cases, QH has 11 wins,
 7 losses, and 6 ties against replay; all 120 policy executions protect the
 resident service budget.
 
