@@ -364,8 +364,6 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         matrix = np.vstack((static[:, original], resource))
         limits = np.r_[capacity, np.where(limit - fixed_resource > 1e-10 * np.maximum(limit, 1.), limit - fixed_resource, 0.)]
         gains = table.gains[original] * (finish <= table.deadline + 1e-10)
-        if protected:
-            gains *= fixed_finish[table.route[original]] <= table.deadline + 1e-10
         debt = (data["replay"] * loads[:, :, None] * loss[:, None, None] + data["kv"] * loads[:, :, None] + data["buffers"]).sum((0, 1))
         if fleet.metadata.get("protect_resident"):
             debt = (data["replay"] + data["kv"] + data["recovery"]).sum((0, 1))

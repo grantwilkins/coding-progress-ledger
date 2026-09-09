@@ -71,11 +71,11 @@ executor continues already admitted work through shared network, compute, and
 recovery phases. Remaining work is reconstructed from observed phase progress
 and central primitives; hidden execution draws are replaced. New admissions use
 candidate phase profiles and the capacity left by this continuation's peak
-compute reservations and network volumes. If this forecast leaves an existing
-migration unfinished at the deadline, that route accepts no new starts at that
-decision. This guard does not prove physical infeasibility. New admissions can
-change subsequent sharing, so the continuation does not certify their combined
-executed schedule.
+compute reservations and network volumes. Every admitted obligation remains
+reserved, including work forecast to miss the deadline. Such unfinished work
+does not block other feasible handoffs: the objective is maximum completed
+handoffs, not completion of every admission. New admissions can change subsequent
+sharing, so the continuation does not certify their combined executed schedule.
 Compute reservations use peak occupancy within each time
 bin; networking remains a flow-volume model. Recorded turns and resets, with
 modeled phase dependencies and recovery, are evaluated by the pooled event executor.

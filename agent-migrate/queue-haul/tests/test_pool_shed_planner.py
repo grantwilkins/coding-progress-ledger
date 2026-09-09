@@ -299,16 +299,26 @@ def test_secondary_primary_row_margin_stays_bounded_for_large_gain():
 
 
 @pytest.mark.parametrize("policy", ["queue_haul", "greedy", "kv_only", "isolated_fastest"])
-def test_new_admission_cannot_sacrifice_mandatory_route_deadline(policy):
+@pytest.mark.parametrize("old_mass", [1., 1e-6])
+def test_late_migration_keeps_its_resources_without_vetoing_feasible_new_work(policy, old_mass):
     table, timing, calibration = case(5.)
     table.fleet.metadata["protect_resident"] = True
     table.fleet.t1[:] = 20.
     engine = PooledExecution(table, timing, calibration)
-    engine.admit(np.array([1., 0., 0., 0.]))
-    chosen, _, info = plan_admission(engine, table, policy, calibration=calibration)
-    assert info["mandatory_forecast_finish_s"][0] > table.deadline
-    assert chosen[table.route == 0].sum() == 0
-    assert info["predicted_shed_fraction"] > 0
+    engine.loads[1] = 1.
+    engine.admit(np.array([old_mass, 0., 0., 0.]))
+    while engine.now < table.deadline:
+        chosen, until, info = plan_admission(engine, table, policy, calibration=calibration)
+        if engine.now == 0:
+            assert info["mandatory_forecast_finish_s"][0] > table.deadline
+            assert info["predicted_shed_fraction"] > 0
+        assert chosen[table.route == 1].sum() == 0
+        assert info["max_relative_residual"] <= 1e-8 and info.get("fixed_obligation_overload", 0.) <= 1e-8
+        engine.admit(chosen)
+        engine.advance(until)
+    assert engine.mass[0] == old_mass and engine.state[0] < 6
+    assert engine.result()["shed_fraction"] > 0
+    assert not engine.resident_generated.any()
 
 
 @pytest.mark.parametrize("policy", ["queue_haul", "replay_only"])
