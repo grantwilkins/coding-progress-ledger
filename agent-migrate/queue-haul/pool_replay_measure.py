@@ -117,7 +117,7 @@ class Acquisition:
 
     def unloaded(self, plan):
         previous = self.out / 'unloaded'
-        root = self.out / ('unloaded-matrix' if previous.exists() else 'unloaded')
+        root = self.out / ('unloaded-continuation' if (self.out/'unloaded-matrix').exists() else 'unloaded-matrix' if previous.exists() else 'unloaded')
         root.mkdir(exist_ok=False)
         metrics = serving.MetricsSampler(self.cfg.host, self.cfg.sink_port, root/'engine.csv', .5)
         power = p.PowerSampler(root/'power.csv', .5)
@@ -141,9 +141,13 @@ class Acquisition:
             write(root/'cache-integrity.json', check)
             if not check['passed']:
                 raise RuntimeError('cold/shared-prefix cache telemetry verification failed')
+            attempted = {json.loads(line).get('episode') for line in (self.out/'requests.jsonl').read_text().splitlines()}
             for index, trial in enumerate(plan['unloaded_trials']):
                 started = time.monotonic()
                 episode = f"unloaded-{index:02d}-s{trial['seed']}"
+                if episode in attempted:
+                    print(episode, 'retained prior attempt; no retry', flush=True)
+                    continue
                 histories = [self.history(f'{episode}-lane{lane}', trial['retained_tokens']) for lane in range(trial['width'])]
                 cold_histories = [self.history(f'{episode}-cold-lane{lane}', trial['retained_tokens']+trial['append_tokens']) for lane in range(trial['width'])]
                 results = []
@@ -158,12 +162,18 @@ class Acquisition:
                             {**trial, 'episode':episode, 'phase':phase, 'session':lane, 'cohort':'migration', 'method':'replay'},
                             f'{episode}-lane{lane}' + ('-cold' if phase == 'cold_updated' else ''),
                             max(.1, 90-(time.monotonic()-started))) for lane,(messages,code) in enumerate(pairs)]
-                        rows = [f.result() for f in futures]
+                        rows = []
+                        for future in futures:
+                            try:
+                                rows.append(future.result())
+                            except Exception as exc:
+                                rows.append({'status':'failed','error':f'{type(exc).__name__}: {exc}'})
                     results.append({'phase':phase,'start_ns':phase_start,'end_ns':time.monotonic_ns(),
-                        'request_ids':[r['request_id'] for r in rows], 'cached_tokens':[r.get('cached_tokens') for r in rows],
+                        'request_ids':[r.get('request_id') for r in rows], 'cached_tokens':[r.get('cached_tokens') for r in rows],
                         'statuses':[r['status'] for r in rows], 'engine_before':before_phase, 'engine_after':self.engine_metrics()})
-                write(root/f'{episode}.json', {'trial':trial,'phases':results,'elapsed_s':time.monotonic()-started})
-                print(episode, 'complete', round(time.monotonic()-started,2), flush=True)
+                status = 'complete' if all(v == 'complete' for phase in results for v in phase['statuses']) else 'failed'
+                write(root/f'{episode}.json', {'trial':trial,'phases':results,'elapsed_s':time.monotonic()-started,'status':status})
+                print(episode, status, round(time.monotonic()-started,2), flush=True)
         finally:
             metrics.close(); power.close()
 
