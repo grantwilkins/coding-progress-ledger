@@ -771,6 +771,31 @@ campaign is archived under `outputs/a100-pooled-execution`.
 
 ### Bounded resident server timing handoff
 
+The [East US 2 acquisition](outputs/a100-resident-server-timing-20260910T1723/report.json)
+completed four 300-second source-active episodes and all twelve decode cells in
+43.28 minutes, including startup and cleanup. Both A100 80GB PCIe GPUs used a
+300 W power limit; Sweden was the source. The sole permitted overhead repeat passed:
+instrumentation differed by 0.30% in median duration and 0.03% in output rate.
+All 100 decode requests returned exactly 1,536 tokens with the required native
+cache hits. Independent server-token joins establish 32 scheduled prompt tokens,
+zero external hits and no preemptions for 84 requests across the first eleven
+cells. **Global telemetry acceptance failed:** both EngineCore logs lack final
+records, and the last 30K/concurrency-sixteen cell is missing 245 worker token
+records. Client completion does not make that cell valid for server timing fits.
+The likely shutdown signal race is documented; the measured evidence is unchanged.
+
+The episodes retain all 772 service arrivals: 768 successful, two timeout failures
+at the observation boundary and two censored. Long-context replay raised resident
+P90 arrival TTFT from 0.893 s to 11.345 s. The worst 21.148 s request includes
+17.619 s from server registration to scheduling, versus 2.504 s from scheduling
+to output readiness. The 1,233-token coding control turn has 36.81 ms server-ready
+and 36.78 ms client mean TPOT, demonstrating actual generation time. All four
+workload/arrival hash pairs match their frozen references; 55 focused tests passed.
+The broad suite remains unresolved as recorded in the report. Both GPU stacks
+were stopped. No coefficients were fitted and the full-fleet readiness guard
+remains in place. Raw gzip files preserve verified uncompressed hashes, and
+`pool_replay_server_reduce.py` reads them directly.
+
 The node agent should pull `policy-hardware-width8-pilot` and use
 [this frozen acquisition plan](outputs/a100-resident-server-timing-plan/plan.json).
 `pool_replay_server_timing.py` generates six guarded patches for vLLM 0.22.0;

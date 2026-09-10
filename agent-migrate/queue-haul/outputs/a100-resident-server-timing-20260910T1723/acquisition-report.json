@@ -1,6 +1,6 @@
 {
   "data_acceptance": "pending server event joins and telemetry completeness validation",
-  "status": "running",
+  "status": "complete",
   "cells": [
     {
       "id": "episodes-coding-0-control-7102",
@@ -47,73 +47,308 @@
     {
       "id": "episodes-coding_long-0-control-7101",
       "kind": "episode",
-      "status": "running",
-      "start_wall_ns": 1789062771983082565
+      "status": "complete",
+      "start_wall_ns": 1789062771983082565,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--episode",
+        "2"
+      ],
+      "exit_code": 0,
+      "end_wall_ns": 1789063137746714963
     },
     {
       "id": "episodes-coding_long-0-replay-7101",
       "kind": "episode",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789063137747156929,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--episode",
+        "3"
+      ],
+      "exit_code": 0,
+      "end_wall_ns": 1789063475110246762
     },
     {
       "id": "warm-c8192-n1-r1",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789063475110766543,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c8192-n1-r1\", \"context_tokens\": 8192, \"concurrency\": 1, \"seed\": 8101, \"repeat\": 1, \"use\": \"fit\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789063533674800045
     },
     {
       "id": "warm-c8192-n8-r1",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789063533675183181,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c8192-n8-r1\", \"context_tokens\": 8192, \"concurrency\": 8, \"seed\": 8101, \"repeat\": 1, \"use\": \"fit\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789063599843266289
     },
     {
       "id": "warm-c8192-n16-r1",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789063599843668922,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c8192-n16-r1\", \"context_tokens\": 8192, \"concurrency\": 16, \"seed\": 8101, \"repeat\": 1, \"use\": \"fit\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789063673661157051
     },
     {
       "id": "warm-c30000-n1-r1",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789063673661587996,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c30000-n1-r1\", \"context_tokens\": 30000, \"concurrency\": 1, \"seed\": 8101, \"repeat\": 1, \"use\": \"fit\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789063736488572712
     },
     {
       "id": "warm-c30000-n8-r1",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789063736488948344,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c30000-n8-r1\", \"context_tokens\": 30000, \"concurrency\": 8, \"seed\": 8101, \"repeat\": 1, \"use\": \"fit\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789063832998043334
     },
     {
       "id": "warm-c30000-n16-r1",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789063832998476173,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c30000-n16-r1\", \"context_tokens\": 30000, \"concurrency\": 16, \"seed\": 8101, \"repeat\": 1, \"use\": \"fit\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789063967345541119
     },
     {
       "id": "warm-c8192-n1-r2",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789063967346031085,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c8192-n1-r2\", \"context_tokens\": 8192, \"concurrency\": 1, \"seed\": 8102, \"repeat\": 2, \"use\": \"heldout\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789064026635468569
     },
     {
       "id": "warm-c8192-n8-r2",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789064026635898192,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c8192-n8-r2\", \"context_tokens\": 8192, \"concurrency\": 8, \"seed\": 8102, \"repeat\": 2, \"use\": \"heldout\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789064092340788788
     },
     {
       "id": "warm-c8192-n16-r2",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789064092341238880,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c8192-n16-r2\", \"context_tokens\": 8192, \"concurrency\": 16, \"seed\": 8102, \"repeat\": 2, \"use\": \"heldout\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789064165275174539
     },
     {
       "id": "warm-c30000-n1-r2",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789064165275697166,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c30000-n1-r2\", \"context_tokens\": 30000, \"concurrency\": 1, \"seed\": 8102, \"repeat\": 2, \"use\": \"heldout\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789064227766393252
     },
     {
       "id": "warm-c30000-n8-r2",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789064227766843394,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c30000-n8-r2\", \"context_tokens\": 30000, \"concurrency\": 8, \"seed\": 8102, \"repeat\": 2, \"use\": \"heldout\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789064324297411988
     },
     {
       "id": "warm-c30000-n16-r2",
       "kind": "warm",
-      "status": "unstarted"
+      "status": "complete",
+      "start_wall_ns": 1789064324297902365,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--cell",
+        "{\"id\": \"warm-c30000-n16-r2\", \"context_tokens\": 30000, \"concurrency\": 16, \"seed\": 8102, \"repeat\": 2, \"use\": \"heldout\"}"
+      ],
+      "exit_code": 0,
+      "warm_valid": true,
+      "end_wall_ns": 1789064457858235017
     }
   ],
   "overhead": [
@@ -150,5 +385,7 @@
   ],
   "start_wall_ns": 1789061880753991121,
   "deadline_wall_ns": 1789067280753991121,
-  "git_revision": "028bd3648d968ea369a83ca28f955aa80b439ad0"
+  "git_revision": "028bd3648d968ea369a83ca28f955aa80b439ad0",
+  "cleanup_exit_code": 0,
+  "end_wall_ns": 1789064477619373774
 }

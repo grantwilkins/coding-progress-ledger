@@ -1,0 +1,2063 @@
+{
+  "schema": "qh-server-timing-quality-v1",
+  "accepted": false,
+  "errors": [
+    {
+      "kind": "missing_or_invalid_process_final",
+      "path": "outputs/a100-resident-server-timing-20260910T1723/stack/timing/vmssa270f000001-207459.jsonl",
+      "last_sequence": 15616
+    },
+    {
+      "kind": "missing_or_invalid_process_final",
+      "path": "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7625.jsonl.gz",
+      "last_sequence": 122624
+    },
+    {
+      "kind": "scheduled_iteration_without_output",
+      "iteration": "vmssa270f000001:207459:5385"
+    },
+    {
+      "kind": "scheduled_iteration_without_output",
+      "iteration": "vmssa270f000001:207459:5386"
+    },
+    {
+      "kind": "scheduled_iteration_without_output",
+      "iteration": "vmssae9f0000000:7625:41195"
+    },
+    {
+      "kind": "scheduled_iteration_without_output",
+      "iteration": "vmssae9f0000000:7625:41196"
+    },
+    {
+      "kind": "http_ingress_without_request_mapping",
+      "ingress_id": "7195:2180600275573"
+    },
+    {
+      "kind": "http_ingress_without_request_mapping",
+      "ingress_id": "7195:2498325962912"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 69,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 70,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 71,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 72,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 73,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 74,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 75,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 76,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 77,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 78,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 79,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 80,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 81,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 82,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 83,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 84,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 85,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 86,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bd1610c8d7b3eaef-0-b4f38051",
+      "ordinal": 87,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1520,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1521,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1522,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1523,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1524,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1525,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1526,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1527,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1528,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ba163f0c3281d907-0-b8deda5f",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1529,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-ad75a15159efeee4-0-acf9ed2a",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1530,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1531,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1532,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1533,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1534,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a5e80dbecefdef26-0-8885e7ea",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a20674b93f7c772d-0-8c49c821",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b6b418cde7a6f43b-0-a6c939b3",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-89c27125c0386174-0-bcd6fee8",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-8d1e2da33434a71a-0-81f6930e",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-bf4c83d779ded3c6-0-ad6fcd6f",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b4af0c2f1ac7ca79-0-9542703c",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a3e777e4cb08051f-0-9c1cc8f9",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-99a1e4b66bb620a0-0-b3c391bb",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-b2c660d39005fcb2-0-9b0a0c4e",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-933b3b227f5cd799-0-89d74493",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-96c82534da148c91-0-b8ad8f31",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a6def4ad13116323-0-b6fc0a28",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "unjoined_token",
+      "request_id": "cmpl-a693a0c95aa83f24-0-a00865b4",
+      "ordinal": 1535,
+      "boundary": "frontend_receipt"
+    },
+    {
+      "kind": "upstream_tokens_without_downstream",
+      "boundary": "frontend_receipt",
+      "count": 11
+    },
+    {
+      "kind": "client_request_mapping_missing",
+      "count": 4,
+      "request_ids": [
+        "",
+        "",
+        null,
+        null
+      ]
+    },
+    {
+      "kind": "frontend_request_without_client_record",
+      "request_id": "cmpl-ba2aebf8f28659f5-0-9aab40d6"
+    },
+    {
+      "kind": "frontend_request_without_client_record",
+      "request_id": "cmpl-b29c83fa4e5a6a7d-0-9bb32407"
+    },
+    {
+      "kind": "generated_tokens_without_frontend_receipt",
+      "count": 11,
+      "explanation": "May include in-flight tokens discarded after EOS/abort; unresolved until engine discard evidence is joined."
+    }
+  ],
+  "process_identity": {
+    "outputs/a100-resident-server-timing-20260910T1723/stack/timing/vmssa270f000001-206710.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 20063473500212,
+      "host": "vmssa270f000001",
+      "pid": 206710,
+      "boot_id": "197d89d5-45eb-452a-a55d-2eb40d2c178c",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061901403354253,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/engine/output_processor.py",
+          "sha256": "aecde82b8d2c71a9cca130330974d5160af9c8966f4b60dcf9471bfa0736762e"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/entrypoints/openai/completion/serving.py",
+          "sha256": "4a9fd6608075f2342e4ffddf8be992bc845f9bb38ebfff9e3aa13ab8b4f93e7a"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/entrypoints/openai/completion/api_router.py",
+          "sha256": "c85e7eb06422f8c5dfe4e2f4d3a6b8e57f5e3f949deedef83d9caaa5e0aef05e"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/stack/timing/vmssa270f000001-207092.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 20079145157660,
+      "host": "vmssa270f000001",
+      "pid": 207092,
+      "boot_id": "197d89d5-45eb-452a-a55d-2eb40d2c178c",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061917075012292,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/stack/timing/vmssa270f000001-207348.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 20092987209212,
+      "host": "vmssa270f000001",
+      "pid": 207348,
+      "boot_id": "197d89d5-45eb-452a-a55d-2eb40d2c178c",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061930917062702,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/stack/timing/vmssa270f000001-207349.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 20093033891110,
+      "host": "vmssa270f000001",
+      "pid": 207349,
+      "boot_id": "197d89d5-45eb-452a-a55d-2eb40d2c178c",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061930963743108,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/stack/timing/vmssa270f000001-207458.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 20097572263978,
+      "host": "vmssa270f000001",
+      "pid": 207458,
+      "boot_id": "197d89d5-45eb-452a-a55d-2eb40d2c178c",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061935502106758,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/stack/timing/vmssa270f000001-207459.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 20097503365634,
+      "host": "vmssa270f000001",
+      "pid": 207459,
+      "boot_id": "197d89d5-45eb-452a-a55d-2eb40d2c178c",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061935433219846,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/worker/gpu_model_runner.py",
+          "sha256": "911e1f9192ed742521b6e3e9188958d12a501a06b2dd20065611907c34fd6b65"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/scheduler.py",
+          "sha256": "70004c843b25499753c54fc34f3cd2e8cebb65929f5b0e2a229b9684e689869c"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/stack/timing/vmssa270f000001-207981.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 20110149867887,
+      "host": "vmssa270f000001",
+      "pid": 207981,
+      "boot_id": "197d89d5-45eb-452a-a55d-2eb40d2c178c",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061948079722579,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7195.jsonl.gz": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 1631257881457,
+      "host": "vmssae9f0000000",
+      "pid": 7195,
+      "boot_id": "1dad075a-4b22-4797-b2fd-b4fa9469fbe2",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061904275789468,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/engine/output_processor.py",
+          "sha256": "aecde82b8d2c71a9cca130330974d5160af9c8966f4b60dcf9471bfa0736762e"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/entrypoints/openai/completion/serving.py",
+          "sha256": "4a9fd6608075f2342e4ffddf8be992bc845f9bb38ebfff9e3aa13ab8b4f93e7a"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/entrypoints/openai/completion/api_router.py",
+          "sha256": "c85e7eb06422f8c5dfe4e2f4d3a6b8e57f5e3f949deedef83d9caaa5e0aef05e"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7625.jsonl.gz": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 1665726541634,
+      "host": "vmssae9f0000000",
+      "pid": 7625,
+      "boot_id": "1dad075a-4b22-4797-b2fd-b4fa9469fbe2",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061938744460295,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/worker/gpu_model_runner.py",
+          "sha256": "911e1f9192ed742521b6e3e9188958d12a501a06b2dd20065611907c34fd6b65"
+        },
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/scheduler.py",
+          "sha256": "70004c843b25499753c54fc34f3cd2e8cebb65929f5b0e2a229b9684e689869c"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7410.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 1647748253183,
+      "host": "vmssae9f0000000",
+      "pid": 7410,
+      "boot_id": "1dad075a-4b22-4797-b2fd-b4fa9469fbe2",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061920766171965,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7545.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 1660917194773,
+      "host": "vmssae9f0000000",
+      "pid": 7545,
+      "boot_id": "1dad075a-4b22-4797-b2fd-b4fa9469fbe2",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061933935112403,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7546.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 1661099907996,
+      "host": "vmssae9f0000000",
+      "pid": 7546,
+      "boot_id": "1dad075a-4b22-4797-b2fd-b4fa9469fbe2",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061934117826777,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7624.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 1665707363864,
+      "host": "vmssae9f0000000",
+      "pid": 7624,
+      "boot_id": "1dad075a-4b22-4797-b2fd-b4fa9469fbe2",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061938725281473,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    },
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-8045.jsonl": {
+      "sequence": 1,
+      "kind": "process_start",
+      "mono_ns": 1678165001547,
+      "host": "vmssae9f0000000",
+      "pid": 8045,
+      "boot_id": "1dad075a-4b22-4797-b2fd-b4fa9469fbe2",
+      "time_namespace": "time:[4026531834]",
+      "time_namespace_offsets": "monotonic           0         0\nboottime            0         0\n",
+      "cuda_visible_devices": "0",
+      "clock": "CLOCK_MONOTONIC",
+      "wall_ns": 1789061951182907845,
+      "module_sha256": "a4b0c4d627144fba160f47ad82d5cc5d800f9be3f95b94a04a0d2316b372d7c6",
+      "imported_modules": [
+        {
+          "path": "/tmp/qh-server-runtime/lib/python3.12/site-packages/vllm/v1/core/sched/output.py",
+          "sha256": "b66607f2fb8ab5e2427c155b9cd6d7a3f58ab825301c340c40c739f74287479f"
+        }
+      ]
+    }
+  },
+  "counts": {
+    "uninstrumented_client_requests": 64,
+    "client_requests": 1173,
+    "completed": 1169,
+    "failed_or_censored": 4,
+    "scheduler_iterations": 46582,
+    "worker_iterations": 45069,
+    "generated_tokens": 216078,
+    "frontend_receipt_tokens": 216331,
+    "collector_put_tokens": 216331,
+    "collector_pop_tokens": 216331
+  },
+  "gpu_stream_elapsed_ms": {
+    "forward": {
+      "count": 45069,
+      "min": 4.843999862670898,
+      "median": 33.12531280517578,
+      "max": 1971.4727783203125
+    },
+    "logits": {
+      "count": 45069,
+      "min": 0.6547520160675049,
+      "median": 0.7409600019454956,
+      "max": 5.21727991104126
+    },
+    "sample": {
+      "count": 45069,
+      "min": 0.024447999894618988,
+      "median": 0.026623999699950218,
+      "max": 6.436672210693359
+    }
+  },
+  "server_output_ready_intervals_ms": {
+    "count": 214907,
+    "min": 0.582905,
+    "median": 35.586925,
+    "max": 1500.159868
+  },
+  "same_clock_host_intervals_ms": {
+    "registration_to_first_schedule_ms": {
+      "count": 1171,
+      "min": 1.229529,
+      "median": 23.04018,
+      "max": 24832.442141
+    },
+    "frontend_receipt_from_previous_ms": {
+      "count": 216067,
+      "min": 0.495726,
+      "median": 1.541475,
+      "max": 260.65691
+    },
+    "collector_put_from_previous_ms": {
+      "count": 216331,
+      "min": 0.061286,
+      "median": 0.087724,
+      "max": 33.857725
+    },
+    "collector_pop_from_previous_ms": {
+      "count": 216331,
+      "min": 0.11188,
+      "median": 1.258323,
+      "max": 268.639013
+    },
+    "client_receive_from_collector_pop_ms": {
+      "count": 6270,
+      "min": 0.136159,
+      "median": 0.26997000000000004,
+      "max": 73.083061
+    }
+  },
+  "client_completion_s": {
+    "count": 1169,
+    "min": 0.053725194,
+    "median": 1.530988862,
+    "max": 57.124594918
+  },
+  "causal_client_queue_s": {
+    "count": 1169,
+    "min": 2.1931e-05,
+    "median": 0.004059081,
+    "max": 28.194196137
+  },
+  "limitations": [
+    "CUDA events are relative stream elapsed time and can include waits, not exclusive kernel busy time.",
+    "Host intervals require matching host, boot ID, time namespace and offsets; missing domains are never subtracted.",
+    "Collector pop is not wire flush; cross-host delivery is not derived from monotonic subtraction.",
+    "Registration-to-first-schedule is the observed server admission delay; client causal queue is dispatch minus offered time.",
+    "This reducer does not certify offered traces, frozen warm cache conditions or calibration fits."
+  ]
+}
