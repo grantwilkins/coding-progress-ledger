@@ -296,6 +296,12 @@ Native serialization is 1.611 decimal GB per 32,768 tokens, distinct from the ea
 limits aggregate GET responses to 1,000 Mbit/s; it is not the simulator's 1,000-Gbit/s
 WAN scenario.
 
+Loaded migration probes often generate all 512 allowed output tokens despite EOS
+being enabled. The verified 30,777-token replay catch-up reached its first token in
+0.377 seconds but took 15.215 seconds to complete 512 output tokens. KV also runs a
+source export probe before prefetch and destination validation. Keep these adapter
+generation costs separate from prefix rebuild work when calibrating the simulator.
+
 Arrival times and finite-trajectory cycling are assumed: all 111 main-episode context
 restarts were cycle wraps, not observed production resets. Histories retain actual
 generated tokens between those declared restarts, using content-free recorded shapes.
