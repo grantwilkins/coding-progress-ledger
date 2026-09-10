@@ -3573,3 +3573,14 @@ same byte volume, saturated shared WAN, and bandwidth-independent overhead;
 these four estimates are not additional measured repeats. The control anchors
 the estimate rather than providing an independent validation. Colors and
 distinct policy markers come from `plot_style.py`.
+
+`uv run python quick_action_mix.py --out /tmp/quick-action-mix` reproduces
+the deadline-sweep bar plot from the measured inputs captured in
+`outputs/quick-action-mix-20260910/report.json`; `--inputs` selects another snapshot.
+The snapshot includes private KV geometry, A100 prefill curves, natural link
+rates, and 100 matched eight-session context draws and orders, so reproduction
+does not require the original `/datadrive` checkout or its profiling helpers.
+This is an optimistic earliest-finish transport/prefill heuristic, not QH
+Greedy. It shares each destination's link and serial replay server but excludes
+lookup, restoration, decode, ongoing-load and memory admission, and power.
+The bars describe estimated choices, not live readiness or full-shed attainment.
