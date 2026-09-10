@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import builtins
 import threading
+import sys
 from types import SimpleNamespace
 
 import torch
@@ -53,6 +54,28 @@ def test_replay_bypass_is_explicit():
     assert bypass_lmcache(mp_request)
     mp_request.sampling_params.extra_args = {"qh_bypass_lmcache": 1}
     assert bypass_lmcache(mp_request)
+
+
+def test_mp_external_miss_preserves_native_prefix_for_complete_kv_export(monkeypatch):
+    import lmcache_compat.connector_patch as patch
+
+    tracker = SimpleNamespace(num_vllm_hit_tokens=0, num_lmcache_hit_tokens=0, num_scheduled_tokens=1984)
+
+    class Connector:
+        _hit_alignment_tokens = 16
+        _get_or_create_request_tracker = lambda self, request: tracker
+        get_num_new_matched_tokens = lambda self, request, computed: (0, False)
+        register_kv_caches = lambda *args: None
+        update_state_after_alloc = lambda *args: None
+
+    monkeypatch.setitem(sys.modules, 'lmcache.integration.vllm.lmcache_mp_connector',
+                        SimpleNamespace(LMCacheMPConnector=Connector, logger=SimpleNamespace(info=lambda *args: None)))
+    monkeypatch.setattr(patch, 'patch_sleep_compatible_kv_allocator', lambda logger: None)
+    monkeypatch.setattr(patch, 'patch_attention_kv_layout', lambda: None)
+    patch.patch_mp_connector()
+    assert Connector().get_num_new_matched_tokens(SimpleNamespace(), 64) == (0, False)
+    assert tracker.num_vllm_hit_tokens == 64
+    assert (tracker.num_scheduled_tokens + max(tracker.num_vllm_hit_tokens, tracker.num_lmcache_hit_tokens)) // 256 * 256 == 2048
 
 
 

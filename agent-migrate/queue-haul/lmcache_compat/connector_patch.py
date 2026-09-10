@@ -490,6 +490,7 @@ def patch_mp_connector() -> None:
 
     def lookup(self, request, num_computed_tokens):
         if not bypass_lmcache(request):
+            self._get_or_create_request_tracker(request).num_vllm_hit_tokens = num_computed_tokens // self._hit_alignment_tokens * self._hit_alignment_tokens
             return original_lookup(self, request, num_computed_tokens)
         tracker = self._get_or_create_request_tracker(request)
         tracker.num_stored_tokens = 2**63
