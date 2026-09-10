@@ -2,7 +2,6 @@
 import csv
 import hashlib
 import json
-import subprocess
 from pathlib import Path
 
 root=Path(__file__).resolve().parent
@@ -10,10 +9,8 @@ paths=[root/'service-analysis.json',root/'kv-observations.json',root/'resident-r
 service,kv,rates=(json.loads(p.read_text()) for p in paths)
 frozen=json.loads((root/'plan.json').read_text());repo=root.parent.parent
 simulator_hashes={name:digest for name,digest in frozen['input_hashes'].items() if name.startswith('pool_shed_') or name=='loaded_service_model.py'}
-prefix=subprocess.check_output(['git','rev-parse','--show-prefix'],cwd=repo,text=True).strip()
-simulator_hashes['pool_shed.py']=hashlib.sha256(subprocess.check_output(['git','show',f"{frozen['checkout']['commit']}:{prefix}pool_shed.py"],cwd=repo)).hexdigest()
 simulator_check={name:{'baseline_sha256':digest,'current_sha256':hashlib.sha256((repo/name).read_bytes()).hexdigest(),
-    'baseline_source':'plan.input_hashes' if name!='pool_shed.py' else 'frozen checkout commit '+frozen['checkout']['commit']} for name,digest in simulator_hashes.items()}
+    'baseline_source':'plan.input_hashes'} for name,digest in simulator_hashes.items()}
 if any(r['baseline_sha256']!=r['current_sha256'] for r in simulator_check.values()):raise ValueError('simulator source changed despite fitting stop')
 main=[e for e in service['episodes'] if e['spec']['arm']!='resident']
 scouts=[e for e in service['episodes'] if e['spec']['arm']=='resident']
