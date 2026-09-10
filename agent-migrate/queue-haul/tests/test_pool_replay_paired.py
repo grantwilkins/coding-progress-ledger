@@ -114,3 +114,18 @@ def test_original_wall_deadline_never_extends_local_budget(monkeypatch):
     assert paired.remaining_seconds(100.,1_010_000_000_000)==10
     assert paired.remaining_seconds(100.,900_000_000_000)==0
     assert paired.remaining_seconds(100.,9_000_000_000_000)==1100
+
+
+def test_distinct_run_directories_have_disjoint_source_cache_histories(monkeypatch,tmp_path):
+    calls=[]
+    monkeypatch.setattr(paired,'validate_inventory',lambda inventory:paired.b.Config())
+    monkeypatch.setattr(paired.p,'run_scenario',lambda *args,**kwargs:calls.append(args))
+    monkeypatch.setattr(paired.p,'LiveSession',paired.p.LiveSession)
+    original=paired.scenarios('kv_transfer',8192)[0]
+    for label in ('first','corrected'):
+        paired.worker({'stack_root':str(tmp_path),'bandwidth_mbps':1000},original,tmp_path/label/'scenario')
+    ids=[{r['id'] for r in call[2]['sessions']} for call in calls]
+    assert len(ids[0])==len(ids[1])==8 and ids[0].isdisjoint(ids[1])
+    for call,keys in zip(calls,ids):
+        assert keys=={r['session_id'] for r in call[3]['sessions']}=={r['session_id'] for r in call[3]['moves']}
+    assert original['sessions'][0]['session_id'].startswith('paired-')

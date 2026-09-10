@@ -60,6 +60,7 @@ def reduce(root):
     scenarios, lanes, requests = [], [], []
     for spec in plan['scenarios']:
         folder = root/spec['scenario_id']
+        spec = read(folder/'scenario.json', spec)
         attempt = attempts.get(spec['scenario_id'], read(folder/'attempt.json', {'status': 'unmeasured'}))
         result = read(folder/'result.json', {})
         events = lines(folder/'events.jsonl')

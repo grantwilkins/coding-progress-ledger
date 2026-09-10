@@ -83,6 +83,7 @@ class CheckedSession(p.LiveSession):
 
 
 def worker(inventory, scenario, out):
+    scenario = {**scenario, **{key: [{**row, "session_id": f"{out.parent.name}-{row['session_id']}"} for row in scenario[key]] for key in ("sessions", "moves")}}
     cfg = replace(validate_inventory(inventory), architecture_campaign=True)
     stack = b.Stack(None, None, None, None, Path(inventory["stack_root"]),
                     bandwidth_mbps=inventory["bandwidth_mbps"])
