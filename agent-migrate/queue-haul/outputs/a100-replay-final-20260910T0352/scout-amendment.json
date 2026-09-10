@@ -1,0 +1,41 @@
+{
+  "frozen_utc": "2026-09-10T04:40:12.396096+00:00",
+  "original_plan_sha256": "5b91ccdf1d586ac39222dfc1478fc80642d2c5c412905688a477820c1818d5de",
+  "previous_amendment_sha256": "b72dd8d6fc1611989b534387eade85a16b3e4e046ff79c6ecc207221a4c461ca",
+  "commit": "65a4f0cf4237e83fcd39867e6bfc3a9914326100",
+  "corrections": [
+    {
+      "change": "Preserve original server status and transport error before adding the high-level validation error.",
+      "evidence": "coding_long scout 1 has a failed request at 70.05s with no response ID; its original transport diagnostic was overwritten. Cause remains unknown, not a capacity failure."
+    },
+    {
+      "change": "Use observed original-arrival TTFT, request-mean TPOT or engine waiting growth to identify degradation, requiring at least 99% exact timing for completed requests. Censoring or an unknown acquisition failure alone does not establish a capacity boundary.",
+      "evidence": "coding scout 2 has a legitimate 1233-output request still decoding at its boundary: raw SSE retains 684 tokens and TTFT 0.186s, followed by two causally queued arrivals."
+    },
+    {
+      "change": "Resume only unused probe indices, moving geometrically from the last tested rate; never rerun an existing rate.",
+      "scope": "At most four probes per workload and eight total remain unchanged. The operating point remains the heaviest tested fully passing finite-window screen."
+    }
+  ],
+  "remaining_probe_slots": {
+    "coding_long": [
+      2,
+      3
+    ],
+    "coding": [
+      3
+    ]
+  },
+  "next_new_nominal_rates_rps": {
+    "coding_long": 0.7527133116854072,
+    "coding": 1.770401019345314
+  },
+  "later_rate_rule": "Double if no observed degradation; halve after observed degradation only if that rate is untested. Omit remaining probes if their proposed rate was already tested.",
+  "existing_results_preserved": true,
+  "deadline_wall_ns": 1789020343193408970,
+  "deadline_extension": false,
+  "old_source_sha256": "d4366a0a870d72293eb031bdc0c713f8d8737aa445e1412a8d12e49469aeb06c",
+  "new_source_sha256": "f5701a5f3e46e561a90b5cd55c70ebee62cd4e20fae5ca111487a0500326aa36",
+  "tests": "resident-scout-refinement-tests.log: 31 passed",
+  "simulator_fitting": "stopped pending user review"
+}
