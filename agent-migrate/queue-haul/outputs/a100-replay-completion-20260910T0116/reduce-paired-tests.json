@@ -1,0 +1,10 @@
+{
+  "command": "UV_CACHE_DIR=/tmp/qh-completion-uv-cache /datadrive/queue-haul-tools/bin/uv run --no-project --python /datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python pytest -q -o cache_dir=/tmp/qh-paired-reduce-pytest-cache outputs/a100-replay-completion-20260910T0116/test_reduce_paired.py",
+  "passed": 2,
+  "exit_code": 0,
+  "duration_s": 0.11,
+  "checks": [
+    "Repeated GET keys distinguish unique state bytes from actually transferred payload/protocol bytes, with scenario bucket totals counted once.",
+    "Timeout cannot pass even if result.json claims complete; unfinished JSONL tail and missing cache telemetry remain explicit."
+  ]
+}
