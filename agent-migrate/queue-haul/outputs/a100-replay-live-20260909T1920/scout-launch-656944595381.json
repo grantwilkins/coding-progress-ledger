@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "pool_replay_resident.py",
+    "scout",
+    "--out",
+    "outputs/a100-replay-live-20260909T1920",
+    "--plan",
+    "outputs/a100-replay-live-20260909T1920/live-plan.json"
+  ],
+  "source_sha256": "dee97ee4e7c09a5935c8d6d80332d0b1c8dc1cb7102068daf72698f34e45a91f",
+  "runtime_patch": {
+    "runtime": "vllm0.22.0",
+    "path": "/tmp/qh-replay-runtime/lib/python3.12/site-packages/vllm/v1/engine/output_processor.py",
+    "before_sha256": "464c3cda347512cf1090f8e6471d0d3f0f65e286eb9a7b97be52efbc1ffd572a",
+    "after_sha256": "3306b0844d98aadf9621de88533fdd1f6dc4e0959674efa9380f50578e9f00c4",
+    "change": "Preserve each engine RequestOutput in FIFO order instead of merging queued DELTA outputs; do not split engine events or alter sampling/scheduling.",
+    "reason": "resident client token events failed the 99% exact-event prerequisite; original probes retained",
+    "performance_equivalence": "not assumed; all subsequent paired arms use the same patch"
+  },
+  "commit": "c2f572925e43a498dcd8317c3f0de4e8e7845a69",
+  "plan_sha256": "2f025672411b14487d1a90f164cab07fc85a93abd5e80bdbbdf644047e1b08c6",
+  "start_ns": 656950856337
+}

@@ -1,0 +1,2987 @@
+{
+  "schema": "queue-haul-dispatch-wide-final-v1",
+  "case": [
+    "coding",
+    0,
+    0.5,
+    1000,
+    60
+  ],
+  "policy": "isolated_fastest",
+  "planning_resolution": 0.5,
+  "planning_iterations": 3,
+  "source_sha256": {
+    "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+    "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+    "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14"
+  },
+  "source_sha256_after": {
+    "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+    "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+    "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14"
+  },
+  "source_unchanged": true,
+  "rows": [
+    {
+      "chunks": 128,
+      "elapsed_s": 15.090956250205636,
+      "physical_checks_pass": true,
+      "result": {
+        "shed_fraction": 0.9811186648607251,
+        "action_counts": [
+          253401.0514910802,
+          1623.6160992516477,
+          257755.94850892012,
+          2558.7566566144155
+        ],
+        "action_fractions": [
+          0.4046186842595304,
+          0.0017558732142547563,
+          0.5720583692637519,
+          0.002685738123188021
+        ],
+        "completed_sessions": 515339.3727558664,
+        "last_completion_s": 59.13219274839502,
+        "service_ready_s": null,
+        "resident_debt_generated_work_s": [
+          0.0,
+          0.0
+        ],
+        "resident_debt_recovered_work_s": [
+          0.0,
+          0.0
+        ],
+        "pending_resident_debt_work_s": [
+          0.0,
+          0.0
+        ],
+        "batch_replica_seconds": [
+          356050.0834141758,
+          467398.9466169938
+        ],
+        "migration_idle_work_s": [
+          353632.6303713189,
+          464082.41423920466
+        ],
+        "transferred_bytes": [
+          2528262195599.9395,
+          4336349377472.7305,
+          6864611573072.661
+        ],
+        "peak_destination_load": [
+          0.825099645979023,
+          0.9618342216680114
+        ],
+        "final_destination_load": [
+          0.825099645979023,
+          0.959795285909534
+        ],
+        "completion_events": [
+          {
+            "column": 576,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 345.9995383343524,
+            "first_completion_s": 0.6713930915048074,
+            "completion_s": 1.461943680287284,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 577,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 323.44116938655503,
+            "first_completion_s": 0.884330466691249,
+            "completion_s": 0.8915820140112403,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 501,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 110.00000000000222,
+            "first_completion_s": 1.0343641990561057,
+            "completion_s": 1.0440950954578239,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 641,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 36.00000000000179,
+            "first_completion_s": 1.0448653195340025,
+            "completion_s": 1.054846241162219,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 592,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 146.00000000000003,
+            "first_completion_s": 1.11432716110413,
+            "completion_s": 1.125596006845224,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 573,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 306.99999999999926,
+            "first_completion_s": 1.1390832431132345,
+            "completion_s": 1.1449841671076508,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 151,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 121.00000000000145,
+            "first_completion_s": 1.1845990655858887,
+            "completion_s": 1.1874946417860304,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 579,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 160.5329031366309,
+            "first_completion_s": 1.4345312560856995,
+            "completion_s": 1.4502891349968574,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 231,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 248.4670968633698,
+            "first_completion_s": 1.4402540178198757,
+            "completion_s": 1.4560117717861853,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 677,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 66.00023083261134,
+            "first_completion_s": 1.5270145845504681,
+            "completion_s": 2.317494465281194,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 637,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 89.0000000000013,
+            "first_completion_s": 1.5783773774781085,
+            "completion_s": 1.5935305359472343,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 228,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 0.00046166565152816474,
+            "first_completion_s": 2.255196368862766,
+            "completion_s": 2.25546418378479,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 583,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 149.9999999999998,
+            "first_completion_s": 3.9969233043203705,
+            "completion_s": 14.277791194040011,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 645,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 0.00023083261080759137,
+            "first_completion_s": 4.44116929751947,
+            "completion_s": 4.441175325144889,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 681,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 10.75104077607832,
+            "first_completion_s": 4.635448544769644,
+            "completion_s": 4.635474605940386,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 333,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 0.0004448657385273238,
+            "first_completion_s": 4.644600401504915,
+            "completion_s": 4.644600401504915,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 309,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 0.7013055131386162,
+            "first_completion_s": 6.2201461631552295,
+            "completion_s": 6.221817556182148,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 193,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 18.000000000002437,
+            "first_completion_s": 8.847139789055706,
+            "completion_s": 8.920801823776245,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 342,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 259.27590291991174,
+            "first_completion_s": 9.21991249296203,
+            "completion_s": 9.2216741547087,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 286,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 866.4411693865584,
+            "first_completion_s": 9.365177424570064,
+            "completion_s": 9.446821541721022,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 316,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 55.27657861811875,
+            "first_completion_s": 9.485889414544877,
+            "completion_s": 9.487651279582611,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 452,
+            "action": "kv_transfer",
+            "route": 1,
+            "multiplicity": 2558.7566566144155,
+            "first_completion_s": 10.057552589800009,
+            "completion_s": 59.13219274839502,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 8.681079644144741e-14
+          },
+          {
+            "column": 288,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 21168.558830613416,
+            "first_completion_s": 10.627266820609108,
+            "completion_s": 10.7160208026825,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 694,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 11025.192959483222,
+            "first_completion_s": 10.852793261993234,
+            "completion_s": 12.437632936261094,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 346,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 10911.234469675437,
+            "first_completion_s": 10.89682920245356,
+            "completion_s": 12.486426176682302,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 315,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 0.00033839150045179156,
+            "first_completion_s": 11.117717319989037,
+            "completion_s": 11.117717319989037,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 557,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 28.999999999996486,
+            "first_completion_s": 12.392784700431957,
+            "completion_s": 12.496029804779194,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 104,
+            "action": "kv_transfer",
+            "route": 0,
+            "multiplicity": 1606.6160992516404,
+            "first_completion_s": 12.76967113630214,
+            "completion_s": 53.25982338827262,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 7,
+            "action": "kv_transfer",
+            "route": 0,
+            "multiplicity": 17.000000000007276,
+            "first_completion_s": 12.923642777638035,
+            "completion_s": 12.923642777638035,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 548,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 170.0,
+            "first_completion_s": 14.674597790650688,
+            "completion_s": 14.676037323089426,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 571,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 22105.999999999996,
+            "first_completion_s": 15.485964557362504,
+            "completion_s": 15.596776594872486,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 580,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 109.99999999999861,
+            "first_completion_s": 15.922117380832336,
+            "completion_s": 22.26290942186354,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 682,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 56.54495144710745,
+            "first_completion_s": 16.033057736297646,
+            "completion_s": 16.03581846994507,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 549,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 43.000000000010914,
+            "first_completion_s": 16.492321832494984,
+            "completion_s": 16.49474840731993,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 661,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 2.2491900563909457,
+            "first_completion_s": 16.505827465195143,
+            "completion_s": 16.508256235878168,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 657,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 13.022791566952948,
+            "first_completion_s": 17.28435846189385,
+            "completion_s": 17.28729322262726,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 662,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 10.75104077622018,
+            "first_completion_s": 18.041222184304587,
+            "completion_s": 18.044668271574675,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 663,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 54.2954229992174,
+            "first_completion_s": 19.021697131137678,
+            "completion_s": 19.02584697621042,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          }
+        ],
+        "peak_reserved_kv_tokens": [
+          5245077273.299953,
+          6582171911.74704
+        ],
+        "buffered_requests": 314.9230543228103,
+        "transferred_buffered_requests": 314.9230543228103,
+        "source_buffered_requests": 0.0,
+        "pending_buffered_requests": 1.4040344502053876e-14,
+        "pending_destination_buffered_requests": 1.4040344502053876e-14,
+        "completed_buffered_requests": 314.9230543228103,
+        "backlog_reference_work_s": 1862.0549693011337,
+        "pending_backlog_reference_work_s": 8.681079644144741e-14,
+        "pending_source_buffer_work_s": 0.0,
+        "pending_buffered_work_s": 8.681079644144741e-14,
+        "protected_serving_load": [
+          0.825099645979023,
+          0.959795285909534
+        ],
+        "unfinished_batch_mass": 219.11232162004217,
+        "memory_blocked_batch_mass": 0.0,
+        "trace_exhausted_waves": 0,
+        "dispatch_chunks": 128,
+        "dispatch_wave_count": 7296,
+        "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; frozen initial snapshot while source continues",
+        "execution_model": "independent_event_fluid_batch_mass_finite_trace",
+        "source_pacing": "paced recorded trajectories with contextual request-duration proxy; gate arrivals use cycle-average fluid demand",
+        "compute_scope": "shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion",
+        "backlog_scope": "ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears",
+        "resident_debt_scope": "resident debt disallowed by the shared safe-occupancy constraint",
+        "memory_scope": "reserve declared cohort memory, including recorded-cycle peaks, before transfer; grow or reject before catch-up",
+        "admitted_shed_fraction": 0.9813486509025444,
+        "admitted_action_counts": [
+          253401.05149108084,
+          1623.6160992516775,
+          257755.9485089191,
+          2777.8689782344372
+        ],
+        "admitted_action_fractions": [
+          0.4046186842595315,
+          0.0017558732142547875,
+          0.5720583692637501,
+          0.0029157241650079433
+        ],
+        "max_relative_residual": 7.276468892142219e-12,
+        "planning_steps": 16,
+        "planning_s": 10.47000141814351,
+        "planning_diagnostics": [
+          {
+            "time_s": 0.0,
+            "admitted_shed_fraction": 0.9564086741483867,
+            "iterations": 2,
+            "max_relative_residual": 1.1044372057815714e-15,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0003368383843621592,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              0.0,
+              0.0
+            ],
+            "predicted_shed_fraction": 0.9763084966930373,
+            "variables": 1140,
+            "time_bins": 13,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 0.7905597895179396,
+            "admitted_shed_fraction": 0.00011585563731755272,
+            "iterations": 2,
+            "max_relative_residual": 2.02928444354207e-15,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 7.578228933269315e-09,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              10.999477272564462,
+              15.596199943829557
+            ],
+            "predicted_shed_fraction": 0.01989982152836313,
+            "variables": 354,
+            "time_bins": 12,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 1.5811195790358792,
+            "admitted_shed_fraction": 0.018396796397567416,
+            "iterations": 3,
+            "max_relative_residual": 4.3954724137832195e-16,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              10.999477272564162,
+              15.596217620894429
+            ],
+            "predicted_shed_fraction": 0.020087078440923875,
+            "variables": 354,
+            "time_bins": 11,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 2.371679368553819,
+            "admitted_shed_fraction": 0.0007928418376021638,
+            "iterations": 2,
+            "max_relative_residual": 4.0067065571753303e-16,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0004173758999065358,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              12.48642617648026,
+              15.596742230690536
+            ],
+            "predicted_shed_fraction": 0.0017586438766657169,
+            "variables": 348,
+            "time_bins": 10,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 3.1622391580717584,
+            "admitted_shed_fraction": 0.0,
+            "iterations": 2,
+            "max_relative_residual": 7.276468892142219e-12,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 1.1102230246251565e-16,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              12.625676601037258,
+              15.596767141496985
+            ],
+            "predicted_shed_fraction": 0.0009774575113753862,
+            "variables": 342,
+            "time_bins": 9,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 4.743358737107638,
+            "admitted_shed_fraction": 0.00013334032454848278,
+            "iterations": 2,
+            "max_relative_residual": 6.421215841224051e-14,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 5.551115123125783e-16,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              12.625676601037265,
+              15.596767141496992
+            ],
+            "predicted_shed_fraction": 0.0020119059010416133,
+            "variables": 342,
+            "time_bins": 8,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 6.324478316143517,
+            "admitted_shed_fraction": 0.00010879885000130316,
+            "iterations": 2,
+            "max_relative_residual": 1.3987418474302275e-16,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                3486.6807955960157,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 1.965094753586527e-14,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              14.843709589628434,
+              15.596771822280758
+            ],
+            "predicted_shed_fraction": 0.002450518791925544,
+            "variables": 342,
+            "time_bins": 7,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 9.486717474215276,
+            "admitted_shed_fraction": 0.0002151543259492859,
+            "iterations": 2,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              16.430454246822762,
+              15.596770690368496
+            ],
+            "predicted_shed_fraction": 0.0029177811446547703,
+            "variables": 342,
+            "time_bins": 6,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 12.648956632287033,
+            "admitted_shed_fraction": 0.0018919745306885225,
+            "iterations": 2,
+            "max_relative_residual": 2.4502577639160678e-16,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0008509157013719681,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              22.265880438756348,
+              15.59677069036875
+            ],
+            "predicted_shed_fraction": 0.0034768591919546823,
+            "variables": 342,
+            "time_bins": 5,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 18.97343494843055,
+            "admitted_shed_fraction": 0.0005050631184574948,
+            "iterations": 2,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              22.26588043875656,
+              22.12438890775691
+            ],
+            "predicted_shed_fraction": 0.0026323513708236624,
+            "variables": 12,
+            "time_bins": 4,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 25.297913264574067,
+            "admitted_shed_fraction": 0.00042772148223133477,
+            "iterations": 2,
+            "max_relative_residual": 1.9199134753218135e-16,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                15.208104435073437
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                7.198188274005815
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              22.265880438756536,
+              30.847794388697864
+            ],
+            "predicted_shed_fraction": 0.0012326110906035706,
+            "variables": 6,
+            "time_bins": 6,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 30.567331781264265,
+            "admitted_shed_fraction": 0.00021315329218949498,
+            "iterations": 1,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              8.704148513061227e-14
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                7.1981882740059895
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.704148513061227e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.704148513061227e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.704148513061227e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.704148513061227e-14
+              ]
+            ],
+            "fixed_point_residual": 0.0009527330923706501,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              35.52098444441337,
+              31.976617582791643
+            ],
+            "predicted_shed_fraction": 0.00076657267674883,
+            "variables": 6,
+            "time_bins": 5,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 30.700502214268315,
+            "admitted_shed_fraction": 2.077569442718112e-05,
+            "iterations": 1,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              8.704148513061227e-14
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.704148513061227e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.704148513061227e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.704148513061227e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.704148513061227e-14
+              ]
+            ],
+            "fixed_point_residual": 0.0008857077970297889,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              40.79040296111636,
+              31.97678694371896
+            ],
+            "predicted_shed_fraction": 0.0014255844682397303,
+            "variables": 6,
+            "time_bins": 4,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 30.847794388697857,
+            "admitted_shed_fraction": 0.000532631069629649,
+            "iterations": 2,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              8.681079644144741e-14
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.681079644144741e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.681079644144741e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.681079644144741e-14
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              40.923573700335396,
+              31.97678694371896
+            ],
+            "predicted_shed_fraction": 0.002189274819577501,
+            "variables": 6,
+            "time_bins": 3,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 37.9468698968611,
+            "admitted_shed_fraction": 0.0008499148597240252,
+            "iterations": 2,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              8.681079644144741e-14
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.681079644144741e-14
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.681079644144741e-14
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              42.61050030016284,
+              33.03983407315565
+            ],
+            "predicted_shed_fraction": 0.001634380905483929,
+            "variables": 4,
+            "time_bins": 2,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 50.595826529148134,
+            "admitted_shed_fraction": 0.0007359553338238197,
+            "iterations": 1,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              8.681079644144741e-14
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.681079644144741e-14
+              ]
+            ],
+            "fixed_point_residual": 0.0006790545347070687,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              53.25982338827262,
+              52.653747497842105
+            ],
+            "predicted_shed_fraction": 0.0007359553338238197,
+            "variables": 2,
+            "time_bins": 1,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          }
+        ],
+        "solver_status": "receding_horizon_lp",
+        "planning_scope": "common observed queue feedback; central future rates; iterative temporal approximation, no global execution optimality guarantee"
+      }
+    },
+    {
+      "chunks": 512,
+      "elapsed_s": 97.4964351253584,
+      "physical_checks_pass": true,
+      "result": {
+        "shed_fraction": 0.9811085459564329,
+        "action_counts": [
+          253401.05149107453,
+          1622.7208429110376,
+          257755.9485089244,
+          2550.0114295877543
+        ],
+        "action_fractions": [
+          0.40461868425953273,
+          0.0017549335297100041,
+          0.5720583692637458,
+          0.0026765589034444307
+        ],
+        "completed_sessions": 515329.7322724977,
+        "last_completion_s": 58.978559028112976,
+        "service_ready_s": null,
+        "resident_debt_generated_work_s": [
+          0.0,
+          0.0
+        ],
+        "resident_debt_recovered_work_s": [
+          0.0,
+          0.0
+        ],
+        "pending_resident_debt_work_s": [
+          0.0,
+          0.0
+        ],
+        "batch_replica_seconds": [
+          356049.4960893185,
+          467390.17901375267
+        ],
+        "migration_idle_work_s": [
+          353632.05102506105,
+          464073.9744812388
+        ],
+        "transferred_bytes": [
+          2526864556482.6313,
+          4334170605157.2495,
+          6861035161639.767
+        ],
+        "peak_destination_load": [
+          0.8250988942313597,
+          0.9618226489493581
+        ],
+        "final_destination_load": [
+          0.8250988942313597,
+          0.9597879425339042
+        ],
+        "completion_events": [
+          {
+            "column": 576,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 345.9995383392803,
+            "first_completion_s": 0.6713741117548323,
+            "completion_s": 1.4619436268214454,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 577,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 323.44116938655503,
+            "first_completion_s": 0.8842908048028074,
+            "completion_s": 0.8932020153191033,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 501,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 110.00000000000169,
+            "first_completion_s": 1.0343108263263225,
+            "completion_s": 1.046227649083135,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 641,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 36.00000000000161,
+            "first_completion_s": 1.0448105604442168,
+            "completion_s": 1.0570299615922294,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 592,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 146.00000000000003,
+            "first_completion_s": 1.1142652652443052,
+            "completion_s": 1.128042428622777,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 573,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 306.9999999999998,
+            "first_completion_s": 1.1390510017293038,
+            "completion_s": 1.1463155945775292,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 151,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 121.0000000000004,
+            "first_completion_s": 1.1845954643304064,
+            "completion_s": 1.1901246500709497,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 579,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 160.53290313662873,
+            "first_completion_s": 1.434444421301371,
+            "completion_s": 1.4536278720630689,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 231,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 248.46709686337195,
+            "first_completion_s": 1.4402342060476732,
+            "completion_s": 1.4690751204135015,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 677,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 66.00023082967533,
+            "first_completion_s": 1.5269234956004858,
+            "completion_s": 2.3174944073908237,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 637,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 89.00000000000053,
+            "first_completion_s": 1.578293895368678,
+            "completion_s": 1.5967507193920283,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 228,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 0.00046166072934283875,
+            "first_completion_s": 2.255196368862766,
+            "completion_s": 2.2555426578947233,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 583,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 149.99999999999994,
+            "first_completion_s": 3.996923280397128,
+            "completion_s": 14.277978700539403,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 645,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 0.00023082967213697205,
+            "first_completion_s": 4.441169269409145,
+            "completion_s": 4.441175297034969,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 681,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 11.186553477280862,
+            "first_completion_s": 4.635448632667212,
+            "completion_s": 4.63549750858705,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 333,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 0.000444861771796695,
+            "first_completion_s": 4.644600401504916,
+            "completion_s": 4.644600401504916,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 309,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 0.701299268237339,
+            "first_completion_s": 6.2201461631552455,
+            "completion_s": 6.221881439005855,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 193,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 18.000000000002466,
+            "first_completion_s": 8.847045947978527,
+            "completion_s": 8.946578605749282,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 342,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 259.2759091726621,
+            "first_completion_s": 9.21991248695346,
+            "completion_s": 9.221719850015393,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 286,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 866.4411693865559,
+            "first_completion_s": 9.36507337707969,
+            "completion_s": 9.469018303657233,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 316,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 55.27658486318983,
+            "first_completion_s": 9.485889307781505,
+            "completion_s": 9.487696879125833,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 452,
+            "action": "kv_transfer",
+            "route": 1,
+            "multiplicity": 2550.0114295877543,
+            "first_completion_s": 10.057553284137446,
+            "completion_s": 58.978559028112976,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 2.7476699162380355e-13
+          },
+          {
+            "column": 288,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 21168.558830613307,
+            "first_completion_s": 10.6271536109571,
+            "completion_s": 10.733821446269882,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 694,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 11022.467010175511,
+            "first_completion_s": 10.852209374904742,
+            "completion_s": 12.437538061828214,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 346,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 10911.234463428142,
+            "first_completion_s": 10.896696130179537,
+            "completion_s": 12.486478638667368,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 315,
+            "action": "replay",
+            "route": 0,
+            "multiplicity": 0.0003383875337211644,
+            "first_completion_s": 11.117723115571033,
+            "completion_s": 11.117723115571033,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 557,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 28.999999999996394,
+            "first_completion_s": 12.39212517858815,
+            "completion_s": 12.503498846107963,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 104,
+            "action": "kv_transfer",
+            "route": 0,
+            "multiplicity": 1605.7208429110303,
+            "first_completion_s": 12.768670218661443,
+            "completion_s": 53.22788462233315,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 7,
+            "action": "kv_transfer",
+            "route": 0,
+            "multiplicity": 17.000000000007276,
+            "first_completion_s": 12.922641860849746,
+            "completion_s": 12.922641860849746,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 548,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 170.0,
+            "first_completion_s": 14.67459450258354,
+            "completion_s": 14.676235685192282,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 571,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 22105.999999999996,
+            "first_completion_s": 15.485177255986056,
+            "completion_s": 15.596819625778725,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 580,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 110.00000000000557,
+            "first_completion_s": 15.92211716392411,
+            "completion_s": 22.264104311885703,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 682,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 58.83538805466742,
+            "first_completion_s": 16.03305455021287,
+            "completion_s": 16.036184159041614,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 549,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 43.000000000010914,
+            "first_completion_s": 16.492319862124532,
+            "completion_s": 16.495027355442488,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 661,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 1.8136773514743254,
+            "first_completion_s": 16.505825483442788,
+            "completion_s": 16.50853502093211,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 657,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 13.022791559102187,
+            "first_completion_s": 17.28435454461731,
+            "completion_s": 17.287617613259535,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 662,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 11.18655347820095,
+            "first_completion_s": 18.0412165808537,
+            "completion_s": 18.0453113909869,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          },
+          {
+            "column": 663,
+            "action": "replay",
+            "route": 1,
+            "multiplicity": 57.02137231565939,
+            "first_completion_s": 19.021689466601575,
+            "completion_s": 19.02654873220507,
+            "resident_debt_work_s": 0.0,
+            "source_buffer_work_s": 0.0
+          }
+        ],
+        "peak_reserved_kv_tokens": [
+          5245048539.152388,
+          6582062144.530911
+        ],
+        "buffered_requests": 315.9337156579075,
+        "transferred_buffered_requests": 315.9337156579075,
+        "source_buffered_requests": 0.0,
+        "pending_buffered_requests": 4.443944046514069e-14,
+        "pending_destination_buffered_requests": 4.443944046514069e-14,
+        "completed_buffered_requests": 315.93371565790744,
+        "backlog_reference_work_s": 1861.1510110695772,
+        "pending_backlog_reference_work_s": 2.7476699162380355e-13,
+        "pending_source_buffer_work_s": 0.0,
+        "pending_buffered_work_s": 2.7476699162380355e-13,
+        "protected_serving_load": [
+          0.8250988942313597,
+          0.9597879425339042
+        ],
+        "unfinished_batch_mass": 224.43758303765483,
+        "memory_blocked_batch_mass": 0.0,
+        "trace_exhausted_waves": 0,
+        "dispatch_chunks": 512,
+        "dispatch_wave_count": 29184,
+        "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; frozen initial snapshot while source continues",
+        "execution_model": "independent_event_fluid_batch_mass_finite_trace",
+        "source_pacing": "paced recorded trajectories with contextual request-duration proxy; gate arrivals use cycle-average fluid demand",
+        "compute_scope": "shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion",
+        "backlog_scope": "ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears",
+        "resident_debt_scope": "resident debt disallowed by the shared safe-occupancy constraint",
+        "memory_scope": "reserve declared cohort memory, including recorded-cycle peaks, before transfer; grow or reject before catch-up",
+        "admitted_shed_fraction": 0.9813441215323636,
+        "admitted_action_counts": [
+          253401.05149107683,
+          1622.7208429110503,
+          257755.9485089231,
+          2774.4490126254414
+        ],
+        "admitted_action_fractions": [
+          0.4046186842595364,
+          0.0017549335297100176,
+          0.5720583692637451,
+          0.0029121344793720198
+        ],
+        "max_relative_residual": 6.19539422611176e-14,
+        "planning_steps": 16,
+        "planning_s": 65.675248330459,
+        "planning_diagnostics": [
+          {
+            "time_s": 0.0,
+            "admitted_shed_fraction": 0.9564086741483867,
+            "iterations": 2,
+            "max_relative_residual": 1.1044372057815714e-15,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0003368383843621592,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              0.0,
+              0.0
+            ],
+            "predicted_shed_fraction": 0.9763084966930373,
+            "variables": 1140,
+            "time_bins": 13,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 0.7905597895179396,
+            "admitted_shed_fraction": 0.00011585563729570375,
+            "iterations": 2,
+            "max_relative_residual": 2.1742333323665035e-15,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 7.578313310219187e-09,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              11.006695981055394,
+              15.596243051986137
+            ],
+            "predicted_shed_fraction": 0.01989982152834121,
+            "variables": 354,
+            "time_bins": 12,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 1.5811195790358792,
+            "admitted_shed_fraction": 0.018363025267619022,
+            "iterations": 3,
+            "max_relative_residual": 1.2061324067503767e-14,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              11.006695981055245,
+              15.596260729110789
+            ],
+            "predicted_shed_fraction": 0.020087078440947433,
+            "variables": 354,
+            "time_bins": 11,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 2.371679368553819,
+            "admitted_shed_fraction": 0.0008015209322015601,
+            "iterations": 2,
+            "max_relative_residual": 5.215745777745189e-14,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.00041778641983236664,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              12.48647863846531,
+              15.596784196878966
+            ],
+            "predicted_shed_fraction": 0.00179518359924006,
+            "variables": 348,
+            "time_bins": 10,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 3.1622391580717584,
+            "admitted_shed_fraction": 0.0,
+            "iterations": 2,
+            "max_relative_residual": 1.5276341503109258e-16,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              12.625401635278845,
+              15.596810116851081
+            ],
+            "predicted_shed_fraction": 0.001005597809355054,
+            "variables": 342,
+            "time_bins": 9,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 4.743358737107638,
+            "admitted_shed_fraction": 0.0001274807007018581,
+            "iterations": 2,
+            "max_relative_residual": 6.19539422611176e-14,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              12.625401635278827,
+              15.596810116851058
+            ],
+            "predicted_shed_fraction": 0.0020395281156774447,
+            "variables": 342,
+            "time_bins": 8,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 6.324478316143517,
+            "admitted_shed_fraction": 0.00011320637791850927,
+            "iterations": 2,
+            "max_relative_residual": 1.8695758879053552e-16,
+            "projected_debt_work_s": [
+              4.547473508864641e-13,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                3503.1440605457815,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                4.547473508864641e-13,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                4.547473508864641e-13,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                4.547473508864641e-13,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 3.6415315207705135e-14,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              14.843212641875818,
+              15.596814987269571
+            ],
+            "predicted_shed_fraction": 0.0024826740645490022,
+            "variables": 342,
+            "time_bins": 7,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 9.486717474215276,
+            "admitted_shed_fraction": 0.00021856307179161976,
+            "iterations": 2,
+            "max_relative_residual": 1.5440996888348565e-16,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              16.428527609053667,
+              15.596813809507578
+            ],
+            "predicted_shed_fraction": 0.0029444406056456235,
+            "variables": 342,
+            "time_bins": 6,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 12.648956632287033,
+            "admitted_shed_fraction": 0.001915334903622848,
+            "iterations": 2,
+            "max_relative_residual": 3.699965963107672e-16,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0008509157013720792,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              22.26333886664366,
+              15.596813809507925
+            ],
+            "predicted_shed_fraction": 0.0035000457932703815,
+            "variables": 342,
+            "time_bins": 5,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 18.97343494843055,
+            "admitted_shed_fraction": 0.0005037973460119893,
+            "iterations": 2,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              0.0
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              22.26333886664413,
+              22.089710020857446
+            ],
+            "predicted_shed_fraction": 0.002631085598378156,
+            "variables": 12,
+            "time_bins": 4,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 25.297913264574067,
+            "admitted_shed_fraction": 0.00042517407673808995,
+            "iterations": 2,
+            "max_relative_residual": 1.9314165598178336e-16,
+            "projected_debt_work_s": [
+              0.0,
+              6.821210263296962e-13
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                15.803139692408195
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.956718361710273
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                6.821210263296962e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                6.821210263296962e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                6.821210263296962e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                6.821210263296962e-13
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              22.26333886664406,
+              30.83826178289037
+            ],
+            "predicted_shed_fraction": 0.0012300636821089305,
+            "variables": 6,
+            "time_bins": 6,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 30.55864643172463,
+            "admitted_shed_fraction": 0.00021112191524637778,
+            "iterations": 1,
+            "max_relative_residual": 2.668428930553617e-16,
+            "projected_debt_work_s": [
+              0.0,
+              2.788880237858393e-13
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                8.956718361709994
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.788880237858393e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.788880237858393e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.788880237858393e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.788880237858393e-13
+              ]
+            ],
+            "fixed_point_residual": 0.0009948928198303397,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              35.520984444875175,
+              31.98241878535611
+            ],
+            "predicted_shed_fraction": 0.0007655619302931376,
+            "variables": 6,
+            "time_bins": 5,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 30.667649423347342,
+            "admitted_shed_fraction": 2.0853249356167908e-05,
+            "iterations": 1,
+            "max_relative_residual": 2.1575117142214445e-16,
+            "projected_debt_work_s": [
+              0.0,
+              2.7711166694643907e-13
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7711166694643907e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7711166694643907e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7711166694643907e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7711166694643907e-13
+              ]
+            ],
+            "fixed_point_residual": 0.0008900034204992746,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              40.78171761203853,
+              31.98252127270664
+            ],
+            "predicted_shed_fraction": 0.0014276063957341897,
+            "variables": 6,
+            "time_bins": 4,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 30.838261782890374,
+            "admitted_shed_fraction": 0.0005335795065433591,
+            "iterations": 2,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              2.7476699162380355e-13
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7476699162380355e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7476699162380355e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7476699162380355e-13
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              40.89072085187867,
+              31.982521272706645
+            ],
+            "predicted_shed_fraction": 0.0021912191921429204,
+            "variables": 6,
+            "time_bins": 3,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 37.9468698968611,
+            "admitted_shed_fraction": 0.0008504789423756198,
+            "iterations": 2,
+            "max_relative_residual": 1.9311135438554717e-16,
+            "projected_debt_work_s": [
+              0.0,
+              2.7476699162380355e-13
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7476699162380355e-13
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7476699162380355e-13
+              ]
+            ],
+            "fixed_point_residual": 0.0,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              42.6475094643482,
+              33.07684323975428
+            ],
+            "predicted_shed_fraction": 0.0016349449881355239,
+            "variables": 4,
+            "time_bins": 2,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          },
+          {
+            "time_s": 50.595826529148134,
+            "admitted_shed_fraction": 0.0007354554565543187,
+            "iterations": 1,
+            "max_relative_residual": 0.0,
+            "projected_debt_work_s": [
+              0.0,
+              2.7476699162380355e-13
+            ],
+            "projected_queue_history_work_s": [
+              [
+                0.0,
+                0.0,
+                0.0,
+                2.7476699162380355e-13
+              ]
+            ],
+            "fixed_point_residual": 0.0006840292843978135,
+            "fixed_obligation_overload": 0.0,
+            "mandatory_forecast_finish_s": [
+              53.22788462233316,
+              52.586395923033464
+            ],
+            "predicted_shed_fraction": 0.0007354554565543187,
+            "variables": 2,
+            "time_bins": 1,
+            "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"
+          }
+        ],
+        "solver_status": "receding_horizon_lp",
+        "planning_scope": "common observed queue feedback; central future rates; iterative temporal approximation, no global execution optimality guarantee"
+      }
+    }
+  ],
+  "complete": true,
+  "physical_checks_pass": true,
+  "difference_fraction": 1.011890429214457e-05,
+  "difference_percentage_points": 0.001011890429214457,
+  "dispatch_gate_percentage_points": 2.0,
+  "dispatch_gate_pass": true,
+  "scope": "Single critical central-calibration case; physical and numerical-dispatch checks, not a global policy-optimality or fleet-wide convergence guarantee."
+}

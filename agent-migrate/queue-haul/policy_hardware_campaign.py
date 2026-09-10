@@ -932,7 +932,7 @@ def plot_max_session_ttft_per_watt(rows, summaries, power_curve, out):
 def plot_full_power_attainment(summaries, power_window_s, out,
                                deadline_s=30):
     fig, ax = plt.subplots(figsize=plot_style.WIDE_FIGSIZE)
-    for policy in CDF_POLICIES:
+    for policy in (p for p in CDF_POLICIES if not p.endswith("_blind")):
         x, y = full_power_attainment_curve(
             summaries, policy, deadline_s, power_window_s
         )

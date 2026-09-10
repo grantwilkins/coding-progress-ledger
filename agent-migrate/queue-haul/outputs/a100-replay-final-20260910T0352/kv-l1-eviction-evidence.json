@@ -1,0 +1,20 @@
+{
+  "source_log": "outputs/a100-replay-final-20260910T0352/stack/lmcache-sink.log",
+  "source_sha256_asof": "bd496e57612a3f6f408b4e8ad093637bc227e1adfa900505c83d0d50bb82586a",
+  "matched_lines": [
+    "\u001b[32;20m[2026-09-10 04:10:01,212] LMCache INFO:\u001b[0m L1 memory usage 0.88 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:10:02,213] LMCache INFO:\u001b[0m L1 memory usage 0.84 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:10:03,214] LMCache INFO:\u001b[0m L1 memory usage 0.81 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:11:43,231] LMCache INFO:\u001b[0m L1 memory usage 0.80 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:12:12,717] LMCache INFO:\u001b[0m Prefetch request completed (L1+L2): 117/125 retained keys (39 L1, 78 L2) in 14490.3 ms (external_request_id=chatcmpl-b68c226f313c240f-a640e141, prefetch_request_id=32) \u001b[3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:12:24,239] LMCache INFO:\u001b[0m L1 memory usage 0.84 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:13:40,252] LMCache INFO:\u001b[0m L1 memory usage 0.91 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:13:41,253] LMCache INFO:\u001b[0m L1 memory usage 0.93 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:13:42,255] LMCache INFO:\u001b[0m L1 memory usage 0.98 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:13:43,256] LMCache INFO:\u001b[0m L1 memory usage 0.98 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:13:44,257] LMCache INFO:\u001b[0m L1 memory usage 0.90 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:13:45,258] LMCache INFO:\u001b[0m L1 memory usage 0.84 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m",
+    "\u001b[32;20m[2026-09-10 04:14:31,267] LMCache INFO:\u001b[0m L1 memory usage 0.88 above watermark 0.80; triggering eviction. \u001b[3m(eviction_controller.py:162:lmcache.v1.distributed.storage_controllers.eviction_controller)\u001b[0m"
+  ],
+  "interpretation": "Observed L1 watermark eviction and request-time L2 retrieval, not inferred from aggregate bytes/token. Source log remains authoritative and may grow."
+}

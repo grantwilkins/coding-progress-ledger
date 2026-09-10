@@ -1,0 +1,47 @@
+{
+  "records": [
+    {
+      "kind": "old",
+      "seconds": [
+        6.6009792080149055,
+        6.8421879587695,
+        6.871008415706456
+      ],
+      "median_s": 6.8421879587695
+    },
+    {
+      "kind": "new",
+      "seconds": [
+        7.255229500122368,
+        7.185235499404371,
+        7.069824041798711
+      ],
+      "median_s": 7.185235499404371
+    }
+  ],
+  "exact_outputs_unchanged": true,
+  "clone_s": 0.014835875481367111,
+  "four_bin_continuation_s": 1.7279212083667517,
+  "waves": 1664,
+  "collector_peak_within_gpus": true,
+  "source_sha256_at_publication": {
+    "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+    "pool_shed_campaign.py": "8e1b6d7856e39158b2e5fe6cd5f00f4b042461cb59e160dfd9af4ab783c9e172",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+    "pool_shed_planner.py": "1682d8a4dd70f97f8a09065a7ac8602dc00b991fb276b8c6f933182ed94632fb"
+  },
+  "baseline_execution_sha256": "4a88dd7145cee9e1b840f1c296b93e99000440050bf713bf3a2bbd07bd9857c7",
+  "benchmark_script_sha256": "17abc6657be4cfdbe8156d7ce7e0122ec426ea82e8539e4e916b8a9b8dd7c556",
+  "provenance_scope": "Source hashes captured when publishing this benchmark, not at measurement start/end. The executor implementation was unchanged between measurement and publication; planner timing is separately profiled. This benchmark checks exact fixed-admission outputs against the committed pre-continuation executor, not full-feedback controller equivalence.",
+  "case": {
+    "workload": "coding",
+    "snapshot": 0,
+    "load": 0.5,
+    "wan_gbps": 1000,
+    "deadline_s": 60,
+    "gpus": 66666,
+    "chunks": 64,
+    "policies": 5,
+    "repeats": 3
+  }
+}

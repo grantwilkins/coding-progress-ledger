@@ -1,0 +1,28 @@
+{
+  "scenario": "paired-7101-8192-kv_transfer",
+  "command": [
+    "/tmp/qh-replay-completion-runtime/bin/python",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+    "worker",
+    "--inventory",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/corrected-inventory.json",
+    "--out",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired-corrected",
+    "--index",
+    "0",
+    "--method",
+    "kv_transfer",
+    "--context",
+    "8192"
+  ],
+  "log_offsets": {
+    "proxy_bytes.csv": 706715,
+    "proxy_connections.csv": 15766,
+    "resp_transfers.csv": 1365668,
+    "lmcache-source.log": 79289,
+    "lmcache-sink.log": 9194
+  },
+  "status": "timeout",
+  "returncode": -9,
+  "interpretation": "failed acquisition; serving endpoints not stopped"
+}

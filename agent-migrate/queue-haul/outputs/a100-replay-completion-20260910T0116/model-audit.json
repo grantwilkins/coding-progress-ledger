@@ -1,0 +1,92 @@
+{
+  "commit": "a2177eae5e7496222e4aadf5d06b2bd1e39a80b5",
+  "dirty_state_before_audit": "?? outputs/a100-replay-completion-20260910T0116/\n",
+  "command": "python3 outputs/a100-replay-completion-20260910T0116/model-audit.py",
+  "input_sha256": {
+    "outputs/a100-replay-live-20260909T1920/unloaded-analysis.json": "30fa0ff7bef36906b0d1445e8396ddc0725df00b58295df82426e5b0f22f99d8",
+    "outputs/a100-replay-live-20260909T1920/report.json": "24eeb4aa4f53072e925191b43ae2f38af9f7f7b13ccb94a3b30b5af0c4f5fd86",
+    "outputs/a100-replay-live-20260909T1920/policy-verification.json": "bd4cbf3a7af0977db55e4c9d4f5c81c67f93ab024002d0f2c68a57dc7d92c3f4",
+    "pool_replay_resident.py": "15a94adc0db09dfcac77e698ede8f6c47f74bbdad5763a536c6506e38d647843",
+    "pool_replay_measure.py": "863df59c08cfa9519787860ec90c70546b6f92a91a398f36e026e0404a138064",
+    "pool_replay_report.py": "5c88f1a60738b5b1166587cc724748f6650be3010c6227670e295f49f41ce1f8",
+    "pool_shed_execution.py": "7fa1f213392fd3804591b34942a2f3c4ec645591769c249a03d255e2538d36bd",
+    "pool_shed_campaign.py": "c5f32749190235d9fb87f29664a8f715b2ab83946484682eb2406fb0d5b20c3b",
+    "pool_shed_calibration.py": "1ddbfb512d4038ad2557154c78b388d320e5ca8b7a132511cfe275de7e9a4e15",
+    "pool_shed_planner.py": "768e3f6f23ce49d4b05f9e16b0a11638b83d30e15049e4152230355435ec7599",
+    "pool_shed_replay_audit.py": "bf498c7babc201601b43a117f5fab845ae9dacb46510fbbe63520ed900318474",
+    "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845",
+    "README.md": "9801bded3d0e418f6bdf901a75080e405e9f38db5f8104a97260c120404f710c"
+  },
+  "validation_checks": {
+    "old_report_heldout_summary_recomputed": true,
+    "all_20_policy_latency_flags_false": true,
+    "all_sent_unloaded_rendered_lengths_match_full_context_targets": true
+  },
+  "valid_second_repeat_phases": 33,
+  "heldout_by_phase_and_width": [
+    {
+      "phase": "initial",
+      "width": 1,
+      "valid_conditions": 6,
+      "median_absolute_error_s": 0.38632863132272727,
+      "max_optimistic_error_s": 0.48124890051102764,
+      "max_pessimistic_error_s": 0,
+      "false_30s_completion_predictions": 0
+    },
+    {
+      "phase": "initial",
+      "width": 8,
+      "valid_conditions": 6,
+      "median_absolute_error_s": 0.3484489287500001,
+      "max_optimistic_error_s": 0.36594217380000016,
+      "max_pessimistic_error_s": 2.891412595449495,
+      "false_30s_completion_predictions": 0
+    },
+    {
+      "phase": "catch_up",
+      "width": 1,
+      "valid_conditions": 6,
+      "median_absolute_error_s": 0.2222159947763348,
+      "max_optimistic_error_s": 0.10614050994885016,
+      "max_pessimistic_error_s": 3.53931601738226,
+      "false_30s_completion_predictions": 0
+    },
+    {
+      "phase": "catch_up",
+      "width": 8,
+      "valid_conditions": 5,
+      "median_absolute_error_s": 4.9505766187748765,
+      "max_optimistic_error_s": 0,
+      "max_pessimistic_error_s": 34.03655582305808,
+      "false_30s_completion_predictions": 0
+    },
+    {
+      "phase": "cold_updated",
+      "width": 1,
+      "valid_conditions": 5,
+      "median_absolute_error_s": 0.35365595958627605,
+      "max_optimistic_error_s": 0.6211907378315429,
+      "max_pessimistic_error_s": 0,
+      "false_30s_completion_predictions": 0
+    },
+    {
+      "phase": "cold_updated",
+      "width": 8,
+      "valid_conditions": 5,
+      "median_absolute_error_s": 0.39681514289007724,
+      "max_optimistic_error_s": 0.39681514289007724,
+      "max_pessimistic_error_s": 3.0084983830580825,
+      "false_30s_completion_predictions": 0
+    }
+  ],
+  "interpretation": {
+    "width": "Elapsed ratios are measured batching/packing comparisons. Eight singleton elapsed intervals are not measured divisible GPU work. Both append groups retain independent initial trials; invalid pairs are null.",
+    "decomposition": "Engine histogram differences sum completed-request durations and may overlap in wall time; per-request arithmetic means are not additive GPU time, per-request trace attribution or percent-of-episode shares. All unloaded requests share one coordinator clock. Null means unavailable. No source, transfer or recovery time is supplied by unloaded traces.",
+    "full_context": "All issued unloaded requests render exactly C for initial and C+append for both warm/cold updated phases; generation limit remains 512. This verifies full-message construction, not evolving source behavior.",
+    "main_catchup_gap": "Prior main driver submits a fixed synthetic 32-token append, marks source_active=False, and resumes incoming completion from initial_history rather than captured evolving source history. It measures destination interference only; it cannot establish source quiescence, actual catch-up growth or state-preserving ownership switch.",
+    "inventory_gap": "sample_fleet allocates gpus*8 session instances across 24 representative trajectory families. Prior hardware instantiates all 24 families on one GPU and distributes the offered rate by cohort weights. It is not the modeled eight physical sessions/GPU; cache footprint and per-session causal concurrency differ.",
+    "correction": "No simulator coefficient correction is supported for fleet cache reuse/queueing by these destination-only measurements. Keep raw warm evidence and identify full-rebuild catch-up as contradicted locally. The smallest next adapter correction is actual history/state continuity through source boundary pause, and a matched physical resident inventory; do not fit an assumed cache percentage.",
+    "readiness": "The existing negative campaign-ready gate and all twenty negative latency-validation flags are consistent with these data. Low median baseline error must not hide large warm-phase overprediction. Short-window tests and completed-only timing cannot establish tail compliance."
+  },
+  "checks": "Assertions in this reproduction script; no model or instrumentation code changed."
+}

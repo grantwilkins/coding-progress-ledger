@@ -1,0 +1,176 @@
+{
+  "status": "blocked_before_hardware_acquisition",
+  "campaign_ready": false,
+  "plan_sha256": "f8efef025f28eaf40c02af37083a4c593a0c8b40784e708460251acf57385b11",
+  "checkout": {
+    "commit": "bf0abe9ca807c2407a4ce69c610bf591da97798f",
+    "dirty_state": "",
+    "baseline_commit": "e68f1d26"
+  },
+  "hardware_measurement_seconds": 0,
+  "hardware_requests": 0,
+  "new_exact_timing_coverage": null,
+  "new_token_events": 0,
+  "new_migration_events": 0,
+  "new_engine_or_power_samples": 0,
+  "runtime": {
+    "utc": "2026-09-09T19:02:20.838260+00:00",
+    "python": "3.12.14 (main, Aug 18 2026, 15:00:50) [GCC 13.2.0]",
+    "executable": "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+    "platform": "Linux-6.6.150.1-1.azl3-x86_64-with-glibc2.38",
+    "gpu_query": {
+      "argv": [
+        "nvidia-smi",
+        "--query-gpu=index,name,uuid,memory.total",
+        "--format=csv"
+      ],
+      "returncode": 9,
+      "stdout": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running.\n\n",
+      "stderr": ""
+    },
+    "versions": {
+      "vllm": "0.24.0",
+      "lmcache": "0.5.1"
+    },
+    "expected_native_versions": [
+      "0.22.0",
+      "0.5.1"
+    ],
+    "changed_inputs": [],
+    "runtime_versions_match": false,
+    "hardware_measurements": 0,
+    "campaign_ready": false,
+    "acquisition_status": "not_started",
+    "remaining_prerequisites": [
+      "trusted accessible A100 endpoint",
+      "verified reference runtime and scheduler",
+      "retained-history rendering and causal arrival adapter",
+      "known cold/shared-prefix telemetry check",
+      "measurement execution adapter with global acquisition deadline"
+    ],
+    "launch_command": [
+      "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+      "pool_replay_validation.py",
+      "preflight",
+      "--out",
+      "outputs/a100-replay-validation-20260909T185553Z"
+    ]
+  },
+  "current_scout_start_rps_per_gpu": {
+    "coding": 0.22130012741816424,
+    "coding_long": 0.1881783279213518
+  },
+  "resident_rates_selected": null,
+  "boundary_bracketed": null,
+  "simulator_changes": [],
+  "new_timing_fit": null,
+  "seed_7102_validation": "not acquired",
+  "bounded_policy_evaluations": {
+    "completed": 0,
+    "planned": 20,
+    "reason": "no explicitly validated resident operating point; do not substitute historical 50% normalization"
+  },
+  "questions": {
+    "resident_traffic": {
+      "status": "open",
+      "answer": "Normalizer mismatch is verified, but whether coding traffic is too light or its service normalization is wrong requires the agentic scout. Labels alone do not establish GPU utilization or capacity.",
+      "archived_mismatch": {
+        "coding_half_in_slo_normalizer": [
+          0.006735182169141779,
+          0.002459747461551853
+        ],
+        "coding_half_rps": 0.22092053826161184,
+        "loaded_2048_32_half_rps": 1.317747978846522,
+        "regional_604_64_half_rps": 3.687488373553021,
+        "scope": "RPS, context, shape and normalization differ. The 4K normalizer illustrates the scale mismatch, not a coding occupancy or SLO estimate. Existing contextual coding cadence remains unchanged."
+      }
+    },
+    "initial_scaling": {
+      "status": "partly_supported_by_old_measurements",
+      "answer": "Existing singleton/width-eight checks support their fixed workloads only; the new 2K/8K/30K, width1/8 matrix has no observations.",
+      "archived_width8": {
+        "large": {
+          "episodes": 24,
+          "median_commit_s": 13.5004992095
+        },
+        "medium": {
+          "episodes": 24,
+          "median_commit_s": 6.0690683725
+        },
+        "mixed": {
+          "episodes": 24,
+          "median_commit_s": 6.0929388885
+        },
+        "small": {
+          "episodes": 24,
+          "median_commit_s": 3.0210528785
+        },
+        "tiny": {
+          "episodes": 24,
+          "median_commit_s": 1.707152269
+        }
+      },
+      "long_cold_burst": [
+        {
+          "context_tokens": 32256,
+          "first_saturated_p90_mean_tpot_s": 1.1360576392258066,
+          "first_saturated_p90_ttft_s": 65.032423398,
+          "first_saturated_width": 16,
+          "max_peak_running_requests": 10,
+          "right_censored": true
+        }
+      ]
+    },
+    "warm_catchup": {
+      "status": "open",
+      "answer": "No current-stack same-history initial/catch-up/cold triplets acquired. Full-rebuild cost remains an unvalidated simulator assumption; no cache percentage or correction fitted."
+    },
+    "delay_decomposition": {
+      "status": "open",
+      "answer": "No new queue/compute/source-idle/transfer/decode/recovery decomposition. Client stream timestamps cannot identify GPU queue wait, and cross-host monotonic clocks are not aligned."
+    },
+    "divisible_width8_work": {
+      "status": "open",
+      "answer": "Reproducing fixed width-eight elapsed time does not establish divisibility under continuing resident service. Width16 long-context followups remain missing."
+    },
+    "service_degradation_and_recovery": {
+      "status": "open",
+      "answer": "The prior six-route/five-episode deficit check has MAE 0.84674 requests, but measures debt at handoff, not recovery under continuing arrivals or per-request latency. No new resident/migrated TTFT/TPOT screen is available.",
+      "archived_resident_deficit_mae_requests": 0.8467415061892248
+    },
+    "kv_wire_anchor": {
+      "status": "open",
+      "effective_wire_bytes_per_32768_tokens": 800000000,
+      "native_serialized_bytes_per_32768_tokens": 1610612736,
+      "resident_kv_capacity_tokens_per_gpu": 963152,
+      "answer": "No paired KV path acquired. Effective decimal wire measurement, serialized geometry, and resident memory remain separate; no private discount was applied."
+    }
+  },
+  "original_gap_status": {
+    "reasoning_first_token": "software corrected and regression tested; hardware coverage open",
+    "missing_cache_telemetry": "software preserves unknown; cold/shared-prefix hardware verification open",
+    "catchup_csv_work": "software retains derived catch-up processed tokens; executed/recomputed work open",
+    "evolving_agentic_workload": "exact sample_fleet trajectories and exclusions frozen; rendering/causal execution adapter remains required",
+    "source_quiescence_and_kv": "open; separate trusted GPU required",
+    "shared_service_and_recovery": "open; matched episodes not acquired",
+    "arrival_distribution": "assumed; original timestamps unavailable",
+    "service_normalization": "open; four-probe scout per workload not acquired",
+    "divisible_compute_and_packing": "open; loaded width8/16 validation missing",
+    "effective_wire": "open; path wire bytes not acquired"
+  },
+  "known_software_failure": {
+    "test": "test_queue_drift_discards_an_incomplete_trailing_block",
+    "reproduced_on_unmodified_commit": "35be3279",
+    "observed": 0.7549019607843137,
+    "expected": 0,
+    "action": "retained; no queue data suppressed to force a pass"
+  },
+  "missing_measurements": [
+    "24 current-stack unloaded replay/warm-catchup/cold triplets",
+    "up to eight evolving-agentic resident scout probes with explicit rates",
+    "matched control/replay/KV continuing-service episodes with equivalent populations and placement logs",
+    "width16 long-context and same-mean burst sensitivities",
+    "actual source quiescence, paired KV wire bytes and external/native retrieval separation"
+  ],
+  "recommendation": "Do not launch full simulations. Restore a trusted A100 endpoint and the exact vLLM0.22.0/LMCache0.5.1 stack; finish and verify the retained-history/causal measurement adapter, run the frozen acquisition, then fit only supported corrections and validate seed7102 before the twenty policy evaluations."
+}

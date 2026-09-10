@@ -1,0 +1,519 @@
+{
+  "plan_identity": "2b697907b19f3d7d18c86b7c039953eb23cc6afa98a39f221e0b9f6331ac1ff4",
+  "campaign_complete": false,
+  "retained_cells": 932,
+  "scope": "Two largest retained replay/greedy gaps; exactly one instrumented QH replay per offending draw. Central comparisons use retained checkpoints. No new hardware or extra simulator sweeps.",
+  "instrumented_source_sha256": {
+    "pool_shed_execution.py": "1d7233f6ff551195bbaa1fd09c01647cd4e598579fbc810fd98a012f53cc474d",
+    "pool_shed_campaign.py": "8f06e7e30750ea7442c82786dec9b161b027a0693312bb81a392bf5d3cf103dc",
+    "pool_shed_planner.py": "3e2f96dbbd52d4206ae55b17ad9d07d07dbba0d31708c94cd9675dd4c9a1841c",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a"
+  },
+  "current_source_sha256": {
+    "pool_shed_execution.py": "82ad197e811377497107105aa37e3ed274cf646255a65dae3ef70b7176aa41bc",
+    "pool_shed_campaign.py": "8f06e7e30750ea7442c82786dec9b161b027a0693312bb81a392bf5d3cf103dc",
+    "pool_shed_planner.py": "3e2f96dbbd52d4206ae55b17ad9d07d07dbba0d31708c94cd9675dd4c9a1841c",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a"
+  },
+  "source_state": {
+    "period_s": 39.910692264431056,
+    "all_first_requests_complete_s": 0.5685941701796111,
+    "longest_initial_tokens": 14336,
+    "longest_completed_tokens": 16416,
+    "batch_serialization_boundary_tokens": 16384,
+    "germany_all8_idlework_before_s": 4.067846595418114,
+    "germany_all8_idlework_after_s": 8.911987651970433
+  },
+  "findings": [
+    "Dominant late batches are admitted after all first source requests complete; their snapshots do not change before D10. Reset/capture mismatch does not explain these groups.",
+    "Prospective candidate copies use isolated full-endpoint timing while LP checks binned network volume. Actual shared dispatch delays initial compute; measured lower bounds exceed candidate slack for several large groups.",
+    "The declared >16K whole-batch serialization rule makes groups containing the longest context much slower. LP chooses large groups close to D10; greedy completes mostly seven-session groups excluding it.",
+    "Central counters still show positive replay work at D10, so the candidate forecast gap exists independently of calibration draws. Regional draw shifts amplify clustered completion cliffs.",
+    "No resident debt, imported queue, source conservation, network budget or protected compute violation was found in the separate 932-cell audit."
+  ],
+  "limitations": [
+    "Timing lower bounds use the minimum final phase_started across each group: completed waves have later phase timestamps, so this is a lower bound for unfinished initial-replay waves, not a complete compute-start distribution.",
+    "No exact decomposition between network waiting and subsequent processor-sharing delay is retained. The release-order violation is directly demonstrated, but their separate contributions cannot be uniquely estimated from saved arrays.",
+    "The 16K batch switching boundary is an explicit model transfer assumption, not a newly observed hardware discontinuity."
+  ],
+  "cases": [
+    {
+      "load": 0.25,
+      "draw": 5,
+      "paired_checkpoints": {
+        "central": "000012",
+        "draw": "000262"
+      },
+      "pairs": {
+        "central": {
+          "queue_haul": {
+            "shed_fraction": 0.6874061794883922,
+            "admitted_shed_fraction": 0.9999999989999927,
+            "action_fractions": [
+              0.16777566145679632,
+              5.4822192356301634e-05,
+              0.5195461363960787,
+              2.955944316085816e-05
+            ],
+            "transferred_bytes": [
+              24982167434.051517,
+              18497246383.43219,
+              43479413817.483376
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "replay_only": {
+            "shed_fraction": 0.6805628702057143,
+            "admitted_shed_fraction": 0.9999999989997744,
+            "action_fractions": [
+              0.21015355492948,
+              0.0,
+              0.4704093152762342,
+              0.0
+            ],
+            "transferred_bytes": [
+              6067408204.657861,
+              7197727057.00484,
+              13265135261.66275
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "greedy": {
+            "shed_fraction": 0.9999999999999996,
+            "admitted_shed_fraction": 0.9999999999999998,
+            "action_fractions": [
+              0.48079123081610337,
+              0.0,
+              0.5192087691838962,
+              0.0
+            ],
+            "transferred_bytes": [
+              5637813411.870731,
+              7527715061.477999,
+              13165528473.348793
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "replay_minus_qh_pp": -0.6843309282677956,
+          "greedy_minus_qh_pp": 31.259382051160735
+        },
+        "draw": {
+          "queue_haul": {
+            "shed_fraction": 0.7112125898237965,
+            "admitted_shed_fraction": 0.9999999989999935,
+            "action_fractions": [
+              0.2429462543717175,
+              6.137279349782949e-05,
+              0.4681761957703193,
+              2.8766888261919543e-05
+            ],
+            "transferred_bytes": [
+              25284530664.77549,
+              18338196074.07526,
+              43622726738.850716
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "replay_only": {
+            "shed_fraction": 0.8138419871623264,
+            "admitted_shed_fraction": 0.9999999989997745,
+            "action_fractions": [
+              0.3432072857232159,
+              0.0,
+              0.47063470143911046,
+              0.0
+            ],
+            "transferred_bytes": [
+              6064248483.790034,
+              7200886777.872672,
+              13265135261.66275
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "greedy": {
+            "shed_fraction": 0.9999999999999996,
+            "admitted_shed_fraction": 0.9999999999999998,
+            "action_fractions": [
+              0.48079123081610337,
+              0.0,
+              0.5192087691838962,
+              0.0
+            ],
+            "transferred_bytes": [
+              5637813411.870731,
+              7527715061.477996,
+              13165528473.348803
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "replay_minus_qh_pp": 10.262939733852983,
+          "greedy_minus_qh_pp": 28.878741017620303
+        }
+      },
+      "dominant_unfinished_groups": [
+        {
+          "time": 0.6714867645700189,
+          "column": 167,
+          "route": 1,
+          "counts": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_fraction": 0.21917940422796217,
+          "unfinished_fraction": 0.17465858774415732,
+          "state_mass": [
+            0.0,
+            0.17465858774415732,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.04452081648380481,
+            0.0
+          ],
+          "predicted_finish": 9.695505050565538,
+          "nominal_remaining_idle_work_mean": 0.12364587546742102,
+          "unfinished_remaining_idle_work_mean": 0.24098207266947594,
+          "candidate_initial_compute_start_s": 0.6716373163606496,
+          "unfinished_compute_start_delay_lower_bound_s": 0.1897685672239191,
+          "predicted_deadline_slack_s": 0.30449494943446176
+        },
+        {
+          "time": 1.3429735291400378,
+          "column": 72,
+          "route": 0,
+          "counts": [
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_fraction": 0.21206286797704282,
+          "unfinished_fraction": 0.09277750473995622,
+          "state_mass": [
+            0.0,
+            0.09277750473995622,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.11928536323708656,
+            0.0
+          ],
+          "predicted_finish": 9.71499129209475,
+          "nominal_remaining_idle_work_mean": 0.25014883769535684,
+          "unfinished_remaining_idle_work_mean": 0.1090496486548836,
+          "candidate_initial_compute_start_s": 1.3435211920856551,
+          "unfinished_compute_start_delay_lower_bound_s": 0.4412965365655306,
+          "predicted_deadline_slack_s": 0.28500870790525035
+        },
+        {
+          "time": 0.6714867645700189,
+          "column": 83,
+          "route": 0,
+          "counts": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_fraction": 0.062112921286051496,
+          "unfinished_fraction": 0.02135131669208019,
+          "state_mass": [
+            0.0,
+            0.02135131669208019,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.04076160459397129,
+            0.0
+          ],
+          "predicted_finish": 9.703491129629029,
+          "nominal_remaining_idle_work_mean": 0.2613039950290788,
+          "unfinished_remaining_idle_work_mean": 0.10909315740866936,
+          "candidate_initial_compute_start_s": 0.6720633936984917,
+          "unfinished_compute_start_delay_lower_bound_s": 0.4686517243081978,
+          "predicted_deadline_slack_s": 0.29650887037097107
+        }
+      ]
+    },
+    {
+      "load": 0.5,
+      "draw": 3,
+      "paired_checkpoints": {
+        "central": "000462",
+        "draw": "000612"
+      },
+      "pairs": {
+        "central": {
+          "queue_haul": {
+            "shed_fraction": 0.5840916443072924,
+            "admitted_shed_fraction": 0.9435952165883681,
+            "action_fractions": [
+              0.36975520399031003,
+              1.0392532768964416e-05,
+              0.21432604595698668,
+              1.827226665634907e-09
+            ],
+            "transferred_bytes": [
+              38843432379.04549,
+              5356454199.342053,
+              44199886578.38763
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "replay_only": {
+            "shed_fraction": 0.5842123661278475,
+            "admitted_shed_fraction": 0.9435952177260603,
+            "action_fractions": [
+              0.3698863170689456,
+              0.0,
+              0.2143260490589019,
+              0.0
+            ],
+            "transferred_bytes": [
+              7055261188.397363,
+              5355897391.815794,
+              12411158580.213108
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "greedy": {
+            "shed_fraction": 0.8960090177950317,
+            "admitted_shed_fraction": 0.8960090177950341,
+            "action_fractions": [
+              0.4480375059395283,
+              0.0,
+              0.4479715118555035,
+              0.0
+            ],
+            "transferred_bytes": [
+              4782783143.523174,
+              7053021991.0425825,
+              11835805134.56576
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "replay_minus_qh_pp": 0.012072182055511416,
+          "greedy_minus_qh_pp": 31.19173734877393
+        },
+        "draw": {
+          "queue_haul": {
+            "shed_fraction": 0.48091117790254484,
+            "admitted_shed_fraction": 0.9435952165883681,
+            "action_fractions": [
+              0.365630151315598,
+              1.0392538744348529e-05,
+              0.11527063222097583,
+              1.8272266656443704e-09
+            ],
+            "transferred_bytes": [
+              38843434433.6754,
+              5356454199.342047,
+              44199888633.0177
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "replay_only": {
+            "shed_fraction": 0.4810318997231079,
+            "admitted_shed_fraction": 0.9435952177260603,
+            "action_fractions": [
+              0.36576126440021606,
+              0.0,
+              0.11527063532289186,
+              0.0
+            ],
+            "transferred_bytes": [
+              7055261188.397366,
+              5355897391.815785,
+              12411158580.213135
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "greedy": {
+            "shed_fraction": 0.8940527996118719,
+            "admitted_shed_fraction": 0.8940527996118742,
+            "action_fractions": [
+              0.4480375059395282,
+              0.0,
+              0.44601529367234366,
+              0.0
+            ],
+            "transferred_bytes": [
+              4782783143.523176,
+              7025597488.418004,
+              11808380631.941141
+            ],
+            "resident_debt_generated_work_s": [
+              0.0,
+              0.0
+            ],
+            "pending_backlog_reference_work_s": 0.0
+          },
+          "replay_minus_qh_pp": 0.012072182056305225,
+          "greedy_minus_qh_pp": 41.314162170932704
+        }
+      },
+      "dominant_unfinished_groups": [
+        {
+          "time": 0.6739514720541645,
+          "column": 167,
+          "route": 1,
+          "counts": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_fraction": 0.30755246692208044,
+          "unfinished_fraction": 0.24508087207853288,
+          "state_mass": [
+            0.0,
+            0.24508087207853288,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.06247159484354759,
+            0.0
+          ],
+          "predicted_finish": 9.728257113454056,
+          "nominal_remaining_idle_work_mean": 0.14028495910582897,
+          "unfinished_remaining_idle_work_mean": 0.26394877213476803,
+          "candidate_initial_compute_start_s": 0.6741020238447952,
+          "unfinished_compute_start_delay_lower_bound_s": 0.14727636219102436,
+          "predicted_deadline_slack_s": 0.2717428865459439
+        },
+        {
+          "time": 1.347902944108329,
+          "column": 156,
+          "route": 1,
+          "counts": [
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_fraction": 0.15644707245466297,
+          "unfinished_fraction": 0.12466876086230955,
+          "state_mass": [
+            0.0,
+            0.12466876086230955,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.03177831159235342,
+            0.0
+          ],
+          "predicted_finish": 9.735108292495813,
+          "nominal_remaining_idle_work_mean": 0.14985931042843087,
+          "unfinished_remaining_idle_work_mean": 0.2664530704600199,
+          "candidate_initial_compute_start_s": 1.3480459331337762,
+          "unfinished_compute_start_delay_lower_bound_s": 0.14728383526877242,
+          "predicted_deadline_slack_s": 0.2648917075041872
+        },
+        {
+          "time": 1.347902944108329,
+          "column": 72,
+          "route": 0,
+          "counts": [
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "source_fraction": 0.1320016853299817,
+          "unfinished_fraction": 0.09281368499764339,
+          "state_mass": [
+            0.0,
+            0.09281368499764339,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.039188000332338324,
+            0.0
+          ],
+          "predicted_finish": 9.790078586636925,
+          "nominal_remaining_idle_work_mean": 0.2119190026690747,
+          "unfinished_remaining_idle_work_mean": 0.23303591881091612,
+          "candidate_initial_compute_start_s": 1.3484506070539464,
+          "unfinished_compute_start_delay_lower_bound_s": 0.21006208604612464,
+          "predicted_deadline_slack_s": 0.2099214133630749
+        }
+      ]
+    }
+  ]
+}

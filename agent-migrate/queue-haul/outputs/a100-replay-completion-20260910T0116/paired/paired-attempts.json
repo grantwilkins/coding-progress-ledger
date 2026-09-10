@@ -1,0 +1,186 @@
+[
+  {
+    "scenario": "paired-7101-8192-replay",
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+      "worker",
+      "--inventory",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+      "--out",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+      "--index",
+      "0"
+    ],
+    "log_offsets": {
+      "proxy_bytes.csv": 977,
+      "proxy_connections.csv": 642,
+      "resp_transfers.csv": 122,
+      "lmcache-source.log": 8196,
+      "lmcache-sink.log": 9675
+    },
+    "status": "failed",
+    "returncode": 1
+  },
+  {
+    "scenario": "paired-7101-8192-kv_transfer",
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+      "worker",
+      "--inventory",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+      "--out",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+      "--index",
+      "1"
+    ],
+    "log_offsets": {
+      "proxy_bytes.csv": 41899,
+      "proxy_connections.csv": 2547,
+      "resp_transfers.csv": 69651,
+      "lmcache-source.log": 14027,
+      "lmcache-sink.log": 12480
+    },
+    "status": "failed",
+    "returncode": 1
+  },
+  {
+    "scenario": "paired-7101-30000-replay",
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+      "worker",
+      "--inventory",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+      "--out",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+      "--index",
+      "2"
+    ],
+    "log_offsets": {
+      "proxy_bytes.csv": 78671,
+      "proxy_connections.csv": 3563,
+      "resp_transfers.csv": 139043,
+      "lmcache-source.log": 19415,
+      "lmcache-sink.log": 88504
+    },
+    "status": "complete",
+    "returncode": 0
+  },
+  {
+    "scenario": "paired-7101-30000-kv_transfer",
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+      "worker",
+      "--inventory",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+      "--out",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+      "--index",
+      "3"
+    ],
+    "log_offsets": {
+      "proxy_bytes.csv": 221804,
+      "proxy_connections.csv": 6635,
+      "resp_transfers.csv": 406043,
+      "lmcache-source.log": 31856,
+      "lmcache-sink.log": 91496
+    },
+    "status": "failed",
+    "returncode": 1
+  },
+  {
+    "scenario": "paired-7102-8192-kv_transfer",
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+      "worker",
+      "--inventory",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+      "--out",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+      "--index",
+      "4"
+    ],
+    "log_offsets": {
+      "proxy_bytes.csv": 362207,
+      "proxy_connections.csv": 7659,
+      "resp_transfers.csv": 692765,
+      "lmcache-source.log": 44944,
+      "lmcache-sink.log": 372451
+    },
+    "status": "failed",
+    "returncode": 1
+  },
+  {
+    "scenario": "paired-7102-8192-replay",
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+      "worker",
+      "--inventory",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+      "--out",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+      "--index",
+      "5"
+    ],
+    "log_offsets": {
+      "proxy_bytes.csv": 390488,
+      "proxy_connections.csv": 7659,
+      "resp_transfers.csv": 760021,
+      "lmcache-source.log": 46806,
+      "lmcache-sink.log": 372451
+    },
+    "status": "complete",
+    "returncode": 0
+  },
+  {
+    "scenario": "paired-7102-30000-kv_transfer",
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+      "worker",
+      "--inventory",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+      "--out",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+      "--index",
+      "6"
+    ],
+    "log_offsets": {
+      "proxy_bytes.csv": 435980,
+      "proxy_connections.csv": 10707,
+      "resp_transfers.csv": 829413,
+      "lmcache-source.log": 52411,
+      "lmcache-sink.log": 375443
+    },
+    "status": "failed",
+    "returncode": 1
+  },
+  {
+    "scenario": "paired-7102-30000-replay",
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+      "worker",
+      "--inventory",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+      "--out",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+      "--index",
+      "7"
+    ],
+    "log_offsets": {
+      "proxy_bytes.csv": 563321,
+      "proxy_connections.csv": 11731,
+      "resp_transfers.csv": 1096413,
+      "lmcache-source.log": 65505,
+      "lmcache-sink.log": 657257
+    },
+    "status": "complete",
+    "returncode": 0
+  }
+]

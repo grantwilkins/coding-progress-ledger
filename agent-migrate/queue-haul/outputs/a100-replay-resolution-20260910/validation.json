@@ -1,0 +1,50 @@
+{
+  "status": "diagnosis_complete; fleet resident latency remains unvalidated",
+  "focused_tests": {
+    "passed": 171,
+    "deselected": 3,
+    "command": "uv run --offline --no-sync pytest -q tests/test_pool_shed_execution.py tests/test_pool_shed_planner.py tests/test_pool_shed.py -k \"not execution_draws_preserve_initial_information and not campaign_reduction_checks_all_cells and not independent_regional_fidelity\"",
+    "scope": "Includes the captured numerical regression, original certificate rejection tests, resident displacement checks and one complete five-policy prepare/run/reduce test."
+  },
+  "audit": {
+    "policy_evaluations": 28,
+    "primary_evaluations": 20,
+    "sensitivity_evaluations": 8,
+    "verified_source_hashes": 226,
+    "maximum_resource_residual": 9.654421766011369e-11,
+    "archived_primary_reproduction": "All 20 candidate hashes match and handoff fractions agree within 1e-8. Of 340 execution-output comparisons excluding planning wall time, the largest relative difference was 1.1673e-7 in isolated-fastest resident debt (6.843e-5 normalized work-seconds)."
+  },
+  "numerical_regression": {
+    "reproduced_with_executor_commit": "66a39ade",
+    "case": "coding, load .5, WAN 1000 Gbit/s, deadline 60s, isolated_fastest, chunks 128, planning resolution .25, iterations 6",
+    "original_result": "Both unscaled solver attempts returned Unknown. This reproduced using the pre-change executor.",
+    "fix": "Final equilibrated simplex attempt on the same LP; all original resource and primary-objective checks remain mandatory.",
+    "standard_form": "min c^T x subject to A x <= b and 0 <= x <= u; 888 variables and 254 rows; no mathematical reformulation or relaxed constraints.",
+    "fixture": "tests/fixtures/pool_shed_resolution888.npz",
+    "captured_primal_residual": 1.2745360322696797e-13,
+    "captured_dual_gap": 4.973677469877202e-09,
+    "full_policy_regression": {
+      "last_completion_s": 54.49550078634064,
+      "max_relative_residual": 5.704685756969455e-11,
+      "resident_latency_validated": false,
+      "service_recovered_by_deadline": true,
+      "shed_fraction": 0.999999998991622
+    }
+  },
+  "scope_limits": [
+    "The initial broader run was interrupted after 159 passing tests and the resolution failure; the full multi-setting resolution sweep was not repeated after the fix.",
+    "No GPU jobs or full campaign were launched. This does not validate replica-local resident TTFT/TPOT, production arrivals or universal service capacity."
+  ],
+  "primary_references": [
+    "https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/",
+    "https://docs.vllm.ai/en/stable/configuration/optimization/",
+    "https://ergo-code.github.io/HiGHS/dev/options/definitions/#simplex_scale_strategy"
+  ],
+  "sha256": {
+    "outputs/a100-replay-resolution-20260910/report.json": "355632b746fa82bcf529c09d5e4661136823b1bd120fab963312f11879753639",
+    "outputs/a100-replay-resolution-20260910/migration-requests.csv": "59d580f91dc0f26c0a429ac8c49994a454f09661c3b2bfb8d28adba19ffbc035",
+    "outputs/a100-replay-resolution-20260910/focused-tests.log": "e3bfd537e84b0cb1005260a4fdc68237b3dd8f7db81444c1dd29a0c14d49c8f5",
+    "outputs/a100-replay-resolution-20260910/resolution-regression.json": "98283fcdcadb4c22dfd11b4bb1b5d2ac21c36e60bca1001fc83450beb79f0b86",
+    "tests/fixtures/pool_shed_resolution888.npz": "4da18a68cc15336362352a4bc6f12fba1a21cb3e684cc870dcc2f5adf00823bd"
+  }
+}

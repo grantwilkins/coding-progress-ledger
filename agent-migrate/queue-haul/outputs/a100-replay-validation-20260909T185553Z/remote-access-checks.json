@@ -1,0 +1,74 @@
+[
+  {
+    "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "azureuser@10.1.0.4",
+      "nvidia-smi --query-gpu=index,name,uuid,memory.total --format=csv"
+    ],
+    "exitcode": 255,
+    "observed_failure": "REMOTE HOST IDENTIFICATION HAS CHANGED; offending ECDSA known_hosts entry 7; presented ED25519 SHA256:L0G8vYDQj33kx1iMEd7NNReIKqQH9KbVJLdr+QyqgWs; host key verification failed",
+    "source": "tool-call output recorded during this attempt",
+    "host_identity_bypassed": false,
+    "hardware_measured": false
+  },
+  {
+    "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "azureuser@10.3.0.4",
+      "nvidia-smi --query-gpu=index,name,uuid,memory.total --format=csv"
+    ],
+    "exitcode": 255,
+    "observed_failure": "ssh: connect to host 10.3.0.4 port 22: Connection timed out",
+    "source": "tool-call output recorded during this attempt",
+    "host_identity_bypassed": false,
+    "hardware_measured": false
+  },
+  {
+    "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "azureuser@10.2.0.4",
+      "nvidia-smi --query-gpu=index,name,uuid,memory.total --format=csv"
+    ],
+    "exitcode": 255,
+    "observed_failure": "ssh: connect to host 10.2.0.4 port 22: Connection timed out",
+    "source": "tool-call output recorded during this attempt",
+    "host_identity_bypassed": false,
+    "hardware_measured": false
+  },
+  {
+    "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "azureuser@10.0.0.4",
+      "nvidia-smi --query-gpu=index,name,uuid,memory.total --format=csv"
+    ],
+    "exitcode": 255,
+    "observed_failure": "Host key verification failed.",
+    "source": "tool-call output recorded during this attempt",
+    "host_identity_bypassed": false,
+    "hardware_measured": false
+  }
+]

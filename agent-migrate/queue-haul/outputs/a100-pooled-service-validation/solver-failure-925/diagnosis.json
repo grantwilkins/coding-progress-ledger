@@ -1,0 +1,21 @@
+{
+  "scope": "Numerical solver failure and exact configuration correction; no change to physical model, bounds, tolerances or acceptance gates",
+  "cell_index": 925,
+  "policy": "queue_haul",
+  "decision_time_s": 86.58341497915436,
+  "failure": "Native automatic scaling returned Unknown and x_min=-3.0 after presolve/postsolve",
+  "correction": "Disable internal simplex scaling; retain existing explicit row/column normalization and presolve",
+  "optimal_normalized_objective": -1.0000519451158267,
+  "certificate": "Feasible saved dual certificate matches optimal primal objective, with original-unit resource feasibility checked",
+  "source_before_identity": "2b697907b19f3d7d18c86b7c039953eb23cc6afa98a39f221e0b9f6331ac1ff4",
+  "source_after_state": "Uncommitted one-option prototype integration, awaiting parent freeze",
+  "source_after_sha256": "8f06e7e30750ea7442c82786dec9b161b027a0693312bb81a392bf5d3cf103dc",
+  "fixture_sha256": "202803a7eda092ab201bc40658a42cdc953302fd90a1a0f140c6c4f88f421ef3",
+  "artifacts": {
+    "independent-native-options.json": "c883f152932967594bb8c5d919986f692c17d1fd2dae9686313e37b795c3076d",
+    "captured-lp.npz": "a0d14964c1b949c9bf71057f098e02f1122ee50dbfb3cf0a67689b91fa6b27ee",
+    "captured-lp.json": "e203d09ab47de6c974f6132fabe5932a7ed4937ea9cce0a77a2153f23d94e830",
+    "historical-regressions.json": "cc78e06b59a277729f2fb610dc6ce7f38381d9c32ded32b3932bf69cdad0588a",
+    "full-cell-prototype.json": "d8473cbc36b23797af30d1d42711284b3f7510dad9c589e882c937c9e4e58392"
+  }
+}

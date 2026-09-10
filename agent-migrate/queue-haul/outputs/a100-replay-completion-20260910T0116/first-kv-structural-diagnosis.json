@@ -1,0 +1,35 @@
+{
+  "scenario": "paired-7101-8192-kv_transfer",
+  "copy_start_coordinator_monotonic_ns": 1471978499521,
+  "command_counts": {
+    "EXISTS": 264,
+    "SET": 256
+  },
+  "after_copy_start_commands": {
+    "EXISTS": 1,
+    "SET": 7
+  },
+  "unique_set_keys": 256,
+  "unique_exists_keys": 264,
+  "set_exists_key_intersection": 256,
+  "get_payload_bytes": 0,
+  "destination_warm_prefetch_results": [
+    "0/32",
+    "0/32",
+    "0/32",
+    "0/32",
+    "0/32",
+    "0/32",
+    "0/32",
+    "0/32"
+  ],
+  "source_remote_address": "127.0.0.1:18300",
+  "destination_remote_address": "10.0.0.4:18300",
+  "hypothesis": "destination cannot reach source RESP proxy; no destination prefetch commands observed in relay window; verify TCP route before attributing to key encoding",
+  "input_sha256": {
+    "outputs/a100-replay-completion-20260910T0116/paired/paired-7101-8192-kv_transfer/resp_transfers.csv": "28b8f90289b1fe536f0efd8eabd5259fda78741f153fc61b90b1bbf9f820984d",
+    "outputs/a100-replay-completion-20260910T0116/paired/paired-7101-8192-kv_transfer/events.jsonl": "b0c72e78a3ef13749a1a07fcad5b6a4bb31bd5193dec25e20ff71f8aab0c895f",
+    "outputs/a100-replay-completion-20260910T0116/paired/paired-7101-8192-kv_transfer/attached-lmcache-sink.log.raw": "de7215cf00176ba2bb57119909e1e1aaaf914c935f47fcdf4dcebb6e3b19802e"
+  },
+  "hypothesis_status": "withdrawn after remote TCP proof and later partial GET transfers; see kv-runtime-comparison.json"
+}

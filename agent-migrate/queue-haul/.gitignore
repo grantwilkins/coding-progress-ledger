@@ -15,3 +15,37 @@ native/target/
 # live inside that commit; prepare regenerates it and the reduced outputs are
 # what get pinned.
 outputs/fleet-shed-frontier-*/plan.json
+
+# Reproducible pooled-simulation checkpoints; keep compact reductions in Git.
+outputs/a100-pool-shed/cells/
+outputs/a100-pool-shed/shard-*.log
+outputs/a100-batch-shed*/cells/
+outputs/a100-batch-shed*/runtime-*.json
+outputs/a100-batch-shed*/scenarios.csv
+outputs/a100-pooled-execution/cells/
+outputs/a100-pooled-execution/runtime-*.json
+outputs/a100-pooled-execution/run-*.log
+outputs/a100-pooled-execution/scenarios.csv
+outputs/a100-pooled-feedback/cells/
+outputs/a100-pooled-feedback/runtime-*.json
+outputs/a100-pooled-feedback/run-*.log
+outputs/a100-pooled-feedback/scenarios.csv
+outputs/a100-pooled-service/cells/
+outputs/a100-pooled-service/runtime-*.json
+outputs/a100-pooled-service/run-*.log
+outputs/a100-pooled-service/resumed-run-*.log
+outputs/a100-pooled-service/scenarios.csv
+
+outputs/a100-pooled-service-pre-stable-ties/cells/
+outputs/a100-pooled-service-pre-stable-ties/*run-*.log
+
+outputs/a100-pooled-service/cpu-staging/
+outputs/a100-pooled-service/group-logs/
+outputs/a100-pooled-service/native-runtimes/
+outputs/a100-pooled-service/recovery/group-*.log
+outputs/a100-pooled-service-pre-certificate-retry/cells/
+outputs/a100-pooled-service-pre-certificate-retry/runtime-*.json
+outputs/a100-pooled-service-pre-certificate-retry/native-runtimes/
+outputs/a100-pooled-service-pre-certificate-retry/group-logs/
+outputs/a100-pooled-service-pre-certificate-retry/cpu-staging/
+outputs/a100-pooled-service-pre-certificate-retry/recovery/group-*.log

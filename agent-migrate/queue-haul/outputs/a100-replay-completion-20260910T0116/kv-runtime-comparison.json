@@ -1,0 +1,23 @@
+{
+  "compared_by": "local filesystem SHA256 and read-only SSH destination filesystem SHA256",
+  "source_destination_identical": true,
+  "sha256": {
+    "lmcache/v1/distributed/l2_adapters/resp_l2_adapter.py": "2d39068619ef9370b800e163221b8c1ee7f277af991428cdf6b7675a6f319a75",
+    "lmcache/v1/distributed/l2_adapters/native_connector_l2_adapter.py": "b3a3e18d21f1e0dbaa05746fb1797f878ae8fa82a6b0fba8f3b785e71968c00b",
+    "lmcache/v1/multiprocess/token_hasher.py": "ed1a77621f47146fa49d11a83e64dfc559a146d73d87983d7eeefc4bbe2f4c8f",
+    "lmcache/v1/multiprocess/warm_prefetch.py": "f245cb1b68a13113f27ce7db4beb57e5b22a08a9a90639df84d5f98702cb2e4d",
+    "lmcache/v1/distributed/api.py": "ef8bdbf4fa88413774070900162efa31d07587124e4f4e80602c8364cf4f77e8",
+    "lmcache/lmcache_redis.cpython-312-x86_64-linux-gnu.so": "0bd6deefb045f01f402a6166ae9b8a7927afa8c78274b713d85c7bcad37ebda6"
+  },
+  "warm_status_readback": "404:completed jobs are consumed and deleted by prior poll",
+  "native_error_telemetry_gap": "NativeConnectorL2Adapter._demux_loop receives native error string but discards it, converting failedLOOKUP to emptybitmap. Historical exact error cannot be recovered from completed status.",
+  "set_body_decomposition": {
+    "command_bytes": 3,
+    "key_bytes": 169,
+    "kv_value_bytes": 12582912,
+    "request_body_bytes": 12583084
+  },
+  "connectivity_hypothesis_status": "withdrawn: coordinator reports successful remote TCP connection and actual partial GET in later long condition",
+  "remaining_measurement": "Original failed native error cannot be recovered; retain failed scenarios. Fresh-client read-only EXISTS succeeds after restart.",
+  "subsequent_diagnosis": "Coordinator observed old destination LMCache had zero established RESP connections and identical-config restarted LMCache had eight. This supports broken persistent pool after source proxy startup/restart; exact historical native error was discarded."
+}

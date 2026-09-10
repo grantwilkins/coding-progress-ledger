@@ -1,0 +1,245 @@
+{
+  "frozen_utc": "2026-09-10T04:49:34.100990+00:00",
+  "original_plan_sha256": "5b91ccdf1d586ac39222dfc1478fc80642d2c5c412905688a477820c1818d5de",
+  "prior_amendments": [
+    "service-amendment.json",
+    "scout-amendment.json"
+  ],
+  "resident_rate_selection_sha256": "339f653821f0a20f7759a5a7a83d636a200f9ac20abfb6a6aee719345ef07d68",
+  "operating_points": {
+    "coding_long": {
+      "nominal_rps": 0.1881783279213518,
+      "measured_probe": "scout-coding_long-0",
+      "observation": {
+        "offered_requests": 10,
+        "completed_requests": 10,
+        "exact_requests": 10,
+        "tpot_requests": 7,
+        "unfinished_or_failed_requests": 0,
+        "offered_rps": 0.16666666666666666,
+        "completed_rps": 0.2,
+        "completions_in_window": 12,
+        "arrival_cohort_completion_cutoff_s": 90,
+        "exact_timing_coverage": 1.0,
+        "p90_arrival_ttft_s": 0.2929902257,
+        "p90_request_mean_tpot_s": 0.02768381670533516,
+        "p90_client_send_lateness_s": 0.0131986308,
+        "p90_client_queue_s": 0.0074561423,
+        "p90_client_schedule_lateness_s": 0.004341776899999999,
+        "queue_growth_requests": 0.0,
+        "max_engine_waiting": 0.0,
+        "prompt_tokens": {
+          "min": 1708,
+          "median": 29885.0,
+          "max": 30777
+        },
+        "output_tokens": {
+          "median": 17.5,
+          "max": 302
+        },
+        "screen_pass": true,
+        "tail_guarantee": false,
+        "scope": "finite-window request-level screen; sample counts and censoring retained"
+      },
+      "bracket": {
+        "rates": [
+          0.1881783279213518
+        ],
+        "selected_rate_rps": 0.1881783279213518,
+        "selected_rate_screen_pass": true,
+        "selection_basis": "heaviest tested passing screen; lowest measured rate if no passing point",
+        "stable_rates": [
+          0.1881783279213518
+        ],
+        "boundary_bracketed": true,
+        "validated_capacity_boundary": false
+      },
+      "interpretation": "Finite-window measured service screen only, not a universal capacity boundary or tail guarantee. Main transport differs as explicitly recorded below."
+    },
+    "coding": {
+      "nominal_rps": 0.4426002548363285,
+      "measured_probe": "scout-coding-1",
+      "observation": {
+        "offered_requests": 28,
+        "completed_requests": 28,
+        "exact_requests": 28,
+        "tpot_requests": 22,
+        "unfinished_or_failed_requests": 0,
+        "offered_rps": 0.4666666666666667,
+        "completed_rps": 0.48333333333333334,
+        "completions_in_window": 29,
+        "arrival_cohort_completion_cutoff_s": 90,
+        "exact_timing_coverage": 1.0,
+        "p90_arrival_ttft_s": 0.32586811940000004,
+        "p90_request_mean_tpot_s": 0.02838956760523077,
+        "p90_client_send_lateness_s": 0.009165759300000001,
+        "p90_client_queue_s": 0.005997297300000001,
+        "p90_client_schedule_lateness_s": 0.0032105698,
+        "queue_growth_requests": 0.0,
+        "max_engine_waiting": 0.0,
+        "prompt_tokens": {
+          "min": 2038,
+          "median": 8038.0,
+          "max": 32129
+        },
+        "output_tokens": {
+          "median": 13.0,
+          "max": 100
+        },
+        "screen_pass": true,
+        "tail_guarantee": false,
+        "scope": "finite-window request-level screen; sample counts and censoring retained"
+      },
+      "bracket": {
+        "rates": [
+          0.4426002548363285
+        ],
+        "selected_rate_rps": 0.4426002548363285,
+        "selected_rate_screen_pass": true,
+        "selection_basis": "heaviest tested passing screen; lowest measured rate if no passing point",
+        "stable_rates": [
+          0.22130012741816424,
+          0.4426002548363285
+        ],
+        "boundary_bracketed": true,
+        "validated_capacity_boundary": false
+      },
+      "interpretation": "Finite-window measured service screen only, not a universal capacity boundary or tail guarantee. Main transport differs as explicitly recorded below."
+    }
+  },
+  "main_episodes": [
+    {
+      "workload": "coding_long",
+      "seed": 7101,
+      "arm": "control",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7101-coding_long-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding_long",
+      "seed": 7101,
+      "arm": "replay",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7101-coding_long-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding_long",
+      "seed": 7101,
+      "arm": "kv_transfer",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7101-coding_long-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding_long",
+      "seed": 7102,
+      "arm": "kv_transfer",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7102-coding_long-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding_long",
+      "seed": 7102,
+      "arm": "replay",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7102-coding_long-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding_long",
+      "seed": 7102,
+      "arm": "control",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7102-coding_long-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding",
+      "seed": 7101,
+      "arm": "control",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7101-coding-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding",
+      "seed": 7101,
+      "arm": "replay",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7101-coding-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding",
+      "seed": 7101,
+      "arm": "kv_transfer",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7101-coding-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding",
+      "seed": 7102,
+      "arm": "kv_transfer",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7102-coding-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding",
+      "seed": 7102,
+      "arm": "replay",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7102-coding-0",
+      "requires_separate_source": true
+    },
+    {
+      "workload": "coding",
+      "seed": 7102,
+      "arm": "control",
+      "rate_slot": 0,
+      "width": 8,
+      "trace_id": "7102-coding-0",
+      "requires_separate_source": true
+    }
+  ],
+  "observation_s": 300,
+  "baseline_s": 60,
+  "physical_resident_sessions_per_gpu": 8,
+  "incoming_source_sessions": 8,
+  "corrections": [
+    {
+      "change": "Use fresh per-request HTTP connections, matching the existing reference headroom client policy (force_close=True).",
+      "evidence": "One explicitly preserved ServerDisconnectedError in coding_long scout 2, session 0/turn 3, plus an analogous earlier failure with overwritten diagnostics. The exact underlying cause is not established.",
+      "scope": "Preserve all eight scouts and their failures; no performance retry. Connection overhead is included and matched across all main arms. Main baselines independently report service under this transport policy."
+    },
+    {
+      "change": "After materialization, require the full observation duration plus 60 seconds of cleanup reserve before starting the episode clock.",
+      "commit": "98c5e46b",
+      "scope": "Budget guard only; do not begin a shortened episode near the deadline."
+    }
+  ],
+  "control_note": "The service amendment already moved control mirroring outside the source dependency lock. Extra destination baseline materialization remains separately tagged; original lock-delay note is superseded.",
+  "bracket_interpretation": "Both workloads have observed finite-window degradation at higher rates, dominated by client causal queues rather than inferred GPU waiting. Transport-contaminated points do not establish capacity.",
+  "source_sha256": "737d2f1d40a75e32efb9246eafedded236fb00016eb0d75581d3661daf34e2ef",
+  "commit": "0347c2bd33fec1cd66966408e7d45f260bc2e24e",
+  "deadline_wall_ns": 1789020343193408970,
+  "deadline_extension": false,
+  "acquisition_cap_s": 7200,
+  "tests": "resident-transport-tests.log: 31 passed",
+  "simulator_fitting": "stopped pending user review"
+}

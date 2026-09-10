@@ -1,0 +1,9 @@
+{
+  "runtime": "vllm0.22.0",
+  "path": "/tmp/qh-replay-runtime/lib/python3.12/site-packages/vllm/v1/engine/output_processor.py",
+  "before_sha256": "464c3cda347512cf1090f8e6471d0d3f0f65e286eb9a7b97be52efbc1ffd572a",
+  "after_sha256": "3306b0844d98aadf9621de88533fdd1f6dc4e0959674efa9380f50578e9f00c4",
+  "change": "Preserve each engine RequestOutput in FIFO order instead of merging queued DELTA outputs; do not split engine events or alter sampling/scheduling.",
+  "reason": "resident client token events failed the 99% exact-event prerequisite; original probes retained",
+  "performance_equivalence": "not assumed; all subsequent paired arms use the same patch"
+}

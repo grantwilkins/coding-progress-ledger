@@ -1,0 +1,9 @@
+{
+  "wall_ns": 1788985223791493174,
+  "hardware_resident_sessions_per_gpu": 24,
+  "construction": "one independent retained history per sampled fleet cohort; offered RPS weighted by recorded cohort counts",
+  "modeled_sessions_per_source_gpu": 8,
+  "scope": "This is a representative-mixture single-GPU experiment, not a validated mapping of the modeled eight-session inventory onto GPUs. Resident cache footprint and per-session cadence differ; do not transfer an RPS screen into a universal occupancy or fleet SLO claim. Existing simulator resident KV accounting remains unchanged.",
+  "arrival_schedule": "assumed; no arrival timestamps exist in the content-free manifest",
+  "source_scope": "incoming eight-session workload is matched across arms, but no independently active source exists"
+}

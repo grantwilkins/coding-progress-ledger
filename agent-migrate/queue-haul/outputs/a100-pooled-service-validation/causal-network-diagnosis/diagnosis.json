@@ -1,0 +1,16 @@
+{
+  "scope": "Candidate network copy-to-compute ordering defect and conservative bin-release correction; not an execution-feasibility certificate",
+  "cause": "Sub-millisecond isolated log copy was credited as compute-ready, while shared wave copies delayed large groups by0.15\u20130.47s, exceeding available deadline slack",
+  "source_context_check": "Dominant measured_pack groups captured after the first completed request and before the next completed request; reset/snapshot mismatch does not explain their delays",
+  "correction": "Positive network phases start and finish on bin boundaries before dependent phases; bytes unchanged; isolated-fastest ranking retains raw singleton timing",
+  "remaining_limits": "Residual per-bin WAN volume does not encode mandatory transfer priority and every endpoint available subwindow; central admitted-versus-completed gap remains measured",
+  "focused_tests": "64 passed in 18.59 s",
+  "sources": {
+    "pool_shed_campaign.py": "8f06e7e30750ea7442c82786dec9b161b027a0693312bb81a392bf5d3cf103dc",
+    "pool_shed_planner.py": "a4c69fc4e586c1d3ea94189f277eb5ecfd5ddc3142127ca033244ac47ed7973a",
+    "pool_shed_execution.py": "82ad197e811377497107105aa37e3ed274cf646255a65dae3ef70b7176aa41bc",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a"
+  },
+  "time_equivalence": "Existing 1e-10 s boundary equivalence prevents an ULP from adding a bin; max(original time, boundary) prevents moving backwards.",
+  "source_state": "Working source after approved correction; parent owns final commit."
+}

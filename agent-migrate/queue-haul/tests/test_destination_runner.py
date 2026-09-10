@@ -72,19 +72,56 @@ def test_session_forced_tokens_use_the_observed_safe_range(monkeypatch):
     assert vocabularies[-1] == ("s:0:output", 200000)
 
 
+def test_unforced_output_preserves_seeded_prompts_and_completion_length():
+    from dataclasses import replace
+
+    forced = runner.Session("s", 4, 2, 3, 201088, 7)
+    unforced = replace(forced, force_output=False)
+    for index in (-1, 0, 1):
+        prompt, token = forced.prompt(index)
+        assert unforced.prompt(index) == (prompt, None)
+        assert forced.prompt(index) == (prompt, token)
+        assert isinstance(token, int)
+    body = json.loads(runner.prepare_issue(unforced, 0, "m", True)["body"])
+    assert "allowed_token_ids" not in body
+    assert body["max_tokens"] == 3 and body["ignore_eos"] is True
+    assert body["kv_transfer_params"] == {
+        "qh_bypass_lmcache": True, "lmcache.skip_save": True}
+    assert runner.completion_payload("m", [1], 2, 7)["allowed_token_ids"] == [7]
+
+
+def test_unforced_background_prewarm_and_requests_never_apply_a_token_mask(monkeypatch):
+    payloads = []
+    def complete(host, port, model, prompt, output_tokens, forced,
+                 timeout_s, bypass_lmcache=False, **kwargs):
+        payloads.append(runner.completion_payload(
+            model, prompt, output_tokens, forced, bypass_lmcache))
+        return {**request(), "start_ns": 0, "prompt_tokens": len(prompt),
+                "output_tokens": output_tokens, "planned_output_tokens": output_tokens,
+                "recorded_output_tokens": output_tokens}
+
+    monkeypatch.setattr(runner, "_completion", complete)
+    session = runner.Session("s", 4, 2, 3, 201088, 7, force_output=False)
+    runner.prewarm("h", 1, "m", [session], bypass_lmcache=True)
+    runner.issue("h", 1, "m", session, 0, 0, 1, bypass_lmcache=True)
+
+    assert [row["max_tokens"] for row in payloads] == [1, 3]
+    assert [len(row["prompt"]) for row in payloads] == [4, 6]
+    assert all("allowed_token_ids" not in row for row in payloads)
+
+
 def test_issue_accepts_a_prepared_request(monkeypatch):
     session = runner.Session("s", 4, 2, 3, 100, 0)
-    prepared = ([1, 2, 3], 7)
+    prepared = runner.prepare_issue(session, 0, "m")
     monkeypatch.setattr(session, "prompt", lambda _index: pytest.fail("rebuilt prompt"))
-    monkeypatch.setattr(runner, "_completion", lambda *args: {
-        "start_ns": 1, "prompt": args[3], "forced": args[5], "body": args[8],
+    monkeypatch.setattr(runner, "_completion", lambda *args, prepared_body: {
+        "start_ns": 1, "prompt": args[3], "forced": args[5], "body": prepared_body,
     })
 
-    row = runner.issue(
-        "h", 1, "m", session, 0, 1, 2, prepared=prepared, body="serialized",
-    )
+    row = runner.issue_prepared("h", 1, "m", prepared, 1, 2)
 
-    assert (row["prompt"], row["forced"], row["body"]) == (*prepared, "serialized")
+    assert (row["prompt"], row["forced"], row["body"]) == (
+        prepared["prompt"], prepared["forced"], prepared["body"])
 
 
 def test_token_timing_excludes_metadata_and_done_delay():
@@ -255,11 +292,11 @@ def test_queue_drift_can_include_active_decode_hold():
     assert runner.queue_drift_upper(rows, include_running=True) > 0
 
 
-def test_queue_drift_discards_an_incomplete_trailing_block():
+def test_queue_drift_retains_growth_in_an_incomplete_trailing_block():
     rows = [{"monotonic_ns": i * 10**9,
              "vllm:num_requests_waiting": max(0, i - 59)} for i in range(71)]
 
-    assert runner.queue_drift_upper(rows) == pytest.approx(0)
+    assert runner.queue_drift_upper(rows) > 0
 
 
 def test_client_side_backlog_is_not_classified_stable():
@@ -986,3 +1023,10 @@ def test_prepared_issue_moves_prompt_work_before_dispatch(monkeypatch):
     assert row["prompt_sha256"] == prepared["prompt_sha256"]
     assert prepared["body"]
     assert calls[0]["prepared_body"] == prepared["body"]
+
+
+def test_completion_row_missing_cache_and_empty_timing_are_unknown():
+    row = runner.completion_row(200, 1, 2, {}, [], True)
+    assert row['cached_tokens'] is None
+    assert not row['exact_token_timestamps']
+    assert row['mean_tpot_s'] is None

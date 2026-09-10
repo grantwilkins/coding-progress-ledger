@@ -382,7 +382,7 @@ def client_task_count(plan: dict, trace: list[dict]) -> int:
 
 async def async_completion(session: aiohttp.ClientSession, host: str, port: int,
                            prepared: dict, scheduled_ns: int,
-                           timeout_s: float) -> dict:
+                           timeout_s: float, event_sink=None) -> dict:
     """Issue one exact-timing completion without occupying an OS thread."""
     start, usage, events, done = time.monotonic_ns(), {}, [], False
     request_id, finish_reason, status, error = "", None, 0, ""
@@ -400,6 +400,8 @@ async def async_completion(session: aiohttp.ClientSession, host: str, port: int,
                     if not line.strip().startswith(b"data:"):
                         continue
                     now, data = time.monotonic_ns(), line.strip()[5:].strip()
+                    if event_sink is not None:
+                        event_sink({"monotonic_ns": now, "data": data.decode(), "timestamp_basis": "client_receive"})
                     if data == b"[DONE]":
                         done = True
                         break

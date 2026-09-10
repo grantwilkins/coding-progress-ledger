@@ -663,6 +663,7 @@ def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int,
                  cache_salt: str | None = None,
                  ignore_eos: bool = False) -> dict:
     payload = {"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "reasoning_effort": "low", "stream": True, "stream_options": {"include_usage": True}}
+    payload["return_token_ids"] = True
     if bypass_lmcache:
         payload["vllm_xargs"] = {"qh_bypass_lmcache": 1}
     if cache_salt:
@@ -672,55 +673,96 @@ def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int,
     return payload
 
 
+class RetryableStreamError(RuntimeError):
+    pass
+
+
+class StreamResponseError(RuntimeError):
+    pass
+
+
 def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
                 context_hash: str, timeout_s: float,
                 bypass_lmcache: bool = False,
                 cache_salt: str | None = None,
                 ignore_eos: bool = False,
                 request_headers: dict[str, str] | None = None,
+                event_sink=None,
                 ) -> tuple[RequestResult, str]:
     body = json.dumps(chat_payload(
         cfg, messages, max_tokens, bypass_lmcache, cache_salt, ignore_eos,
     ))
     start = time.monotonic_ns()
     conn = http.client.HTTPConnection(cfg.host, port, timeout=timeout_s)
-    conn.request("POST", "/v1/chat/completions", body, {
-        "Content-Type": "application/json", **(request_headers or {})})
-    response = conn.getresponse()
-    chunks, text, request_id, first, prompt_tokens, output_tokens, cached_tokens = [], [], "", None, 0, 0, 0
+    try:
+        conn.request("POST", "/v1/chat/completions", body, {
+            "Content-Type": "application/json", **(request_headers or {})})
+        response = conn.getresponse()
+    except (http.client.HTTPException, OSError) as exc:
+        conn.close()
+        raise RetryableStreamError("chat transport failed") from exc
+    chunks, text, request_id, first, prompt_tokens, output_tokens, cached_tokens = [], [], "", None, 0, 0, None
+    token_events = []
+    done = usage_seen = False
     if response.status != 200:
         error = response.read().decode(errors="ignore")
         conn.close()
         end = time.monotonic_ns()
         return RequestResult("", response.status, context_hash, start, end), error
-    while line := response.readline():
-        now = time.monotonic_ns()
-        if not line.strip().startswith(b"data:"):
-            continue
-        chunks.append(StreamChunk(now, len(line)))
-        data = line.strip()[5:].strip()
-        if data == b"[DONE]":
-            break
-        item = json.loads(data)
-        request_id = request_id or item.get("id", "")
-        usage = item.get("usage") or {}
-        prompt_tokens = int(usage.get("prompt_tokens", prompt_tokens))
-        output_tokens = int(usage.get("completion_tokens", output_tokens))
-        cached_tokens = int(
-            (usage.get("prompt_tokens_details") or {}).get(
-                "cached_tokens", cached_tokens,
-            )
-        )
-        content = (item.get("choices") or [{}])[0].get("delta", {}).get("content") or ""
-        if content and first is None:
-            first = now
-        text.append(content)
-    conn.close()
+    try:
+        while line := response.readline():
+            now = time.monotonic_ns()
+            if not line.strip().startswith(b"data:"):
+                continue
+            chunks.append(StreamChunk(now, len(line)))
+            data = line.strip()[5:].strip()
+            if event_sink is not None:
+                event_sink({"monotonic_ns": now, "data": data.decode(),
+                            "clock": "client_monotonic", "timestamp_basis": "client_receive"})
+            if data == b"[DONE]":
+                done = True
+                break
+            try:
+                item = json.loads(data)
+            except json.JSONDecodeError as exc:
+                raise RetryableStreamError("malformed chat stream") from exc
+            if "error" in item:
+                raise StreamResponseError(f"chat stream error: {item['error']}")
+            request_id = request_id or item.get("id", "")
+            raw_usage = item.get("usage")
+            usage = raw_usage or {}
+            usage_seen |= isinstance(raw_usage, dict) and "prompt_tokens" in raw_usage
+            prompt_tokens = int(usage.get("prompt_tokens", prompt_tokens))
+            output_tokens = int(usage.get("completion_tokens", output_tokens))
+            reported_cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+            if reported_cached is not None:
+                cached_tokens = int(reported_cached)
+            choice = (item.get("choices") or [{}])[0]
+            delta = choice.get("delta") or {}
+            ids = choice.get("token_ids") or []
+            if ids:
+                token_events.append({"monotonic_ns": now, "token_ids": ids})
+            content = delta.get("content") or ""
+            if (ids or content or delta.get("reasoning") or delta.get("reasoning_content")) and first is None:
+                first = now
+            text.append(content)
+    except (http.client.HTTPException, OSError) as exc:
+        raise RetryableStreamError("truncated chat stream") from exc
+    finally:
+        conn.close()
+    if not done or not usage_seen:
+        raise RetryableStreamError(
+            "chat stream ended without terminal usage")
     end = time.monotonic_ns()
+    token_ids = tuple(int(token) for event in token_events for token in event["token_ids"])
     return RequestResult(
-        request_id, response.status, context_hash, start, end, first or end,
+        request_id, response.status, context_hash, start, end, first,
         prompt_tokens, output_tokens, cached_tokens,
         stream_chunks=tuple(chunks),
+        token_events=tuple(token_events), token_ids=token_ids,
+        last_token_ns=token_events[-1]["monotonic_ns"] if token_events else None,
+        exact_token_timestamps=output_tokens > 0 and len(token_ids) == output_tokens
+        and all(len(event["token_ids"]) == 1 for event in token_events),
     ), "".join(text)
 
 
@@ -836,9 +878,11 @@ class LiveSession:
 
     def request(self, port: int, messages: list[dict], label: str, prompt: str | None = None, bypass_lmcache: bool = False) -> tuple[RequestResult, str]:
         context_hash = messages_hash(messages)
-        self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash)
-        result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s, bypass_lmcache)
-        self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks])
+        self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash,
+                             messages=self.probe(messages, prompt), max_tokens=PROBE_MAX_TOKENS)
+        result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s, bypass_lmcache,
+            event_sink=lambda event: self.event_log.write("response_event", session_id=self.session_id, request_label=label, route_port=port, **event))
+        self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks], result=asdict(result))
         if result.status_code != 200:
             raise RuntimeError(
                 f"{label} failed for {self.session_id}: HTTP {result.status_code}"
@@ -915,6 +959,8 @@ class LiveSession:
                     user["content"],
                 )
                 if port == self.cfg.src_port and b.lmcache_mode() == "mp":
+                    if result.cached_tokens is None:
+                        raise RuntimeError("source activity omitted cache telemetry")
                     keys = b.mp_wait_source_keys(
                         self.source_log, log_offset,
                         self.cache_log, transfer_offset,
@@ -1067,7 +1113,7 @@ class LiveRuntime:
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
         log_offset = self.sink_log.stat().st_size
         transfer_start_ns = time.monotonic_ns()
-        pending_keys = session.cache_keys - session.copied_keys
+        transfer_keys = set(session.cache_keys)
         if move.method == "kv_transfer" and self.mp_layout:
             tokens = b.mp_chat_tokens(
                 self.cfg, session.probe(list(state.messages)),
@@ -1078,22 +1124,27 @@ class LiveRuntime:
             if warm["total_keys"] < 1 \
                     or not 0 <= warm["found_keys"] <= warm["total_keys"]:
                 raise RuntimeError(f"incomplete warm prefetch: {warm}")
+            self.event_log.write("cache_prefetch", session_id=move.session_id, phase=phase, warm_prefetch=warm)
         result, _text = session.request(
             self.cfg.api_proxy_port, list(state.messages),
             f"{move.method}_{phase}",
             bypass_lmcache=move.method == "replay",
         )
         if move.method == "kv_transfer" and self.mp_layout:
-            b.mp_request_hit(
+            external_hit = b.mp_request_hit(
                 self.sink_log, log_offset, result.request_id, False,
-                self.chunk_tokens,
+                self.chunk_tokens, require_l1=False,
+                event_sink=lambda tiers: self.event_log.write("cache_tier_evidence", session_id=move.session_id,
+                    phase=phase, request_id=result.request_id, **tiers),
             )
             hit = result.cached_tokens
-            if hit < len(tokens) // self.chunk_tokens * self.chunk_tokens:
-                raise RuntimeError(
-                    f"request-time WAN or cache accounting mismatch for "
-                    f"{result.request_id}"
-                )
+            if hit is None:
+                raise RuntimeError("KV request omitted cache telemetry")
+            if not 0 <= hit <= result.prompt_tokens:
+                raise RuntimeError(f"invalid cached-token count for {result.request_id}")
+            self.event_log.write("cache_request_evidence", session_id=move.session_id, phase=phase, request_id=result.request_id,
+                                 request_external_cached_tokens=external_hit, cached_tokens=hit,
+                                 derived_prompt_minus_cache_tokens=result.prompt_tokens-hit, executed_tokens=None)
             session.copied_keys |= session.cache_keys
             session.copied_token_ids = tokens
             total = result.prompt_tokens
@@ -1113,16 +1164,20 @@ class LiveRuntime:
                     f"tokens, expected {expected}"
                 )
         layout = self._kv_layout(
-            transfer_start_ns, result.end_ns, pending_keys,
+            transfer_start_ns, result.end_ns, transfer_keys,
         ) \
             if move.method == "kv_transfer" or not self.mp_layout else {}
+        if move.method == "kv_transfer" and self.mp_layout and phase == "initial" and not layout["total_payload_bytes"]:
+            raise RuntimeError("initial KV migration lacks measured external payload transfer")
         logical_chunks, logical_bytes = (
             (len(session.copied_token_ids) // self.chunk_tokens,
-             layout["total_payload_bytes"])
+             layout["unique_payload_bytes"])
             if move.method == "kv_transfer" and self.mp_layout
             else kv_metrics(hit, layout) if layout else (0, 0)
         )
-        result = replace(result, processed_tokens=total - max(hit, result.cached_tokens), logical_kv_chunks=logical_chunks, logical_kv_bytes=logical_bytes)
+        result = replace(result, processed_tokens=None if result.cached_tokens is None else total - max(hit, result.cached_tokens),
+                         processed_tokens_basis="derived_prompt_minus_cache" if result.cached_tokens is not None else None,
+                         logical_kv_chunks=logical_chunks, logical_kv_bytes=logical_bytes)
         with self.lock:
             self.requests.write(json.dumps({"move_id": move.order, "session_id": move.session_id, "method": move.method, "phase": phase, "kv_layout": layout, **asdict(result)}, separators=(",", ":")) + "\n")
         self.event_log.write("copy_end", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase, processed_tokens=result.processed_tokens, logical_kv_bytes=logical_bytes, logical_kv_chunks=result.logical_kv_chunks, kv_layout=layout)
@@ -1140,18 +1195,19 @@ class LiveRuntime:
             and int(row["end_ns"]) > start_ns
         ]
         keys = [row["key_hashes"] for row in rows]
-        if not rows or len(keys) != len(set(keys)):
-            raise RuntimeError(
-                "MP migration did not expose one fresh GET per transferred key"
-            )
         sizes = [int(row["payload_bytes"]) for row in rows]
+        payloads = dict(zip(keys, sizes))
+        if any(payloads[key] != size for key, size in zip(keys, sizes)):
+            raise RuntimeError("same KV key exposed inconsistent payload sizes")
         unique_sizes = set(sizes)
-        total = sum(sizes)
+        total, unique = sum(sizes), sum(payloads.values())
         return {
             "chunk_tokens": self.chunk_tokens,
             "chunk_bytes": sizes[0] if len(unique_sizes) == 1 else None,
-            "total_payload_bytes": total,
-            "payload_bytes_by_key": dict(sorted(zip(keys, sizes))),
+            "total_payload_bytes": total, "unique_payload_bytes": unique,
+            "retransferred_payload_bytes": total-unique, "transfer_count": len(rows),
+            "payload_bytes_by_key": dict(sorted(payloads.items())),
+            "transfer_observation": "external_payload" if rows else "no_external_get_observed",
             "dtype": None, "shape": [],
         }
 
@@ -1172,6 +1228,8 @@ class LiveRuntime:
                         f"activity timed out for {session.session_id}"
                     )
                 session.activity_condition.wait(remaining)
+            if session.activity_error:
+                raise session.activity_error
             state = SessionState(
                 session.session_id, session.generation,
                 tuple(session.messages), messages_hash(session.messages),
@@ -1478,7 +1536,8 @@ def with_destination_load(load, action):
         load.close()
 
 
-def verify_continuations(scenario, sessions, cfg, session_ids=None):
+def verify_continuations(scenario, sessions, cfg, session_ids=None,
+                         allow_stream_errors=False, concurrency=None):
     expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" \
         else cfg.src_port
 
@@ -1487,7 +1546,15 @@ def verify_continuations(scenario, sessions, cfg, session_ids=None):
         if session.route != expected_port:
             raise RuntimeError(f"wrong continuation route for {session.session_id}")
         committed_hash = messages_hash(session.messages)
-        request = session.continuation()
+        try:
+            request = session.continuation()
+        except (RetryableStreamError, StreamResponseError) as exc:
+            if not allow_stream_errors:
+                raise
+            return {"session_id": session.session_id,
+                    "route_port": session.route,
+                    "committed_context_hash": committed_hash,
+                    "error": f"{type(exc).__name__}: {exc}"}
         return {
             "session_id": session.session_id, "route_port": session.route,
             "committed_context_hash": committed_hash,
@@ -1497,8 +1564,27 @@ def verify_continuations(scenario, sessions, cfg, session_ids=None):
     ordered = sorted((row for row in scenario["sessions"]
                       if session_ids is None or row["session_id"] in session_ids),
                      key=lambda row: row["order"])
-    with ThreadPoolExecutor(max_workers=len(ordered)) as pool:
-        return list(pool.map(verify, ordered))
+    workers = len(ordered) if concurrency is None else int(concurrency)
+    if workers < 1 and ordered:
+        raise ValueError("continuation concurrency must be positive")
+    if not ordered:
+        return []
+    with ThreadPoolExecutor(max_workers=min(workers, len(ordered))) as pool:
+        rows = list(pool.map(verify, ordered))
+    _check_move_errors([row["error"] for row in rows if row.get("error")],
+                       allow_stream_errors)
+    return rows
+
+
+def _check_move_errors(errors: list[str], allow_partial: bool) -> None:
+    if not errors:
+        return
+    if all(row.startswith("RetryableStreamError:") for row in errors):
+        raise RetryableStreamError("; ".join(errors))
+    if allow_partial and all(row.startswith("StreamResponseError:")
+                             for row in errors):
+        return
+    raise RuntimeError("; ".join(errors))
 
 
 def warm_sessions(sessions, concurrency):
@@ -1653,8 +1739,10 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                         power_after()
                     for future in activity_futures:
                         future.result()
-                if any(not row.succeeded for row in rows):
-                    raise RuntimeError("; ".join(row.error for row in rows if row.error))
+                _check_move_errors(
+                    [row.error for row in rows if row.error],
+                    scenario.get("allow_partial_moves", False),
+                )
                 return rows
             if schedule:
                 with ThreadPoolExecutor(max_workers=len(sessions)) as pool:
@@ -1664,11 +1752,17 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
         def action_and_verify():
             nonlocal continuations
             result = action()
-            selected = {row["session_id"] for row in scenario["moves"]} \
+            selected = {row.move.session_id for row in result if row.succeeded} \
                 if scenario["kind"] == "migration" else None
             continuations = verify_continuations(
                 scenario, sessions, cfg, selected,
+                allow_stream_errors=scenario.get("allow_partial_moves", False),
+                concurrency=serving_concurrency,
             ) if scenario.get("verify_continuations", True) else []
+            failures = {row["session_id"]: row["error"] for row in continuations
+                        if row.get("error")}
+            result = [replace(row, error=row.error or failures.get(
+                row.move.session_id)) for row in result]
             if destination_load and hasattr(destination_load, "wait_deadline"):
                 destination_load.wait_deadline()
             return result
@@ -1904,7 +1998,8 @@ def request_measurements(prefix: str, request: dict | None, controller_end_ns: i
     first = first_stream_ns(request)
     return {
         f"{prefix}_prompt_tokens": int(request.get("prompt_tokens", 0)),
-        f"{prefix}_processed_tokens": int(request.get("processed_tokens", 0)),
+        f"{prefix}_processed_tokens": request.get("processed_tokens"),
+        f"{prefix}_processed_tokens_basis": request.get("processed_tokens_basis"),
         f"{prefix}_kv_chunks": int(request.get("logical_kv_chunks", 0)),
         f"{prefix}_kv_bytes": int(request.get("logical_kv_bytes", 0)),
         f"{prefix}_request_s": duration(request["start_ns"], request["end_ns"]),
@@ -1923,7 +2018,6 @@ def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
     ]
     initial_metrics = request_measurements("initial", initial, row["initial_end_ns"])
     catch_up_metrics = request_measurements("catch_up", catch_up, row.get("catch_up_end_ns"))
-    catch_up_metrics.pop("catch_up_processed_tokens")
     return {
         "scenario_id": scenario["scenario_id"], "match_id": scenario["match_id"], "job_class": session.get("job_class", ""),
         "session_id": row["move"]["session_id"], "method": row["move"]["method"], "order": row["move"]["order"],
@@ -2222,9 +2316,10 @@ def migration_stage_rows(scenario: dict, result: dict, move: dict,
             "pause_ns": move["pause_start_ns"],
             "route_switch_ns": move["switch_start_ns"],
             "commit_ns": move["switch_end_ns"],
-            "cache_hit_tokens": request.get("prompt_tokens", 0)
-                - request.get("processed_tokens", 0),
-            "processed_tail_tokens": request.get("processed_tokens", 0),
+            "cache_hit_tokens": (request.get("prompt_tokens", 0) - request["processed_tokens"]
+                                 if request.get("processed_tokens") is not None else None),
+            "processed_tail_tokens": request.get("processed_tokens"),
+            "processed_tokens_basis": request.get("processed_tokens_basis"),
             "success": not move.get("error"), "error": move.get("error"),
         })
     return rows

@@ -1,0 +1,1997 @@
+{
+  "model": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+  "chunk_tokens": 256,
+  "world_size": 1,
+  "kv_rank_hex": "01000100",
+  "object_group_id": 0,
+  "salt": "",
+  "method": "Frozen LMCache blake3 rolling full-token chunks, native ObjectKey serialization, proxy SHA256. All observed GETs checked against recorded rendered prompts; no GPU requests.",
+  "scenarios": [
+    {
+      "scenario_id": "paired-7101-30000-kv_transfer",
+      "scenario": {
+        "get_records": 1234,
+        "unique_keys": 1000,
+        "unique_payload_bytes": 12582912000,
+        "total_payload_bytes": 15527313408,
+        "retransferred_payload_bytes": 2944401408,
+        "protocol_bytes": 250502,
+        "wire_bytes": 15527563910,
+        "payload_sizes": [
+          12582912
+        ]
+      },
+      "lanes": [
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-0",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-0",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-0",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-1",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-1",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-1",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-2",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-2",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-2",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-3",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-3",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-3",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-4",
+          "phase": "all",
+          "get_records": 242,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 3045064704,
+          "retransferred_payload_bytes": 1472200704,
+          "protocol_bytes": 49126,
+          "wire_bytes": 3045113830,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-4",
+          "phase": "catch_up",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 1472200704,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 125,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-4",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-5",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-5",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-5",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-6",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-6",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-6",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-7",
+          "phase": "all",
+          "get_records": 242,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 3045064704,
+          "retransferred_payload_bytes": 1472200704,
+          "protocol_bytes": 49126,
+          "wire_bytes": 3045113830,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-7",
+          "phase": "catch_up",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 1472200704,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 125,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7101-30000-kv_transfer-7",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        }
+      ],
+      "unresolved_get_records": [],
+      "ownership_unmapped_records": 0,
+      "ownership_multiple_session_records": 0,
+      "phase_attribution_complete": true,
+      "scope": "Each positive GET counted once in scenario totals. Lane all totals and phase totals are separate views; never sum both. Same keys may legitimately appear across phases; total-minus-unique counts retransferred payload. Unknown ownership or incomplete/ambiguous phase windows retained explicitly.",
+      "destination_get": {
+        "get_records": 1234,
+        "unique_keys": 1000,
+        "unique_payload_bytes": 12582912000,
+        "total_payload_bytes": 15527313408,
+        "retransferred_payload_bytes": 2944401408,
+        "protocol_bytes": 250502,
+        "wire_bytes": 15527563910,
+        "payload_sizes": [
+          12582912
+        ],
+        "all_get_records": 1234,
+        "zero_payload_get_records": 0,
+        "request_protocol_bytes": 234460,
+        "response_protocol_bytes": 16042
+      },
+      "source_local_get": {
+        "get_records": 0,
+        "unique_keys": 0,
+        "unique_payload_bytes": 0,
+        "total_payload_bytes": 0,
+        "retransferred_payload_bytes": 0,
+        "protocol_bytes": 0,
+        "wire_bytes": 0,
+        "payload_sizes": [],
+        "all_get_records": 0,
+        "zero_payload_get_records": 0,
+        "request_protocol_bytes": 0,
+        "response_protocol_bytes": 0
+      },
+      "destination_phase_attribution": {
+        "scenario": {
+          "get_records": 1234,
+          "unique_keys": 1000,
+          "unique_payload_bytes": 12582912000,
+          "total_payload_bytes": 15527313408,
+          "retransferred_payload_bytes": 2944401408,
+          "protocol_bytes": 250502,
+          "wire_bytes": 15527563910,
+          "payload_sizes": [
+            12582912
+          ]
+        },
+        "lanes": [
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-0",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-0",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-0",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-1",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-1",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-1",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-2",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-2",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-2",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-3",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-3",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-3",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-4",
+            "phase": "all",
+            "get_records": 242,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 3045064704,
+            "retransferred_payload_bytes": 1472200704,
+            "protocol_bytes": 49126,
+            "wire_bytes": 3045113830,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-4",
+            "phase": "catch_up",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 1472200704,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 125,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-4",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-5",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-5",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-5",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-6",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-6",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-6",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-7",
+            "phase": "all",
+            "get_records": 242,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 3045064704,
+            "retransferred_payload_bytes": 1472200704,
+            "protocol_bytes": 49126,
+            "wire_bytes": 3045113830,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-7",
+            "phase": "catch_up",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 1472200704,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 125,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7101-30000-kv_transfer-7",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          }
+        ],
+        "unresolved_get_records": [],
+        "ownership_unmapped_records": 0,
+        "ownership_multiple_session_records": 0,
+        "phase_attribution_complete": true,
+        "scope": "Each positive GET counted once in scenario totals. Lane all totals and phase totals are separate views; never sum both. Same keys may legitimately appear across phases; total-minus-unique counts retransferred payload. Unknown ownership or incomplete/ambiguous phase windows retained explicitly."
+      },
+      "connection_origin_proof": "outputs/a100-replay-final-20260910T0352/attribution-proof.json"
+    },
+    {
+      "scenario_id": "paired-7102-30000-kv_transfer",
+      "scenario": {
+        "get_records": 1149,
+        "unique_keys": 1000,
+        "unique_payload_bytes": 12582912000,
+        "total_payload_bytes": 14457765888,
+        "retransferred_payload_bytes": 1874853888,
+        "protocol_bytes": 233247,
+        "wire_bytes": 14457999135,
+        "payload_sizes": [
+          12582912
+        ]
+      },
+      "lanes": [
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-0",
+          "phase": "all",
+          "get_records": 157,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1975517184,
+          "retransferred_payload_bytes": 402653184,
+          "protocol_bytes": 31871,
+          "wire_bytes": 1975549055,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-0",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-0",
+          "phase": "initial",
+          "get_records": 149,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1874853888,
+          "retransferred_payload_bytes": 402653184,
+          "protocol_bytes": 30247,
+          "wire_bytes": 1874884135,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-1",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-1",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-1",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-2",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-2",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-2",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-3",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-3",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-3",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-4",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-4",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-4",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-5",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-5",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-5",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-6",
+          "phase": "all",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-6",
+          "phase": "catch_up",
+          "get_records": 8,
+          "unique_keys": 8,
+          "unique_payload_bytes": 100663296,
+          "total_payload_bytes": 100663296,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 1624,
+          "wire_bytes": 100664920,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 8,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-6",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-7",
+          "phase": "all",
+          "get_records": 242,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 3045064704,
+          "retransferred_payload_bytes": 1472200704,
+          "protocol_bytes": 49126,
+          "wire_bytes": 3045113830,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": null,
+          "expected_full_prefix_keys": null,
+          "matching_full_prefix_keys_transferred": null,
+          "unexpected_keys_transferred": null,
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-7",
+          "phase": "catch_up",
+          "get_records": 125,
+          "unique_keys": 125,
+          "unique_payload_bytes": 1572864000,
+          "total_payload_bytes": 1572864000,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 25375,
+          "wire_bytes": 1572889375,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 1472200704,
+          "expected_full_prefix_keys": 125,
+          "matching_full_prefix_keys_transferred": 125,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": null
+        },
+        {
+          "session": "paired-l2measured-paired-7102-30000-kv_transfer-7",
+          "phase": "initial",
+          "get_records": 117,
+          "unique_keys": 117,
+          "unique_payload_bytes": 1472200704,
+          "total_payload_bytes": 1472200704,
+          "retransferred_payload_bytes": 0,
+          "protocol_bytes": 23751,
+          "wire_bytes": 1472224455,
+          "payload_sizes": [
+            12582912
+          ],
+          "crossphase_previously_seen_payload_bytes": 0,
+          "expected_full_prefix_keys": 117,
+          "matching_full_prefix_keys_transferred": 117,
+          "unexpected_keys_transferred": [],
+          "initial_full_rounded_prefix_transfer": true
+        }
+      ],
+      "unresolved_get_records": [],
+      "ownership_unmapped_records": 0,
+      "ownership_multiple_session_records": 0,
+      "phase_attribution_complete": true,
+      "scope": "Each positive GET counted once in scenario totals. Lane all totals and phase totals are separate views; never sum both. Same keys may legitimately appear across phases; total-minus-unique counts retransferred payload. Unknown ownership or incomplete/ambiguous phase windows retained explicitly.",
+      "destination_get": {
+        "get_records": 1117,
+        "unique_keys": 1000,
+        "unique_payload_bytes": 12582912000,
+        "total_payload_bytes": 14055112704,
+        "retransferred_payload_bytes": 1472200704,
+        "protocol_bytes": 226751,
+        "wire_bytes": 14055339455,
+        "payload_sizes": [
+          12582912
+        ],
+        "all_get_records": 1117,
+        "zero_payload_get_records": 0,
+        "request_protocol_bytes": 212230,
+        "response_protocol_bytes": 14521
+      },
+      "source_local_get": {
+        "get_records": 32,
+        "unique_keys": 32,
+        "unique_payload_bytes": 402653184,
+        "total_payload_bytes": 402653184,
+        "retransferred_payload_bytes": 0,
+        "protocol_bytes": 6496,
+        "wire_bytes": 402659680,
+        "payload_sizes": [
+          12582912
+        ],
+        "all_get_records": 32,
+        "zero_payload_get_records": 0,
+        "request_protocol_bytes": 6080,
+        "response_protocol_bytes": 416
+      },
+      "destination_phase_attribution": {
+        "scenario": {
+          "get_records": 1117,
+          "unique_keys": 1000,
+          "unique_payload_bytes": 12582912000,
+          "total_payload_bytes": 14055112704,
+          "retransferred_payload_bytes": 1472200704,
+          "protocol_bytes": 226751,
+          "wire_bytes": 14055339455,
+          "payload_sizes": [
+            12582912
+          ]
+        },
+        "lanes": [
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-0",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-0",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-0",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-1",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-1",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-1",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-2",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-2",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-2",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-3",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-3",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-3",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-4",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-4",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-4",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-5",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-5",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-5",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-6",
+            "phase": "all",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-6",
+            "phase": "catch_up",
+            "get_records": 8,
+            "unique_keys": 8,
+            "unique_payload_bytes": 100663296,
+            "total_payload_bytes": 100663296,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 1624,
+            "wire_bytes": 100664920,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 8,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-6",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-7",
+            "phase": "all",
+            "get_records": 242,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 3045064704,
+            "retransferred_payload_bytes": 1472200704,
+            "protocol_bytes": 49126,
+            "wire_bytes": 3045113830,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": null,
+            "expected_full_prefix_keys": null,
+            "matching_full_prefix_keys_transferred": null,
+            "unexpected_keys_transferred": null,
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-7",
+            "phase": "catch_up",
+            "get_records": 125,
+            "unique_keys": 125,
+            "unique_payload_bytes": 1572864000,
+            "total_payload_bytes": 1572864000,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 25375,
+            "wire_bytes": 1572889375,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 1472200704,
+            "expected_full_prefix_keys": 125,
+            "matching_full_prefix_keys_transferred": 125,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": null
+          },
+          {
+            "session": "paired-l2measured-paired-7102-30000-kv_transfer-7",
+            "phase": "initial",
+            "get_records": 117,
+            "unique_keys": 117,
+            "unique_payload_bytes": 1472200704,
+            "total_payload_bytes": 1472200704,
+            "retransferred_payload_bytes": 0,
+            "protocol_bytes": 23751,
+            "wire_bytes": 1472224455,
+            "payload_sizes": [
+              12582912
+            ],
+            "crossphase_previously_seen_payload_bytes": 0,
+            "expected_full_prefix_keys": 117,
+            "matching_full_prefix_keys_transferred": 117,
+            "unexpected_keys_transferred": [],
+            "initial_full_rounded_prefix_transfer": true
+          }
+        ],
+        "unresolved_get_records": [],
+        "ownership_unmapped_records": 0,
+        "ownership_multiple_session_records": 0,
+        "phase_attribution_complete": true,
+        "scope": "Each positive GET counted once in scenario totals. Lane all totals and phase totals are separate views; never sum both. Same keys may legitimately appear across phases; total-minus-unique counts retransferred payload. Unknown ownership or incomplete/ambiguous phase windows retained explicitly."
+      },
+      "connection_origin_proof": "outputs/a100-replay-final-20260910T0352/attribution-proof.json"
+    }
+  ],
+  "input_sha256": {
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/key-formula/lmcache/v1/multiprocess/token_hasher.py": "ed1a77621f47146fa49d11a83e64dfc559a146d73d87983d7eeefc4bbe2f4c8f",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/key-formula/lmcache/v1/distributed/l2_adapters/native_connector_l2_adapter.py": "b3a3e18d21f1e0dbaa05746fb1797f878ae8fa82a6b0fba8f3b785e71968c00b",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/key-formula/lmcache/v1/distributed/api.py": "ef8bdbf4fa88413774070900162efa31d07587124e4f4e80602c8364cf4f77e8",
+    "outputs/a100-replay-final-20260910T0352/stack/lmcache-source.log": "97c86a85102c44dff6feeeec53370bb7ef76968c6ebd5e34e9d7c0422efccc66",
+    "outputs/a100-replay-final-20260910T0352/attribution-proof.json": "75006c74559caac22057259ebbb715dd2dc6157d3ae781d9e634681fe9168267",
+    "outputs/a100-replay-final-20260910T0352/paired-l2measured/paired-7101-30000-kv_transfer/events.jsonl": "7747a5ee5b442787b941f9f4891d4914bf8c68e91e41329021c23e630741bae3",
+    "outputs/a100-replay-final-20260910T0352/paired-l2measured/paired-7101-30000-kv_transfer/resp_transfers.csv": "7e2724263a7fd11f575dd72fe71a7a5dec7b9e4f9bc56153bd8d5f9632ca90a8",
+    "outputs/a100-replay-final-20260910T0352/paired-l2measured/paired-7102-30000-kv_transfer/events.jsonl": "242de8ce66516e158de8279788fce599876dabc8d31fabf552f1f874394580cf",
+    "outputs/a100-replay-final-20260910T0352/paired-l2measured/paired-7102-30000-kv_transfer/resp_transfers.csv": "72c70a62ced3237635aba368ffd8add4e92a8670d3c481d55f4624893ebf3852"
+  },
+  "source_code_sha256": "4f711b8a74fb8943bc8e2851485db4085871165f462a48f4a15bce30998edc9d"
+}

@@ -1,0 +1,29 @@
+{
+  "scenario": "paired-7102-30000-kv_transfer",
+  "command": [
+    "/tmp/qh-replay-completion-runtime/bin/python",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+    "worker",
+    "--inventory",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/inventory.json",
+    "--out",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/paired-l2measured",
+    "--index",
+    "1",
+    "--method",
+    "kv_transfer",
+    "--context",
+    "30000"
+  ],
+  "log_offsets": {
+    "proxy_bytes.csv": 1771094,
+    "proxy_connections.csv": 14228,
+    "resp_transfers.csv": 2926887,
+    "lmcache-source.log": 53637,
+    "lmcache-sink.log": 2471161
+  },
+  "reserved_scenario_s": 300,
+  "remaining_before_launch_s": 1312.5492938549996,
+  "status": "complete",
+  "returncode": 0
+}

@@ -1,0 +1,28 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_invalid_source_activity_cannot_commit_destination ____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x5fa33cd0470>
+
+    def test_invalid_source_activity_cannot_commit_destination(monkeypatch):
+        events = []
+        session = SimpleNamespace(session_id='s', generation=0, messages=[], timeout_s=1,
+            activity_condition=threading.Condition(), activity_active=False,
+            activity_error=RuntimeError('invalid source state response'), paused=False,
+            route=1, cfg=SimpleNamespace(src_port=1))
+        runtime = c.LiveRuntime.__new__(c.LiveRuntime)
+        runtime.sessions, runtime.cfg = {'s':session}, SimpleNamespace(api_proxy_port=2,src_port=1)
+        runtime.event_log = SimpleNamespace(write=lambda event, **fields: events.append(event))
+        state = c.SessionState('s',0,(),c.messages_hash([]))
+        monkeypatch.setattr(runtime,'snapshot',lambda move:state)
+        monkeypatch.setattr(runtime,'prepare',lambda move,snapshot,phase:c.RequestResult('r',200,snapshot.context_hash,1,2))
+        monkeypatch.setattr(runtime,'background',lambda move,snapshot:())
+        result = c.MigrationController(runtime,1).run([c.Move('s','replay',0)])[0]
+>       assert result.error and 'invalid source state response' in result.error
+E       AssertionError: assert (None)
+E        +  where None = MoveResult(move=Move(session_id='s', method='replay', order=0), queued_ns=1624640285699, initial_start_ns=162464071133...eneration=0, messages=(), context_hash='4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'), error=None).error
+
+outputs/a100-replay-completion-20260910T0116/wait-idle-regression.py:33: AssertionError
+=========================== short test summary info ============================
+FAILED outputs/a100-replay-completion-20260910T0116/wait-idle-regression.py::test_invalid_source_activity_cannot_commit_destination
+1 failed in 0.17s

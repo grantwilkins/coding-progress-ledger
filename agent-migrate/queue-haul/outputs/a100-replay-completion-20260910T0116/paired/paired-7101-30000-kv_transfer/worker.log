@@ -1,0 +1,21 @@
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 196, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 148, in main
+    worker(inventory, plan["scenarios"][args.index], args.out/plan["scenarios"][args.index]["scenario_id"])
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 94, in worker
+    p.run_scenario(stack, cfg, manifest, scenario, out, out.parent.name, configure_proxy=False)
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1761, in run_scenario
+    migration_results = with_destination_load(destination_load, action_and_verify)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1522, in with_destination_load
+    return action()
+           ^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1746, in action_and_verify
+    result = action()
+             ^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1734, in action
+    _check_move_errors(
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1579, in _check_move_errors
+    raise RuntimeError("; ".join(errors))
+RuntimeError: RuntimeError: LMCache reported 0 records for chatcmpl-bdeac38cc00a94cf; RuntimeError: LMCache reported 0 records for chatcmpl-a8b0a5d720e59095; RuntimeError: LMCache reported 0 records for chatcmpl-a9f148d1f56c518c; RuntimeError: LMCache reported 0 records for chatcmpl-89fa203893f6e6fc; RuntimeError: LMCache reported 0 records for chatcmpl-81d6d0bd5015ffe5; RuntimeError: LMCache reported 0 records for chatcmpl-98f927066d5a506d; RuntimeError: LMCache reported 0 records for chatcmpl-96b12c2c0c9e198c; RuntimeError: LMCache reported 0 records for chatcmpl-a293fd258b7c1b6b

@@ -1,0 +1,165 @@
+{
+  "wall_ns": 1789005256734339207,
+  "archives": [
+    {
+      "label": "original",
+      "remote_root": "/tmp/qh-replay-completion-20260910",
+      "archive": "destination-original-raw.tar.gz",
+      "archive_sha256": "7e0f2fddebf9069ad33567b96ab4b64adb73a3585a9d24b354858c96f17b3ac1",
+      "archive_bytes": 3783522,
+      "lossless_member_sha256_verified": true,
+      "members": {
+        "remote-reconnect-supervisor.py": {
+          "sha256": "6d47731a0f5f7936bc99d57bad22e9a96cac5ccfb5b8a16e6caf5f9a8268d01a",
+          "bytes": 3224
+        },
+        "cleanup.json": {
+          "sha256": "69bcd416b0372850266da40f84fc1230786427ae9c4485de1fb69d2d140494b2",
+          "bytes": 161
+        },
+        "sink.log": {
+          "sha256": "76770b70a424b0be35c8ac87b0bb5b1bc4f13b9e4cee94b56f404dae71120d1a",
+          "bytes": 187007
+        },
+        "owned-processes.json": {
+          "sha256": "bd719f1a1a5e3999573c344b3684680adc99e065afe43d3294cf5a17644f55fc",
+          "bytes": 2034
+        },
+        "lmcache-sink.log": {
+          "sha256": "8eafeaef2aeb369b8c9190691f5df7f59f42a466b5fb0773170ff690d3e7eeff",
+          "bytes": 661808
+        },
+        "power.csv": {
+          "sha256": "f42c727ff8c1ff6364470226c0c68a9956d29243f1d31657f27d0db9db9464cc",
+          "bytes": 82323
+        },
+        "engine-metrics.jsonl": {
+          "sha256": "48b7b56a0c3fca17098bae1f64668020ccf6969f9d7c9987bb743d66e1201b8d",
+          "bytes": 39944060
+        },
+        "supervisor.log": {
+          "sha256": "cb3e61a396de23867bfab55ae45b06a30c09232aa33360de673572a9db8e7c63",
+          "bytes": 10
+        },
+        "supplemental-start.json": {
+          "sha256": "446c0dca3fa2263074576b17222ea35eed89b2549bb5d08440e62fb33f2828ff",
+          "bytes": 187
+        },
+        "gpu-identity.csv": {
+          "sha256": "7b9532d8b5f328eff900dda6733d0b006eab96605a0ee612093b207ba76f826d",
+          "bytes": 160
+        },
+        "overlay-test.log": {
+          "sha256": "8da3a0217114c482bbea4aa714861b387d78b0351bb7d0382081cfc22ef84a77",
+          "bytes": 1694
+        },
+        "patched-runtime-sha256.txt": {
+          "sha256": "ba99578fdbd8c2cfeaa75f739c8e53cddbe31c9fa45746e44c5c822a09506a24",
+          "bytes": 144
+        },
+        "original-runtime-sha256.txt": {
+          "sha256": "e935e583bd7d348e62437db15800a52c3fa08d858bd8bce3974c0a1ba16c4184",
+          "bytes": 189
+        },
+        "remote-supervisor.py": {
+          "sha256": "baeca86b5933bfb29b65e3a8b3932bf23631a9013b2e1038c5f1c029097c8cde",
+          "bytes": 3212
+        },
+        "remote-prepare.sh": {
+          "sha256": "81e450924ee40811286259b8a6d09d363549eefeb0f7b6cc5a5ce183d9dde45d",
+          "bytes": 937
+        },
+        "remote-commands.json": {
+          "sha256": "4771ab287842e35e62b01ec6c95715dad2a15bd743280bffa1f1d8a059c3c494",
+          "bytes": 1715
+        },
+        "test_stream_patch.py": {
+          "sha256": "7cc98988045f15675d41a6945ff50ac16c1834076c61df85ab59f1a3f6914ba9",
+          "bytes": 810
+        },
+        "output_processor.patched.py": {
+          "sha256": "3306b0844d98aadf9621de88533fdd1f6dc4e0959674efa9380f50578e9f00c4",
+          "bytes": 32218
+        }
+      },
+      "archive_command": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "tar -C /tmp/qh-replay-completion-20260910 -czf - -- remote-reconnect-supervisor.py cleanup.json sink.log owned-processes.json lmcache-sink.log power.csv engine-metrics.jsonl supervisor.log supplemental-start.json gpu-identity.csv overlay-test.log patched-runtime-sha256.txt original-runtime-sha256.txt remote-supervisor.py remote-prepare.sh remote-commands.json test_stream_patch.py output_processor.patched.py"
+      ]
+    },
+    {
+      "label": "reconnected",
+      "remote_root": "/tmp/qh-replay-completion-20260910-reconnected",
+      "archive": "destination-reconnected-raw.tar.gz",
+      "archive_sha256": "45b84d40b41bf05293b4e10916ca528f2006b235a394b9fa7a8a1d24ab22b4b4",
+      "archive_bytes": 3349157,
+      "lossless_member_sha256_verified": true,
+      "members": {
+        "cleanup.json": {
+          "sha256": "6ee42f74bcd3405f447859d31ea2811cf0f15ba3efac1ac583315a600d69807e",
+          "bytes": 162
+        },
+        "sink.log": {
+          "sha256": "0519c8ecfb6c8021864c16999f329260a764041fe73f29cc33690153b5776f06",
+          "bytes": 87527
+        },
+        "owned-processes.json": {
+          "sha256": "1b0ede9a56ecb688d8016215c214b123ac04e988f89cef42846afb401ba8101b",
+          "bytes": 2038
+        },
+        "lmcache-sink.log": {
+          "sha256": "305f8b964550ac32e69cabb98d35dc73db266804ac565dd9b9438043d4e28cab",
+          "bytes": 114687
+        },
+        "power.csv": {
+          "sha256": "c8d1b8256946a01a26061e931a3e8c0910d6ea6d67280b5be5edd77216ac78bd",
+          "bytes": 71975
+        },
+        "engine-metrics.jsonl": {
+          "sha256": "3760718dd3fbfc41d7fde46eb8d8118f7cbcd4144febf97c530e8cca85dceba4",
+          "bytes": 39365953
+        },
+        "supervisor.log": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        "remote-supervisor.py": {
+          "sha256": "6d47731a0f5f7936bc99d57bad22e9a96cac5ccfb5b8a16e6caf5f9a8268d01a",
+          "bytes": 3224
+        },
+        "test_stream_patch.py": {
+          "sha256": "7cc98988045f15675d41a6945ff50ac16c1834076c61df85ab59f1a3f6914ba9",
+          "bytes": 810
+        },
+        "supplemental-start.json": {
+          "sha256": "446c0dca3fa2263074576b17222ea35eed89b2549bb5d08440e62fb33f2828ff",
+          "bytes": 187
+        },
+        "remote-commands.json": {
+          "sha256": "4771ab287842e35e62b01ec6c95715dad2a15bd743280bffa1f1d8a059c3c494",
+          "bytes": 1715
+        }
+      },
+      "archive_command": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "tar -C /tmp/qh-replay-completion-20260910-reconnected -czf - -- cleanup.json sink.log owned-processes.json lmcache-sink.log power.csv engine-metrics.jsonl supervisor.log remote-supervisor.py test_stream_patch.py supplemental-start.json remote-commands.json"
+      ]
+    }
+  ],
+  "gpu_and_owned_process_verification": "uuid, memory.used [MiB]\nGPU-427d22f2-8e58-888c-37be-a9a42e38d271, 0 MiB\n  16208   16208 bash -c nvidia-smi --query-gpu=uuid,memory.used --format=csv; ps -eo pid,pgid,args | grep -E \"11906|11909|11938|7194|7197|7329\"\n  16253   16208 grep -E 11906|11909|11938|7194|7197|7329\n",
+  "cleanup_status": "Owned supervisors stopped; GPU0MiB; local owned mirror readers stopped"
+}

@@ -1,0 +1,3 @@
+Unmodified commit 35be3279 destination_runner.queue_drift_upper on the test fixture: 0.7549019607843137; expected 0.
+Source loaded from git show HEAD:agent-migrate/queue-haul/destination_runner.py before instrumentation commit, via importlib.util.spec_from_file_location.
+Fixture: [{"monotonic_ns": i * 10**9, "vllm:num_requests_waiting": max(0, i - 59)} for i in range(71)].

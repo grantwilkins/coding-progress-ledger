@@ -1,0 +1,6 @@
+{'identity': 'ab50712399d61c333e34f3709cdad20c58b8dd62ae56c6051fff10af6a4de3b0', 'cases': [3104, 925, 2252]}
+/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py:422: RuntimeWarning: HiGHS simplex returned Unknown; retrying the same LP with IPM
+  result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper)
+{'index': 3104, 'wall_s': 44.94655041676015}
+{'index': 925, 'wall_s': 8.728240249678493}
+{'index': 2252, 'wall_s': 20.927353374660015}

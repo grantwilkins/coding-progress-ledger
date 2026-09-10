@@ -44,12 +44,17 @@ class RequestResult:
     first_byte_ns: int | None = None
     prompt_tokens: int = 0
     output_tokens: int = 0
-    cached_tokens: int = 0
-    processed_tokens: int = 0
+    cached_tokens: int | None = None
+    processed_tokens: int | None = None
     logical_kv_chunks: int = 0
     logical_kv_bytes: int = 0
     wire_bytes: int = 0
     stream_chunks: tuple[StreamChunk, ...] = ()
+    token_events: tuple[dict, ...] = ()
+    token_ids: tuple[int, ...] = ()
+    last_token_ns: int | None = None
+    exact_token_timestamps: bool = False
+    processed_tokens_basis: str | None = None
 
 
 @dataclass(frozen=True)

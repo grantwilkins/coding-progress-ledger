@@ -1,0 +1,22 @@
+........................................................................ [ 27%]
+..................F..................................................... [ 54%]
+........................................................................ [ 82%]
+..............................................                           [100%]
+=================================== FAILURES ===================================
+____________ test_queue_drift_discards_an_incomplete_trailing_block ____________
+
+    def test_queue_drift_discards_an_incomplete_trailing_block():
+        rows = [{"monotonic_ns": i * 10**9,
+                 "vllm:num_requests_waiting": max(0, i - 59)} for i in range(71)]
+    
+>       assert runner.queue_drift_upper(rows) == pytest.approx(0)
+E       assert 0.7549019607843137 == 0 ± 1.0e-12
+E         
+E         comparison failed
+E         Obtained: 0.7549019607843137
+E         Expected: 0 ± 1.0e-12
+
+tests/test_destination_runner.py:299: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_destination_runner.py::test_queue_drift_discards_an_incomplete_trailing_block
+1 failed, 261 passed in 15.14s

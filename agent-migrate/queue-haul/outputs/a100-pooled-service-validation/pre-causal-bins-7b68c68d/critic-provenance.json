@@ -1,0 +1,28 @@
+{
+  "wall_seconds": 413.0883761672303,
+  "before": {
+    "pool_shed_campaign.py": "31a16c7ed6d7b071c514afc2e69878a21a6962f19344f3872c8f5f4796a67599",
+    "pool_shed_planner.py": "3e2f96dbbd52d4206ae55b17ad9d07d07dbba0d31708c94cd9675dd4c9a1841c",
+    "pool_shed_execution.py": "1d7233f6ff551195bbaa1fd09c01647cd4e598579fbc810fd98a012f53cc474d",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+    "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+  },
+  "after": {
+    "pool_shed_campaign.py": "31a16c7ed6d7b071c514afc2e69878a21a6962f19344f3872c8f5f4796a67599",
+    "pool_shed_planner.py": "3e2f96dbbd52d4206ae55b17ad9d07d07dbba0d31708c94cd9675dd4c9a1841c",
+    "pool_shed_execution.py": "1d7233f6ff551195bbaa1fd09c01647cd4e598579fbc810fd98a012f53cc474d",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a",
+    "loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845"
+  },
+  "source_hashes_verified": 220,
+  "solver_version": "1.14.0",
+  "artifacts": "outputs/a100-pooled-service-validation",
+  "orchestration": "validation-orchestration.json",
+  "wide_dispatch_artifact": "dispatch-wide-final.json",
+  "visual_checks_pass": true,
+  "visual_artifacts": [
+    "optimal-kv-ranges.png",
+    "scale-comparison.png"
+  ],
+  "wide_probe_current_source_verified": true
+}

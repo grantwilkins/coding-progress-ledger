@@ -184,9 +184,10 @@ def test_oat_axes_cover_only_effective_resource_ranges():
         ).migration_horizon_s == 25
 
 
-def test_oat_pairs_seeded_openhands_packs_across_resource_levels():
+@pytest.mark.parametrize("fixed_prefill_tps", [None, 2671.1881753955605])
+def test_oat_pairs_seeded_openhands_packs_across_resource_levels(fixed_prefill_tps):
     rows, packs, raw, distribution, design = campaign.simulate_oat(
-        packs=2, levels=3, seed=3, sessions=4)
+        packs=2, levels=3, seed=3, sessions=4, fixed_prefill_tps=fixed_prefill_tps)
 
     assert len(rows) == 2 * 3 * len(campaign.ACTIONS)
     assert len(packs) == 2
@@ -211,6 +212,9 @@ def test_oat_pairs_seeded_openhands_packs_across_resource_levels():
         == "pooled median across contexts and repeats"
     assert design["prefill_observations"]["max_reducer"] \
         == "raw maximum across contexts and repeats"
+    assert design["prefill_observations"]["median_tps"] == pytest.approx(5342.376350791121)
+    assert design["bandwidth_sweep"]["fixed_prefill_available_tps"] == pytest.approx(
+        fixed_prefill_tps if fixed_prefill_tps is not None else 5342.376350791121)
     for sweep in ("bandwidth", "prefill"):
         for level in range(3):
             selected = [row for row in rows

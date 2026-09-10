@@ -1,0 +1,108 @@
+{
+  "focused-simulator": {
+    "argv": [
+      "/datadrive/queue-haul-tools/bin/uv",
+      "run",
+      "--no-project",
+      "--python",
+      "/tmp/qh-replay-runtime/bin/python",
+      "pytest",
+      "-q",
+      "-o",
+      "cache_dir=/tmp/qh-validation-pytest",
+      "tests/test_pool_shed.py",
+      "tests/test_pool_shed_calibration.py",
+      "tests/test_pool_shed_execution.py",
+      "tests/test_pool_shed_planner.py",
+      "tests/test_loaded_service_model.py",
+      "-k",
+      "not independent_regional_fidelity and not campaign_reduction and not execution_draws"
+    ],
+    "returncode": 0,
+    "elapsed_wall_s": 207.7173011302948,
+    "log": "focused-simulator-tests.log",
+    "summary": "181 passed, 3 deselected, 2 warnings in 207.16s (0:03:27)"
+  },
+  "instrumentation_sandbox_attempt": {
+    "argv": [
+      "/datadrive/queue-haul-tools/bin/uv",
+      "run",
+      "--no-project",
+      "--python",
+      "/tmp/qh-replay-runtime/bin/python",
+      "pytest",
+      "-q",
+      "-o",
+      "cache_dir=/tmp/qh-validation-pytest",
+      "tests/test_migration.py",
+      "tests/test_migration_profiler.py",
+      "tests/test_migration_testbed.py",
+      "tests/test_destination_runner.py",
+      "tests/test_service_headroom_campaign.py",
+      "tests/test_service_admission_transition_campaign.py",
+      "tests/test_pool_replay_validation.py",
+      "tests/test_pool_replay_measure.py",
+      "tests/test_pool_replay_resident.py",
+      "tests/test_pool_replay_report.py"
+    ],
+    "returncode": 1,
+    "log": "instrumentation-tests.log",
+    "summary": "4 failed, 245 passed in 13.76s",
+    "launch_to_collection_wall_s": 207.71731090545654
+  },
+  "instrumentation_host": {
+    "argv": [
+      "/datadrive/queue-haul-tools/bin/uv",
+      "run",
+      "--no-project",
+      "--python",
+      "/tmp/qh-replay-runtime/bin/python",
+      "pytest",
+      "-q",
+      "-o",
+      "cache_dir=/tmp/qh-validation-pytest",
+      "tests/test_migration.py",
+      "tests/test_migration_profiler.py",
+      "tests/test_migration_testbed.py",
+      "tests/test_destination_runner.py",
+      "tests/test_service_headroom_campaign.py",
+      "tests/test_service_admission_transition_campaign.py",
+      "tests/test_pool_replay_validation.py",
+      "tests/test_pool_replay_measure.py",
+      "tests/test_pool_replay_resident.py",
+      "tests/test_pool_replay_report.py",
+      "tests/test_migration_profile_fit.py",
+      "tests/test_migration_timing_parity.py",
+      "tests/test_service_headroom_driver.py"
+    ],
+    "returncode": 1,
+    "elapsed_wall_s": 15.411139011383057,
+    "log": "instrumentation-host-tests.log",
+    "summary": "1 failed, 258 passed in 14.54s"
+  },
+  "isolated_dispatch_diagnostic": {
+    "argv": [
+      "/datadrive/queue-haul-tools/bin/uv",
+      "run",
+      "--no-project",
+      "--python",
+      "/tmp/qh-replay-runtime/bin/python",
+      "pytest",
+      "-q",
+      "-o",
+      "cache_dir=/tmp/qh-validation-pytest",
+      "tests/test_service_headroom_campaign.py::test_async_trace_releases_many_queued_requests_without_thread_backpressure"
+    ],
+    "returncode": 0,
+    "elapsed_wall_s": 2.565544605255127,
+    "log": "isolated-dispatch-test.log",
+    "summary": "1 passed in 1.87s",
+    "scope": "One isolated diagnostic after CPU policy and focused-test jobs finished; original concurrent-host timing failure retained. No threshold or implementation changed."
+  },
+  "readme_package": {
+    "command": "UV_CACHE_DIR=/tmp/qh-replay-uv-cache /datadrive/queue-haul-tools/bin/uv run --no-project --python /tmp/qh-replay-runtime/bin/python pytest -q -o cache_dir=/tmp/qh-validation-pytest tests/test_pool_replay_report.py tests/test_pool_replay_validation.py",
+    "log": "readme-package-tests.log",
+    "summary": "7 passed in 1.80s"
+  },
+  "interpretation": "Focused simulator tests pass. Host instrumentation has258passes and one50-ms dispatch assertion failure at56.3ms during concurrent CPU checks; one isolated diagnostic passes. Sandbox socket failures and the concurrent timing failure are retained, not relabelled passing. No hardware performance failure was retried."
+}

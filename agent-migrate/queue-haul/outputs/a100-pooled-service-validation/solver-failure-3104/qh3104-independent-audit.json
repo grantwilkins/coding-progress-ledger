@@ -1,0 +1,81 @@
+[
+  {
+    "options": {
+      "simplex_scale_strategy": 0
+    },
+    "status": "HighsStatus.kWarning",
+    "model": "Unknown",
+    "seconds": 0.0075449589639902115,
+    "primal_objective": 2.3106687765853806,
+    "dual_objective": 2.310668776584862,
+    "duality_gap": 5.186961971048731e-13,
+    "original_resource_residual": 2.504532622727939e-05,
+    "normalized_primal_residual": 2.5045326227291744e-05,
+    "stationarity_residual": 1.0573208975017678e-12,
+    "row_dual_positive_violation": 0.0,
+    "native_primal_infeasibilities": 1,
+    "native_dual_infeasibilities": 0,
+    "native_max_primal": 2.5045326227291744e-05,
+    "native_max_dual": 0.0
+  },
+  {
+    "options": {
+      "simplex_scale_strategy": 0,
+      "presolve": "off"
+    },
+    "status": "HighsStatus.kWarning",
+    "model": "Unknown",
+    "seconds": 0.005468208342790604,
+    "primal_objective": 2.3106687765850955,
+    "dual_objective": 2.310668776584862,
+    "duality_gap": 2.3359092438113294e-13,
+    "original_resource_residual": 2.504531646291213e-05,
+    "normalized_primal_residual": 2.504531646296022e-05,
+    "stationarity_residual": 2.052247261019602e-12,
+    "row_dual_positive_violation": 0.0,
+    "native_primal_infeasibilities": 1,
+    "native_dual_infeasibilities": 0,
+    "native_max_primal": 2.504531646296022e-05,
+    "native_max_dual": 0.0
+  },
+  {
+    "options": {
+      "simplex_scale_strategy": 0,
+      "simplex_update_limit": 10
+    },
+    "status": "HighsStatus.kWarning",
+    "model": "Unknown",
+    "seconds": 0.00788916740566492,
+    "primal_objective": 2.3106687765853806,
+    "dual_objective": 2.310668776584862,
+    "duality_gap": 5.186961971048731e-13,
+    "original_resource_residual": 2.504532622727939e-05,
+    "normalized_primal_residual": 2.5045326227291744e-05,
+    "stationarity_residual": 1.0573208975017678e-12,
+    "row_dual_positive_violation": 0.0,
+    "native_primal_infeasibilities": 1,
+    "native_dual_infeasibilities": 0,
+    "native_max_primal": 2.5045326227291744e-05,
+    "native_max_dual": 0.0
+  },
+  {
+    "options": {
+      "solver": "ipm",
+      "simplex_scale_strategy": 0
+    },
+    "status": "HighsStatus.kOk",
+    "model": "Optimal",
+    "seconds": 0.03190749976783991,
+    "primal_objective": 2.310669090148167,
+    "dual_objective": 2.3106690901477123,
+    "duality_gap": 4.547473508864641e-13,
+    "original_resource_residual": 1.1393624598233137e-15,
+    "normalized_primal_residual": 1.3322676295501878e-15,
+    "stationarity_residual": 3.133326931248348e-12,
+    "row_dual_positive_violation": 0.0,
+    "native_primal_infeasibilities": 0,
+    "native_dual_infeasibilities": 0,
+    "native_max_primal": 0.0,
+    "native_max_dual": 0.0
+  }
+]

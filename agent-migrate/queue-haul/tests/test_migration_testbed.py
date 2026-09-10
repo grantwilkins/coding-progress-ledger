@@ -317,7 +317,8 @@ def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     cfg = s.Config()
 
     lmcache = cmd_text(s.lmcache_cmd(cfg))
-    proxy = cmd_text(s.proxy_cmd(cfg, 1000.0))
+    proxy_cmd = s.proxy_cmd(cfg, 1000.0)
+    proxy = cmd_text(proxy_cmd)
 
     assert "migration_testbed.py lmcache-server --host 127.0.0.1 --port 5655" in lmcache
     assert "apptainer" not in lmcache
@@ -325,6 +326,7 @@ def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     assert "APPTAINERENV_CUDA_VISIBLE_DEVICES" not in lmcache
     assert "lmcache.v1.server" not in lmcache
     assert "migration_testbed.py proxy" in proxy
+    assert Path(proxy_cmd[1]).resolve() == Path(s.__file__).resolve()
     assert "--kv-listen 127.0.0.1:8300 --kv-target 127.0.0.1:5655" in proxy
     assert "--api-listen 127.0.0.1:8400 --api-target 127.0.0.1:8200" in proxy
     assert "--mbps 1000.0" in proxy
@@ -796,3 +798,16 @@ def test_reset_vllm_caches_can_target_a_port_subset(monkeypatch):
     posted.clear()
     s.reset_vllm_caches(cfg, (log, log))
     assert posted == [cfg.src_port, cfg.sink_port]
+
+
+def test_mp_request_hit_measures_request_time_l2_without_waiving_accounting(tmp_path):
+    log=tmp_path/"lmcache.log"
+    log.write_text("117/125 retained keys (39 L1, 78 L2), external_request_id=req,\n")
+    with pytest.raises(RuntimeError,match="L1-only"):
+        s.mp_request_hit(log,0,"req",False)
+    events=[]
+    assert s.mp_request_hit(log,0,"req",False,require_l1=False,event_sink=events.append)==117*256
+    assert events==[{"retained_tokens":117*256,"queried_tokens":125*256,"l1_cached_tokens":39*256,"l2_retrieved_tokens":78*256}]
+    log.write_text("117/125 retained keys (39 L1, 79 L2), external_request_id=req,\n")
+    with pytest.raises(RuntimeError,match="inconsistent"):
+        s.mp_request_hit(log,0,"req",False,require_l1=False)

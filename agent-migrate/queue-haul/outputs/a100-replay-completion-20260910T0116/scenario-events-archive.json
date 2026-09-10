@@ -1,0 +1,72 @@
+{
+  "archive": "scenario-events.tar.gz",
+  "archive_bytes": 860205,
+  "archive_sha256": "656b5662c8220e72461ef889aa37367ea1be760c820855d07424d501540d5303",
+  "member_count": 9,
+  "uncompressed_bytes": 65019946,
+  "verification": "Every decompressed member matches its original artifact-sha256.json SHA-256 and collecting-instance byte length. Original files retained.",
+  "restore_command": "tar -xzf outputs/a100-replay-completion-20260910T0116/scenario-events.tar.gz -C outputs/a100-replay-completion-20260910T0116",
+  "members": [
+    {
+      "path": "paired-corrected/paired-7101-8192-kv_transfer/events.jsonl",
+      "bytes": 2036961,
+      "sha256": "4703e3c2e77cb3dd8fc5e0a0ef5fa3265795bd1e148b35cd51ced7c052e01f95"
+    },
+    {
+      "path": "paired/paired-7101-30000-kv_transfer/events.jsonl",
+      "bytes": 9417584,
+      "sha256": "960eda2854163f9e70a7dab01c5c2adb0f008eb31fcd4dda5f9c6c332cec0c98"
+    },
+    {
+      "path": "paired/paired-7101-30000-replay/events.jsonl",
+      "bytes": 15906341,
+      "sha256": "696903ba9ae96012f114b335ad242ef020de7a828bf0ae6f58e2bed39b0f3571"
+    },
+    {
+      "path": "paired/paired-7101-8192-kv_transfer/events.jsonl",
+      "bytes": 2881782,
+      "sha256": "b0c72e78a3ef13749a1a07fcad5b6a4bb31bd5193dec25e20ff71f8aab0c895f"
+    },
+    {
+      "path": "paired/paired-7101-8192-replay/events.jsonl",
+      "bytes": 3728727,
+      "sha256": "d08d8288ca32396f6decd9f46a3c26bea290af6061edd942f562166e830fd26d"
+    },
+    {
+      "path": "paired/paired-7102-30000-kv_transfer/events.jsonl",
+      "bytes": 9405288,
+      "sha256": "5bbeb47d0920ecbec261daacf618fd6418217bb17a9e9171a37e540a4e6a76bd"
+    },
+    {
+      "path": "paired/paired-7102-30000-replay/events.jsonl",
+      "bytes": 15941552,
+      "sha256": "8f139bcc277dd51383b445aee2a56377fc702f5f902a605afa4430e388e4f30c"
+    },
+    {
+      "path": "paired/paired-7102-8192-kv_transfer/events.jsonl",
+      "bytes": 951639,
+      "sha256": "ea2bb92f02177834043b45aa8e6216f8a0da8592bc2a3761e79d3dd8f3920995"
+    },
+    {
+      "path": "paired/paired-7102-8192-replay/events.jsonl",
+      "bytes": 4750072,
+      "sha256": "ff8d49291870a983efe6b49ebff0508d4f2515d3eb9c57e8425a57549dc3cbfa"
+    }
+  ],
+  "reproduction_check": {
+    "inputs": "Fresh temporary copy of Git-tracked run files plus extracted scenario-events.tar.gz; no collecting-instance raw files copied directly.",
+    "paired": {
+      "scenarios": 8,
+      "request_records": 231,
+      "saved_reduction_matches": true
+    },
+    "paired-corrected": {
+      "scenarios": 2,
+      "request_records": 16,
+      "saved_reduction_matches": true
+    },
+    "combined_final_facts_match": true,
+    "comparison": "All analysis fields match after normalizing temporary paths and excluding path-dependent command/input-hash provenance; original raw member hashes are verified independently.",
+    "pytest": "uv run --no-project --python /datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python python -m pytest -q outputs/a100-replay-completion-20260910T0116/test_reduce_paired.py: 2 passed."
+  }
+}

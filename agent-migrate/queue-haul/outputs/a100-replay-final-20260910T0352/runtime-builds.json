@@ -1,0 +1,23 @@
+{
+  "source": {
+    "python": "3.12.14 (main, Aug 18 2026, 15:00:50) [GCC 13.2.0]",
+    "torch": "2.11.0+cu130",
+    "cuda_build": "13.0"
+  },
+  "destination": {
+    "python": "3.12.13 (main, Jul 18 2026, 17:02:19) [Clang 22.1.3 ]",
+    "torch": "2.11.0+cu129",
+    "cuda_build": "12.9"
+  },
+  "command": [
+    "ssh",
+    "-i",
+    "/home/azureuser/.ssh/azrs",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "azureuser@10.3.0.4",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin/python -c 'import json,sys,torch;print(json.dumps({'\"'\"'python'\"'\"':sys.version,'\"'\"'torch'\"'\"':torch.__version__,'\"'\"'cuda_build'\"'\"':torch.version.cuda}))'"
+  ]
+}

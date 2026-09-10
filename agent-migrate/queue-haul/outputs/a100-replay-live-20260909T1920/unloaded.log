@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_measure.py", line 162, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_measure.py", line 158, in main
+    acquisition.unloaded(plan)
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_measure.py", line 117, in unloaded
+    raise RuntimeError('cold/shared-prefix cache telemetry verification failed')
+RuntimeError: cold/shared-prefix cache telemetry verification failed

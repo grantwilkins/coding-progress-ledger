@@ -1,0 +1,37 @@
+--- a/migration_profiler.py
++++ b/migration_profiler.py
+@@ -1222,6 +1222,8 @@
+                         f"activity timed out for {session.session_id}"
+                     )
+                 session.activity_condition.wait(remaining)
++            if session.activity_error:
++                raise session.activity_error
+             state = SessionState(
+                 session.session_id, session.generation,
+                 tuple(session.messages), messages_hash(session.messages),
+--- a/tests/test_migration_profiler.py
++++ b/tests/test_migration_profiler.py
+@@ -1421,3 +1421,23 @@
+     row = c.request_measurements('catch_up', request, 3)
+     assert row['catch_up_processed_tokens'] == 32
+     assert row['catch_up_processed_tokens_basis'] == 'derived_prompt_minus_cache'
++
++
++def test_invalid_source_activity_cannot_commit_destination(monkeypatch):
++    events = []
++    session = SimpleNamespace(session_id='s', generation=0, messages=[], timeout_s=1,
++        activity_condition=threading.Condition(), activity_active=False,
++        activity_error=RuntimeError('invalid source state response'), paused=False,
++        route=1, cfg=SimpleNamespace(src_port=1))
++    runtime = c.LiveRuntime.__new__(c.LiveRuntime)
++    runtime.sessions, runtime.cfg = {'s':session}, SimpleNamespace(api_proxy_port=2,src_port=1)
++    runtime.event_log = SimpleNamespace(write=lambda event, **fields: events.append(event))
++    state = c.SessionState('s',0,(),c.messages_hash([]))
++    monkeypatch.setattr(runtime,'snapshot',lambda move:state)
++    monkeypatch.setattr(runtime,'prepare',lambda move,snapshot,phase:c.RequestResult('r',200,snapshot.context_hash,1,2))
++    monkeypatch.setattr(runtime,'background',lambda move,snapshot:())
++    result = c.MigrationController(runtime,1).run([c.Move('s','replay',0)])[0]
++    assert result.error and 'invalid source state response' in result.error
++    assert result.committed_state is None
++    assert session.route == 1
++    assert 'route_switch' not in events and 'idle' not in events

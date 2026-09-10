@@ -1,0 +1,221 @@
+{
+  "scope": "Integrated causal network-bin candidate model, central measurements only; no guarantee every admitted wave completes",
+  "sources": {
+    "pool_shed_campaign.py": "8f06e7e30750ea7442c82786dec9b161b027a0693312bb81a392bf5d3cf103dc",
+    "pool_shed_planner.py": "a4c69fc4e586c1d3ea94189f277eb5ecfd5ddc3142127ca033244ac47ed7973a",
+    "pool_shed_execution.py": "82ad197e811377497107105aa37e3ed274cf646255a65dae3ef70b7176aa41bc",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a"
+  },
+  "rows": [
+    {
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.5,
+        0,
+        40,
+        10
+      ],
+      "elapsed_s": 13.879287582822144,
+      "results": {
+        "queue_haul": {
+          "shed_fraction": 0.895305118761043,
+          "admitted_shed_fraction": 0.9152607136905649,
+          "max_relative_residual": 9.266656267224298e-16,
+          "planning_steps": 8,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "greedy": {
+          "shed_fraction": 0.9012366702327531,
+          "admitted_shed_fraction": 0.9012366702327541,
+          "max_relative_residual": 1.619411191204225e-16,
+          "planning_steps": 8,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "kv_only": {
+          "shed_fraction": 0.0002841095407488032,
+          "admitted_shed_fraction": 0.0002841095407488027,
+          "max_relative_residual": 2.830097880785115e-16,
+          "planning_steps": 8,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "replay_only": {
+          "shed_fraction": 0.8954764633876205,
+          "admitted_shed_fraction": 0.915425186224017,
+          "max_relative_residual": 9.416440510151029e-15,
+          "planning_steps": 8,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "isolated_fastest": {
+          "shed_fraction": 0.8954764633876205,
+          "admitted_shed_fraction": 0.915425186224017,
+          "max_relative_residual": 9.416440510151029e-15,
+          "planning_steps": 8,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        }
+      }
+    },
+    {
+      "cell": [
+        [
+          "coding",
+          0
+        ],
+        0.5,
+        0,
+        1000,
+        30
+      ],
+      "elapsed_s": 29.307287042029202,
+      "results": {
+        "queue_haul": {
+          "shed_fraction": 0.9960556534489712,
+          "admitted_shed_fraction": 0.9961847228035174,
+          "max_relative_residual": 2.2778266279599917e-14,
+          "planning_steps": 11,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "greedy": {
+          "shed_fraction": 0.9806049002700475,
+          "admitted_shed_fraction": 0.9807754794273682,
+          "max_relative_residual": 1.870415394144239e-16,
+          "planning_steps": 11,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "kv_only": {
+          "shed_fraction": 0.02690769974423801,
+          "admitted_shed_fraction": 0.026907699744237998,
+          "max_relative_residual": 1.6858867065890464e-16,
+          "planning_steps": 11,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "replay_only": {
+          "shed_fraction": 0.9906303951252176,
+          "admitted_shed_fraction": 0.9906303951252187,
+          "max_relative_residual": 2.4556942515605054e-14,
+          "planning_steps": 11,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "isolated_fastest": {
+          "shed_fraction": 0.9781199745500104,
+          "admitted_shed_fraction": 0.9781199745500112,
+          "max_relative_residual": 2.436141780759514e-14,
+          "planning_steps": 11,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        }
+      }
+    },
+    {
+      "cell": [
+        [
+          "coding",
+          0
+        ],
+        0.5,
+        0,
+        1000,
+        3600
+      ],
+      "elapsed_s": 45.18537670746446,
+      "results": {
+        "queue_haul": {
+          "shed_fraction": 0.9999999989974161,
+          "admitted_shed_fraction": 0.9999999989974167,
+          "max_relative_residual": 5.176274359878584e-13,
+          "planning_steps": 19,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 6.868131547714052e-14
+        },
+        "greedy": {
+          "shed_fraction": 1.0,
+          "admitted_shed_fraction": 1.0,
+          "max_relative_residual": 1.6694531584162592e-16,
+          "planning_steps": 11,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "kv_only": {
+          "shed_fraction": 0.9124727016818293,
+          "admitted_shed_fraction": 0.9124727016818296,
+          "max_relative_residual": 7.72049844417428e-16,
+          "planning_steps": 25,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "replay_only": {
+          "shed_fraction": 0.9999999989999453,
+          "admitted_shed_fraction": 0.9999999989999462,
+          "max_relative_residual": 4.953158592670937e-13,
+          "planning_steps": 11,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        },
+        "isolated_fastest": {
+          "shed_fraction": 0.9999999989948085,
+          "admitted_shed_fraction": 0.9999999989948086,
+          "max_relative_residual": 1.3325050786718303e-13,
+          "planning_steps": 15,
+          "resident_debt_generated_work_s": [
+            0.0,
+            0.0
+          ],
+          "pending_backlog_reference_work_s": 0.0
+        }
+      }
+    }
+  ]
+}

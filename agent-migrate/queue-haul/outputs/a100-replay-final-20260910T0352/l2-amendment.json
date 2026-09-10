@@ -1,0 +1,49 @@
+{
+  "frozen_utc": "2026-09-10T04:18:17.661897+00:00",
+  "original_plan_sha256": "5b91ccdf1d586ac39222dfc1478fc80642d2c5c412905688a477820c1818d5de",
+  "original_attempts": "paired/paired-attempts.json",
+  "evidence": "kv-l1-eviction-evidence.json",
+  "correction": "Remove the unsupported post-request L1-only assertion; retain actual native L1/L2 behavior and record per-request cache-tier evidence. Full request/state/ownership/continuation validation remains strict. No timing, SLO threshold or cache capacity changed.",
+  "reason": "Both original30K cases reached valid destination responses but the L1-only assertion prevented completion/continuation evidence after natural L1eviction and L2refetch. Failed originals remain failed, including measured cache miss/refetch latency.",
+  "scope": "Acquire missing complete long-context measurements only, not retries to obtain passing performance/SLO results. Reuse clean original8K repeats.",
+  "conditions": [
+    {
+      "seed": 7101,
+      "retained_tokens": 30000,
+      "append_tokens": 2048,
+      "width": 8,
+      "method": "kv_transfer",
+      "max_generation_tokens": 512
+    },
+    {
+      "seed": 7102,
+      "retained_tokens": 30000,
+      "append_tokens": 2048,
+      "width": 8,
+      "method": "kv_transfer",
+      "max_generation_tokens": 512
+    }
+  ],
+  "per_scenario_allowance_s": 300,
+  "cleanup_reserve_s": 30,
+  "deadline_wall_ns": 1789020343193408970,
+  "acquisition_cap_s": 7200,
+  "deadline_extension": false,
+  "cache_reset": "No change to runtime or L1capacity; native cache retained from originalattempts, independent sessionhistories in newrun. Cache state measured.",
+  "input_changes": {
+    "migration_testbed.py": {
+      "original_sha256": "777b24b0a943c1f85b14c3fbc7a5c4648e09c58a40fd6bfa1a3773c98238c9f4",
+      "current_sha256": "0579b4c2c9018d84c5c92fa4247cfd6fd3073cbf09025bd9081dae0d10b2ec05"
+    },
+    "migration_profiler.py": {
+      "original_sha256": "bf1cba21ff97cc8f6a78d9a46d648cbf815b387f2c22ba919c7123e2b1f5e199",
+      "current_sha256": "6bd2a6514b3bc6f03e5cf14d355d1c3fd7e3927370f9b0bed4863fdd8c42cdaf"
+    },
+    "pool_replay_paired.py": {
+      "original_sha256": "592c1de6909782a179d053e191320ee86e20aaa490ba5413711ccad3ec0830ad",
+      "current_sha256": "592c1de6909782a179d053e191320ee86e20aaa490ba5413711ccad3ec0830ad"
+    }
+  },
+  "commit": "8efcd832442cc1685bd041a4168922aaf16ae5ae",
+  "simulator_fitting": "stopped_pending_user_review"
+}

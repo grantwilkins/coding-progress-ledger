@@ -1,0 +1,449 @@
+{
+  "cells": 11250,
+  "complete": true,
+  "counts": {
+    "decisions": 326697,
+    "evaluations": 56250,
+    "greedy_full_handoff_with_debt": 157,
+    "isolated_fastest_full_handoff_with_debt": 280,
+    "qh_adjacent_deadline_declines": 607,
+    "qh_completes_kv": 9464,
+    "qh_selects_but_completes_no_kv": 337,
+    "qh_selects_kv": 9801,
+    "queue_haul_full_handoff_with_debt": 507,
+    "replay_only_full_handoff_with_debt": 996,
+    "unsettled_decisions": 69259
+  },
+  "examples": {
+    "greedy_largest_advantage": {
+      "baseline": 0.8732397225882207,
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.25,
+        6,
+        40,
+        10
+      ],
+      "qh": 0.38105014866762027
+    },
+    "isolated_fastest_largest_advantage": {
+      "baseline": 0.8219581277383233,
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.25,
+        6,
+        100,
+        10
+      ],
+      "qh": 0.46116741275635825
+    },
+    "kv_only_largest_advantage": {
+      "baseline": 0.6249999990000001,
+      "cell": [
+        [
+          "coding",
+          0
+        ],
+        0.75,
+        7,
+        1000,
+        3600
+      ],
+      "qh": 0.6249999989999998
+    },
+    "replay_only_largest_advantage": {
+      "baseline": 0.8219581277383233,
+      "cell": [
+        [
+          "measured_pack",
+          0
+        ],
+        0.25,
+        6,
+        100,
+        10
+      ],
+      "qh": 0.46116741275635825
+    }
+  },
+  "expected_cells": 11250,
+  "identity": "4ffcd134eb7a3a4552b2ef04d491def7a11d05eb4a1d656734184886c83985d3",
+  "iteration_counts_by_policy": {
+    "greedy": {
+      "decisions": 47288,
+      "unsettled_decisions": 15500
+    },
+    "isolated_fastest": {
+      "decisions": 71888,
+      "unsettled_decisions": 17144
+    },
+    "kv_only": {
+      "decisions": 75375,
+      "unsettled_decisions": 10990
+    },
+    "queue_haul": {
+      "decisions": 71588,
+      "unsettled_decisions": 12656
+    },
+    "replay_only": {
+      "decisions": 60558,
+      "unsettled_decisions": 12969
+    }
+  },
+  "maxima": {
+    "greedy_advantage": 0.4921895739206004,
+    "initial_nominal_lp_loss": 1.0000348327210418e-09,
+    "isolated_fastest_advantage": 0.3607907149819651,
+    "kv_only_advantage": 3.3306690738754696e-16,
+    "lp_resource_residual": 7.927963667040703e-11,
+    "planning_steps": 12,
+    "qh_deadline_decline": 0.015612973688290066,
+    "queue_iteration_residual": 0.7086918207460637,
+    "replay_only_advantage": 0.3607907149819651
+  },
+  "physical_accounting": {
+    "cells": 11250,
+    "completion_events": 671127,
+    "evaluations": 56250,
+    "evaluations_with_positive_handoff": {
+      "greedy": 10125,
+      "isolated_fastest": 10125,
+      "kv_only": 9896,
+      "queue_haul": 10125,
+      "replay_only": 10125
+    },
+    "gate_pass": true,
+    "git_sha": "9f4dc2bdef1396f17800649e096c109ce8a62d27",
+    "identity": "4ffcd134eb7a3a4552b2ef04d491def7a11d05eb4a1d656734184886c83985d3",
+    "maximum_relative_residuals": {
+      "buffer_requests_decomposition": 0.0,
+      "buffer_work_decomposition": 0.0,
+      "buffer_work_noncreation": 0.0,
+      "completed_source_cohort_capacity": 1.6729750650693942e-12,
+      "completion_action_admission": 4.170514983471302e-15,
+      "completion_power_admission": 1.5543122344752192e-15,
+      "compute_capacity": 0.0,
+      "destination_load_capacity": 6.661338147750935e-16,
+      "destination_requests_conservation": 2.0294145208678616e-16,
+      "event_deadline": 0.0,
+      "event_order": 0.0,
+      "event_power_reconstruction": 1.3322676295501878e-15,
+      "event_session_reconstruction": 3.792011584582594e-15,
+      "idle_work_bound": 0.0,
+      "imported_serving_reconstruction": 2.3092638912203256e-14,
+      "last_completion_deadline": 0.0,
+      "memory_capacity": 0.0,
+      "network_capacity": 4.098046256633286e-15,
+      "network_shared_sum": 1.6948248221331647e-14,
+      "pending_requests_decomposition": 0.0,
+      "planning_fixed_resource_residual": 0.0,
+      "planning_resource_residual": 0.0,
+      "policy_action_restrictions": 0.0,
+      "power_admission_sum": 4.440892098500624e-16,
+      "power_completion_sum": 0.0,
+      "pure_kv_application_capacity": 0.0,
+      "reconstructed_serving_capacity": 1.332267629550186e-15,
+      "resident_debt_conservation": 3.0403105715932966e-14,
+      "service_ready_buffer_work": 0.0,
+      "service_ready_deadline": 0.0,
+      "service_ready_resident_debt": 0.0,
+      "service_ready_source_work": 0.0,
+      "service_ready_unfinished": 0.0,
+      "session_completion_sum": 0.0,
+      "source_power_admission": 2.2204460492503126e-16,
+      "source_session_admission": 2.1828091123461507e-16
+    },
+    "scope": "Independent physical accounting audit from immutable completed cell files, manifest calibration, and reconstructed common-library cohorts. Does not establish global planning optimality.",
+    "seconds": 36.6624035006389
+  },
+  "qh_comparisons": {
+    "greedy": {
+      "losses": 2042,
+      "losses_over_2pp": 555,
+      "ties": 6425,
+      "wins": 2783
+    },
+    "isolated_fastest": {
+      "losses": 1245,
+      "losses_over_2pp": 208,
+      "ties": 5937,
+      "wins": 4068
+    },
+    "kv_only": {
+      "losses_over_2pp": 0,
+      "ties": 1665,
+      "wins": 9585
+    },
+    "replay_only": {
+      "losses": 2982,
+      "losses_over_2pp": 91,
+      "ties": 7966,
+      "wins": 302
+    }
+  },
+  "qh_comparisons_by_deadline": {
+    "1": {
+      "greedy": {
+        "losses": 188,
+        "ties": 926,
+        "wins": 11
+      },
+      "isolated_fastest": {
+        "ties": 1125
+      },
+      "kv_only": {
+        "ties": 900,
+        "wins": 225
+      },
+      "replay_only": {
+        "ties": 1125
+      }
+    },
+    "10": {
+      "greedy": {
+        "losses": 576,
+        "ties": 91,
+        "wins": 458
+      },
+      "isolated_fastest": {
+        "losses": 337,
+        "ties": 90,
+        "wins": 698
+      },
+      "kv_only": {
+        "wins": 1125
+      },
+      "replay_only": {
+        "losses": 851,
+        "ties": 109,
+        "wins": 165
+      }
+    },
+    "120": {
+      "greedy": {
+        "losses": 62,
+        "ties": 734,
+        "wins": 329
+      },
+      "isolated_fastest": {
+        "losses": 36,
+        "ties": 583,
+        "wins": 506
+      },
+      "kv_only": {
+        "wins": 1125
+      },
+      "replay_only": {
+        "losses": 165,
+        "ties": 960
+      }
+    },
+    "1800": {
+      "greedy": {
+        "ties": 924,
+        "wins": 201
+      },
+      "isolated_fastest": {
+        "ties": 809,
+        "wins": 316
+      },
+      "kv_only": {
+        "ties": 186,
+        "wins": 939
+      },
+      "replay_only": {
+        "losses": 1,
+        "ties": 1124
+      }
+    },
+    "3": {
+      "greedy": {
+        "losses": 642,
+        "ties": 225,
+        "wins": 258
+      },
+      "isolated_fastest": {
+        "losses": 523,
+        "ties": 287,
+        "wins": 315
+      },
+      "kv_only": {
+        "ties": 225,
+        "wins": 900
+      },
+      "replay_only": {
+        "losses": 704,
+        "ties": 285,
+        "wins": 136
+      }
+    },
+    "30": {
+      "greedy": {
+        "losses": 412,
+        "ties": 351,
+        "wins": 362
+      },
+      "isolated_fastest": {
+        "losses": 244,
+        "ties": 308,
+        "wins": 573
+      },
+      "kv_only": {
+        "wins": 1125
+      },
+      "replay_only": {
+        "losses": 753,
+        "ties": 371,
+        "wins": 1
+      }
+    },
+    "300": {
+      "greedy": {
+        "losses": 27,
+        "ties": 829,
+        "wins": 269
+      },
+      "isolated_fastest": {
+        "losses": 18,
+        "ties": 655,
+        "wins": 452
+      },
+      "kv_only": {
+        "ties": 27,
+        "wins": 1098
+      },
+      "replay_only": {
+        "losses": 81,
+        "ties": 1044
+      }
+    },
+    "3600": {
+      "greedy": {
+        "ties": 925,
+        "wins": 200
+      },
+      "isolated_fastest": {
+        "ties": 871,
+        "wins": 254
+      },
+      "kv_only": {
+        "ties": 273,
+        "wins": 852
+      },
+      "replay_only": {
+        "ties": 1125
+      }
+    },
+    "60": {
+      "greedy": {
+        "losses": 73,
+        "ties": 590,
+        "wins": 462
+      },
+      "isolated_fastest": {
+        "losses": 36,
+        "ties": 576,
+        "wins": 513
+      },
+      "kv_only": {
+        "wins": 1125
+      },
+      "replay_only": {
+        "losses": 343,
+        "ties": 782
+      }
+    },
+    "600": {
+      "greedy": {
+        "losses": 62,
+        "ties": 830,
+        "wins": 233
+      },
+      "isolated_fastest": {
+        "losses": 51,
+        "ties": 633,
+        "wins": 441
+      },
+      "kv_only": {
+        "ties": 54,
+        "wins": 1071
+      },
+      "replay_only": {
+        "losses": 84,
+        "ties": 1041
+      }
+    }
+  },
+  "qh_kv_by_deadline": {
+    "1": {
+      "cells": 1125,
+      "completes_kv": 0,
+      "selects_kv": 0
+    },
+    "10": {
+      "cells": 1125,
+      "completes_kv": 1033,
+      "selects_kv": 1107
+    },
+    "120": {
+      "cells": 1125,
+      "completes_kv": 1125,
+      "selects_kv": 1125
+    },
+    "1800": {
+      "cells": 1125,
+      "completes_kv": 1125,
+      "selects_kv": 1125
+    },
+    "3": {
+      "cells": 1125,
+      "completes_kv": 556,
+      "selects_kv": 819
+    },
+    "30": {
+      "cells": 1125,
+      "completes_kv": 1125,
+      "selects_kv": 1125
+    },
+    "300": {
+      "cells": 1125,
+      "completes_kv": 1125,
+      "selects_kv": 1125
+    },
+    "3600": {
+      "cells": 1125,
+      "completes_kv": 1125,
+      "selects_kv": 1125
+    },
+    "60": {
+      "cells": 1125,
+      "completes_kv": 1125,
+      "selects_kv": 1125
+    },
+    "600": {
+      "cells": 1125,
+      "completes_kv": 1125,
+      "selects_kv": 1125
+    }
+  },
+  "scope": "Independent aggregate accounting, equal initial information, pure-action restrictions and numerical audits; adaptive policy comparisons do not imply global LP optimality. Per-cohort admission restrictions are enforced by the executor and covered by focused tests, not reconstructible from aggregate checkpoints.",
+  "solver_version": "1.14.0",
+  "source_commit": "9f4dc2bdef1396f17800649e096c109ce8a62d27",
+  "source_hashes_verified": 212,
+  "status": "pass",
+  "terminal_capacity_audit": {
+    "ceiling_formula": "min(1, 2 * (1 - resident_load) / source_load)",
+    "cells": 1125,
+    "cells_at_destination_serving_or_source_ceiling": 1125,
+    "deadline_s": 3600,
+    "maximum_ceiling_shortfall_fraction": 4.576077183848781e-09,
+    "numerical_tolerance_fraction": 1e-08,
+    "scope": "All terminal QH/replay ties reach the aggregate serving/source shedding ceiling within numerical tolerance."
+  }
+}

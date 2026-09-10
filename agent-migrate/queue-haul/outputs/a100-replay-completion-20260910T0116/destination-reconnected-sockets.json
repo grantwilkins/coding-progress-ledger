@@ -1,0 +1,16 @@
+{
+  "wall_ns": 1789004473864315005,
+  "command": [
+    "ssh",
+    "-i",
+    "/home/azureuser/.ssh/azrs",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "azureuser@10.3.0.4",
+    "ss -tnp | grep 18300"
+  ],
+  "stdout": "ESTAB 0      0           10.3.0.4:35228        10.0.0.4:18300 users:((\"lmcache\",pid=11909,fd=29))         \nESTAB 0      0           10.3.0.4:35262        10.0.0.4:18300 users:((\"lmcache\",pid=11909,fd=30))         \nESTAB 0      0           10.3.0.4:35290        10.0.0.4:18300 users:((\"lmcache\",pid=11909,fd=35))         \nESTAB 0      0           10.3.0.4:35214        10.0.0.4:18300 users:((\"lmcache\",pid=11909,fd=25))         \nESTAB 0      0           10.3.0.4:35224        10.0.0.4:18300 users:((\"lmcache\",pid=11909,fd=27))         \nESTAB 0      0           10.3.0.4:35260        10.0.0.4:18300 users:((\"lmcache\",pid=11909,fd=26))         \nESTAB 0      0           10.3.0.4:35244        10.0.0.4:18300 users:((\"lmcache\",pid=11909,fd=28))         \nESTAB 0      0           10.3.0.4:35278        10.0.0.4:18300 users:((\"lmcache\",pid=11909,fd=31))         \n",
+  "interpretation": "8 established native RESP worker sockets after same-configuration destination restart; previous adapter had none"
+}

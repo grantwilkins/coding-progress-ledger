@@ -1,0 +1,16 @@
+{
+  "recorded_at_utc": "2026-09-09T09:47:51.026858+00:00",
+  "host": "10.1.0.4",
+  "subscription": "7d07dbdd-8117-46e9-8f58-721da3f32fd4",
+  "resource_group": "FKAZHAMIAKA-A100-EASTUS2-V1",
+  "scale_set": "vmss-a100-v1",
+  "instance_id": "0",
+  "observed_power_state": "PowerState/deallocated",
+  "observed_provisioning_state": "Succeeded",
+  "checks": {
+    "ssh_from_local": "connection timed out after 10 seconds",
+    "tcp_from_source_10.0.0.4": "timed out after 5 seconds",
+    "source_ssh": "reachable"
+  },
+  "scope": "Read-only diagnosis; no VM start, resize, replacement or new remote work. Observation time is not the outage start time."
+}

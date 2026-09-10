@@ -1,0 +1,32 @@
+{
+  "source_commit": "f9c9e2a11e640bf9b3f54169bf63c2f450363cc5",
+  "status": "pass",
+  "passed": 200,
+  "deselected": 2,
+  "warnings": 3,
+  "elapsed_s": 165.89,
+  "files": [
+    "tests/test_pool_shed.py",
+    "tests/test_pool_shed_calibration.py",
+    "tests/test_pool_shed_execution.py",
+    "tests/test_pool_shed_planner.py",
+    "tests/test_loaded_service_model.py",
+    "tests/test_batch_shed.py",
+    "tests/test_workload_adaptation_campaign.py"
+  ],
+  "excluded": "independent_regional_fidelity or campaign_reduction",
+  "scope": "Single-process focused tests, math threads1; separate full scientific validation covers excluded validation and campaign integration scope. Warnings are visible HiGHS model import warnings; original constraints remain audited.",
+  "source_sha256": {
+    "tests/test_pool_shed.py": "25c658c4c107b13579135f422555cf224f44f36fd9bba64473f136a13cdb182c",
+    "tests/test_pool_shed_calibration.py": "7ede988993b6878de71918119efb3faf3f9a4062f206608918ade9b3760bc04f",
+    "tests/test_pool_shed_execution.py": "956659266eed70bc5c2ad5e2de919a6f5c9a2112592d7d3ce255705533a64772",
+    "tests/test_pool_shed_planner.py": "8b1bb327a899c401b476e7109992779ba267197fa0bfbc93a9218cc17466bcc8",
+    "tests/test_loaded_service_model.py": "8bbacfc282c7d9f1f5cccddddced5f65f165e3a548a2eb270cd973c32c08695e",
+    "tests/test_batch_shed.py": "496a1720f794e072861d896c8f2e94eb3f969ee8f75fc41bb5554dba4988f4c6",
+    "tests/test_workload_adaptation_campaign.py": "714e04eb464272f15c1e2143a66b7f960d1e48030d4733f7269efa21def27bc3",
+    "pool_shed_planner.py": "b36e7ac285e2a1976d1ec1e7670fd4f1f6ecf87e51784df844ebf978424c6f14",
+    "pool_shed_execution.py": "a2865112626a9ad137a955455b7d60c2946451212bdc88626e790e2c248f587b",
+    "pool_shed_campaign.py": "327f751d0e99b70fbcfd756ee3ef80a36ed1132746665a91f0b4124448427a10",
+    "pool_shed_calibration.py": "e6b445a866073dbc9a435c39be943fff2dce1231a614fb39080d6d1db642523a"
+  }
+}

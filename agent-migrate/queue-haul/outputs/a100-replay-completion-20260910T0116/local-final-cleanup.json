@@ -1,0 +1,10 @@
+{
+  "wall_ns": 1789005406316403145,
+  "closed_tunnels": [
+    {
+      "pid": 13979,
+      "command": "ssh -i /home/azureuser/.ssh/azrs -o BatchMode=yes -o StrictHostKeyChecking=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -N -L 127.0.0.1:18200:127.0.0.1:18200 -L 127.0.0.1:18081:127.0.0.1:18081 azureuser@10.3.0.4"
+    }
+  ],
+  "gpu": "uuid, memory.used [MiB]\nGPU-d809b3d2-a896-24d6-65b3-48aae6e5ab86, 0 MiB\n"
+}

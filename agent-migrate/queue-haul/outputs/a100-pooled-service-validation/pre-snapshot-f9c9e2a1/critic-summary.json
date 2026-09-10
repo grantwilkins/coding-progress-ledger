@@ -1,0 +1,312 @@
+{
+  "validation_seconds": 483.42273645754904,
+  "parallel_refinement_wall": 421.3852696251124,
+  "summed_worker_cpu": 1636.563854,
+  "summed_worker_wall": 1653.0348482066765,
+  "dispatch_max_pp": 0.07372142848223184,
+  "grid_max_pp": 8.613522420199171,
+  "grid_gap_max_pp": 5.863293348346243,
+  "iterations_max_pp": 0.2593147882845875,
+  "max_iteration_residual": 0.4,
+  "library_p95": 1.1216704157286615e-05,
+  "library_max": 0.00030094257356794163,
+  "runtime_scaling": [
+    {
+      "columns": 168,
+      "completion_events": 20,
+      "gpus": 6400,
+      "seconds": 3.071039415895939,
+      "shed": {
+        "greedy": 0.9999999999999998,
+        "isolated_fastest": 0.9999999984999991,
+        "kv_only": 0.038675148254307005,
+        "queue_haul": 0.9999999989999987,
+        "replay_only": 0.9999999984999991
+      }
+    },
+    {
+      "columns": 168,
+      "completion_events": 20,
+      "gpus": 64000,
+      "seconds": 3.109127334319055,
+      "shed": {
+        "greedy": 1.0,
+        "isolated_fastest": 0.9999999985000003,
+        "kv_only": 0.038675148254306665,
+        "queue_haul": 0.9999999989999988,
+        "replay_only": 0.9999999985000003
+      }
+    },
+    {
+      "columns": 168,
+      "completion_events": 20,
+      "gpus": 640000,
+      "seconds": 3.081087457947433,
+      "shed": {
+        "greedy": 0.9999999999999998,
+        "isolated_fastest": 0.9999999985000004,
+        "kv_only": 0.038675148254306096,
+        "queue_haul": 0.9999999989999989,
+        "replay_only": 0.9999999985000004
+      }
+    }
+  ],
+  "default_cases": [
+    {
+      "workload": "measured_pack",
+      "load": 0.5,
+      "wan_gbps": 1000,
+      "deadline_s": 30,
+      "shed_fraction": {
+        "greedy": 0.9999999999999998,
+        "isolated_fastest": 0.9999999984999997,
+        "kv_only": 0.004159706039109598,
+        "queue_haul": 0.9999999989999899,
+        "replay_only": 0.9999999984999997
+      },
+      "seconds": 4.292310667224228
+    },
+    {
+      "workload": "coding",
+      "load": 0.5,
+      "wan_gbps": 1000,
+      "deadline_s": 60,
+      "shed_fraction": {
+        "greedy": 1.0,
+        "isolated_fastest": 0.9811183253710265,
+        "kv_only": 0.04775886176026894,
+        "queue_haul": 0.9999968470801972,
+        "replay_only": 0.9999999989997465
+      },
+      "seconds": 38.00103933271021
+    },
+    {
+      "workload": "coding",
+      "load": 0.95,
+      "wan_gbps": 40,
+      "deadline_s": 3600,
+      "shed_fraction": {
+        "greedy": 0.12499999999999976,
+        "isolated_fastest": 0.12499999494678457,
+        "kv_only": 0.051674265494335035,
+        "queue_haul": 0.12499999899999416,
+        "replay_only": 0.12499999899997916
+      },
+      "seconds": 40.45998041611165
+    },
+    {
+      "workload": "coding",
+      "load": 0.5,
+      "wan_gbps": 1000,
+      "deadline_s": 3600,
+      "shed_fraction": {
+        "greedy": 1.0,
+        "isolated_fastest": 0.9999999989998418,
+        "kv_only": 0.8560407267328156,
+        "queue_haul": 0.9999999989999995,
+        "replay_only": 0.9999999989997465
+      },
+      "seconds": 47.17694433312863
+    },
+    {
+      "workload": "coding_long",
+      "load": 0.5,
+      "wan_gbps": 1000,
+      "deadline_s": 30,
+      "shed_fraction": {
+        "greedy": 0.9991853221593304,
+        "isolated_fastest": 0.7378374782231867,
+        "kv_only": 0.00801195787123914,
+        "queue_haul": 0.999409998910714,
+        "replay_only": 0.9824432893397603
+      },
+      "seconds": 38.94618104118854
+    },
+    {
+      "workload": "coding_long",
+      "load": 0.95,
+      "wan_gbps": 1000,
+      "deadline_s": 300,
+      "shed_fraction": {
+        "greedy": 0.1250000000000003,
+        "isolated_fastest": 0.12498914437983889,
+        "kv_only": 0.08171097405843133,
+        "queue_haul": 0.12499999899998099,
+        "replay_only": 0.12499999900000014
+      },
+      "seconds": 18.42189604230225
+    }
+  ],
+  "gate_sections": {
+    "execution_resolution": true,
+    "historical_execution": true,
+    "loaded_execution": true,
+    "regional_components": true,
+    "regional_execution": true
+  },
+  "historical": {
+    "gate_pass": true,
+    "loaded_local_tail_s": 1.2333900304008214,
+    "loaded_matched_runtime": {
+      "gate_pass": true,
+      "metrics": {
+        "kv_transfer": {
+          "episodes": 220,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.028222378253057782,
+          "p90_relative_error": 0.11917242873846964
+        },
+        "replay": {
+          "episodes": 220,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.012344017462924718,
+          "p90_relative_error": 0.022791646813871008
+        }
+      },
+      "p90_relative_error_limits": {
+        "kv_transfer": 0.15,
+        "replay": 0.05
+      }
+    },
+    "loaded_transferred_tail": {
+      "gate_pass": false,
+      "metrics": {
+        "kv_transfer": {
+          "episodes": 220,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.021282411051348517,
+          "p90_relative_error": 0.16828004117844608
+        },
+        "replay": {
+          "episodes": 220,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.012344017462924718,
+          "p90_relative_error": 0.022791646813871008
+        }
+      },
+      "p90_relative_error_limits": {
+        "kv_transfer": 0.15,
+        "replay": 0.05
+      }
+    },
+    "long_context": {
+      "gate_pass": true,
+      "metrics": {
+        "replay": {
+          "episodes": 72,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.02942686458389532,
+          "p90_relative_error": 0.16008520575123936
+        }
+      },
+      "p90_relative_error_limits": {
+        "replay": 0.2
+      }
+    },
+    "policy_local_tail_s": 1.2800082435000002,
+    "policy_matched_runtime": {
+      "gate_pass": true,
+      "metrics": {
+        "greedy": {
+          "episodes": 40,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.03834300473018557,
+          "p90_relative_error": 0.2903667202069523
+        },
+        "kv_only": {
+          "episodes": 40,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.03980534180373174,
+          "p90_relative_error": 0.13127010881140377
+        },
+        "queue_haul": {
+          "episodes": 40,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.06911942228311851,
+          "p90_relative_error": 0.263737686396271
+        },
+        "replay_only": {
+          "episodes": 40,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.01575590846637893,
+          "p90_relative_error": 0.18669061839444612
+        }
+      },
+      "p90_relative_error_limits": {
+        "greedy": 0.30611468672972936,
+        "kv_only": 0.23101041213196025,
+        "queue_haul": 0.2838061502948406,
+        "replay_only": 0.18673428381980783
+      }
+    },
+    "policy_transferred_tail": {
+      "gate_pass": true,
+      "metrics": {
+        "greedy": {
+          "episodes": 40,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.040451206599796244,
+          "p90_relative_error": 0.3052611416282613
+        },
+        "kv_only": {
+          "episodes": 40,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.0691322439797436,
+          "p90_relative_error": 0.23097775095528936
+        },
+        "queue_haul": {
+          "episodes": 40,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.07556509088519633,
+          "p90_relative_error": 0.269490852035123
+        },
+        "replay_only": {
+          "episodes": 40,
+          "false_feasible_25s": 0,
+          "median_relative_error": 0.01575590846637893,
+          "p90_relative_error": 0.18669061839444612
+        }
+      },
+      "p90_relative_error_limits": {
+        "greedy": 0.30611468672972936,
+        "kv_only": 0.23101041213196025,
+        "queue_haul": 0.2838061502948406,
+        "replay_only": 0.18673428381980783
+      }
+    },
+    "scope": "Recorded one-GPU actions, original unprotected resident offered load, frozen source; local endpoint and training-only tail adapters. Loaded/long gates are existing gates; policy limits preserve analytic-reference error. Transferred-tail failures remain visible. This validates engine progress, not protected serving, moving trajectories, fleet SLOs or new policy decisions."
+  },
+  "regional_execution": {
+    "aggregate": {
+      "episodes": 24,
+      "false_feasible_25s": 1,
+      "mae_s": 1.2429944162432411,
+      "r2": 0.9854284531544539
+    },
+    "fixed_kv_transfer": {
+      "episodes": 8,
+      "false_feasible_25s": 0,
+      "mae_s": 1.3232312566380284,
+      "r2": 0.971479066746617
+    },
+    "fixed_mixed": {
+      "episodes": 8,
+      "false_feasible_25s": 1,
+      "mae_s": 1.6013796249282308,
+      "r2": 0.9144222261940067
+    },
+    "fixed_replay": {
+      "episodes": 8,
+      "false_feasible_25s": 0,
+      "mae_s": 0.804372367163464,
+      "r2": 0.8904307653869151
+    },
+    "gate_pass": true,
+    "gates": {
+      "mae_s": 3,
+      "r2": 0.8
+    },
+    "scope": "Previously inspected regional partition; fixed actions, frozen context and resident load. Tests engine transport/compute, not source growth, dynamic serving admission or fleet-scale fidelity."
+  },
+  "scope": "Validation of numerical resolution and original hardware contracts; not proof of fleet SLOs, global controller optimality, or planning-grid independence. Parallel worker timings include concurrent contention."
+}

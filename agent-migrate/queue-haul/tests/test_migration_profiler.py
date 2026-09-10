@@ -485,17 +485,86 @@ def test_session_probe_appends_one_final_instruction():
     assert c.chat_payload(c.b.Config(), base, 1, ignore_eos=True)["ignore_eos"] is True
 
 
+@pytest.mark.parametrize(("lines", "error"), [
+    ([b'data: {"id":"r","choices":[{"delta":{"content":"ok"}}]}\n',
+      b'data: {"id":"r","choices":[],"usage":{"prompt_tokens":2,'
+      b'"completion_tokens":1,"prompt_tokens_details":{"cached_tokens":1}}}\n',
+      b'data: [DONE]\n'], None),
+    ([b'data: {"id":"r","choices":[]}\n'], c.RetryableStreamError),
+    ([b'data: not-json\n'], c.RetryableStreamError),
+    ([b'data: {"error":{"message":"broken stream"}}\n'],
+     c.StreamResponseError),
+])
+def test_stream_chat_validates_terminal_usage(monkeypatch, lines, error):
+    class Response:
+        status = 200
+
+        def __init__(self):
+            self.lines = iter(lines)
+
+        def readline(self):
+            return next(self.lines, b"")
+
+    class Connection:
+        def __init__(self, *_args, **_kwargs):
+            self.response = Response()
+
+        def request(self, *_args, **_kwargs):
+            pass
+
+        def getresponse(self):
+            return self.response
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(c.http.client, "HTTPConnection", Connection)
+
+    if error:
+        with pytest.raises(error):
+            c.stream_chat(c.b.Config(), 1, [], 1, "hash", 1)
+    else:
+        result, text = c.stream_chat(c.b.Config(), 1, [], 1, "hash", 1)
+        assert (result.prompt_tokens, result.output_tokens,
+                result.cached_tokens, text) == (2, 1, 1, "ok")
+
+
+def test_stream_chat_classifies_request_transport_failure(monkeypatch):
+    class Connection:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def request(self, *_args, **_kwargs):
+            raise OSError("connection reset")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(c.http.client, "HTTPConnection", Connection)
+    with pytest.raises(c.RetryableStreamError, match="transport"):
+        c.stream_chat(c.b.Config(), 1, [], 1, "hash", 1)
+
+
+def test_move_error_classification_does_not_retry_server_failures():
+    c._check_move_errors(["StreamResponseError: bad"], True)
+    with pytest.raises(c.RetryableStreamError):
+        c._check_move_errors(["RetryableStreamError: eof"], True)
+    with pytest.raises(RuntimeError, match="hard"):
+        c._check_move_errors(["RetryableStreamError: eof",
+                              "RuntimeError: hard"], True)
+
+
 def test_session_request_requires_http_success_not_exact_model_text(monkeypatch):
     session = c.LiveSession.__new__(c.LiveSession)
     session.cfg, session.state_code = c.b.Config(), "CODE"
     session.session_id, session.timeout_s = "session", 1
     session.event_log = SimpleNamespace(write=lambda *_args, **_kwargs: None)
     result = c.RequestResult("request", 200, "hash", 1, 2)
-    monkeypatch.setattr(c, "stream_chat", lambda *_args: (result, "valid reply"))
+    monkeypatch.setattr(c, "stream_chat", lambda *_args, **_kwargs: (result, "valid reply"))
 
     assert session.request(1, [], "probe") == (result, "valid reply")
     failed = c.RequestResult("request", 500, "hash", 1, 2)
-    monkeypatch.setattr(c, "stream_chat", lambda *_args: (failed, "CODE"))
+    monkeypatch.setattr(c, "stream_chat", lambda *_args, **_kwargs: (failed, "CODE"))
     with pytest.raises(RuntimeError, match="HTTP 500"):
         session.request(1, [], "probe")
 
@@ -527,6 +596,70 @@ def test_continuations_verify_in_parallel_and_preserve_order():
     assert [row["session_id"] for row in rows] == ["a", "b"]
     assert {row["committed_context_hash"] for row in rows} == {
         c.messages_hash([])}
+
+
+def test_continuations_honor_declared_concurrency():
+    gate = threading.Lock()
+
+    class Session:
+        route, messages = 7, []
+
+        def __init__(self, session_id):
+            self.session_id = session_id
+
+        def continuation(self):
+            assert gate.acquire(blocking=False)
+            time.sleep(.01)
+            gate.release()
+            return c.RequestResult(self.session_id, 200, "h", 1, 2)
+
+    sessions = {name: Session(name) for name in ("a", "b")}
+    scenario = {"kind": "migration", "sessions": [
+        {"session_id": name, "order": order}
+        for order, name in enumerate(sessions)]}
+
+    c.verify_continuations(
+        scenario, sessions, SimpleNamespace(api_proxy_port=7), concurrency=1)
+
+
+def test_partial_continuation_keeps_server_stream_failure():
+    session = SimpleNamespace(
+        session_id="a", route=7, messages=[],
+        continuation=lambda: (_ for _ in ()).throw(
+            c.StreamResponseError("server rejected output")),
+    )
+    scenario = {"kind": "migration", "sessions": [
+        {"session_id": "a", "order": 0}]}
+
+    rows = c.verify_continuations(
+        scenario, {"a": session}, SimpleNamespace(api_proxy_port=7), {"a"},
+        allow_stream_errors=True)
+
+    assert rows[0]["error"].startswith("StreamResponseError:")
+
+
+def test_partial_continuation_mixed_stream_failures_hard_fail():
+    class Session:
+        route, messages = 7, []
+
+        def __init__(self, session_id, error):
+            self.session_id, self.error = session_id, error
+
+        def continuation(self):
+            raise self.error
+
+    sessions = {
+        "a": Session("a", c.StreamResponseError("server")),
+        "b": Session("b", c.RetryableStreamError("transport")),
+    }
+    scenario = {"kind": "migration", "sessions": [
+        {"session_id": name, "order": order}
+        for order, name in enumerate(sessions)]}
+
+    with pytest.raises(RuntimeError, match="transport"):
+        c.verify_continuations(
+            scenario, sessions, SimpleNamespace(api_proxy_port=7), set(sessions),
+            allow_stream_errors=True)
 
 
 def test_sessions_warm_in_parallel():
@@ -604,6 +737,7 @@ def test_reduction_separates_transferred_kv_from_catch_up_cache_hits():
     assert row["measured_prompt_tokens"] == 120
     assert row["measured_processed_tokens"] == 0
     assert row["catch_up_new_tokens"] == 10
+    assert row["catch_up_processed_tokens"] == 10
     assert row["initial_time_to_first_response_s"] == pytest.approx(.6)
     assert row["initial_response_s"] == pytest.approx(.4)
 
@@ -806,12 +940,12 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
         lambda *_args: calls.append("prefetch")
         or {"total_keys": 6, "found_keys": 0},
     )
-    monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 6)
-    monkeypatch.setattr(c.time, "monotonic_ns", lambda: 0)
+    monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args, **_kwargs: 6)
+    monkeypatch.setattr(c.time, "monotonic_ns", lambda: 2)
     rows = c.b.resp_rows(transfers)
     monkeypatch.setattr(
         c.b, "resp_rows",
-        lambda _path: rows if calls.count("request") == 0 else rows + [{**rows[0], "key_hashes": "k2"}],
+        lambda _path: rows if calls.count("request") == 0 else rows + [{**rows[0], "key_hashes": "k2", "start_ns": "3", "end_ns": "4"}],
     )
     runtime = c.LiveRuntime(
         {"s": session},
@@ -862,8 +996,14 @@ def test_mp_kv_layout_sums_heterogeneous_fresh_payloads(monkeypatch, tmp_path):
     )
 
     layout = runtime._kv_layout(10, 20, {"a", "b"})
+    empty = runtime._kv_layout(30, 40, {"a", "b"})
+    rows.append(dict(rows[1]))
+    repeated = runtime._kv_layout(10, 20, {"a", "b"})
     runtime.close()
 
+    assert empty["total_payload_bytes"] == empty["unique_payload_bytes"] == empty["retransferred_payload_bytes"] == 0
+    assert empty["transfer_observation"] == "no_external_get_observed"
+    assert repeated["total_payload_bytes"] == 40 and repeated["unique_payload_bytes"] == 30 and repeated["retransferred_payload_bytes"] == 10
     assert layout["chunk_bytes"] is None
     assert layout["total_payload_bytes"] == 30
     assert layout["payload_bytes_by_key"] == {"a": 10, "b": 20}
@@ -1249,3 +1389,86 @@ def test_reduce_validates_and_writes_interpretable_tables_and_plots(
     assert "continuation_difference_s" in table
     assert "measured_prompt_tokens" in table
     assert "context_size" not in table
+
+
+@pytest.mark.parametrize('reasoning', ['reasoning', 'reasoning_content'])
+@pytest.mark.parametrize('ids', [[], [17], [17, 18]])
+def test_stream_chat_records_reasoning_tokens_and_unknown_cache(monkeypatch, reasoning, ids):
+    from io import BytesIO
+    events = [
+        {'choices': [{'delta': {'role': 'assistant'}}]},
+        {'choices': [{'delta': {reasoning: 'thinking'}, 'token_ids': ids}]},
+        {'choices': [{'delta': {'content': 'answer'}, 'token_ids': [19]}]},
+        {'choices': [], 'usage': {'prompt_tokens': 8, 'completion_tokens': 2}},
+    ]
+    response = BytesIO((''.join('data: ' + json.dumps(e) + '\n' for e in events)
+                        + 'data: [DONE]\n').encode())
+    response.status = 200
+    sent, raw = [], []
+    monkeypatch.setattr(c.http.client, 'HTTPConnection', lambda *a, **k: SimpleNamespace(
+        request=lambda *a: sent.append(json.loads(a[2])), getresponse=lambda: response,
+        close=lambda: None))
+    result, text = c.stream_chat(c.b.Config(), 1, [], c.PROBE_MAX_TOKENS, 'hash', 1,
+                                 event_sink=raw.append)
+    assert result.first_byte_ns == raw[1]['monotonic_ns']
+    assert result.last_token_ns == raw[2]['monotonic_ns']
+    assert result.token_ids == tuple(ids + [19])
+    assert result.exact_token_timestamps == (ids == [17])
+    assert result.cached_tokens is None and result.processed_tokens is None
+    assert text == 'answer' and len(raw) == 5
+    assert sent[0]['return_token_ids'] and sent[0]['max_tokens'] == 512
+    assert sent[0]['temperature'] == 0 and sent[0]['reasoning_effort'] == 'low'
+
+
+def test_request_measurements_preserve_unknown_and_derived_catchup_work():
+    request = {'start_ns': 1, 'end_ns': 2, 'processed_tokens': None}
+    assert c.request_measurements('catch_up', request, 3)['catch_up_processed_tokens'] is None
+    request.update(processed_tokens=32, processed_tokens_basis='derived_prompt_minus_cache')
+    row = c.request_measurements('catch_up', request, 3)
+    assert row['catch_up_processed_tokens'] == 32
+    assert row['catch_up_processed_tokens_basis'] == 'derived_prompt_minus_cache'
+
+
+def test_invalid_source_activity_cannot_commit_destination(monkeypatch):
+    events = []
+    session = SimpleNamespace(session_id='s', generation=0, messages=[], timeout_s=1,
+        activity_condition=threading.Condition(), activity_active=False,
+        activity_error=RuntimeError('invalid source state response'), paused=False,
+        route=1, cfg=SimpleNamespace(src_port=1))
+    runtime = c.LiveRuntime.__new__(c.LiveRuntime)
+    runtime.sessions, runtime.cfg = {'s':session}, SimpleNamespace(api_proxy_port=2,src_port=1)
+    runtime.event_log = SimpleNamespace(write=lambda event, **fields: events.append(event))
+    state = c.SessionState('s',0,(),c.messages_hash([]))
+    monkeypatch.setattr(runtime,'snapshot',lambda move:state)
+    monkeypatch.setattr(runtime,'prepare',lambda move,snapshot,phase:c.RequestResult('r',200,snapshot.context_hash,1,2))
+    monkeypatch.setattr(runtime,'background',lambda move,snapshot:())
+    result = c.MigrationController(runtime,1).run([c.Move('s','replay',0)])[0]
+    assert result.error and 'invalid source state response' in result.error
+    assert result.committed_state is None
+    assert session.route == 1
+    assert 'route_switch' not in events and 'idle' not in events
+
+
+@pytest.mark.parametrize("phase,cached,payload", [("catch_up", 256, 0), ("catch_up", 100, 0), ("initial", 100, 10), ("initial", 256, 0)])
+def test_mp_catchup_allows_native_reuse_and_recomputed_tail_but_initial_requires_transfer(monkeypatch, tmp_path, phase, cached, payload):
+    import io
+    runtime = c.LiveRuntime.__new__(c.LiveRuntime)
+    sink = tmp_path/"sink.log"; sink.write_text("")
+    events = []
+    session = SimpleNamespace(cache_keys={"key"}, copied_keys=set(), copied_token_ids=[],
+        probe=lambda messages: messages, request=lambda *a, **kw: (c.RequestResult("r", 200, "h", 1, 3, prompt_tokens=256, cached_tokens=cached), "CODE"))
+    runtime.sessions, runtime.cfg, runtime.mp_layout = {"s": session}, SimpleNamespace(api_proxy_port=1), ("model", 1)
+    runtime.schedule, runtime.copy_policy, runtime.chunk_tokens = [], "initial_final", 256
+    runtime.sink_log, runtime.requests, runtime.lock = sink, io.StringIO(), threading.Lock()
+    runtime.event_log = SimpleNamespace(write=lambda event, **fields: events.append({"event": event, **fields}))
+    runtime._kv_layout = lambda *args: {"total_payload_bytes": payload, "unique_payload_bytes": payload}
+    monkeypatch.setattr(c.b, "mp_chat_tokens", lambda *args: [0]*256)
+    monkeypatch.setattr(c.b, "mp_warm_prefetch", lambda *args: {"total_keys": 1, "found_keys": 0})
+    monkeypatch.setattr(c.b, "mp_request_hit", lambda *args, **kwargs: 0)
+    if phase == "initial" and not payload:
+        with pytest.raises(RuntimeError, match="lacks measured external payload"):
+            runtime.prepare(c.Move("s", "kv_transfer", 0), c.SessionState("s", 1, (), "h"), phase)
+    else:
+        result = runtime.prepare(c.Move("s", "kv_transfer", 0), c.SessionState("s", 1, (), "h"), phase)
+        assert result.processed_tokens == 256-cached and result.processed_tokens_basis == "derived_prompt_minus_cache"
+        assert next(e for e in events if e["event"] == "cache_request_evidence")["executed_tokens"] is None

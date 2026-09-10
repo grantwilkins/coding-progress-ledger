@@ -1,0 +1,38 @@
+........................................................................ [ 27%]
+........................................................................ [ 55%]
+...................................................F.................... [ 83%]
+...........................................                              [100%]
+=================================== FAILURES ===================================
+__ test_async_trace_releases_many_queued_requests_without_thread_backpressure __
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x6cd812ed970>
+
+    def test_async_trace_releases_many_queued_requests_without_thread_backpressure(
+            monkeypatch):
+        starts = []
+    
+        async def issue(_session, _host, _port, _prepared, scheduled_ns, _timeout):
+            start = campaign.time.monotonic_ns()
+            starts.append((scheduled_ns, start))
+            return {"scheduled_ns": scheduled_ns, "start_ns": start}
+    
+        monkeypatch.setattr(campaign, "async_completion", issue)
+        trace = [{"offset_s": .02, "population": "incumbent",
+                  "prepared": {"index": index}} for index in range(256)]
+        epoch = campaign.time.monotonic_ns() + int(.02e9)
+        rows, error = campaign.issue_async_trace(
+            "127.0.0.1", 1, trace, epoch, 1, 8,
+        )
+    
+        assert error is None
+        assert campaign.gc.isenabled()
+        assert len(rows) == len(starts) == 256
+        assert min(start - scheduled for scheduled, start in starts) >= 0
+>       assert max(start - scheduled for scheduled, start in starts) / 1e9 < .05
+E       assert (56305708 / 1000000000.0) < 0.05
+E        +  where 56305708 = max(<generator object test_async_trace_releases_many_queued_requests_without_thread_backpressure.<locals>.<genexpr> at 0x6cd85912c20>)
+
+tests/test_service_headroom_campaign.py:197: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_service_headroom_campaign.py::test_async_trace_releases_many_queued_requests_without_thread_backpressure
+1 failed, 258 passed in 14.54s

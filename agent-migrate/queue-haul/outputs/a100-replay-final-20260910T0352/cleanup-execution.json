@@ -1,0 +1,200 @@
+{
+  "start_wall_ns": 1789019837518985141,
+  "operations": [
+    {
+      "operation": "stop Germany supervisor",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "python3 -c 'import json,os,signal;from pathlib import Path;r=Path('\"'\"'/tmp/qh-replay-final-20260910'\"'\"');p=json.loads((r/'\"'\"'owned-processes.json'\"'\"').read_text())['\"'\"'supervisor'\"'\"'];assert p>1 and str(r/'\"'\"'remote-supervisor.py'\"'\"').encode() in Path(f'\"'\"'/proc/{p}/cmdline'\"'\"').read_bytes().split(b'\"'\"'\\0'\"'\"');os.kill(p,signal.SIGTERM)'"
+      ],
+      "start_wall_ns": 1789019837518987676,
+      "end_wall_ns": 1789019838244115785,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "Welcome to Microsoft Azure Linux 3.0 (x86_64)\n"
+    },
+    {
+      "operation": "verify Germany GPU ownership released",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "nvidia-smi --query-compute-apps=pid,gpu_uuid,process_name,used_gpu_memory --format=csv"
+      ],
+      "start_wall_ns": 1789019846244545137,
+      "end_wall_ns": 1789019846986072423,
+      "returncode": 0,
+      "stdout": "pid, gpu_uuid, process_name, used_gpu_memory [MiB]\n",
+      "stderr": "Welcome to Microsoft Azure Linux 3.0 (x86_64)\n"
+    },
+    {
+      "operation": "snapshot Germany-only pool closures before stopping Sweden",
+      "argv": [
+        "python3",
+        "-c",
+        "import csv,hashlib,io,json,time;from pathlib import Path\nr=Path('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352');raw=(r/'stack/proxy_connections.csv').read_bytes();(r/'germany-stop-proxy-connections.csv').write_bytes(raw)\np=json.loads((r/'attribution-proof.json').read_text());rows=list(csv.DictReader(io.StringIO(raw.decode())));source=set(p['source_connection_ids']);destination=set(p['destination_connection_ids']);closed={x['connection_id'] for x in rows};pid=json.loads((r/'runtime-launch.json').read_text())['pid']\nv={'observed_utc_ns':time.time_ns(),'observed_monotonic_ns':time.monotonic_ns(),'proxy_snapshot_sha256':hashlib.sha256(raw).hexdigest(),'source_supervisor_pid':pid,'source_supervisor_still_present':Path(f'/proc/{pid}/cmdline').exists(),'closed_destination_ids':sorted(closed&destination),'closed_source_ids':sorted(closed&source),'verified':closed&destination==destination and not closed&source and Path(f'/proc/{pid}/cmdline').exists()};(r/'germany-stop-origin-crosscheck.json').write_text(json.dumps(v,indent=2)+'\\n');print(json.dumps(v));assert v['verified']\n"
+      ],
+      "start_wall_ns": 1789019846986390321,
+      "end_wall_ns": 1789019847024214928,
+      "returncode": 0,
+      "stdout": "{\"observed_utc_ns\": 1789019847019519475, \"observed_monotonic_ns\": 17379263293333, \"proxy_snapshot_sha256\": \"1d234a1ca83e53c6b6e0bd05a4c4e8a4aedbe27375f39485645bd931c918a60a\", \"source_supervisor_pid\": 93472, \"source_supervisor_still_present\": true, \"closed_destination_ids\": [\"5c3ccfee2b4a010f\", \"67ddcecfbdf1393a\", \"816a5eac5a347ee1\", \"95f59728b6dc58ea\", \"9fecf44b034c39fa\", \"c8eae58ae761c2b6\", \"cc197c10aef4a6af\", \"d131546c9896151d\"], \"closed_source_ids\": [], \"verified\": true}\n",
+      "stderr": ""
+    },
+    {
+      "operation": "stop Sweden supervisor",
+      "argv": [
+        "python3",
+        "-c",
+        "import json,os,signal;from pathlib import Path;r=Path('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352');p=json.loads((r/'runtime-launch.json').read_text())['pid'];assert p>1 and str(r/'launch-source.py').encode() in Path(f'/proc/{p}/cmdline').read_bytes().split(b'\\0');os.kill(p,signal.SIGTERM)"
+      ],
+      "start_wall_ns": 1789019847024519651,
+      "end_wall_ns": 1789019847055470764,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "operation": "verify local GPU ownership released",
+      "argv": [
+        "nvidia-smi",
+        "--query-compute-apps=pid,gpu_uuid,process_name,used_gpu_memory",
+        "--format=csv"
+      ],
+      "start_wall_ns": 1789019855055953552,
+      "end_wall_ns": 1789019855081124102,
+      "returncode": 0,
+      "stdout": "pid, gpu_uuid, process_name, used_gpu_memory [MiB]\n",
+      "stderr": ""
+    },
+    {
+      "operation": "hash closed Germany raw files",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "python3 -c 'import hashlib,json;from pathlib import Path;r=Path('\"'\"'/tmp/qh-replay-final-20260910'\"'\"');files=['\"'\"'owned-processes.json'\"'\"', '\"'\"'cleanup.json'\"'\"', '\"'\"'remote-supervisor.py'\"'\"', '\"'\"'remote-commands.json'\"'\"', '\"'\"'runtime-launch.json'\"'\"', '\"'\"'supervisor.log'\"'\"', '\"'\"'lmcache-sink.log'\"'\"', '\"'\"'sink.log'\"'\"', '\"'\"'power.csv'\"'\"', '\"'\"'engine-metrics.jsonl'\"'\"'];(r/'\"'\"'raw-artifact-sha256.json'\"'\"').write_text(json.dumps({n:hashlib.sha256((r/n).read_bytes()).hexdigest() for n in files},indent=2)+'\"'\"'\\n'\"'\"')'"
+      ],
+      "start_wall_ns": 1789019907247900166,
+      "end_wall_ns": 1789019908512030941,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "Welcome to Microsoft Azure Linux 3.0 (x86_64)\n"
+    },
+    {
+      "operation": "archive closed Germany raw files",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "tar -C /tmp/qh-replay-final-20260910 -czf /tmp/qh-replay-final-20260910-raw.tar.gz owned-processes.json cleanup.json remote-supervisor.py remote-commands.json runtime-launch.json supervisor.log lmcache-sink.log sink.log power.csv engine-metrics.jsonl raw-artifact-sha256.json"
+      ],
+      "start_wall_ns": 1789019908512497047,
+      "end_wall_ns": 1789019914781491964,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "Welcome to Microsoft Azure Linux 3.0 (x86_64)\n"
+    },
+    {
+      "operation": "record Germany archive hash",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "sha256sum /tmp/qh-replay-final-20260910-raw.tar.gz"
+      ],
+      "start_wall_ns": 1789019914781889852,
+      "end_wall_ns": 1789019915516103495,
+      "returncode": 0,
+      "stdout": "758be95d4af58c945c73578d83fd474fabc78edee1c19e353883fff3663cc942  /tmp/qh-replay-final-20260910-raw.tar.gz\n",
+      "stderr": "Welcome to Microsoft Azure Linux 3.0 (x86_64)\n"
+    },
+    {
+      "operation": "collect Germany archive",
+      "argv": [
+        "scp",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4:/tmp/qh-replay-final-20260910-raw.tar.gz",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/destination-final-raw.tar.gz"
+      ],
+      "start_wall_ns": 1789019915516505321,
+      "end_wall_ns": 1789019917056988537,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "Welcome to Microsoft Azure Linux 3.0 (x86_64)\n"
+    },
+    {
+      "operation": "verify local archived raw files and compare archive hash to Germany",
+      "argv": [
+        "python3",
+        "-c",
+        "import hashlib,json,tarfile;from pathlib import Path;p=Path('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/destination-final-raw.tar.gz');t=tarfile.open(p);h=json.load(t.extractfile('raw-artifact-sha256.json'));assert all(hashlib.sha256(t.extractfile(n).read()).hexdigest()==v for n,v in h.items());print(json.dumps({'archive_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'verified_raw_members':len(h)}))"
+      ],
+      "start_wall_ns": 1789019917057411562,
+      "end_wall_ns": 1789019919233260930,
+      "returncode": 0,
+      "stdout": "{\"archive_sha256\": \"758be95d4af58c945c73578d83fd474fabc78edee1c19e353883fff3663cc942\", \"verified_raw_members\": 10}\n",
+      "stderr": ""
+    },
+    {
+      "operation": "stop verified owned mirror/tunnel processes",
+      "argv": [
+        "python3",
+        "-c",
+        "import json,os,signal;from pathlib import Path;r=Path('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352')\nfor row in json.loads((r/'controller-launch.json').read_text()):\n if row['name']=='source-supervisor':continue\n p=row['pid'];cmd=Path(f'/proc/{p}/cmdline')\n if not cmd.exists():continue\n actual=cmd.read_bytes().rstrip(b'\\0').decode().split('\\0');assert p>1 and Path(actual[0]).name==Path(row['command'][0]).name and actual[1:]==row['command'][1:];os.kill(p,signal.SIGTERM)"
+      ],
+      "start_wall_ns": 1789019919233751442,
+      "end_wall_ns": 1789019919266331890,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "gpu_stop_checks_complete_wall_ns": 1789019855081505168,
+  "completed_wall_ns": 1789019921381304043,
+  "destination_archive_sha256": "758be95d4af58c945c73578d83fd474fabc78edee1c19e353883fff3663cc942",
+  "verified_destination_members": {
+    "owned-processes.json": "0904402801d253ddb9ccf44b5614b9cfb0e7a9312ce81fceb45685cfdd101da5",
+    "cleanup.json": "2daa708117c14bd01c2794da771d8fdf6e074306f06ac312cbf030ccbf3b1338",
+    "remote-supervisor.py": "702d7210788f582d6333f459eae2d9fd357761a8063353ab544dffaa27bfe58f",
+    "remote-commands.json": "4771ab287842e35e62b01ec6c95715dad2a15bd743280bffa1f1d8a059c3c494",
+    "runtime-launch.json": "9eafa85f0dac5f189c0711c37905837fc8c716bae34509e2a359e5a2c6677c23",
+    "supervisor.log": "cb3e61a396de23867bfab55ae45b06a30c09232aa33360de673572a9db8e7c63",
+    "lmcache-sink.log": "7271a4b352123005a378ef35e17b1e6d913fd1f445cf6594d61c1f6dc1dd26b3",
+    "sink.log": "bfffebe7ed4a5353906d4f15dffb78f324a970dc303cb9c0c141e7b627adca8d",
+    "power.csv": "1afa25a26af33bf591935ff7f944e93a5baee77628dc0bfaf21e468e75229c44",
+    "engine-metrics.jsonl": "ad89bb0d5c9de3e82fdfef6e6401ef4413a94c98ee375c44f36eeb1ac5c8a95f"
+  },
+  "mirrors": "Original SSH mirrors retained byte-for-byte; authoritative unprefixed Germany files are in the separately verified destination-final-raw.tar.gz."
+}

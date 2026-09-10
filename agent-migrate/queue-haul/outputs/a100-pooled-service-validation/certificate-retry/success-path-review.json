@@ -1,0 +1,35 @@
+{
+  "parent_campaign_sha256": "637c0e824d6b0009e2575fe64ac74680105cb5c2c4b42081fa8e9808e317ac20",
+  "candidate_campaign_sha256": "7177f5177626ac77a9a463ffa798a4b04388e34f67f63f43b164a3ca433f3f83",
+  "unchanged_successful_returns": [
+    {
+      "case": "925",
+      "bitwise_equal": true,
+      "variables": 76
+    },
+    {
+      "case": "3104",
+      "bitwise_equal": true,
+      "variables": 1230
+    }
+  ],
+  "original_certificate_predicates_ast_identical": true,
+  "original_mapping_assignment_ast_identical": true,
+  "scientific_module_outside_two_solver_functions_ast_identical": true,
+  "status": "pass",
+  "previous_successful_path_unchanged": true,
+  "production_campaign_sha256": "7177f5177626ac77a9a463ffa798a4b04388e34f67f63f43b164a3ca433f3f83",
+  "newly_certified_case_9044": {
+    "original_resource_residual": 7.918110611626616e-12,
+    "primary_loss": 1.0354615220808938e-09,
+    "original_gates_unchanged": true
+  },
+  "scope": "Reviewed certificate-only extension of the existing simplex/IPM attempts; return paths that previously passed every acceptance gate are unchanged. This is not an automatic compatibility rule for other code changes.",
+  "evidence_sha256": {
+    "outputs/a100-pooled-service-validation/certificate-retry/qh-service-925-last.npz": "a0d14964c1b949c9bf71057f098e02f1122ee50dbfb3cf0a67689b91fa6b27ee",
+    "outputs/a100-pooled-service-validation/certificate-retry/qh-service-3104-last.npz": "f3c8ec8828d0153fb7b854e431cd2a636042b88631a0a8334b8cc9c557d32a56",
+    "outputs/a100-pooled-service-validation/certificate-retry/qh-service-9044-last.npz": "011f28f2f3a7d0020fe4ebcd97e9191310036dd9abe3f2c6f7504bfa6e8695f8",
+    "outputs/a100-pooled-service-validation/certificate-retry/qh9044-independent-audit.json": "58395daee7aba51f4bd1dbe4a26e8dcfde10c96d4c4c01f4247c387f6487b453",
+    "outputs/a100-pooled-service-validation/certificate-retry/qh9044-native-row-check.json": "535a7abe11ef6ff1baab9a47cba9fab56c3cedc703f89ec46c432cbf094d7cfe"
+  }
+}

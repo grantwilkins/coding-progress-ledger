@@ -34,28 +34,42 @@ STRESS_POLICY_NAMES = {**POLICY_NAMES, "isolated_fastest": "True Greedy"}
 COMPACT_POLICY_NAMES = {
     **POLICY_NAMES, "kv_only": "KV Migrate", "replay_only": "Replay Context",
 }
+PAPER_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "QH LP", "greedy": "QH Greedy",
+                      "kv_only": "KV only", "replay_only": "Replay only"}
 SHORT_POLICY_NAMES = {**POLICY_NAMES, "queue_haul": "Queue-Haul"}
 POLICY_COLORS = dict(zip(POLICIES, (
     "#0072B2", "#E69F00", "#F0E442", "#D55E00",
     "#56B4E9", "#CC79A7", "#009E73", "#000000",
 )))
+POLICY_MARKERS = dict(zip(POLICIES, ("o", "D", "P", "^", "s", "v", "X", "*")))
 POLICY_LINESTYLES = dict(zip(POLICIES, (
     "-", "--", (0, (3, 1, 1, 1)), (0, (5, 1)), "-.", ":",
     (0, (3, 1)), (0, (1, 1)),
 )))
+POLICY_NAMES.update(lp_bound="QH continuous volume bound", lp_plan="QH LP-derived integer plan")
+POLICY_COLORS.update(lp_bound=POLICY_COLORS["queue_haul"], lp_plan="#009E73")
+POLICY_LINESTYLES.update(lp_bound=POLICY_LINESTYLES["queue_haul"], lp_plan=(0, (3, 1)))
+REFERENCE = "exact_modeled_milp_optimum"
+POLICY_NAMES[REFERENCE] = "Exact modeled MILP optimum"
+POLICY_COLORS[REFERENCE] = "#000000"
+POLICY_LINESTYLES[REFERENCE] = "-"
+POLICY_NAMES["per_session_greedy"] = "Per-session greedy"
+POLICY_COLORS["per_session_greedy"] = POLICY_COLORS["isolated_fastest"]
+POLICY_LINESTYLES["per_session_greedy"] = POLICY_LINESTYLES["isolated_fastest"]
 ACTION_NAMES = {
     "replay": "Replay", "kv_transfer": "KV transfer",
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",
     "germany_replay": "Replay → Germany",
     "germany_kv_transfer": "KV transfer → Germany",
-    "not_moved": "Not moved",
+    "not_moved": "Not moved", "not_selected": "Not selected",
 }
 ACTION_COLORS = {
     "replay": "#E98300", "kv_transfer": "#006CB8",
     "east_replay": "#F6B65B", "germany_replay": "#D55E00",
     "east_kv_transfer": "#56B4E9", "germany_kv_transfer": "#0072B2",
-    "not_moved": "#999999",
+    "not_moved": "#999999", "not_selected": "#999999",
 }
+PAPER_ACTION_COLORS = {**ACTION_COLORS, "replay": "#9467BD", "kv_transfer": "#009E73"}
 OAT_DENSITY_COLOR = "#6A3D9A"
 OAT_TARGET_COLOR = "#222222"
 OAT_TARGET_LINESTYLE = "-"
@@ -82,6 +96,7 @@ SERVICE_LOAD_LINESTYLES = {
     "prefill_heavy": "--",
     "decode_heavy": "-",
 }
+
 SERVICE_LOAD_MARKERS = {"prefill_heavy": "o", "decode_heavy": "s"}
 SERVICE_MIXES = ("prefill_heavy", "balanced", "decode_heavy")
 SERVICE_MIX_NAMES = {

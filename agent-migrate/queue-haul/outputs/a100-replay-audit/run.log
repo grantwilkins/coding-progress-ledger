@@ -1,0 +1,9 @@
+effective_wire_anchor {'replay_only': 1.0, 'queue_haul': 0.999916}
+offered_reference_factor_one {'replay_only': 0.960873, 'queue_haul': 0.998286}
+without_regional_speedup {'replay_only': 0.960016, 'queue_haul': 0.992621}
+serial_all_replay_batches {'replay_only': 1.0, 'queue_haul': 1.0}
+destination_load_075 {'replay_only': 0.590076, 'queue_haul': 0.605926}
+/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_campaign.py:434: RuntimeWarning: HiGHS model import warning; original constraints are checked after solving
+  result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper, certificate)
+coding_long {'replay_only': 0.87884, 'queue_haul': 0.886955}
+/Users/grantwilkins/houdini/agent-migrate/queue-haul/outputs/a100-replay-audit/audit.json

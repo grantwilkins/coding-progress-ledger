@@ -1,0 +1,37 @@
+{
+  "source": {
+    "vllm": "0.22.0",
+    "lmcache": "0.5.1",
+    "torch": "2.11.0",
+    "transformers": "5.17.0"
+  },
+  "destination": {
+    "vllm": "0.22.0",
+    "lmcache": "0.5.1",
+    "torch": "2.11.0+cu129",
+    "transformers": "5.15.1"
+  },
+  "differences": {
+    "torch": [
+      "2.11.0",
+      "2.11.0+cu129"
+    ],
+    "transformers": [
+      "5.17.0",
+      "5.15.1"
+    ]
+  },
+  "connector_and_stream_patch_identical": true,
+  "command": [
+    "ssh",
+    "-i",
+    "/home/azureuser/.ssh/azrs",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "azureuser@10.3.0.4",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin/python -c 'import hashlib,json,subprocess,time\nfrom pathlib import Path\nfrom importlib.metadata import version\nroot=Path('\"'\"'/tmp/qh-replay-final-20260910'\"'\"')\npaths=[root/'\"'\"'overlay/vllm/v1/engine/output_processor.py'\"'\"',*sorted((root/'\"'\"'lmcache_compat'\"'\"').glob('\"'\"'*.py'\"'\"'))]\nprint(json.dumps({'\"'\"'identity'\"'\"':{'\"'\"'host'\"'\"':'\"'\"'10.3.0.4'\"'\"','\"'\"'wall_ns'\"'\"':time.time_ns(),'\"'\"'gpu'\"'\"':subprocess.check_output(['\"'\"'nvidia-smi'\"'\"','\"'\"'--query-gpu=name,uuid,memory.total,driver_version'\"'\"','\"'\"'--format=csv'\"'\"'],text=True)},'\"'\"'runtime'\"'\"':{k:version(k) for k in ('\"'\"'vllm'\"'\"','\"'\"'lmcache'\"'\"','\"'\"'torch'\"'\"','\"'\"'transformers'\"'\"')},'\"'\"'sha256'\"'\"':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}))\n'"
+  ],
+  "interpretation": "Reference vLLM and LMCache match. Torch build and Transformers versions differ; actual rendered tokens and state validation required."
+}

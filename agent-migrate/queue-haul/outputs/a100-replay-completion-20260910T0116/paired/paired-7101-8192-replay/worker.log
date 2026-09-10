@@ -1,0 +1,36 @@
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 196, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 148, in main
+    worker(inventory, plan["scenarios"][args.index], args.out/plan["scenarios"][args.index]["scenario_id"])
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 94, in worker
+    p.run_scenario(stack, cfg, manifest, scenario, out, out.parent.name, configure_proxy=False)
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1761, in run_scenario
+    migration_results = with_destination_load(destination_load, action_and_verify)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1522, in with_destination_load
+    return action()
+           ^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1746, in action_and_verify
+    result = action()
+             ^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1733, in action
+    future.result()
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1102, in run_activities
+    session.wait_activity()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1017, in wait_activity
+    raise self.activity_error
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 957, in _activity
+    result, text = self.request(
+                   ^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 79, in request
+    raise RuntimeError("migration probe omitted expected state code")
+RuntimeError: migration probe omitted expected state code
