@@ -20,6 +20,7 @@ for episode in main:
             'outstanding_at_migration_plus120':episode['outstanding_by_seconds_after_migration']['120'][w['cohort']],
             'switches_at_migration_plus30':episode['switches_by_seconds_after_migration']['30'],
             'switches_at_migration_plus120':episode['switches_by_seconds_after_migration']['120'],
+            'destination_dispatch_timing':episode['incoming_by_dispatch_placement']['destination'] if w['cohort']=='incoming' else None,
             'strict_source_token_stream_pause_overlaps':sum(r['client_token_stream_overlap_verified'] for r in pause),
             'tail_guarantee':False})
 with (root/'service-observations.csv').open('w') as handle:
