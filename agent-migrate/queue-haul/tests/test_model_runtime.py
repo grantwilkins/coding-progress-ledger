@@ -83,7 +83,8 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
         assert "--dtype bfloat16" in command
         assert "--kv-cache-dtype auto" in command
         assert "--gpu-memory-utilization 0.9" in command
-        assert "--disable-hybrid-kv-cache-manager" not in command
+        assert ("--disable-hybrid-kv-cache-manager" in command) == (
+            cfg.model == "openai/gpt-oss-20b")
         assert "speculative" not in command
 
 

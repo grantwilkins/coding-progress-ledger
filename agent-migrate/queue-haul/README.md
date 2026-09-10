@@ -3179,8 +3179,8 @@ outcome rather than retried away. Only infrastructure and runtime-contract
 failures are retryable.
 
 The runtime is one A100, BF16 KV, TP1, 32K `max_model_len`, 256
-`max_num_seqs`, 90% memory, chunked prefill, APC, eager execution, and the
-hybrid KV manager. Qwen contexts are multiples of its measured 784-token
+`max_num_seqs`, 90% memory, chunked prefill, APC, and eager execution. Qwen and
+Gemma use the hybrid KV manager. Qwen contexts are multiples of its measured 784-token
 unified block and its LMCache server uses separate object groups. The pinned
 vLLM 0.22 Qwen cache is exposed as a K/V-major transpose of a contiguous
 page-major allocation; `connector_patch.py` restores that page-major view
@@ -3190,7 +3190,9 @@ GPU-visible `lmcache_driven` transport because its engine-driven gather path
 does not support hybrid KV cache groups. On a sleep-enabled source, their KV
 backing uses PyTorch's standard CUDA allocator so LMCache can export it over
 CUDA IPC; model weights remain in vLLM's CuMem pool for level-1 sleep/wake.
-GPT-OSS retains `engine_driven`.
+GPT-OSS retains `engine_driven` and disables the hybrid KV manager to keep
+the single cache group required by that transport, including model-campaign
+and capacity-discovery launches.
 Results are descriptive limits, not admission gates.
 
 ```bash
