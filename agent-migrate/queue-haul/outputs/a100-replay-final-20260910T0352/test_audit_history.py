@@ -19,3 +19,10 @@ def test_actual_output_retained_across_source_destination_and_reset():
     rows[1]['full_prompt_token_ids'][2]=99;rows[1]['client_dispatch_ns']=9
     result=module.audit(rows)
     assert result['causal_violations']==result['retained_history_violations']==1
+
+
+def test_reset_classification_distinguishes_recorded_reset_and_assumed_cycle_wrap():
+    base={'phase':'service','cohort':'incoming','episode':'x','session':0,'done':True,'reset':True,'prompt_tokens':8}
+    rows=[{**base,'turn':i,'recorded_turn':index} for i,index in enumerate((0,1,0))]
+    result=module.resets(rows,{'x':{'turn_sequences':[[{'reset':True,'context':7},{'reset':True,'context':7}]]}})
+    assert result['counts']=={'initialization':1,'assumed_cycle_wrap':1,'recorded_shape_reset':1}

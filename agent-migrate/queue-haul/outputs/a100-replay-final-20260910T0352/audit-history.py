@@ -35,16 +35,28 @@ def audit(rows):
         'retained_history_violations':sum(r['nonreset_exact_retained_history'] is False for r in links)}
 
 
+def resets(rows,workloads):
+    result=[]
+    for row in rows:
+        if row.get('phase')!='service' or not row.get('done') or not row.get('reset'):continue
+        shape=workloads[row['episode']]['turn_sequences'][row['session']][row['recorded_turn']]
+        origin='initialization' if row['turn']==0 else 'assumed_cycle_wrap' if row['recorded_turn']==0 else 'recorded_shape_reset'
+        if origin=='recorded_shape_reset' and not shape['reset']:raise ValueError('reset has no recorded or cycle basis')
+        result.append({**{k:row[k] for k in ('episode','cohort','session','turn','recorded_turn')},'origin':origin,'shape_reset':shape['reset'],'retained_context_tokens':shape['context'],'prompt_tokens':row['prompt_tokens']})
+    return {'counts':{kind:sum(r['origin']==kind for r in result) for kind in ('initialization','assumed_cycle_wrap','recorded_shape_reset')},'events':result}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('root',type=Path);args=parser.parse_args()
     root=args.root;raw=(root/'requests.jsonl').read_bytes();complete=raw[:raw.rfind(b'\n')+1]
+    rows=[json.loads(line) for line in complete.splitlines()]
     result={'input':'requests.jsonl','input_prefix_bytes':len(complete),'input_prefix_sha256':hashlib.sha256(complete).hexdigest(),
         'input_sha256':hashlib.sha256(raw).hexdigest(),'input_complete_at_read':len(raw)==len(complete),
         'scope':'complete service records; unfinished and unobserved links remain unvalidated',
         'physical_workload_files':{str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob('*/physical-workload.json')},
-        **audit([json.loads(line) for line in complete.splitlines()])}
+        'reset_classification':resets(rows,{p.parent.name:json.loads(p.read_text()) for p in root.glob('*/physical-workload.json')}),**audit(rows)}
     (root/'resident-history-audit.json').write_text(json.dumps(result,indent=2)+'\n')
-    print(json.dumps({k:v for k,v in result.items() if k not in ('sessions','physical_workload_files')}))
+    print(json.dumps({k:v for k,v in result.items() if k not in ('sessions','physical_workload_files','reset_classification')}))
 
 
 if __name__=='__main__':main()
