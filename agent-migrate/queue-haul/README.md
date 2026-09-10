@@ -20,8 +20,8 @@ excluding CPUs and peripherals. This is the requested A100 study, not the
 original H100 configuration. Eight GPUs share each modeled node. The next campaign
 uses the recorded `coding` and `coding_long` agentic trajectories; `measured_pack`
 remains a hardware-validation workload. The default output is
-`outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped: the replay
-diagnosis below is complete, but fleet resident latency is not validated.
+`outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped: fleet
+resident latency and the extrapolated network configuration are not validated.
 
 The September 10 server records are sufficient for the bounded correction; no
 new GPU campaign is needed to explain fast replay. The
@@ -64,6 +64,10 @@ measured active-to-idle allocation proxy for full handoff is approximately
 The completed 60-evaluation comparison includes [raw-handoff results](outputs/a100-replay-queue-resolution-20260910/raw-handoff/frontier.json),
 [local-recovery results](outputs/a100-replay-queue-resolution-20260910/local-recovery/frontier.json)
 and a [presentation figure](outputs/a100-replay-queue-resolution-20260910/local-recovery/frontier.pdf).
+These curves assume **1 Tb/s shared WAN** and give each eight-GPU node the
+transport capacity measured on a **one-GPU VM**. This substantially reduces
+bandwidth per GPU compared with the hardware experiments; see the controlled
+network comparison below before interpreting KV's low selection rate.
 It shows why the metric matters. Under the raw-handoff objective, long replay at
 30 s hands off **97.69%** but only **7.57%** has cleared its local queues.
 With the common predicted-clearance admission criterion, independently executed
@@ -85,6 +89,52 @@ for coding at 120 s, KV-only hands off 65.62%, of which 60.59 percentage points
 actually clear by the deadline. Shared WAN execution and source buffering account
 for this forecast gap. Full results retain both metrics and remaining work;
 these single-snapshot curves have no statistical confidence interval.
+
+The [network audit](outputs/a100-network-balance-audit-20260910/network-sensitivity.json)
+holds the trajectories, source/destination GPU counts, resident load, timing,
+0.80 GB/32K payloads, candidate batches and planning time fixed. Its 24 CPU
+evaluations change only the number of GPUs sharing each measured network
+endpoint and the shared WAN cap. At **30 s**, queue-cleared handoff is:
+
+| Workload | Network assumption | QH LP | KV only | Replay only |
+| --- | --- | ---: | ---: | ---: |
+| coding | Current eight-GPU nodes, 1 Tb/s shared | 84.65% | 31.75% | 81.50% |
+| coding | Measured network capacity replicated per GPU | 99.69% | 99.67% | 81.50% |
+| coding_long | Current eight-GPU nodes, 1 Tb/s shared | 72.15% | 21.10% | 68.54% |
+| coding_long | Measured network capacity replicated per GPU | 97.40% | 97.40% | 68.54% |
+
+The latter scenario has 73.42 Tb/s aggregate bulk capacity and 36.72 Tb/s
+aggregate effective application capacity. It isolates the hardware-to-fleet
+network ratio; its datacenter deployment feasibility is unvalidated. QH then
+uses 99.83% KV for coding and 100% KV for coding_long. Replay calibration and
+handoff are unchanged.
+Removing only the shared WAN cap while retaining eight-GPU endpoint sharing
+raises KV-only to 53.79% and 53.98%; both scaling assumptions matter. Transferring
+the complete time-zero snapshots over 1 Tb/s takes at least 155 s and 293 s
+before endpoint work or catch-up; future context resets can change those volumes.
+
+The [hardware audit](outputs/a100-power-frontier-20260910/kv-evidence-audit.json)
+finds KV faster in all 72 matched July long/agentic width-eight episodes at
+5–10 Gb/s; the September 1 Gb/s tests contain the opposite ordering. The
+[scenario reconciliation](outputs/a100-power-frontier-20260910/scenario-reconciliation.json)
+also reproduces the current one-GPU Germany primitive comparison: eight 16K
+contexts take 6.875 s with the user-provided effective KV measurement versus
+10.468 s for replay. It distinguishes measured transfers, analytic payloads,
+modeled H100 decisions, and historical versus restored quick-model endpoint delays.
+
+The [power-versus-deadline figure](outputs/a100-power-frontier-20260910/power-frontier.pdf)
+and [CSV](outputs/a100-power-frontier-20260910/power-frontier.csv) export the
+existing 1 Tb/s results in MW without rerunning policies. Both raw and locally
+queue-cleared handoff use the existing measured active-to-awake-idle allocation.
+The figure labels its network and placement assumptions explicitly.
+
+The [greedy audit](outputs/a100-power-frontier-20260910/greedy-audit.json)
+also reproduces the six 120-second QH/greedy/replay cases. Pure-action baselines
+use LP allocation. Greedy exhausts all destination replicas with smaller packs
+(about 2.85 histories per GPU versus QH's 3.55–3.76); placements remain occupied
+after migration ends. On identical initial admission matrices, LP already
+explains 94.5%/99.8% of the final QH–greedy gap. This reflects heuristic packing
+under the one-incoming-pack-per-GPU scenario, rather than slow greedy execution.
 
 The [GPU-local queue pilot](outputs/a100-resident-queues-20260910/report.json)
 now reconstructs all 2,865 offered service requests from 20 episodes, including

@@ -230,6 +230,20 @@ def test_replica_scenario_prices_generation_without_changing_offered_work():
         c.replica_fleet(original, {**fleet.metadata['source_timing_coefficients'], 'decode_attention_s': 1.})
 
 
+def test_power_frontier_uses_measured_reduction_and_keeps_recovery_separate():
+    from pool_shed_queue_frontier import power_rows
+
+    report = {'fleets': {'coding': {'full_handoff_source_power_mw': .45, 'source_gpus': 6666}},
+              'cells': [{'workload': 'coding', 'deadline_s': 30, 'results': {
+                  'queue_haul': {'shed_fraction': .8, 'recovered_handoff_fraction': .6}}}]}
+    row, = power_rows(report)
+    assert row['raw_handoff_power_mw'] == pytest.approx(.36)
+    assert row['queue_cleared_handoff_power_mw'] == pytest.approx(.27)
+    report['cells'][0]['results']['queue_haul']['recovered_handoff_fraction'] = .9
+    with pytest.raises(ValueError, match='handoff fraction'):
+        power_rows(report)
+
+
 def test_replica_table_reserves_gpus_and_rejects_locally_overloaded_packs():
     fleet = c.replica_fleet(c.sample_fleet('coding', gpus=8))
     replay = np.zeros((2, len(fleet.count)))

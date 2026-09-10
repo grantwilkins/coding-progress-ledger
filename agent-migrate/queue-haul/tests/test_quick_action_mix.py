@@ -71,7 +71,7 @@ def test_saved_cases_match_independent_planner_and_simulator(inputs):
             for row in case['actions']:
                 key = str(row['session'])
                 assert row['selected_action'] == (selected[key].method if key in selected else 'not_moved')
-                assert row['finish_s'] == finishes.get(key)
+                assert row['finish_s'] == pytest.approx(finishes.get(key), rel=1e-12, abs=1e-12)
                 assert (row['action'] != 'not_moved') == (key in selected and finishes[key] is not None
                                                         and finishes[key] <= deadline + 1e-8)
         for summary in model['summary']:

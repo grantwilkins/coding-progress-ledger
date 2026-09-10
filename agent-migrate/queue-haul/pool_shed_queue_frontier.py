@@ -3,6 +3,7 @@
 import argparse
 import csv
 import hashlib
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from pool_shed_replay_audit import FIELDS, fleet_summary
 from pool_shed_resident_fit import calibrate_server_decode
 
 
-def plot(report, out):
+def plot(report, out, power=False):
     import matplotlib.pyplot as plt
 
     plot_style.apply()
@@ -23,22 +24,73 @@ def plot(report, out):
     fig, axes = plt.subplots(2, len(workloads), figsize=(6 * len(workloads), 7), squeeze=False, sharex=True, sharey=True)
     for col, workload in enumerate(workloads):
         cells = [cell for cell in report['cells'] if cell['workload'] == workload]
+        scale = report['fleets'][workload]['full_handoff_source_power_mw'] if power else 100.
         for row, metric in enumerate(('shed_fraction', 'recovered_handoff_fraction')):
             ax = axes[row, col]
             for policy in q.POLICIES:
-                ax.plot([cell['deadline_s'] for cell in cells], [100 * cell['results'][policy][metric] for cell in cells],
+                ax.plot([cell['deadline_s'] for cell in cells], [scale * cell['results'][policy][metric] for cell in cells],
                         **plot_style.policy_style(policy, names=plot_style.PAPER_POLICY_NAMES))
-            ax.set(title=workload.replace('_', ' '), ylim=(0, 103), ylabel=('Handoff (%)' if row == 0 else 'Recovered handoff (%)'))
+            label = 'Power shed (MW)' if power else ('Handoff (%)' if row == 0 else 'Recovered handoff (%)')
+            ceiling = max(f['full_handoff_source_power_mw'] for f in report['fleets'].values()) * 1.05 if power else 103.
+            title = workload.replace('_', ' ') + ((' (handoff)' if row == 0 else ' (local queues cleared)') if power else '')
+            ax.set(title=title, ylim=(0, ceiling), ylabel=label)
+            ax.set_xticks([cell['deadline_s'] for cell in cells])
             ax.grid(alpha=.2)
             if row == 1:
                 ax.set_xlabel('Deadline (s)')
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='upper center', ncol=3, frameon=False)
-    fig.text(.5, .015, report['planning_criterion'] + '\nConditional simulation; queue clearance is a fluid work measure, not resident SLO certification.', ha='center', fontsize=10)
-    fig.tight_layout(rect=(0, .04, 1, .9))
+    note = (report['planning_criterion'] + '.\n'
+            f"2 MW installed/site; {report['shared_wan_gbps']:g} Gb/s shared WAN; eight GPUs share each measured VM endpoint.\n"
+            'Source power: linear active-to-awake-idle allocation.\n'
+            'One incoming pack/GPU; LP allocation except QH Greedy; queue clearance does not certify SLOs.') if power else report['planning_criterion'] + '\nConditional simulation; queue clearance is a fluid work measure, not resident SLO certification.'
+    fig.text(.5, .015, note, ha='center', fontsize=10)
+    fig.tight_layout(rect=(0, .12 if power else .04, 1, .9))
     for extension in ('png', 'svg', 'pdf'):
-        fig.savefig(out / f'frontier.{extension}', dpi=220)
+        path = out / f'{"power-frontier" if power else "frontier"}.{extension}'
+        fig.savefig(path, dpi=220)
+        if extension == 'svg':
+            path.write_text('\n'.join(line.rstrip() for line in path.read_text().splitlines()) + '\n')
     plt.close(fig)
+
+
+def power_rows(report):
+    rows = []
+    for cell in report['cells']:
+        scale = report['fleets'][cell['workload']]['full_handoff_source_power_mw']
+        if not np.isfinite(scale) or scale <= 0:
+            raise ValueError('positive measured active-to-idle power scale required')
+        for policy, result in cell['results'].items():
+            handoff, recovered = result['shed_fraction'], result['recovered_handoff_fraction']
+            if not np.isfinite([handoff, recovered]).all() or not 0 <= recovered <= handoff + 1e-8 or handoff > 1 + 1e-8:
+                raise ValueError('invalid raw or queue-cleared handoff fraction')
+            rows.append({'workload': cell['workload'], 'deadline_s': cell['deadline_s'], 'policy': policy,
+                         'raw_handoff_power_mw': handoff * scale, 'queue_cleared_handoff_power_mw': recovered * scale})
+    return rows
+
+
+def export_power(report_path, out):
+    if (out / 'power-frontier.json').exists():
+        raise ValueError('use a fresh power output directory')
+    payload = report_path.read_bytes()
+    report = json.loads(payload)
+    rows = power_rows(report)
+    out.mkdir(parents=True, exist_ok=True)
+    plot(report, out, power=True)
+    with (out / 'power-frontier.csv').open('w') as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator='\n')
+        writer.writeheader()
+        writer.writerows(rows)
+    q.write_json(out / 'power-frontier.json', {
+        'source_report': str(report_path), 'source_report_sha256': hashlib.sha256(payload).hexdigest(),
+        'planning_criterion': report['planning_criterion'], 'simulation_sources': report['sources'],
+        'renderer_sources': {name: hashlib.sha256((q.ROOT / name).read_bytes()).hexdigest()
+                             for name in (Path(__file__).name, 'plot_style.py')},
+        'power_scope': 'Existing measured full active-to-awake-idle reduction allocated proportionally by handed-off work; no source GPU shutdown, nonlinear remaining-workload power estimate, or destination power subtraction.',
+        'resident_latency_validated': False, 'new_policy_evaluations': 0,
+        'full_handoff_source_power_mw': {name: f['full_handoff_source_power_mw'] for name, f in report['fleets'].items()},
+        'rows': rows, 'output_sha256': {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                                      for path in sorted(out.glob('power-frontier.*'))}})
 
 
 def run(out, workloads, deadlines, require_local_recovery=False):
@@ -119,7 +171,11 @@ if __name__ == '__main__':
     parser.add_argument('--workloads', choices=('coding', 'coding_long'), nargs='+', default=['coding', 'coding_long'])
     parser.add_argument('--deadlines', type=float, nargs='+', default=[30., 60., 120.])
     parser.add_argument('--require-local-recovery', action='store_true')
+    parser.add_argument('--from-report', type=Path, help='Export power-versus-deadline plots from frozen results without rerunning policies')
     args = parser.parse_args()
     if any(not np.isfinite(value) or value <= 0 for value in args.deadlines) or sorted(set(args.deadlines)) != args.deadlines:
         raise ValueError('deadlines must be positive, finite, unique and increasing')
-    run(args.out, args.workloads, args.deadlines, args.require_local_recovery)
+    if args.from_report:
+        export_power(args.from_report, args.out)
+    else:
+        run(args.out, args.workloads, args.deadlines, args.require_local_recovery)
