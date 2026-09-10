@@ -45,7 +45,7 @@ def validate_inventory(inventory):
     return cfg
 
 
-def scenarios(selected_method=None):
+def scenarios(selected_method=None, selected_context=None):
     rows = []
     for seed in (7101, 7102):
         for context, appended in ((8192, 32), (30000, 2048)):
@@ -61,7 +61,7 @@ def scenarios(selected_method=None):
                     "warm_concurrency": 8, "prestage_all": True, "copy_policy": "initial_final",
                     "reset_caches": False, "wait_cache_idle": False, "sample_power": False,
                     "final_state": "awake", "deadline_s": 180})
-    return [row for row in rows if selected_method is None or row["method"] == selected_method]
+    return [row for row in rows if (selected_method is None or row["method"] == selected_method) and (selected_context is None or row["context_size"] == selected_context)]
 
 
 class CheckedSession(p.LiveSession):
@@ -94,6 +94,10 @@ def worker(inventory, scenario, out):
     p.run_scenario(stack, cfg, manifest, scenario, out, out.parent.name, configure_proxy=False)
 
 
+def remaining_seconds(started, deadline_wall_ns=None):
+    return max(0., min(1200 - (time.monotonic() - started), (deadline_wall_ns - time.time_ns()) / 1e9 if deadline_wall_ns is not None else 1200.))
+
+
 def run_worker(command, timeout, log):
     with log.open("w") as handle:
         child = subprocess.Popen(command, stdout=handle, stderr=subprocess.STDOUT, start_new_session=True)
@@ -114,6 +118,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--index", type=int)
     parser.add_argument("--method", choices=("replay", "kv_transfer"))
+    parser.add_argument("--context", type=int, choices=(8192, 30000))
     args = parser.parse_args()
     os.environ.update(QH_LMCACHE_MODE="mp", QH_RUNTIME="native")
     inventory = json.loads(args.inventory.read_text())
@@ -127,7 +132,7 @@ def main():
                     (inventory["source"], inventory["destination"])
                     for key in ("identity_evidence", "runtime_evidence")]]
         write(plan_path, {"scope": "controlled source append and paired KV diagnostics; not recorded agentic service",
-            "total_limit_s": 1200, "per_scenario_limit_s": 180, "method": args.method, "scenarios": scenarios(args.method),
+            "total_limit_s": 1200, "per_scenario_limit_s": 180, "method": args.method, "context": args.context, "deadline_wall_ns": inventory.get("deadline_wall_ns"), "scenarios": scenarios(args.method, args.context),
             "input_sha256": {str(path): p.file_hash(path) for path in evidence},
             "driver_sha256": p.file_hash(Path(__file__)), "argv": sys.argv,
             "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
@@ -143,7 +148,7 @@ def main():
     for path, expected in plan["input_sha256"].items():
         if p.file_hash(Path(path)) != expected:
             raise ValueError(f"frozen input changed: {path}")
-    if plan.get("method") != args.method or plan["scenarios"] != scenarios(args.method) or plan["total_limit_s"] != 1200 or plan["per_scenario_limit_s"] != 180:
+    if plan.get("method") != args.method or plan.get("context") != args.context or plan.get("deadline_wall_ns") != inventory.get("deadline_wall_ns") or plan["scenarios"] != scenarios(args.method, args.context) or plan["total_limit_s"] != 1200 or plan["per_scenario_limit_s"] != 180:
         raise ValueError("frozen bounded plan differs from driver")
     if args.stage == "worker":
         worker(inventory, plan["scenarios"][args.index], args.out/plan["scenarios"][args.index]["scenario_id"])
@@ -156,7 +161,7 @@ def main():
                    "plan_sha256": p.file_hash(plan_path), "driver_sha256": p.file_hash(Path(__file__))})
     results = []
     for index, row in enumerate(plan["scenarios"]):
-        remaining = 1200-(time.monotonic()-started)
+        remaining = remaining_seconds(started, plan.get("deadline_wall_ns"))
         if remaining <= 0:
             results.extend({"scenario": item["scenario_id"], "status": "unmeasured_budget_limit"}
                            for item in plan["scenarios"][index:])
@@ -169,13 +174,16 @@ def main():
                    str(args.inventory.resolve()), "--out", str(args.out.resolve()), "--index", str(index)]
         if args.method:
             command += ["--method", args.method]
+        if args.context:
+            command += ["--context", str(args.context)]
         samplers = [serving.MetricsSampler(cfg.host, port, root/f"engine-{role}.csv", .5)
                     for role, port in (("source", cfg.src_port), ("destination", cfg.sink_port))]
         samplers.append(p.PowerSampler(root/"power-source.csv", .5))
         for sampler in samplers:
             sampler.start()
         try:
-            outcome = run_worker(command, min(180, remaining), root/"worker.log")
+            remaining = remaining_seconds(started, plan.get("deadline_wall_ns"))
+            outcome = run_worker(command, min(180, remaining), root/"worker.log") if remaining > 0 else {"status": "unmeasured_global_deadline"}
         finally:
             for sampler in samplers:
                 sampler.close()
@@ -192,7 +200,7 @@ def main():
                            for item in plan["scenarios"][index+1:])
             break
     write(args.out/"paired-attempts.json", results)
-    write(args.out/"paired-stop.json", {"elapsed_s": time.monotonic()-started, "end_wall_ns": time.time_ns()})
+    write(args.out/"paired-stop.json", {"elapsed_s": time.monotonic()-started, "end_wall_ns": time.time_ns(), "deadline_wall_ns": plan.get("deadline_wall_ns")})
 
 
 if __name__ == "__main__":

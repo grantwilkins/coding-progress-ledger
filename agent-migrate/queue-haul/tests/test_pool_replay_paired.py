@@ -100,3 +100,17 @@ def test_method_filter_is_frozen_with_runtime_dependency_hashes(monkeypatch,tmp_
     monkeypatch.setattr(sys,'argv',['paired','worker','--inventory',str(inventory),'--out',str(tmp_path),'--method','replay','--index','0'])
     with pytest.raises(ValueError,match='frozen bounded plan'):
         paired.main()
+
+
+def test_context_filter_keeps_both_seeds_without_extra_conditions():
+    rows=paired.scenarios('kv_transfer',8192)
+    assert [(r['seed'],r['context_size'],r['method']) for r in rows]==[(7101,8192,'kv_transfer'),(7102,8192,'kv_transfer')]
+
+
+def test_original_wall_deadline_never_extends_local_budget(monkeypatch):
+    monkeypatch.setattr(paired.time,'monotonic',lambda:200.)
+    monkeypatch.setattr(paired.time,'time_ns',lambda:1_000_000_000_000)
+    assert paired.remaining_seconds(100.)==1100
+    assert paired.remaining_seconds(100.,1_010_000_000_000)==10
+    assert paired.remaining_seconds(100.,900_000_000_000)==0
+    assert paired.remaining_seconds(100.,9_000_000_000_000)==1100
