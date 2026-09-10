@@ -38,6 +38,10 @@ report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main
     'clean_controlled_KV_conditions':kv['clean_conditions'],'clean_KV_destination_continuations':kv['clean_destination_continuations'],
     'selected_resident_rates':rates,'service_observations':rows,
     'strict_client_token_stream_pause_overlap_methods':verified_methods,
+    'verified_migration_pause_examples':[{'episode':e['spec']['episode'],'arm':e['spec']['arm'],**q,
+        'catch_up_request_boundaries':[dict(r,elapsed_s=(r['end_ns']-r['start_ns'])/1e9) for r in e['migration_requests'] if r['session']==q['session'] and r['phase'] in ('catch_up_source_export','catch_up') and r.get('done')],
+        'interpretation':'Full catch-up includes export, retrieval/control and destination generation; warm TTFT is a separate observation, not total retained-context rebuild work.'}
+        for e in main if e['spec']['arm'] in ('replay','kv_transfer') for q in e['quiescence'] if q['client_token_stream_overlap_verified']],
     'previous_nine_scenario_events_archive':'../a100-replay-completion-20260910T0116/scenario-events-archive.json',
     'evidence_tables':{'controlled_KV':'kv-observations.csv','service':'service-observations.csv','complete_windows_phases_metrics':'service-analysis.json','recorded_history_validation':'resident-history-audit.json','raw_archive':'raw-telemetry-archive.json','GET_payload_origin_proof':'attribution-proof.json','loaded_KV_payload':'service-wire-analysis.json'},
     'modeling_gap_status':{
