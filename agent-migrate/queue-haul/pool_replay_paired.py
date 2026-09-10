@@ -169,6 +169,7 @@ def main():
                    str(args.inventory.resolve()), "--out", str(args.out.resolve()), "--index", str(index)]
         samplers = [serving.MetricsSampler(cfg.host, port, root/f"engine-{role}.csv", .5)
                     for role, port in (("source", cfg.src_port), ("destination", cfg.sink_port))]
+        samplers.append(p.PowerSampler(root/"power-source.csv", .5))
         for sampler in samplers:
             sampler.start()
         try:
