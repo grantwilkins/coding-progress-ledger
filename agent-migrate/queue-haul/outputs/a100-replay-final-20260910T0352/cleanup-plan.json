@@ -1,0 +1,147 @@
+{
+  "status": "procedure only; commands not executed by this review agent",
+  "ownership": {
+    "germany": {
+      "supervisor_pid_from_launch": 49600,
+      "root": "/tmp/qh-replay-final-20260910",
+      "metadata": "owned-processes.json"
+    },
+    "sweden": {
+      "supervisor_pid_from_launch": 93472,
+      "metadata": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/runtime-launch.json"
+    },
+    "auxiliary": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/controller-launch.json"
+  },
+  "order": [
+    "Finish or censor observation and retain pending requests. Stop measurement driver if still running before stopping engines.",
+    "Verify exact supervisor script path in /proc/PID/cmdline and signal only that supervisor.",
+    "Allow up to 10 seconds for its five-second owned-process cleanup. Check cleanup.json/source-stop.json plus recorded child PIDs and GPU compute-process listing; existence of cleanup JSON alone is insufficient.",
+    "If an owned child group remains after its supervisor exited, inspect its command and process group against ownership metadata before any targeted signal. Never use broad process-name killing.",
+    "Create and copy final Germany archive after logs close; verify every archived raw file hash locally.",
+    "Stop only verified controller-owned mirrors and destination tunnel after collection. Preserve raw files and runtime evidence."
+  ],
+  "commands": [
+    {
+      "operation": "stop Germany supervisor",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "python3 -c 'import json,os,signal;from pathlib import Path;r=Path('\"'\"'/tmp/qh-replay-final-20260910'\"'\"');p=json.loads((r/'\"'\"'owned-processes.json'\"'\"').read_text())['\"'\"'supervisor'\"'\"'];assert p>1 and str(r/'\"'\"'remote-supervisor.py'\"'\"').encode() in Path(f'\"'\"'/proc/{p}/cmdline'\"'\"').read_bytes().split(b'\"'\"'\\0'\"'\"');os.kill(p,signal.SIGTERM)'"
+      ]
+    },
+    {
+      "operation": "stop Sweden supervisor",
+      "argv": [
+        "python3",
+        "-c",
+        "import json,os,signal;from pathlib import Path;r=Path('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352');p=json.loads((r/'runtime-launch.json').read_text())['pid'];assert p>1 and str(r/'launch-source.py').encode() in Path(f'/proc/{p}/cmdline').read_bytes().split(b'\\0');os.kill(p,signal.SIGTERM)"
+      ]
+    },
+    {
+      "operation": "verify local GPU ownership released",
+      "argv": [
+        "nvidia-smi",
+        "--query-compute-apps=pid,gpu_uuid,process_name,used_gpu_memory",
+        "--format=csv"
+      ]
+    },
+    {
+      "operation": "verify Germany GPU ownership released",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "nvidia-smi --query-compute-apps=pid,gpu_uuid,process_name,used_gpu_memory --format=csv"
+      ]
+    },
+    {
+      "operation": "hash closed Germany raw files",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "python3 -c 'import hashlib,json;from pathlib import Path;r=Path('\"'\"'/tmp/qh-replay-final-20260910'\"'\"');files=['\"'\"'owned-processes.json'\"'\"', '\"'\"'cleanup.json'\"'\"', '\"'\"'remote-supervisor.py'\"'\"', '\"'\"'remote-commands.json'\"'\"', '\"'\"'runtime-launch.json'\"'\"', '\"'\"'supervisor.log'\"'\"', '\"'\"'lmcache-sink.log'\"'\"', '\"'\"'sink.log'\"'\"', '\"'\"'power.csv'\"'\"', '\"'\"'engine-metrics.jsonl'\"'\"'];(r/'\"'\"'raw-artifact-sha256.json'\"'\"').write_text(json.dumps({n:hashlib.sha256((r/n).read_bytes()).hexdigest() for n in files},indent=2)+'\"'\"'\\n'\"'\"')'"
+      ]
+    },
+    {
+      "operation": "archive closed Germany raw files",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "tar -C /tmp/qh-replay-final-20260910 -czf /tmp/qh-replay-final-20260910-raw.tar.gz owned-processes.json cleanup.json remote-supervisor.py remote-commands.json runtime-launch.json supervisor.log lmcache-sink.log sink.log power.csv engine-metrics.jsonl raw-artifact-sha256.json"
+      ]
+    },
+    {
+      "operation": "record Germany archive hash",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "sha256sum /tmp/qh-replay-final-20260910-raw.tar.gz"
+      ]
+    },
+    {
+      "operation": "collect Germany archive",
+      "argv": [
+        "scp",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4:/tmp/qh-replay-final-20260910-raw.tar.gz",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/destination-final-raw.tar.gz"
+      ]
+    },
+    {
+      "operation": "verify local archived raw files and compare archive hash to Germany",
+      "argv": [
+        "python3",
+        "-c",
+        "import hashlib,json,tarfile;from pathlib import Path;p=Path('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/destination-final-raw.tar.gz');t=tarfile.open(p);h=json.load(t.extractfile('raw-artifact-sha256.json'));assert all(hashlib.sha256(t.extractfile(n).read()).hexdigest()==v for n,v in h.items());print(json.dumps({'archive_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'verified_raw_members':len(h)}))"
+      ]
+    },
+    {
+      "operation": "stop verified owned mirror/tunnel processes",
+      "argv": [
+        "python3",
+        "-c",
+        "import json,os,signal;from pathlib import Path;r=Path('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352')\nfor row in json.loads((r/'controller-launch.json').read_text()):\n if row['name']=='source-supervisor':continue\n p=row['pid'];cmd=Path(f'/proc/{p}/cmdline')\n if not cmd.exists():continue\n actual=cmd.read_bytes().rstrip(b'\\0').decode().split('\\0');assert p>1 and Path(actual[0]).name==Path(row['command'][0]).name and actual[1:]==row['command'][1:];os.kill(p,signal.SIGTERM)"
+      ]
+    }
+  ],
+  "constraints": [
+    "No model or server probes are needed for cleanup. GPU process listing is read-only.",
+    "Do not archive the whole overlay symlink tree; explicit raw files and separately preserved patches are reproducible.",
+    "No timestamps from separate host monotonic clocks are subtracted.",
+    "If metadata process already exited, record it as exited; do not signal a reused PID."
+  ]
+}
