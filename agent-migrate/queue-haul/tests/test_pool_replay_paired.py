@@ -72,3 +72,31 @@ def test_worker_config_is_copied_without_mutating_frozen_reference(monkeypatch, 
     assert not cfg.architecture_campaign
     assert calls[0][0][1].architecture_campaign
     assert calls[0][1] == {'configure_proxy': False}
+
+
+def test_method_filter_keeps_four_original_conditions_in_order():
+    original = paired.scenarios()
+    for method in ('replay', 'kv_transfer'):
+        rows = paired.scenarios(method)
+        assert rows == [r for r in original if r['method'] == method]
+        assert len(rows) == 4
+        assert [(r['seed'],r['context_size']) for r in rows] == [(7101,8192),(7101,30000),(7102,8192),(7102,30000)]
+
+
+def test_method_filter_is_frozen_with_runtime_dependency_hashes(monkeypatch,tmp_path):
+    import json
+    from pathlib import Path
+    evidence=tmp_path/'identity.json'; evidence.write_text('{}')
+    inventory=tmp_path/'inventory.json'
+    inventory.write_text(json.dumps({role:{'identity_evidence':str(evidence),'runtime_evidence':str(evidence)} for role in ('source','destination')}))
+    monkeypatch.setattr(paired,'validate_inventory',lambda raw:paired.b.Config())
+    args=['paired','freeze','--inventory',str(inventory),'--out',str(tmp_path),'--method','kv_transfer']
+    monkeypatch.setattr(sys,'argv',args)
+    paired.main()
+    plan=json.loads((tmp_path/'paired-plan.json').read_text())
+    assert plan['method']=='kv_transfer' and len(plan['scenarios'])==4
+    for path in (paired.p.__file__,paired.b.__file__):
+        assert plan['input_sha256'][path]==paired.p.file_hash(Path(path))
+    monkeypatch.setattr(sys,'argv',['paired','worker','--inventory',str(inventory),'--out',str(tmp_path),'--method','replay','--index','0'])
+    with pytest.raises(ValueError,match='frozen bounded plan'):
+        paired.main()

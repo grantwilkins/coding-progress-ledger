@@ -45,7 +45,7 @@ def validate_inventory(inventory):
     return cfg
 
 
-def scenarios():
+def scenarios(selected_method=None):
     rows = []
     for seed in (7101, 7102):
         for context, appended in ((8192, 32), (30000, 2048)):
@@ -61,7 +61,7 @@ def scenarios():
                     "warm_concurrency": 8, "prestage_all": True, "copy_policy": "initial_final",
                     "reset_caches": False, "wait_cache_idle": False, "sample_power": False,
                     "final_state": "awake", "deadline_s": 180})
-    return rows
+    return [row for row in rows if selected_method is None or row["method"] == selected_method]
 
 
 class CheckedSession(p.LiveSession):
@@ -113,6 +113,7 @@ def main():
     parser.add_argument("--inventory", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--index", type=int)
+    parser.add_argument("--method", choices=("replay", "kv_transfer"))
     args = parser.parse_args()
     os.environ.update(QH_LMCACHE_MODE="mp", QH_RUNTIME="native")
     inventory = json.loads(args.inventory.read_text())
@@ -122,11 +123,11 @@ def main():
         args.out.mkdir(parents=True, exist_ok=True)
         if plan_path.exists():
             raise FileExistsError(plan_path)
-        evidence = [args.inventory, *[Path(endpoint[key]) for endpoint in
+        evidence = [args.inventory, Path(p.__file__), Path(b.__file__), *[Path(endpoint[key]) for endpoint in
                     (inventory["source"], inventory["destination"])
                     for key in ("identity_evidence", "runtime_evidence")]]
         write(plan_path, {"scope": "controlled source append and paired KV diagnostics; not recorded agentic service",
-            "total_limit_s": 1200, "per_scenario_limit_s": 180, "scenarios": scenarios(),
+            "total_limit_s": 1200, "per_scenario_limit_s": 180, "method": args.method, "scenarios": scenarios(args.method),
             "input_sha256": {str(path): p.file_hash(path) for path in evidence},
             "driver_sha256": p.file_hash(Path(__file__)), "argv": sys.argv,
             "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
@@ -142,7 +143,7 @@ def main():
     for path, expected in plan["input_sha256"].items():
         if p.file_hash(Path(path)) != expected:
             raise ValueError(f"frozen input changed: {path}")
-    if plan["scenarios"] != scenarios() or plan["total_limit_s"] != 1200 or plan["per_scenario_limit_s"] != 180:
+    if plan.get("method") != args.method or plan["scenarios"] != scenarios(args.method) or plan["total_limit_s"] != 1200 or plan["per_scenario_limit_s"] != 180:
         raise ValueError("frozen bounded plan differs from driver")
     if args.stage == "worker":
         worker(inventory, plan["scenarios"][args.index], args.out/plan["scenarios"][args.index]["scenario_id"])
@@ -166,6 +167,8 @@ def main():
                    for name in (*p.MP_SCENARIO_CSVS, "lmcache-source.log", "lmcache-sink.log")}
         command = [sys.executable, str(Path(__file__).resolve()), "worker", "--inventory",
                    str(args.inventory.resolve()), "--out", str(args.out.resolve()), "--index", str(index)]
+        if args.method:
+            command += ["--method", args.method]
         samplers = [serving.MetricsSampler(cfg.host, port, root/f"engine-{role}.csv", .5)
                     for role, port in (("source", cfg.src_port), ("destination", cfg.sink_port))]
         samplers.append(p.PowerSampler(root/"power-source.csv", .5))
