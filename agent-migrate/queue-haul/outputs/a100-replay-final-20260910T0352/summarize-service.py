@@ -34,6 +34,7 @@ verified_methods=sorted({e['spec']['arm'] for e in main if any(q['client_token_s
 report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main_observations_complete',
     'completed_main_episodes':len(main),'requested_main_episodes':12,'completed_scouts':len(scouts),
     'simulator_source_hash_verification':simulator_check,'simulator_coefficients_changed':False,'new_policy_evaluations':0,
+    'test_evidence':{'final_commands_and_results':'verification.json','focused_simulator':'focused-simulator-tests.log','focused_result':'181 passed,3 deselected','combined_instrumentation':'resident-broad-tests-original-order-fixed.log','combined_result':'82 passed','retained_failed_attempt':'resident-broad-test-environment-failures.log','failure_resolution':'Paired tests leaked QH_RUNTIME/QH_LMCACHE_MODE; fixture restoration plus permitted loopback execution resolves the original-order suite. Original13failed/67passed output remains archived.'},
     'clean_controlled_KV_conditions':kv['clean_conditions'],'clean_KV_destination_continuations':kv['clean_destination_continuations'],
     'selected_resident_rates':rates,'service_observations':rows,
     'strict_client_token_stream_pause_overlap_methods':verified_methods,
