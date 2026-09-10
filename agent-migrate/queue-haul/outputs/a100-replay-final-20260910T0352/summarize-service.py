@@ -52,7 +52,7 @@ report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main
         'Sweden/Germany match vLLM0.22.0 and LMCache0.5.1 plus reference serving settings; Python, Torch CUDA build and Transformers versions differ (runtime-builds.json). Identical model-file hashes and rendered-token check do not establish exact runtime-build equivalence.',
         'Arrival timestamps are assumed because recorded trajectories contain none. Eight physical per-GPU resident histories are sampled from the frozen trajectory distribution; physical source ownership continues until measured handoff.',
         'Loaded service uses exact-token completions to preserve evolving output history; this is an explicit adapter deviation from original full-message chat probes.',
-        'Protocol bytes are measured RESP application commands/keys/framing, excluding transport/tunnel headers; unique payload and retransferred payload are separately counted.',
+        'Protocol bytes are observed RESP application commands/keys/framing, excluding transport/tunnel headers; unique GET payload and retransferred payload are separate. Shared proxy records lack source/destination peer identity, so observed GET payload cannot automatically be called intersite WAN bytes.',
         'Original failed KV attempts and contaminated scout rates remain evidence. Instrumentation/transport amendments do not convert failed attempts into passing measurements.'],
     'recommendation':'Keep full simulations and fitting stopped until review; these bounded measurements do not establish fleet SLO feasibility.',
     'input_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
