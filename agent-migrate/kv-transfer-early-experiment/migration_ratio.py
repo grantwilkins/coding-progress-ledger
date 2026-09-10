@@ -330,7 +330,7 @@ def plot_context_ratio(label: str = CONTEXT_MODEL, stem: str = CONTEXT_STEM):
     ax.set_ylim(*CONTEXT_RATIO_YLIM)
     shade_regions(ax, CONTEXT_TOKENS, (0.04, 25), (0.56, 3e-3))
     ax.set_xlabel("Context size (tokens)")
-    ax.set_ylabel(r"$t^{R}/t^{KV}$")
+    ax.set_ylabel("Replay time /\nKV cache transfer time")
     ax.grid(True, which="both", alpha=0.15)
     cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
     cbar.set_label("Bandwidth (Gbps)")
@@ -379,7 +379,7 @@ def main():
     shade_regions(ax, bw, (0.04, 20), (0.63, 4e-3))
 
     ax.set_xlabel("Inter-site bandwidth (Gbps)")
-    ax.set_ylabel(r"$t^{R}/t^{KV}$")
+    ax.set_ylabel("Replay time /\nKV cache transfer time")
     ax.grid(True, which="both", alpha=0.15)
     # Legend follows the curves top to bottom. All lines share a slope, so this
     # is also the order they cross ratio = 1 going left to right.
