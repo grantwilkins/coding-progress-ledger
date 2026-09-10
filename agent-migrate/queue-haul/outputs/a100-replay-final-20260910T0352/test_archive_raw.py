@@ -1,5 +1,7 @@
 import importlib.util
 import tarfile
+import io
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -13,5 +15,5 @@ def test_ignored_and_partial_raw_events_restore_losslessly(tmp_path):
     (root/'events.jsonl').write_bytes(raw)
     result=module.archive(tmp_path)
     assert result['members'][0]['path']=='scenario/events.jsonl'
-    with tarfile.open(tmp_path/result['archive']) as handle:assert handle.extractfile('scenario/events.jsonl').read()==raw
+    with tarfile.open(fileobj=io.BytesIO(subprocess.check_output(['zstd','-q','-d','-c',str(tmp_path/result['archive'])]))) as handle:assert handle.extractfile('scenario/events.jsonl').read()==raw
     with pytest.raises(FileExistsError):module.archive(tmp_path)
