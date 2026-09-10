@@ -1,6 +1,9 @@
+from types import SimpleNamespace
+
+import numpy as np
 import pytest
 
-from pool_shed_resident_queue import simulate
+from pool_shed_resident_queue import simulate, source_turns
 
 
 C = dict(prefill_step_s=.1, prefill_token_s=.1, prefill_attention_s=0., decode_step_s=.1, decode_attention_s=0., endpoint_s=.2)
@@ -76,3 +79,43 @@ def test_arrivals_during_final_censored_iteration_remain_visible_in_queue():
     result = simulate(rows, {**C, "prefill_token_s": 1.}, 2.)["requests"]
     assert result[1]["eligible_s"] == 1.
     assert result[1]["admitted_s"] is None and not result[1]["done"]
+
+
+def source_fleet(durations, **metadata):
+    return SimpleNamespace(count=np.ones(len(durations)), metadata={
+        'turn_sequences': [[{} for _ in row] for row in durations],
+        'turn_duration_s': durations, 'source_session_rps': 1 / 22, **metadata})
+
+
+def test_long_source_generation_queues_later_offers_and_finite_trace_ends():
+    fleet = source_fleet([[45., 2., 3.], []])
+    for now, expected in ((44., (1, 0, 45.)), (45., (2, 1, 47.)),
+                          (47., (3, 2, 50.)), (200., (3, 3, 50.))):
+        started, completed, finish = source_turns(fleet, now)
+        assert (started[0], completed[0], finish[0]) == expected
+        assert started[1] == completed[1] == 0 and finish[1] == -np.inf
+
+
+def test_source_timeline_cache_preserves_phases_offsets_and_arbitrary_query_order():
+    fleet = source_fleet([[45., 2., 3.]], sequence_cycle=True, turn_offset=[1], source_phase_s=[1.])
+    cache = {}
+    for now, expected in ((88., (4, 3, 90.)), (-2., (0, 0, -np.inf)), (0., (1, 0, 1.)),
+                          (1., (1, 1, 1.)), (10., (1, 1, 1.)), (66., (3, 2, 88.))):
+        cached = source_turns(fleet, now, cache)
+        assert tuple(v[0] for v in cached) == expected
+        for a, b in zip(cached, source_turns(fleet, now)):
+            np.testing.assert_array_equal(a, b)
+    other = source_fleet([[1.]], sequence_cycle=True)
+    assert tuple(v[0] for v in source_turns(other, 0., cache)) == (1, 0, 1.)
+
+
+def test_source_timeline_requires_valid_duration_and_offered_pacing():
+    for duration in (0., -1., np.nan, np.inf):
+        with pytest.raises(ValueError, match='positive durations'):
+            source_turns(source_fleet([[duration]]), 0.)
+    with pytest.raises(ValueError, match='within one offered period'):
+        source_turns(source_fleet([[1.]], source_phase_s=[22.]), 0.)
+    with pytest.raises(ValueError, match='invalid source trace pacing'):
+        source_turns(source_fleet([[1.]], source_session_rps=0.), 0.)
+    with pytest.raises(ValueError, match='time must be finite'):
+        source_turns(source_fleet([[1.]]), np.inf)

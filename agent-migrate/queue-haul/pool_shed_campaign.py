@@ -178,6 +178,30 @@ def sample_fleet(workload, snapshot=0, gpus=GPUS, gpus_per_node=8):
     return fleet
 
 
+def replica_fleet(fleet, coefficients=None):
+    """Explicit fixed-replica scenario with sequential, server-timed source turns."""
+    from pool_shed_resident_fit import calibrate_server_decode, prefill_seconds
+
+    sources = {}
+    if coefficients is None:
+        path = ROOT / "outputs/a100-resident-queues-20260910/report.json"
+        fit = calibrate_server_decode()
+        coefficients = {**json.loads(path.read_text())["fit"]["coefficients"],
+                        **{key: fit["coefficients"][key] for key in ("decode_step_s", "decode_attention_s")}}
+        sources = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest(), **fit["input_sha256"]}
+    if coefficients["decode_attention_s"] != 0:
+        raise ValueError("source duration model requires the measured constant decode cadence")
+    durations = [[float(prefill_seconds(r["context"] + r["prompt"], r["prompt"], coefficients)
+                        + max(r["output"] - 1, 0) * coefficients["decode_step_s"] + coefficients["endpoint_s"])
+                  for r in sequence] for sequence in fleet.metadata["turn_sequences"]]
+    if any(not np.isfinite(values).all() or min(values) <= 0 for values in durations):
+        raise ValueError("source timelines require positive finite request durations")
+    return replace(fleet, metadata={**fleet.metadata, "resident_affinity": True, "causal_source": True,
+        "turn_duration_s": durations, "source_timing_coefficients": dict(coefficients), "source_timing_inputs": sources,
+        "source_timing_scope": "Sequential history service: prior source context stays cached, frozen incremental prefill, East A100 server decode cadence transferred to the source, frozen endpoint residual. Concurrent source histories have no extra prefill contention; durations are an optimistic floor, not GPU busy work.",
+        "placement_scope": "Disjoint destination replica cohorts, one incoming action pack per GPU; resident KV and incoming service stay on that GPU. Continuous cohort masses approximate integer placement."})
+
+
 def batch_time(replay, t1, beta, kappa, load):
     replay, t1, kappa = np.asarray(replay), np.asarray(t1), np.asarray(kappa)
     if (np.any(replay < 0) or np.any(t1 <= 0) or np.any((kappa < 0) | (kappa > 1))
@@ -349,6 +373,11 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
     capacities = np.r_[fleet.count, [gpus * deadline] * 2, [gpus * (1 - load)] * 2,
                        [(fleet.kv_capacity - fleet.baseline_kv) * gpus / fleet.gpus] * 2, budgets[:2],
                        np.asarray(timing.get("regional_kv_bytes_per_s", endpoint[:2])) * network_nodes(fleet)[:2], budgets[2]]
+    if fleet.metadata.get("resident_affinity"):
+        from pool_shed_execution import replica_feasible
+        eligible &= replica_feasible(fleet, r, k, load)
+        replicas = (r.sum(1) > 0).astype(int) + (k.sum(1) > 0)
+        matrix, capacities = np.vstack((matrix, row_masks * replicas)), np.r_[capacities, [gpus] * 2]
     if fleet.metadata.get("protect_resident"):
         service_time = compute + buffered + (r @ fleet.demand) * np.maximum(deadline - r_commit, 0) + (k @ fleet.demand) * np.maximum(deadline - k_commit, 0)
         matrix = np.vstack((matrix, row_masks * service_time))

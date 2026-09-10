@@ -23,6 +23,69 @@ remains a hardware-validation workload. The default output is
 `outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped: the replay
 diagnosis below is complete, but fleet resident latency is not validated.
 
+The September 10 server records are sufficient for the bounded correction; no
+new GPU campaign is needed to explain fast replay. The
+[server-conditioned validation](outputs/a100-replay-queue-resolution-20260910/server-heldout.json)
+fits decode cadence only on six complete warm repeat-1 cells: **35.486 ms/token**,
+with at most **1.98%** error on five complete repeat-2 cells. Frozen prefill and
+endpoint coefficients remain unchanged. The held-out long-replay resident P90
+from registration to first output is **10.267 s measured versus 10.147 s modeled**.
+All 246 resident TPOT checks pass their existing bands. Some coding request and
+client checks still fail; this is conditional queue validation, not a fleet SLO
+certificate. Incomplete final-cell telemetry is excluded from the fit.
+
+`replica_fleet()` enables the corrected scenario without changing archived
+pooled defaults. Each incoming action pack reserves its own destination GPU
+cohort, keeps its KV and ongoing service there, and repays resident backlog only
+with that GPU's headroom. Packs must fit local service and memory capacity.
+Source turns use measured server cadence and wait for predecessor completion;
+the longest sampled turn takes 43.97 s rather than a short throughput proxy.
+Full-context migration replay, historical regional factors, offered rates and
+the 0.80 GB/32K wire anchor stay unchanged. Source retained prefixes are assumed
+cached; additional contention between source histories remains omitted.
+
+The bounded comparison separates raw handoff from handoff whose local resident
+and source queues have cleared. Its second mode requires predicted local queue
+clearance by the deadline for every policy; execution independently checks actual
+clearance. It adds no pre-handoff pause or synthetic replay penalty. These are
+continuous fixed-replica scenarios, not optimal placement or resident SLO bounds:
+
+```bash
+uv run python pool_shed_queue_frontier.py --out outputs/a100-replay-queue-resolution-20260910/raw-handoff
+uv run python pool_shed_queue_frontier.py --require-local-recovery --out outputs/a100-replay-queue-resolution-20260910/local-recovery
+```
+
+Each command evaluates both agentic workloads and all five policies at
+30/60/120 s, writing JSON, CSV and PNG/SVG/PDF figures. Use fresh output paths
+when reproducing frozen results. **100% handoff is not 2 MW released**: the
+measured active-to-idle allocation proxy for full handoff is approximately
+0.45 MW; installed GPU IT remains 2 MW per site.
+
+The completed 60-evaluation comparison includes [raw-handoff results](outputs/a100-replay-queue-resolution-20260910/raw-handoff/frontier.json),
+[local-recovery results](outputs/a100-replay-queue-resolution-20260910/local-recovery/frontier.json)
+and a [presentation figure](outputs/a100-replay-queue-resolution-20260910/local-recovery/frontier.pdf).
+It shows why the metric matters. Under the raw-handoff objective, long replay at
+30 s hands off **97.69%** but only **7.57%** has cleared its local queues.
+With the common predicted-clearance admission criterion, independently executed
+**recovered handoff** is:
+
+| Agentic workload | Deadline | QH LP | QH greedy | KV only | Replay only | Isolated fastest |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| coding | 30 s | 84.65% | 76.57% | 31.75% | 81.50% | 51.81% |
+| coding | 60 s | 95.10% | 84.42% | 53.95% | 92.67% | 60.97% |
+| coding | 120 s | 96.84% | 84.80% | 60.59% | 94.24% | 65.48% |
+| coding_long | 30 s | 72.15% | 68.56% | 21.10% | 68.54% | 23.04% |
+| coding_long | 60 s | 84.06% | 78.62% | 38.26% | 82.34% | 40.24% |
+| coding_long | 120 s | 93.24% | 84.41% | 61.06% | 92.29% | 57.51% |
+
+QH's KV share of handed-off work is 7.58% for coding and 8.71% for coding_long
+at 30 s; replay remains the majority action. The advantage is modest and no
+policy advantage was used for calibration. Predicted clearance is not guaranteed:
+for coding at 120 s, KV-only hands off 65.62%, of which 60.59 percentage points
+actually clear by the deadline. Shared WAN execution and source buffering account
+for this forecast gap. Full results retain both metrics and remaining work;
+these single-snapshot curves have no statistical confidence interval.
+
 The [GPU-local queue pilot](outputs/a100-resident-queues-20260910/report.json)
 now reconstructs all 2,865 offered service requests from 20 episodes, including
 33 unfinished or failed requests, and reproduces all 112 existing service
@@ -39,7 +102,9 @@ resident turn, a small decode-rate error advances completion by 2.1–4.4 s and
 then advances dependent turns. Some client streams also compress token delivery:
 an 18-token response contains nine sub-millisecond gaps. Client TPOT therefore
 does not identify physical GPU iteration timing, even with individual token
-frames. The fit remains frozen; the pilot is **not installed in fleet execution**.
+frames. This historical client fit remains frozen. The new server-conditioned
+check above uses the warm-trained cadence; fleet recovery still uses a fluid
+throughput-loss model rather than this request-level scheduler.
 
 Reproduce the compact extraction and bounded CPU validation with:
 
@@ -48,12 +113,10 @@ uv run python pool_shed_resident_data.py
 uv run python pool_shed_resident_validation.py
 ```
 
-The remaining timing ambiguity is server scheduling/generation versus buffered
-client delivery. The [bounded GPU handoff](#bounded-resident-server-timing-handoff)
-freezes twelve warm-decode cells and four agentic episodes to resolve it. Another
-GPU measurement is only essential if existing timing uncertainty changes the
-end-to-end conclusions; GPU-local KV placement, causal source queues and bounded
-validation still need integration either way. Failed transport/dependency scout
+The completed [bounded GPU handoff](#bounded-resident-server-timing-handoff)
+separates server generation from client delivery using twelve warm-decode cells
+and four agentic episodes. Its complete local records support the correction
+above despite missing shutdown telemetry. Failed transport/dependency scout
 cases do not establish GPU capacity. Full `run` calls hard-fail while resident
 latency is unvalidated; `prepare`, historical reduction, smoke runs and bounded
 `run_cell` audits remain available.
@@ -64,7 +127,8 @@ request buffers. Requests arriving after source quiescence are buffered and move
 to the destination at handoff. There is no default isolation reservation or
 pre-handoff buffer gate. The planner reserves recovery work over every remaining
 time interval so earlier idle service cannot pay for later arrivals. This is an
-aggregate recovery approximation: executed handoff, `service_ready_s`,
+aggregate recovery approximation in the archived pooled mode; the new replica
+mode confines recovery to each assigned GPU. Executed handoff, `service_ready_s`,
 `service_recovered_by_deadline`, and resident latency validity are separate
 outputs. **Resident TTFT/TPOT is not validated.** KV network waiting uses no
 compute; KV ingest is omitted.
@@ -795,11 +859,13 @@ to output readiness. The 1,233-token coding control turn has 36.81 ms server-rea
 and 36.78 ms client mean TPOT, demonstrating actual generation time. All four
 workload/arrival hash pairs match their frozen references; 55 focused tests passed.
 The broad suite remains unresolved as recorded in the report. Both GPU stacks
-were stopped. No coefficients were fitted and the full-fleet readiness guard
-remains in place. Raw gzip files preserve verified uncompressed hashes, and
+were stopped. Acquisition itself did not fit coefficients; the subsequent
+warm-only decode fit and held-out queue checks are described above. The full-fleet
+readiness guard remains in place. Raw gzip files preserve verified uncompressed hashes, and
 `pool_replay_server_reduce.py` reads them directly.
 
-The node agent should pull `policy-hardware-width8-pilot` and use
+The following is the completed acquisition procedure, retained for reproducibility;
+it is not a request for another GPU run. The node agent used `policy-hardware-width8-pilot` and
 [this frozen acquisition plan](outputs/a100-resident-server-timing-plan/plan.json).
 `pool_replay_server_timing.py` generates six guarded patches for vLLM 0.22.0;
 install them in an isolated reference runtime with the preserved FIFO collector.
@@ -955,10 +1021,10 @@ of two destinations. Do not rerun scouts, the broad KV/WAN sweep or fleet polici
    tolerances frozen while collecting; all four new agentic episodes are
    validation only. Data quality is the GPU acceptance test, not a QH advantage.
 
-After the data returns, CPU work remains: calibrate only identifiable timing
-terms, integrate GPU-local resident queues and KV placement plus causal source
-queues, then run bounded end-to-end policy and uncertainty checks. Remove the
-full-campaign guard only after those checks support resident-service validity.
+The returned data now supports warm-only server cadence calibration, the
+four-episode conditional scheduler check, causal source turns and fixed-replica
+fleet recovery. Bounded policy comparisons are documented above. The full-campaign
+guard still distinguishes those conditional results from validated resident SLOs.
 
 ## Current evidence
 
@@ -3557,14 +3623,11 @@ five-second power window. This agrees with archived on-time attainment and
 extends late completions beyond the horizontal 30-second deadline.
 
 True Greedy's 0% and 100% KV episodes are the observed all-eight-replay
-and all-eight-KV executions for those same cases. Pure-action markers overlay those same
-endpoint observations, sharing both their times and their display offsets.
-The CSV records each source episode once; the overlays are reused timings,
-not extra baseline measurements. The separately recorded deadline-admitted
+and all-eight-KV executions for those same cases. Only QH LP, QH Greedy,
+and True Greedy are plotted; the CSV records each source episode once. The separately recorded deadline-admitted
 KV-only/replay-only policies move only subsets and are excluded from this
 full-plan comparison. Four all-KV WAN endpoints are back-of-the-envelope
-estimates, shown as hollow squares labeled `KV only` and recorded separately
-in `wan_kv_estimates.csv`. The frozen pack has 12,381,585,408 KV bytes. The
+estimates, recorded separately in `wan_kv_estimates.csv` but not plotted. The frozen pack has 12,381,585,408 KV bytes. The
 13 all-KV 10 Gb/s control runs average 13.4219 s to completion, giving a fixed
 overhead of 3.5166 s after subtracting byte-transfer time. Thus estimated
 attainment is `8 * KV_bytes / bandwidth_bps + 3.5166 + 5` seconds: 48.14,

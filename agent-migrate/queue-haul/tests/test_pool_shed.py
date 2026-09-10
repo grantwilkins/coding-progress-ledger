@@ -212,6 +212,35 @@ def test_baselines_share_every_mixed_action_batch_projection():
     assert all(tuple(np.r_[zero, row]) in signatures for row in kv if row.any())
 
 
+def test_replica_scenario_prices_generation_without_changing_offered_work():
+    original = c.sample_fleet('coding')
+    fleet = c.replica_fleet(original)
+    assert fleet.metadata['resident_affinity'] and fleet.metadata['causal_source']
+    assert not original.metadata.get('causal_source')
+    assert fleet.metadata['source_session_rps'] == original.metadata['source_session_rps']
+    assert np.array_equal(fleet.demand, original.demand)
+    assert np.array_equal(fleet.t1, original.t1)
+    step = fleet.metadata['source_timing_coefficients']['decode_step_s']
+    assert step == pytest.approx(.03548622490944625)
+    assert all(duration >= max(row['output'] - 1, 0) * step
+               for rows, durations in zip(fleet.metadata['turn_sequences'], fleet.metadata['turn_duration_s'])
+               for row, duration in zip(rows, durations))
+    assert max(max(durations) for durations in fleet.metadata['turn_duration_s']) > 1 / fleet.metadata['source_session_rps']
+    with pytest.raises(ValueError, match='constant decode cadence'):
+        c.replica_fleet(original, {**fleet.metadata['source_timing_coefficients'], 'decode_attention_s': 1.})
+
+
+def test_replica_table_reserves_gpus_and_rejects_locally_overloaded_packs():
+    fleet = c.replica_fleet(c.sample_fleet('coding', gpus=8))
+    replay = np.zeros((2, len(fleet.count)))
+    replay[:, np.argmax(fleet.demand)] = [1, 8]
+    table = c.schedule_table(fleet, replay, np.zeros_like(replay), .5, 120.,
+                             np.full(3, 1e12), np.full(3, 1e12), calibration(0)['timing'][0])
+    assert table.eligible.tolist() == [True, False, True, False]
+    assert table.capacities[-2:].tolist() == [8., 8.]
+    assert table.matrix[-2:].tolist() == [[1., 1., 0., 0.], [0., 0., 1., 1.]]
+
+
 def test_mixed_batch_resources_are_additive_pure_action_choices():
     fleet = c.sample_fleet('measured_pack')
     replay, kv = np.array([[1, 1, 1, 1, 0, 0, 0, 0.]]), np.array([[0, 0, 0, 0, 1, 1, 1, 1.]])

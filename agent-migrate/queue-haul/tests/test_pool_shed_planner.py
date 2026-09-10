@@ -180,6 +180,75 @@ def test_generated_replay_debt_changes_later_calibrated_compute_time():
     assert slow["finish"] > fast["finish"] + 3.
 
 
+def test_affine_queue_profile_preserves_compute_and_recovery_order_inside_bins():
+    from pool_shed_planner import replica_queue_profile
+    profile = replica_queue_profile(np.array([0., 2., 4., 6., 9.]), [(0., 1.), (3., 4.)],
+                                    5., 1., .5, .25, 1.)
+    assert profile["resident_debt"] == pytest.approx([0., .5, 0., 0.])
+    assert profile["buffer_debt"] == pytest.approx([0., 0., .75, 0.])
+    assert profile["recovery"].sum() == pytest.approx(2.)
+
+
+def test_affine_profile_matches_execution_without_idle_gpu_compensation():
+    table, timing, calibration = case()
+    table.fleet.metadata["resident_affinity"] = True
+    edges = np.array([0., 1., 3., 5., 10., 20.])
+    profile = phase_profile(table, np.ones(1), 0, 0, 0., edges, np.full((2, 5), .99), timing, calibration)
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1., 0., 0., 0.])
+    for k, until in enumerate(edges[1:]):
+        engine.advance(until)
+        assert engine.resident_debt[0] == pytest.approx(profile["resident_debt"][k], abs=1e-9)
+        assert engine.backlog[0] == pytest.approx(profile["buffer_debt"][k], abs=1e-9)
+    assert profile["finish"] == pytest.approx(engine.result()["last_completion_s"])
+
+
+@pytest.mark.parametrize("policy", ["queue_haul", "greedy", "replay_only", "kv_only", "isolated_fastest"])
+def test_affine_planner_reserves_disjoint_replicas_for_every_policy(policy):
+    table, timing, calibration = case()
+    table.fleet.metadata.update(resident_affinity=True, destination_gpus=1)
+    engine = PooledExecution(table, timing, calibration)
+    chosen, _, audit = plan_admission(engine, table, policy, calibration=calibration)
+    footprint = (table.replay.sum(1) > 0).astype(int) + (table.kv.sum(1) > 0)
+    for route in (0, 1):
+        assert chosen[table.route == route] @ footprint[table.route == route] <= 1 + 1e-8
+    assert chosen.sum() > 0 and audit["max_relative_residual"] <= 1e-8
+    engine.admit(chosen)
+
+
+def test_affine_planner_rejects_local_overload_and_preserves_completed_replica_reservations():
+    table, timing, calibration = case()
+    table.fleet.metadata.update(resident_affinity=True, destination_gpus=1)
+    table.fleet.demand[:] = .3
+    table.replay[[0, 2], 0] = 2.
+    engine = PooledExecution(table, timing, calibration)
+    chosen, _, _ = plan_admission(engine, table, "queue_haul", calibration=calibration)
+    assert chosen[[0, 2]].sum() == 0.
+    engine.admit([0., 1., 0., 0.])
+    engine.advance(5.)
+    assert engine.state[0] == 6
+    chosen, _, _ = plan_admission(engine, table, "queue_haul", calibration=calibration)
+    assert chosen[:2].sum() == 0. and chosen[3] > 0
+    engine.admit(chosen)
+
+
+def test_local_recovery_admission_rejects_handoff_that_leaves_its_own_queue():
+    table, timing, calibration = case(deadline=8.)
+    table.fleet.metadata["resident_affinity"] = True
+    raw, _, _ = plan_admission(PooledExecution(table, timing, calibration), table, "replay_only", calibration=calibration)
+    assert raw.sum() > 0
+    table.fleet.metadata["require_local_recovery"] = True
+    for policy in ("queue_haul", "greedy", "replay_only", "kv_only", "isolated_fastest"):
+        engine = PooledExecution(table, timing, calibration)
+        chosen, _, audit = plan_admission(engine, table, policy, calibration=calibration)
+        assert chosen[[0, 2]].sum() == 0
+        assert chosen[[1, 3]].sum() > 0 if policy != "replay_only" else chosen.sum() == 0
+        assert "forecast criterion" in audit["planning_scope"]
+    del table.fleet.metadata["resident_affinity"]
+    with pytest.raises(ValueError, match="requires resident affinity"):
+        PooledExecution(table, timing, calibration)
+
+
 def test_buffer_recovery_honors_per_batch_cap_and_resident_priority():
     zero, edges = np.zeros((2, 1)), np.array([0., 1.])
     loads, history, debt = project_queues(edges, [0., 0.], [0., 0.], [1., 0.], zero, zero, zero, zero,

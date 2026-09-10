@@ -99,7 +99,11 @@ def test_toggle_does_not_change_frontend_ordinal_accounting(records, monkeypatch
         timing.enabled()
 
 
-def test_buffered_log_has_contiguous_sequence_and_orderly_final_record(tmp_path):
+def test_buffered_log_has_contiguous_sequence_and_orderly_final_record(tmp_path, monkeypatch):
+    read_text, readlink = Path.read_text, timing.os.readlink
+    proc = {'/proc/sys/kernel/random/boot_id': 'test-boot\n', '/proc/self/timens_offsets': 'monotonic 0 0\n'}
+    monkeypatch.setattr(Path, 'read_text', lambda path, *a, **k: proc[str(path)] if str(path) in proc else read_text(path, *a, **k))
+    monkeypatch.setattr(timing.os, 'readlink', lambda path: 'time:[test]' if str(path) == '/proc/self/ns/time' else readlink(path))
     log = timing.EventLog(tmp_path)
     for i in range(257):
         log.write('sample', i=i)
@@ -108,7 +112,7 @@ def test_buffered_log_has_contiguous_sequence_and_orderly_final_record(tmp_path)
     assert [row['sequence'] for row in rows] == list(range(1, 260))
     assert rows[-1]['dropped_records'] == 0
     assert rows[-1]['records_before_final'] == 258
-    assert rows[0]['boot_id'] and rows[0]['time_namespace']
+    assert (rows[0]['boot_id'], rows[0]['time_namespace']) == ('test-boot', 'time:[test]')
 
 
 def test_source_replacement_fails_on_ambiguity():

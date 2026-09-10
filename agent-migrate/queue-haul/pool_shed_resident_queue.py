@@ -2,7 +2,65 @@
 
 import heapq
 import math
+from bisect import bisect_right
 from collections import defaultdict
+
+import numpy as np
+
+
+def source_turns(fleet, now, cache=None):
+    """Return actual started/completed counts and latest-started finish per cohort.
+
+    The first offered turn starts at -phase, without earlier queued history.
+    Cyclic histories use turn_offset; finite histories retain their first row.
+    A cache belongs to fixed fleet metadata, and permits arbitrary query order.
+    """
+    if not math.isfinite(now):
+        raise ValueError('source observation time must be finite')
+    key = ('source_turn_timeline', id(fleet))
+    state = None if cache is None else cache.get(key)
+    if state is None:
+        metadata, size = fleet.metadata, len(fleet.count)
+        sequences = metadata['turn_sequences']
+        cadence = metadata.get('source_session_rps', 0.)
+        phases = np.asarray(metadata.get('source_phase_s', np.zeros(size)), dtype=float)
+        offsets = metadata.get('turn_offset', [0] * size)
+        durations = metadata.get('turn_duration_s', [[] for _ in sequences])
+        cycle = metadata.get('sequence_cycle', False)
+        if (len(sequences) != size or len(durations) != size or len(offsets) != size
+                or not math.isfinite(cadence) or cadence < 0 or (not cadence and any(sequences))):
+            raise ValueError('invalid source trace pacing or cohort counts')
+        if (phases.shape != (size,) or not np.isfinite(phases).all() or np.any(phases < 0)
+                or np.any(phases * cadence >= 1)):
+            raise ValueError('source phases must be within one offered period')
+        ordered = []
+        for sequence, values, offset in zip(sequences, durations, offsets):
+            if (len(values) != len(sequence) or any(not math.isfinite(v) or v <= 0 for v in values)
+                    or not isinstance(offset, (int, np.integer)) or isinstance(offset, bool) or offset < 0):
+                raise ValueError('source turns require aligned positive durations and integer offsets')
+            values = tuple(values)
+            offset = offset % len(values) if cycle and values else 0
+            ordered.append(values[offset:] + values[:offset])
+        state = cadence, phases.copy(), ordered, cycle, [[] for _ in sequences], [[] for _ in sequences]
+        if cache is not None:
+            cache[key] = state
+    cadence, phases, durations, cycle, starts, finishes = state
+    started, completed, finish = np.zeros(len(durations), int), np.zeros(len(durations), int), np.full(len(durations), -np.inf)
+    for i, values in enumerate(durations):
+        while values and (cycle or len(starts[i]) < len(values)):
+            n = len(starts[i])
+            begin = max(n / cadence - phases[i], finishes[i][-1] if n else -np.inf)
+            if begin > now:
+                break
+            end = begin + values[n % len(values)]
+            if not math.isfinite(end) or end <= begin:
+                raise ValueError('source finish must advance finite time')
+            starts[i].append(begin)
+            finishes[i].append(end)
+        started[i], completed[i] = bisect_right(starts[i], now), bisect_right(finishes[i], now)
+        if started[i]:
+            finish[i] = finishes[i][started[i] - 1]
+    return started, completed, finish
 
 
 def simulate(requests, coefficients, until, token_budget=8192, max_sequences=256, endpoint_before_fraction=0.):

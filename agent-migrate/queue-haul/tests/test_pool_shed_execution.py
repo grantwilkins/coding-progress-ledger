@@ -338,6 +338,97 @@ def test_nonmigrating_replica_capacity_absorbs_displaced_resident_work():
     assert result["service_ready_s"] == result["last_completion_s"]
 
 
+@pytest.mark.parametrize("gpus", [1, 10])
+def test_affine_debt_recovers_only_on_its_replica_after_persistent_incoming_load(gpus):
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      gpus=gpus, load=.5, demand=(.25, 0.), work=(4., 1.), deadline=10.)
+    table.fleet.metadata["resident_affinity"] = True
+    timing["resident_replay_loss"] = 1.
+    result = run(table, timing, calibration)
+    assert result["last_completion_s"] == pytest.approx(4.2)
+    assert result["resident_debt_generated_work_s"] == pytest.approx([2., 0.])
+    assert result["pending_resident_debt_work_s"] == pytest.approx([.55, 0.])
+    assert result["resident_pool_compensation_work_s"] == [0., 0.]
+    assert result["shed_fraction"] == .5 and result["recovered_handoff_fraction"] == 0.
+    assert result["resident_latency_validated"] is False
+
+
+@pytest.mark.parametrize("failure", ["serving", "memory", "replicas"])
+def test_affine_admission_enforces_local_and_permanent_replica_capacity(failure):
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.), (0., 1.)), kv=((0., 0.), (0., 0.)),
+                                      route=(0, 0), gpus=10, load=.5, demand=(.1, .1), work=(1., 1.))
+    table.fleet.metadata["resident_affinity"] = True
+    timing["resident_replay_loss"] = 1.
+    if failure == "serving":
+        table.fleet.demand[0] = .6
+    elif failure == "memory":
+        table.fleet.kv_capacity = 500.
+    else:
+        table.fleet.metadata["destination_gpus"] = 1
+    engine = PooledExecution(table, timing, calibration)
+    if failure == "replicas":
+        engine.admit([1., 0.])
+        engine.advance(10.)
+        assert engine.state[0] == 6
+    with pytest.raises(ValueError, match="replica"):
+        engine.admit([0., 1.] if failure == "replicas" else [1., 0.])
+
+
+def test_affine_resident_priority_keeps_buffer_recovery_on_same_gpu_and_clone_independent():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.),), kv=((0., 0.),), route=(0,),
+                                      gpus=10, load=.25, demand=(.25, 0.), deadline=5.)
+    table.fleet.metadata["resident_affinity"] = True
+    timing["resident_replay_loss"] = 1.
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1.])
+    engine.state[:], engine.remaining[:], engine.origin_time[:] = 6, 0., 0.
+    engine.replica_debt[:], engine.resident_debt[0], engine.backlog[:] = .5, .5, 1.
+    engine.loads[0] += .25 / 10
+    clone = engine.nominal_continuation(table, timing, calibration)
+    clone.advance(1.)
+    assert clone.replica_debt[0] == pytest.approx(0.) and clone.backlog[0] == 1.
+    assert engine.replica_debt[0] == .5 and engine.backlog[0] == 1.
+    clone.advance(3.)
+    assert clone.backlog[0] == pytest.approx(0.)
+
+
+@pytest.mark.parametrize("chunks", [1, 4])
+def test_affine_compute_load_is_local_and_interrupted_execution_is_identical(chunks):
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((1., 0.), (0., 1.)), kv=((0., 0.), (0., 0.)),
+                                      route=(0, 0), gpus=2, load=.25, demand=(.25, .25), work=(1., 8.), deadline=20.)
+    table.fleet.metadata["resident_affinity"] = True
+    timing.update(resident_replay_loss=1., beta=1.)
+    expected = execute_pooled(table, np.ones(2), timing, calibration, chunks)
+    assert expected["last_completion_s"] == pytest.approx(.4 + 8 * np.exp(.25))
+    actual = PooledExecution(table, timing, calibration, chunks)
+    actual.admit(np.ones(2))
+    for until in (.1, 1., 2., 8., 15., 20.):
+        actual.advance(until)
+    for key in ("last_completion_s", "service_ready_s", "resident_debt_generated_work_s", "pending_resident_debt_work_s",
+                "recovered_handoff_fraction", "recovered_action_fractions"):
+        assert actual.result()[key] == pytest.approx(expected[key])
+    assert actual.result()["recovered_handoff_fraction"] == pytest.approx(1.)
+
+
+def test_causal_source_snapshot_quiescence_and_buffer_counts_use_actual_long_turn():
+    from pool_shed_execution import source_snapshot
+    table, _, calibration = case()
+    fleet = table.fleet
+    fleet.metadata.update(paced_source=True, causal_source=True, source_session_rps=1., turn_sequences=[[
+        {"context": 100, "prompt": 1, "output": 3}, {"context": 104, "prompt": 1, "output": 0}], []],
+        turn_duration_s=[[4.5, .5], []], turn_work_s=[[.2, .1], []])
+    context, completed = source_snapshot(fleet, 3.)
+    assert context[0] == 100 and completed[0] == 0
+    end, context, _, _ = _quiesce(fleet, np.array([1., 0.]), 3.)
+    assert end == 4.5 and context[0] == 104
+    assert _buffered(fleet, np.array([1., 0.]), 3., 5.5, calibration, quiescing=True) == pytest.approx((1., .1))
+    context, completed = source_snapshot(fleet, 5.)
+    assert context[0] == 105 and completed[0] == 2
+
+
 def test_resident_debt_recovers_before_migrated_source_buffers():
     table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
                                       load=.25, demand=(0., 0.), deadline=3.3)

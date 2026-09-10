@@ -41,6 +41,14 @@ def compute_allocation(load, replay_mass, kv_mass, gpus, loss=None, protected=Fa
     return sharing, max(0., gpus - sharing * cost)
 
 
+def replica_feasible(fleet, replay, kv, load):
+    """Each nonempty action pack remains on its own resident-bearing replica."""
+    free = (fleet.kv_capacity - fleet.baseline_kv) / fleet.gpus
+    return np.logical_and.reduce([(counts @ fleet.demand <= 1 - np.asarray(load) + 1e-8)
+                                  & (counts @ fleet.memory_tokens <= free + 1e-8 * max(free, 1.))
+                                  for counts in (replay, kv)])
+
+
 def flow_rates(mass, route, endpoint, budgets):
     """Weighted max-min per-batch rates under endpoint, route and shared caps."""
     return _flow_with_caps(mass, route, np.asarray(endpoint)[route], budgets)
@@ -74,14 +82,18 @@ def source_snapshot(fleet, now, cache=None):
     context, completed = fleet.context.copy(), np.zeros(len(fleet.count), int)
     cadence, cycle = fleet.metadata.get("source_session_rps", 0.), fleet.metadata.get("sequence_cycle", False)
     if paced_source(fleet) and cadence:
+        causal = fleet.metadata.get("causal_source", False)
+        if causal:
+            from pool_shed_resident_queue import source_turns
+            _, actual_completed, _ = source_turns(fleet, now, cache)
         started = _started_turns(fleet, now)
         phases = fleet.metadata.get("source_phase_s", np.zeros(len(context)))
         for i, sequence in enumerate(fleet.metadata["turn_sequences"]):
             if not sequence:
                 continue
             offset = fleet.metadata.get("turn_offset", [0] * len(context))[i] if cycle else 0
-            n = started[i]
-            if cycle or n <= len(sequence):
+            n = actual_completed[i] if causal else started[i]
+            if not causal and (cycle or n <= len(sequence)):
                 duration = fleet.metadata["turn_duration_s"][i][(offset + n - 1) % len(sequence)]
                 n -= (n - 1) / cadence - phases[i] + duration > now + 1e-10
             completed[i] = n if cycle else min(n, len(sequence))
@@ -143,8 +155,12 @@ def _quiesce(fleet, counts, now, cache=None, origin_turn=None):
     if cycle and np.any(lengths == 0):
         raise ValueError("cannot cycle an empty source trace")
     paced = paced_source(fleet)
+    causal = fleet.metadata.get("causal_source", False)
     if paced and cadence:
         steps = _started_turns(fleet, now)
+        if causal:
+            from pool_shed_resident_queue import source_turns
+            steps, _, finishes = source_turns(fleet, now, cache)
     origin_turn = np.zeros(len(fleet.count), int) if origin_turn is None else origin_turn
     key = ("quiesce", counts.astype(float, copy=False).tobytes(), steps.tobytes(), origin_turn.tobytes())
     if cache is not None and key in cache:
@@ -152,7 +168,9 @@ def _quiesce(fleet, counts, now, cache=None, origin_turn=None):
         return max(now, end), context, reset, terminal
     completed = steps[active] if cycle else np.minimum(lengths, steps[active])
     end = 0. if paced or not cadence else float(completed.max(initial=0) / cadence)
-    if paced and cadence:
+    if paced and cadence and causal:
+        end = float(finishes[active].max(initial=-np.inf))
+    elif paced and cadence:
         durations = fleet.metadata["turn_duration_s"]
         phases = fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count)))
         for i, n, length in zip(active, completed, lengths):
@@ -182,6 +200,9 @@ def _buffered(fleet, counts, start, end, calibration, cache=None, quiescing=Fals
     cadence = fleet.metadata.get("source_session_rps", 0.)
     phases = np.asarray(fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count))))
     first = _started_turns(fleet, start) if quiescing else np.ceil((start + phases) * cadence - 1e-9).astype(int)
+    if quiescing and fleet.metadata.get("causal_source", False):
+        from pool_shed_resident_queue import source_turns
+        first = source_turns(fleet, start, cache)[0]
     last = np.maximum(first, np.ceil((end + phases) * cadence - 1e-9).astype(int))
     if cache is not None:
         key = ("buffer", counts.astype(float, copy=False).tobytes(), first.tobytes(), last.tobytes())
@@ -260,6 +281,12 @@ class PooledExecution:
         self.fleet = table.fleet
         self.gpus = destination_gpus(self.fleet)
         self.protected = self.fleet.metadata.get("protect_resident", False)
+        self.affinity = self.fleet.metadata.get("resident_affinity", False)
+        self.require_local_recovery = self.fleet.metadata.get("require_local_recovery", False)
+        if self.require_local_recovery and not self.affinity:
+            raise ValueError("local recovery admission requires resident affinity")
+        if self.affinity and (self.protected or "resident_replay_loss" not in self.timing):
+            raise ValueError("resident affinity requires measured interference and unprotected migration")
         self.paced = paced_source(self.fleet)
         self.timing_load_factor = self.fleet.metadata.get("timing_load_factor", 1.)
         if not np.isfinite(self.timing_load_factor) or self.timing_load_factor <= 0:
@@ -289,6 +316,7 @@ class PooledExecution:
         self.pause_requested = np.zeros(self.n)
         self.gated = np.zeros(self.n, bool)
         self.resident_debt, self.resident_generated, self.resident_recovered = (np.zeros(2) for _ in range(3))
+        self.replica_debt = np.zeros(self.n)
         self.resident_displaced, self.peak_migration_replicas = np.zeros(2), np.zeros(2)
         self.resident_loss = np.broadcast_to(np.asarray(self.timing.get("resident_replay_loss", 0.)), (2,))
         if not np.isfinite(self.resident_loss).all() or np.any((self.resident_loss < 0) | (self.resident_loss > 1)):
@@ -322,8 +350,12 @@ class PooledExecution:
         counts = np.array([c for _, _, c in selected])
         route = np.array([self.table.route[j] for j, _, _ in selected], int)
         demand, memory = counts @ self.fleet.demand, counts @ self.memory_tokens
+        if self.affinity and not replica_feasible(self.fleet, counts, np.zeros_like(counts), self.initial_load[route]).all():
+            raise ValueError("action pack exceeds its destination replica serving or memory capacity")
         for r in (0, 1):
             ids, old = route == r, self.route == r
+            if self.affinity and mass[ids].sum() + self.mass[old].sum() > self.gpus * (1 + 1e-8):
+                raise ValueError("selected migrations exceed permanently reserved destination replicas")
             if (mass[ids] @ demand[ids] + self.mass[old] @ self.demand[old] > self.gpus * (1 - self.initial_load[r]) + 1e-7 * self.gpus
                     or mass[ids] @ memory[ids] + self.reserved[old].sum() > self.free_memory + 1e-7 * self.fleet.kv_capacity):
                 raise ValueError("selected migrations exceed destination serving or memory capacity")
@@ -336,7 +368,7 @@ class PooledExecution:
                       group=np.arange(self.n, self.n + n) // self.chunks, initial_ready=np.zeros(n, bool), gated=np.zeros(n, bool),
                       origin_time=np.full(n, np.nan if self.paced else 0.),
                       state=np.zeros(n, int), remaining=remaining, tail=tail, phase_started=np.full(n, self.now))
-        for name in ("release", "delta", "quiesced", "pause_requested", "buffered", "backlog", "backlog_total", "phase_replica_seconds", "phase_transferred_bytes", "phase_nominal_work"):
+        for name in ("release", "delta", "quiesced", "pause_requested", "buffered", "backlog", "backlog_total", "phase_replica_seconds", "phase_transferred_bytes", "phase_nominal_work", "replica_debt"):
             values[name] = np.zeros(n)
         for name, value in values.items():
             setattr(self, name, np.concatenate((getattr(self, name), value)))
@@ -413,7 +445,8 @@ class PooledExecution:
                         self.exhausted += int(terminal)
                         required = self.mass[i] * (c @ np.maximum(self.memory_tokens, np.ceil(context / 16) * 16))
                         occupied = self.reserved[self.route == r].sum() - self.reserved[i] + required
-                        if occupied > self.free_memory + 1e-7:
+                        if (occupied > self.free_memory + 1e-7 or self.affinity
+                                and required / self.mass[i] > self.free_memory / self.gpus + 1e-7):
                             self.state[i], self.reserved[i] = 7, 0.
                             continue
                         self.reserved[i] = required
@@ -497,12 +530,28 @@ class PooledExecution:
             computing = (self.state == 1) | (self.state == 4)
             backlog_rates = np.zeros(self.n)
             resident_growth, resident_recovery, resident_displacement, compute_shares = (np.zeros(2) for _ in range(4))
+            local_growth, local_recovery = np.zeros(self.n), np.zeros(self.n)
             nominal_rates = np.zeros(2)
             serving_load = self.serving_load()
             for r in (0, 1):
                 active = computing & (self.route == r)
                 queued = (self.backlog > 1e-9) & (self.route == r)
                 load = serving_load[r]
+                if self.affinity:
+                    local_load = self.initial_load[r] + self.demand * (self.state == 6)
+                    headroom = np.maximum(1 - local_load, 0.)
+                    recovering = (self.route == r) & ~computing & (self.replica_debt > 1e-9)
+                    local_growth[active] = self.initial_load[r] * np.where(self.action[active] == 0, self.resident_loss[r], 1.)
+                    local_recovery[recovering] = headroom[recovering]
+                    backlog_rates[queued & ~computing] = (headroom - local_recovery)[queued & ~computing]
+                    resident_growth[r] = resident_displacement[r] = float(self.mass[active] @ local_growth[active])
+                    resident_recovery[r] = float(self.mass[recovering] @ local_recovery[recovering])
+                    compute_shares[r] = 1.
+                    self.peak_migration_replicas[r] = max(self.peak_migration_replicas[r], self.mass[active].sum())
+                    self.peak_load[r] = max(self.peak_load[r], load + (resident_recovery[r] + self.mass[queued] @ backlog_rates[queued]) / self.gpus)
+                    rates[active] = np.exp(-self.timing["beta"] * self.initial_load[r] * self.timing_load_factor)
+                    nominal_rates[r] = np.exp(-self.nominal_beta * self.initial_load[r] * self.timing_load_factor)
+                    continue
                 if self.protected:
                     backlog_rates[queued] = min(1., self.gpus * (1 - load) / max(float(self.mass[queued].sum()), 1e-30))
                     load = min(1., load + float(self.mass[queued] @ backlog_rates[queued]) / self.gpus)
@@ -527,6 +576,7 @@ class PooledExecution:
             completions = np.divide(self.remaining, rates, out=np.full(self.n, np.inf), where=rates > 0)
             waiting = ((self.state == 2) | (self.state == 5)) & (self.release > self.now)
             step = min(until - self.now, float(completions.min(initial=np.inf)),
+                       float(np.min(np.divide(self.replica_debt, local_recovery, out=np.full(self.n, np.inf), where=local_recovery > 0), initial=np.inf)) if self.affinity else
                        float(np.min(np.divide(self.resident_debt, resident_recovery, out=np.full(2, np.inf), where=resident_recovery > 0))),
                        float(np.min(np.divide(self.backlog, backlog_rates, out=np.full(self.n, np.inf), where=backlog_rates > 0), initial=np.inf)),
                        float(np.min(self.release[waiting] - self.now, initial=np.inf)))
@@ -557,7 +607,11 @@ class PooledExecution:
             self.resident_generated += resident_growth * step
             self.resident_displaced += resident_displacement * step
             self.resident_recovered += resident_recovery * step
-            self.resident_debt = np.maximum(self.resident_debt + (resident_growth - resident_recovery) * step, 0.)
+            if self.affinity:
+                self.replica_debt = np.maximum(self.replica_debt + (local_growth - local_recovery) * step, 0.)
+                self.resident_debt = np.array([self.mass[self.route == r] @ self.replica_debt[self.route == r] for r in (0, 1)])
+            else:
+                self.resident_debt = np.maximum(self.resident_debt + (resident_growth - resident_recovery) * step, 0.)
             self.backlog = np.maximum(self.backlog - backlog_rates * step, 0)
             gate = (self.state == 5) & self.gated
             self.buffered[gate] += self.counts[gate].sum(1) * self.fleet.metadata.get("source_session_rps", 0.) * step
@@ -584,16 +638,24 @@ class PooledExecution:
                                            for i in np.flatnonzero((self.state >= 2) & (self.state < 6) & ~gate)), start=np.zeros(2))
         source_buffered, source_work = source_buffered + gate_pending, source_work + gate_work
         transferred_buffered = float(self.mass @ self.buffered) - gate_pending
+        recovered = (self.state == 6) & (self.replica_debt <= 1e-9) & (self.backlog <= 1e-9)
+        recovered_fractions = [float(self.mass[recovered & (2 * self.route + self.action == a)] @
+                                    (self.counts[recovered & (2 * self.route + self.action == a)] @ self.fleet.gain)) for a in range(4)]
         return {"shed_fraction": float(fractions.sum()), "action_counts": numbers.tolist(),
                 "resident_latency_validated": False,
                 "service_recovered_by_deadline": self.service_ready_s is not None,
-                "service_recovery_scope": "aggregate pooled work only; no resident GPU affinity or TTFT/TPOT guarantee",
+                "service_recovery_scope": ("resident debt and source buffers recover on their permanently assigned replica cohorts; work proxy, no TTFT/TPOT guarantee" if self.affinity else "aggregate pooled work only; no resident GPU affinity or TTFT/TPOT guarantee"),
                 "action_fractions": fractions.tolist(), "completed_sessions": float(numbers.sum()),
                 "last_completion_s": max((e["completion_s"] for e in events), default=0.),
                 "service_ready_s": self.service_ready_s,
                 "resident_debt_generated_work_s": self.resident_generated.tolist(),
                 "resident_displaced_work_s": self.resident_displaced.tolist(),
                 "resident_pool_compensation_work_s": np.maximum(self.resident_displaced - self.resident_generated, 0.).tolist(),
+                "resident_affinity": bool(self.affinity),
+                "require_local_recovery": bool(self.require_local_recovery),
+                "recovered_handoff_fraction": float(sum(recovered_fractions)) if self.affinity else None,
+                "recovered_action_fractions": recovered_fractions if self.affinity else None,
+                "reserved_destination_replicas": [float(self.mass[self.route == r].sum()) for r in (0, 1)] if self.affinity else None,
                 "resident_debt_recovered_work_s": self.resident_recovered.tolist(),
                 "pending_resident_debt_work_s": self.resident_debt.tolist(),
                 "batch_replica_seconds": self.compute_used.tolist(), "migration_idle_work_s": self.idle_work.tolist(),
@@ -615,11 +677,11 @@ class PooledExecution:
                 "dispatch_chunks": int(self.chunks), "dispatch_wave_count": self.n,
                 "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; " + ("capture current source state at each wave's first dispatch" if self.paced else "frozen initial snapshot while source continues"),
                 "execution_model": "independent_event_fluid_batch_mass_finite_trace",
-                "source_pacing": ("paced recorded trajectories with contextual request-duration proxy and declared arrival phases" if self.paced else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
+                "source_pacing": ("sequential histories with server-timed generation; offered turns wait for their predecessor" if self.fleet.metadata.get("causal_source") else "paced recorded trajectories with contextual request-duration proxy and declared arrival phases" if self.paced else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
                                   else "finite recorded turns at explicit equal cadence; terminal context retained"),
-                "compute_scope": ("shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion" if self.protected else "fractional batch processor sharing; dynamic measured load factor; no ingestion"),
-                "backlog_scope": ("ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears" if self.protected else "migration reduces ordinary service; spare capacity repays resident debt before source buffers; recovery utilization enters the measured migration load factor"),
-                "resident_debt_scope": ("resident debt disallowed by the shared safe-occupancy constraint" if self.protected else "site-wide deficit after spare GPUs compensate displaced service; resident_displaced_work_s records the local throughput-loss proxy before compensation; zero ordinary service during KV response compute; network waiting consumes no ordinary service"
+                "compute_scope": ("one action pack per permanently reserved replica cohort; measured slowdown uses that replica's initial resident load; no ingestion" if self.affinity else "shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion" if self.protected else "fractional batch processor sharing; dynamic measured load factor; no ingestion"),
+                "backlog_scope": ("incoming standing service remains on its action replica; local headroom repays resident debt before source buffers" if self.affinity else "ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears" if self.protected else "migration reduces ordinary service; spare capacity repays resident debt before source buffers; recovery utilization enters the measured migration load factor"),
+                "resident_debt_scope": ("disjoint fluid replica cohorts; measured local throughput loss generates debt during compute, same-replica headroom recovers it outside compute; no cross-GPU compensation; conservative placement, not general bin packing" if self.affinity else "resident debt disallowed by the shared safe-occupancy constraint" if self.protected else "site-wide deficit after spare GPUs compensate displaced service; resident_displaced_work_s records the local throughput-loss proxy before compensation; zero ordinary service during KV response compute; network waiting consumes no ordinary service"
                                         if "resident_replay_loss" in self.timing else "reverse interference disabled in legacy primitive fixture"),
                 "memory_scope": "reserve declared cohort memory, including recorded-cycle peaks, before transfer; grow or reject before catch-up"}
 
