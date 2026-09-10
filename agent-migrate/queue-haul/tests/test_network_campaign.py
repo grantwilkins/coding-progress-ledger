@@ -108,6 +108,21 @@ def test_h100_two_region_cluster_and_profile_override(tmp_path, monkeypatch):
     n.validate_hosts(n.Cluster.parse(value), reports)
 
 
+def test_southeastasia_cluster_routes_and_identity():
+    cluster = n.Cluster.load(n.ROOT / "azure_network_cluster_southeastasia.json")
+    node, = cluster.destinations
+    assert (cluster.source.region, cluster.source.host) == ("westus3", "10.11.0.4")
+    assert (node.region, node.host, node.ssh_user) == (
+        "southeastasia", "10.15.0.4", "azrsadmin")
+    routes, ports = n.cluster_routes(cluster)
+    assert ports[node.id]["kv"] == 8301
+    assert any(route.listen_host == "10.11.0.4" for route in routes)
+    value = cluster.as_dict()
+    value["source"]["region"] = "swedencentral"
+    with pytest.raises(ValueError, match="frozen topology"):
+        n.Cluster.parse(value)
+
+
 def test_remote_commands_use_pinned_runtime(tmp_path):
     node = n.Cluster.load(
         n.ROOT / "azure_network_cluster_australia_southcentral.json"

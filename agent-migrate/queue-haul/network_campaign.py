@@ -295,7 +295,7 @@ class Cluster:
         if not (value.source.region == "swedencentral" and regions <= {
                 "eastus2", "westeurope", "germanywestcentral"} or
                 value.source.region == "westus3" and
-                regions == {"australiaeast", "southcentralus"}):
+                regions in ({"australiaeast", "southcentralus"}, {"southeastasia"})):
             raise ValueError("cluster regions do not match the frozen topology")
         return value
 
