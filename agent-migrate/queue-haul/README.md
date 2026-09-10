@@ -247,6 +247,11 @@ cutoff. Original failed attempts and the initial 148.6-minute acquisition remain
 unchanged. The twenty-policy diagnostic remains the bounded simulator comparison;
 full SLO-feasibility campaigns remain unready, with the remaining measurements
 listed in the supplemental report.
+The nine per-scenario `events.jsonl` files are preserved losslessly in
+[scenario-events.tar.gz](outputs/a100-replay-completion-20260910T0116/scenario-events.tar.gz).
+Their [archive manifest](outputs/a100-replay-completion-20260910T0116/scenario-events-archive.json)
+records verified original hashes and the extraction command needed before reproducing
+the reductions from a Git checkout; the existing ignore rule excludes the raw files.
 
 Source load is 0.8; destination loads are 0.25, 0.50, 0.75, 0.90, and 0.95.
 At equal source/destination sizes, the standing-service shed ceiling
