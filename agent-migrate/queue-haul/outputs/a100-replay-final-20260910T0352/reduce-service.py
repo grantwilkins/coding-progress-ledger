@@ -63,7 +63,7 @@ def window(rows, trace, epoch, start, end):
         'arrived_failed_by_end':sum(r.get('status') in ('failed','dependency_failed') and r['scheduled_ns'] < epoch+end*1e9 and r.get('end_ns',float('inf')) <= epoch+end*1e9 for r in rows),
         'known_cache_requests':len(cached),'cached_tokens':sum(r['cached_tokens'] for r in cached) if cached else None,
         'derived_prompt_minus_cache_tokens':sum(r['prompt_tokens']-r['cached_tokens'] for r in cached) if cached else None,
-        'completed_request_latency_screen':bool(coverage is not None and coverage >= .99 and ttft and tpot and percentile(ttft) <= 1 and percentile(tpot) <= .1),
+        'completed_request_latency_screen':bool(coverage is not None and coverage >= .99 and offered and len(exact)/offered >= .99 and ttft and tpot and percentile(ttft) <= 1 and percentile(tpot) <= .1),
         'tail_guarantee':False}
 
 

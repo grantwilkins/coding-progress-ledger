@@ -49,3 +49,12 @@ def test_pause_after_last_token_is_not_verified_execution_overlap():
     events[0]['monotonic_ns']=15
     result=module.quiescence(events,[request])[0]
     assert result['client_token_stream_overlap_verified'] and not result['server_execution_timestamps_available']
+
+
+def test_censoring_cannot_pass_population_screen_from_completed_subset():
+    row=dict(scheduled_ns=0,start_ns=0,first_ns=100_000_000,end_ns=1_000_000_000,
+        status=200,done=True,exact_token_timestamps=True,mean_tpot_s=.02,prompt_tokens=8,cached_tokens=None)
+    result=module.window([row],[{'offset_s':0},{'offset_s':2}],0,0,3)
+    assert result['exact_timing_coverage_of_completed']==1
+    assert result['exact_completed_fraction_of_arrivals']==.5
+    assert not result['completed_request_latency_screen']
