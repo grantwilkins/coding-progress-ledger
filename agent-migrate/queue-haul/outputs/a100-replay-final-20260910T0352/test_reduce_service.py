@@ -39,3 +39,13 @@ def test_censored_stream_keeps_observed_ttft_without_claiming_full_tpot():
     assert summary['p90_original_arrival_ttft_s']==.2 and summary['ttft_observed_requests']==1
     assert summary['outstanding_all_prior_arrivals']==1 and summary['tpot_requests']==0
     assert not summary['completed_request_latency_screen']
+
+
+def test_pause_after_last_token_is_not_verified_execution_overlap():
+    request=dict(request_id='r',session=0,scheduled_ns=0,start_ns=1,cohort='incoming',serving_role='source',exact_token_timestamps=True,first_ns=10,last_token_ns=20,end_ns=30)
+    events=[dict(kind='pause',session=0,monotonic_ns=25,in_flight_request={'request_id':'r','first_token_ns':10}),
+        dict(kind='source_idle',session=0,monotonic_ns=31,last_source_request={'request_id':'r'})]
+    assert not module.quiescence(events,[request])[0]['client_token_stream_overlap_verified']
+    events[0]['monotonic_ns']=15
+    result=module.quiescence(events,[request])[0]
+    assert result['client_token_stream_overlap_verified'] and not result['server_execution_timestamps_available']

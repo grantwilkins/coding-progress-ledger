@@ -51,16 +51,45 @@ def window(rows, trace, epoch, start, end):
         'unfinished_or_failed_arrival_cohort':offered-len(done),'exact_requests':len(exact),'tpot_requests':len(tpot),
         'exact_timing_coverage_of_completed':coverage,'exact_completed_fraction_of_arrivals':len(exact)/offered if offered else None,
         'offered_rps':offered/(end-start),'completed_rps':sum(r['end_ns'] >= epoch+start*1e9 for r in completed)/(end-start),
-        'ttft_observed_requests':len(first_observed),'no_first_token_waiting_over_1s':sum((r.get('first_ns') is None or r['first_ns'] > epoch+end*1e9) and r['scheduled_ns'] < epoch+(end-1)*1e9 for r in eligible),
+        'ttft_observed_requests':len(first_observed),'request_tpot_over_100ms':sum(t>.1 for t in tpot),'no_first_token_waiting_over_1s':sum((r.get('first_ns') is None or r['first_ns'] > epoch+end*1e9) and r['scheduled_ns'] < epoch+(end-1)*1e9 for r in eligible),
+        'known_original_arrival_ttft_over_1s':sum(t>1 for t in ttft),
+        'minimum_fraction_of_offered_with_ttft_over_1s':sum(t>1 for t in ttft)/offered if offered else None,
         'p90_original_arrival_ttft_s':percentile(ttft),'p90_request_mean_tpot_s':percentile(tpot),
         'p90_client_send_lateness_s':percentile([(r['start_ns']-r['scheduled_ns'])/1e9 for r in done]),
         'p90_client_queue_s':percentile([(r['client_dispatch_ns']-r['client_wakeup_ns'])/1e9 for r in done if r.get('client_wakeup_ns') is not None]),
         'p90_client_schedule_lateness_s':percentile([(r['client_wakeup_ns']-r['scheduled_ns'])/1e9 for r in done if r.get('client_wakeup_ns') is not None]),
         'outstanding_all_prior_arrivals':sum(r['offset_s'] < end for r in trace)-len(completed),
+        'arrived_not_dispatched_by_end':sum(r['scheduled_ns'] < epoch+end*1e9 and (r.get('start_ns') is None or r['start_ns'] > epoch+end*1e9) for r in rows),
+        'arrived_failed_by_end':sum(r.get('status') in ('failed','dependency_failed') and r['scheduled_ns'] < epoch+end*1e9 and r.get('end_ns',float('inf')) <= epoch+end*1e9 for r in rows),
         'known_cache_requests':len(cached),'cached_tokens':sum(r['cached_tokens'] for r in cached) if cached else None,
         'derived_prompt_minus_cache_tokens':sum(r['prompt_tokens']-r['cached_tokens'] for r in cached) if cached else None,
         'completed_request_latency_screen':bool(coverage is not None and coverage >= .99 and ttft and tpot and percentile(ttft) <= 1 and percentile(tpot) <= .1),
         'tail_guarantee':False}
+
+
+def quiescence(events, requests):
+    rows=[]
+    for pause in (e for e in events if e['kind']=='pause'):
+        idle=next((e for e in events if e['kind']=='source_idle' and e['session']==pause['session'] and e['monotonic_ns']>=pause['monotonic_ns']),None)
+        request_id=(pause.get('in_flight_request') or {}).get('request_id')
+        request=next((r for r in requests if request_id and r.get('request_id')==request_id and r.get('cohort')=='incoming' and r.get('serving_role')=='source'),None)
+        overlap=bool(idle and request and request.get('exact_token_timestamps') and request.get('first_ns') is not None
+            and request['first_ns']<=pause['monotonic_ns']<request['last_token_ns']<=request['end_ns']<=idle['monotonic_ns']
+            and (idle.get('last_source_request') or {}).get('request_id')==request_id)
+        switch=next((e for e in events if e['kind']=='route_switch' and e['session']==pause['session']),None)
+        queued=lambda at:sum(r['scheduled_ns']<=at and (r.get('start_ns') is None or r['start_ns']>at) for r in requests if r.get('cohort')=='incoming' and r['session']==pause['session']) if at is not None else None
+        phases={phase:next((e for e in events if e['kind']==phase and e['session']==pause['session']),None) for phase in ('catch_up_start','catch_up_end')}
+        rows.append({'session':pause['session'],'pause_ns':pause['monotonic_ns'],'source_in_flight':bool(pause.get('in_flight_request')),
+            'request_id':request_id,'client_token_stream_overlap_verified':overlap,'server_execution_timestamps_available':False,
+            'pause_to_idle_s':(idle['monotonic_ns']-pause['monotonic_ns'])/1e9 if idle else None,
+            'context_growth_tokens':idle.get('actual_context_growth_tokens') if idle else None,
+            'reset_since_snapshot':idle.get('reset_since_snapshot') if idle else None,
+            'source_owned_undispatched_at_pause':queued(pause['monotonic_ns']),
+            'source_owned_undispatched_at_idle':queued(idle['monotonic_ns'] if idle else None),
+            'destination_owned_undispatched_at_switch':queued(switch['monotonic_ns'] if switch else None),
+            'catch_up_s':(phases['catch_up_end']['monotonic_ns']-phases['catch_up_start']['monotonic_ns'])/1e9 if all(phases.values()) else None,
+            'catch_up_cached_tokens':phases['catch_up_end'].get('cached_tokens') if phases['catch_up_end'] else None})
+    return rows
 
 
 def engine_window(rows, epoch, start, end):
@@ -105,9 +134,7 @@ def reduce(root):
             'migration_events':events,'switches_by_seconds_after_migration':{str(t-60):sum(e['monotonic_ns'] <= epoch+t*1e9 for e in switches) for t in (90,180) if t <= duration},
             'control_materialization_requests':sum(r.get('phase','').startswith('control_') for r in selected),
             'service_requests_by_role':{role:sum(r.get('cohort') in ('resident','incoming') and r.get('serving_role')==role for r in selected) for role in ('source','destination')},
-            'quiescence':[{'session':e['session'],'pause_ns':e['monotonic_ns'],'source_in_flight':bool(e.get('in_flight_request')),
-                'source_decode_in_progress_verified':bool((e.get('in_flight_request') or {}).get('first_token_ns')),
-                'pause_to_idle_s':next(((z['monotonic_ns']-e['monotonic_ns'])/1e9 for z in events if z['kind']=='source_idle' and z['session']==e['session']),None)} for e in events if e['kind']=='pause'],
+            'quiescence':quiescence(events,selected),
             'statuses':{str(status):sum(r.get('status')==status for r in selected) for status in {r.get('status') for r in selected}}})
     pairs = []
     for episode in episodes:
