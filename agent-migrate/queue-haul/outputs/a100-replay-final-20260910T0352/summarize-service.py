@@ -7,6 +7,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parent
 paths=[root/'service-analysis.json',root/'kv-observations.json',root/'resident-rate-selection.json']
 service,kv,rates=(json.loads(p.read_text()) for p in paths)
+paths += [root/'plan.json',root/'runtime-launch.json',root/'resident-history-audit.json'] + ([root/'cleanup-execution.json'] if (root/'cleanup-execution.json').exists() else [])
 frozen=json.loads((root/'plan.json').read_text());repo=root.parent.parent
 simulator_hashes={name:digest for name,digest in frozen['input_hashes'].items() if name.startswith('pool_shed_') or name=='loaded_service_model.py'}
 simulator_check={name:{'baseline_sha256':digest,'current_sha256':hashlib.sha256((repo/name).read_bytes()).hexdigest(),
@@ -40,7 +41,7 @@ report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main
     'runtime_provenance':{'launch':'runtime-launch.json','builds':'runtime-builds.json','GPU_identity':'runtime-comparison.json','cleanup':'cleanup-execution.json','source_stop':'source-stop.json','destination_stop':'destination-stop.json','acquisition_cap_s':launch['acquisition_cap_s'],'controller_total_through_cleanup_s':cleanup_elapsed,'startup_and_cleanup_within_cap':cleanup_elapsed<=launch['acquisition_cap_s'] if cleanup_elapsed is not None else None},
     'independent_history_audit':{**{k:history[k] for k in ('input_sha256','completed_links','nonreset_links','source_to_destination_links','causal_violations','turn_order_violations','retained_history_violations')},'reset_classification':history['reset_classification']['counts'],'exactly_one_terminal_row_per_offered_arrival':history['trace_coverage']['valid']},
     'completed_main_episodes':len(main),'requested_main_episodes':12,'completed_scouts':len(scouts),
-    'simulator_source_hash_verification':simulator_check,'simulator_coefficients_changed':False,'new_policy_evaluations':0,
+    'simulator_source_hash_verification':simulator_check,'simulator_coefficients_changed':False,'new_policy_evaluations':0,'policy_evaluation_scope':'Campaign evaluations; required software tests may exercise simulator routines.',
     'test_evidence':{'final_commands_and_results':'verification.json','focused_simulator':'focused-simulator-tests.log','focused_result':'181 passed,3 deselected','combined_instrumentation':'resident-broad-tests-original-order-fixed.log','combined_result':'82 passed','retained_failed_attempt':'resident-broad-test-environment-failures.log','failure_resolution':'Paired tests leaked QH_RUNTIME/QH_LMCACHE_MODE; fixture restoration plus permitted loopback execution resolves the original-order suite. Original13failed/67passed output remains archived.'},
     'clean_controlled_KV_conditions':kv['clean_conditions'],'clean_KV_destination_continuations':kv['clean_destination_continuations'],
     'selected_resident_rates':rates,'service_observations':rows,
