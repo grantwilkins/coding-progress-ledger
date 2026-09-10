@@ -270,6 +270,7 @@ class ResidentAcquisition(Acquisition):
                 if cohort=='incoming' and spec['arm']=='control':
                     await materialize(t,i,t.history or prompt,self.cfg.sink_port,'control_preepoch_materialization',1,True)
             await asyncio.gather(*(prewarm(t,i,c) for c,ts in (('resident',trajectories),('incoming',incoming)) for i,t in enumerate(ts)))
+            if self.remaining()<duration+60:raise TimeoutError('insufficient full observation and cleanup reserve after materialization')
             metrics=serving.MetricsSampler(self.cfg.host,self.cfg.sink_port,root/'engine.csv',.5)
             source_metrics=serving.MetricsSampler(self.cfg.host,self.cfg.src_port,root/'engine-source.csv',.5) if migration else None
             power=profiler.PowerSampler(root/'power.csv',.5)
