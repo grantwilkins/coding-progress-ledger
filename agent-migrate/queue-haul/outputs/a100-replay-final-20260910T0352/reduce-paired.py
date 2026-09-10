@@ -104,6 +104,8 @@ def reduce(root):
             a, z = row['event_initial_start_ns'], row['event_initial_end_ns']
             row['source_activity_requests'] = [r | {'overlapped_initial_copy_from_client_events': r['start_ns'] < z and r['end_ns'] > a if a is not None and z is not None else None} for r in requests if r['scenario'] == spec['scenario_id'] and r['session'] == sid and (r['phase_label'] or '').startswith('controlled_turn_')]
             row.update({'event_' + key + '_ns': next((e['monotonic_ns'] for e in ev if e['event'] == key), None) for key in ('pause','idle','route_switch')})
+            row['cache_evidence'] = [e for e in ev if e['event'] in ('cache_prefetch','cache_request_evidence')]
+            row['phase_kv_layouts'] = {e['phase']:e.get('kv_layout') for e in ev if e['event']=='copy_end'}
             row['snapshot_events'] = [e for e in ev if e['event'] in ('snapshot','pause','idle','route_switch','resume_source')]
             pause, idle = row['event_pause_ns'], row['event_idle_ns']
             row['pause_to_idle_s'] = (idle-pause)/1e9 if pause is not None and idle is not None else None
