@@ -26,3 +26,16 @@ def test_missing_engine_telemetry_is_unknown():
     assert result['gauges']['kv_cache_usage_perc']['max'] is None
     assert result['counter_deltas']['num_preemptions_total'] is None
     assert result['max_sample_gap_s'] is None
+
+
+def test_censored_stream_keeps_observed_ttft_without_claiming_full_tpot():
+    import json
+    row=dict(episode='e',cohort='resident',session=2,turn=7,status='censored',done=False,scheduled_ns=70_000_000_000)
+    events=[dict(episode='e',cohort='resident',session=2,turn=7,monotonic_ns=t,
+        data=json.dumps({'id':'r','choices':[{'token_ids':[1]}]})) for t in (70_200_000_000,90_000_000_000)]
+    partial=module.recover_partial([row],events)
+    summary=module.window([row],[{'offset_s':70}],0,30,90)
+    assert partial[0]['observed_token_ids']==2 and partial[0]['mean_request_tpot_s'] is None
+    assert summary['p90_original_arrival_ttft_s']==.2 and summary['ttft_observed_requests']==1
+    assert summary['outstanding_all_prior_arrivals']==1 and summary['tpot_requests']==0
+    assert not summary['completed_request_latency_screen']

@@ -12,12 +12,37 @@ def percentile(values):
     return float(np.quantile(values, .9)) if values else None
 
 
+def recover_partial(rows, events):
+    pending = {(r['episode'],r['cohort'],r['session'],r['turn']):r for r in rows
+               if r.get('cohort') in ('resident','incoming') and not r.get('done')}
+    observed = {}
+    for event in events:
+        key = tuple(event.get(k) for k in ('episode','cohort','session','turn'))
+        if key not in pending or not event.get('data') or event['data']=='[DONE]':continue
+        payload=json.loads(event['data'])
+        for choice in payload.get('choices',[]):
+            if choice.get('token_ids'):
+                observed.setdefault(key,[]).append({'monotonic_ns':event['monotonic_ns'],'token_ids':choice['token_ids'],'request_id':payload.get('id')})
+    partial=[]
+    for key,tokens in observed.items():
+        row=pending[key];row['first_ns']=tokens[0]['monotonic_ns'];row['recovered_partial_exact_token_events']=all(len(e['token_ids'])==1 for e in tokens)
+        partial.append({'episode':key[0],'cohort':key[1],'session':key[2],'turn':key[3],
+            'request_id':tokens[0]['request_id'],'status':row['status'],'scheduled_ns':row['scheduled_ns'],
+            'first_ns':row['first_ns'],'last_observed_token_ns':tokens[-1]['monotonic_ns'],
+            'observed_token_ids':sum(len(e['token_ids']) for e in tokens),'all_observed_events_single_token':row['recovered_partial_exact_token_events'],
+            'original_arrival_ttft_s':(row['first_ns']-row['scheduled_ns'])/1e9,
+            'mean_request_tpot_s':None,'scope':'Recovered from raw request-path SSE events; unfinished completion remains censored. Last observed tokens can extend past the observation boundary and do not establish full-request TPOT.'})
+    return partial
+
+
 def window(rows, trace, epoch, start, end):
     eligible = [r for r in rows if start <= (r['scheduled_ns']-epoch)/1e9 < end]
     done = [r for r in eligible if r.get('done') and r.get('status') == 200 and r['end_ns'] <= epoch+end*1e9]
     exact = [r for r in done if r.get('exact_token_timestamps') and r.get('first_ns') is not None]
     offered = sum(start <= r['offset_s'] < end for r in trace)
-    ttft = [(r['first_ns']-r['scheduled_ns'])/1e9 for r in exact]
+    first_observed = [r for r in eligible if r.get('first_ns') is not None and r['first_ns'] <= epoch+end*1e9
+                      and (r.get('exact_token_timestamps') or r.get('recovered_partial_exact_token_events'))]
+    ttft = [(r['first_ns']-r['scheduled_ns'])/1e9 for r in first_observed]
     tpot = [r['mean_tpot_s'] for r in exact if r.get('mean_tpot_s') is not None]
     completed = [r for r in rows if r.get('done') and r.get('status') == 200 and r['end_ns'] <= epoch+end*1e9]
     cached = [r for r in done if r.get('cached_tokens') is not None]
@@ -26,6 +51,7 @@ def window(rows, trace, epoch, start, end):
         'unfinished_or_failed_arrival_cohort':offered-len(done),'exact_requests':len(exact),'tpot_requests':len(tpot),
         'exact_timing_coverage_of_completed':coverage,'exact_completed_fraction_of_arrivals':len(exact)/offered if offered else None,
         'offered_rps':offered/(end-start),'completed_rps':sum(r['end_ns'] >= epoch+start*1e9 for r in completed)/(end-start),
+        'ttft_observed_requests':len(first_observed),'no_first_token_waiting_over_1s':sum((r.get('first_ns') is None or r['first_ns'] > epoch+end*1e9) and r['scheduled_ns'] < epoch+(end-1)*1e9 for r in eligible),
         'p90_original_arrival_ttft_s':percentile(ttft),'p90_request_mean_tpot_s':percentile(tpot),
         'p90_client_send_lateness_s':percentile([(r['start_ns']-r['scheduled_ns'])/1e9 for r in done]),
         'p90_client_queue_s':percentile([(r['client_dispatch_ns']-r['client_wakeup_ns'])/1e9 for r in done if r.get('client_wakeup_ns') is not None]),
@@ -54,6 +80,8 @@ def reduce(root):
     def read(path):
         return json.loads(raw(path))
     rows = [json.loads(line) for line in raw(root/'requests.jsonl').splitlines()]
+    event_path=root/'request-events.jsonl'
+    partial = recover_partial(rows,(json.loads(line) for line in raw(event_path).splitlines())) if event_path.exists() else []
     episodes = []
     for path in sorted(root.glob('*/result.json')):
         result = read(path)
@@ -93,9 +121,9 @@ def reduce(root):
                 'completion_deficit_requests':w['outstanding_all_prior_arrivals']-reference['outstanding_all_prior_arrivals'],
                 'original_arrival_ttft_p90_difference_s':w['p90_original_arrival_ttft_s']-reference['p90_original_arrival_ttft_s'] if w['p90_original_arrival_ttft_s'] is not None and reference['p90_original_arrival_ttft_s'] is not None else None,
                 'request_mean_tpot_p90_difference_s':w['p90_request_mean_tpot_s']-reference['p90_request_mean_tpot_s'] if w['p90_request_mean_tpot_s'] is not None and reference['p90_request_mean_tpot_s'] is not None else None})
-    return {'episodes':episodes,'matched_comparisons':pairs,'input_sha256':hashes,'fitting':'stopped_pending_user_review','campaign_ready':False,
+    return {'episodes':episodes,'partial_request_observations':partial,'matched_comparisons':pairs,'input_sha256':hashes,'fitting':'stopped_pending_user_review','campaign_ready':False,
         'limitations':['Exact timing is client token arrival, not server execution. No GPU queue inferred from TTFT; aggregate engine histogram deltas cannot be added as elapsed time.',
-            'Window percentiles cover arrival cohorts completed by that window end; unfinished arrivals remain outstanding. Completed-only timing coverage and offered-arrival coverage are separate; short windows establish no tail guarantee.',
+            'TPOT covers arrival cohorts completed by that window end. TTFT also includes unfinished requests whose exact first-token event is preserved; unobserved first tokens and unfinished arrivals remain explicit. Completed-only timing coverage and offered-arrival coverage are separate; short windows establish no tail guarantee.',
             'Recovery comparisons use continuing arrivals through300; cleanup excluded. Control materialization adds destination work and must be read with baseline differences.',
             'Service migration adapter validates full retained token history/hash/generation, not semantic state-code recall; original full-message512 probe retained only in controlled KV diagnostics.']}
 
