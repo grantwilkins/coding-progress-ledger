@@ -3580,7 +3580,24 @@ the deadline-sweep bar plot from the measured inputs captured in
 The snapshot includes private KV geometry, A100 prefill curves, natural link
 rates, and 100 matched eight-session context draws and orders, so reproduction
 does not require the original `/datadrive` checkout or its profiling helpers.
-This is an optimistic earliest-finish transport/prefill heuristic, not QH
-Greedy. It shares each destination's link and serial replay server but excludes
-lookup, restoration, decode, ongoing-load and memory admission, and power.
-The bars describe estimated choices, not live readiness or full-shed attainment.
+The calculation uses the existing pooled QH Greedy planner and event simulator.
+The adjacent frozen regional profiles provide measured memory limits and are
+verified against the original profile hashes. Normal single-request P50 prefill
+is used for replay; KV timing is private bytes divided by VM-to-VM bandwidth.
+This static, idle-destination estimate gives every session equal selection
+credit using a synthetic linear power curve and negligible bookkeeping demand.
+It excludes lookup, restoration, tail recomputation, decode, and ongoing traffic;
+it does not estimate the original physical-demand campaign's power attainment.
+The existing five-second power reserve is added to the internal planner deadline,
+so the migration budget remains exactly 5, 10, 20, or 30 seconds. Bars count
+simulator commits by that migration deadline; remain includes unselected or
+late sessions. The report retains selected counts, destination mixes, late
+counts, and the fraction of draws where all eight complete.
+
+This supersedes the earliest-finish heuristic in commit `3a7d90a8`, whose deadline
+only rejected late actions and could not alter choices after all eight fit.
+Across 100 matched draws, corrected 5-second KV/replay/remain percentages are
+98.125/1.875/0 for GPT-OSS, 88.25/11.75/0 for Gemma, and
+36.5/19.875/43.625 for Qwen. At 10 seconds GPT-OSS and Gemma choose all KV;
+Qwen is 87.25/1.75/11. All three choose all KV at 20 and 30 seconds.
+These are simulator predictions under the stated assumptions, not live readiness.

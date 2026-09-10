@@ -1,0 +1,405 @@
+{
+  "cases": {
+    "central": {
+      "F": 18232.296192716927,
+      "G": 1602.8655204340316,
+      "action_power_w": {
+        "catch_up": {
+          "1": [
+            0.0,
+            14.079714925373132
+          ],
+          "2": [
+            0.0,
+            14.616575819539108
+          ],
+          "4": [
+            0.0,
+            15.860431372549016
+          ],
+          "8": [
+            0.0,
+            16.78788427779117
+          ]
+        },
+        "kv_transfer": {
+          "1": [
+            0.0,
+            14.079714925373132
+          ],
+          "2": [
+            0.0,
+            14.616575819539108
+          ],
+          "4": [
+            0.0,
+            15.860431372549016
+          ],
+          "8": [
+            0.0,
+            16.78788427779117
+          ]
+        },
+        "off": {
+          "1": [
+            0,
+            0
+          ]
+        },
+        "replay": {
+          "1": [
+            0.0,
+            27.953837670068005
+          ],
+          "2": [
+            0.0,
+            41.26283846153845
+          ],
+          "4": [
+            0.0,
+            53.10784354636591
+          ],
+          "8": [
+            0.0,
+            79.95660768217735
+          ]
+        },
+        "replay_on_request": {
+          "1": [
+            0.0,
+            27.953837670068005
+          ]
+        },
+        "sleep": {
+          "1": [
+            0,
+            0
+          ]
+        }
+      },
+      "decode_tps": {
+        "1": [
+          [
+            4096,
+            27.925504011624486
+          ],
+          [
+            8192,
+            28.232573990349334
+          ],
+          [
+            16384,
+            28.603641696696705
+          ],
+          [
+            24576,
+            28.154738448721517
+          ],
+          [
+            32256,
+            28.487637239918616
+          ]
+        ]
+      },
+      "kv_transfer": {
+        "block_bytes": 9437184,
+        "block_tokens": 256,
+        "bytes_by_context": [
+          [
+            4096,
+            150994944
+          ],
+          [
+            8192,
+            301989888
+          ],
+          [
+            16384,
+            603979776
+          ],
+          [
+            24576,
+            905969664
+          ],
+          [
+            32256,
+            1189085184
+          ]
+        ],
+        "catch_up_fixed_s": 1.052118278,
+        "destination_bytes_per_s": 107554751.21831268,
+        "initial_completion_s": 0.7730908602291662,
+        "setup_s": 0,
+        "tail_replay_tps": 919.4260924435412
+      },
+      "phase_power": {
+        "a_s_per_prefill_token": 5.4847726771763395e-05,
+        "b_s_per_decode_token": 0.003548974780428271,
+        "bootstrap": [],
+        "delta_w": 191.00117905008506,
+        "grouped_cv_rmse_w": 7.755752341532584,
+        "measured_power_curve": [
+          [
+            0.0,
+            107.95885245901638
+          ],
+          [
+            0.09976651120462904,
+            146.54446526393133
+          ],
+          [
+            0.2609746300557349,
+            177.82451440864367
+          ],
+          [
+            0.3263786105268115,
+            176.0104528782418
+          ],
+          [
+            0.5143040245814772,
+            229.52068417123235
+          ],
+          [
+            0.5804984910862326,
+            248.06219635417784
+          ],
+          [
+            0.8420703614826636,
+            296.9075631065939
+          ],
+          [
+            0.9441411503061058,
+            297.8258777049416
+          ],
+          [
+            1.4241964794732693,
+            297.8461768849189
+          ],
+          [
+            1.6821972875739926,
+            298.23146783841406
+          ],
+          [
+            2.8469166930500367,
+            298.800329059575
+          ],
+          [
+            3.361258248993913,
+            298.96003150910144
+          ],
+          [
+            5.642676958050254,
+            298.8040310588003
+          ]
+        ],
+        "p0_w": 107.95885245901638,
+        "provenance_sha256": "5cec98c728e2fabc791b9f131cc21c4413e02ff7231a2345612ad4a7be7d4f1e",
+        "valid_hull": [
+          [
+            16948.566666666666,
+            4.1
+          ],
+          [
+            9318.1,
+            803.1
+          ],
+          [
+            117.26666666666667,
+            1588.1333333333334
+          ],
+          [
+            10.866666666666667,
+            163.4
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            9232.433333333332,
+            2.2333333333333334
+          ]
+        ],
+        "within_5w_fraction": 0.8333333333333334
+      },
+      "power_curve": [
+        [
+          0,
+          107.95885245901638
+        ],
+        [
+          5.642676958050254,
+          298.96003150910144
+        ]
+      ],
+      "prefill_tps": {
+        "1": [
+          [
+            4096,
+            16292.610002907293
+          ],
+          [
+            8192,
+            14308.450309455871
+          ],
+          [
+            16384,
+            10898.044460529289
+          ],
+          [
+            24576,
+            8803.923922075028
+          ],
+          [
+            32256,
+            7459.038889468506
+          ]
+        ]
+      },
+      "replay_completion_s": 0,
+      "replay_tps": {
+        "1": [
+          [
+            4096,
+            5727.940795421062
+          ],
+          [
+            8192,
+            7475.910955927413
+          ],
+          [
+            16384,
+            7308.663104004643
+          ],
+          [
+            24576,
+            6670.854675697365
+          ],
+          [
+            32256,
+            6248.3225835300145
+          ]
+        ]
+      },
+      "shutdown_s": null,
+      "sleep_power_delta_w": 0.015758548702308417,
+      "sleep_s": 3.2890054985,
+      "switch_s": 0.000173443
+    }
+  },
+  "gpus_per_node": 1,
+  "hardware": "NVIDIA A100 80GB PCIe",
+  "kv_capacity_tokens": 2088863,
+  "kv_geometry": {
+    "capacity_bytes": [
+      51539607552,
+      51539607552,
+      51539607552
+    ],
+    "groups": [
+      "kernel-0:engine-0",
+      "kernel-1:engine-1",
+      "shared-allocator-budget"
+    ],
+    "resident_bytes": [
+      [
+        4096,
+        3145728,
+        100663296,
+        103809024
+      ],
+      [
+        8192,
+        3145728,
+        201326592,
+        204472320
+      ],
+      [
+        16384,
+        3145728,
+        402653184,
+        405798912
+      ],
+      [
+        24576,
+        3145728,
+        603979776,
+        607125504
+      ],
+      [
+        32256,
+        3145728,
+        792723456,
+        795869184
+      ]
+    ]
+  },
+  "max_destination_kv_streams": 8,
+  "max_destination_replays": 1,
+  "max_ell": 1.0121167648179428,
+  "max_power_load": 5.642676958050254,
+  "model": "openai/gpt-oss-20b",
+  "power_scope": "gpu",
+  "power_window_s": 5.0,
+  "precision": "bf16",
+  "profile_id": "openai-gpt-oss-20b-a100-regional-architecture-1353b28c",
+  "schema": "queue-haul-model-profile-v6",
+  "sources": {
+    "capacity": {
+      "kind": "measured",
+      "reference": "/datadrive/gpt-concurrency-east-20260908-002 distributed evidence; timing roots /datadrive/gpt-current-stack-timing-east-20260908-004",
+      "relative_error": 0,
+      "valid_range": [
+        0,
+        2088863
+      ]
+    },
+    "kv_transfer": {
+      "kind": "measured",
+      "reference": "/datadrive/gpt-concurrency-east-20260908-002 distributed evidence; timing roots /datadrive/gpt-current-stack-timing-east-20260908-004",
+      "relative_error": 0,
+      "valid_range": [
+        150994944,
+        1189085184
+      ]
+    },
+    "power": {
+      "kind": "measured",
+      "reference": "/datadrive/gpt-final-power-fit-20260908-002.json",
+      "relative_error": 0.025942438868442753,
+      "valid_range": [
+        0,
+        5.642676958050254
+      ]
+    },
+    "replay": {
+      "kind": "measured",
+      "reference": "/datadrive/gpt-concurrency-east-20260908-002 distributed evidence; timing roots /datadrive/gpt-current-stack-timing-east-20260908-004",
+      "relative_error": 0,
+      "valid_range": [
+        4096,
+        32256
+      ]
+    },
+    "service": {
+      "kind": "measured",
+      "reference": "/datadrive/gpt-concurrency-east-20260908-002 source warm requests and power-run throughput",
+      "relative_error": 0,
+      "valid_range": [
+        4096,
+        32256
+      ]
+    },
+    "transitions": {
+      "kind": "assumed",
+      "reference": "Legacy A100 transition parameters; drain experiment leaves the source awake.",
+      "relative_error": 1.0,
+      "valid_range": [
+        0.0,
+        300.0
+      ]
+    }
+  },
+  "status": "fitted",
+  "tensor_parallel": 1
+}
