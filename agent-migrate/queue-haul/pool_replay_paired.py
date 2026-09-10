@@ -16,6 +16,8 @@ import destination_runner as serving
 import migration_profiler as p
 import migration_testbed as b
 
+TOTAL_LIMIT_S, SCENARIO_LIMIT_S, CLEANUP_RESERVE_S = 1500, 300, 30
+
 
 def write(path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False, default=str) + "\n")
@@ -60,7 +62,7 @@ def scenarios(selected_method=None, selected_context=None):
                     "concurrency": 8, "move_concurrency": 8, "serving_concurrency": 8,
                     "warm_concurrency": 8, "prestage_all": True, "copy_policy": "initial_final",
                     "reset_caches": False, "wait_cache_idle": False, "sample_power": False,
-                    "final_state": "awake", "deadline_s": 180})
+                    "final_state": "awake", "deadline_s": SCENARIO_LIMIT_S})
     return [row for row in rows if (selected_method is None or row["method"] == selected_method) and (selected_context is None or row["context_size"] == selected_context)]
 
 
@@ -92,11 +94,29 @@ def worker(inventory, scenario, out):
                 for row in scenario["sessions"]]}
     scenario = {**scenario, "bandwidth_mbps": inventory["bandwidth_mbps"]}
     p.LiveSession = CheckedSession
-    p.run_scenario(stack, cfg, manifest, scenario, out, out.parent.name, configure_proxy=False)
+    result = p.run_scenario(stack, cfg, manifest, scenario, out, out.parent.name, configure_proxy=False)
+    validate_completion(result, scenario, cfg.api_proxy_port)
+
+
+def validate_completion(result, scenario, destination_port):
+    expected = {row["session_id"] for row in scenario["sessions"]}
+    moves = {row["move"]["session_id"]: row for row in result["migrations"]}
+    continuations = {row["session_id"]: row for row in result["continuations"]}
+    if result["status"] != "complete" or set(moves) != expected or set(continuations) != expected:
+        raise RuntimeError("every incoming session must finish migration and destination continuation")
+    for sid, move in moves.items():
+        initial, catch_up, state = (move.get(key) for key in ("initial", "catch_up", "committed_state"))
+        continuation = continuations[sid]
+        if move.get("error") or not initial or not catch_up or not state or state["generation"] < 1:
+            raise RuntimeError(f"{sid}: complete initial transfer, actual source growth and catch-up required")
+        if catch_up["context_hash"] != state["context_hash"] or continuation.get("committed_context_hash") != state["context_hash"] or continuation.get("status_code") != 200 or continuation.get("route_port") != destination_port:
+            raise RuntimeError(f"{sid}: stale or invalid destination continuation")
+        if not move["initial_end_ns"] <= move["pause_start_ns"] <= move["idle_ns"] <= move["catch_up_start_ns"] <= move["catch_up_end_ns"] <= move["switch_start_ns"] <= move["switch_end_ns"] <= continuation["start_ns"]:
+            raise RuntimeError(f"{sid}: invalid transfer/quiescence/catch-up/ownership ordering")
 
 
 def remaining_seconds(started, deadline_wall_ns=None):
-    return max(0., min(1200 - (time.monotonic() - started), (deadline_wall_ns - time.time_ns()) / 1e9 if deadline_wall_ns is not None else 1200.))
+    return max(0., min(TOTAL_LIMIT_S - (time.monotonic() - started), (deadline_wall_ns - time.time_ns()) / 1e9 if deadline_wall_ns is not None else float(TOTAL_LIMIT_S)))
 
 
 def run_worker(command, timeout, log):
@@ -129,11 +149,11 @@ def main():
         args.out.mkdir(parents=True, exist_ok=True)
         if plan_path.exists():
             raise FileExistsError(plan_path)
-        evidence = [args.inventory, Path(p.__file__), Path(b.__file__), *[Path(endpoint[key]) for endpoint in
+        evidence = [args.inventory, Path(p.__file__), Path(b.__file__), b.LMCACHE_COMPAT/"connector_patch.py", *[Path(endpoint[key]) for endpoint in
                     (inventory["source"], inventory["destination"])
                     for key in ("identity_evidence", "runtime_evidence")]]
         write(plan_path, {"scope": "controlled source append and paired KV diagnostics; not recorded agentic service",
-            "total_limit_s": 1200, "per_scenario_limit_s": 180, "method": args.method, "context": args.context, "deadline_wall_ns": inventory.get("deadline_wall_ns"), "scenarios": scenarios(args.method, args.context),
+            "total_limit_s": TOTAL_LIMIT_S, "per_scenario_limit_s": SCENARIO_LIMIT_S, "cleanup_reserve_s": CLEANUP_RESERVE_S, "method": args.method, "context": args.context, "deadline_wall_ns": inventory.get("deadline_wall_ns"), "scenarios": scenarios(args.method, args.context),
             "input_sha256": {str(path): p.file_hash(path) for path in evidence},
             "driver_sha256": p.file_hash(Path(__file__)), "argv": sys.argv,
             "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
@@ -149,7 +169,7 @@ def main():
     for path, expected in plan["input_sha256"].items():
         if p.file_hash(Path(path)) != expected:
             raise ValueError(f"frozen input changed: {path}")
-    if plan.get("method") != args.method or plan.get("context") != args.context or plan.get("deadline_wall_ns") != inventory.get("deadline_wall_ns") or plan["scenarios"] != scenarios(args.method, args.context) or plan["total_limit_s"] != 1200 or plan["per_scenario_limit_s"] != 180:
+    if plan.get("method") != args.method or plan.get("context") != args.context or plan.get("deadline_wall_ns") != inventory.get("deadline_wall_ns") or plan["scenarios"] != scenarios(args.method, args.context) or plan["total_limit_s"] != TOTAL_LIMIT_S or plan["per_scenario_limit_s"] != SCENARIO_LIMIT_S or plan.get("cleanup_reserve_s") != CLEANUP_RESERVE_S:
         raise ValueError("frozen bounded plan differs from driver")
     if args.stage == "worker":
         worker(inventory, plan["scenarios"][args.index], args.out/plan["scenarios"][args.index]["scenario_id"])
@@ -163,7 +183,7 @@ def main():
     results = []
     for index, row in enumerate(plan["scenarios"]):
         remaining = remaining_seconds(started, plan.get("deadline_wall_ns"))
-        if remaining <= 0:
+        if remaining < SCENARIO_LIMIT_S + CLEANUP_RESERVE_S:
             results.extend({"scenario": item["scenario_id"], "status": "unmeasured_budget_limit"}
                            for item in plan["scenarios"][index:])
             break
@@ -184,7 +204,7 @@ def main():
             sampler.start()
         try:
             remaining = remaining_seconds(started, plan.get("deadline_wall_ns"))
-            outcome = run_worker(command, min(180, remaining), root/"worker.log") if remaining > 0 else {"status": "unmeasured_global_deadline"}
+            outcome = run_worker(command, SCENARIO_LIMIT_S, root/"worker.log") if remaining >= SCENARIO_LIMIT_S + CLEANUP_RESERVE_S else {"status": "unmeasured_global_deadline"}
         finally:
             for sampler in samplers:
                 sampler.close()
@@ -193,7 +213,7 @@ def main():
             with source.open("rb") as handle:
                 handle.seek(offset)
                 (root/f"attached-{name}.raw").write_bytes(handle.read())
-        results.append({"scenario": row["scenario_id"], "command": command, "log_offsets": offsets, **outcome})
+        results.append({"scenario": row["scenario_id"], "command": command, "log_offsets": offsets, "reserved_scenario_s": SCENARIO_LIMIT_S, "remaining_before_launch_s": remaining, **outcome})
         write(root/"attempt.json", results[-1])
         write(args.out/"paired-attempts.json", results)
         if outcome["status"] == "timeout":

@@ -12,7 +12,7 @@ def test_bounded_counterbalanced_plan_never_resets_attached_stack():
     assert len(rows) == 8
     assert [row['method'] for row in rows] == ['replay', 'kv_transfer']*2 + ['kv_transfer', 'replay']*2
     assert {(row['context_size'], row['activity_tokens']) for row in rows} == {(8192, 32), (30000, 2048)}
-    assert all(row['concurrency'] == 8 and row['deadline_s'] == 180 for row in rows)
+    assert all(row['concurrency'] == 8 and row['deadline_s'] == paired.SCENARIO_LIMIT_S for row in rows)
     assert all(not row['reset_caches'] and not row['wait_cache_idle'] and row['final_state'] == 'awake' for row in rows)
     assert len({session['session_id'] for row in rows for session in row['sessions']}) == 64
 
@@ -66,6 +66,7 @@ def test_worker_config_is_copied_without_mutating_frozen_reference(monkeypatch, 
     cfg = paired.b.Config()
     calls = []
     monkeypatch.setattr(paired, 'validate_inventory', lambda inventory: cfg)
+    monkeypatch.setattr(paired, 'validate_completion', lambda *args: None)
     monkeypatch.setattr(paired.p, 'run_scenario', lambda *args, **kwargs: calls.append((args, kwargs)))
     monkeypatch.setattr(paired.p, 'LiveSession', paired.p.LiveSession)
     paired.worker({'stack_root': str(tmp_path), 'bandwidth_mbps': 1000}, paired.scenarios()[0], tmp_path)
@@ -110,15 +111,16 @@ def test_context_filter_keeps_both_seeds_without_extra_conditions():
 def test_original_wall_deadline_never_extends_local_budget(monkeypatch):
     monkeypatch.setattr(paired.time,'monotonic',lambda:200.)
     monkeypatch.setattr(paired.time,'time_ns',lambda:1_000_000_000_000)
-    assert paired.remaining_seconds(100.)==1100
+    assert paired.remaining_seconds(100.)==1400
     assert paired.remaining_seconds(100.,1_010_000_000_000)==10
     assert paired.remaining_seconds(100.,900_000_000_000)==0
-    assert paired.remaining_seconds(100.,9_000_000_000_000)==1100
+    assert paired.remaining_seconds(100.,9_000_000_000_000)==1400
 
 
 def test_distinct_run_directories_have_disjoint_source_cache_histories(monkeypatch,tmp_path):
     calls=[]
     monkeypatch.setattr(paired,'validate_inventory',lambda inventory:paired.b.Config())
+    monkeypatch.setattr(paired,'validate_completion',lambda *args:None)
     monkeypatch.setattr(paired.p,'run_scenario',lambda *args,**kwargs:calls.append(args))
     monkeypatch.setattr(paired.p,'LiveSession',paired.p.LiveSession)
     original=paired.scenarios('kv_transfer',8192)[0]
@@ -129,3 +131,35 @@ def test_distinct_run_directories_have_disjoint_source_cache_histories(monkeypat
     for call,keys in zip(calls,ids):
         assert keys=={r['session_id'] for r in call[3]['sessions']}=={r['session_id'] for r in call[3]['moves']}
     assert original['sessions'][0]['session_id'].startswith('paired-')
+
+
+@pytest.mark.parametrize("remaining", [14.6, 329.9])
+def test_insufficient_full_allowance_never_launches_worker(monkeypatch, tmp_path, remaining):
+    import json
+    evidence = tmp_path/"identity.json"; evidence.write_text("{}")
+    inventory = tmp_path/"inventory.json"
+    inventory.write_text(json.dumps({role: {"identity_evidence": str(evidence), "runtime_evidence": str(evidence)} for role in ("source", "destination")}))
+    monkeypatch.setattr(paired, "validate_inventory", lambda raw: paired.b.Config())
+    args = ["paired", "freeze", "--inventory", str(inventory), "--out", str(tmp_path), "--method", "kv_transfer"]
+    monkeypatch.setattr(sys, "argv", args)
+    paired.main()
+    monkeypatch.setattr(paired, "remaining_seconds", lambda *args: remaining)
+    monkeypatch.setattr(paired, "run_worker", lambda *args: pytest.fail("must reserve complete scenario"))
+    monkeypatch.setattr(sys, "argv", [args[0], "run", *args[2:]])
+    paired.main()
+    attempts = json.loads((tmp_path/"paired-attempts.json").read_text())
+    assert len(attempts) == 4 and all(row["status"] == "unmeasured_budget_limit" for row in attempts)
+
+
+@pytest.mark.parametrize("missing", [None, "catch_up", "committed_state", "continuations"])
+def test_complete_requires_catchup_state_and_destination_continuation(missing):
+    move = {"move": {"session_id": "s"}, "initial": {"context_hash": "before"},
+            "catch_up": {"context_hash": "after"}, "committed_state": {"context_hash": "after", "generation": 1},
+            **dict(zip(("initial_end_ns", "pause_start_ns", "idle_ns", "catch_up_start_ns", "catch_up_end_ns", "switch_start_ns", "switch_end_ns"), range(1, 8)))}
+    result = {"status": "complete", "migrations": [move], "continuations": [{"session_id": "s", "committed_context_hash": "after", "status_code": 200, "route_port": 8400, "start_ns": 8}]}
+    if missing == "continuations": result[missing] = []
+    elif missing: move[missing] = None
+    if missing:
+        with pytest.raises(RuntimeError): paired.validate_completion(result, {"sessions": [{"session_id": "s"}]}, 8400)
+    else:
+        paired.validate_completion(result, {"sessions": [{"session_id": "s"}]}, 8400)
