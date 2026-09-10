@@ -33,10 +33,13 @@ def payload(rows):
 
 
 def attribute(events, transfers, model):
-    owners = collections.defaultdict(set)
+    owners, expected = collections.defaultdict(set), {}
     for event in events:
         if event['event']=='rendered_request':
-            for key in keys(event['token_ids'],model):owners[key].add(event['session_id'])
+            request_keys=set(keys(event['token_ids'],model))
+            for key in request_keys:owners[key].add(event['session_id'])
+            if event.get('request_label') in ('kv_transfer_initial','kv_transfer_catch_up'):
+                expected[(event['session_id'],event['request_label'].removeprefix('kv_transfer_'))]=request_keys
     windows = []
     for event in events:
         if event['event']!='copy_start':continue
@@ -53,7 +56,18 @@ def attribute(events, transfers, model):
         if len(sessions)==1:
             sid = next(iter(sessions));groups[(sid,'all')].append(row)
             if len(phases)==1:groups[phases[0]].append(row)
-    return {'scenario':payload(gets),'lanes':[{'session':s,'phase':p,**payload(rows)} for (s,p),rows in sorted(groups.items())],
+    lanes=[]
+    for (sid,phase),rows in sorted(groups.items()):
+        wanted=expected.get((sid,phase));observed={r['key_hashes'] for r in rows}
+        starts=[a for s,p,a,z in windows if s==sid and p==phase]
+        previous={r['key_hashes'] for r in gets if starts and int(r['end_ns'])<=min(starts)}
+        lanes.append({'session':sid,'phase':phase,**payload(rows),
+            'crossphase_previously_seen_payload_bytes':sum(int(r['payload_bytes']) for r in rows if r['key_hashes'] in previous) if starts else None,
+            'expected_full_prefix_keys':len(wanted) if wanted is not None else None,
+            'matching_full_prefix_keys_transferred':len(wanted&observed) if wanted is not None else None,
+            'unexpected_keys_transferred':sorted(observed-wanted) if wanted is not None else None,
+            'initial_full_rounded_prefix_transfer':wanted==observed if phase=='initial' and wanted is not None else None})
+    return {'scenario':payload(gets),'lanes':lanes,
         'unresolved_get_records':ambiguous,'ownership_unmapped_records':sum(not owners[r['key_hashes']] for r in gets),
         'ownership_multiple_session_records':sum(len(owners[r['key_hashes']])>1 for r in gets),
         'phase_attribution_complete':not ambiguous,
@@ -86,7 +100,7 @@ def reduce(root, package):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('root',type=Path)
-    parser.add_argument('--package',type=Path,default=Path('/tmp/qh-replay-completion-runtime/lib/python3.12/site-packages'))
+    parser.add_argument('--package',type=Path,default=Path(__file__).resolve().parent/'key-formula')
     args=parser.parse_args();result=reduce(args.root,args.package)
     (args.root/'keyed-wire-analysis.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps([{k:s[k] for k in ('scenario_id','scenario','ownership_unmapped_records','ownership_multiple_session_records','phase_attribution_complete')} for s in result['scenarios']],indent=2))
