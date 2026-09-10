@@ -1,0 +1,179 @@
+{
+  "scope": "Supplemental controlled-source append checks. Not original recorded agentic shared-resident episodes. All original/corrective failures preserved; no simulator timing coefficients fitted.",
+  "counts": {
+    "paired": {
+      "scenario_statuses": {
+        "failed": 5,
+        "complete": 3
+      },
+      "requests_started": 231,
+      "http_complete_exact_requests": 231,
+      "state_valid_requests": 229
+    },
+    "paired-corrected": {
+      "scenario_statuses": {
+        "timeout": 1,
+        "unmeasured_after_timeout": 1
+      },
+      "requests_started": 17,
+      "http_complete_exact_requests": 16,
+      "state_valid_requests": 16
+    }
+  },
+  "valid_replay_conditions": [
+    {
+      "scenario": "paired-7101-30000-replay",
+      "seed": 7101,
+      "method": "replay",
+      "target_context": 30000,
+      "target_append": 2048,
+      "requests_started": 40,
+      "exact_timing_requests": 40,
+      "state_valid_requests": 40,
+      "block": "paired",
+      "initial_span_s": 33.745476291,
+      "catchup_span_s": 6.945464797,
+      "complete_switch_span_s": 36.38335548,
+      "updated_context_range": [
+        32075,
+        32088
+      ],
+      "initial_native_cached_tokens": [
+        64
+      ],
+      "catchup_cached_tokens": [
+        29984
+      ],
+      "maximum_pause_to_idle_ms": 0.455455,
+      "source_requests_overlapping_initial": 8
+    },
+    {
+      "scenario": "paired-7102-8192-replay",
+      "seed": 7102,
+      "method": "replay",
+      "target_context": 8192,
+      "target_append": 32,
+      "requests_started": 40,
+      "exact_timing_requests": 40,
+      "state_valid_requests": 40,
+      "block": "paired",
+      "initial_span_s": 5.664573071,
+      "catchup_span_s": 1.229152365,
+      "complete_switch_span_s": 6.435812786,
+      "updated_context_range": [
+        8252,
+        8257
+      ],
+      "initial_native_cached_tokens": [
+        64
+      ],
+      "catchup_cached_tokens": [
+        8176
+      ],
+      "maximum_pause_to_idle_ms": 0.540285,
+      "source_requests_overlapping_initial": 8
+    },
+    {
+      "scenario": "paired-7102-30000-replay",
+      "seed": 7102,
+      "method": "replay",
+      "target_context": 30000,
+      "target_append": 2048,
+      "requests_started": 40,
+      "exact_timing_requests": 40,
+      "state_valid_requests": 40,
+      "block": "paired",
+      "initial_span_s": 35.539889317,
+      "catchup_span_s": 5.315111221,
+      "complete_switch_span_s": 36.996035972,
+      "updated_context_range": [
+        32077,
+        32088
+      ],
+      "initial_native_cached_tokens": [
+        64
+      ],
+      "catchup_cached_tokens": [
+        29984
+      ],
+      "maximum_pause_to_idle_ms": 0.253566,
+      "source_requests_overlapping_initial": 8
+    }
+  ],
+  "corrected_kv": {
+    "status": "timeout_at_global_cutoff; invalid",
+    "second_seed": "unmeasured_after_timeout; budget omission",
+    "requests_started": 17,
+    "source_http_complete_exact_state_valid_requests": 16,
+    "usable_exact_timing_fraction_of_started": 0.9411764705882353,
+    "destination_requests_started": 1,
+    "destination_requests_completed": 0,
+    "destination_stream_events_before_cutoff": 13,
+    "source_unique_set_keys": 264,
+    "source_set_request_body_sizes": {
+      "12583084": 264
+    },
+    "unique_get_keys": 45,
+    "get_payload_sizes": {
+      "12582912": 45
+    },
+    "wire": {
+      "unique_get_keys": 45,
+      "unique_get_payload_bytes": 566231040,
+      "get_transfers": 45,
+      "actual_get_payload_bytes_including_repeated_keys": 566231040,
+      "get_request_protocol_bytes": 8550,
+      "get_response_protocol_bytes": 566231625,
+      "get_first_start_ns": 2659571146782,
+      "get_last_end_ns": 2664287134025,
+      "whole_proxy_bucket_bytes_by_direction": {
+        "kv/client_to_target": 3322052030,
+        "kv/target_to_client": 528486250,
+        "api/client_to_target": 16728,
+        "api/target_to_client": 41578
+      },
+      "window_ns": [
+        null,
+        null
+      ],
+      "scope": "Whole intersecting transfer records and proxy buckets, never prorated; phase windows may overlap. Scenario totals count each record once. Unique payload does not count retransfers; actual GET payload does."
+    },
+    "destination_engine": {
+      "samples": 25,
+      "interval_ns": [
+        "2649868182924",
+        "2664078786865"
+      ],
+      "counter_deltas": {
+        "prefix_cache_queries_total": 8192.0,
+        "prefix_cache_hits_total": 0.0,
+        "external_prefix_cache_hits_total": 8192.0,
+        "request_queue_time_seconds_sum": 0.0,
+        "request_prefill_time_seconds_sum": 0.0,
+        "request_decode_time_seconds_sum": 0.0,
+        "request_prefill_kv_computed_tokens_sum": 0.0,
+        "num_preemptions_total": 0.0
+      }
+    },
+    "verified": "Destination log reports Retrieved8192tokens in0.019s, matching +8192external cache-hit tokens and zero native hits. Source produced264unique SET keys after source-export fix. This demonstrates actual external retrieval on one unfinished request.",
+    "unvalidated": "No completed KV initial request, pause/catchup/commit or successful KV handoff. Partial RESP bytes do not establish a full32768-token wire anchor.16/17exact completed requests falls below99%coverage.",
+    "byte_coverage": "RESP transfer records log after client drain; proxy buckets flush separately. At cutoff45complete GETpayload records exceed copied proxy bucket bytes. Preserve both amounts; do not force equality or call proxy bucket coverage complete."
+  },
+  "modeling_status": {
+    "warm_full_source_evolved_catchup": "verified for24lanes across3valid replay conditions; full messages and original512token probe retained",
+    "source_activity_overlap": "24valid source requests overlap initial replay; maximum measured pause-to-idle<0.55ms because source work finished before pause. Long in-flight quiescence remains unmeasured.",
+    "source_error_safety": "Data exposed stale-state switch after invalid source output; two-line wait_idle guard plus regression applied after original block. Invalid original switches remain failures.",
+    "kv_path": "Source-export alignment corrected from observation; partial corrected run demonstrates8192external retrievedtokens, not a successful migration.",
+    "wire_anchor": "Observed GETchunk12,582,912B per256tokens equals49,152B/token native geometry. Extrapolation to32768=1,610,612,736B is native geometry, not measured full-context effective wire.0.80GB remains separate and unvalidated.",
+    "fleet_readiness": false
+  },
+  "reproduction": [
+    "python3 outputs/a100-replay-completion-20260910T0116/reduce-paired.py outputs/a100-replay-completion-20260910T0116/paired",
+    "python3 outputs/a100-replay-completion-20260910T0116/reduce-paired.py outputs/a100-replay-completion-20260910T0116/paired-corrected",
+    "python3 outputs/a100-replay-completion-20260910T0116/combine-paired.py"
+  ],
+  "input_sha256": {
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired/paired-analysis.json": "e5abb343cedb0f145adc9a4ab413da1d70ee40df118f6fae53718a6e769aea25",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired-corrected/paired-analysis.json": "be41cc23f64b6573be02d61f548ae29526c858575de84ccf3ce644209a649439"
+  }
+}
