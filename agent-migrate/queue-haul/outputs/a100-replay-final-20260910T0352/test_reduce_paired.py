@@ -15,7 +15,9 @@ def test_wire_counts_each_record_once_and_reports_unique_payload():
     assert result['actual_get_payload_bytes_including_repeated_keys'] == 400
     assert result['get_response_wire_bytes'] == 430
     assert result['get_response_protocol_bytes'] == 30
-    assert result['get_request_protocol_bytes'] == 15
+    assert result['get_request_protocol_bytes'] == 24
+    assert result['get_request_resp_framing_bytes'] == 15
+    assert result['get_request_command_key_bytes'] == 9
     assert result['retransferred_get_payload_bytes'] == 100
     assert result['whole_proxy_bucket_bytes_by_direction'] == {'kv/target_to_client':430}
 
