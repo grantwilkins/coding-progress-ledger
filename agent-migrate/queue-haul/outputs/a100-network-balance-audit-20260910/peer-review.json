@@ -1,0 +1,59 @@
+{
+  "checked_evidence_sha256": "02211b50d602c3d8b2d5bf34319cfb6e470dce872662e57ceb32f59517fb867e",
+  "checked_report_sha256": "9141b204ad49e485cdadc448e124901aecbe3026faa9d3299ffc8a13dc86457e",
+  "checks": [
+    "All eight configurations and 24 policy outputs present.",
+    "All recorded input hashes and two source helper hashes omitted from the sensitivity manifest match current files.",
+    "Candidate libraries independently reconstructed once per workload; every sensitivity cell and frozen D30 baseline matches.",
+    "Original width8/1Tbps outputs match frozen results within original tolerance.",
+    "All handoff, recovery, action-sum, deadline, replica, route/shared byte and pure-KV application bounds pass.",
+    "Replay fractions, bytes and reserved replicas are unchanged to 1e-12 relative tolerance; replay logs produce less than 1ms completion-time change.",
+    "Changing gpus_per_node here changes network endpoint replication only; GPU counts, fixed replica placement, contexts, source service and offered traffic stay fixed.",
+    "README network numbers and counterfactual scope match frozen evidence and policy outputs."
+  ],
+  "evidence_input_hashes_verified": 226,
+  "interpretation": "The existing fleet scenario lowers WAN per source GPU by 73.416x versus its measured bulk VM balance and shares each one-GPU VM endpoint across eight assumed GPUs. The matched-bandwidth counterfactual recovers hardware-like KV preference without slowing replay or changing calibration. This is an explanatory counterfactual, not a 73Tbps deployment recommendation or SLO certification.",
+  "minor_counterfactual_caveat": "With 1Tbps retained, coding_long QH changes from 0.72149412 to 0.74330521 when endpoint sharing changes even though pooled application bounds exceed shared WAN. Pure KV and replay do not change. Treat this small delta as planner/allocation sensitive pending further diagnosis; it does not demonstrate additional usable aggregate WAN.",
+  "new_policy_evaluations_by_reviewer": 0,
+  "replay_last_completion_max_change_s": 0.0008802225168196287,
+  "report_input_hashes_verified": 224,
+  "reviewed_evaluations": 24,
+  "schema": "queue-haul-network-balance-peer-review-v1",
+  "source_helper_hashes_verified_against_frozen_frontier": {
+    "pool_shed_resident_fit.py": "bd9a802e0f63d1b591cdb4255238b1f0b24483e2518acf5207005972ed69b596",
+    "pool_shed_resident_queue.py": "6674e1f75647ddbb0e5c551f4248c1f2db36695e85345dabc59a0cfbf006bf23"
+  },
+  "status": "approved with stated scope",
+  "summaries": [
+    {
+      "baseline_recovered_fractions": {
+        "kv_only": 0.31747063472480064,
+        "queue_haul": 0.8465086626351702,
+        "replay_only": 0.8150494722703883
+      },
+      "candidate_sha256": "6f58e2a10d3db85130c7f7568bb400804bcebc2986fee73d121ce4b7a25bb7d1",
+      "replicated_one_gpu_endpoint_recovered_fractions": {
+        "kv_only": 0.9967262497921318,
+        "queue_haul": 0.996855062532304,
+        "replay_only": 0.8150494722703883
+      },
+      "target_qh_kv_share_of_handoff": 0.9982587488959124,
+      "workload": "coding"
+    },
+    {
+      "baseline_recovered_fractions": {
+        "kv_only": 0.2110295463023925,
+        "queue_haul": 0.721494120669155,
+        "replay_only": 0.6854235341255022
+      },
+      "candidate_sha256": "f7fdf8c641c711d7f00f0a274e463a039d8f101d34356208c377573f47727ed9",
+      "replicated_one_gpu_endpoint_recovered_fractions": {
+        "kv_only": 0.9739970248781764,
+        "queue_haul": 0.9739970270410132,
+        "replay_only": 0.6854235341255022
+      },
+      "target_qh_kv_share_of_handoff": 1.0,
+      "workload": "coding_long"
+    }
+  ]
+}
