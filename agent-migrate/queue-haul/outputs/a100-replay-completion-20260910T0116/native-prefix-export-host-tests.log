@@ -1,0 +1,6 @@
+Command: UV_CACHE_DIR=/tmp/qh-paired-uv /datadrive/queue-haul-tools/bin/uv run --no-project --python /datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python python -m pytest -q -o cache_dir=/tmp/qh-paired-pytest tests/test_lmcache_compat.py
+Execution: host (sandbox escalation for socket access)
+Provenance: exact stdout retained from exec session 82406; no rerun.
+
+.........                                                                [100%]
+9 passed in 1.75s

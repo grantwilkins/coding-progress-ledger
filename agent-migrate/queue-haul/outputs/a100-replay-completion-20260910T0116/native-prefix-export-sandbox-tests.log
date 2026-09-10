@@ -1,0 +1,7 @@
+Command: UV_CACHE_DIR=/tmp/qh-paired-uv /datadrive/queue-haul-tools/bin/uv run --no-project --python /datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python python -m pytest -q -o cache_dir=/tmp/qh-paired-pytest tests/test_lmcache_compat.py
+Execution: restricted sandbox
+Status: stalled after three test progress dots; no passing result.
+Observed stdout: ...
+Cleanup: owned pytest PID 34360 received SIGTERM after successful focused regression checks.
+Provenance: exec session 40006; no complete pytest summary was emitted.
+Final tool result: exit code 143 after SIGTERM; no additional stdout.
