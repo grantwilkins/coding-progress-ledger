@@ -20,6 +20,7 @@ def audit(rows):
             links.append({'prior_turn':prior['turn'],'turn':current['turn'],'reset':current['reset'],
                 'prior_prompt_tokens':prior['prompt_tokens'],'prompt_tokens':current['prompt_tokens'],
                 'actual_prior_output_tokens':len(prior['token_ids']),'source_owned_prior':prior.get('serving_role')=='source',
+                'source_to_destination':prior.get('serving_role')=='source' and current.get('serving_role')=='destination',
                 'causal_dispatch':prior['end_ns']<=current['client_dispatch_ns'],
                 'consecutive_turn':current['turn']==prior['turn']+1,
                 'nonreset_exact_retained_history':None if current['reset'] else current['full_prompt_token_ids'][:len(retained)]==retained})
@@ -29,6 +30,7 @@ def audit(rows):
     links=[link for row in sessions for link in row['links']]
     return {'sessions':sessions,'completed_links':len(links),'nonreset_links':sum(not r['reset'] for r in links),
         'reset_links':sum(r['reset'] for r in links),'causal_violations':sum(not r['causal_dispatch'] for r in links),
+        'source_to_destination_links':sum(r['source_to_destination'] for r in links),
         'turn_order_violations':sum(not r['consecutive_turn'] for r in links),
         'retained_history_violations':sum(r['nonreset_exact_retained_history'] is False for r in links)}
 

@@ -14,6 +14,7 @@ def test_actual_output_retained_across_source_destination_and_reset():
         'prompt_tokens':1,'end_ns':30,'client_dispatch_ns':20}]
     result=module.audit(rows)
     assert result['nonreset_links']==1 and result['reset_links']==1
+    assert result['source_to_destination_links']==1
     assert result['causal_violations']==result['retained_history_violations']==0
     rows[1]['full_prompt_token_ids'][2]=99;rows[1]['client_dispatch_ns']=9
     result=module.audit(rows)
