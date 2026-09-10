@@ -1,0 +1,600 @@
+........................................................................ [  4%]
+.............F.......................................................... [  9%]
+........................................................................ [ 13%]
+........................................................................ [ 18%]
+........................................................................ [ 22%]
+...............................................................F........ [ 27%]
+........................F...........................F................... [ 31%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+.................................F......FFFFF........................... [ 45%]
+........................................................................ [ 49%]
+........................................................................ [ 54%]
+........................................................................ [ 58%]
+........................................................................ [ 63%]
+...................................................................F.... [ 67%]
+.............
+=================================== FAILURES ===================================
+________ test_nominal_forecast_includes_final_delta_and_buffered_turns _________
+
+    def test_nominal_forecast_includes_final_delta_and_buffered_turns():
+        f = fleet(count=(1,), demand=(.2,), t1=(1.,), log=(0.,), kv=(100.,))
+        f.context[:] = 100
+        f.metadata = {"source_session_rps": 1., "turn_sequences": [[
+            {"context": 100, "prompt": 10, "output": 0},
+            {"context": 110, "prompt": 20, "output": 0}]]}
+        timing = {"beta": 0., "kappa": 1., "kv_completion_s": .5, "kv_batch_completion_s": .5}
+        measured = {"forecast_load": .5, "replay_context_tokens": [100., 200.], "replay_tps": [100., 100.],
+            "replay_completion_s": 0., "kv_block_tokens": 10, "kv_block_bytes": 10,
+            "kv_tail_replay_tps": 10., "F": 10., "G": 10.}
+>       np.testing.assert_allclose(c.nominal_action(f, np.ones(1), 0, 0, 100., timing, measured),
+                                   [20., 1.1, 1.3, 2.])
+E       AssertionError: 
+E       Not equal to tolerance rtol=1e-07, atol=0
+E       
+E       Mismatched elements: 3 / 4 (75%)
+E       Max absolute difference among violations: 200.
+E       Max relative difference among violations: 10.
+E        ACTUAL: array([220. ,   2.1,   4.3,   2. ])
+E        DESIRED: array([20. ,  1.1,  1.3,  2. ])
+
+tests/test_batch_shed.py:322: AssertionError
+__________ test_matched_prefill_does_not_start_an_unused_kv_connector __________
+
+    def test_matched_prefill_does_not_start_an_unused_kv_connector():
+>       command = campaign.capacity.stack_commands(
+            campaign.config("Qwen/Qwen3.8-27B", "h100"))
+
+tests/test_h100_serving_campaign.py:51: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+single_gpu_capacity_campaign.py:175: in stack_commands
+    return {"vllm": list(map(str, testbed.vllm_cmd(
+migration_testbed.py:541: in vllm_cmd
+    validate_model_runtime(cfg)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+cfg = Config(model='Qwen/Qwen3.8-27B', sandbox=PosixPath('/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox'), hf_home=...lse, capacity_discovery=True, matched_prefill=True, literal_token_timing=False, timing_only=False, enforce_eager=False)
+
+    def validate_model_runtime(cfg: Config) -> None:
+        if cfg.literal_token_timing and not cfg.architecture_campaign:
+            raise ValueError(
+                "literal token timing requires architecture_campaign")
+        if cfg.matched_prefill:
+            if cfg.max_model_len != 32768 or cfg.max_num_seqs != 256 \
+                    or cfg.max_num_batched_tokens != 8192 \
+                    or lmcache_mode() != "mp":
+>               raise ValueError("matched-prefill runtime geometry changed")
+E               ValueError: matched-prefill runtime geometry changed
+
+migration_testbed.py:287: ValueError
+_____ test_queue_parity_uses_full_migration_axes_and_pooled_second_metrics _____
+
+tmp_path = PosixPath('/tmp/pytest-of-azureuser/pytest-21/test_queue_parity_uses_full_mi0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x125af03b6d20>
+
+    def test_queue_parity_uses_full_migration_axes_and_pooled_second_metrics(
+            tmp_path, monkeypatch):
+        rows = [
+            {"action": "replay", "predicted_s": 1, "measured_s": 1},
+            {"action": "replay", "predicted_s": 2, "measured_s": 3},
+            {"action": "kv_transfer", "predicted_s": 3, "measured_s": 3},
+            {"action": "mixed", "predicted_s": 4, "measured_s": 5},
+        ]
+        monkeypatch.setattr(plt, "close", lambda _: None)
+    
+        write_queue(rows, tmp_path / "queue")
+    
+        axis = plt.gcf().axes[0]
+        assert not axis.get_title()
+        assert axis.figure.get_size_inches().tolist() == [1.65, 1.75]
+        assert axis.xaxis.label.get_fontsize() >= 7.5
+        assert min(text.get_fontsize() for text in axis.legend_.texts) >= 6.5
+        assert axis.get_xlabel().replace("\n", " ") == "Predicted Full Migration (s)"
+        assert axis.get_ylabel() == "Measured Full Migration (s)"
+        assert axis.get_xscale() == axis.get_yscale() == "log"
+        assert axis.get_xlim() == axis.get_ylim() == (1, 200)
+>       assert [tick for tick in axis.get_xticks() if 1 <= tick <= 200] == [1, 10, 100]
+E       assert [np.float64(1...loat64(100.0)] == [1, 10, 100]
+E         
+E         At index 1 diff: np.float64(100.0) != 10
+E         Right contains one more item: 100
+E         Use -v to get more diff
+
+tests/test_live_timing_parity.py:111: AssertionError
+__________ test_frozen_bootstrap_is_deduplicated_without_losing_draws __________
+
+    def test_frozen_bootstrap_is_deduplicated_without_losing_draws():
+>       result = fit_spec(SPECS[0], bootstrap_samples=20)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_matched_power_fit.py:15: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+matched_power_fit.py:61: in fit_spec
+    raw = list(csv.DictReader(path.open()))
+                              ^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/datadrive/h100-phase-power-20260820-r5/qwen3_8_27b/measurements.csv')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/datadrive/h100-phase-power-20260820-r5/qwen3_8_27b/measurements.csv'
+
+/usr/lib/python3.12/pathlib.py:1013: FileNotFoundError
+____ test_constraint_simulation_separates_joint_policies_and_exports_duals _____
+
+tmp_path = PosixPath('/tmp/pytest-of-azureuser/pytest-21/test_constraint_simulation_sep0')
+
+    def test_constraint_simulation_separates_joint_policies_and_exports_duals(tmp_path):
+        plan = n.make_plan(
+            n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
+            design="constraint")
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text(json.dumps(plan))
+    
+>       summary = n.simulate_constraint(plan_path, tmp_path / "simulation")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_network_campaign.py:719: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+network_campaign.py:3231: in simulate_constraint
+    _validate_constraint_simulation(rows, duals)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'condition_index': 0, 'condition_id': 'window-19', 'policy': 'queue_haul', 'objective': 'max_shed', ...}, {'conditio...ndition_index': 0, 'condition_id': 'window-19', 'policy': 'queue_haul_power_blind', 'objective': 'max_shed', ...}, ...]
+duals = [{'condition_index': 0, 'condition_id': 'window-19', 'phase_one_marginal_ceiling_w': 32.54903877845354, 'resource': 'k...'window-19', 'phase_one_marginal_ceiling_w': 32.54903877845354, 'resource': 'migration:pool/germany:replay', ...}, ...]
+
+    def _validate_constraint_simulation(rows: list[dict], duals: list[dict]) -> None:
+        by_cell = {(row["condition_id"], row["policy"]): row for row in rows}
+        if any(row["target_met"] for row in rows):
+            raise RuntimeError("the full-pack request must exceed constrained capacity")
+        if any(by_cell[cell, "queue_haul"]["attained_shed_w"] < max(
+                by_cell[cell, policy]["attained_shed_w"]
+                for policy in CONSTRAINT_POLICIES[1:]) - 1e-8
+               for cell, *_ in CONSTRAINT_CELLS):
+>           raise RuntimeError("Queue-Haul is below a baseline capacity point")
+E           RuntimeError: Queue-Haul is below a baseline capacity point
+
+network_campaign.py:3149: RuntimeError
+___________ test_separation_simulation_has_wide_joint_action_margins ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-azureuser/pytest-21/test_separation_simulation_has0')
+
+    def test_separation_simulation_has_wide_joint_action_margins(tmp_path):
+        plan = n.make_plan(
+            n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
+            design="separation")
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text(json.dumps(plan))
+    
+>       summary = n.simulate_separation(plan_path, tmp_path / "simulation")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_network_campaign.py:934: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+network_campaign.py:3474: in simulate_separation
+    _validate_separation_simulation(rows, resources, duals)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+rows = [{'condition_index': 0, 'condition_id': 'germany-service', 'repeat': 0, 'policy': 'queue_haul', ...}, {'condition_inde..., {'condition_index': 0, 'condition_id': 'germany-service', 'repeat': 0, 'policy': 'queue_haul_power_blind', ...}, ...]
+resources = [{'condition_id': 'germany-service', 'resource': 'route:link/east', 'unit': 'bytes', 'used': 4643268434.0, ...}, {'con...ny-service', 'resource': 'migration:pool/east:kv_transfer', 'unit': 'replica-s', 'used': 23.884821854345006, ...}, ...]
+duals = [{'condition_id': 'germany-service', 'phase_one_marginal_ceiling_w': 32.01978302176356, 'resource': 'route:link/east',...one_marginal_ceiling_w': 32.01978302176356, 'resource': 'migration:pool/east:kv_transfer', 'capacity': 25.0, ...}, ...]
+
+    def _validate_separation_simulation(rows: list[dict], resources: list[dict],
+                                        duals: list[dict]) -> None:
+        for row in rows:
+            winner = row["policy"] in SEPARATION_POLICIES[:2]
+            ratio = row["attained_shed_w"] / row["requested_shed_w"]
+            if winner and (ratio < 1 + SEPARATION_MARGIN
+                           or not row["deadline_met"]):
+>               raise RuntimeError("a joint planner lacks the required robust margin")
+E               RuntimeError: a joint planner lacks the required robust margin
+
+network_campaign.py:3359: RuntimeError
+______ test_oracle_stale_simulation_certifies_capacity_and_deadline_traps ______
+
+tmp_path = PosixPath('/tmp/pytest-of-azureuser/pytest-21/test_oracle_stale_simulation_c0')
+
+    def test_oracle_stale_simulation_certifies_capacity_and_deadline_traps(tmp_path):
+        plan = n.make_plan(
+            n.ROOT / "outputs/coding-manifest.json", constraint_contract(), seed=1,
+            design="separation")
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text(json.dumps(plan))
+    
+>       summary = n.simulate_oracle_stale(plan_path, tmp_path / "simulation")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_network_campaign.py:980: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+network_campaign.py:3932: in simulate_oracle_stale
+    _validate_oracle_stale(oracles, predictions, resources, duals)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+oracles = [{'family': 'original', 'condition_id': 'germany-service', 'restriction': 'joint', 'requested_shed_w': 37.113979472624...al', 'condition_id': 'east-service-slow-path', 'restriction': 'joint', 'requested_shed_w': 47.6296069898685, ...}, ...]
+predictions = [{'state': 'all-bind', 'plan': 'adaptive', 'requested_shed_w': 40.20681109534354, 'planned_shed_w': 49.13328620483598,...kv', 'plan': 'stale-optimistic', 'requested_shed_w': 40.20681109534354, 'planned_shed_w': 55.91862816438433, ...}, ...]
+resources = [{'state': 'all-bind', 'resource': 'route:link/east', 'unit': 'bytes', 'used': 1547817437.9999998, ...}, {'state': 'al... 'all-bind', 'resource': 'migration:pool/east:kv_transfer', 'unit': 'replica-s', 'used': 16.288824069124825, ...}, ...]
+duals = [{'state': 'all-bind', 'phase_one_marginal_ceiling_w': 32.010348876139446, 'resource': 'route:link/east', 'capacity': ...ne_marginal_ceiling_w': 32.010348876139446, 'resource': 'migration:pool/east:kv_transfer', 'capacity': 25.0, ...}, ...]
+
+    def _validate_oracle_stale(oracles: list[dict], predictions: list[dict],
+                               resources: list[dict], duals: list[dict]) -> None:
+        if {row["admission_mode"] for row in (*oracles, *predictions)} \
+                != {"normal"}:
+            raise RuntimeError("restricted oracles do not share normal admission")
+        oracle = {(row["family"], row["condition_id"], row["restriction"]): row
+                  for row in oracles}
+        for condition, *_ in SEPARATION_CELLS:
+            joint = oracle["original", condition, "joint"]["shed_w"]
+            restricted = max(oracle["original", condition, name]["shed_w"]
+                             for name in ORACLE_RESTRICTIONS[1:])
+            if joint - restricted < (.4 if H100_CAMPAIGN else 12):
+                raise RuntimeError("an original exact restricted-oracle gap is too small")
+        target = oracle["toggle", "all-bind", "joint"]["requested_shed_w"]
+        joint = oracle["toggle", "all-bind", "joint"]
+        restricted = [oracle["toggle", "all-bind", name]
+                      for name in ORACLE_RESTRICTIONS[1:]]
+        if joint["shed_w"] < (1.015 if H100_CAMPAIGN else 1.2) * target \
+                or max(row["shed_w"] for row in restricted) \
+                > (.985 if H100_CAMPAIGN else .8) * target \
+                or joint["shed_w"] - max(row["shed_w"] for row in restricted) \
+                < (3 if H100_CAMPAIGN else 18) \
+                or any(joint[action] == 0 for action in CONSTRAINT_ACTIONS):
+            raise RuntimeError("the all-bind exact-oracle separation is not severe")
+        releases = (
+            ("free-kv", "east_only", 1.5 if H100_CAMPAIGN else 4),
+            ("free-service", "germany_only", 12),
+            ("free-bandwidth", "kv_only", 1.5 if H100_CAMPAIGN else 4),
+        )
+        if any(oracle["toggle", state, restriction]["shed_w"]
+               - oracle["toggle", "all-bind", restriction]["shed_w"] < margin
+               for state, restriction, margin in releases) \
+                or not any(oracle["toggle", "all-release", name]["target_met"]
+                           for name in ORACLE_RESTRICTIONS[1:]):
+            raise RuntimeError("switching off a constraint did not release its oracle")
+        predicted = {(row["state"], row["plan"]): row for row in predictions}
+        if any(not predicted[state, "robust"]["target_by_deadline"]
+               or not predicted[state, "adaptive"]["target_by_deadline"]
+               or predicted[state, "adaptive"]["shed_by_deadline_w"] + 1e-8
+               < predicted[state, "robust"]["shed_by_deadline_w"]
+               for state, *_ in ORACLE_STALE_STATES) \
+                or predicted["all-bind", "stale-optimistic"]["status"] \
+                != "capacity_infeasible":
+            raise RuntimeError("the robust or stale-plan certificate failed")
+        aware, blind = (predicted["all-bind", name] for name in (
+            "deadline-aware", "deadline-blind"))
+        blind_valid = (blind["target_by_deadline"] if H100_CAMPAIGN else
+                       blind["status"] == "late"
+                       and blind["shed_by_deadline_w"] <= .85 * target
+                       and blind["eventual_shed_w"] >= 1.2 * target
+                       and blind["time_to_target_s"] is not None
+                       and blind["time_to_target_s"] >= 55)
+        if aware["shed_by_deadline_w"] < (1.015 if H100_CAMPAIGN else 1.2) * target \
+                or aware["time_to_target_s"] >= SEPARATION_DEADLINE_S \
+                or not blind_valid:
+>           raise RuntimeError("deadline blindness is not a severe late-power trap")
+E           RuntimeError: deadline blindness is not a severe late-power trap
+
+network_campaign.py:3696: RuntimeError
+_____ test_hardware_gap_plan_is_matched_and_covers_each_missing_constraint _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x125aec69ac90>
+
+    def test_hardware_gap_plan_is_matched_and_covers_each_missing_constraint(
+            monkeypatch):
+        monkeypatch.chdir(n.ROOT.parent)
+>       plan = n.hardware_gap_plan(
+            n.ROOT / "outputs/east-germany-separation-20260809/plan.json",
+            n.ROOT / "outputs/east-germany-oracle-stale-20260809/plans.json",
+        )
+
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/tests/test_network_campaign.py:1026: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+parent_path = PosixPath('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-separation-20260809/plan.json')
+oracle_path = PosixPath('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-oracle-stale-20260809/plans.json')
+
+    def hardware_gap_plan(parent_path: Path, oracle_path: Path) -> dict:
+        parent = json.loads(parent_path.read_text())
+        validate_plan(parent)
+        if parent["design"] != "separation":
+            raise ValueError("hardware gap requires a separation plan")
+        frozen = json.loads(oracle_path.read_text())
+        if frozen.get("schema") != "queue-haul-oracle-stale-plans-v1":
+            raise ValueError("invalid oracle/stale plans")
+        manifest = json.loads(Path(parent["manifest"]["path"]).read_text())
+        profile = ModelProfile.load(MODEL_PATH)
+        template = next(row for row in parent["scenarios"]
+                        if row["condition_id"] == "joint-shaped"
+                        and row["repeat"] == 0 and row["policy"] == "queue_haul")
+        states, exact = {}, {}
+        for state, germany, kv, bandwidth, _policies in HARDWARE_GAP_MATRIX:
+            scenario = {
+                **template, "design": "hardware_gap", "condition_id": state,
+                "background": {"east": (.25, kv), "germany": (germany, 0)},
+                "bandwidth": bandwidth,
+                "bandwidth_mbps": _bandwidths(
+                    parent["network_contract"], bandwidth),
+                "requested_shed_fraction": HARDWARE_GAP_TARGET_FRACTION,
+                "admission_mode": "normal",
+                "migration_headroom": ({
+                    "east": {"replay": .35}, "germany": {"replay": .35},
+                } if H100_CAMPAIGN else {}),
+                "full_horizon_s": ORACLE_STALE_HORIZON_S,
+                "background_kv_headroom_tokens": {
+                    "east": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                    "germany": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                },
+            }
+            problem, architecture, routes, target, _demand = _scenario_problem(
+                scenario, manifest, profile)
+            states[state] = scenario, problem, architecture, routes, target
+            for restriction in ORACLE_RESTRICTIONS:
+                result, _ = _oracle_row(
+                    "hardware_gap", state, restriction, problem, architecture,
+                    routes, profile, target)
+                exact[state, restriction] = result
+        all_bind = states["all-bind"]
+        robust = exact["all-bind", "joint"].moves
+        stale = exact["all-release", "joint"].moves
+        blind = solve(
+            replace(all_bind[1], deadline_s=ORACLE_STALE_HORIZON_S,
+                    end_s=ORACLE_STALE_HORIZON_S),
+            profile, all_bind[3], "max_shed", destination=all_bind[2],
+            admission_mode="normal",
+        ).moves
+        generated = {
+            "robust_all_bind": _move_rows(robust),
+            "stale_all_release": _move_rows(stale),
+            "deadline_blind_90s": _move_rows(blind),
+        }
+        if any(generated[key] != frozen[key] for key in generated):
+>           raise RuntimeError("frozen oracle/stale decisions changed")
+E           RuntimeError: frozen oracle/stale decisions changed
+
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py:4075: RuntimeError
+________ test_hardware_gap_rejects_stale_plan_without_silent_replanning ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x125aef972930>
+
+    def test_hardware_gap_rejects_stale_plan_without_silent_replanning(
+            monkeypatch):
+        monkeypatch.chdir(n.ROOT.parent)
+>       plan = n.hardware_gap_plan(
+            n.ROOT / "outputs/east-germany-separation-20260809/plan.json",
+            n.ROOT / "outputs/east-germany-oracle-stale-20260809/plans.json",
+        )
+
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/tests/test_network_campaign.py:1067: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+parent_path = PosixPath('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-separation-20260809/plan.json')
+oracle_path = PosixPath('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-oracle-stale-20260809/plans.json')
+
+    def hardware_gap_plan(parent_path: Path, oracle_path: Path) -> dict:
+        parent = json.loads(parent_path.read_text())
+        validate_plan(parent)
+        if parent["design"] != "separation":
+            raise ValueError("hardware gap requires a separation plan")
+        frozen = json.loads(oracle_path.read_text())
+        if frozen.get("schema") != "queue-haul-oracle-stale-plans-v1":
+            raise ValueError("invalid oracle/stale plans")
+        manifest = json.loads(Path(parent["manifest"]["path"]).read_text())
+        profile = ModelProfile.load(MODEL_PATH)
+        template = next(row for row in parent["scenarios"]
+                        if row["condition_id"] == "joint-shaped"
+                        and row["repeat"] == 0 and row["policy"] == "queue_haul")
+        states, exact = {}, {}
+        for state, germany, kv, bandwidth, _policies in HARDWARE_GAP_MATRIX:
+            scenario = {
+                **template, "design": "hardware_gap", "condition_id": state,
+                "background": {"east": (.25, kv), "germany": (germany, 0)},
+                "bandwidth": bandwidth,
+                "bandwidth_mbps": _bandwidths(
+                    parent["network_contract"], bandwidth),
+                "requested_shed_fraction": HARDWARE_GAP_TARGET_FRACTION,
+                "admission_mode": "normal",
+                "migration_headroom": ({
+                    "east": {"replay": .35}, "germany": {"replay": .35},
+                } if H100_CAMPAIGN else {}),
+                "full_horizon_s": ORACLE_STALE_HORIZON_S,
+                "background_kv_headroom_tokens": {
+                    "east": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                    "germany": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                },
+            }
+            problem, architecture, routes, target, _demand = _scenario_problem(
+                scenario, manifest, profile)
+            states[state] = scenario, problem, architecture, routes, target
+            for restriction in ORACLE_RESTRICTIONS:
+                result, _ = _oracle_row(
+                    "hardware_gap", state, restriction, problem, architecture,
+                    routes, profile, target)
+                exact[state, restriction] = result
+        all_bind = states["all-bind"]
+        robust = exact["all-bind", "joint"].moves
+        stale = exact["all-release", "joint"].moves
+        blind = solve(
+            replace(all_bind[1], deadline_s=ORACLE_STALE_HORIZON_S,
+                    end_s=ORACLE_STALE_HORIZON_S),
+            profile, all_bind[3], "max_shed", destination=all_bind[2],
+            admission_mode="normal",
+        ).moves
+        generated = {
+            "robust_all_bind": _move_rows(robust),
+            "stale_all_release": _move_rows(stale),
+            "deadline_blind_90s": _move_rows(blind),
+        }
+        if any(generated[key] != frozen[key] for key in generated):
+>           raise RuntimeError("frozen oracle/stale decisions changed")
+E           RuntimeError: frozen oracle/stale decisions changed
+
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py:4075: RuntimeError
+_____________ test_hardware_gap_simulation_has_severe_matched_gaps _____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x125aef3e0200>
+tmp_path = PosixPath('/tmp/pytest-of-azureuser/pytest-21/test_hardware_gap_simulation_h0')
+
+    def test_hardware_gap_simulation_has_severe_matched_gaps(monkeypatch, tmp_path):
+        monkeypatch.chdir(n.ROOT.parent)
+        plan_path = tmp_path / "plan.json"
+>       n.write_hardware_gap_plan(
+            n.ROOT / "outputs/east-germany-separation-20260809/plan.json",
+            n.ROOT / "outputs/east-germany-oracle-stale-20260809/plans.json",
+            plan_path,
+        )
+
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/tests/test_network_campaign.py:1102: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py:4145: in write_hardware_gap_plan
+    plan = hardware_gap_plan(parent, oracle)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+parent_path = PosixPath('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-separation-20260809/plan.json')
+oracle_path = PosixPath('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/east-germany-oracle-stale-20260809/plans.json')
+
+    def hardware_gap_plan(parent_path: Path, oracle_path: Path) -> dict:
+        parent = json.loads(parent_path.read_text())
+        validate_plan(parent)
+        if parent["design"] != "separation":
+            raise ValueError("hardware gap requires a separation plan")
+        frozen = json.loads(oracle_path.read_text())
+        if frozen.get("schema") != "queue-haul-oracle-stale-plans-v1":
+            raise ValueError("invalid oracle/stale plans")
+        manifest = json.loads(Path(parent["manifest"]["path"]).read_text())
+        profile = ModelProfile.load(MODEL_PATH)
+        template = next(row for row in parent["scenarios"]
+                        if row["condition_id"] == "joint-shaped"
+                        and row["repeat"] == 0 and row["policy"] == "queue_haul")
+        states, exact = {}, {}
+        for state, germany, kv, bandwidth, _policies in HARDWARE_GAP_MATRIX:
+            scenario = {
+                **template, "design": "hardware_gap", "condition_id": state,
+                "background": {"east": (.25, kv), "germany": (germany, 0)},
+                "bandwidth": bandwidth,
+                "bandwidth_mbps": _bandwidths(
+                    parent["network_contract"], bandwidth),
+                "requested_shed_fraction": HARDWARE_GAP_TARGET_FRACTION,
+                "admission_mode": "normal",
+                "migration_headroom": ({
+                    "east": {"replay": .35}, "germany": {"replay": .35},
+                } if H100_CAMPAIGN else {}),
+                "full_horizon_s": ORACLE_STALE_HORIZON_S,
+                "background_kv_headroom_tokens": {
+                    "east": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                    "germany": HARDWARE_GAP_BACKGROUND_KV_TOKENS,
+                },
+            }
+            problem, architecture, routes, target, _demand = _scenario_problem(
+                scenario, manifest, profile)
+            states[state] = scenario, problem, architecture, routes, target
+            for restriction in ORACLE_RESTRICTIONS:
+                result, _ = _oracle_row(
+                    "hardware_gap", state, restriction, problem, architecture,
+                    routes, profile, target)
+                exact[state, restriction] = result
+        all_bind = states["all-bind"]
+        robust = exact["all-bind", "joint"].moves
+        stale = exact["all-release", "joint"].moves
+        blind = solve(
+            replace(all_bind[1], deadline_s=ORACLE_STALE_HORIZON_S,
+                    end_s=ORACLE_STALE_HORIZON_S),
+            profile, all_bind[3], "max_shed", destination=all_bind[2],
+            admission_mode="normal",
+        ).moves
+        generated = {
+            "robust_all_bind": _move_rows(robust),
+            "stale_all_release": _move_rows(stale),
+            "deadline_blind_90s": _move_rows(blind),
+        }
+        if any(generated[key] != frozen[key] for key in generated):
+>           raise RuntimeError("frozen oracle/stale decisions changed")
+E           RuntimeError: frozen oracle/stale decisions changed
+
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/network_campaign.py:4075: RuntimeError
+____________ test_bounded_worker_sigterm_runs_cancellation_cleanup _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-azureuser/pytest-21/test_bounded_worker_sigterm_ru0')
+
+    def test_bounded_worker_sigterm_runs_cancellation_cleanup(tmp_path):
+        import subprocess
+        import sys
+        import time
+        from pool_replay_server_acquire import bounded_command
+    
+        marker = tmp_path/'cancelled'
+        code = ('import asyncio\nfrom pathlib import Path\nfrom pool_replay_server_acquire import run_cancellable\n'
+                'async def work():\n try: await asyncio.sleep(60)\n'
+                f' finally: Path({str(marker)!r}).write_text("cancelled")\nrun_cancellable(work())\n')
+        started = time.monotonic()
+        with pytest.raises(subprocess.TimeoutExpired):
+            bounded_command([sys.executable, '-c', code], 3, tmp_path/'worker.log')
+>       assert marker.read_text() == 'cancelled'
+               ^^^^^^^^^^^^^^^^^^
+
+tests/test_pool_replay_server_acquire.py:119: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.12/pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/pytest-of-azureuser/pytest-21/test_bounded_worker_sigterm_ru0/cancelled')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-azureuser/pytest-21/test_bounded_worker_sigterm_ru0/cancelled'
+
+/usr/lib/python3.12/pathlib.py:1013: FileNotFoundError
+=========================== short test summary info ============================
+FAILED tests/test_batch_shed.py::test_nominal_forecast_includes_final_delta_and_buffered_turns
+FAILED tests/test_h100_serving_campaign.py::test_matched_prefill_does_not_start_an_unused_kv_connector
+FAILED tests/test_live_timing_parity.py::test_queue_parity_uses_full_migration_axes_and_pooled_second_metrics
+FAILED tests/test_matched_power_fit.py::test_frozen_bootstrap_is_deduplicated_without_losing_draws
+FAILED tests/test_network_campaign.py::test_constraint_simulation_separates_joint_policies_and_exports_duals
+FAILED tests/test_network_campaign.py::test_separation_simulation_has_wide_joint_action_margins
+FAILED tests/test_network_campaign.py::test_oracle_stale_simulation_certifies_capacity_and_deadline_traps
+FAILED tests/test_network_campaign.py::test_hardware_gap_plan_is_matched_and_covers_each_missing_constraint
+FAILED tests/test_network_campaign.py::test_hardware_gap_rejects_stale_plan_without_silent_replanning
+FAILED tests/test_network_campaign.py::test_hardware_gap_simulation_has_severe_matched_gaps
+FAILED tests/test_pool_replay_server_acquire.py::test_bounded_worker_sigterm_runs_cancellation_cleanup
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_shed_execution.py:185: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)
+11 failed, 1082 passed in 510.86s (0:08:30)
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();

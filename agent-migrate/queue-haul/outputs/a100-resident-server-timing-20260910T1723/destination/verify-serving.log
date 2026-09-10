@@ -1,0 +1,7 @@
+[32;20m[2026-09-10 17:35:21,354] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/tmp/qh-server-runtime/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-09-10 17:35:21,870] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-09-10 17:35:22,648] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-10 17:35:22,649] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-10 17:35:22,651] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+Using Python 3.12.9 environment at: /tmp/qh-server-runtime
+{"model_verified": true, "identity": {"hostname": "vmssae9f0000000", "pid": 6029, "boot_id": "1dad075a-4b22-4797-b2fd-b4fa9469fbe2", "time_namespace": "time:[4026531834]", "wall_ns": 1789061717045854822, "monotonic_ns": 1444027878472, "gpu": "name, uuid, memory.total [MiB], power.limit [W], mig.mode.current, driver_version\nNVIDIA A100 80GB PCIe, GPU-ee757c0c-d22b-d7b6-e597-582796b8e965, 81920 MiB, 300.00 W, Disabled, 580.105.08\n", "active_compute": "pid, process_name, used_gpu_memory [MiB]\n"}, "runtime": {"vllm": "0.22.0", "lmcache": "0.5.1", "torch": "2.11.0+cu129", "transformers": "5.15.1", "python": "3.12.9 (main, Jun  2 2026, 15:06:48) [GCC 13.2.0]", "torch_build": "2.11.0+cu129", "cuda_build": "12.9"}}

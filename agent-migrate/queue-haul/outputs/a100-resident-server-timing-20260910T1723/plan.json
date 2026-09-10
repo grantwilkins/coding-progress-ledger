@@ -1,0 +1,342 @@
+{
+  "schema": "a100-resident-server-timing-plan-v1",
+  "status": "planned_not_acquired",
+  "purpose": "Separate device execution, server output readiness and client delivery; validate long-output dependent resident queues.",
+  "implementation_status": "Node agent must add bounded launcher and server instrumentation; this JSON is not input to the old campaign CLI.",
+  "reference_plan": "outputs/a100-replay-final-20260910T0352/plan.json",
+  "reference_plan_sha256": "5b91ccdf1d586ac39222dfc1478fc80642d2c5c412905688a477820c1818d5de",
+  "output_directory_pattern": "outputs/a100-resident-server-timing-<UTC>",
+  "runtime": {
+    "source": "A100 80GB PCIe source; archived Sweden node preferred for direct timing reproduction",
+    "destination": "A100 80GB PCIe destination; archived Germany node preferred for direct timing reproduction",
+    "separate_physical_gpu_uuids": true,
+    "exclusive_test_stack": true,
+    "model": "openai/gpt-oss-20b",
+    "vllm_version": "0.22.0",
+    "lmcache_version": "0.5.1",
+    "tensor_parallel_size": 1,
+    "power_limit_w": 300,
+    "power_limit_evidence": "Measure both current power.limit values; archived final Germany evidence does not establish its cap. Record any change to 300 W.",
+    "max_model_len": 32768,
+    "max_num_seqs": 256,
+    "max_num_batched_tokens": 8192,
+    "block_size": 16,
+    "kv_cache_dtype": "auto",
+    "gpu_memory_utilization": 0.75,
+    "dtype": "bfloat16",
+    "quantization": "gpt_oss_mxfp4",
+    "attention_backend": "TRITON_ATTN",
+    "enable_chunked_prefill": true,
+    "enable_prefix_caching": true,
+    "enforce_eager": true,
+    "disable_hybrid_kv_cache_manager": true,
+    "preserve_installed_builds_and_fifo_collector_patch": true,
+    "hardware_proxy_bandwidth_mbps": 1000,
+    "model_revision": "6cee5e81ee83917806bbde320786a8fb61efebee",
+    "reference_model_manifests": [
+      {
+        "path": "outputs/a100-replay-final-20260910T0352/source-model-sha256.json",
+        "sha256": "0ddf149dc9e651265fb77be2935c41d4003ce1191e76c674cf3900a4f7dc29bc"
+      },
+      {
+        "path": "outputs/a100-replay-final-20260910T0352/destination-model-sha256.json",
+        "sha256": "0ddf149dc9e651265fb77be2935c41d4003ce1191e76c674cf3900a4f7dc29bc"
+      }
+    ],
+    "enable_prompt_tokens_details": true,
+    "environment": {
+      "VLLM_USE_FLASHINFER_SAMPLER": "0"
+    },
+    "azure_required": false,
+    "reference_gpu_name": "NVIDIA A100 80GB PCIe",
+    "full_gpu_no_mig": true,
+    "portability": "Matching full A100 80GB PCIe GPUs outside Azure can run this plan. One GPU suffices for warm-decode cells; source-active episodes require two separate GPU UUIDs, which may share a host if CPU/service interference is recorded. Preserve the proxy cap and measure transport/clock differences. Results on new hosts are a new environment, not direct validation of archived Germany timing. SXM or 40GB variants require separately labeled hardware calibration; do not silently pool their fits with PCIe 80GB.",
+    "coordinator_routing": "The harness uses one cfg.host coordinator address: expose distinct source/destination serving and LMCache ports there, directly or via forwarding. Preserve coordinator-local proxy timestamps and attached source/sink stack logs."
+  },
+  "budget": {
+    "acquisition_wall_cap_s": 5400,
+    "startup_and_smoke_cap_s": 360,
+    "episode_whole_cell_cap_s": 420,
+    "warm_whole_cell_cap_s": 270,
+    "warm_all_prewarm_cap_s": 90,
+    "warm_measurement_cap_s": 180,
+    "final_cleanup_reserve_s": 120,
+    "order": [
+      "startup_and_smoke",
+      "agentic_episodes_in_list_order",
+      "warm_decode_cells_in_list_order",
+      "cleanup"
+    ],
+    "rule": "Start only with whole-cell plus cleanup reserve; one global deadline includes setup, warmup, failures and cleanup. Record unstarted and censored cells. No performance retries.",
+    "scope": "Acquisition cap, not a runtime forecast; implement and test instrumentation before starting the GPU acquisition clock."
+  },
+  "instrumentation_check": {
+    "sequence": [
+      "off",
+      "on",
+      "off"
+    ],
+    "context_tokens": 8192,
+    "concurrency": 8,
+    "output_tokens": 256,
+    "prewarm_prefix_tokens": 8160,
+    "maximum_relative_duration_and_output_rate_difference": 0.05,
+    "comparison": "Matched cache state; off baselines agree within 5%, on agrees within 5% of the time-interpolated off baselines. Completion duration and output rate are client-observable in both modes.",
+    "one_repeat_only_if_inconclusive_and_within_startup_cap": true,
+    "stop_main_acquisition_on_failure": true,
+    "optional_short_native_profile_max_iterations": 32,
+    "profile_excluded_from_fitting": true,
+    "request_contract": "Use warm_decode_contract with O=256. Reuse the same eight prompts and output settings across off/on/off; clear owned native cache and repeat prewarming before each mode. Disable only new timing hooks, preserving the existing FIFO collector patch.",
+    "completion_duration": "Median over the eight client dispatch-to-DONE durations.",
+    "output_rate": "Total actual generated output tokens divided by (last client DONE minus first client dispatch), in seconds."
+  },
+  "agentic_contract": {
+    "observation_s": 300,
+    "baseline_s": 60,
+    "migration_at_s": 60,
+    "resident_histories": 8,
+    "incoming_source_histories": 8,
+    "migration_enabled_for_control_and_replay": true,
+    "workload_input": "reference_plan.workloads[spec.workload], not the already sampled physical-workload.json",
+    "execution": "Reuse ResidentAcquisition.episode(spec, original_workload, 300, True) with new runtime-launch.json, fresh inventory and deadline.",
+    "preserve_archived_spec_rates_and_seed": true,
+    "preserve_causal_turns_source_quiescence_and_control_mirroring": true,
+    "control_mirroring": "Current harness releases the trajectory ownership lock before mirror work; preserve this and tag mirror work separately.",
+    "service_outputs": "Exact archived trajectory output lengths, including the 1233-token coding turn.",
+    "migration_probe": "Full retained-token /v1/completions probe: max_tokens 512, normal EOS. Preserve the agentic adapter; do not substitute the separate chat state-code probe. Keep generation separate from replay rebuild.",
+    "holdout": "All four new episodes are validation only; do not fit timing to their outcomes.",
+    "episodes": [
+      {
+        "spec": {
+          "workload": "coding",
+          "seed": 7102,
+          "arm": "control",
+          "rate_slot": 0,
+          "width": 8,
+          "trace_id": "7102-coding-0",
+          "requires_separate_source": true,
+          "episode": "episodes-coding-0-control-7102",
+          "rate": 0.4426002548363285,
+          "incoming_session_rps": 0.04426002548363285
+        },
+        "reference_result": "outputs/a100-replay-final-20260910T0352/episodes-coding-0-control-7102/result.json",
+        "reference_result_sha256": "25ad298543c95819fe2cc87f184ec4005c29a40f4b27cd4b05684a7cea5b24ff",
+        "physical_workload_sha256": "51134ccc31049d1bce548175c280266e101b123ad927e3c1508823f1aa9f73b1",
+        "offered_trace_sha256": "c6dc8df5508a59569b7b0039a378d847dcd1eef98b8d92c462c245437a296245",
+        "offered_arrivals": {
+          "resident": 132,
+          "incoming": 106
+        }
+      },
+      {
+        "spec": {
+          "workload": "coding",
+          "seed": 7102,
+          "arm": "replay",
+          "rate_slot": 0,
+          "width": 8,
+          "trace_id": "7102-coding-0",
+          "requires_separate_source": true,
+          "episode": "episodes-coding-0-replay-7102",
+          "rate": 0.4426002548363285,
+          "incoming_session_rps": 0.04426002548363285
+        },
+        "reference_result": "outputs/a100-replay-final-20260910T0352/episodes-coding-0-replay-7102/result.json",
+        "reference_result_sha256": "4becf3b759ebbd7b1cb095273b89968aaca2cb8f4f2c5c6f9eb35bfdd43685d5",
+        "physical_workload_sha256": "51134ccc31049d1bce548175c280266e101b123ad927e3c1508823f1aa9f73b1",
+        "offered_trace_sha256": "c6dc8df5508a59569b7b0039a378d847dcd1eef98b8d92c462c245437a296245",
+        "offered_arrivals": {
+          "resident": 132,
+          "incoming": 106
+        }
+      },
+      {
+        "spec": {
+          "workload": "coding_long",
+          "seed": 7101,
+          "arm": "control",
+          "rate_slot": 0,
+          "width": 8,
+          "trace_id": "7101-coding_long-0",
+          "requires_separate_source": true,
+          "episode": "episodes-coding_long-0-control-7101",
+          "rate": 0.1881783279213518,
+          "incoming_session_rps": 0.03763566558427036
+        },
+        "reference_result": "outputs/a100-replay-final-20260910T0352/episodes-coding_long-0-control-7101/result.json",
+        "reference_result_sha256": "186e04ab22be2250aeb04f51145af0e74907742b4e69abff3af8918a38d9ecae",
+        "physical_workload_sha256": "c24922d8e624af10920290b3d87b0d5fc08a048820790eed83a627be63d68a6a",
+        "offered_trace_sha256": "e08145b7d6326f157feace23f24be7eb6f3abc003b39377a857d282b18e2e033",
+        "offered_arrivals": {
+          "resident": 56,
+          "incoming": 92
+        }
+      },
+      {
+        "spec": {
+          "workload": "coding_long",
+          "seed": 7101,
+          "arm": "replay",
+          "rate_slot": 0,
+          "width": 8,
+          "trace_id": "7101-coding_long-0",
+          "requires_separate_source": true,
+          "episode": "episodes-coding_long-0-replay-7101",
+          "rate": 0.1881783279213518,
+          "incoming_session_rps": 0.03763566558427036
+        },
+        "reference_result": "outputs/a100-replay-final-20260910T0352/episodes-coding_long-0-replay-7101/result.json",
+        "reference_result_sha256": "b40f8c82d88ec4fc699dee6a1119b02fae0f87e74620c8a3b1f097328bf90003",
+        "physical_workload_sha256": "c24922d8e624af10920290b3d87b0d5fc08a048820790eed83a627be63d68a6a",
+        "offered_trace_sha256": "e08145b7d6326f157feace23f24be7eb6f3abc003b39377a857d282b18e2e033",
+        "offered_arrivals": {
+          "resident": 56,
+          "incoming": 92
+        }
+      }
+    ]
+  },
+  "warm_decode_contract": {
+    "host": "destination role; a non-Azure matching GPU is allowed under runtime.portability",
+    "output_tokens": 1536,
+    "append_tokens": 32,
+    "prewarm_output_tokens": 1,
+    "vocabulary": 200000,
+    "temperature": 0,
+    "ignore_eos": true,
+    "force_output": false,
+    "bypass_lmcache": true,
+    "unique_session_ids_and_prefixes_per_cell_and_lane": true,
+    "preserve_native_cache_between_prewarm_and_measurement": true,
+    "independent_sessions_dispatched_concurrently": true,
+    "native_cache_min_tokens": "context_tokens - 32",
+    "external_cache_hits": 0,
+    "invalid_cell_policy": "Retain measured cache misses, preemptions, failures and partial outputs; do not certify the warm condition or fit it as Q=32. Never replace them with zero-cost work.",
+    "fit_repeat": 1,
+    "heldout_repeat": 2,
+    "cells": [
+      {
+        "id": "warm-c8192-n1-r1",
+        "context_tokens": 8192,
+        "concurrency": 1,
+        "seed": 8101,
+        "repeat": 1,
+        "use": "fit"
+      },
+      {
+        "id": "warm-c8192-n8-r1",
+        "context_tokens": 8192,
+        "concurrency": 8,
+        "seed": 8101,
+        "repeat": 1,
+        "use": "fit"
+      },
+      {
+        "id": "warm-c8192-n16-r1",
+        "context_tokens": 8192,
+        "concurrency": 16,
+        "seed": 8101,
+        "repeat": 1,
+        "use": "fit"
+      },
+      {
+        "id": "warm-c30000-n1-r1",
+        "context_tokens": 30000,
+        "concurrency": 1,
+        "seed": 8101,
+        "repeat": 1,
+        "use": "fit"
+      },
+      {
+        "id": "warm-c30000-n8-r1",
+        "context_tokens": 30000,
+        "concurrency": 8,
+        "seed": 8101,
+        "repeat": 1,
+        "use": "fit"
+      },
+      {
+        "id": "warm-c30000-n16-r1",
+        "context_tokens": 30000,
+        "concurrency": 16,
+        "seed": 8101,
+        "repeat": 1,
+        "use": "fit"
+      },
+      {
+        "id": "warm-c8192-n1-r2",
+        "context_tokens": 8192,
+        "concurrency": 1,
+        "seed": 8102,
+        "repeat": 2,
+        "use": "heldout"
+      },
+      {
+        "id": "warm-c8192-n8-r2",
+        "context_tokens": 8192,
+        "concurrency": 8,
+        "seed": 8102,
+        "repeat": 2,
+        "use": "heldout"
+      },
+      {
+        "id": "warm-c8192-n16-r2",
+        "context_tokens": 8192,
+        "concurrency": 16,
+        "seed": 8102,
+        "repeat": 2,
+        "use": "heldout"
+      },
+      {
+        "id": "warm-c30000-n1-r2",
+        "context_tokens": 30000,
+        "concurrency": 1,
+        "seed": 8102,
+        "repeat": 2,
+        "use": "heldout"
+      },
+      {
+        "id": "warm-c30000-n8-r2",
+        "context_tokens": 30000,
+        "concurrency": 8,
+        "seed": 8102,
+        "repeat": 2,
+        "use": "heldout"
+      },
+      {
+        "id": "warm-c30000-n16-r2",
+        "context_tokens": 30000,
+        "concurrency": 16,
+        "seed": 8102,
+        "repeat": 2,
+        "use": "heldout"
+      }
+    ],
+    "before_each_cell": "Verify the owned GPU/stack is idle, reset owned native prefix cache, then prewarm only this cell; all setup is inside the whole-cell cap."
+  },
+  "required_telemetry": {
+    "identity": "Host, GPU UUID, PID, boot/time namespace, monotonic clock domain, paired wall/monotonic anchors, launch flags and hashes of actually imported patched modules.",
+    "scheduler": "Iteration ID; request IDs; prompt and output counts; computed tokens BEFORE scheduling; scheduled Q; native/external cache counts; running/waiting, remote-KV waits and preemptions; host schedule start/end.",
+    "worker": "Same iteration ID; CUDA-event forward/logits/sampling elapsed times and output-ready host timestamp after existing output-copy synchronization; emitted request IDs and token ordinals.",
+    "frontend": "External/internal request-ID mapping; server ingress; output-processor receipt; collector put/pop or SSE yield with token ordinals and host timestamps.",
+    "client": "Existing request dispatch, raw SSE receive events, exact token counts, usage, completion/failure/censoring and offered-arrival timestamps.",
+    "engine": "Existing running/waiting, KV-cache, prefix-cache, preemption, GPU utilization/power/clocks telemetry at the archived sampling cadence.",
+    "rules": "Join IDs across asynchronous batches; no extra per-step global CUDA synchronize. CUDA-event elapsed remains relative GPU-stream time in its own clock domain, not a host timestamp or exclusive kernel busy time. SSE yield is not wire flush. Subtract host timestamps only after verifying a common clock domain; never subtract different-host monotonic clocks."
+  },
+  "acceptance": [
+    "Zero dropped telemetry records; every offered request and observed scheduled/generated token is represented, including failed or censored requests.",
+    "Iteration/request/token-ordinal joins resolve; sum of scheduled Q per iteration is at most 8192; actual outputs agree with complete final usage.",
+    "Controlled warm cells certify native prefix hits and zero external hits, output 1536 and no context overflow; any failed condition stays visible and is excluded from the intended warm fit.",
+    "Agentic physical-workload and offered-trace hashes reproduce their frozen references exactly.",
+    "Report device execution, server-ready decode, frontend/client delivery and causal queue wait separately; explain the 1233-token coding turn and long-replay burst with evidence.",
+    "Keep previous fit and heldout tolerances frozen while collecting; publish data-quality outcomes before proposing any recalibration. Policy ranking is not an acceptance criterion."
+  ],
+  "return_artifacts": [
+    "Frozen plan, git revision, fresh runtime-launch and inventory, launch commands, model/tokenizer and imported module hashes, instrumentation patch/source copies.",
+    "All raw scheduler/worker/frontend/client event streams, offered traces, physical workloads, request/migration histories, engine and power logs.",
+    "Off/on/off overhead comparison, optional short native profile, per-cell summaries and report including failed/censored/unstarted cells and completeness checks.",
+    "SHA256 manifest; compressed raw archives allowed only with verified member hashes and a working reducer."
+  ],
+  "remaining_cpu_work": "Integrate calibrated GPU-local resident queues/KV placement and causal source queues; validate all policies and bounded sensitivities before removing the full-campaign readiness guard.",
+  "no_broad_gpu_sweep_or_full_fleet_campaign": true
+}

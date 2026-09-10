@@ -773,9 +773,14 @@ campaign is archived under `outputs/a100-pooled-execution`.
 
 The node agent should pull `policy-hardware-width8-pilot` and use
 [this frozen acquisition plan](outputs/a100-resident-server-timing-plan/plan.json).
-It is a **plan, not a ready-to-run acquisition CLI**: add the small timing hooks
-and bounded launcher on the installed reference stack before starting acquisition.
-Reuse the current harness and token-stream collector. This follow-up measures
+`pool_replay_server_timing.py` generates six guarded patches for vLLM 0.22.0;
+install them in an isolated reference runtime with the preserved FIFO collector.
+`pool_replay_server_acquire.py --out RUN --inventory RUN/inventory.json` attaches
+to an owned two-GPU stack with its original startup clock and cleanup commands.
+It enforces the frozen overhead gate, cell order and time limits.
+`pool_replay_server_reduce.py` checks raw server/client joins after shutdown;
+launcher completion alone does not establish telemetry acceptance.
+These tools reuse the current harness and token-stream collector. This follow-up measures
 resident decode and queueing; the fleet study remains 2 MW source / 2 MW at each
 of two destinations. Do not rerun scouts, the broad KV/WAN sweep or fleet policies.
 
