@@ -1,0 +1,48 @@
+"""Verify actual generated histories and causal dispatch from retained service rows."""
+import argparse
+from collections import defaultdict
+import hashlib
+import json
+from pathlib import Path
+
+
+def audit(rows):
+    groups=defaultdict(list)
+    for row in rows:
+        if row.get('phase')=='service' and row.get('cohort') in ('resident','incoming'):
+            groups[(row['episode'],row['cohort'],row['session'])].append(row)
+    sessions=[]
+    for key,values in sorted(groups.items()):
+        values.sort(key=lambda row:row['turn']);links=[]
+        for prior,current in zip(values,values[1:]):
+            if not prior.get('done') or not current.get('done'):continue
+            retained=prior['full_prompt_token_ids']+prior['token_ids']
+            links.append({'prior_turn':prior['turn'],'turn':current['turn'],'reset':current['reset'],
+                'prior_prompt_tokens':prior['prompt_tokens'],'prompt_tokens':current['prompt_tokens'],
+                'actual_prior_output_tokens':len(prior['token_ids']),'source_owned_prior':prior.get('serving_role')=='source',
+                'causal_dispatch':prior['end_ns']<=current['client_dispatch_ns'],
+                'consecutive_turn':current['turn']==prior['turn']+1,
+                'nonreset_exact_retained_history':None if current['reset'] else current['full_prompt_token_ids'][:len(retained)]==retained})
+        sessions.append({'episode':key[0],'cohort':key[1],'physical_session':key[2],
+            'session_id':values[0].get('session_id'),'observed_turns':[r['turn'] for r in values],
+            'completed_turns':sum(bool(r.get('done')) for r in values),'links':links})
+    links=[link for row in sessions for link in row['links']]
+    return {'sessions':sessions,'completed_links':len(links),'nonreset_links':sum(not r['reset'] for r in links),
+        'reset_links':sum(r['reset'] for r in links),'causal_violations':sum(not r['causal_dispatch'] for r in links),
+        'turn_order_violations':sum(not r['consecutive_turn'] for r in links),
+        'retained_history_violations':sum(r['nonreset_exact_retained_history'] is False for r in links)}
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('root',type=Path);args=parser.parse_args()
+    root=args.root;raw=(root/'requests.jsonl').read_bytes();complete=raw[:raw.rfind(b'\n')+1]
+    result={'input':'requests.jsonl','input_prefix_bytes':len(complete),'input_prefix_sha256':hashlib.sha256(complete).hexdigest(),
+        'input_sha256':hashlib.sha256(raw).hexdigest(),'input_complete_at_read':len(raw)==len(complete),
+        'scope':'complete service records; unfinished and unobserved links remain unvalidated',
+        'physical_workload_files':{str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob('*/physical-workload.json')},
+        **audit([json.loads(line) for line in complete.splitlines()])}
+    (root/'resident-history-audit.json').write_text(json.dumps(result,indent=2)+'\n')
+    print(json.dumps({k:v for k,v in result.items() if k not in ('sessions','physical_workload_files')}))
+
+
+if __name__=='__main__':main()
