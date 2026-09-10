@@ -135,6 +135,7 @@ def reduce(root):
             'control_materialization_requests':sum(r.get('phase','').startswith('control_') for r in selected),
             'service_requests_by_role':{role:sum(r.get('cohort') in ('resident','incoming') and r.get('serving_role')==role for r in selected) for role in ('source','destination')},
             'quiescence':quiescence(events,selected),
+            'migration_requests':[{k:r.get(k) for k in ('session','phase','serving_role','request_id','context_hash','prompt_tokens','recorded_append_tokens','output_tokens','cached_tokens','derived_prompt_minus_cache_tokens','start_ns','first_ns','last_token_ns','end_ns','ttft_s','mean_tpot_s','exact_token_timestamps','status','done','error','transport_error')} for r in selected if r.get('cohort')=='migration'],
             'statuses':{str(status):sum(r.get('status')==status for r in selected) for status in {r.get('status') for r in selected}}})
     pairs = []
     for episode in episodes:
@@ -151,6 +152,7 @@ def reduce(root):
     return {'episodes':episodes,'partial_request_observations':partial,'matched_comparisons':pairs,'input_sha256':hashes,'fitting':'stopped_pending_user_review','campaign_ready':False,
         'limitations':['Exact timing is client token arrival, not server execution. No GPU queue inferred from TTFT; aggregate engine histogram deltas cannot be added as elapsed time.',
             'TPOT covers arrival cohorts completed by that window end. TTFT also includes unfinished requests whose exact first-token event is preserved; unobserved first tokens and unfinished arrivals remain explicit. Completed-only timing coverage and offered-arrival coverage are separate; short windows establish no tail guarantee.',
+            'KV occupancy is the engine active-block usage gauge; it does not measure all free evictable prefix blocks or actual resident tensor allocation.',
             'Recovery comparisons use continuing arrivals through300; cleanup excluded. Control materialization adds destination work and must be read with baseline differences.',
             'Service migration adapter validates full retained token history/hash/generation, not semantic state-code recall; original full-message512 probe retained only in controlled KV diagnostics.']}
 
