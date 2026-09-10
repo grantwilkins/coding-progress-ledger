@@ -2,14 +2,153 @@
 
 import argparse
 import csv
+import gzip
 import json
 from pathlib import Path
+import shlex
 
 import numpy as np
 
-from pool_shed_resident_data import OUTPUT, digest, load_requests, write_csv
-from pool_shed_resident_fit import UNLOADED, calibrate, prefill_seconds
+from pool_shed_resident_data import OUTPUT, ENGINE_FIELDS, audit, checked_lines, compact_request, digest, load_requests, token_observation, write_csv
+from pool_shed_resident_fit import UNLOADED, calibrate, calibrate_server_decode, prefill_seconds
 from pool_shed_resident_queue import simulate
+from pool_replay_server_reduce import domain
+
+
+SERVER_OUTPUT = Path('outputs/a100-replay-queue-resolution-20260910')
+
+
+def server_bundle(source):
+    """Verify and compact the four East episodes, retaining failed global integrity."""
+    source = Path(source)
+    manifest = json.loads((source / 'sha256-manifest.json').read_text())
+    hashes = {'sha256-manifest.json': digest(source / 'sha256-manifest.json')}
+    def checked(name):
+        path = source / name
+        hashes[name] = digest(path)
+        if hashes[name] != manifest[name]:
+            raise ValueError('server evidence hash mismatch: ' + name)
+        return path
+    def read(name):
+        return json.loads(checked(name).read_text())
+    compressed = {r['original_path']: r for r in read('compression-manifest.json')}
+    def lines(name):
+        path = checked(compressed[name]['gzip_path'] if name in compressed else name)
+        with (gzip.open(path, 'rb') if name in compressed else path.open('rb')) as stream:
+            records = checked_lines(stream, {'path': name, 'bytes': compressed[name]['original_bytes'],
+                                    'sha256': compressed[name]['original_sha256']}) if name in compressed else stream
+            yield from (json.loads(line) for line in records)
+    plan, report = read('plan.json'), read('report.json')
+    certificate = read('critic-warm-certificate.json')
+    if len(plan['agentic_contract']['episodes']) != 4 or report['episodes_completed'] != 4:
+        raise ValueError('four frozen East episodes required')
+    for role, prefix, name in (('source', 'stack', 'source'), ('destination', 'destination', 'sink')):
+        launch = next(r for r in lines(prefix + '/launches.jsonl') if r['name'] == name)
+        if read(role + '/runtime.json')['vllm'] != '0.22.0' or '--enable-prompt-tokens-details' not in shlex.split(launch['argv'][-1]):
+            raise ValueError('native cache decoding requires the captured details-enabled v0.22 runtime')
+        directory = ('destination/' if role == 'destination' else '') + 'instrumentation/'
+        modules = read(directory + 'manifest.json')
+        for module in ('v1/engine/output_processor.py', 'entrypoints/openai/completion/serving.py'):
+            if digest(checked(directory + 'vllm/' + module)) != modules[module]['patched_sha256']:
+                raise ValueError('captured cache serializer differs from instrumented runtime')
+    results, workloads, traces = {}, {}, {}
+    for episode in plan['agentic_contract']['episodes']:
+        name = episode['spec']['episode']
+        results[name] = read(name + '/result.json')
+        workloads[name] = read(name + '/physical-workload.json')
+        traces[name] = read(name + '/offered-trace.json')
+        if (results[name]['spec'] != episode['spec']
+                or hashes[name + '/physical-workload.json'] != episode['physical_workload_sha256']
+                or hashes[name + '/offered-trace.json'] != episode['offered_trace_sha256']):
+            raise ValueError('East episode changed the frozen offered workload')
+    observed, usage, rows, engine, expected_tokens = {}, {}, [], [], {}
+    for event in lines('request-events.jsonl'):
+        if event.get('episode') in results:
+            token_observation(observed, event, results[event['episode']]['boundary_ns'], usage)
+    for raw in lines('requests.jsonl'):
+        if raw.get('episode') in results:
+            rows.append(compact_request(raw, results[raw['episode']], workloads[raw['episode']], observed, usage))
+            if raw.get('request_id') and raw.get('serving_role') == 'destination':
+                expected_tokens[raw['request_id']] = raw.get('token_ids', [])
+    audit_result = audit(rows, results, traces)
+    for name, result in results.items():
+        with checked(name + '/engine.csv').open() as stream:
+            engine.extend({'episode': name, 'serving_role': 'destination',
+                'time_s': (int(r['monotonic_ns']) - result['epoch_ns']) / 1e9,
+                **{k: float(r['vllm:' + k]) if r.get('vllm:' + k) else None for k in ENGINE_FIELDS}}
+                for r in csv.DictReader(stream))
+    server, internal = {}, {}
+    frontend = next(p for p in certificate['telemetry_files'] if '/destination/timing/' in p and '-7195.' in p)
+    core = next(p for p in certificate['telemetry_files'] if '/destination/timing/' in p and '-7625.' in p)
+    for path in (frontend, core):
+        name = path.split('/destination/', 1)[1]
+        name = 'destination/' + name.removesuffix('.gz')
+        identity = None
+        for event in lines(name):
+            if event['kind'] == 'process_start':
+                identity = event
+            elif event['kind'] == 'frontend_registration':
+                external = event['external_request_id'].removesuffix('-0')
+                if external in expected_tokens:
+                    server[external] = {'registration_ns': event['mono_ns'], 'domain': domain(identity), 'tokens': [], 'ready_ns': []}
+                    internal[event['request_id']] = external
+            elif event['kind'] == 'schedule':
+                for request in event['requests']:
+                    if request['request_id'] in internal and request['scheduled_tokens']:
+                        record = server[internal[request['request_id']]]
+                        if record['domain'] is None or record['domain'] != domain(identity):
+                            raise ValueError('server timestamps lack a verified common clock domain')
+                        record.setdefault('scheduled_ns', event['start_ns'])
+            elif event['kind'] == 'worker_output':
+                for request in event['requests']:
+                    if request['request_id'] in internal and request['token_ids']:
+                        record = server[internal[request['request_id']]]
+                        if request['ordinal_start'] != len(record['tokens']):
+                            raise ValueError('server token ordinals are incomplete for an episode request')
+                        record['tokens'].extend(request['token_ids'])
+                        record['ready_ns'].extend([event['output_ready_ns']] * len(request['token_ids']))
+    for request_id, record in server.items():
+        record['local_tokens_complete'] = record.pop('tokens') == expected_tokens[request_id]
+    return rows, engine, server, {'input_sha256': hashes, 'request_audit': audit_result,
+        'global_telemetry_accepted': report['global_telemetry_accepted'],
+        'telemetry_error_counts': report['telemetry_error_counts'],
+        'endpoint_training_diagnostic_s': [{'cell': c['cell'], 'median': float(np.median([
+            r['ttft_s'] - r['server_registration_to_first_ready_s'] for r in c['requests']]))}
+            for c in certificate['warm_cells'] if c['cell'].endswith('-r1') and c['request_evidence_complete']]}
+
+
+def server_conditioned(rows, server, coefficients):
+    """Condition GPU queue execution on observed server registrations, without RTT fitting."""
+    requests, selected = inputs(rows, 'miss')
+    missing = [r['request_id'] for r in requests if selected[r['request_id']]['request_id'] not in server]
+    if missing:
+        raise ValueError('destination demand lacks server registration: ' + str(missing))
+    epoch = min(server[selected[r['request_id']]['request_id']]['registration_ns'] for r in requests)
+    observations = {}
+    for request in requests:
+        raw = selected[request['request_id']]
+        event = server[raw['request_id']]
+        if raw['done'] and (not event['local_tokens_complete'] or len(event['ready_ns']) != raw['output_tokens']):
+            raise ValueError('completed episode request lacks complete local server token evidence')
+        request['arrival_s'] = (event['registration_ns'] - epoch) / 1e9
+        observations[request['request_id']] = event
+    result = simulate(requests, {**coefficients, 'endpoint_s': 0.}, rows[0]['duration_s'] + 10.)
+    comparisons = []
+    for prediction in result['requests']:
+        raw, event = selected[prediction['request_id']], observations[prediction['request_id']]
+        if not raw['done'] or not event['ready_ns']:
+            continue
+        first, last = event['ready_ns'][0], event['ready_ns'][-1]
+        wait = (event['scheduled_ns'] - event['registration_ns']) / 1e9
+        latency = (first - event['registration_ns']) / 1e9
+        cadence = (last - first) / 1e9 / (raw['output_tokens'] - 1) if raw['output_tokens'] > 1 else None
+        predicted_wait = prediction['admitted_s'] - prediction['arrival_s'] if prediction['admitted_s'] is not None else None
+        comparisons.append({'row_id': raw['row_id'], 'cohort': raw['cohort'], 'output_tokens': raw['output_tokens'],
+            'first_schedule_wait_s': comparison(wait, predicted_wait, .2),
+            'registration_to_ready_s': comparison(latency, prediction['ttft_s'], .2),
+            'server_ready_tpot_s': comparison(cadence, prediction['mean_tpot_s'], .005)})
+    return {'episode': rows[0]['episode'], 'split': 'heldout', 'requests': comparisons,
+            'scope': 'Conditional GPU scheduling with observed destination registration and native cache inputs; endpoint zero here only because transport is outside this clock domain. Resident releases still serialize modeled predecessor completion. This does not predict offered-arrival or source queues.'}
 
 
 def comparison(observed, predicted, absolute, relative=.25):

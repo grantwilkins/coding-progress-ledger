@@ -212,6 +212,22 @@ def test_baselines_share_every_mixed_action_batch_projection():
     assert all(tuple(np.r_[zero, row]) in signatures for row in kv if row.any())
 
 
+def test_replica_scenario_prices_generation_without_changing_offered_work():
+    original = c.sample_fleet('coding')
+    fleet = c.replica_fleet(original)
+    assert fleet.metadata['resident_affinity'] and fleet.metadata['causal_source']
+    assert not original.metadata.get('causal_source')
+    assert fleet.metadata['source_session_rps'] == original.metadata['source_session_rps']
+    assert np.array_equal(fleet.demand, original.demand)
+    assert np.array_equal(fleet.t1, original.t1)
+    step = fleet.metadata['source_timing_coefficients']['decode_step_s']
+    assert step == pytest.approx(.03548622490944625)
+    assert all(duration >= max(row['output'] - 1, 0) * step
+               for rows, durations in zip(fleet.metadata['turn_sequences'], fleet.metadata['turn_duration_s'])
+               for row, duration in zip(rows, durations))
+    assert max(max(durations) for durations in fleet.metadata['turn_duration_s']) > 1 / fleet.metadata['source_session_rps']
+
+
 def test_mixed_batch_resources_are_additive_pure_action_choices():
     fleet = c.sample_fleet('measured_pack')
     replay, kv = np.array([[1, 1, 1, 1, 0, 0, 0, 0.]]), np.array([[0, 0, 0, 0, 1, 1, 1, 1.]])
