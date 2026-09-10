@@ -28,20 +28,20 @@ def plot(report, out):
             for policy in q.POLICIES:
                 ax.plot([cell['deadline_s'] for cell in cells], [100 * cell['results'][policy][metric] for cell in cells],
                         **plot_style.policy_style(policy, names=plot_style.PAPER_POLICY_NAMES))
-            ax.set(title=workload.replace('_', ' '), ylim=(0, 103), ylabel=('Handoff (%)' if row == 0 else 'Handoff with local queues cleared (%)'))
+            ax.set(title=workload.replace('_', ' '), ylim=(0, 103), ylabel=('Handoff (%)' if row == 0 else 'Recovered handoff (%)'))
             ax.grid(alpha=.2)
             if row == 1:
                 ax.set_xlabel('Deadline (s)')
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='upper center', ncol=3, frameon=False)
-    fig.text(.5, .015, 'Conditional simulation; queue clearance is a fluid work measure, not resident SLO certification.', ha='center', fontsize=10)
+    fig.text(.5, .015, report['planning_criterion'] + '\nConditional simulation; queue clearance is a fluid work measure, not resident SLO certification.', ha='center', fontsize=10)
     fig.tight_layout(rect=(0, .04, 1, .9))
     for extension in ('png', 'svg', 'pdf'):
         fig.savefig(out / f'frontier.{extension}', dpi=220)
     plt.close(fig)
 
 
-def run(out, workloads, deadlines):
+def run(out, workloads, deadlines, require_local_recovery=False):
     if (out / 'frontier.json').exists():
         raise ValueError('use a fresh output directory; preserve the frozen comparison')
     calibration, decode = q.calibration(0), calibrate_server_decode()
@@ -51,6 +51,8 @@ def run(out, workloads, deadlines):
                     (Path(__file__).name, 'pool_shed_resident_fit.py', 'pool_shed_resident_queue.py')})
     report = {'scope': 'Bounded fixed-replica scenario, 2 MW source and 2 MW EACH destination; full-context replay; no GPU campaign.',
               'resident_latency_validated': False, 'campaign_ready': False, 'server_decode_fit': decode,
+              'require_local_recovery': require_local_recovery,
+              'planning_criterion': 'Require predicted local queues to clear by deadline' if require_local_recovery else 'Maximize handoff; report remaining queues separately',
               'shared_wan_gbps': 1000, 'wire_bytes_per_32768_tokens': 800_000_000, 'sources': sources, 'fleets': {}, 'cells': [],
               'limits': ['One incoming action pack per destination GPU; this is a declared placement scenario, not optimal bin packing.',
                          'Resident queues retain the measured throughput-loss fluid approximation; per-request resident TTFT is checked separately.',
@@ -64,6 +66,7 @@ def run(out, workloads, deadlines):
     for workload in workloads:
         fleet = q.replica_fleet(q.sample_fleet(workload, gpus=6666, gpus_per_node=8))
         fleet = replace(fleet, metadata={**fleet.metadata, 'planning_reference_s': 4.,
+                        'require_local_recovery': require_local_recovery,
                         'kv_wire_scale': 800_000_000 / (32768 * 49152), 'replay_cached_tokens': [0] * len(fleet.count),
                         'kv_shared_tokens': [0] * len(fleet.count)})
         fleet = replace(fleet, kv=kv_transfer_bytes(fleet, fleet.context, calibration))
@@ -88,7 +91,8 @@ def run(out, workloads, deadlines):
                         or np.any(np.asarray(result['transferred_bytes']) > budgets * deadline * (1 + 1e-8))):
                     raise ValueError('physical conservation or deadline check failed')
                 cell['results'][policy] = {key: result[key] for key in (*FIELDS, 'recovered_handoff_fraction',
-                    'resident_displaced_work_s', 'resident_pool_compensation_work_s', 'service_recovery_scope', 'resident_debt_scope')}
+                    'recovered_action_fractions', 'reserved_destination_replicas', 'resident_displaced_work_s',
+                    'resident_pool_compensation_work_s', 'service_recovery_scope', 'resident_debt_scope')}
                 csv_rows.append({'workload': workload, 'deadline_s': deadline, 'policy': policy,
                     **{key: result[key] for key in ('shed_fraction', 'recovered_handoff_fraction', 'last_completion_s', 'pending_buffered_work_s')},
                     'pending_resident_work_s': float(pending.sum()), 'kv_shed_fraction': sum(result['action_fractions'][1::2]),
@@ -102,7 +106,7 @@ def run(out, workloads, deadlines):
     report['policy_evaluations'] = len(csv_rows)
     q.write_json(out / 'frontier.json', report)
     with (out / 'frontier.csv').open('w') as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(csv_rows[0]))
+        writer = csv.DictWriter(handle, fieldnames=list(csv_rows[0]), lineterminator='\n')
         writer.writeheader()
         writer.writerows(csv_rows)
     plot(report, out)
@@ -114,7 +118,8 @@ if __name__ == '__main__':
     parser.add_argument('--out', type=Path, default=q.ROOT / 'outputs/a100-replay-queue-resolution-20260910')
     parser.add_argument('--workloads', choices=('coding', 'coding_long'), nargs='+', default=['coding', 'coding_long'])
     parser.add_argument('--deadlines', type=float, nargs='+', default=[30., 60., 120.])
+    parser.add_argument('--require-local-recovery', action='store_true')
     args = parser.parse_args()
     if any(not np.isfinite(value) or value <= 0 for value in args.deadlines) or sorted(set(args.deadlines)) != args.deadlines:
         raise ValueError('deadlines must be positive, finite, unique and increasing')
-    run(args.out, args.workloads, args.deadlines)
+    run(args.out, args.workloads, args.deadlines, args.require_local_recovery)
