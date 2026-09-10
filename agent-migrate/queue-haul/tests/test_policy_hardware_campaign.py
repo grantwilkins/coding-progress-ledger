@@ -744,8 +744,10 @@ def test_full_power_attainment_uses_all_cases_and_requested_layout(
     figure = campaign.plt.gcf()
     ax = figure.axes[0]
     legend = ax.get_legend()
+    policies = ["queue_haul", "greedy", "greedy_lagrangian",
+                "isolated_fastest", "kv_only", "replay_only"]
     assert [text.get_text() for text in legend.texts] \
-        == [CDF_LABELS[policy] for policy in campaign.CDF_POLICIES]
+        == [CDF_LABELS[policy] for policy in policies]
     assert not figure.legends
     assert legend._ncols == 1
     assert legend._loc == 4
@@ -754,7 +756,7 @@ def test_full_power_attainment_uses_all_cases_and_requested_layout(
     assert ax.xaxis.label.get_fontsize() == 17
     assert legend.get_texts()[0].get_fontsize() == 12
     assert [line.get_color() for line in ax.lines[:-1]] \
-        == [CDF_COLORS[policy] for policy in campaign.CDF_POLICIES]
+        == [CDF_COLORS[policy] for policy in policies]
     assert len({str(CDF_LINESTYLES[policy])
                 for policy in campaign.CDF_POLICIES}) == len(campaign.CDF_POLICIES)
     figure.canvas.draw()
