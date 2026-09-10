@@ -254,6 +254,11 @@ Their [archive manifest](outputs/a100-replay-completion-20260910T0116/scenario-e
 records verified original hashes and the extraction command needed before reproducing
 the reductions from a Git checkout; the existing ignore rule excludes the raw files.
 
+After extraction, all 298 artifact-manifest files match their hashes; both paired
+reductions and the combined findings reproduce after normalizing path provenance.
+Extraction is required: the archived reducer treats missing logs as empty and can
+overwrite request counts with zeros while still labeling completed scenarios valid.
+
 The [2026-09-10 paired follow-up](outputs/a100-replay-final-20260910T0352/report.json)
 completed four clean width-eight KV conditions, eight resident scouts and twelve
 300-second control/replay/KV episodes on separate Sweden and Germany A100s.
