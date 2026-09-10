@@ -131,6 +131,14 @@ def reduce(root):
             'placement':result.get('placement'),'trace_sha256':hashes[str((path.parent/'offered-trace.json').relative_to(root))],
             'windows':windows,'outstanding_by_seconds_after_migration':checkpoints,
             'engine':{name:[{'start_s':a,'end_s':z,**engine_window(table,epoch,a,z)} for a,z in intervals] for name,table in tables.items()},
+            'incoming_by_dispatch_placement':{role:{'scope':'Service requests scheduled after migration start and dispatched on this GPU; undispatched arrivals remain in whole incoming population.',
+                'requests':len(group),'completed_requests':sum(r.get('done') and r.get('status')==200 for r in group),
+                'exact_completed_requests':len(exact),'p90_original_arrival_ttft_s':percentile([(r['first_ns']-r['scheduled_ns'])/1e9 for r in exact]),
+                'request_tpot_samples':sum(r.get('mean_tpot_s') is not None for r in exact),
+                'p90_request_mean_tpot_s':percentile([r['mean_tpot_s'] for r in exact if r.get('mean_tpot_s') is not None])}
+                for role in ('source','destination')
+                for group in ([r for r in selected if r.get('cohort')=='incoming' and r.get('serving_role')==role and r['scheduled_ns']>=epoch+60e9],)
+                for exact in ([r for r in group if r.get('done') and r.get('status')==200 and r.get('exact_token_timestamps') and r.get('first_ns') is not None and r['end_ns']<=result['boundary_ns']],)},
             'migration_events':events,'switches_by_seconds_after_migration':{str(t-60):sum(e['monotonic_ns'] <= epoch+t*1e9 for e in switches) for t in (90,180) if t <= duration},
             'control_materialization_requests':sum(r.get('phase','').startswith('control_') for r in selected),
             'service_requests_by_role':{role:sum(r.get('cohort') in ('resident','incoming') and r.get('serving_role')==role for r in selected) for role in ('source','destination')},

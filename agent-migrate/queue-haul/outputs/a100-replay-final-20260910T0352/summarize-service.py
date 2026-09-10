@@ -30,6 +30,7 @@ report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main
     'clean_controlled_KV_conditions':kv['clean_conditions'],'clean_KV_destination_continuations':kv['clean_destination_continuations'],
     'selected_resident_rates':rates,'service_observations':rows,
     'strict_client_token_stream_pause_overlap_methods':verified_methods,
+    'previous_nine_scenario_events_archive':'../a100-replay-completion-20260910T0116/scenario-events-archive.json',
     'evidence_tables':{'controlled_KV':'kv-observations.csv','service':'service-observations.csv','complete_windows_phases_metrics':'service-analysis.json','recorded_history_validation':'resident-history-audit.json','raw_archive':'raw-telemetry-archive.json'},
     'modeling_gap_status':{
         'eight_physical_resident_sessions':'implemented; final recorded-history audit must verify all completed episodes',
