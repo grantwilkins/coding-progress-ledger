@@ -17,6 +17,8 @@ cleanup=json.loads((root/'cleanup-execution.json').read_text()) if (root/'cleanu
 cleanup_elapsed=(cleanup['completed_wall_ns']-launch['start_wall_ns'])/1e9 if cleanup.get('completed_wall_ns') is not None else None
 main=[e for e in service['episodes'] if e['spec']['arm']!='resident']
 scouts=[e for e in service['episodes'] if e['spec']['arm']=='resident']
+history=json.loads((root/'resident-history-audit.json').read_text())
+if len(main)==12 and history['input_sha256']!=service['input_sha256']['requests.jsonl']:raise ValueError('final history audit and service reduction use different raw requests')
 rows=[]
 for episode in main:
     spec=episode['spec'];pause=episode['quiescence']
@@ -36,6 +38,7 @@ with (root/'service-observations.csv').open('w') as handle:
 verified_methods=sorted({e['spec']['arm'] for e in main if any(q['client_token_stream_overlap_verified'] for q in e['quiescence'])})
 report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main_observations_complete',
     'runtime_provenance':{'launch':'runtime-launch.json','builds':'runtime-builds.json','GPU_identity':'runtime-comparison.json','cleanup':'cleanup-execution.json','source_stop':'source-stop.json','destination_stop':'destination-stop.json','acquisition_cap_s':launch['acquisition_cap_s'],'controller_total_through_cleanup_s':cleanup_elapsed,'startup_and_cleanup_within_cap':cleanup_elapsed<=launch['acquisition_cap_s'] if cleanup_elapsed is not None else None},
+    'independent_history_audit':{**{k:history[k] for k in ('input_sha256','completed_links','nonreset_links','source_to_destination_links','causal_violations','turn_order_violations','retained_history_violations')},'reset_classification':history['reset_classification']['counts'],'exactly_one_terminal_row_per_offered_arrival':history['trace_coverage']['valid']},
     'completed_main_episodes':len(main),'requested_main_episodes':12,'completed_scouts':len(scouts),
     'simulator_source_hash_verification':simulator_check,'simulator_coefficients_changed':False,'new_policy_evaluations':0,
     'test_evidence':{'final_commands_and_results':'verification.json','focused_simulator':'focused-simulator-tests.log','focused_result':'181 passed,3 deselected','combined_instrumentation':'resident-broad-tests-original-order-fixed.log','combined_result':'82 passed','retained_failed_attempt':'resident-broad-test-environment-failures.log','failure_resolution':'Paired tests leaked QH_RUNTIME/QH_LMCACHE_MODE; fixture restoration plus permitted loopback execution resolves the original-order suite. Original13failed/67passed output remains archived.'},
