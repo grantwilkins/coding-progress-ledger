@@ -671,8 +671,24 @@ def test_both_native_algorithms_nonoptimal_still_fail(monkeypatch):
     monkeypatch.setattr(campaign.highspy, 'Highs', FailedSolver)
     with pytest.warns(RuntimeWarning, match='retrying the same LP with IPM'), pytest.raises(RuntimeError):
         campaign._bounded_lp(-np.ones(1), np.ones((1, 1)), np.ones(1), np.ones(1))
-    assert len(attempts) == 2
-    assert [item.getOptionValue('solver')[1] for item in attempts] == ['simplex', 'ipm']
+    assert len(attempts) == 3
+    assert [item.getOptionValue('solver')[1] for item in attempts] == ['simplex', 'ipm', 'simplex']
+    assert [item.getOptionValue('simplex_scale_strategy')[1] for item in attempts] == [0, 0, 2]
+
+
+def test_captured_resolution_lp_recovers_with_scaling_and_a_dual_certificate():
+    from pathlib import Path
+    from pool_shed_campaign import _bounded_lp
+
+    data = np.load(Path(__file__).parent / 'fixtures/pool_shed_resolution888.npz')
+    cost, matrix, rhs, upper = (data[k] for k in ('cost', 'matrix', 'rhs', 'upper'))
+    chosen = _bounded_lp(cost, matrix, rhs, upper)
+    assert np.max(matrix @ chosen - rhs) <= 1e-10
+    assert chosen.min() >= -1e-10 and np.max(chosen - upper) <= 1e-10
+    assert data['row_dual'].max() <= 1e-10
+    assert matrix.T @ data['row_dual'] + data['col_dual'] == pytest.approx(cost, abs=1e-10)
+    bound = rhs @ data['row_dual'] + upper @ np.minimum(data['col_dual'], 0)
+    assert cost @ chosen == pytest.approx(bound, abs=1e-8)
 
 
 @pytest.mark.parametrize('scale', [1e-6, 1., 1e6])
@@ -731,4 +747,4 @@ def test_native_optimal_requires_original_certificate(monkeypatch, bad_value, er
         else:
             chosen = campaign.solve_lp(table, np.ones(1, bool), np.ones(1), primary=.5)
             assert chosen[0] == pytest.approx(.5, abs=1e-8)
-    assert len(attempts) == 2
+    assert len(attempts) == (3 if both_fail else 2)

@@ -128,6 +128,19 @@ def test_released_network_capacity_finishes_feasible_mixed_schedule():
     assert result["transferred_bytes"] == pytest.approx([2, 98, 100])
 
 
+@pytest.mark.parametrize("gpus", [1, 2])
+def test_pool_spare_capacity_does_not_erase_reported_local_resident_displacement(gpus):
+    table, timing, calibration = case(gpus=gpus, load=.5, demand=(0., 0.))
+    timing["resident_replay_loss"] = .9
+    result = run(table, timing, calibration, mass=[1., 0.])
+    assert result["resident_displaced_work_s"] == pytest.approx([.5 * .9 * 8, 0.])
+    assert result["resident_pool_compensation_work_s"] == pytest.approx([3.6 if gpus == 2 else 0., 0.])
+    assert result["resident_debt_generated_work_s"] == pytest.approx([0. if gpus == 2 else 3.6, 0.])
+    assert result["peak_migration_replicas"] == [1., 0.]
+    assert not result["resident_latency_validated"]
+    assert "no resident GPU affinity" in result["service_recovery_scope"]
+
+
 def test_independent_execution_does_not_read_planning_certificate():
     table, timing, calibration = case()
     table.matrix, table.duration, table.rate, table.eligible = None, None, None, None

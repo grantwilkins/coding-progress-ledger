@@ -375,7 +375,8 @@ def policy_mask(table, policy):
 
 def _bounded_lp(cost, matrix, rhs, upper, certificate=None):
     matrix = csr_matrix(matrix)
-    for algorithm in ("simplex", "ipm"):
+    attempts = (("simplex", 0), ("ipm", 0), ("simplex", 2))
+    for attempt, (algorithm, scaling) in enumerate(attempts):
         model, solver = highspy.HighsLp(), highspy.Highs()
         model.num_col_, model.num_row_ = matrix.shape[1], matrix.shape[0]
         model.col_cost_, model.col_lower_, model.col_upper_ = cost, np.zeros(len(cost)), upper
@@ -383,7 +384,7 @@ def _bounded_lp(cost, matrix, rhs, upper, certificate=None):
         model.a_matrix_.format_ = highspy.MatrixFormat.kRowwise
         model.a_matrix_.start_, model.a_matrix_.index_, model.a_matrix_.value_ = matrix.indptr, matrix.indices, matrix.data
         for key, value in {"output_flag": False, "threads": 1, "solver": algorithm, "presolve": "on",
-                           "simplex_scale_strategy": 0, "small_matrix_value": 1e-12,
+                           "simplex_scale_strategy": scaling, "small_matrix_value": 1e-12,
                            "primal_feasibility_tolerance": 1e-10, "dual_feasibility_tolerance": 1e-9}.items():
             if solver.setOptionValue(key, value) != highspy.HighsStatus.kOk:
                 raise RuntimeError(f"HiGHS rejected option {key}")
@@ -399,8 +400,8 @@ def _bounded_lp(cost, matrix, rhs, upper, certificate=None):
             failure = certificate(result) if certificate is not None else None
             if failure is None:
                 return result
-        if algorithm == "simplex":
-            warnings.warn(f"HiGHS simplex failed: {failure}; retrying the same LP with IPM", RuntimeWarning, stacklevel=2)
+        if attempt + 1 < len(attempts):
+            warnings.warn(f"HiGHS {algorithm} failed: {failure}; retrying the same LP with {'IPM' if attempt == 0 else 'scaled simplex'}", RuntimeWarning, stacklevel=2)
     raise RuntimeError(failure)
 
 
@@ -825,12 +826,16 @@ def reduce(out):
             if not np.allclose(np.array(result["resident_debt_generated_work_s"]) - result["resident_debt_recovered_work_s"],
                                result["pending_resident_debt_work_s"], rtol=1e-8, atol=1e-6):
                 raise ValueError("resident debt conservation failed")
+            if not np.allclose(np.array(result["resident_displaced_work_s"]) - result["resident_pool_compensation_work_s"],
+                               result["resident_debt_generated_work_s"], rtol=1e-8, atol=1e-6):
+                raise ValueError("pooled resident compensation conservation failed")
             if result["resident_latency_validated"]:
                 raise ValueError("aggregate queue accounting cannot validate resident latency")
             if result["last_completion_s"] > deadline + 1e-8:
                 raise ValueError("handoff after deadline")
             row = {"workload": workload, "snapshot": snapshot, "load": load, "draw": draw, "wan_gbps": wan,
                    "resident_latency_validated": False, "service_recovered_by_deadline": result["service_recovered_by_deadline"],
+                   "service_recovery_scope": result["service_recovery_scope"],
                    "deadline_s": deadline, "policy": policy, "shed_fraction": result["shed_fraction"],
                    "admitted_shed_fraction": result["admitted_shed_fraction"],
                    "admitted_unfinished_fraction": result["admitted_shed_fraction"] - result["shed_fraction"],
@@ -841,6 +846,9 @@ def reduce(out):
                    "buffered_requests": result["buffered_requests"], "pending_buffered_requests": result["pending_buffered_requests"],
                    "pending_resident_debt_work_s": sum(result["pending_resident_debt_work_s"]),
                    "resident_debt_generated_work_s": sum(result["resident_debt_generated_work_s"]),
+                   "resident_displaced_work_s": sum(result["resident_displaced_work_s"]),
+                   "resident_pool_compensation_work_s": sum(result["resident_pool_compensation_work_s"]),
+                   "peak_migration_replicas": result["peak_migration_replicas"],
                    "pending_source_buffer_work_s": result["pending_source_buffer_work_s"],
                    "pending_destination_buffer_work_s": result["pending_backlog_reference_work_s"],
                    "service_ready_s": result["service_ready_s"],

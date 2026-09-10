@@ -289,6 +289,7 @@ class PooledExecution:
         self.pause_requested = np.zeros(self.n)
         self.gated = np.zeros(self.n, bool)
         self.resident_debt, self.resident_generated, self.resident_recovered = (np.zeros(2) for _ in range(3))
+        self.resident_displaced, self.peak_migration_replicas = np.zeros(2), np.zeros(2)
         self.resident_loss = np.broadcast_to(np.asarray(self.timing.get("resident_replay_loss", 0.)), (2,))
         if not np.isfinite(self.resident_loss).all() or np.any((self.resident_loss < 0) | (self.resident_loss > 1)):
             raise ValueError("resident replay throughput loss must be in [0, 1]")
@@ -495,7 +496,7 @@ class PooledExecution:
             rates[transfers] = self.network_rates[transfers]
             computing = (self.state == 1) | (self.state == 4)
             backlog_rates = np.zeros(self.n)
-            resident_growth, resident_recovery, compute_shares = np.zeros(2), np.zeros(2), np.zeros(2)
+            resident_growth, resident_recovery, resident_displacement, compute_shares = (np.zeros(2) for _ in range(4))
             nominal_rates = np.zeros(2)
             serving_load = self.serving_load()
             for r in (0, 1):
@@ -505,9 +506,13 @@ class PooledExecution:
                 if self.protected:
                     backlog_rates[queued] = min(1., self.gpus * (1 - load) / max(float(self.mass[queued].sum()), 1e-30))
                     load = min(1., load + float(self.mass[queued] @ backlog_rates[queued]) / self.gpus)
-                sharing, capacity = compute_allocation(load, *[float(self.mass[active & (self.action == a)].sum()) for a in (0, 1)],
+                replay_mass, kv_mass = [float(self.mass[active & (self.action == a)].sum()) for a in (0, 1)]
+                sharing, capacity = compute_allocation(load, replay_mass, kv_mass,
                     self.gpus, self.resident_loss[r] if "resident_replay_loss" in self.timing else None, self.protected)
                 compute_shares[r] = sharing
+                self.peak_migration_replicas[r] = max(self.peak_migration_replicas[r], sharing * (replay_mass + kv_mass))
+                if not self.protected and "resident_replay_loss" in self.timing:
+                    resident_displacement[r] = sharing * load * (self.resident_loss[r] * replay_mass + kv_mass)
                 if self.protected and capacity < load * self.gpus - 1e-9 * self.gpus:
                     raise RuntimeError("migration violated protected serving capacity")
                 resident_growth[r] = 0. if self.protected else max(load * self.gpus - capacity, 0.)
@@ -550,6 +555,7 @@ class PooledExecution:
                 usage["service_peak"] = np.maximum(usage["service_peak"], ordinary + recovery)
             self.idle_work += [float(self.mass[computing & (self.route == r)] @ progress[computing & (self.route == r)]) for r in (0, 1)]
             self.resident_generated += resident_growth * step
+            self.resident_displaced += resident_displacement * step
             self.resident_recovered += resident_recovery * step
             self.resident_debt = np.maximum(self.resident_debt + (resident_growth - resident_recovery) * step, 0.)
             self.backlog = np.maximum(self.backlog - backlog_rates * step, 0)
@@ -581,13 +587,17 @@ class PooledExecution:
         return {"shed_fraction": float(fractions.sum()), "action_counts": numbers.tolist(),
                 "resident_latency_validated": False,
                 "service_recovered_by_deadline": self.service_ready_s is not None,
+                "service_recovery_scope": "aggregate pooled work only; no resident GPU affinity or TTFT/TPOT guarantee",
                 "action_fractions": fractions.tolist(), "completed_sessions": float(numbers.sum()),
                 "last_completion_s": max((e["completion_s"] for e in events), default=0.),
                 "service_ready_s": self.service_ready_s,
                 "resident_debt_generated_work_s": self.resident_generated.tolist(),
+                "resident_displaced_work_s": self.resident_displaced.tolist(),
+                "resident_pool_compensation_work_s": np.maximum(self.resident_displaced - self.resident_generated, 0.).tolist(),
                 "resident_debt_recovered_work_s": self.resident_recovered.tolist(),
                 "pending_resident_debt_work_s": self.resident_debt.tolist(),
                 "batch_replica_seconds": self.compute_used.tolist(), "migration_idle_work_s": self.idle_work.tolist(),
+                "peak_migration_replicas": self.peak_migration_replicas.tolist(),
                 "transferred_bytes": self.network_used.tolist(),
                 "peak_destination_load": self.peak_load.tolist(), "final_destination_load": self.loads.tolist(), "completion_events": events,
                 "peak_reserved_kv_tokens": self.peak_memory.tolist(),
@@ -609,7 +619,7 @@ class PooledExecution:
                                   else "finite recorded turns at explicit equal cadence; terminal context retained"),
                 "compute_scope": ("shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion" if self.protected else "fractional batch processor sharing; dynamic measured load factor; no ingestion"),
                 "backlog_scope": ("ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears" if self.protected else "migration reduces ordinary service; spare capacity repays resident debt before source buffers; recovery utilization enters the measured migration load factor"),
-                "resident_debt_scope": ("resident debt disallowed by the shared safe-occupancy constraint" if self.protected else "measured resident throughput loss during replay; conservative zero ordinary service during KV response compute; network waiting consumes no ordinary service"
+                "resident_debt_scope": ("resident debt disallowed by the shared safe-occupancy constraint" if self.protected else "site-wide deficit after spare GPUs compensate displaced service; resident_displaced_work_s records the local throughput-loss proxy before compensation; zero ordinary service during KV response compute; network waiting consumes no ordinary service"
                                         if "resident_replay_loss" in self.timing else "reverse interference disabled in legacy primitive fixture"),
                 "memory_scope": "reserve declared cohort memory, including recorded-cycle peaks, before transfer; grow or reject before catch-up"}
 

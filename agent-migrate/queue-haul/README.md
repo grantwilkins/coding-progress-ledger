@@ -20,8 +20,8 @@ excluding CPUs and peripherals. This is the requested A100 study, not the
 original H100 configuration. Eight GPUs share each modeled node. The next campaign
 uses the recorded `coding` and `coding_long` agentic trajectories; `measured_pack`
 remains a hardware-validation workload. The default output is
-`outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped pending the
-validation below.
+`outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped: the replay
+diagnosis below is complete, but fleet resident latency is not validated.
 
 Resident service shares compute with migration. Replay uses the existing measured
 resident-throughput loss; spare capacity repays resident debt before migrated
@@ -33,6 +33,77 @@ aggregate recovery approximation: executed handoff, `service_ready_s`,
 `service_recovered_by_deadline`, and resident latency validity are separate
 outputs. **Resident TTFT/TPOT is not validated.** KV network waiting uses no
 compute; KV ingest is omitted.
+
+The [completed replay diagnosis](outputs/a100-replay-resolution-20260910/report.json)
+reproduces all 20 archived 2/2-MW policy evaluations and adds eight controlled CPU
+comparisons. Run `uv run python pool_shed_replay_resolution.py --out /tmp/replay-audit`
+with a fresh output directory to reproduce it. Timing coefficients, full-context
+replay and the effective 0.80-decimal-GB/32K wire assumption are unchanged. The
+audit distinguishes these causes of apparently fast replay:
+
+- **Handoff is earlier than service recovery.** At the 120-second coding deadline,
+  replay finishes ownership transfers at 15.15 s but aggregate service recovers at
+  58.15 s. QH reaches both at 50.58 s. At 30 seconds both hand off 100%, while QH
+  retains 148.3 and replay 906.9 normalized work-seconds of request buffers.
+- **Resident service is ideally pooled across GPUs.** Spare GPUs compensate the
+  throughput lost on migration GPUs before resident debt is reported. For long
+  replay at 30 seconds, the model displaces 80,941 work-seconds of resident service
+  and cancels 63,482 through this assumption. Resident histories on the measured
+  GPU cannot use that spare capacity elsewhere without moving their KV. Execution
+  and campaign tables now expose `resident_displaced_work_s`,
+  `resident_pool_compensation_work_s`, `peak_migration_replicas` and the explicit
+  aggregate-only `service_recovery_scope`. These are diagnostics, not a new
+  queue-delay penalty. The remaining modeled debt can recover while individual
+  residents have already missed their latency target.
+- **The resource ratio favors parallel rebuilds.** Two 2-MW destinations at half
+  nominal load have more standing spare service than the 2-MW source uses at 80%.
+  The source's eight sessions/GPU can spread over twice its GPU inventory. At the
+  0.80-GB wire anchor, the initial coding and long snapshots contain 18.94 and
+  36.28 TB of KV versus 1.56 and 2.98 GB of replay text. The KV payloads alone take
+  151.5 and 290.3 s at a shared 1-Tbit/s cap if those snapshots must all move;
+  evolving snapshots, endpoints and catch-up require separate accounting.
+- **The load and timing transfers are generous.** Nominal half-load offers
+  0.2213 coding or 0.1882 long requests/s/GPU. The inherited timing conversion
+  increases replay time by just 0.68% or 0.52%; the latest coding hardware used
+  twice that coding RPS. Regional calibration also speeds replay by about 22%.
+  Removing only that regional discount lowers long replay's 30-second handoff
+  from 87.31% to 76.40%, and QH from 93.97% to 83.39%.
+- **Completion protocols and context lifecycles differ.** Unloaded width-eight
+  cold replay has 0.35-s median absolute held-out error; a blanket replay slowdown
+  is unsupported. Loaded probes often generate 512 tokens, while simulator replay
+  has a short measured completion overhead. Natural warm-prefix hits reduce
+  rebuild work even when the entire context is submitted. The full-rebuild
+  simulator can overcharge warm catch-up. Source request durations remain roughly
+  0.26/0.30-s throughput proxies, and cyclic traces can wrap to short histories;
+  `coding_long` describes the initial state, not a permanent context floor.
+
+At 30 seconds with the requested 2/2-MW inventory, QH hands off 93.97% of the long
+workload and replay 87.31%. Halving only each destination to 1 MW changes coding
+to QH 60.44% / replay 56.76%, and long to 55.92% / 49.97%; the standing-service
+ceiling becomes 62.5%. This is a labeled capacity sensitivity, not the primary
+configuration. QH need not strictly dominate executed replay: its temporal LP
+optimizes a forecast and commits admissions incrementally. In the no-regional-
+discount coding sensitivity, replay still exceeds QH (99.87% versus 97.50%).
+
+The new hardware itself has replay ownership handoffs in 42.9–60.2 s versus
+105.6–135.8 s for KV under its measured 1-Gbit/s GET cap. Its long replay resident
+P90 TTFT reaches 14.07 s in one repeat versus 0.335 s in the matched control.
+That is the discrepancy that needs a replica-local service model: fast handoff
+can coexist with poor resident service. The existing paired traces are sufficient
+to establish this diagnosis; another broad GPU campaign is not needed for it.
+
+The review also reproduced a pre-existing HiGHS `Unknown` failure in the refined
+60-second coding/isolated-fastest check. Both original solver attempts disabled
+matrix scaling. A final equilibrated-simplex attempt now solves the same bounded
+LP, retaining the original resource and primary-objective certificate. The
+captured 888-variable regression has a primal residual below 1.3e-13 and a dual
+gap below 5e-9; the [previously failing policy case](outputs/a100-replay-resolution-20260910/resolution-regression.json)
+now completes with a resource residual below 5.8e-11. This is a numerical fix;
+the default successful solver path and timing coefficients are unchanged.
+[Focused tests](outputs/a100-replay-resolution-20260910/focused-tests.log) cover
+execution, planning and a complete five-policy single-cell reduction. The three
+broader integration tests remain excluded from that focused run; the full
+multi-setting resolution sweep is not certified by this bounded regression.
 
 `Fleet.metadata["destination_gpus"]` independently sets the GPU count at each of
 the two equally sized destinations; it defaults to the source count. The bounded
@@ -110,42 +181,18 @@ skips cached-prefix prefill work without eliminating decode.
 measures the throughput/latency tradeoff from interleaving prefill and decode.
 These sources explain mechanisms; they supply no new simulator coefficients.
 
-Before another large campaign:
-
-1. Match agentic resident context, appended/output tokens, request rate and active
-   concurrency to measured service. The old coding normalization and the newer
-   4K SLO recipes cannot be equated by calling both loads 50%. Validate the
-   transferred service rates before using them to set destination headroom.
-2. Check live replay and catch-up on the current runtime at short and long retained
-   contexts, small and large appends, and widths one and eight. Record native
-   cached/evaluated token counts, queue wait and exact token timestamps. Full
-   context remains the submitted request; actual prefix hits must be observed.
-   Historical catch-up timings on vLLM 0.10.1.1 do not validate the current stack.
-3. Validate source request durations and arrival timing, including tool pauses,
-   bursts, growth and resets. The 1,655 coding records contain no arrival times;
-   equal cadence and seeded phases remain assumptions. Report excluded trajectories
-   beyond the roughly 32K replay support, and keep any unmeasured arrival model
-   explicit in sensitivity results.
-4. Validate GPU queueing under sustained resident traffic and overlapping replay.
-   Width-eight completion fits alone do not establish that measured elapsed time
-   can be treated as divisible pooled GPU work. Use the existing long-context
-   overload cases to check queue delay, KV-memory pressure and scheduler effects;
-   add only the queue behavior required to reproduce those observations.
-5. Measure incumbent and migrated request latency before, during and after handoff,
-   with arrivals continuing through recovery. Use the existing 1-second P90 TTFT
-   and 100-ms P90 mean-TPOT targets as the initial validation contract. Resolve
-   missed recovery forecasts and report both populations' queues and SLO misses;
-   an empty final queue alone does not certify latency throughout migration.
-
-The next experiment should be a small matched agentic replay/KV validation block,
-followed by a bounded comparison of all five policies with common candidates and
-planning clocks. Lock coefficients before held-out checks; acceptance depends on
-timing, queue and service fidelity, not the QH/replay ranking. The existing frozen
-width-eight and regional timing checks remain necessary but do not cover these
-live-source and resident-service gaps. No synthetic replay-cache discount or
-policy-specific contention penalty is introduced. Keep the 0.80 GB/32K effective
-wire check explicit: the campaign's native serialized KV geometry is a different
-assumption, and a private-KV fraction must not discount the same measurement twice.
+The requested matched acquisition and bounded policy comparison are complete.
+Before claiming SLO-feasible fleet shedding, the remaining work is a model of
+resident queues tied to their serving replicas, checked against the collected
+control/replay/KV traces with exact RPS, history count, output length and prefix
+reuse. Separate rebuild, generation and source quiescence; do not fit a whole
+512-token probe as prefill or replace local queues with a global protection pause.
+Source durations and arrival timing also require an explicit contract: the
+1,655 coding records contain no arrival timestamps or observed cycle restarts.
+Keep those assumptions and the roughly 32K context support visible. Acceptance
+depends on held-out timing and service fidelity, not QH's ranking. The native KV
+geometry and the 0.80-GB effective-wire scenario remain distinct; a private-KV
+fraction must not discount the same measurement twice.
 
 Load is a fraction of the measured coding **normal serving envelope**, not
 FLOPs or GPU busy time. Request work uses the original context-dependent
@@ -245,9 +292,9 @@ Observed storage chunks contain 12,582,912 payload bytes per 256 tokens, matchin
 native serialized geometry; this does not validate the 0.80-GB effective-wire
 anchor for a complete migration. Both GPUs were released within the supplemental
 cutoff. Original failed attempts and the initial 148.6-minute acquisition remain
-unchanged. The twenty-policy diagnostic remains the bounded simulator comparison;
-full SLO-feasibility campaigns remain unready, with the remaining measurements
-listed in the supplemental report.
+unchanged. The twenty-policy diagnostic was subsequently reproduced in the
+completed replay diagnosis above; the final paired follow-up below supersedes
+this supplemental report's acquisition checklist. Fleet SLO validation remains open.
 The nine per-scenario `events.jsonl` files are preserved losslessly in
 [scenario-events.tar.gz](outputs/a100-replay-completion-20260910T0116/scenario-events.tar.gz).
 Their [archive manifest](outputs/a100-replay-completion-20260910T0116/scenario-events-archive.json)
@@ -309,8 +356,9 @@ The two nodes match vLLM 0.22.0/LMCache 0.5.1 but differ in CUDA/Torch build and
 Transformers version; the [runtime builds](outputs/a100-replay-final-20260910T0352/runtime-builds.json)
 record those differences. Client token timestamps do not identify server execution
 or GPU queue time. Small windows and censored arrivals do not certify latency tails.
-Simulator coefficients and campaign evaluations remain unchanged; **full simulations
-and fitting stay stopped pending review**.
+The acquisition changed no simulator coefficients. The completed replay diagnosis
+above adds CPU comparisons and exposes ideal pooling; **the full campaign stays
+stopped until replica-local service behavior is validated**.
 
 The [raw archive manifest](outputs/a100-replay-final-20260910T0352/raw-telemetry-archive.json)
 provides lossless restoration commands and verified member hashes, including ignored

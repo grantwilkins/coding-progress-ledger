@@ -1,5 +1,6 @@
 """Campaign provenance, measured inputs, and complete paired reductions."""
 
+import csv
 import gzip
 import json
 
@@ -132,6 +133,21 @@ def test_campaign_reduction_checks_all_cells_and_policies(tmp_path, monkeypatch)
     c.write_json(path, value)
     with pytest.raises(ValueError, match='missing policy'):
         c.reduce(tmp_path)
+
+
+def test_single_cell_reduction_retains_resident_pooling_diagnostics(tmp_path, monkeypatch):
+    config = {**c.configuration(), 'workloads': ['coding'], 'resident_loads': [.5],
+              'deadlines': [30], 'wan_gbps': [1000], 'snapshots': 1, 'draws': 0}
+    monkeypatch.setattr(c, 'configuration', lambda smoke=False: config.copy())
+    monkeypatch.setattr(c, 'plot', lambda *args: None)
+    c.prepare(tmp_path)
+    c.run(tmp_path)
+    assert c.reduce(tmp_path)['cells'] == 1
+    rows = list(csv.DictReader((tmp_path / 'scenarios.csv').open()))
+    assert len(rows) == len(c.POLICIES)
+    for row in rows:
+        assert float(row['resident_displaced_work_s']) - float(row['resident_pool_compensation_work_s']) == pytest.approx(float(row['resident_debt_generated_work_s']), abs=1e-6)
+        assert 'no resident GPU affinity' in row['service_recovery_scope']
 
 
 def test_configuration_and_provenance_fail_closed(tmp_path):
