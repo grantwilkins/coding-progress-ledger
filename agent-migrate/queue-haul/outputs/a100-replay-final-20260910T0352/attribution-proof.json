@@ -1,0 +1,198 @@
+{
+  "verified": true,
+  "source_connection_ids": [
+    "1c77df2888e550cb",
+    "2c14e0b662c86fbb",
+    "35f7548cb7882bfc",
+    "39e6a71c40fddb66",
+    "918dcba18890801f",
+    "cfb7f67061b8be33",
+    "cff701778a43987a",
+    "d9925d1dae24b439"
+  ],
+  "destination_connection_ids": [
+    "5c3ccfee2b4a010f",
+    "67ddcecfbdf1393a",
+    "816a5eac5a347ee1",
+    "95f59728b6dc58ea",
+    "9fecf44b034c39fa",
+    "c8eae58ae761c2b6",
+    "cc197c10aef4a6af",
+    "d131546c9896151d"
+  ],
+  "exclusive_source_warm_window_ns": [
+    10843122178605,
+    10854615676617
+  ],
+  "exclusive_source_commands": {
+    "EXISTS": 248,
+    "SET": 256
+  },
+  "source_warm_requests": [
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-1",
+      "route_port": 18100,
+      "event": "request_start",
+      "monotonic_ns": 10843122178605,
+      "request_id": "source_warm",
+      "context_hash": "26dd3063168a7ca5fc1c2324d31112c1e87631807a506d815f373bf16f5a368c"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-0",
+      "route_port": 18100,
+      "event": "request_start",
+      "monotonic_ns": 10843123990683,
+      "request_id": "source_warm",
+      "context_hash": "fd034d2a7ff39080f3dd97cc266d3086aed4dcf1e39cb8d7c3680182316d9784"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-3",
+      "route_port": 18100,
+      "event": "request_start",
+      "monotonic_ns": 10843129881532,
+      "request_id": "source_warm",
+      "context_hash": "8622eeb44ecbf31020651b12e913b26457a1a1775e88613c90f76683ccb1b40b"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-4",
+      "route_port": 18100,
+      "event": "request_start",
+      "monotonic_ns": 10843137796681,
+      "request_id": "source_warm",
+      "context_hash": "6c0c35454b16c9cd8ac5794859e94e69a1fbed45d538b48f4e930a1416dcbf80"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-2",
+      "route_port": 18100,
+      "event": "request_start",
+      "monotonic_ns": 10843145806929,
+      "request_id": "source_warm",
+      "context_hash": "64abeae3da10338dda043c6fe2572b14d044e5c925d36b7243d0d890cdd26598"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-5",
+      "route_port": 18100,
+      "event": "request_start",
+      "monotonic_ns": 10843153748738,
+      "request_id": "source_warm",
+      "context_hash": "affb53065c542126eeaf4f089342c1dd0b3869c367754e9826d9f66743524cdc"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-6",
+      "route_port": 18100,
+      "event": "request_start",
+      "monotonic_ns": 10843161382029,
+      "request_id": "source_warm",
+      "context_hash": "9b01a99ed57655991f343e518e1b9854bba1bc38a3fa5f69bd26530a2e9e76a2"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-7",
+      "route_port": 18100,
+      "event": "request_start",
+      "monotonic_ns": 10843168872130,
+      "request_id": "source_warm",
+      "context_hash": "4a8816b6515f68442ee225589860939b71542f16e396533462c3859efcc8efe6"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-0",
+      "route_port": 18100,
+      "event": "request_end",
+      "monotonic_ns": 10852356391617,
+      "request_id": "chatcmpl-86d12284628b9765",
+      "context_hash": "fd034d2a7ff39080f3dd97cc266d3086aed4dcf1e39cb8d7c3680182316d9784"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-2",
+      "route_port": 18100,
+      "event": "request_end",
+      "monotonic_ns": 10852432813853,
+      "request_id": "chatcmpl-8327bbd443d63dac",
+      "context_hash": "64abeae3da10338dda043c6fe2572b14d044e5c925d36b7243d0d890cdd26598"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-4",
+      "route_port": 18100,
+      "event": "request_end",
+      "monotonic_ns": 10852436100222,
+      "request_id": "chatcmpl-8e6e9630708be1f9",
+      "context_hash": "6c0c35454b16c9cd8ac5794859e94e69a1fbed45d538b48f4e930a1416dcbf80"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-1",
+      "route_port": 18100,
+      "event": "request_end",
+      "monotonic_ns": 10852436441493,
+      "request_id": "chatcmpl-9acd0cebb9517185",
+      "context_hash": "26dd3063168a7ca5fc1c2324d31112c1e87631807a506d815f373bf16f5a368c"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-3",
+      "route_port": 18100,
+      "event": "request_end",
+      "monotonic_ns": 10852467725853,
+      "request_id": "chatcmpl-8e98d1a2c485c064",
+      "context_hash": "8622eeb44ecbf31020651b12e913b26457a1a1775e88613c90f76683ccb1b40b"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-5",
+      "route_port": 18100,
+      "event": "request_end",
+      "monotonic_ns": 10852536671499,
+      "request_id": "chatcmpl-82e75a923a7c2244",
+      "context_hash": "affb53065c542126eeaf4f089342c1dd0b3869c367754e9826d9f66743524cdc"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-6",
+      "route_port": 18100,
+      "event": "request_end",
+      "monotonic_ns": 10852881265635,
+      "request_id": "chatcmpl-9a042ae01a45f002",
+      "context_hash": "9b01a99ed57655991f343e518e1b9854bba1bc38a3fa5f69bd26530a2e9e76a2"
+    },
+    {
+      "session": "paired-paired-7101-8192-kv_transfer-7",
+      "route_port": 18100,
+      "event": "request_end",
+      "monotonic_ns": 10854606771269,
+      "request_id": "chatcmpl-a7fcf4c3eeea09bc",
+      "context_hash": "4a8816b6515f68442ee225589860939b71542f16e396533462c3859efcc8efe6"
+    }
+  ],
+  "observed_pool_connections": 16,
+  "closed_pool_connections": [],
+  "logic": "Cache-integrity requests bypassed LMCache. The first paired source-warm phase precedes any destination copy and identifies all eight source connections. The installed Redis backend creates exactly eight workers, one persistent TCP connection per worker before its operation loop, without reconnect. Both once-started pools have eight workers and all sixteen observed IDs remain distinct; the other eight therefore belong to Germany. Source-local and Germany GET traffic both traverse the billed proxy.",
+  "source_commit": {
+    "tag": "0.5.1",
+    "distance": 0,
+    "node": "g979719d7",
+    "dirty": false,
+    "branch": "HEAD",
+    "node_date": "2026-07-02"
+  },
+  "source_urls": [
+    "https://raw.githubusercontent.com/LMCache/LMCache/979719d7/csrc/storage_backends/connector_base.h",
+    "https://raw.githubusercontent.com/LMCache/LMCache/979719d7/csrc/storage_backends/redis/connector.cpp",
+    "https://raw.githubusercontent.com/LMCache/LMCache/979719d7/csrc/storage_backends/redis/connector.h"
+  ],
+  "input_sha256": {
+    "paired/paired-7101-8192-kv_transfer/events.jsonl": "290d8bb8cc7e04d48257313500b4ed138c68b7fbd8ce154bda46d51f7b75c20e",
+    "paired/paired-plan.json": "fd85df1c8fbc28cd2daa2e9976973ec520ec89215d3ec0c7e900573a7bf507ef",
+    "stack/proxy_connections.csv": "64794062f491a022b39207eea0d767a7031bf7117db08d506b86993298ed7d5d",
+    "stack/resp_transfers.csv": "c3f5fb086ac215f85fe03be801b3976f4e723324c9822ecbf85b7b6331f13d1e",
+    "stack/lmcache-source.log": "001f1d7e2942aa25c1e652ea0b90ecbdcda448ad97eb4538a2e32774a142269d",
+    "stack/lmcache-sink.log": "ca98a6eac31759fbbf06aea2a2a7fe18832ad0e2db33a5773ee51ad8d7c14504",
+    "source-launches.json": "8de4fbfc471a7c11735d91f37895952e0aacbc673ca97bf91ab205d4efc9768f",
+    "stack/remote-commands.json": "4771ab287842e35e62b01ec6c95715dad2a15bd743280bffa1f1d8a059c3c494",
+    "check-cache.py": "301c6c4dd9581841ae55912b2ce0962036d12d5b6062e3971c65173a0890f1bc",
+    "key-formula/csrc/storage_backends/connector_base.h": "0ede07813b0b93f52d4aa02425493afa7e9f3ec24215ac2da276bd6ed91cdb2b",
+    "key-formula/csrc/storage_backends/redis/connector.cpp": "d21dc3a0efd9e06be440ed9b9b2a630c317d57f4079b5acaabfdf05fa594af64",
+    "key-formula/csrc/storage_backends/redis/connector.h": "df81bcf59551846e6e4f78cb80666d15784fbc6388a194622b8202f479de3130",
+    "key-formula/lmcache/v1/distributed/api.py": "ef8bdbf4fa88413774070900162efa31d07587124e4f4e80602c8364cf4f77e8",
+    "key-formula/lmcache/v1/distributed/l2_adapters/native_connector_l2_adapter.py": "b3a3e18d21f1e0dbaa05746fb1797f878ae8fa82a6b0fba8f3b785e71968c00b",
+    "key-formula/lmcache/v1/distributed/l2_adapters/resp_l2_adapter.py": "2d39068619ef9370b800e163221b8c1ee7f277af991428cdf6b7675a6f319a75",
+    "key-formula/lmcache/v1/multiprocess/token_hasher.py": "ed1a77621f47146fa49d11a83e64dfc559a146d73d87983d7eeefc4bbe2f4c8f",
+    "key-formula/lmcache-scm-version.json": "879d8c716cb2a337621921e018fbd5824907cc230b4fec3d997a55586d4c9cac"
+  },
+  "physical_wire_limit": "Destination RESP request/response bytes exclude TCP/IP, TLS/SSH tunnel and link-layer overhead.",
+  "installed_redis_binary_sha256": "fa9668cad33448aee94e3d2f2aa1389bd4784bed774a174736896fc04b4c0421"
+}

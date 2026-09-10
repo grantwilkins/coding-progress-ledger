@@ -32,6 +32,14 @@ def payload(rows):
         'protocol_bytes':wire-actual,'wire_bytes':wire,'payload_sizes':sorted(set(unique.values()))}
 
 
+def get_bytes(rows):
+    rows=[r for r in rows if r['command']=='GET'];summary=payload([r for r in rows if int(r['payload_bytes'])>0])
+    request=sum(int(r['request_wire_bytes']) for r in rows);response=sum(int(r['response_wire_bytes']) for r in rows)
+    return {**summary,'all_get_records':len(rows),'zero_payload_get_records':sum(int(r['payload_bytes'])==0 for r in rows),
+        'request_protocol_bytes':request,'response_protocol_bytes':response-summary['total_payload_bytes'],
+        'protocol_bytes':request+response-summary['total_payload_bytes'],'wire_bytes':request+response}
+
+
 def attribute(events, transfers, model):
     owners, expected = collections.defaultdict(set), {}
     for event in events:
@@ -86,13 +94,21 @@ def reduce(root, package):
     assert 'chunk_size=256, hash_algorithm=blake3' in log
     models=set(re.findall(r'\(model=(.*?), world_size=(\d+)\)',log));assert len(models)==1 and next(iter(models))[1]=='1'
     model=next(iter(models))[0];scenarios=[]
+    proof=root.parent/'attribution-proof.json';origins=json.loads(raw(proof)) if proof.exists() else None
     for folder in sorted(root.glob('paired-*')):
         if not folder.is_dir() or not (folder/'resp_transfers.csv').exists():continue
         data=raw(folder/'events.jsonl')
         if data and not data.endswith(b'\n'):raise ValueError(f'partial event record: {folder}')
         events=[json.loads(x) for x in data.splitlines()]
         rows=list(csv.DictReader(raw(folder/'resp_transfers.csv').decode().splitlines()))
-        scenarios.append({'scenario_id':folder.name,**attribute(events,rows,model)})
+        value={'scenario_id':folder.name,**attribute(events,rows,model)}
+        if origins:
+            source=set(origins['source_connection_ids']);destination=set(origins['destination_connection_ids'])
+            assert origins['verified'] and not source&destination and {r['connection_id'] for r in rows}<=(source|destination)
+            dest_rows=[r for r in rows if r['connection_id'] in destination]
+            value.update(destination_get=get_bytes(dest_rows),source_local_get=get_bytes([r for r in rows if r['connection_id'] in source]),
+                destination_phase_attribution=attribute(events,dest_rows,model),connection_origin_proof=str(proof))
+        scenarios.append(value)
     return {'model':model,'chunk_tokens':256,'world_size':1,'kv_rank_hex':'01000100','object_group_id':0,'salt':'',
         'method':'Frozen LMCache blake3 rolling full-token chunks, native ObjectKey serialization, proxy SHA256. All observed GETs checked against recorded rendered prompts; no GPU requests.',
         'scenarios':scenarios,'input_sha256':provenance,'source_code_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
