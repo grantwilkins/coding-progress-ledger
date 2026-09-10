@@ -1,0 +1,154 @@
+{
+  "data_acceptance": "pending server event joins and telemetry completeness validation",
+  "status": "running",
+  "cells": [
+    {
+      "id": "episodes-coding-0-control-7102",
+      "kind": "episode",
+      "status": "complete",
+      "start_wall_ns": 1789062126661577533,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--episode",
+        "0"
+      ],
+      "exit_code": 0,
+      "end_wall_ns": 1789062454136505602
+    },
+    {
+      "id": "episodes-coding-0-replay-7102",
+      "kind": "episode",
+      "status": "complete",
+      "start_wall_ns": 1789062454136987202,
+      "command": [
+        "/tmp/qh-server-runtime/bin/python",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_server_acquire.py",
+        "--out",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723",
+        "--inventory",
+        "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/inventory.json",
+        "--plan",
+        "outputs/a100-resident-server-timing-plan/plan.json",
+        "--worker",
+        "--episode",
+        "1"
+      ],
+      "exit_code": 0,
+      "end_wall_ns": 1789062771982580797
+    },
+    {
+      "id": "episodes-coding_long-0-control-7101",
+      "kind": "episode",
+      "status": "running",
+      "start_wall_ns": 1789062771983082565
+    },
+    {
+      "id": "episodes-coding_long-0-replay-7101",
+      "kind": "episode",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c8192-n1-r1",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c8192-n8-r1",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c8192-n16-r1",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c30000-n1-r1",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c30000-n8-r1",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c30000-n16-r1",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c8192-n1-r2",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c8192-n8-r2",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c8192-n16-r2",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c30000-n1-r2",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c30000-n8-r2",
+      "kind": "warm",
+      "status": "unstarted"
+    },
+    {
+      "id": "warm-c30000-n16-r2",
+      "kind": "warm",
+      "status": "unstarted"
+    }
+  ],
+  "overhead": [
+    {
+      "status": "inconclusive",
+      "comparisons": {
+        "median_duration_s": {
+          "off_relative_difference": 0.17720517756405987,
+          "on_relative_difference": 0.09208032503632674,
+          "interpolated_off": 10.410426015250938
+        },
+        "output_tokens_s": {
+          "off_relative_difference": 0.2174522029008845,
+          "on_relative_difference": 0.09753327606607781,
+          "interpolated_off": 196.97204698131532
+        }
+      }
+    },
+    {
+      "status": "passed",
+      "comparisons": {
+        "median_duration_s": {
+          "off_relative_difference": 0.019420931860001506,
+          "on_relative_difference": 0.0030457228962713703,
+          "interpolated_off": 9.44536727961279
+        },
+        "output_tokens_s": {
+          "off_relative_difference": 0.02910669792257434,
+          "on_relative_difference": 0.0002923471511055879,
+          "interpolated_off": 215.75194696550392
+        }
+      }
+    }
+  ],
+  "start_wall_ns": 1789061880753991121,
+  "deadline_wall_ns": 1789067280753991121,
+  "git_revision": "028bd3648d968ea369a83ca28f955aa80b439ad0"
+}

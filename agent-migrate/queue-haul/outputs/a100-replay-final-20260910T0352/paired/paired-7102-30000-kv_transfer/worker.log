@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 228, in <module>
+    main()
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 175, in main
+    worker(inventory, plan["scenarios"][args.index], args.out/plan["scenarios"][args.index]["scenario_id"])
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py", line 97, in worker
+    result = p.run_scenario(stack, cfg, manifest, scenario, out, out.parent.name, configure_proxy=False)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1767, in run_scenario
+    migration_results = with_destination_load(destination_load, action_and_verify)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1528, in with_destination_load
+    return action()
+           ^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1752, in action_and_verify
+    result = action()
+             ^^^^^^^^
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1740, in action
+    _check_move_errors(
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py", line 1585, in _check_move_errors
+    raise RuntimeError("; ".join(errors))
+RuntimeError: RuntimeError: request chatcmpl-975b514daf196901 was not L1-only
