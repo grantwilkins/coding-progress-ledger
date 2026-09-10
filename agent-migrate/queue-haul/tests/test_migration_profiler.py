@@ -940,7 +940,7 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
         lambda *_args: calls.append("prefetch")
         or {"total_keys": 6, "found_keys": 0},
     )
-    monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 6)
+    monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args, **_kwargs: 6)
     monkeypatch.setattr(c.time, "monotonic_ns", lambda: 2)
     rows = c.b.resp_rows(transfers)
     monkeypatch.setattr(
@@ -1464,7 +1464,7 @@ def test_mp_catchup_allows_native_reuse_and_recomputed_tail_but_initial_requires
     runtime._kv_layout = lambda *args: {"total_payload_bytes": payload, "unique_payload_bytes": payload}
     monkeypatch.setattr(c.b, "mp_chat_tokens", lambda *args: [0]*256)
     monkeypatch.setattr(c.b, "mp_warm_prefetch", lambda *args: {"total_keys": 1, "found_keys": 0})
-    monkeypatch.setattr(c.b, "mp_request_hit", lambda *args: 0)
+    monkeypatch.setattr(c.b, "mp_request_hit", lambda *args, **kwargs: 0)
     if phase == "initial" and not payload:
         with pytest.raises(RuntimeError, match="lacks measured external payload"):
             runtime.prepare(c.Move("s", "kv_transfer", 0), c.SessionState("s", 1, (), "h"), phase)

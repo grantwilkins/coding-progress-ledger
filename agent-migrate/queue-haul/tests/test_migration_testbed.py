@@ -798,3 +798,16 @@ def test_reset_vllm_caches_can_target_a_port_subset(monkeypatch):
     posted.clear()
     s.reset_vllm_caches(cfg, (log, log))
     assert posted == [cfg.src_port, cfg.sink_port]
+
+
+def test_mp_request_hit_measures_request_time_l2_without_waiving_accounting(tmp_path):
+    log=tmp_path/"lmcache.log"
+    log.write_text("117/125 retained keys (39 L1, 78 L2), external_request_id=req,\n")
+    with pytest.raises(RuntimeError,match="L1-only"):
+        s.mp_request_hit(log,0,"req",False)
+    events=[]
+    assert s.mp_request_hit(log,0,"req",False,require_l1=False,event_sink=events.append)==117*256
+    assert events==[{"retained_tokens":117*256,"queried_tokens":125*256,"l1_cached_tokens":39*256,"l2_retrieved_tokens":78*256}]
+    log.write_text("117/125 retained keys (39 L1, 79 L2), external_request_id=req,\n")
+    with pytest.raises(RuntimeError,match="inconsistent"):
+        s.mp_request_hit(log,0,"req",False,require_l1=False)

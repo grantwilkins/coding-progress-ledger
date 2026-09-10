@@ -1133,7 +1133,9 @@ class LiveRuntime:
         if move.method == "kv_transfer" and self.mp_layout:
             external_hit = b.mp_request_hit(
                 self.sink_log, log_offset, result.request_id, False,
-                self.chunk_tokens,
+                self.chunk_tokens, require_l1=False,
+                event_sink=lambda tiers: self.event_log.write("cache_tier_evidence", session_id=move.session_id,
+                    phase=phase, request_id=result.request_id, **tiers),
             )
             hit = result.cached_tokens
             if hit is None:
