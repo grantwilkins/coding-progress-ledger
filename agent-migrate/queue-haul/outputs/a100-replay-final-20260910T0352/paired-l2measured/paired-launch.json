@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "pool_replay_paired.py",
+    "run",
+    "--inventory",
+    "outputs/a100-replay-final-20260910T0352/inventory.json",
+    "--out",
+    "outputs/a100-replay-final-20260910T0352/paired-l2measured",
+    "--method",
+    "kv_transfer",
+    "--context",
+    "30000"
+  ],
+  "start_wall_ns": 1789013942545922645,
+  "start_monotonic": 11474.78969439,
+  "plan_sha256": "b4bcec1d43d170619a5dc57cd7cf615ab59490c24c0a2183fbc0deaca16ad811",
+  "driver_sha256": "592c1de6909782a179d053e191320ee86e20aaa490ba5413711ccad3ec0830ad"
+}

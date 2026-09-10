@@ -1,0 +1,125 @@
+[
+  {
+    "name": "source-supervisor",
+    "pid": 93472,
+    "command": [
+      "/tmp/qh-replay-completion-runtime/bin/python",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352/launch-source.py"
+    ],
+    "wall_ns": 1789013143006427817
+  },
+  {
+    "name": "destination-tunnels",
+    "pid": 93569,
+    "command": [
+      "ssh",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ExitOnForwardFailure=yes",
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=2",
+      "-N",
+      "-L",
+      "18200:127.0.0.1:18200",
+      "-L",
+      "18081:127.0.0.1:18081",
+      "azureuser@10.3.0.4"
+    ],
+    "wall_ns": 1789013146383629595
+  },
+  {
+    "name": "mirror-lmcache-sink.log",
+    "pid": 93570,
+    "command": [
+      "ssh",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ExitOnForwardFailure=yes",
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=2",
+      "azureuser@10.3.0.4",
+      "tail -n +1 -F /tmp/qh-replay-final-20260910/lmcache-sink.log"
+    ],
+    "wall_ns": 1789013146384926660
+  },
+  {
+    "name": "mirror-sink.log",
+    "pid": 93571,
+    "command": [
+      "ssh",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ExitOnForwardFailure=yes",
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=2",
+      "azureuser@10.3.0.4",
+      "tail -n +1 -F /tmp/qh-replay-final-20260910/sink.log"
+    ],
+    "wall_ns": 1789013146386458455
+  },
+  {
+    "name": "mirror-power.csv",
+    "pid": 93573,
+    "command": [
+      "ssh",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ExitOnForwardFailure=yes",
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=2",
+      "azureuser@10.3.0.4",
+      "tail -n +1 -F /tmp/qh-replay-final-20260910/power.csv"
+    ],
+    "wall_ns": 1789013146389855211
+  },
+  {
+    "name": "mirror-engine-metrics.jsonl",
+    "pid": 93575,
+    "command": [
+      "ssh",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ExitOnForwardFailure=yes",
+      "-o",
+      "ServerAliveInterval=15",
+      "-o",
+      "ServerAliveCountMax=2",
+      "azureuser@10.3.0.4",
+      "tail -n +1 -F /tmp/qh-replay-final-20260910/engine-metrics.jsonl"
+    ],
+    "wall_ns": 1789013146391479790
+  }
+]

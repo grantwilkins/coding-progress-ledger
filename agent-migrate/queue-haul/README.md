@@ -208,9 +208,10 @@ Completed-request control screens passed, with censoring disclosed; this does
 not validate a fleet SLO operating point. The 0.80-GB decimal effective-wire
 anchor remains unvalidated on this path, separate from native KV geometry and
 resident memory. No timing, cache, normalization or policy-resource coefficient
-changed. **Full SLO-feasibility campaigns are not ready:** live source quiescence,
-paired KV transfer, physical cache placement and latency/recovery mappings remain
-open. A single destination GPU cannot validate source-active ownership transfer.
+changed. That single-GPU run left live source quiescence, paired KV transfer,
+physical cache placement and latency/recovery mappings open. A single destination
+GPU cannot validate source-active ownership transfer; the paired follow-up below
+addresses the source and transfer checks.
 
 The [focused tests](outputs/a100-replay-live-20260909T1920/focused-simulator-tests.log)
 passed 181 tests with the three requested exclusions. Host instrumentation checks
@@ -252,6 +253,61 @@ The nine per-scenario `events.jsonl` files are preserved losslessly in
 Their [archive manifest](outputs/a100-replay-completion-20260910T0116/scenario-events-archive.json)
 records verified original hashes and the extraction command needed before reproducing
 the reductions from a Git checkout; the existing ignore rule excludes the raw files.
+
+The [2026-09-10 paired follow-up](outputs/a100-replay-final-20260910T0352/report.json)
+completed four clean width-eight KV conditions, eight resident scouts and twelve
+300-second control/replay/KV episodes on separate Sweden and Germany A100s.
+Acquisition, including startup and cleanup, took 113.0 minutes, within the two-hour cap.
+All 32 controlled KV continuations and all 96 main-episode handoffs/continuations
+validated. The main episodes retain 2,310 exact completed service requests and nine
+censored arrivals. Both replay and KV exercised a verified source token stream
+across the pause, followed by actual-history catch-up and destination continuation;
+no extra diagnostic was needed.
+
+Eight physical resident sessions used the frozen trajectories at nominal rates of
+0.442600 coding and 0.188178 coding_long requests/s/GPU. Actual rates, original-arrival
+latency, request-mean TPOT, sample counts, timing coverage, queues at migration +30/+120
+seconds and recovery under continuing arrivals are in the
+[service table](outputs/a100-replay-final-20260910T0352/service-observations.csv).
+The following P90 TTFT values are seconds, shown as resident/destination-incoming;
+destination timing excludes requests still dispatched on the source, while the
+report retains the entire incoming population and its outstanding work.
+
+| Workload / seed | Control | Replay | KV |
+| --- | ---: | ---: | ---: |
+| coding / 7101 | 0.353 / 0.339 | 0.689 / 0.505 | 0.355 / 19.753 |
+| coding / 7102 | 0.445 / 0.412 | 0.607 / 0.548 | 0.490 / 19.850 |
+| coding_long / 7101 | 0.335 / 0.490 | 14.070 / 1.124 | 0.322 / 23.819 |
+| coding_long / 7102 | 0.314 / 0.465 | 0.345 / 0.631 | 0.318 / 36.496 |
+
+Warm prefix reuse does not eliminate migration overhead: the verified loaded KV
+catch-up took 62.38 seconds overall, with a 0.227-second destination TTFT and two
+new KV chunks fetched in 0.428 seconds; source export, the controller/prefetch interval
+and the unchanged 512-token validation limit remain separate measurements.
+[Wire accounting](outputs/a100-replay-final-20260910T0352/kv-observations.csv)
+separates unique payload, repeated GET payload, RESP framing and source-local reads.
+Native serialization is 1.611 decimal GB per 32,768 tokens, distinct from the earlier
+0.80-GB effective-wire anchor and resident memory accounting. The hardware proxy
+limits aggregate GET responses to 1,000 Mbit/s; it is not the simulator's 1,000-Gbit/s
+WAN scenario.
+
+Arrival times and finite-trajectory cycling are assumed: all 111 main-episode context
+restarts were cycle wraps, not observed production resets. Histories retain actual
+generated tokens between those declared restarts, using content-free recorded shapes.
+The two nodes match vLLM 0.22.0/LMCache 0.5.1 but differ in CUDA/Torch build and
+Transformers version; the [runtime builds](outputs/a100-replay-final-20260910T0352/runtime-builds.json)
+record those differences. Client token timestamps do not identify server execution
+or GPU queue time. Small windows and censored arrivals do not certify latency tails.
+Simulator coefficients and campaign evaluations remain unchanged; **full simulations
+and fitting stay stopped pending review**.
+
+The [raw archive manifest](outputs/a100-replay-final-20260910T0352/raw-telemetry-archive.json)
+provides lossless restoration commands and verified member hashes, including ignored
+events. The [artifact manifest](outputs/a100-replay-final-20260910T0352/artifact-sha256.json)
+maps every raw file to its archived copy; authoritative Germany originals also reside
+in [destination-final-raw.tar.gz](outputs/a100-replay-final-20260910T0352/destination-final-raw.tar.gz).
+The frozen plan, amendments, exact launches, verified/open modeling gaps and
+[test results](outputs/a100-replay-final-20260910T0352/verification.json) accompany the report.
 
 Source load is 0.8; destination loads are 0.25, 0.50, 0.75, 0.90, and 0.95.
 At equal source/destination sizes, the standing-service shed ceiling

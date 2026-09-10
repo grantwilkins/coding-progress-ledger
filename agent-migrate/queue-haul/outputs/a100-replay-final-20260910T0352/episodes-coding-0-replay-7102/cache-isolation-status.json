@@ -1,0 +1,718 @@
+[
+  {
+    "monotonic_ns": 16682678454901,
+    "states": {
+      "18080": {
+        "is_healthy": true,
+        "engine_type": "MPCacheServer",
+        "chunk_size": 256,
+        "hash_algorithm": "blake3",
+        "active_sessions": 0,
+        "storage_manager": {
+          "is_healthy": true,
+          "l1_manager": {
+            "is_healthy": true,
+            "total_object_count": 533,
+            "write_locked_count": 0,
+            "read_locked_count": 0,
+            "temporary_count": 0,
+            "memory_used_bytes": 6706692096,
+            "memory_total_bytes": 17179869184,
+            "memory_usage_ratio": 0.390380859375,
+            "write_ttl_seconds": 600,
+            "read_ttl_seconds": 300
+          },
+          "store_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "pending_keys_count": 0,
+            "in_flight_task_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "prefetch_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "max_in_flight": 8,
+            "submission_queue_size": 0,
+            "pending_queue_size": 0,
+            "in_flight_request_count": 0,
+            "lookup_phase_count": 0,
+            "load_phase_count": 0,
+            "completed_results_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "l1_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "eviction_policy": "LRU",
+            "trigger_watermark": 0.8,
+            "eviction_ratio": 0.2
+          },
+          "l2_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "adapters": []
+          },
+          "l2_adapters": [
+            {
+              "is_healthy": true,
+              "type": "LMCacheRedisClient"
+            }
+          ],
+          "num_l2_adapters": 1
+        },
+        "active_prefetch_jobs": 0,
+        "active_p2p_lookup_jobs": 0,
+        "p2p_enabled": false,
+        "p2p_state": "unregistered",
+        "p2p_peer_count": 0,
+        "p2p_peers": [],
+        "worker_liveness": {
+          "enabled": true,
+          "reap_timeout_seconds": 120.0,
+          "registration_grace_seconds": 3600.0,
+          "tracked_instances": 1
+        },
+        "registered_non_cuda_instance_ids": [
+          2659907442887931012
+        ],
+        "non_cuda_context_meta": {
+          "2659907442887931012": {
+            "model_name": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+            "world_size": 1,
+            "block_size": 16,
+            "use_mla": false
+          }
+        }
+      },
+      "18081": {
+        "is_healthy": true,
+        "engine_type": "MPCacheServer",
+        "chunk_size": 256,
+        "hash_algorithm": "blake3",
+        "active_sessions": 0,
+        "storage_manager": {
+          "is_healthy": true,
+          "l1_manager": {
+            "is_healthy": true,
+            "total_object_count": 709,
+            "write_locked_count": 0,
+            "read_locked_count": 0,
+            "temporary_count": 0,
+            "memory_used_bytes": 8921284608,
+            "memory_total_bytes": 17179869184,
+            "memory_usage_ratio": 0.519287109375,
+            "write_ttl_seconds": 600,
+            "read_ttl_seconds": 300
+          },
+          "store_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "pending_keys_count": 0,
+            "in_flight_task_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "prefetch_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "max_in_flight": 8,
+            "submission_queue_size": 0,
+            "pending_queue_size": 0,
+            "in_flight_request_count": 0,
+            "lookup_phase_count": 0,
+            "load_phase_count": 0,
+            "completed_results_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "l1_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "eviction_policy": "LRU",
+            "trigger_watermark": 0.8,
+            "eviction_ratio": 0.2
+          },
+          "l2_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "adapters": []
+          },
+          "l2_adapters": [
+            {
+              "is_healthy": true,
+              "type": "LMCacheRedisClient"
+            }
+          ],
+          "num_l2_adapters": 1
+        },
+        "active_prefetch_jobs": 0,
+        "active_p2p_lookup_jobs": 0,
+        "p2p_enabled": false,
+        "p2p_state": "unregistered",
+        "p2p_peer_count": 0,
+        "p2p_peers": [],
+        "worker_liveness": {
+          "enabled": true,
+          "reap_timeout_seconds": 120.0,
+          "registration_grace_seconds": 3600.0,
+          "tracked_instances": 1
+        },
+        "registered_non_cuda_instance_ids": [
+          2694133611967096917
+        ],
+        "non_cuda_context_meta": {
+          "2694133611967096917": {
+            "model_name": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+            "world_size": 1,
+            "block_size": 16,
+            "use_mla": false
+          }
+        }
+      }
+    }
+  },
+  {
+    "monotonic_ns": 16683229006201,
+    "states": {
+      "18080": {
+        "is_healthy": true,
+        "engine_type": "MPCacheServer",
+        "chunk_size": 256,
+        "hash_algorithm": "blake3",
+        "active_sessions": 0,
+        "storage_manager": {
+          "is_healthy": true,
+          "l1_manager": {
+            "is_healthy": true,
+            "total_object_count": 533,
+            "write_locked_count": 0,
+            "read_locked_count": 0,
+            "temporary_count": 0,
+            "memory_used_bytes": 6706692096,
+            "memory_total_bytes": 17179869184,
+            "memory_usage_ratio": 0.390380859375,
+            "write_ttl_seconds": 600,
+            "read_ttl_seconds": 300
+          },
+          "store_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "pending_keys_count": 0,
+            "in_flight_task_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "prefetch_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "max_in_flight": 8,
+            "submission_queue_size": 0,
+            "pending_queue_size": 0,
+            "in_flight_request_count": 0,
+            "lookup_phase_count": 0,
+            "load_phase_count": 0,
+            "completed_results_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "l1_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "eviction_policy": "LRU",
+            "trigger_watermark": 0.8,
+            "eviction_ratio": 0.2
+          },
+          "l2_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "adapters": []
+          },
+          "l2_adapters": [
+            {
+              "is_healthy": true,
+              "type": "LMCacheRedisClient"
+            }
+          ],
+          "num_l2_adapters": 1
+        },
+        "active_prefetch_jobs": 0,
+        "active_p2p_lookup_jobs": 0,
+        "p2p_enabled": false,
+        "p2p_state": "unregistered",
+        "p2p_peer_count": 0,
+        "p2p_peers": [],
+        "worker_liveness": {
+          "enabled": true,
+          "reap_timeout_seconds": 120.0,
+          "registration_grace_seconds": 3600.0,
+          "tracked_instances": 1
+        },
+        "registered_non_cuda_instance_ids": [
+          2659907442887931012
+        ],
+        "non_cuda_context_meta": {
+          "2659907442887931012": {
+            "model_name": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+            "world_size": 1,
+            "block_size": 16,
+            "use_mla": false
+          }
+        }
+      },
+      "18081": {
+        "is_healthy": true,
+        "engine_type": "MPCacheServer",
+        "chunk_size": 256,
+        "hash_algorithm": "blake3",
+        "active_sessions": 0,
+        "storage_manager": {
+          "is_healthy": true,
+          "l1_manager": {
+            "is_healthy": true,
+            "total_object_count": 709,
+            "write_locked_count": 0,
+            "read_locked_count": 0,
+            "temporary_count": 0,
+            "memory_used_bytes": 8921284608,
+            "memory_total_bytes": 17179869184,
+            "memory_usage_ratio": 0.519287109375,
+            "write_ttl_seconds": 600,
+            "read_ttl_seconds": 300
+          },
+          "store_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "pending_keys_count": 0,
+            "in_flight_task_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "prefetch_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "max_in_flight": 8,
+            "submission_queue_size": 0,
+            "pending_queue_size": 0,
+            "in_flight_request_count": 0,
+            "lookup_phase_count": 0,
+            "load_phase_count": 0,
+            "completed_results_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "l1_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "eviction_policy": "LRU",
+            "trigger_watermark": 0.8,
+            "eviction_ratio": 0.2
+          },
+          "l2_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "adapters": []
+          },
+          "l2_adapters": [
+            {
+              "is_healthy": true,
+              "type": "LMCacheRedisClient"
+            }
+          ],
+          "num_l2_adapters": 1
+        },
+        "active_prefetch_jobs": 0,
+        "active_p2p_lookup_jobs": 0,
+        "p2p_enabled": false,
+        "p2p_state": "unregistered",
+        "p2p_peer_count": 0,
+        "p2p_peers": [],
+        "worker_liveness": {
+          "enabled": true,
+          "reap_timeout_seconds": 120.0,
+          "registration_grace_seconds": 3600.0,
+          "tracked_instances": 1
+        },
+        "registered_non_cuda_instance_ids": [
+          2694133611967096917
+        ],
+        "non_cuda_context_meta": {
+          "2694133611967096917": {
+            "model_name": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+            "world_size": 1,
+            "block_size": 16,
+            "use_mla": false
+          }
+        }
+      }
+    }
+  },
+  {
+    "monotonic_ns": 16683780257504,
+    "states": {
+      "18080": {
+        "is_healthy": true,
+        "engine_type": "MPCacheServer",
+        "chunk_size": 256,
+        "hash_algorithm": "blake3",
+        "active_sessions": 0,
+        "storage_manager": {
+          "is_healthy": true,
+          "l1_manager": {
+            "is_healthy": true,
+            "total_object_count": 533,
+            "write_locked_count": 0,
+            "read_locked_count": 0,
+            "temporary_count": 0,
+            "memory_used_bytes": 6706692096,
+            "memory_total_bytes": 17179869184,
+            "memory_usage_ratio": 0.390380859375,
+            "write_ttl_seconds": 600,
+            "read_ttl_seconds": 300
+          },
+          "store_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "pending_keys_count": 0,
+            "in_flight_task_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "prefetch_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "max_in_flight": 8,
+            "submission_queue_size": 0,
+            "pending_queue_size": 0,
+            "in_flight_request_count": 0,
+            "lookup_phase_count": 0,
+            "load_phase_count": 0,
+            "completed_results_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "l1_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "eviction_policy": "LRU",
+            "trigger_watermark": 0.8,
+            "eviction_ratio": 0.2
+          },
+          "l2_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "adapters": []
+          },
+          "l2_adapters": [
+            {
+              "is_healthy": true,
+              "type": "LMCacheRedisClient"
+            }
+          ],
+          "num_l2_adapters": 1
+        },
+        "active_prefetch_jobs": 0,
+        "active_p2p_lookup_jobs": 0,
+        "p2p_enabled": false,
+        "p2p_state": "unregistered",
+        "p2p_peer_count": 0,
+        "p2p_peers": [],
+        "worker_liveness": {
+          "enabled": true,
+          "reap_timeout_seconds": 120.0,
+          "registration_grace_seconds": 3600.0,
+          "tracked_instances": 1
+        },
+        "registered_non_cuda_instance_ids": [
+          2659907442887931012
+        ],
+        "non_cuda_context_meta": {
+          "2659907442887931012": {
+            "model_name": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+            "world_size": 1,
+            "block_size": 16,
+            "use_mla": false
+          }
+        }
+      },
+      "18081": {
+        "is_healthy": true,
+        "engine_type": "MPCacheServer",
+        "chunk_size": 256,
+        "hash_algorithm": "blake3",
+        "active_sessions": 0,
+        "storage_manager": {
+          "is_healthy": true,
+          "l1_manager": {
+            "is_healthy": true,
+            "total_object_count": 709,
+            "write_locked_count": 0,
+            "read_locked_count": 0,
+            "temporary_count": 0,
+            "memory_used_bytes": 8921284608,
+            "memory_total_bytes": 17179869184,
+            "memory_usage_ratio": 0.519287109375,
+            "write_ttl_seconds": 600,
+            "read_ttl_seconds": 300
+          },
+          "store_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "pending_keys_count": 0,
+            "in_flight_task_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "prefetch_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "max_in_flight": 8,
+            "submission_queue_size": 0,
+            "pending_queue_size": 0,
+            "in_flight_request_count": 0,
+            "lookup_phase_count": 0,
+            "load_phase_count": 0,
+            "completed_results_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "l1_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "eviction_policy": "LRU",
+            "trigger_watermark": 0.8,
+            "eviction_ratio": 0.2
+          },
+          "l2_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "adapters": []
+          },
+          "l2_adapters": [
+            {
+              "is_healthy": true,
+              "type": "LMCacheRedisClient"
+            }
+          ],
+          "num_l2_adapters": 1
+        },
+        "active_prefetch_jobs": 0,
+        "active_p2p_lookup_jobs": 0,
+        "p2p_enabled": false,
+        "p2p_state": "unregistered",
+        "p2p_peer_count": 0,
+        "p2p_peers": [],
+        "worker_liveness": {
+          "enabled": true,
+          "reap_timeout_seconds": 120.0,
+          "registration_grace_seconds": 3600.0,
+          "tracked_instances": 1
+        },
+        "registered_non_cuda_instance_ids": [
+          2694133611967096917
+        ],
+        "non_cuda_context_meta": {
+          "2694133611967096917": {
+            "model_name": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+            "world_size": 1,
+            "block_size": 16,
+            "use_mla": false
+          }
+        }
+      }
+    }
+  },
+  {
+    "monotonic_ns": 16683994920335,
+    "states": {
+      "18080": {
+        "is_healthy": true,
+        "engine_type": "MPCacheServer",
+        "chunk_size": 256,
+        "hash_algorithm": "blake3",
+        "active_sessions": 0,
+        "storage_manager": {
+          "is_healthy": true,
+          "l1_manager": {
+            "is_healthy": true,
+            "total_object_count": 0,
+            "write_locked_count": 0,
+            "read_locked_count": 0,
+            "temporary_count": 0,
+            "memory_used_bytes": 0,
+            "memory_total_bytes": 17179869184,
+            "memory_usage_ratio": 0.0,
+            "write_ttl_seconds": 600,
+            "read_ttl_seconds": 300
+          },
+          "store_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "pending_keys_count": 0,
+            "in_flight_task_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "prefetch_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "max_in_flight": 8,
+            "submission_queue_size": 0,
+            "pending_queue_size": 0,
+            "in_flight_request_count": 0,
+            "lookup_phase_count": 0,
+            "load_phase_count": 0,
+            "completed_results_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "l1_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "eviction_policy": "LRU",
+            "trigger_watermark": 0.8,
+            "eviction_ratio": 0.2
+          },
+          "l2_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "adapters": []
+          },
+          "l2_adapters": [
+            {
+              "is_healthy": true,
+              "type": "LMCacheRedisClient"
+            }
+          ],
+          "num_l2_adapters": 1
+        },
+        "active_prefetch_jobs": 0,
+        "active_p2p_lookup_jobs": 0,
+        "p2p_enabled": false,
+        "p2p_state": "unregistered",
+        "p2p_peer_count": 0,
+        "p2p_peers": [],
+        "worker_liveness": {
+          "enabled": true,
+          "reap_timeout_seconds": 120.0,
+          "registration_grace_seconds": 3600.0,
+          "tracked_instances": 1
+        },
+        "registered_non_cuda_instance_ids": [
+          2659907442887931012
+        ],
+        "non_cuda_context_meta": {
+          "2659907442887931012": {
+            "model_name": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+            "world_size": 1,
+            "block_size": 16,
+            "use_mla": false
+          }
+        }
+      },
+      "18081": {
+        "is_healthy": true,
+        "engine_type": "MPCacheServer",
+        "chunk_size": 256,
+        "hash_algorithm": "blake3",
+        "active_sessions": 0,
+        "storage_manager": {
+          "is_healthy": true,
+          "l1_manager": {
+            "is_healthy": true,
+            "total_object_count": 0,
+            "write_locked_count": 0,
+            "read_locked_count": 0,
+            "temporary_count": 0,
+            "memory_used_bytes": 0,
+            "memory_total_bytes": 17179869184,
+            "memory_usage_ratio": 0.0,
+            "write_ttl_seconds": 600,
+            "read_ttl_seconds": 300
+          },
+          "store_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "pending_keys_count": 0,
+            "in_flight_task_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "prefetch_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "max_in_flight": 8,
+            "submission_queue_size": 0,
+            "pending_queue_size": 0,
+            "in_flight_request_count": 0,
+            "lookup_phase_count": 0,
+            "load_phase_count": 0,
+            "completed_results_count": 0,
+            "num_l2_adapters": 1,
+            "num_active_adapters": 1,
+            "num_draining_adapters": 0
+          },
+          "l1_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "eviction_policy": "LRU",
+            "trigger_watermark": 0.8,
+            "eviction_ratio": 0.2
+          },
+          "l2_eviction_controller": {
+            "is_healthy": true,
+            "thread_alive": true,
+            "adapters": []
+          },
+          "l2_adapters": [
+            {
+              "is_healthy": true,
+              "type": "LMCacheRedisClient"
+            }
+          ],
+          "num_l2_adapters": 1
+        },
+        "active_prefetch_jobs": 0,
+        "active_p2p_lookup_jobs": 0,
+        "p2p_enabled": false,
+        "p2p_state": "unregistered",
+        "p2p_peer_count": 0,
+        "p2p_peers": [],
+        "worker_liveness": {
+          "enabled": true,
+          "reap_timeout_seconds": 120.0,
+          "registration_grace_seconds": 3600.0,
+          "tracked_instances": 1
+        },
+        "registered_non_cuda_instance_ids": [
+          2694133611967096917
+        ],
+        "non_cuda_context_meta": {
+          "2694133611967096917": {
+            "model_name": "/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee",
+            "world_size": 1,
+            "block_size": 16,
+            "use_mla": false
+          }
+        }
+      }
+    }
+  }
+]

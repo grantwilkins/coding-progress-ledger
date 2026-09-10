@@ -1,0 +1,533 @@
+[
+  {
+    "spec": {
+      "episode": "scout-coding_long-0",
+      "trace_id": "scout-coding_long",
+      "seed": 7101,
+      "workload": "coding_long",
+      "rate": 0.1881783279213518,
+      "arm": "resident",
+      "probe": 0
+    },
+    "epoch_ns": 12012599879055,
+    "boundary_ns": 12102599879055,
+    "summaries": {
+      "resident": {
+        "30-90": {
+          "offered_requests": 10,
+          "completed_requests": 10,
+          "exact_requests": 10,
+          "tpot_requests": 7,
+          "unfinished_or_failed_requests": 0,
+          "offered_rps": 0.16666666666666666,
+          "completed_rps": 0.2,
+          "completions_in_window": 12,
+          "arrival_cohort_completion_cutoff_s": 90,
+          "exact_timing_coverage": 1.0,
+          "p90_arrival_ttft_s": 0.2929902257,
+          "p90_request_mean_tpot_s": 0.02768381670533516,
+          "p90_client_send_lateness_s": 0.0131986308,
+          "p90_client_queue_s": 0.0074561423,
+          "p90_client_schedule_lateness_s": 0.004341776899999999,
+          "queue_growth_requests": 0.0,
+          "max_engine_waiting": 0.0,
+          "prompt_tokens": {
+            "min": 1708,
+            "median": 29885.0,
+            "max": 30777
+          },
+          "output_tokens": {
+            "median": 17.5,
+            "max": 302
+          },
+          "screen_pass": true,
+          "tail_guarantee": false,
+          "scope": "finite-window request-level screen; sample counts and censoring retained"
+        }
+      }
+    },
+    "migration_events": [],
+    "outstanding_at_migration_offset_s": {},
+    "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+    "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+    "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+    "resident_population": 8,
+    "incoming_population": 0,
+    "placement": {
+      "resident": 18200,
+      "incoming_before_switch": 18100,
+      "incoming_after_switch": 18200
+    }
+  },
+  {
+    "spec": {
+      "episode": "scout-coding_long-1",
+      "trace_id": "scout-coding_long",
+      "seed": 7101,
+      "workload": "coding_long",
+      "rate": 0.3763566558427036,
+      "arm": "resident",
+      "probe": 1
+    },
+    "epoch_ns": 12134887241706,
+    "boundary_ns": 12224887241706,
+    "summaries": {
+      "resident": {
+        "30-90": {
+          "offered_requests": 23,
+          "completed_requests": 22,
+          "exact_requests": 22,
+          "tpot_requests": 18,
+          "unfinished_or_failed_requests": 1,
+          "offered_rps": 0.38333333333333336,
+          "completed_rps": 0.36666666666666664,
+          "completions_in_window": 22,
+          "arrival_cohort_completion_cutoff_s": 90,
+          "exact_timing_coverage": 1.0,
+          "p90_arrival_ttft_s": 0.28677487840000004,
+          "p90_request_mean_tpot_s": 0.028361919240774865,
+          "p90_client_send_lateness_s": 0.0123254491,
+          "p90_client_queue_s": 0.0075406665,
+          "p90_client_schedule_lateness_s": 0.0032651168,
+          "queue_growth_requests": 0.0,
+          "max_engine_waiting": 0.0,
+          "prompt_tokens": {
+            "min": 1708,
+            "median": 30362.5,
+            "max": 31168
+          },
+          "output_tokens": {
+            "median": 77.5,
+            "max": 302
+          },
+          "screen_pass": false,
+          "tail_guarantee": false,
+          "scope": "finite-window request-level screen; sample counts and censoring retained"
+        }
+      }
+    },
+    "migration_events": [
+      {
+        "kind": "service_failed",
+        "monotonic_ns": 12204939575882,
+        "session": 0,
+        "cohort": "resident",
+        "error": "request did not complete exact requested input/output state"
+      }
+    ],
+    "outstanding_at_migration_offset_s": {},
+    "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+    "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+    "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+    "resident_population": 8,
+    "incoming_population": 0,
+    "placement": {
+      "resident": 18200,
+      "incoming_before_switch": 18100,
+      "incoming_after_switch": 18200
+    }
+  },
+  {
+    "spec": {
+      "episode": "scout-coding-0",
+      "trace_id": "scout-coding",
+      "seed": 7101,
+      "workload": "coding",
+      "rate": 0.22130012741816424,
+      "arm": "resident",
+      "probe": 0
+    },
+    "epoch_ns": 12241733618738,
+    "boundary_ns": 12331733618738,
+    "summaries": {
+      "resident": {
+        "30-90": {
+          "offered_requests": 9,
+          "completed_requests": 9,
+          "exact_requests": 9,
+          "tpot_requests": 8,
+          "unfinished_or_failed_requests": 0,
+          "offered_rps": 0.15,
+          "completed_rps": 0.16666666666666666,
+          "completions_in_window": 10,
+          "arrival_cohort_completion_cutoff_s": 90,
+          "exact_timing_coverage": 1.0,
+          "p90_arrival_ttft_s": 0.2880418238,
+          "p90_request_mean_tpot_s": 0.028119214773076922,
+          "p90_client_send_lateness_s": 0.0126325356,
+          "p90_client_queue_s": 0.0077926918,
+          "p90_client_schedule_lateness_s": 0.002208236,
+          "queue_growth_requests": 0.0,
+          "max_engine_waiting": 0.0,
+          "prompt_tokens": {
+            "min": 3754,
+            "median": 19809.0,
+            "max": 32077
+          },
+          "output_tokens": {
+            "median": 27.0,
+            "max": 66
+          },
+          "screen_pass": true,
+          "tail_guarantee": false,
+          "scope": "finite-window request-level screen; sample counts and censoring retained"
+        }
+      }
+    },
+    "migration_events": [],
+    "outstanding_at_migration_offset_s": {},
+    "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+    "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+    "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+    "resident_population": 8,
+    "incoming_population": 0,
+    "placement": {
+      "resident": 18200,
+      "incoming_before_switch": 18100,
+      "incoming_after_switch": 18200
+    }
+  },
+  {
+    "spec": {
+      "episode": "scout-coding-1",
+      "trace_id": "scout-coding",
+      "seed": 7101,
+      "workload": "coding",
+      "rate": 0.4426002548363285,
+      "arm": "resident",
+      "probe": 1
+    },
+    "epoch_ns": 12348530921198,
+    "boundary_ns": 12438530921198,
+    "summaries": {
+      "resident": {
+        "30-90": {
+          "offered_requests": 28,
+          "completed_requests": 28,
+          "exact_requests": 28,
+          "tpot_requests": 22,
+          "unfinished_or_failed_requests": 0,
+          "offered_rps": 0.4666666666666667,
+          "completed_rps": 0.48333333333333334,
+          "completions_in_window": 29,
+          "arrival_cohort_completion_cutoff_s": 90,
+          "exact_timing_coverage": 1.0,
+          "p90_arrival_ttft_s": 0.32586811940000004,
+          "p90_request_mean_tpot_s": 0.02838956760523077,
+          "p90_client_send_lateness_s": 0.009165759300000001,
+          "p90_client_queue_s": 0.005997297300000001,
+          "p90_client_schedule_lateness_s": 0.0032105698,
+          "queue_growth_requests": 0.0,
+          "max_engine_waiting": 0.0,
+          "prompt_tokens": {
+            "min": 2038,
+            "median": 8038.0,
+            "max": 32129
+          },
+          "output_tokens": {
+            "median": 13.0,
+            "max": 100
+          },
+          "screen_pass": true,
+          "tail_guarantee": false,
+          "scope": "finite-window request-level screen; sample counts and censoring retained"
+        }
+      }
+    },
+    "migration_events": [],
+    "outstanding_at_migration_offset_s": {},
+    "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+    "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+    "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+    "resident_population": 8,
+    "incoming_population": 0,
+    "placement": {
+      "resident": 18200,
+      "incoming_before_switch": 18100,
+      "incoming_after_switch": 18200
+    }
+  },
+  {
+    "spec": {
+      "episode": "scout-coding-2",
+      "trace_id": "scout-coding",
+      "seed": 7101,
+      "workload": "coding",
+      "rate": 0.885200509672657,
+      "arm": "resident",
+      "probe": 2
+    },
+    "epoch_ns": 12455270351467,
+    "boundary_ns": 12545270351467,
+    "summaries": {
+      "resident": {
+        "30-90": {
+          "offered_requests": 55,
+          "completed_requests": 52,
+          "exact_requests": 52,
+          "tpot_requests": 31,
+          "unfinished_or_failed_requests": 3,
+          "offered_rps": 0.9166666666666666,
+          "completed_rps": 0.8833333333333333,
+          "completions_in_window": 53,
+          "arrival_cohort_completion_cutoff_s": 90,
+          "exact_timing_coverage": 1.0,
+          "p90_arrival_ttft_s": 0.28511562469999996,
+          "p90_request_mean_tpot_s": 0.03125184755555556,
+          "p90_client_send_lateness_s": 0.0076335675,
+          "p90_client_queue_s": 0.0052531532,
+          "p90_client_schedule_lateness_s": 0.0018815887999999994,
+          "queue_growth_requests": 0.0,
+          "max_engine_waiting": 0.0,
+          "prompt_tokens": {
+            "min": 1800,
+            "median": 7369.0,
+            "max": 21657
+          },
+          "output_tokens": {
+            "median": 8.0,
+            "max": 345
+          },
+          "screen_pass": false,
+          "tail_guarantee": false,
+          "scope": "finite-window request-level screen; sample counts and censoring retained"
+        }
+      }
+    },
+    "migration_events": [],
+    "outstanding_at_migration_offset_s": {},
+    "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+    "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+    "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+    "resident_population": 8,
+    "incoming_population": 0,
+    "placement": {
+      "resident": 18200,
+      "incoming_before_switch": 18100,
+      "incoming_after_switch": 18200
+    }
+  },
+  {
+    "spec": {
+      "episode": "scout-coding_long-2",
+      "trace_id": "scout-coding_long",
+      "seed": 7101,
+      "workload": "coding_long",
+      "rate": 0.7527133116854072,
+      "arm": "resident",
+      "probe": 2
+    },
+    "epoch_ns": 12803752563802,
+    "boundary_ns": 12893752563802,
+    "summaries": {
+      "resident": {
+        "30-90": {
+          "offered_requests": 41,
+          "completed_requests": 35,
+          "exact_requests": 35,
+          "tpot_requests": 24,
+          "unfinished_or_failed_requests": 6,
+          "offered_rps": 0.6833333333333333,
+          "completed_rps": 0.6666666666666666,
+          "completions_in_window": 40,
+          "arrival_cohort_completion_cutoff_s": 90,
+          "exact_timing_coverage": 1.0,
+          "p90_arrival_ttft_s": 0.29283732360000003,
+          "p90_request_mean_tpot_s": 0.030497490808878678,
+          "p90_client_send_lateness_s": 0.0111495524,
+          "p90_client_queue_s": 0.007686616,
+          "p90_client_schedule_lateness_s": 0.0013441834000000004,
+          "queue_growth_requests": 0.0,
+          "max_engine_waiting": 0.0,
+          "prompt_tokens": {
+            "min": 1707,
+            "median": 30516.0,
+            "max": 32129
+          },
+          "output_tokens": {
+            "median": 24.0,
+            "max": 341
+          },
+          "screen_pass": false,
+          "tail_guarantee": false,
+          "scope": "finite-window request-level screen; sample counts and censoring retained"
+        }
+      }
+    },
+    "migration_events": [
+      {
+        "kind": "service_failed",
+        "monotonic_ns": 12838828815108,
+        "session": 0,
+        "cohort": "resident",
+        "error": "request did not complete exact requested input/output state"
+      },
+      {
+        "kind": "service_failed",
+        "monotonic_ns": 12849399356990,
+        "session": 0,
+        "cohort": "resident",
+        "error": "incomplete trajectory dependency"
+      },
+      {
+        "kind": "service_failed",
+        "monotonic_ns": 12860028511038,
+        "session": 0,
+        "cohort": "resident",
+        "error": "incomplete trajectory dependency"
+      },
+      {
+        "kind": "service_failed",
+        "monotonic_ns": 12870655928190,
+        "session": 0,
+        "cohort": "resident",
+        "error": "incomplete trajectory dependency"
+      },
+      {
+        "kind": "service_failed",
+        "monotonic_ns": 12881284236452,
+        "session": 0,
+        "cohort": "resident",
+        "error": "incomplete trajectory dependency"
+      },
+      {
+        "kind": "service_failed",
+        "monotonic_ns": 12891912787857,
+        "session": 0,
+        "cohort": "resident",
+        "error": "incomplete trajectory dependency"
+      }
+    ],
+    "outstanding_at_migration_offset_s": {},
+    "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+    "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+    "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+    "resident_population": 8,
+    "incoming_population": 0,
+    "placement": {
+      "resident": 18200,
+      "incoming_before_switch": 18100,
+      "incoming_after_switch": 18200
+    }
+  },
+  {
+    "spec": {
+      "episode": "scout-coding_long-3",
+      "trace_id": "scout-coding_long",
+      "seed": 7101,
+      "workload": "coding_long",
+      "rate": 1.5054266233708145,
+      "arm": "resident",
+      "probe": 3
+    },
+    "epoch_ns": 12926268908027,
+    "boundary_ns": 13016268908027,
+    "summaries": {
+      "resident": {
+        "30-90": {
+          "offered_requests": 92,
+          "completed_requests": 78,
+          "exact_requests": 78,
+          "tpot_requests": 50,
+          "unfinished_or_failed_requests": 14,
+          "offered_rps": 1.5333333333333334,
+          "completed_rps": 1.4166666666666667,
+          "completions_in_window": 85,
+          "arrival_cohort_completion_cutoff_s": 90,
+          "exact_timing_coverage": 1.0,
+          "p90_arrival_ttft_s": 4.792473937,
+          "p90_request_mean_tpot_s": 0.04809012370714287,
+          "p90_client_send_lateness_s": 4.5839999053,
+          "p90_client_queue_s": 4.5829849659,
+          "p90_client_schedule_lateness_s": 0.0014830567999999996,
+          "queue_growth_requests": 0.0,
+          "max_engine_waiting": 1.0,
+          "prompt_tokens": {
+            "min": 1707,
+            "median": 20495.0,
+            "max": 32129
+          },
+          "output_tokens": {
+            "median": 14.5,
+            "max": 354
+          },
+          "screen_pass": false,
+          "tail_guarantee": false,
+          "scope": "finite-window request-level screen; sample counts and censoring retained"
+        }
+      }
+    },
+    "migration_events": [],
+    "outstanding_at_migration_offset_s": {},
+    "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+    "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+    "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+    "resident_population": 8,
+    "incoming_population": 0,
+    "placement": {
+      "resident": 18200,
+      "incoming_before_switch": 18100,
+      "incoming_after_switch": 18200
+    }
+  },
+  {
+    "spec": {
+      "episode": "scout-coding-3",
+      "trace_id": "scout-coding",
+      "seed": 7101,
+      "workload": "coding",
+      "rate": 1.770401019345314,
+      "arm": "resident",
+      "probe": 3
+    },
+    "epoch_ns": 13033351428814,
+    "boundary_ns": 13123351428814,
+    "summaries": {
+      "resident": {
+        "30-90": {
+          "offered_requests": 109,
+          "completed_requests": 109,
+          "exact_requests": 109,
+          "tpot_requests": 62,
+          "unfinished_or_failed_requests": 0,
+          "offered_rps": 1.8166666666666667,
+          "completed_rps": 1.8666666666666667,
+          "completions_in_window": 112,
+          "arrival_cohort_completion_cutoff_s": 90,
+          "exact_timing_coverage": 1.0,
+          "p90_arrival_ttft_s": 5.2816276894,
+          "p90_request_mean_tpot_s": 0.03207783696715687,
+          "p90_client_send_lateness_s": 5.1140350578,
+          "p90_client_queue_s": 5.1113473224,
+          "p90_client_schedule_lateness_s": 0.001336741,
+          "queue_growth_requests": 0.0,
+          "max_engine_waiting": 0.0,
+          "prompt_tokens": {
+            "min": 1800,
+            "median": 6899.0,
+            "max": 27581
+          },
+          "output_tokens": {
+            "median": 10.0,
+            "max": 1233
+          },
+          "screen_pass": false,
+          "tail_guarantee": false,
+          "scope": "finite-window request-level screen; sample counts and censoring retained"
+        }
+      }
+    },
+    "migration_events": [],
+    "outstanding_at_migration_offset_s": {},
+    "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+    "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+    "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+    "resident_population": 8,
+    "incoming_population": 0,
+    "placement": {
+      "resident": 18200,
+      "incoming_before_switch": 18100,
+      "incoming_after_switch": 18200
+    }
+  }
+]

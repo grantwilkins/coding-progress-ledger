@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "pool_replay_paired.py",
+    "run",
+    "--inventory",
+    "outputs/a100-replay-final-20260910T0352/inventory.json",
+    "--out",
+    "outputs/a100-replay-final-20260910T0352/paired",
+    "--method",
+    "kv_transfer"
+  ],
+  "start_wall_ns": 1789013308537983548,
+  "start_monotonic": 10840.781755372,
+  "plan_sha256": "fd85df1c8fbc28cd2daa2e9976973ec520ec89215d3ec0c7e900573a7bf507ef",
+  "driver_sha256": "592c1de6909782a179d053e191320ee86e20aaa490ba5413711ccad3ec0830ad"
+}

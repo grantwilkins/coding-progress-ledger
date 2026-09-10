@@ -1,0 +1,22 @@
+{
+  "command": [
+    "ssh",
+    "-i",
+    "/home/azureuser/.ssh/azrs",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "-o",
+    "ExitOnForwardFailure=yes",
+    "-o",
+    "ServerAliveInterval=15",
+    "-o",
+    "ServerAliveCountMax=2",
+    "azureuser@10.3.0.4",
+    "nohup /home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin/python /tmp/qh-replay-final-20260910/remote-supervisor.py > /tmp/qh-replay-final-20260910/supervisor.log 2>&1 < /dev/null & echo $!"
+  ],
+  "supervisor_pid": 49600,
+  "wall_ns": 1789013146381902032,
+  "remote_root": "/tmp/qh-replay-final-20260910"
+}

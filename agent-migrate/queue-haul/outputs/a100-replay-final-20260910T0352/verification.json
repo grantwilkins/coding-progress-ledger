@@ -1,0 +1,80 @@
+{
+  "final_suite": {
+    "argv": [
+      "/datadrive/queue-haul-tools/bin/uv",
+      "run",
+      "--no-project",
+      "--python",
+      "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_pool_replay_resident.py",
+      "tests/test_pool_replay_paired.py",
+      "tests/test_pool_replay_measure.py",
+      "tests/test_migration_profiler.py",
+      "tests/test_migration_testbed.py",
+      "tests/test_destination_runner.py",
+      "outputs/a100-replay-final-20260910T0352/test_archive_raw.py",
+      "outputs/a100-replay-final-20260910T0352/test_audit_history.py",
+      "outputs/a100-replay-final-20260910T0352/test_cleanup_plan.py",
+      "outputs/a100-replay-final-20260910T0352/test_keyed_wire.py",
+      "outputs/a100-replay-final-20260910T0352/test_manifest_artifacts.py",
+      "outputs/a100-replay-final-20260910T0352/test_reduce_paired.py",
+      "outputs/a100-replay-final-20260910T0352/test_reduce_service.py",
+      "outputs/a100-replay-final-20260910T0352/test_service_wire.py"
+    ],
+    "start_wall_ns": 1789020050118223411,
+    "log": "final-verification-tests.log",
+    "end_wall_ns": 1789020065304591027,
+    "returncode": 0,
+    "result": "........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 91%]\n.....................                                                    [100%]\n237 passed in 14.29s\n"
+  },
+  "focused_simulator_suite": {
+    "command": "uv run python -m pytest -q tests/test_pool_shed.py tests/test_pool_shed_calibration.py tests/test_pool_shed_execution.py tests/test_pool_shed_planner.py tests/test_loaded_service_model.py -k 'not independent_regional_fidelity and not campaign_reduction and not execution_draws'",
+    "log": "focused-simulator-tests.log",
+    "result": "181 passed, 3 deselected; simulator source hashes unchanged"
+  },
+  "preserved_prior_failure": "resident-broad-test-environment-failures.log retains 13 test failures caused by test environment leakage and loopback sandbox restrictions; environment fixture fixed and original module order passed 82 tests in resident-broad-tests-original-order-fixed.log.",
+  "documentation_checks": [
+    {
+      "argv": [
+        "/datadrive/queue-haul-tools/bin/uv",
+        "run",
+        "--no-project",
+        "--python",
+        "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "outputs/a100-replay-final-20260910T0352/test_reduce_service.py"
+      ],
+      "wall_ns": 1789020196387059949,
+      "returncode": 0,
+      "stdout": ".....                                                                    [100%]\n=============================== warnings summary ===============================\n../../../../../datadrive/queue-haul-campaign/agent-migrate/.venv/lib/python3.12/site-packages/_pytest/cacheprovider.py:469\n  /datadrive/queue-haul-campaign/agent-migrate/.venv/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: cache could not write path /home/azureuser/coding-progress-ledger/agent-migrate/.pytest_cache/v/cache/nodeids: [Errno 30] Read-only file system: '/home/azureuser/coding-progress-ledger/agent-migrate/.pytest_cache/v/cache/nodeids'\n    config.cache.set(\"cache/nodeids\", sorted(self.cached_nodeids))\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n5 passed, 1 warning in 0.21s\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/datadrive/queue-haul-tools/bin/uv",
+        "run",
+        "--no-project",
+        "--python",
+        "/datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "outputs/a100-replay-final-20260910T0352/test_reduce_service.py",
+        "-o",
+        "cache_dir=/tmp/qh-final-pytest-cache"
+      ],
+      "wall_ns": 1789020251320818698,
+      "returncode": 0,
+      "stdout": ".....                                                                    [100%]\n5 passed in 0.22s\n",
+      "stderr": ""
+    }
+  ]
+}

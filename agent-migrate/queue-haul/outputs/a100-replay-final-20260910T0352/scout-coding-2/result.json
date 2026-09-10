@@ -1,0 +1,60 @@
+{
+  "spec": {
+    "episode": "scout-coding-2",
+    "trace_id": "scout-coding",
+    "seed": 7101,
+    "workload": "coding",
+    "rate": 0.885200509672657,
+    "arm": "resident",
+    "probe": 2
+  },
+  "epoch_ns": 12455270351467,
+  "boundary_ns": 12545270351467,
+  "summaries": {
+    "resident": {
+      "30-90": {
+        "offered_requests": 55,
+        "completed_requests": 52,
+        "exact_requests": 52,
+        "tpot_requests": 31,
+        "unfinished_or_failed_requests": 3,
+        "offered_rps": 0.9166666666666666,
+        "completed_rps": 0.8833333333333333,
+        "completions_in_window": 53,
+        "arrival_cohort_completion_cutoff_s": 90,
+        "exact_timing_coverage": 1.0,
+        "p90_arrival_ttft_s": 0.28511562469999996,
+        "p90_request_mean_tpot_s": 0.03125184755555556,
+        "p90_client_send_lateness_s": 0.0076335675,
+        "p90_client_queue_s": 0.0052531532,
+        "p90_client_schedule_lateness_s": 0.0018815887999999994,
+        "queue_growth_requests": 0.0,
+        "max_engine_waiting": 0.0,
+        "prompt_tokens": {
+          "min": 1800,
+          "median": 7369.0,
+          "max": 21657
+        },
+        "output_tokens": {
+          "median": 8.0,
+          "max": 345
+        },
+        "screen_pass": false,
+        "tail_guarantee": false,
+        "scope": "finite-window request-level screen; sample counts and censoring retained"
+      }
+    }
+  },
+  "migration_events": [],
+  "outstanding_at_migration_offset_s": {},
+  "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+  "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+  "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+  "resident_population": 8,
+  "incoming_population": 0,
+  "placement": {
+    "resident": 18200,
+    "incoming_before_switch": 18100,
+    "incoming_after_switch": 18200
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "spec": {
+    "episode": "scout-coding-0",
+    "trace_id": "scout-coding",
+    "seed": 7101,
+    "workload": "coding",
+    "rate": 0.22130012741816424,
+    "arm": "resident",
+    "probe": 0
+  },
+  "epoch_ns": 12241733618738,
+  "boundary_ns": 12331733618738,
+  "summaries": {
+    "resident": {
+      "30-90": {
+        "offered_requests": 9,
+        "completed_requests": 9,
+        "exact_requests": 9,
+        "tpot_requests": 8,
+        "unfinished_or_failed_requests": 0,
+        "offered_rps": 0.15,
+        "completed_rps": 0.16666666666666666,
+        "completions_in_window": 10,
+        "arrival_cohort_completion_cutoff_s": 90,
+        "exact_timing_coverage": 1.0,
+        "p90_arrival_ttft_s": 0.2880418238,
+        "p90_request_mean_tpot_s": 0.028119214773076922,
+        "p90_client_send_lateness_s": 0.0126325356,
+        "p90_client_queue_s": 0.0077926918,
+        "p90_client_schedule_lateness_s": 0.002208236,
+        "queue_growth_requests": 0.0,
+        "max_engine_waiting": 0.0,
+        "prompt_tokens": {
+          "min": 3754,
+          "median": 19809.0,
+          "max": 32077
+        },
+        "output_tokens": {
+          "median": 27.0,
+          "max": 66
+        },
+        "screen_pass": true,
+        "tail_guarantee": false,
+        "scope": "finite-window request-level screen; sample counts and censoring retained"
+      }
+    }
+  },
+  "migration_events": [],
+  "outstanding_at_migration_offset_s": {},
+  "scope": "full exact-token evolving trajectory service adapter; original chat probes retained in separate controlled KV measurements",
+  "arrival_schedule": "assumed independent per-session periodic offsets; causality and queued arrivals preserved",
+  "control_materialization": "initial preepoch and updated baseline/final context explicitly recorded; extra control baseline cost is not resident service",
+  "resident_population": 8,
+  "incoming_population": 0,
+  "placement": {
+    "resident": 18200,
+    "incoming_before_switch": 18100,
+    "incoming_after_switch": 18200
+  }
+}
