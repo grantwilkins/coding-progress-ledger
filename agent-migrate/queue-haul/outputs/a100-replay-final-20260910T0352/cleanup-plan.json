@@ -14,8 +14,10 @@
   },
   "order": [
     "Finish or censor observation and retain pending requests. Stop measurement driver if still running before stopping engines.",
-    "Verify exact supervisor script path in /proc/PID/cmdline and signal only that supervisor.",
+    "Stop Germany first: verify its exact supervisor script path in /proc/PID/cmdline and signal only that supervisor. Keep Sweden source and proxy running.",
     "Allow up to 10 seconds for its five-second owned-process cleanup. Check cleanup.json/source-stop.json plus recorded child PIDs and GPU compute-process listing; existence of cleanup JSON alone is insufficient.",
+    "After Germany cleanup and GPU release, snapshot the still-running Sweden proxy connection log. Require exactly the eight proven Germany pool IDs closed and zero Sweden pool IDs closed before stopping Sweden; preserve a failed cross-check and investigate it rather than silently claiming confirmation.",
+    "Then stop the verified Sweden supervisor, allow its owned-process cleanup and verify local GPU release.",
     "If an owned child group remains after its supervisor exited, inspect its command and process group against ownership metadata before any targeted signal. Never use broad process-name killing.",
     "Create and copy final Germany archive after logs close; verify every archived raw file hash locally.",
     "Stop only verified controller-owned mirrors and destination tunnel after collection. Preserve raw files and runtime evidence."
@@ -36,6 +38,28 @@
       ]
     },
     {
+      "operation": "verify Germany GPU ownership released",
+      "argv": [
+        "ssh",
+        "-i",
+        "/home/azureuser/.ssh/azrs",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "azureuser@10.3.0.4",
+        "nvidia-smi --query-compute-apps=pid,gpu_uuid,process_name,used_gpu_memory --format=csv"
+      ]
+    },
+    {
+      "operation": "snapshot Germany-only pool closures before stopping Sweden",
+      "argv": [
+        "python3",
+        "-c",
+        "import csv,hashlib,io,json,time;from pathlib import Path\nr=Path('/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-final-20260910T0352');raw=(r/'stack/proxy_connections.csv').read_bytes();(r/'germany-stop-proxy-connections.csv').write_bytes(raw)\np=json.loads((r/'attribution-proof.json').read_text());rows=list(csv.DictReader(io.StringIO(raw.decode())));source=set(p['source_connection_ids']);destination=set(p['destination_connection_ids']);closed={x['connection_id'] for x in rows};pid=json.loads((r/'runtime-launch.json').read_text())['pid']\nv={'observed_utc_ns':time.time_ns(),'observed_monotonic_ns':time.monotonic_ns(),'proxy_snapshot_sha256':hashlib.sha256(raw).hexdigest(),'source_supervisor_pid':pid,'source_supervisor_still_present':Path(f'/proc/{pid}/cmdline').exists(),'closed_destination_ids':sorted(closed&destination),'closed_source_ids':sorted(closed&source),'verified':closed&destination==destination and not closed&source and Path(f'/proc/{pid}/cmdline').exists()};(r/'germany-stop-origin-crosscheck.json').write_text(json.dumps(v,indent=2)+'\\n');print(json.dumps(v));assert v['verified']\n"
+      ]
+    },
+    {
       "operation": "stop Sweden supervisor",
       "argv": [
         "python3",
@@ -49,20 +73,6 @@
         "nvidia-smi",
         "--query-compute-apps=pid,gpu_uuid,process_name,used_gpu_memory",
         "--format=csv"
-      ]
-    },
-    {
-      "operation": "verify Germany GPU ownership released",
-      "argv": [
-        "ssh",
-        "-i",
-        "/home/azureuser/.ssh/azrs",
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "StrictHostKeyChecking=yes",
-        "azureuser@10.3.0.4",
-        "nvidia-smi --query-compute-apps=pid,gpu_uuid,process_name,used_gpu_memory --format=csv"
       ]
     },
     {
