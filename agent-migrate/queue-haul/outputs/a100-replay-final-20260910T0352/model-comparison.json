@@ -1,0 +1,21 @@
+{
+  "same_files_and_hashes": true,
+  "commands": {
+    "source": [
+      "python3",
+      "-c",
+      "import hashlib,json\nfrom pathlib import Path\nroot=Path('/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee')\nrows={}\nfor p in sorted(root.rglob('*')):\n if p.is_file():\n  digest=hashlib.sha256()\n  with p.open('rb') as f:\n   for block in iter(lambda:f.read(8*1024*1024),b''):digest.update(block)\n  rows[str(p.relative_to(root))]={'sha256':digest.hexdigest(),'bytes':p.stat().st_size}\nprint(json.dumps(rows))\n"
+    ],
+    "destination": [
+      "ssh",
+      "-i",
+      "/home/azureuser/.ssh/azrs",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "azureuser@10.3.0.4",
+      "python3 -c 'import hashlib,json\nfrom pathlib import Path\nroot=Path('\"'\"'/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee'\"'\"')\nrows={}\nfor p in sorted(root.rglob('\"'\"'*'\"'\"')):\n if p.is_file():\n  digest=hashlib.sha256()\n  with p.open('\"'\"'rb'\"'\"') as f:\n   for block in iter(lambda:f.read(8*1024*1024),b'\"'\"''\"'\"'):digest.update(block)\n  rows[str(p.relative_to(root))]={'\"'\"'sha256'\"'\"':digest.hexdigest(),'\"'\"'bytes'\"'\"':p.stat().st_size}\nprint(json.dumps(rows))\n'"
+    ]
+  }
+}

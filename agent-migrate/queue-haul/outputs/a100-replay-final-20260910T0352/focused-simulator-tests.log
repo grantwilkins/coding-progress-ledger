@@ -1,0 +1,18 @@
+........................................................................ [ 39%]
+........................................................................ [ 79%]
+.....................................                                    [100%]
+=============================== warnings summary ===============================
+queue-haul/tests/test_pool_shed_planner.py::test_small_fleet_qh_does_not_reserve_wan_for_compute_only_replicas
+  /home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_shed_campaign.py:434: RuntimeWarning: HiGHS model import warning; original constraints are checked after solving
+    result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper, certificate)
+
+queue-haul/tests/test_pool_shed_planner.py::test_optimal_secondary_lp_is_retried_until_original_certificate_passes
+  /home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_shed_campaign.py:434: RuntimeWarning: HiGHS simplex failed: LP returned an infeasible resource allocation; retrying the same LP with IPM
+    result = _bounded_lp(cost / max(abs(cost).max(), 1e-30), constraints, limits, upper, certificate)
+
+../../../../../datadrive/queue-haul-campaign/agent-migrate/.venv/lib/python3.12/site-packages/_pytest/cacheprovider.py:469
+  /datadrive/queue-haul-campaign/agent-migrate/.venv/lib/python3.12/site-packages/_pytest/cacheprovider.py:469: PytestCacheWarning: cache could not write path /home/azureuser/coding-progress-ledger/agent-migrate/.pytest_cache/v/cache/nodeids: [Errno 30] Read-only file system: '/home/azureuser/coding-progress-ledger/agent-migrate/.pytest_cache/v/cache/nodeids'
+    config.cache.set("cache/nodeids", sorted(self.cached_nodeids))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+181 passed, 3 deselected, 3 warnings in 207.50s (0:03:27)
