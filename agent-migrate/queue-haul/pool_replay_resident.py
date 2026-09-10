@@ -128,6 +128,11 @@ def physical_workload(workload, seed, count=8):
             'migration_context_exclusion':'entire trajectory must leave 512 output tokens; no truncation'}
 
 
+def service_degraded(screen):
+    return screen['exact_timing_coverage']>=.99 and any((screen[key] or 0)>limit for key,limit in
+        (('p90_arrival_ttft_s',1),('p90_request_mean_tpot_s',.1),('queue_growth_requests',1)))
+
+
 def cache_idle(status):
     if not status['is_healthy']:raise RuntimeError('LMCache status is unhealthy')
     state=status['storage_manager']
@@ -240,7 +245,7 @@ class ResidentAcquisition(Acquisition):
                     result=await headroom.async_completion(client,self.cfg.host,port,prepared,tags['scheduled_ns'],
                         max(.001,min(180,self.remaining(),(boundary-now)/1e9 if boundary else 180)),
                         event_sink=token_event)
-                    row.update(result)
+                    row.update(result,server_status=result['status'] or None,transport_error=result['error'] or None)
                     row.update(derived_prompt_minus_cache_tokens=None if row.get('cached_tokens') is None else row['prompt_tokens']-row['cached_tokens'],
                                processed_tokens_basis='derived_prompt_minus_cache',external_cache_bypassed=bypass)
                     if not row['done'] or row['status']!=200 or row['prompt_tokens']!=len(prompt) or row['recorded_output_tokens']!=row['output_tokens'] or not 0<row['output_tokens']<=output or (tags['phase']=='service' and row['output_tokens']!=output):
@@ -401,10 +406,12 @@ class ResidentAcquisition(Acquisition):
         else:raise RuntimeError('engine did not clear cancelled requests during cleanup')
         return result
 
-    def scout(self,plan):
+    def scout(self,plan,workloads=('coding_long','coding')):
         results=json.loads((self.out/'scout-results.json').read_text()) if (self.out/'scout-results.json').exists() else []
-        for workload in ('coding_long','coding'):
-            rate=plan['workloads'][workload]['initial_scout_rps_per_gpu']
+        for workload in workloads:
+            prior=[r for r in results if r['spec']['workload']==workload]
+            if any(r['summaries']['resident']['30-90']['screen_pass'] for r in prior) and any(service_degraded(r['summaries']['resident']['30-90']) for r in prior):continue
+            rate=(prior[-1]['spec']['rate']*(.5 if service_degraded(prior[-1]['summaries']['resident']['30-90']) else 2)) if prior else plan['workloads'][workload]['initial_scout_rps_per_gpu']
             first = max((int(path.name.rsplit('-',1)[1]) for path in self.out.glob(f'scout-{workload}-*') if path.is_dir()),default=-1)+1
             for probe in range(first,4):
                 if self.remaining()<150:raise TimeoutError('insufficient reserve for scout and cleanup')
@@ -417,8 +424,8 @@ class ResidentAcquisition(Acquisition):
                 if screen['completed_requests'] and screen['exact_timing_coverage'] < .99:
                     raise RuntimeError('scout timing prerequisite failed; no service degradation inferred')
                 seen=[r for r in results if r['spec']['workload']==workload]
-                if any(r['summaries']['resident']['30-90']['screen_pass'] for r in seen) and any(not r['summaries']['resident']['30-90']['screen_pass'] for r in seen):break
-                rate*=2 if screen['screen_pass'] else .5
+                if any(r['summaries']['resident']['30-90']['screen_pass'] for r in seen) and any(service_degraded(r['summaries']['resident']['30-90']) for r in seen):break
+                rate*=.5 if service_degraded(screen) else 2
         selection={}
         for workload in ('coding_long','coding'):
             trials=[r for r in results if r['spec']['workload']==workload]
@@ -441,12 +448,13 @@ def main():
     parser.add_argument('--out',type=Path,required=True)
     parser.add_argument('--plan',type=Path,required=True)
     parser.add_argument('--inventory',type=Path)
+    parser.add_argument('--workload',choices=('coding','coding_long'))
     args=parser.parse_args();plan=json.loads(args.plan.read_text());a=ResidentAcquisition(args.out,json.loads(args.inventory.read_text()) if args.inventory else None)
     write(args.out/f'{args.stage}-launch-{time.monotonic_ns()}.json',{'argv':__import__('sys').argv,'source_sha256':profiler.file_hash(Path(__file__)),
         'runtime_patch':json.loads((args.out/'stream-patch.json').read_text()) if (args.out/'stream-patch.json').exists() else None,
         'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
         'plan_sha256':profiler.file_hash(args.plan),'start_ns':time.monotonic_ns()})
-    if args.stage=='scout':a.scout(plan)
+    if args.stage=='scout':a.scout(plan,(args.workload,) if args.workload else ('coding_long','coding'))
     else:
         import pool_shed_campaign as pool
         selection=json.loads((args.out/'resident-rate-selection.json').read_text())

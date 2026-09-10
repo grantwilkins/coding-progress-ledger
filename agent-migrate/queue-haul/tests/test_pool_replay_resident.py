@@ -108,3 +108,37 @@ def test_cache_isolation_waits_for_locks_and_async_storage_not_stale_result_hand
             assert not cache_idle(pending)
     with pytest.raises(KeyError):cache_idle({'is_healthy':True,'storage_manager':{}})
     with pytest.raises(RuntimeError):cache_idle({'is_healthy':False})
+
+
+def test_scout_degradation_does_not_infer_capacity_from_censor_or_transport_failure():
+    from pool_replay_resident import service_degraded
+    screen={'exact_timing_coverage':1.,'p90_arrival_ttft_s':.3,
+            'p90_request_mean_tpot_s':.03,'queue_growth_requests':0,'screen_pass':False,
+            'unfinished_or_failed_requests':3}
+    assert not service_degraded(screen)
+    assert service_degraded({**screen,'p90_arrival_ttft_s':1.01})
+    assert service_degraded({**screen,'queue_growth_requests':2})
+    assert not service_degraded({**screen,'p90_arrival_ttft_s':2.,'exact_timing_coverage':.98})
+
+
+def test_scout_resumes_only_unused_new_geometric_rate_slots(tmp_path):
+    import json
+    from pool_replay_resident import ResidentAcquisition
+    screen={'exact_timing_coverage':1.,'p90_arrival_ttft_s':.3,
+            'p90_request_mean_tpot_s':.03,'queue_growth_requests':0,'screen_pass':True,'completed_requests':10}
+    def result(workload,rate,passed=True,degraded=False):
+        return {'spec':{'workload':workload,'rate':rate},'summaries':{'resident':{'30-90':{
+            **screen,'screen_pass':passed,'p90_arrival_ttft_s':2 if degraded else .3}}}}
+    prior=[result('coding_long',.188),result('coding_long',.376,False),result('coding',.221),result('coding',.442)]
+    (tmp_path/'scout-results.json').write_text(json.dumps(prior))
+    for i in (0,1):(tmp_path/f'scout-coding_long-{i}').mkdir()
+    a=ResidentAcquisition.__new__(ResidentAcquisition);a.out=tmp_path;a.remaining=lambda:1000
+    offered=[]
+    async def episode(spec,workload,duration):
+        offered.append((spec['probe'],spec['rate']))
+        return result(spec['workload'],spec['rate'],spec['probe']==2,spec['probe']==3)
+    a.episode=episode
+    a.scout({'workloads':{'coding_long':{'initial_scout_rps_per_gpu':.188},'coding':{}}},('coding_long',))
+    assert offered==[(2,.752),(3,1.504)]
+    selected=json.loads((tmp_path/'resident-rate-selection.json').read_text())
+    assert selected['coding_long']['rates']==[.752] and selected['coding_long']['boundary_bracketed']
