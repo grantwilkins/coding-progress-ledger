@@ -1317,6 +1317,29 @@ The H100 path uses West US 3 (`10.11.0.4`) as source and Australia East
 `QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json`; the A100 profile remains the
 network campaign default so archived plans retain their original meaning.
 
+Southeast Asia (`10.15.0.4`) uses **`azrsadmin`**, with the existing `~/.ssh/azrs`
+key. Azure IMDS confirmed `southeastasia` and `Standard_NC40ads_H100_v5` on
+2026-09-10; the host exposes an H100 NVL and a writable `/datadrive`.
+`rsync` and `iperf3` are installed, and `/datadrive/queue-haul-network` is ready
+for files. From this checkout's host, a 64 MiB SCP round trip passed SHA-256
+verification (11.18 s upload, 11.17 s download); five-second private-IP iperf3
+checks measured 130.0 Mbit/s upload and 115.9 Mbit/s download.
+
+```bash
+ssh -o StrictHostKeyChecking=yes -i ~/.ssh/azrs azrsadmin@10.15.0.4
+scp -o StrictHostKeyChecking=yes -i ~/.ssh/azrs ./file azrsadmin@10.15.0.4:/datadrive/queue-haul-network/
+scp -o StrictHostKeyChecking=yes -i ~/.ssh/azrs azrsadmin@10.15.0.4:/datadrive/queue-haul-network/file ./
+```
+
+The SSH host key is recorded on this checkout's host. Other clients need their
+own trusted host-key entry. This is currently a file-transfer endpoint, outside
+the frozen campaign topologies: the Queue-Haul runtime and model cache are not
+installed, and migration/service paths have not been validated. The readiness
+check also found a failed `nvidia-fabricmanager` service and package-trigger
+errors rebuilding an older kernel's initramfs; the running `6.6.150.1-1.azl3`
+kernel has an initramfs and `nvidia-smi` succeeds. GPU workload and reboot
+readiness remain unverified.
+
 The node map across the provided cluster files is:
 
 | role | region | private IP |
