@@ -48,16 +48,15 @@ uv run python pool_shed_resident_data.py
 uv run python pool_shed_resident_validation.py
 ```
 
-Before fleet integration, the missing measurement is server arrival, first
-schedule, first/last generation and iteration timing, with scheduled prefill
-tokens and decode request IDs alongside client SSE timestamps. A bounded probe
-can use warm independent 8K/30K prefixes, concurrency 1/8/16, 1,536 fixed output
-tokens and two repeats, followed by the coding long-output and long-replay burst
-checks. Failed transport/dependency scout cases remain explicit and do not
-establish GPU capacity. Full `run` calls now hard-fail while resident latency is
-unvalidated; `prepare`, historical reduction, smoke runs and bounded `run_cell`
-audits remain available. GPU-local KV placement and causal source queues still
-need integration after this timing check passes.
+The remaining timing ambiguity is server scheduling/generation versus buffered
+client delivery. The [bounded GPU handoff](#bounded-resident-server-timing-handoff)
+freezes twelve warm-decode cells and four agentic episodes to resolve it. Another
+GPU measurement is only essential if existing timing uncertainty changes the
+end-to-end conclusions; GPU-local KV placement, causal source queues and bounded
+validation still need integration either way. Failed transport/dependency scout
+cases do not establish GPU capacity. Full `run` calls hard-fail while resident
+latency is unvalidated; `prepare`, historical reduction, smoke runs and bounded
+`run_cell` audits remain available.
 
 Resident service shares compute with migration. Replay uses the existing measured
 resident-throughput loss; spare capacity repays resident debt before migrated
@@ -769,6 +768,164 @@ admission. The failed Linux comparison is retained as regression evidence.
 resident displacement and used the old service/power normalization. Its results
 use an obsolete normalization; they do not validate the current shared-service model. The earlier fixed-plan
 campaign is archived under `outputs/a100-pooled-execution`.
+
+### Bounded resident server timing handoff
+
+The node agent should pull `policy-hardware-width8-pilot` and use
+[this frozen acquisition plan](outputs/a100-resident-server-timing-plan/plan.json).
+It is a **plan, not a ready-to-run acquisition CLI**: add the small timing hooks
+and bounded launcher on the installed reference stack before starting acquisition.
+Reuse the current harness and token-stream collector. This follow-up measures
+resident decode and queueing; the fleet study remains 2 MW source / 2 MW at each
+of two destinations. Do not rerun scouts, the broad KV/WAN sweep or fleet policies.
+
+1. **Verify the GPUs and runtime.** Azure is optional. Both archived GPUs are
+   **A100 80GB PCIe**; matching full GPUs outside Azure can run this probe.
+   Use exclusive GPUs without MIG partitioning. One GPU suffices for warm-decode
+   cells; source-active episodes require two separate physical GPUs. They may
+   share a host if CPU/service interference is recorded. Prefer the archived
+   Germany destination and Sweden source for direct timing reproduction; a new
+   environment provides new calibration, not proof of Germany's old timing.
+   Record network/endpoint differences. SXM or 40GB variants require a separately
+   labeled hardware calibration; do not silently pool their timing fits with
+   PCIe 80GB. NVIDIA documents the variant differences in its
+   [A100 specifications](https://www.nvidia.com/en-us/data-center/a100/).
+   Use an exclusive test stack: the existing episode setup resets native/LMCache state and its
+   owned Redis database. Pin GPT-OSS-20B revision
+   `6cee5e81ee83917806bbde320786a8fb61efebee` and verify weights/tokenizer against
+   the two reference model manifests linked in the plan. Keep TP1, vLLM 0.22.0,
+   LMCache 0.5.1, BF16/MXFP4, TRITON_ATTN, eager execution, 32,768 maximum context,
+   256 sequences, 8,192 scheduled tokens, 16-token blocks, KV dtype `auto`, memory utilization
+   0.75, prefix caching and chunked prefill enabled, hybrid KV manager disabled,
+   prompt-token details enabled and `VLLM_USE_FLASHINFER_SAMPLER=0`.
+   Keep the installed Torch/CUDA/Transformers builds; record their differences.
+   Record GPU UUIDs and actual `nvidia-smi` power limits on both nodes; use 300 W
+   on the owned test GPUs and record any change. The archived final Germany
+   inventory does not prove its old power cap. Preserve the hardware proxy's
+   1,000 **Mbit/s** setting and record actual transport delays on the new hosts;
+   this is distinct from the fleet's 1,000-Gbit/s WAN.
+
+2. **Instrument generation separately from delivery.** Log stable iteration IDs,
+   external/internal request-ID mappings and token ordinals at these boundaries:
+   scheduler (prompt length, computed tokens before scheduling, scheduled tokens,
+   running/waiting requests, cache hits, remote-KV waits and preemptions); worker
+   (CUDA-event forward/logits/sampling elapsed time and the host output-ready
+   timestamp); frontend (ingress, output receipt, collector put/pop or SSE yield);
+   and the existing client SSE receiver. Capture partial/failed requests too.
+   Read the scheduler's **pre-update** computed count: the live request has already
+   advanced when `schedule()` returns. Associate the correct iteration with each
+   asynchronous worker result. Reuse output-copy synchronization when resolving
+   CUDA events; do not add a global device synchronization on every iteration.
+   Host `execute_model(non_block=True)` duration measures enqueueing. CUDA events
+   measure relative GPU-stream elapsed time, which can include waits; they are
+   not host timestamps. SSE yield does not prove wire flush. Record clock domains,
+   hosts, boot/time namespaces and paired wall/monotonic anchors. Subtract host
+   timestamps only after verifying a common clock domain; never subtract Sweden
+   and Germany monotonic clocks.
+   These boundaries follow the pinned vLLM
+   [scheduler](https://github.com/vllm-project/vllm/blob/v0.22.0/vllm/v1/core/sched/scheduler.py),
+   [engine](https://github.com/vllm-project/vllm/blob/v0.22.0/vllm/v1/engine/core.py) and
+   [worker](https://github.com/vllm-project/vllm/blob/v0.22.0/vllm/v1/worker/gpu_model_runner.py).
+
+3. **Check measurement overhead before collecting.** Run matched warm 8K,
+   concurrency-eight, 256-output smoke bursts with instrumentation off/on/off.
+   Use the warm-cell protocol below, reusing the same eight prompts and clearing
+   owned native cache before each mode's prewarm. Disable only the new timing
+   hooks; preserve the FIFO collector patch. Completion duration is the median
+   client dispatch-to-DONE duration; output rate is total actual output tokens
+   divided by the interval from first dispatch to last DONE. Require the two off
+   baselines to agree within 5% in both metrics, and on to agree within 5% of their
+   time-interpolated values.
+   Permit one repeat only for an inconclusive check within the setup budget;
+   stop acquisition if instrumentation fails. Use buffered process-local logs,
+   require zero dropped records and hash every actually imported patched module.
+   A short native profile can verify the device boundaries: use the v0.22
+   `--profiler-config` with `profiler: torch`, `max_iterations: 32` and
+   `ignore_frontend: true`, and disable stack/shape/memory/FLOP collection. Verify
+   the trace actually contains CUDA kernels and exclude it from fitting. Keep
+   the profiler off for the measurement cells.
+
+4. **Run these four complete agentic episodes first, in this order.** Each has
+   eight resident histories, eight source histories, 60 seconds of baseline,
+   migration at 60 seconds and continuing arrivals until 300 seconds. Preserve
+   causal turns, resets, source quiescence and captured-state continuations.
+
+   | Episode | Resident requests/s | Incoming requests/s/session |
+   |---|---:|---:|
+   | `episodes-coding-0-control-7102` | 0.4426002548363285 | 0.04426002548363285 |
+   | `episodes-coding-0-replay-7102` | 0.4426002548363285 | 0.04426002548363285 |
+   | `episodes-coding_long-0-control-7101` | 0.1881783279213518 | 0.03763566558427036 |
+   | `episodes-coding_long-0-replay-7101` | 0.1881783279213518 | 0.03763566558427036 |
+
+   The JSON contains the exact archived specs and hashes. Use the original
+   `outputs/a100-replay-final-20260910T0352/plan.json` workload objects with
+   `ResidentAcquisition.episode(spec, workload, 300, True)`, including for control.
+   Create a fresh output directory, `runtime-launch.json` and validated inventory
+   with a new deadline before constructing the acquisition object. The harness
+   uses one coordinator address: expose separate source/destination serving and
+   LMCache ports there, directly or via forwarding, with coordinator-local proxy
+   timestamps and attached source/sink stack logs. Do not pass
+   the already sampled `physical-workload.json`: `episode()` samples internally.
+   The offered traces must reproduce 132 resident + 106 incoming arrivals for
+   coding and 56 + 92 for long, with the frozen hashes. Preserve the current
+   control mirror behavior after releasing trajectory ownership; tag this work
+   separately. Keep the full retained-token `/v1/completions` migration probe
+   with a 512-token maximum and normal EOS; do not substitute the separate chat
+   state-code probe. Service turns retain their exact trajectory outputs.
+   In particular, retain coding resident session 1, turn 7 (1,233 outputs), and
+   its dependent turns; a 90-second scout misses this event.
+
+   Use a thin direct launcher: the old `episodes` CLI recalculates incoming rates
+   from the current fleet model, `--workload` only filters scouts, and `followups`
+   adds hardcoded unrelated cases. Do not run an archived `start-stack.py`
+   unchanged: its paths, endpoints and deadlines belong to the old acquisition.
+
+5. **Run the twelve controlled warm-decode cells.** Cross total prompt lengths
+   **8,192 / 30,000**, independent concurrent sessions **1 / 8 / 16**, and two
+   repeats, each generating **1,536 tokens**. The JSON fixes order and seeds
+   8101/8102; repeat one is fitting data and repeat two is held out. Before each
+   cell, verify the owned GPU/stack is idle and reset its native prefix cache.
+   Prewarm each unique session's `C - 32` prefix with one output token, then submit full `C`
+   with 32 fresh suffix tokens. Preserve native cache between warmup and measure.
+   Reuse `destination_runner.Session(..., force_output=False)`, `prewarm`,
+   `prepare_issue`/`completion_payload` and `headroom.async_completion`; set
+   `ignore_eos=True`, temperature zero and bypass LMCache reads/writes. Do not
+   restrict allowed output tokens. Require 1,536 actual outputs, native cached
+   prefixes at least 8,160 / 29,968 tokens and zero external-cache hits. Verify
+   actual scheduled prefill work. Both prompt-plus-output lengths fit 32,768.
+   Retain failed warm conditions, preemptions and incomplete outputs explicitly;
+   a width-16 cell that cannot keep its prefixes resident is useful evidence,
+   but cannot be fitted as a successful 32-token warm append.
+
+6. **Bound the acquisition and return all evidence.** The hard wall cap is
+   **90 minutes**, including setup, warmup, failures and cleanup: setup/smoke
+   at most 360 s, each episode 420 s, each warm cell 270 s (all prewarming at most
+   90 s, measurement at most 180 s), plus a final 120 s cleanup reserve. These
+   are limits, not runtime predictions. Prepare/test the instrumentation before
+   that clock starts. Existing prewarm timeouts are per request; enforce the
+   whole-cell and global deadlines too. Start a cell only with its full reserve
+   plus cleanup available. Save failures, partial outputs and unstarted cells;
+   do not retry slow results or relax the protocol to fill the matrix.
+
+   Return `outputs/a100-resident-server-timing-<UTC>/` with the frozen plan,
+   checkout, new inventory and exact launch commands; model/tokenizer and imported
+   module hashes, instrumentation patch/source copies; raw scheduler, worker,
+   frontend and client events; offered/physical traces, migration/request history,
+   engine and GPU telemetry; overhead comparison and optional short profile;
+   per-cell summaries, completeness report and a SHA256 manifest. Compressed raw
+   archives are fine if member hashes and a fresh reduction are verified.
+   Reconcile request/iteration/token ordinals, generated counts and final usage,
+   including partial requests; check each iteration's scheduled-token total is
+   at most 8,192. Report causal queue wait, device execution, server output-ready
+   intervals and client delivery separately. Explain the long coding response
+   and long-replay resident burst from those records. Keep the existing fit and
+   tolerances frozen while collecting; all four new agentic episodes are
+   validation only. Data quality is the GPU acceptance test, not a QH advantage.
+
+After the data returns, CPU work remains: calibrate only identifiable timing
+terms, integrate GPU-local resident queues and KV placement plus causal source
+queues, then run bounded end-to-end policy and uncertainty checks. Remove the
+full-campaign guard only after those checks support resident-service validity.
 
 ## Current evidence
 
