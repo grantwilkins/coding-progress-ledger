@@ -1,0 +1,31 @@
+{
+  "wall_ns": 1789003456551302476,
+  "remote_supervisor_pid": 7194,
+  "launch_command": [
+    "ssh",
+    "-i",
+    "/home/azureuser/.ssh/azrs",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "azureuser@10.3.0.4",
+    "nohup /home/azureuser/coding-progress-ledger/agent-migrate/.venv/bin/python /tmp/qh-replay-completion-20260910/remote-supervisor.py > /tmp/qh-replay-completion-20260910/supervisor.log 2>&1 < /dev/null & echo $!"
+  ],
+  "local_log_mirror_pids": {
+    "lmcache-sink": 15523,
+    "sink": 15524,
+    "destination-power.csv": 19927,
+    "destination-engine-metrics.jsonl": 19928
+  },
+  "shared_deadline": {
+    "start_wall_ns": 1789003377050105138,
+    "deadline_wall_ns": 1789005177050105138,
+    "pid": 13567,
+    "argv": [
+      "outputs/a100-replay-completion-20260910T0116/launch-source.py"
+    ]
+  }
+}
