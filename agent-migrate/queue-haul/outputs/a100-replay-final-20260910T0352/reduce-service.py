@@ -71,11 +71,15 @@ def reduce(root):
         events = result.get('migration_events',[])
         switches = [e for e in events if e['kind'] in ('route_switch','destination_admission')]
         episodes.append({'spec':spec,'duration_s':duration,'resident_population':result.get('resident_population'),'incoming_population':result.get('incoming_population'),
-            'trace_sha256':hashes[str((path.parent/'offered-trace.json').relative_to(root))],
+            'placement':result.get('placement'),'trace_sha256':hashes[str((path.parent/'offered-trace.json').relative_to(root))],
             'windows':windows,'outstanding_by_seconds_after_migration':checkpoints,
             'engine':{name:[{'start_s':a,'end_s':z,**engine_window(table,epoch,a,z)} for a,z in intervals] for name,table in tables.items()},
             'migration_events':events,'switches_by_seconds_after_migration':{str(t-60):sum(e['monotonic_ns'] <= epoch+t*1e9 for e in switches) for t in (90,180) if t <= duration},
-            'control_materialization_requests':sum(r.get('cohort')=='control_materialization' for r in selected),
+            'control_materialization_requests':sum(r.get('phase','').startswith('control_') for r in selected),
+            'service_requests_by_role':{role:sum(r.get('cohort') in ('resident','incoming') and r.get('serving_role')==role for r in selected) for role in ('source','destination')},
+            'quiescence':[{'session':e['session'],'pause_ns':e['monotonic_ns'],'source_in_flight':bool(e.get('in_flight_request')),
+                'source_decode_in_progress_verified':bool((e.get('in_flight_request') or {}).get('first_token_ns')),
+                'pause_to_idle_s':next(((z['monotonic_ns']-e['monotonic_ns'])/1e9 for z in events if z['kind']=='source_idle' and z['session']==e['session']),None)} for e in events if e['kind']=='pause'],
             'statuses':{str(status):sum(r.get('status')==status for r in selected) for status in {r.get('status') for r in selected}}})
     pairs = []
     for episode in episodes:
