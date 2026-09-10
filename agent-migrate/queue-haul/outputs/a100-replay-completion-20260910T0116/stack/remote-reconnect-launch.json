@@ -1,0 +1,22 @@
+{
+  "wall_ns": 1789004423897351447,
+  "remote_supervisor_pid": 11906,
+  "remote_root": "/tmp/qh-replay-completion-20260910-reconnected",
+  "local_log_mirror_pids": {
+    "stack/lmcache-sink.log": 30791,
+    "stack/sink.log": 30792,
+    "destination-power.csv": 30793,
+    "destination-engine-metrics.jsonl": 30797
+  },
+  "shared_deadline": {
+    "start_wall_ns": 1789003377050105138,
+    "deadline_wall_ns": 1789005177050105138,
+    "pid": 17467,
+    "argv": [
+      "outputs/a100-replay-completion-20260910T0116/launch-source.py"
+    ]
+  },
+  "reason": "Old native RESP adapter constructed before sourceproxy became stable; fresh nativeclient read-only EXISTS succeeded; identical config restarted to establish connections",
+  "previous_remote_root": "/tmp/qh-replay-completion-20260910",
+  "old_gpu_released_mib": 0
+}
