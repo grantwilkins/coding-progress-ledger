@@ -113,6 +113,24 @@ raises KV-only to 53.79% and 53.98%; both scaling assumptions matter. Transferri
 the complete time-zero snapshots over 1 Tb/s takes at least 155 s and 293 s
 before endpoint work or catch-up; future context resets can change those volumes.
 
+The [10 Tb/s check](outputs/a100-network-balance-audit-20260910/network-10000gbps.json)
+adds 12 evaluations with the same controls, using
+`uv run python pool_shed_network_audit.py --wan-gbps 10000`.
+At 30 s, queue-cleared handoff is:
+
+| Workload | GPUs sharing each measured endpoint | QH LP | KV only | Replay only |
+| --- | ---: | ---: | ---: | ---: |
+| coding | 8 | 87.06% | 53.79% | 81.50% |
+| coding | 1 | 98.54% | 85.15% | 81.50% |
+| coding_long | 8 | 77.17% | 53.98% | 68.54% |
+| coding_long | 1 | 90.70% | 76.17% | 68.54% |
+
+Eight-GPU endpoint sharing still caps aggregate effective KV transport at
+4.59 Tb/s, so its results exactly match the earlier endpoint-limited case.
+With one measured endpoint per GPU, QH's handed-off work is 57.70% KV for coding
+and 57.99% KV for coding_long. Its queue-cleared source-power allocation is
+0.444 MW and 0.405 MW, respectively. GPU counts and replay calibration stay fixed.
+
 The [hardware audit](outputs/a100-power-frontier-20260910/kv-evidence-audit.json)
 finds KV faster in all 72 matched July long/agentic width-eight episodes at
 5–10 Gb/s; the September 1 Gb/s tests contain the opposite ordering. The

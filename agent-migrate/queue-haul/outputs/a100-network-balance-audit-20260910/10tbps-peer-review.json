@@ -1,0 +1,134 @@
+{
+  "checks": [
+    "Four configurations and all 12 requested policy outputs present.",
+    "All recorded source hashes match current inputs, including resident fit/queue helpers.",
+    "All network budgets independently recomputed.",
+    "All action-sum, handoff/recovery, deadline, replica, route/shared bytes and pure-KV application bounds pass.",
+    "Every width8/10Tbps result field is bit-for-bit equal to the prior width8/no-extra-cap result.",
+    "Replay handoff and resource-volume results match the frozen baseline to 1e-12 relative tolerance.",
+    "CLI preserves previous artifacts, rejects nonpositive/nonfinite WAN capacities before calibration, and records the exact requested cap."
+  ],
+  "controls": "Candidate libraries independently reconstructed at the original 1Tbps baseline, identical to all new cells and frozen D30 frontier. Source/destination GPU counts, source histories/phases/service, standing traffic, full replay context, measured KV bytes, replica placement, 4s planning and calibration unchanged. Only shared WAN cap and network endpoint replication vary.",
+  "frozen_frontier_sha256": "44c4b64a9d4f35429d407f69e1506b8c0f1947f0580359fb86ab4a0edbd2ad07",
+  "input_hashes_verified": 226,
+  "new_policy_evaluations_by_reviewer": 0,
+  "prior_report_sha256": "9141b204ad49e485cdadc448e124901aecbe3026faa9d3299ffc8a13dc86457e",
+  "report_path": "outputs/a100-network-balance-audit-20260910/network-10000gbps.json",
+  "report_sha256": "bc989a7a549448009cabf091ee88c250db65a59f89718f27985dec25a24b013e",
+  "reviewed_evaluations": 12,
+  "rows": [
+    {
+      "gpus_per_network_endpoint": 8,
+      "kv_share_of_handoff": 1.0,
+      "policy": "kv_only",
+      "queue_cleared_handoff_fraction": 0.5378595574190677,
+      "raw_handoff_fraction": 0.5850406958966117,
+      "source_power_proxy_mw": 0.2421449033045109,
+      "workload": "coding"
+    },
+    {
+      "gpus_per_network_endpoint": 8,
+      "kv_share_of_handoff": 0.18598389145566455,
+      "policy": "queue_haul",
+      "queue_cleared_handoff_fraction": 0.8705940289529233,
+      "raw_handoff_fraction": 0.8705940289529226,
+      "source_power_proxy_mw": 0.3919422906043851,
+      "workload": "coding"
+    },
+    {
+      "gpus_per_network_endpoint": 8,
+      "kv_share_of_handoff": 0.0,
+      "policy": "replay_only",
+      "queue_cleared_handoff_fraction": 0.8150494722703883,
+      "raw_handoff_fraction": 0.815049472270388,
+      "source_power_proxy_mw": 0.36693607639574727,
+      "workload": "coding"
+    },
+    {
+      "gpus_per_network_endpoint": 1,
+      "kv_share_of_handoff": 1.0,
+      "policy": "kv_only",
+      "queue_cleared_handoff_fraction": 0.8514924494751599,
+      "raw_handoff_fraction": 0.8657720631487201,
+      "source_power_proxy_mw": 0.38334274068135077,
+      "workload": "coding"
+    },
+    {
+      "gpus_per_network_endpoint": 1,
+      "kv_share_of_handoff": 0.5769931256756545,
+      "policy": "queue_haul",
+      "queue_cleared_handoff_fraction": 0.9853792200683342,
+      "raw_handoff_fraction": 0.9853792200683346,
+      "source_power_proxy_mw": 0.4436186968707426,
+      "workload": "coding"
+    },
+    {
+      "gpus_per_network_endpoint": 1,
+      "kv_share_of_handoff": 0.0,
+      "policy": "replay_only",
+      "queue_cleared_handoff_fraction": 0.8150494722703883,
+      "raw_handoff_fraction": 0.8150494722703876,
+      "source_power_proxy_mw": 0.36693607639574727,
+      "workload": "coding"
+    },
+    {
+      "gpus_per_network_endpoint": 8,
+      "kv_share_of_handoff": 1.0,
+      "policy": "kv_only",
+      "queue_cleared_handoff_fraction": 0.539814779265289,
+      "raw_handoff_fraction": 0.6330699114776355,
+      "source_power_proxy_mw": 0.24075422130728763,
+      "workload": "coding_long"
+    },
+    {
+      "gpus_per_network_endpoint": 8,
+      "kv_share_of_handoff": 0.18080746876907416,
+      "policy": "queue_haul",
+      "queue_cleared_handoff_fraction": 0.7717343035522242,
+      "raw_handoff_fraction": 0.7717343035522242,
+      "source_power_proxy_mw": 0.3441889671133441,
+      "workload": "coding_long"
+    },
+    {
+      "gpus_per_network_endpoint": 8,
+      "kv_share_of_handoff": 0.0,
+      "policy": "replay_only",
+      "queue_cleared_handoff_fraction": 0.6854235341255022,
+      "raw_handoff_fraction": 0.6854235341255023,
+      "source_power_proxy_mw": 0.3056948708382378,
+      "workload": "coding_long"
+    },
+    {
+      "gpus_per_network_endpoint": 1,
+      "kv_share_of_handoff": 1.0,
+      "policy": "kv_only",
+      "queue_cleared_handoff_fraction": 0.7617146010634064,
+      "raw_handoff_fraction": 0.8910352149208881,
+      "source_power_proxy_mw": 0.3397202386474262,
+      "workload": "coding_long"
+    },
+    {
+      "gpus_per_network_endpoint": 1,
+      "kv_share_of_handoff": 0.5799063710695173,
+      "policy": "queue_haul",
+      "queue_cleared_handoff_fraction": 0.9070314610592225,
+      "raw_handoff_fraction": 0.9070314610592222,
+      "source_power_proxy_mw": 0.40453070478310665,
+      "workload": "coding_long"
+    },
+    {
+      "gpus_per_network_endpoint": 1,
+      "kv_share_of_handoff": 0.0,
+      "policy": "replay_only",
+      "queue_cleared_handoff_fraction": 0.6854235341255022,
+      "raw_handoff_fraction": 0.6854235341255023,
+      "source_power_proxy_mw": 0.3056948708382378,
+      "workload": "coding_long"
+    }
+  ],
+  "schema": "queue-haul-10tbps-peer-review-v1",
+  "scope": "10Tbps saturates the declared eight-GPU-per-endpoint configuration at its lower measured endpoint pools; it is exactly equivalent to removing the extra WAN cap there. One GPU per measured endpoint is a separate bandwidth/compute scaling assumption. Conditional queue-clearance estimates are not resident SLO certification or measured datacenter performance.",
+  "status": "approved",
+  "width8_application_cap_tbps": 4.593848372437785,
+  "width8_bulk_cap_tbps": 9.1852504681164
+}
