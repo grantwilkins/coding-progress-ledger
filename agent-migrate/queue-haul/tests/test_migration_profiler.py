@@ -941,11 +941,11 @@ def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
         or {"total_keys": 6, "found_keys": 0},
     )
     monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 6)
-    monkeypatch.setattr(c.time, "monotonic_ns", lambda: 0)
+    monkeypatch.setattr(c.time, "monotonic_ns", lambda: 2)
     rows = c.b.resp_rows(transfers)
     monkeypatch.setattr(
         c.b, "resp_rows",
-        lambda _path: rows if calls.count("request") == 0 else rows + [{**rows[0], "key_hashes": "k2"}],
+        lambda _path: rows if calls.count("request") == 0 else rows + [{**rows[0], "key_hashes": "k2", "start_ns": "3", "end_ns": "4"}],
     )
     runtime = c.LiveRuntime(
         {"s": session},
@@ -996,8 +996,14 @@ def test_mp_kv_layout_sums_heterogeneous_fresh_payloads(monkeypatch, tmp_path):
     )
 
     layout = runtime._kv_layout(10, 20, {"a", "b"})
+    empty = runtime._kv_layout(30, 40, {"a", "b"})
+    rows.append(dict(rows[1]))
+    repeated = runtime._kv_layout(10, 20, {"a", "b"})
     runtime.close()
 
+    assert empty["total_payload_bytes"] == empty["unique_payload_bytes"] == empty["retransferred_payload_bytes"] == 0
+    assert empty["transfer_observation"] == "no_external_get_observed"
+    assert repeated["total_payload_bytes"] == 40 and repeated["unique_payload_bytes"] == 30 and repeated["retransferred_payload_bytes"] == 10
     assert layout["chunk_bytes"] is None
     assert layout["total_payload_bytes"] == 30
     assert layout["payload_bytes_by_key"] == {"a": 10, "b": 20}
@@ -1441,3 +1447,28 @@ def test_invalid_source_activity_cannot_commit_destination(monkeypatch):
     assert result.committed_state is None
     assert session.route == 1
     assert 'route_switch' not in events and 'idle' not in events
+
+
+@pytest.mark.parametrize("phase,cached,payload", [("catch_up", 256, 0), ("catch_up", 100, 0), ("initial", 100, 10), ("initial", 256, 0)])
+def test_mp_catchup_allows_native_reuse_and_recomputed_tail_but_initial_requires_transfer(monkeypatch, tmp_path, phase, cached, payload):
+    import io
+    runtime = c.LiveRuntime.__new__(c.LiveRuntime)
+    sink = tmp_path/"sink.log"; sink.write_text("")
+    events = []
+    session = SimpleNamespace(cache_keys={"key"}, copied_keys=set(), copied_token_ids=[],
+        probe=lambda messages: messages, request=lambda *a, **kw: (c.RequestResult("r", 200, "h", 1, 3, prompt_tokens=256, cached_tokens=cached), "CODE"))
+    runtime.sessions, runtime.cfg, runtime.mp_layout = {"s": session}, SimpleNamespace(api_proxy_port=1), ("model", 1)
+    runtime.schedule, runtime.copy_policy, runtime.chunk_tokens = [], "initial_final", 256
+    runtime.sink_log, runtime.requests, runtime.lock = sink, io.StringIO(), threading.Lock()
+    runtime.event_log = SimpleNamespace(write=lambda event, **fields: events.append({"event": event, **fields}))
+    runtime._kv_layout = lambda *args: {"total_payload_bytes": payload, "unique_payload_bytes": payload}
+    monkeypatch.setattr(c.b, "mp_chat_tokens", lambda *args: [0]*256)
+    monkeypatch.setattr(c.b, "mp_warm_prefetch", lambda *args: {"total_keys": 1, "found_keys": 0})
+    monkeypatch.setattr(c.b, "mp_request_hit", lambda *args: 0)
+    if phase == "initial" and not payload:
+        with pytest.raises(RuntimeError, match="lacks measured external payload"):
+            runtime.prepare(c.Move("s", "kv_transfer", 0), c.SessionState("s", 1, (), "h"), phase)
+    else:
+        result = runtime.prepare(c.Move("s", "kv_transfer", 0), c.SessionState("s", 1, (), "h"), phase)
+        assert result.processed_tokens == 256-cached and result.processed_tokens_basis == "derived_prompt_minus_cache"
+        assert next(e for e in events if e["event"] == "cache_request_evidence")["executed_tokens"] is None

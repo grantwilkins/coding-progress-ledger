@@ -1113,7 +1113,7 @@ class LiveRuntime:
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
         log_offset = self.sink_log.stat().st_size
         transfer_start_ns = time.monotonic_ns()
-        pending_keys = session.cache_keys - session.copied_keys
+        transfer_keys = set(session.cache_keys)
         if move.method == "kv_transfer" and self.mp_layout:
             tokens = b.mp_chat_tokens(
                 self.cfg, session.probe(list(state.messages)),
@@ -1124,24 +1124,25 @@ class LiveRuntime:
             if warm["total_keys"] < 1 \
                     or not 0 <= warm["found_keys"] <= warm["total_keys"]:
                 raise RuntimeError(f"incomplete warm prefetch: {warm}")
+            self.event_log.write("cache_prefetch", session_id=move.session_id, phase=phase, warm_prefetch=warm)
         result, _text = session.request(
             self.cfg.api_proxy_port, list(state.messages),
             f"{move.method}_{phase}",
             bypass_lmcache=move.method == "replay",
         )
         if move.method == "kv_transfer" and self.mp_layout:
-            b.mp_request_hit(
+            external_hit = b.mp_request_hit(
                 self.sink_log, log_offset, result.request_id, False,
                 self.chunk_tokens,
             )
             hit = result.cached_tokens
             if hit is None:
                 raise RuntimeError("KV request omitted cache telemetry")
-            if hit < len(tokens) // self.chunk_tokens * self.chunk_tokens:
-                raise RuntimeError(
-                    f"request-time WAN or cache accounting mismatch for "
-                    f"{result.request_id}"
-                )
+            if not 0 <= hit <= result.prompt_tokens:
+                raise RuntimeError(f"invalid cached-token count for {result.request_id}")
+            self.event_log.write("cache_request_evidence", session_id=move.session_id, phase=phase, request_id=result.request_id,
+                                 request_external_cached_tokens=external_hit, cached_tokens=hit,
+                                 derived_prompt_minus_cache_tokens=result.prompt_tokens-hit, executed_tokens=None)
             session.copied_keys |= session.cache_keys
             session.copied_token_ids = tokens
             total = result.prompt_tokens
@@ -1161,12 +1162,14 @@ class LiveRuntime:
                     f"tokens, expected {expected}"
                 )
         layout = self._kv_layout(
-            transfer_start_ns, result.end_ns, pending_keys,
+            transfer_start_ns, result.end_ns, transfer_keys,
         ) \
             if move.method == "kv_transfer" or not self.mp_layout else {}
+        if move.method == "kv_transfer" and self.mp_layout and phase == "initial" and not layout["total_payload_bytes"]:
+            raise RuntimeError("initial KV migration lacks measured external payload transfer")
         logical_chunks, logical_bytes = (
             (len(session.copied_token_ids) // self.chunk_tokens,
-             layout["total_payload_bytes"])
+             layout["unique_payload_bytes"])
             if move.method == "kv_transfer" and self.mp_layout
             else kv_metrics(hit, layout) if layout else (0, 0)
         )
@@ -1190,18 +1193,19 @@ class LiveRuntime:
             and int(row["end_ns"]) > start_ns
         ]
         keys = [row["key_hashes"] for row in rows]
-        if not rows or len(keys) != len(set(keys)):
-            raise RuntimeError(
-                "MP migration did not expose one fresh GET per transferred key"
-            )
         sizes = [int(row["payload_bytes"]) for row in rows]
+        payloads = dict(zip(keys, sizes))
+        if any(payloads[key] != size for key, size in zip(keys, sizes)):
+            raise RuntimeError("same KV key exposed inconsistent payload sizes")
         unique_sizes = set(sizes)
-        total = sum(sizes)
+        total, unique = sum(sizes), sum(payloads.values())
         return {
             "chunk_tokens": self.chunk_tokens,
             "chunk_bytes": sizes[0] if len(unique_sizes) == 1 else None,
-            "total_payload_bytes": total,
-            "payload_bytes_by_key": dict(sorted(zip(keys, sizes))),
+            "total_payload_bytes": total, "unique_payload_bytes": unique,
+            "retransferred_payload_bytes": total-unique, "transfer_count": len(rows),
+            "payload_bytes_by_key": dict(sorted(payloads.items())),
+            "transfer_observation": "external_payload" if rows else "no_external_get_observed",
             "dtype": None, "shape": [],
         }
 
