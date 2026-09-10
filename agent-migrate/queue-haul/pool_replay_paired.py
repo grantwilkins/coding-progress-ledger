@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import hashlib
 import json
 import os
@@ -83,8 +83,7 @@ class CheckedSession(p.LiveSession):
 
 
 def worker(inventory, scenario, out):
-    cfg = validate_inventory(inventory)
-    cfg.architecture_campaign = True
+    cfg = replace(validate_inventory(inventory), architecture_campaign=True)
     stack = b.Stack(None, None, None, None, Path(inventory["stack_root"]),
                     bandwidth_mbps=inventory["bandwidth_mbps"])
     manifest = {"sessions": [{"id": row["session_id"], "job_class": "coding",

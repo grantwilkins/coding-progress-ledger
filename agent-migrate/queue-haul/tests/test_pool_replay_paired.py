@@ -60,3 +60,15 @@ def test_timeout_is_failure_and_does_not_retry(tmp_path):
 def test_same_gpu_rejected_before_runtime_access():
     with pytest.raises(ValueError, match='separate physical GPUs'):
         paired.validate_inventory({'source': {'gpu_uuid': 'same'}, 'destination': {'gpu_uuid': 'same'}})
+
+
+def test_worker_config_is_copied_without_mutating_frozen_reference(monkeypatch, tmp_path):
+    cfg = paired.b.Config()
+    calls = []
+    monkeypatch.setattr(paired, 'validate_inventory', lambda inventory: cfg)
+    monkeypatch.setattr(paired.p, 'run_scenario', lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(paired.p, 'LiveSession', paired.p.LiveSession)
+    paired.worker({'stack_root': str(tmp_path), 'bandwidth_mbps': 1000}, paired.scenarios()[0], tmp_path)
+    assert not cfg.architecture_campaign
+    assert calls[0][0][1].architecture_campaign
+    assert calls[0][1] == {'configure_proxy': False}
