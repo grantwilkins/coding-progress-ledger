@@ -1,0 +1,44 @@
+{
+  "frozen_utc": "2026-09-10T04:26:39.568427+00:00",
+  "original_plan_sha256": "5b91ccdf1d586ac39222dfc1478fc80642d2c5c412905688a477820c1818d5de",
+  "scope": "Measurement prerequisite correction before the first resident scout; unchanged8resident/8incoming physical sessions,12episode maximum,300s continuing arrivals and original7200s acquisition cap.",
+  "corrections": [
+    {
+      "change": "Require three successive idle LMCache status samples and empty L1/pending work after interepisode clear.",
+      "reason": "Clear must isolate matched-content arms after completed background cache work; never flush during measured baseline/episode."
+    },
+    {
+      "change": "Allow explicit prefetch to stage zero blocks when host L1 allocation is exhausted; validate actual request-ID L1/L2 retrieval instead.",
+      "evidence": [
+        "kv-l1-eviction-evidence.json",
+        "paired-l2measured/paired-analysis.json",
+        "paired-l2measured/keyed-wire-analysis.json"
+      ],
+      "interpretation": "Measured L2 latency/retransfer retained; no assumed cache discount or larger L1 cache."
+    },
+    {
+      "change": "Capture the completed source history under its dependency lock, then mirror control state after releasing the lock.",
+      "reason": "Prevent destination control materialization from artificially gating subsequent causal source requests. Control destination baseline materialization cost remains separately tagged."
+    }
+  ],
+  "supersedes_original_plan_note": "Control materialization no longer holds the source dependency lock. Other recorded control baseline cost and exact-token migration adapter deviations remain.",
+  "deadline_wall_ns": 1789020343193408970,
+  "deadline_extension": false,
+  "input_changes": {
+    "pool_replay_resident.py": {
+      "original_sha256": "4a45021b4d093343299da1cb2cb1315ca4a3483def9144eb8c7ec629cf672325",
+      "current_sha256": "d4366a0a870d72293eb031bdc0c713f8d8737aa445e1412a8d12e49469aeb06c"
+    },
+    "migration_profiler.py": {
+      "original_sha256": "bf1cba21ff97cc8f6a78d9a46d648cbf815b387f2c22ba919c7123e2b1f5e199",
+      "current_sha256": "6bd2a6514b3bc6f03e5cf14d355d1c3fd7e3927370f9b0bed4863fdd8c42cdaf"
+    },
+    "migration_testbed.py": {
+      "original_sha256": "777b24b0a943c1f85b14c3fbc7a5c4648e09c58a40fd6bfa1a3773c98238c9f4",
+      "current_sha256": "0579b4c2c9018d84c5c92fa4247cfd6fd3073cbf09025bd9081dae0d10b2ec05"
+    }
+  },
+  "commit": "08b6ec7172cce87557c8e11038311d9bd39b3b7b",
+  "tests": "resident-cache-isolation-tests.log:29passed. resident-broad-test-environment-failures.log:13failed/67passed retained; failures are not claimed as passing or preexisting.",
+  "simulator_fitting": "stopped_pending_user_review"
+}
