@@ -26,3 +26,11 @@ def test_reset_classification_distinguishes_recorded_reset_and_assumed_cycle_wra
     rows=[{**base,'turn':i,'recorded_turn':index} for i,index in enumerate((0,1,0))]
     result=module.resets(rows,{'x':{'turn_sequences':[[{'reset':True,'context':7},{'reset':True,'context':7}]]}})
     assert result['counts']=={'initialization':1,'assumed_cycle_wrap':1,'recorded_shape_reset':1}
+
+
+def test_every_offered_arrival_has_one_terminal_row_including_censored():
+    item={'cohort':'resident','session':0,'turn':0}
+    row={**item,'phase':'service','episode':'x','status':'censored','done':False}
+    assert module.coverage([row],{'x':[item]})['valid']
+    assert module.coverage([],{'x':[item]})['episodes']['x']['missing']==[('resident',0,0)]
+    assert module.coverage([row,row],{'x':[item]})['episodes']['x']['duplicates']==[['resident',0,0]]

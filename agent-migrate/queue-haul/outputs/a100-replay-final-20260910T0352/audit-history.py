@@ -1,6 +1,6 @@
 """Verify actual generated histories and causal dispatch from retained service rows."""
 import argparse
-from collections import defaultdict
+from collections import Counter, defaultdict
 import hashlib
 import json
 from pathlib import Path
@@ -46,6 +46,15 @@ def resets(rows,workloads):
     return {'counts':{kind:sum(r['origin']==kind for r in result) for kind in ('initialization','assumed_cycle_wrap','recorded_shape_reset')},'events':result}
 
 
+def coverage(rows,traces):
+    result={}
+    for episode,trace in traces.items():
+        key=lambda row:(row['cohort'],row['session'],row['turn'])
+        expected={key(row) for row in trace};actual=Counter(key(row) for row in rows if row.get('episode')==episode and row.get('phase')=='service')
+        result[episode]={'offered':len(trace),'terminal_rows':sum(actual.values()),'missing':sorted(expected-actual.keys()),'unexpected':sorted(actual.keys()-expected),'duplicates':[list(k) for k,v in actual.items() if v!=1]}
+    return {'valid':all(not any(row[k] for k in ('missing','unexpected','duplicates')) and row['offered']==row['terminal_rows'] for row in result.values()),'episodes':result}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('root',type=Path);args=parser.parse_args()
     root=args.root;raw=(root/'requests.jsonl').read_bytes();complete=raw[:raw.rfind(b'\n')+1]
@@ -54,9 +63,11 @@ def main():
         'input_sha256':hashlib.sha256(raw).hexdigest(),'input_complete_at_read':len(raw)==len(complete),
         'scope':'complete service records; unfinished and unobserved links remain unvalidated',
         'physical_workload_files':{str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob('*/physical-workload.json')},
-        'reset_classification':resets(rows,{p.parent.name:json.loads(p.read_text()) for p in root.glob('*/physical-workload.json')}),**audit(rows)}
+        'reset_classification':resets(rows,{p.parent.name:json.loads(p.read_text()) for p in root.glob('*/physical-workload.json')}),
+        'trace_coverage':coverage(rows,{p.parent.name:json.loads((p.parent/'offered-trace.json').read_text()) for p in root.glob('*/result.json')}),**audit(rows)}
     (root/'resident-history-audit.json').write_text(json.dumps(result,indent=2)+'\n')
-    print(json.dumps({k:v for k,v in result.items() if k not in ('sessions','physical_workload_files','reset_classification')}))
+    if not result['trace_coverage']['valid']:raise ValueError('offered arrivals lack exactly one terminal service row; evidence retained')
+    print(json.dumps({k:v for k,v in result.items() if k not in ('sessions','physical_workload_files','reset_classification','trace_coverage')}))
 
 
 if __name__=='__main__':main()
