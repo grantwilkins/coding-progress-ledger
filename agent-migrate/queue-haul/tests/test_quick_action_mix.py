@@ -1,5 +1,6 @@
 import json
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,7 @@ from planner import plan
 from pool_planner import candidate_table
 from power_model import ExpectedPower
 from quick_action_mix import private_bytes, problem_for, profile_for, schedule
-from simulate import predict
+from simulate import PlannedMove, predict
 
 
 @pytest.fixture(scope='module')
@@ -52,8 +53,8 @@ def test_qwen_deadline_changes_real_planner_actions_and_attainment(inputs):
     long = schedule(contexts, order, profile, inputs['bandwidth_mbps'], 30)
     assert 'not_moved' in {r['action'] for r in short}
     assert 'replay' in {r['action'] for r in short}
-    assert all(r['action'] == 'kv_transfer' and r['destination'] == 'germany' for r in long)
-    assert all(r['finish_s'] <= 30 for r in long)
+    assert sum(r['action'] != 'not_moved' for r in long) > sum(r['action'] != 'not_moved' for r in short)
+    assert all(r['finish_s'] <= 30 for r in long if r['action'] != 'not_moved')
 
 
 def test_saved_cases_match_independent_planner_and_simulator(inputs):
@@ -78,3 +79,22 @@ def test_saved_cases_match_independent_planner_and_simulator(inputs):
             counts = Counter(r['action'] for r in actions)
             assert summary['counts'] == {a: counts[a] for a in summary['counts']}
             assert sum(counts.values()) == inputs['resamples'] * 8
+
+
+def test_profiled_kv_endpoint_delays_reach_execution(inputs):
+    for index, model in enumerate(inputs['models']):
+        profile = model_profile(inputs, index)
+        original = json.loads((Path(__file__).resolve().parents[1] / model['frozen_profile']).read_text())['cases']['central']['kv_transfer']
+        kv = profile.case().kv_transfer
+        fields = ('setup_s', 'initial_completion_s', 'catch_up_fixed_s')
+        assert {name: getattr(kv, name) for name in fields} == {name: original[name] for name in fields}
+        problem, architecture = problem_for(inputs['context_packs'][0], inputs['session_orders'][0],
+                                            profile, inputs['bandwidth_mbps'], 30)
+        moves = (PlannedMove('0', 'germany', 'kv_transfer', 0, ('link/germany',),
+                             destination_pool='pool/germany'),)
+        result = predict(problem, profile, moves, destination=architecture)
+        zero = replace(profile, cases={'central': replace(profile.case(), kv_transfer=replace(
+            kv, setup_s=0, initial_completion_s=0, catch_up_fixed_s=0))})
+        baseline = predict(problem, zero, moves, destination=architecture)
+        assert result.sessions[0].committed_s - baseline.sessions[0].committed_s == pytest.approx(
+            original['setup_s'] + original['initial_completion_s'])

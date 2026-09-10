@@ -45,8 +45,7 @@ def profile_for(model, contexts):
     transfer = replace(profile.case().kv_transfer, block_tokens=1, block_bytes=1,
                        bytes_by_context=tuple((c, private_bytes(c, model['private_geometry']))
                                               for c in sorted(set(contexts))),
-                       setup_s=0, destination_bytes_per_s=float('inf'),
-                       initial_completion_s=0, catch_up_fixed_s=0)
+                       destination_bytes_per_s=float('inf'))
     case = replace(profile.case(), prefill=curve, replay=curve, replay_completion_s=0,
                    switch_s=0, kv_transfer=transfer, phase_power=None,
                    power_curve=PowerCurve.parse([[0, 0], [profile.max_power_load, profile.max_power_load]]))
@@ -114,7 +113,7 @@ def plot(report, out):
                bbox_to_anchor=(.5, .94), frameon=False)
     rates = report['bandwidth_mbps']
     fig.text(.5, -.01, f"{report['resamples']} matched eight-session draws; Germany {rates['germany'] / 1000:.2f} Gb/s, East {rates['east'] / 1000:.2f} Gb/s.\n"
-             'Remain includes late moves. Timing estimate; excludes lookup, restoration and decode.',
+             'Profiled KV endpoint delays included. Remain includes late moves; decode excluded.',
              ha='center', fontsize=10)
     fig.tight_layout(rect=(0, .08, 1, .86))
     for suffix in ('png', 'pdf'):
@@ -131,10 +130,12 @@ def calculate(report):
         raise ValueError('requires matched eight-session draws and two positive measured links')
     report.update(schema='queue-haul-quick-timing-mix-v2', execution='offline QH planner and event simulation',
                   policy='planner.plan(solver=greedy, admission_mode=normal), then simulate.predict',
-                  assumptions='Static idle destinations; each session has equal expected_f=1, expected_g=0 solely for equal selection credit under a synthetic linear power curve, below 0.4% service utilization. No ongoing requests or growth. Measured A100 single-request P50 prefill is used for replay on both destinations. Private KV/link only, 2-byte/token replay log, zero endpoint residuals and tail recomputation. Measured scalar memory limits; all eight largest contexts also checked against measured KV group budgets. Eight KV streams, one replay server. Planner deadline is D+5 with its existing 5s power window, yielding migration budget D; bars classify actual simulator commits by D. No claim of live readiness, full decode stream completion, original physical-demand power attainment, or optimality. Independent links; no shared source-egress cap.',
+                  assumptions='Static idle destinations; each session has equal expected_f=1, expected_g=0 solely for equal selection credit under a synthetic linear power curve, below 0.4% service utilization. No ongoing requests or growth. Measured A100 single-request P50 prefill is used for replay on both destinations. Private KV/link plus the frozen model profile setup and initial-completion delays. The profiled fixed catch-up term is retained but does not execute for these static, tail-free sessions; no destination-rate cap. Replay uses a 2-byte/token log with zero replay endpoint residual and no KV tail recomputation. Measured scalar memory limits; all eight largest contexts also checked against measured KV group budgets. Eight KV streams, one replay server. Planner deadline is D+5 with its existing 5s power window, yielding migration budget D; bars classify actual simulator commits by D. No claim of live readiness, full decode stream completion, original physical-demand power attainment, or optimality. Independent links; no shared source-egress cap.',
                   counting='Completed KV/replay by D; remain includes unselected or late sessions. Selected counts and late moves retained separately.')
     for model in report['models']:
         profile = profile_for(model, [c for pack in packs for c in pack])
+        model['kv_endpoint_delays_s'] = {name: getattr(profile.case().kv_transfer, name)
+                                         for name in ('setup_s', 'initial_completion_s', 'catch_up_fixed_s')}
         model['summary'], model['cases'] = [], []
         for deadline in report['deadlines_s']:
             total, selected, destinations, full, late = Counter(), Counter(), Counter(), 0, 0
