@@ -66,7 +66,7 @@ def test_tradeoff_uses_observed_full_plan_endpoints(tmp_path, monkeypatch):
     monkeypatch.setattr(Axes, "scatter", record)
     root = Path(__file__).resolve().parents[1] / "outputs/robustness-a100-20260907"
     plot(root, tmp_path)
-    assert counts == [52] * 3 + [4, 52] + [39] * 3 + [13, 26]
+    assert counts == [52] * 3 + [39] * 3
     with (tmp_path / "action_attainment.csv").open() as stream:
         points = list(csv.DictReader(stream))
     assert len({p["episode_id"] for p in points}) == 273

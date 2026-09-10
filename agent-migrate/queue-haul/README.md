@@ -3557,14 +3557,11 @@ five-second power window. This agrees with archived on-time attainment and
 extends late completions beyond the horizontal 30-second deadline.
 
 True Greedy's 0% and 100% KV episodes are the observed all-eight-replay
-and all-eight-KV executions for those same cases. Pure-action markers overlay those same
-endpoint observations, sharing both their times and their display offsets.
-The CSV records each source episode once; the overlays are reused timings,
-not extra baseline measurements. The separately recorded deadline-admitted
+and all-eight-KV executions for those same cases. Only QH LP, QH Greedy,
+and True Greedy are plotted; the CSV records each source episode once. The separately recorded deadline-admitted
 KV-only/replay-only policies move only subsets and are excluded from this
 full-plan comparison. Four all-KV WAN endpoints are back-of-the-envelope
-estimates, shown as hollow squares labeled `KV only` and recorded separately
-in `wan_kv_estimates.csv`. The frozen pack has 12,381,585,408 KV bytes. The
+estimates, recorded separately in `wan_kv_estimates.csv` but not plotted. The frozen pack has 12,381,585,408 KV bytes. The
 13 all-KV 10 Gb/s control runs average 13.4219 s to completion, giving a fixed
 overhead of 3.5166 s after subtracting byte-transfer time. Thus estimated
 attainment is `8 * KV_bytes / bandwidth_bps + 3.5166 + 5` seconds: 48.14,

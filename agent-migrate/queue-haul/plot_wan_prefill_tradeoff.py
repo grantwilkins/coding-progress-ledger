@@ -96,28 +96,18 @@ def plot(root, out):
     for campaign in ("wan", "prefill"):
         selected_campaign = [r for r in points if r["campaign"] == campaign]
         fig, ax = plt.subplots(figsize=(2.1, 1.6))
-        for policy in POLICIES:
-            shared = policy in ("kv_only", "replay_only")
-            source_policy = "per_session_greedy" if shared else policy
-            selected = sorted((r for r in selected_campaign if r["policy"] == source_policy),
+        for policy in POLICIES[:3]:
+            selected = sorted((r for r in selected_campaign if r["policy"] == policy),
                               key=lambda r: (r["state_id"], int(r["repeat"])))
             identity = STYLE_IDS[policy]
             offsets = np.random.default_rng(0).permutation(np.linspace(-1, 1, len(selected)))
-            if shared:
-                keep = [i for i, r in enumerate(selected) if r["kv_share_percent"] == (100 if policy == "kv_only" else 0)]
-                selected, offsets = [selected[i] for i in keep], offsets[keep]
-            estimated = campaign == "wan" and policy == "kv_only"
-            if estimated:
-                selected, offsets = estimates, np.zeros(len(estimates))
-            if not selected:
-                continue
             ax.scatter(np.array([r["kv_share_percent"] for r in selected]) + offsets,
                        [r["attainment_time_s"] for r in selected],
                        marker=plot_style.POLICY_MARKERS[identity],
-                       s=36 if policy == "greedy" else 9 if policy == "queue_haul" else 30 if shared else 12,
-                       alpha=1 if policy in ("queue_haul", "greedy") else .45 if shared else .6,
-                       facecolors="none" if shared or policy == "greedy" else plot_style.POLICY_COLORS[identity],
-                       edgecolors=plot_style.POLICY_COLORS[identity], linewidths=1 if shared else .8,
+                       s=36 if policy == "greedy" else 9 if policy == "queue_haul" else 12,
+                       alpha=1 if policy in ("queue_haul", "greedy") else .6,
+                       facecolors="none" if policy == "greedy" else plot_style.POLICY_COLORS[identity],
+                       edgecolors=plot_style.POLICY_COLORS[identity], linewidths=.8,
                        label=plot_style.STRESS_POLICY_NAMES[identity] if policy == "per_session_greedy" else plot_style.PAPER_POLICY_NAMES[identity],
                        zorder=5 if policy == "queue_haul" else 4 if policy == "per_session_greedy" else 3)
         ax.axhline(30, color="black", linestyle=":", linewidth=.8)
