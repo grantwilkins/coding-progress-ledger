@@ -175,7 +175,7 @@ class ResidentAcquisition(Acquisition):
         def event(kind, **fields):
             row={'kind':kind,'monotonic_ns':time.monotonic_ns(),**fields}
             migration_events.append(row);self.record(self.events,{**spec,**row})
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0)) as client:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0,force_close=True)) as client:
             ports=(self.cfg.src_port,self.cfg.sink_port) if self.inventory else (self.cfg.sink_port,)
             before={str(port):serving.parse_metrics(testbed.http_text(self.cfg.host,port,'GET','/metrics')) for port in ports}
             if any(r['vllm:num_requests_running'] or r['vllm:num_requests_waiting'] for r in before.values()):raise RuntimeError('cache isolation requires idle engines before episode')
