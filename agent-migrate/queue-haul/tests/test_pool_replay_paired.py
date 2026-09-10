@@ -1,10 +1,17 @@
 from types import SimpleNamespace
 import subprocess
+import os
 import sys
 
 import pytest
 
 import pool_replay_paired as paired
+
+
+@pytest.fixture(autouse=True)
+def restore_runtime_environment(monkeypatch):
+    for key, default in (("QH_RUNTIME", "apptainer"), ("QH_LMCACHE_MODE", "legacy")):
+        monkeypatch.setenv(key, os.environ.get(key, default))
 
 
 def test_bounded_counterbalanced_plan_never_resets_attached_stack():
