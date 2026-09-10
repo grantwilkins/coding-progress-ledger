@@ -32,7 +32,7 @@ report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main
     'selected_resident_rates':rates,'service_observations':rows,
     'strict_client_token_stream_pause_overlap_methods':verified_methods,
     'previous_nine_scenario_events_archive':'../a100-replay-completion-20260910T0116/scenario-events-archive.json',
-    'evidence_tables':{'controlled_KV':'kv-observations.csv','service':'service-observations.csv','complete_windows_phases_metrics':'service-analysis.json','recorded_history_validation':'resident-history-audit.json','raw_archive':'raw-telemetry-archive.json'},
+    'evidence_tables':{'controlled_KV':'kv-observations.csv','service':'service-observations.csv','complete_windows_phases_metrics':'service-analysis.json','recorded_history_validation':'resident-history-audit.json','raw_archive':'raw-telemetry-archive.json','GET_payload_origin_proof':'attribution-proof.json','loaded_KV_payload':'service-wire-analysis.json'},
     'modeling_gap_status':{
         'eight_physical_resident_sessions':'implemented; final recorded-history audit must verify all completed episodes',
         'evolving_history_and_queued_arrivals':'actual generated token IDs retained with recorded resets; per-session causality and queued arrivals preserved; raw history audit provides independent verification',
@@ -52,7 +52,7 @@ report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main
         'Sweden/Germany match vLLM0.22.0 and LMCache0.5.1 plus reference serving settings; Python, Torch CUDA build and Transformers versions differ (runtime-builds.json). Identical model-file hashes and rendered-token check do not establish exact runtime-build equivalence.',
         'Arrival timestamps are assumed because recorded trajectories contain none. Eight physical per-GPU resident histories are sampled from the frozen trajectory distribution; physical source ownership continues until measured handoff.',
         'Loaded service uses exact-token completions to preserve evolving output history; this is an explicit adapter deviation from original full-message chat probes.',
-        'Protocol bytes are observed RESP application commands/keys/framing, excluding transport/tunnel headers; unique GET payload and retransferred payload are separate. Shared proxy records lack source/destination peer identity, so observed GET payload cannot automatically be called intersite WAN bytes.',
+        'Protocol bytes are observed RESP application commands/keys/framing, excluding TCP/IP retransmitted packets, HTTP/SSE and SSH overhead. Unique GET payload and repeated GET payload are separate. Archived persistent-pool connection-origin proof identifies source-local and Germany destination GET subsets; original unfiltered proxy totals remain distinct. The hardware proxy1000Mbit/s aggregate cap is not the archived simulator1000Gbit/s scenario.',
         'Original failed KV attempts and contaminated scout rates remain evidence. Instrumentation/transport amendments do not convert failed attempts into passing measurements.'],
     'recommendation':'Keep full simulations and fitting stopped until review; these bounded measurements do not establish fleet SLO feasibility.',
     'input_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},

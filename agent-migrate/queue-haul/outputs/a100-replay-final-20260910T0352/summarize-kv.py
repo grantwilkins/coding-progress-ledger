@@ -20,6 +20,10 @@ for name in ('paired','paired-l2measured'):
             'migration_through_valid_continuations_s':result.get('elapsed_s'),
             'validated_destination_continuations':len(result.get('continuations',[])) if spec['scenario_valid'] else 0,
             **wire['scenario'],'wire_phase_attribution_complete':wire['phase_attribution_complete'],
+            'all_proxy_byte_scope':'Original scenario totals include both source-local and destination GET responses; origin-filtered fields follow.',
+            **{'destination_get_'+k:v for k,v in wire['destination_get'].items()},
+            **{'source_local_get_'+k:v for k,v in wire['source_local_get'].items()},
+            'connection_origin_proof':'attribution-proof.json',
             'pauses_while_source_request_inflight':sum(r['pause_during_source_request_verified'] for r in lanes)}
         for offset in (30,120):
             row[f'ownership_commits_by_{offset}s']=sum(m['switch_end_ns'] <= result['started_ns']+offset*1e9 for m in result.get('migrations',[]) if m.get('switch_end_ns')) if result else None
@@ -37,7 +41,7 @@ clean=[r for r in rows if r['scenario_valid']]
 if len(clean)!=4 or {(r['seed'],r['target_context']) for r in clean}!={(s,c) for s in (7101,7102) for c in (8192,30000)}:raise ValueError('four requested clean KV conditions are not complete')
 value={'conditions':rows,'clean_conditions':len(clean),'clean_destination_continuations':sum(r['validated_destination_continuations'] for r in clean),
     'exact_completed_requests_clean_conditions':sum(r['request_end_records'] for r in clean),'input_sha256':hashes,
-    'wire_interpretation':'Measured native256-token payload chunks12582912B =49152B/token, or1610612736B per32768serialized tokens before protocol/retransfers. This path does not reproduce the separate800000000B effective-wire anchor; no private-KV discount applied. Unique payload and retransfers are distinct; protocol is RESP application framing/commands/keys, not TCP/IP/tunnel headers.',
+    'wire_interpretation':'Measured native256-token payload chunks12582912B =49152B/token, or1610612736B per32768serialized tokens before protocol/retransfers. This path does not reproduce the separate800000000B effective-wire anchor; no private-KV discount applied. Unique payload and repeated GET payload are distinct; protocol is RESP application framing/commands/keys, not TCP/IP retransmitted packets, HTTP/SSE or SSH overhead. Destination GET subsets use archived persistent-pool connection-origin proof; unfiltered original proxy totals also include source-local retrieval. The hardware proxy is1000Mbit/s aggregate, separate from the archived simulator1000Gbit/s scenario.',
     'timing_interpretation':'Elapsed initial/catch-up batch intervals overlap across lanes and must not be added. End-to-end includes completed ownership transitions and valid destination continuations. No resident traffic in these controlled conditions; no loaded latency or fleet SLO claim.',
     'counterexamples':'Both original30K attempts remain failed despite completed HTTP requests, because an unsupportedL1-only guard prevented complete continuation evidence. Only the guard changed; corrected attempts retain realL2refetch latency.','simulator_fitting':'stopped_pending_user_review'}
 (root/'kv-observations.json').write_text(json.dumps(value,indent=2,allow_nan=False)+'\n')
