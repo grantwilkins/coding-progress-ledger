@@ -281,7 +281,7 @@ def extract(source=SOURCE):
 
 def write_csv(path, rows):
     with path.open('w') as stream:
-        writer = csv.DictWriter(stream, list(dict.fromkeys(k for row in rows for k in row)))
+        writer = csv.DictWriter(stream, list(dict.fromkeys(k for row in rows for k in row)), lineterminator='\n')
         writer.writeheader(); writer.writerows(rows)
 
 
