@@ -23,6 +23,42 @@ remains a hardware-validation workload. The default output is
 `outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped: the replay
 diagnosis below is complete, but fleet resident latency is not validated.
 
+The [GPU-local queue pilot](outputs/a100-resident-queues-20260910/report.json)
+now reconstructs all 2,865 offered service requests from 20 episodes, including
+33 unfinished or failed requests, and reproduces all 112 existing service
+windows. It keeps resident histories on their GPU, serializes dependent turns,
+and shares the 8,192-token iteration budget between partial prefills and decode.
+Timing fits use seed 7101; seed 7102 remains outside fitting. Native cache hits
+and incoming dispatches are observed inputs to this pilot, not fleet forecasts.
+
+The model predicts **20.09 s resident P90 TTFT versus 21.43 s measured** during
+the difficult long-replay burst. It still fails six of 266 held-out metric checks,
+and the successful high-load coding scout also misses its TTFT check. These
+overlapping checks are not independent statistical trials. In one 1,233-token
+resident turn, a small decode-rate error advances completion by 2.1–4.4 s and
+then advances dependent turns. Some client streams also compress token delivery:
+an 18-token response contains nine sub-millisecond gaps. Client TPOT therefore
+does not identify physical GPU iteration timing, even with individual token
+frames. The fit remains frozen; the pilot is **not installed in fleet execution**.
+
+Reproduce the compact extraction and bounded CPU validation with:
+
+```bash
+uv run python pool_shed_resident_data.py
+uv run python pool_shed_resident_validation.py
+```
+
+Before fleet integration, the missing measurement is server arrival, first
+schedule, first/last generation and iteration timing, with scheduled prefill
+tokens and decode request IDs alongside client SSE timestamps. A bounded probe
+can use warm independent 8K/30K prefixes, concurrency 1/8/16, 1,536 fixed output
+tokens and two repeats, followed by the coding long-output and long-replay burst
+checks. Failed transport/dependency scout cases remain explicit and do not
+establish GPU capacity. Full `run` calls now hard-fail while resident latency is
+unvalidated; `prepare`, historical reduction, smoke runs and bounded `run_cell`
+audits remain available. GPU-local KV placement and causal source queues still
+need integration after this timing check passes.
+
 Resident service shares compute with migration. Replay uses the existing measured
 resident-throughput loss; spare capacity repays resident debt before migrated
 request buffers. Requests arriving after source quiescence are buffered and move

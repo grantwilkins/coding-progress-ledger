@@ -41,6 +41,8 @@ def test_default_grid_and_paired_endpoints():
     from pool_shed_execution import destination_gpus
 
     config = c.configuration()
+    assert config['campaign_scope'] == 'full'
+    assert c.configuration(smoke=True)['campaign_scope'] == 'diagnostic'
     assert config['gpus'] == 6666 and config['installed_gpu_w'] == 1999800
     assert config['workloads'] == ['coding', 'coding_long']
     assert {cell[0] for cell in c.cells(config)} == {('coding', i) for i in range(4)} | {('coding_long', 0)}
@@ -137,17 +139,30 @@ def test_campaign_reduction_checks_all_cells_and_policies(tmp_path, monkeypatch)
 
 def test_single_cell_reduction_retains_resident_pooling_diagnostics(tmp_path, monkeypatch):
     config = {**c.configuration(), 'workloads': ['coding'], 'resident_loads': [.5],
-              'deadlines': [30], 'wan_gbps': [1000], 'snapshots': 1, 'draws': 0}
+              'deadlines': [30], 'wan_gbps': [1000], 'snapshots': 1, 'draws': 0, 'campaign_scope': 'diagnostic'}
     monkeypatch.setattr(c, 'configuration', lambda smoke=False: config.copy())
     monkeypatch.setattr(c, 'plot', lambda *args: None)
     c.prepare(tmp_path)
     c.run(tmp_path)
-    assert c.reduce(tmp_path)['cells'] == 1
+    summary = c.reduce(tmp_path)
+    assert summary['cells'] == 1 and summary['campaign_scope'] == 'diagnostic'
+    assert not summary['campaign_ready'] and not summary['resident_latency_validated']
+    assert all(not row['resident_latency_validated'] for row in summary['summary'])
     rows = list(csv.DictReader((tmp_path / 'scenarios.csv').open()))
     assert len(rows) == len(c.POLICIES)
     for row in rows:
         assert float(row['resident_displaced_work_s']) - float(row['resident_pool_compensation_work_s']) == pytest.approx(float(row['resident_debt_generated_work_s']), abs=1e-6)
         assert 'no resident GPU affinity' in row['service_recovery_scope']
+
+
+def test_full_campaign_can_be_prepared_and_reviewed_but_cannot_run(tmp_path, monkeypatch):
+    plan = c.prepare(tmp_path, draws=0)
+    assert not plan['campaign_ready'] and not plan['resident_latency_validated']
+    assert c.load_plan(tmp_path)['identity'] == plan['identity']
+    monkeypatch.setattr(c, 'run_cell', lambda *args: pytest.fail('unvalidated full campaign must not execute'))
+    with pytest.raises(ValueError, match='full campaign blocked: GPU-local resident queues and TTFT/TPOT'):
+        c.run(tmp_path)
+    assert not (tmp_path / 'cells').exists()
 
 
 def test_configuration_and_provenance_fail_closed(tmp_path):

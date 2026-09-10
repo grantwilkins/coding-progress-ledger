@@ -36,6 +36,8 @@ DEADLINES = (1, 3, 10, 30, 60, 120, 300, 600, 1800, 3600)
 LOADS = (.25, .5, .75, .9, .95)
 PRIMARY_TOL = 1e-9
 PRIMARY_ROW_TOL = 1e-9
+READINESS = {"campaign_ready": False, "resident_latency_validated": False,
+             "campaign_blocker": "GPU-local resident queues and TTFT/TPOT remain unvalidated; aggregate debt recovery is not an SLO guarantee"}
 
 
 def digest(value):
@@ -537,6 +539,7 @@ def compare(table):
 
 def configuration(smoke=False):
     return {"schema": SCHEMA, "gpus": GPUS, "installed_gpu_w": GPUS * 300, "source_load": SOURCE_LOAD,
+            "campaign_scope": "diagnostic" if smoke else "full",
             "workloads": ["coding", "coding_long"],
             "solver_version": highspy.Highs().version(),
             "gpus_per_node": 8,
@@ -582,7 +585,7 @@ def prepare(out, smoke=False, resident_loads=None, snapshots=None, draws=None, w
     indices = [-1, *rng.integers(len(network_samples()), size=config["draws"]).tolist()]
     sources = provenance(c)
     identity = digest({"config": config, "sources": sources})
-    plan = {"identity": identity, "config": config, "sources": sources, "calibration": c,
+    plan = {"identity": identity, "config": config, "sources": sources, "calibration": c, **READINESS,
             "network_indices": indices, "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
             "git_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], text=True)),
             "assumptions": ["continuous pooled populations; optimum only within the common finite batch library",
@@ -762,6 +765,8 @@ def run_cell(plan, cell, expanded=False):
 def run(out, shard=0, shards=1):
     started = time.perf_counter()
     plan = load_plan(out)
+    if plan["config"].get("campaign_scope") != "diagnostic":
+        raise ValueError("full campaign blocked: " + READINESS["campaign_blocker"])
     if not 0 <= shard < shards:
         raise ValueError("invalid shard")
     work = cells(plan["config"])
@@ -878,6 +883,7 @@ def reduce(out):
         mw = np.array([r["shed_fraction"] * power_scale * np.array(power[r["workload"], r["snapshot"]]["delta_draws_w"]) for r in sampled])
         central_mw = [r["shed_fraction"] * power_scale * power[r["workload"], r["snapshot"]]["delta_w"] for r in central]
         summary.append({**dict(zip(("workload", "load", "wan_gbps", "deadline_s", "policy"), key)),
+                        "resident_latency_validated": False,
                         "central_shed_mw": float(np.median(central_mw)),
                         "median_shed_fraction": float(np.median(fractions)),
                         "median_nameplate_equivalent_mw": float(np.median(fractions)) * plan["config"]["installed_gpu_w"] / 1e6,
@@ -908,7 +914,8 @@ def reduce(out):
     plot_start = time.perf_counter()
     plot(summary, out)
     plot_debt(summary, out, plan["config"]["gpus"])
-    metadata = {"identity": plan["identity"], "cells": len(paths), "summary": summary,
+    metadata = {"identity": plan["identity"], "cells": len(paths), "summary": summary, **READINESS,
+                "campaign_scope": plan["config"].get("campaign_scope", "full"),
                 "calibration_evidence": plan["calibration"]["evidence"],
                 "workloads": {f"{w}-{s}": sample_fleet(w, s, plan["config"]["gpus"]).metadata
                               for w, s in {cell[0] for cell in expected}},
@@ -1131,7 +1138,7 @@ def validate(out):
             "shed": {p: r["shed_fraction"] for p, r in result["results"].items()}})
     if any(abs(row["shed"][p] - runtime_scaling[0]["shed"][p]) > 1e-8 for row in runtime_scaling for p in POLICIES):
         raise RuntimeError("proportional pooled scaling changed executed outcomes")
-    report = {"sources": provenance(c), "solver_version": highspy.Highs().version(), "calibration": c["evidence"], "regional_fidelity": regional_check(c),
+    report = {"sources": provenance(c), "solver_version": highspy.Highs().version(), "calibration": c["evidence"], "regional_fidelity": regional_check(c), **READINESS,
               "regional_execution": regional_execution_check(c), "loaded_execution": loaded_execution_check(c),
               "regional_components": c["regional_components"]["validation"],
               "library_audit_cells": len(errors), "optimal_kv_ranges": faces, "runtime_scaling": runtime_scaling,
