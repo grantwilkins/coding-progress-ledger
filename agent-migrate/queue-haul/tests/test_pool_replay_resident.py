@@ -92,3 +92,19 @@ def test_materialized_history_and_real_generated_tokens_survive_route_switch():
     t.route='destination'
     next_prompt,_,_,reset,added=t.prompt()
     assert next_prompt[:len(snapshot)]==snapshot and not reset and added==5 and generation==1
+
+
+def test_cache_isolation_waits_for_locks_and_async_storage_not_stale_result_handles():
+    import copy
+    from pool_replay_resident import cache_idle
+    status={'is_healthy':True,'active_prefetch_jobs':3,'storage_manager':{
+        'l1_manager':{'write_locked_count':0,'read_locked_count':0,'temporary_count':0},
+        'store_controller':{'pending_keys_count':0,'in_flight_task_count':0},
+        'prefetch_controller':{'submission_queue_size':0,'pending_queue_size':0,'in_flight_request_count':0}}}
+    assert cache_idle(status)
+    for group,values in status['storage_manager'].items():
+        for key in values:
+            pending=copy.deepcopy(status);pending['storage_manager'][group][key]=1
+            assert not cache_idle(pending)
+    with pytest.raises(KeyError):cache_idle({'is_healthy':True,'storage_manager':{}})
+    with pytest.raises(RuntimeError):cache_idle({'is_healthy':False})

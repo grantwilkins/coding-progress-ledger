@@ -128,6 +128,16 @@ def physical_workload(workload, seed, count=8):
             'migration_context_exclusion':'entire trajectory must leave 512 output tokens; no truncation'}
 
 
+def cache_idle(status):
+    if not status['is_healthy']:raise RuntimeError('LMCache status is unhealthy')
+    state=status['storage_manager']
+    return all(state[group][key]==0 for group,keys in (
+        ('l1_manager',('write_locked_count','read_locked_count','temporary_count')),
+        ('store_controller',('pending_keys_count','in_flight_task_count')),
+        ('prefetch_controller',('submission_queue_size','pending_queue_size','in_flight_request_count')))
+        for key in keys)
+
+
 class ResidentAcquisition(Acquisition):
     def __init__(self, out, inventory=None):
         super().__init__(out)
@@ -164,6 +174,23 @@ class ResidentAcquisition(Acquisition):
             ports=(self.cfg.src_port,self.cfg.sink_port) if self.inventory else (self.cfg.sink_port,)
             before={str(port):serving.parse_metrics(testbed.http_text(self.cfg.host,port,'GET','/metrics')) for port in ports}
             if any(r['vllm:num_requests_running'] or r['vllm:num_requests_waiting'] for r in before.values()):raise RuntimeError('cache isolation requires idle engines before episode')
+            cache_samples=[]
+            async def cache_states():
+                values={}
+                for port in (self.cfg.src_lmc_http_port,self.cfg.sink_lmc_http_port):
+                    async with client.get(f'http://{self.cfg.host}:{port}/status',timeout=aiohttp.ClientTimeout(total=10)) as response:
+                        if response.status!=200:raise RuntimeError('LMCache status unavailable before cache isolation')
+                        values[str(port)]=await response.json()
+                cache_samples.append({'monotonic_ns':time.monotonic_ns(),'states':values})
+                write(root/'cache-isolation-status.json',cache_samples)
+                return values
+            if self.inventory:
+                stop=min(time.monotonic()+30,self.deadline);quiet=0
+                while time.monotonic()<stop:
+                    quiet=quiet+1 if all(cache_idle(v) for v in (await cache_states()).values()) else 0
+                    if quiet==3:break
+                    await asyncio.sleep(.5)
+                else:raise TimeoutError('LMCache work did not quiesce before force-clear')
             cleared=[]
             endpoints=[(port,'/reset_prefix_cache') for port in ports]
             if self.inventory:endpoints += [(port,'/cache/clear') for port in (self.cfg.src_lmc_http_port,self.cfg.sink_lmc_http_port)]
@@ -178,6 +205,9 @@ class ResidentAcquisition(Acquisition):
                 writer.close();await writer.wait_closed()
                 if reply!=b'+OK\r\n':raise RuntimeError('isolated campaign Redis FLUSHALL failed')
                 cleared.append({'redis_flushall':reply.decode()})
+                after_cache=await cache_states()
+                if any(not cache_idle(v) or v['storage_manager']['l1_manager']['total_object_count'] or v['storage_manager']['l1_manager']['memory_used_bytes'] for v in after_cache.values()):
+                    raise RuntimeError('LMCache retained objects or asynchronous work after clear')
             write(root/'pre-episode-cache-isolation.json',{'before':before,'responses':cleared,
                 'after':{str(port):serving.parse_metrics(testbed.http_text(self.cfg.host,port,'GET','/metrics')) for port in ports},
                 'scope':'outside observation, before any resident or incoming materialization'})
@@ -262,8 +292,8 @@ class ResidentAcquisition(Acquisition):
                             event('first_valid_destination_response' if not getattr(t,'continued',False) else 'destination_response',
                                   session=item['session'],request_id=result['request_id'],context_hash=profiler.object_hash(prompt))
                             t.continued=True
-                        if item['cohort']=='incoming' and t.route==self.cfg.src_port and spec['arm']=='control':
-                            await materialize(t,item['session'],t.history,self.cfg.sink_port,'control_baseline_materialization',1,True)
+                        mirror=list(t.history) if item['cohort']=='incoming' and t.route==self.cfg.src_port and spec['arm']=='control' else None
+                    if mirror is not None:await materialize(t,item['session'],mirror,self.cfg.sink_port,'control_baseline_materialization',1,True)
                 except asyncio.CancelledError:
                     if not dispatched:
                         row={**spec,**tags,'status':'censored','done':False,'end_ns':boundary,'cancellation':'observation_boundary',
@@ -294,8 +324,14 @@ class ResidentAcquisition(Acquisition):
                         if warm['status'] in ('failed','error'):raise RuntimeError(f'prefetch failed: {warm}')
                         await asyncio.sleep(.05)
                     event('kv_prefetch',session=i,phase=phase,**warm)
-                    if not 0 <= warm['found_keys'] <= warm['total_keys'] or (phase=='initial' and warm['found_keys']==0):raise RuntimeError('KV initial prefetch lacks transfer evidence')
+                    if not 0 <= warm['found_keys'] <= warm['total_keys']:raise RuntimeError('inconsistent warm-prefetch cache telemetry')
+                sink_log=Path(self.inventory['stack_root'])/'lmcache-sink.log'
+                log_offset=sink_log.stat().st_size
                 result=await materialize(t,i,prompt,self.cfg.sink_port,phase,512,spec['arm']!='kv_transfer')
+                if spec['arm']=='kv_transfer' and (phase=='initial' or result['request_id'] in testbed.read_after(sink_log,log_offset)):
+                    external=testbed.mp_request_hit(sink_log,log_offset,result['request_id'],False,testbed.model_chunk_tokens(self.cfg),require_l1=False,
+                        event_sink=lambda tiers:event('cache_request_tiers',session=i,phase=phase,request_id=result['request_id'],**tiers))
+                    if phase=='initial' and external<=0:raise RuntimeError('KV initial request lacks external retrieval evidence')
                 if spec['arm']=='kv_transfer' and result.get('cached_tokens') is None:raise RuntimeError('KV destination omitted cache telemetry')
                 event(f'{phase}_end',session=i,context_hash=profiler.object_hash(prompt),context_tokens=len(prompt),
                       request_id=result['request_id'],cached_tokens=result.get('cached_tokens'))
