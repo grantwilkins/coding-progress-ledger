@@ -1,0 +1,14 @@
+{
+  "command": "UV_CACHE_DIR=/tmp/qh-completion-uv-cache /datadrive/queue-haul-tools/bin/uv run --no-project --python /datadrive/queue-haul-campaign/agent-migrate/.venv/bin/python pytest -q tests/test_pool_replay_report.py",
+  "exit_code": 0,
+  "passed": 2,
+  "duration_s": 12.58,
+  "warnings": [
+    "Pytest cache cannot be written in parent repository read-only path; tests complete."
+  ],
+  "initial_attempt": {
+    "command": "same uv command without --no-project",
+    "exit_code": 2,
+    "result": "uv attempted to create parent-project .venv in read-only path; no tests ran."
+  }
+}
