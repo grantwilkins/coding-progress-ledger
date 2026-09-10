@@ -2,11 +2,19 @@
 import csv
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 root=Path(__file__).resolve().parent
 paths=[root/'service-analysis.json',root/'kv-observations.json',root/'resident-rate-selection.json']
 service,kv,rates=(json.loads(p.read_text()) for p in paths)
+frozen=json.loads((root/'plan.json').read_text());repo=root.parent.parent
+simulator_hashes={name:digest for name,digest in frozen['input_hashes'].items() if name.startswith('pool_shed_') or name=='loaded_service_model.py'}
+prefix=subprocess.check_output(['git','rev-parse','--show-prefix'],cwd=repo,text=True).strip()
+simulator_hashes['pool_shed.py']=hashlib.sha256(subprocess.check_output(['git','show',f"{frozen['checkout']['commit']}:{prefix}pool_shed.py"],cwd=repo)).hexdigest()
+simulator_check={name:{'baseline_sha256':digest,'current_sha256':hashlib.sha256((repo/name).read_bytes()).hexdigest(),
+    'baseline_source':'plan.input_hashes' if name!='pool_shed.py' else 'frozen checkout commit '+frozen['checkout']['commit']} for name,digest in simulator_hashes.items()}
+if any(r['baseline_sha256']!=r['current_sha256'] for r in simulator_check.values()):raise ValueError('simulator source changed despite fitting stop')
 main=[e for e in service['episodes'] if e['spec']['arm']!='resident']
 scouts=[e for e in service['episodes'] if e['spec']['arm']=='resident']
 rows=[]
@@ -28,6 +36,7 @@ with (root/'service-observations.csv').open('w') as handle:
 verified_methods=sorted({e['spec']['arm'] for e in main if any(q['client_token_stream_overlap_verified'] for q in e['quiescence'])})
 report={'acquisition_status':'in_progress' if len(main)<12 else 'all_twelve_main_observations_complete',
     'completed_main_episodes':len(main),'requested_main_episodes':12,'completed_scouts':len(scouts),
+    'simulator_source_hash_verification':simulator_check,'simulator_coefficients_changed':False,'new_policy_evaluations':0,
     'clean_controlled_KV_conditions':kv['clean_conditions'],'clean_KV_destination_continuations':kv['clean_destination_continuations'],
     'selected_resident_rates':rates,'service_observations':rows,
     'strict_client_token_stream_pause_overlap_methods':verified_methods,
