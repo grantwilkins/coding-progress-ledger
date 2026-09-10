@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/tmp/qh-replay-completion-runtime/bin/python",
+    "pool_replay_paired.py",
+    "run",
+    "--inventory",
+    "outputs/a100-replay-completion-20260910T0116/corrected-inventory.json",
+    "--out",
+    "outputs/a100-replay-completion-20260910T0116/paired-corrected",
+    "--method",
+    "kv_transfer",
+    "--context",
+    "8192"
+  ],
+  "wall_ns": 1789005116060714333,
+  "deadline_wall_ns": 1789005132050105138
+}

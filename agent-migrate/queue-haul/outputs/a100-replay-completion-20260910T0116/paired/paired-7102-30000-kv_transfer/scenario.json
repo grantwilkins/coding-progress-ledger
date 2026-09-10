@@ -1,0 +1,135 @@
+{
+  "activity": "one_turn",
+  "activity_tokens": 2048,
+  "bandwidth_mbps": 1000,
+  "concurrency": 8,
+  "context_size": 30000,
+  "copy_policy": "initial_final",
+  "deadline_s": 180,
+  "final_state": "awake",
+  "kind": "migration",
+  "method": "kv_transfer",
+  "move_concurrency": 8,
+  "moves": [
+    {
+      "initial_tokens": 30000,
+      "method": "kv_transfer",
+      "order": 0,
+      "session_id": "paired-7102-30000-kv_transfer-0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "kv_transfer",
+      "order": 1,
+      "session_id": "paired-7102-30000-kv_transfer-1",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "kv_transfer",
+      "order": 2,
+      "session_id": "paired-7102-30000-kv_transfer-2",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "kv_transfer",
+      "order": 3,
+      "session_id": "paired-7102-30000-kv_transfer-3",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "kv_transfer",
+      "order": 4,
+      "session_id": "paired-7102-30000-kv_transfer-4",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "kv_transfer",
+      "order": 5,
+      "session_id": "paired-7102-30000-kv_transfer-5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "kv_transfer",
+      "order": 6,
+      "session_id": "paired-7102-30000-kv_transfer-6",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "kv_transfer",
+      "order": 7,
+      "session_id": "paired-7102-30000-kv_transfer-7",
+      "turn_index": 0
+    }
+  ],
+  "prestage_all": true,
+  "request_schedule": [
+    {
+      "append_tokens": 2048,
+      "at_s": 0
+    }
+  ],
+  "reset_caches": false,
+  "sample_power": false,
+  "scenario_id": "paired-7102-30000-kv_transfer",
+  "seed": 7102,
+  "serving_concurrency": 8,
+  "sessions": [
+    {
+      "initial_tokens": 30000,
+      "order": 0,
+      "session_id": "paired-7102-30000-kv_transfer-0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 1,
+      "session_id": "paired-7102-30000-kv_transfer-1",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 2,
+      "session_id": "paired-7102-30000-kv_transfer-2",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 3,
+      "session_id": "paired-7102-30000-kv_transfer-3",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 4,
+      "session_id": "paired-7102-30000-kv_transfer-4",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 5,
+      "session_id": "paired-7102-30000-kv_transfer-5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 6,
+      "session_id": "paired-7102-30000-kv_transfer-6",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 7,
+      "session_id": "paired-7102-30000-kv_transfer-7",
+      "turn_index": 0
+    }
+  ],
+  "wait_cache_idle": false,
+  "warm_concurrency": 8
+}

@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "pool_replay_paired.py",
+    "run",
+    "--inventory",
+    "outputs/a100-replay-completion-20260910T0116/corrected-inventory.json",
+    "--out",
+    "outputs/a100-replay-completion-20260910T0116/paired-corrected",
+    "--method",
+    "kv_transfer",
+    "--context",
+    "8192"
+  ],
+  "start_wall_ns": 1789005117485866564,
+  "start_monotonic": 2649.729638409,
+  "plan_sha256": "afdbb34e38f9f202b384a739397c60905243f9e17f726a6e72c7a6229ba3f24a",
+  "driver_sha256": "790f64aa90729dff779dd80e0afef24331092d7b4bd1620f60089f365147ce63"
+}

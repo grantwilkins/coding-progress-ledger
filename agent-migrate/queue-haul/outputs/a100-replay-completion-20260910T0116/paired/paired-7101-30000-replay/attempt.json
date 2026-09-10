@@ -1,0 +1,23 @@
+{
+  "scenario": "paired-7101-30000-replay",
+  "command": [
+    "/tmp/qh-replay-completion-runtime/bin/python",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/pool_replay_paired.py",
+    "worker",
+    "--inventory",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json",
+    "--out",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired",
+    "--index",
+    "2"
+  ],
+  "log_offsets": {
+    "proxy_bytes.csv": 78671,
+    "proxy_connections.csv": 3563,
+    "resp_transfers.csv": 139043,
+    "lmcache-source.log": 19415,
+    "lmcache-sink.log": 88504
+  },
+  "status": "complete",
+  "returncode": 0
+}

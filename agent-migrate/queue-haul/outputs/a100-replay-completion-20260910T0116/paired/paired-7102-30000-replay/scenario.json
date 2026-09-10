@@ -1,0 +1,135 @@
+{
+  "activity": "one_turn",
+  "activity_tokens": 2048,
+  "bandwidth_mbps": 1000,
+  "concurrency": 8,
+  "context_size": 30000,
+  "copy_policy": "initial_final",
+  "deadline_s": 180,
+  "final_state": "awake",
+  "kind": "migration",
+  "method": "replay",
+  "move_concurrency": 8,
+  "moves": [
+    {
+      "initial_tokens": 30000,
+      "method": "replay",
+      "order": 0,
+      "session_id": "paired-7102-30000-replay-0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "replay",
+      "order": 1,
+      "session_id": "paired-7102-30000-replay-1",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "replay",
+      "order": 2,
+      "session_id": "paired-7102-30000-replay-2",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "replay",
+      "order": 3,
+      "session_id": "paired-7102-30000-replay-3",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "replay",
+      "order": 4,
+      "session_id": "paired-7102-30000-replay-4",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "replay",
+      "order": 5,
+      "session_id": "paired-7102-30000-replay-5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "replay",
+      "order": 6,
+      "session_id": "paired-7102-30000-replay-6",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "method": "replay",
+      "order": 7,
+      "session_id": "paired-7102-30000-replay-7",
+      "turn_index": 0
+    }
+  ],
+  "prestage_all": true,
+  "request_schedule": [
+    {
+      "append_tokens": 2048,
+      "at_s": 0
+    }
+  ],
+  "reset_caches": false,
+  "sample_power": false,
+  "scenario_id": "paired-7102-30000-replay",
+  "seed": 7102,
+  "serving_concurrency": 8,
+  "sessions": [
+    {
+      "initial_tokens": 30000,
+      "order": 0,
+      "session_id": "paired-7102-30000-replay-0",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 1,
+      "session_id": "paired-7102-30000-replay-1",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 2,
+      "session_id": "paired-7102-30000-replay-2",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 3,
+      "session_id": "paired-7102-30000-replay-3",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 4,
+      "session_id": "paired-7102-30000-replay-4",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 5,
+      "session_id": "paired-7102-30000-replay-5",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 6,
+      "session_id": "paired-7102-30000-replay-6",
+      "turn_index": 0
+    },
+    {
+      "initial_tokens": 30000,
+      "order": 7,
+      "session_id": "paired-7102-30000-replay-7",
+      "turn_index": 0
+    }
+  ],
+  "wait_cache_idle": false,
+  "warm_concurrency": 8
+}

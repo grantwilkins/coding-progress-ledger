@@ -1,0 +1,43 @@
+{
+  "source_sha256": "1ed1a0288f5e83225750c532ba326fbd282ad68bec7a4642c2ef3b6cc9b99065",
+  "method": "Execute actual installed GetStoreMetadata AST with pure tracker/block metadata; no GPU/no requests",
+  "observations": [
+    {
+      "actual_context": 2048,
+      "actual_native_hits": 64,
+      "recorded_tracker_native_hits": 0,
+      "scheduled_tokens": 1984,
+      "store_start": 0,
+      "store_end": 1792,
+      "stored_tokens": 1792
+    },
+    {
+      "actual_context": 2048,
+      "actual_native_hits": 64,
+      "recorded_tracker_native_hits": 64,
+      "scheduled_tokens": 1984,
+      "store_start": 0,
+      "store_end": 2048,
+      "stored_tokens": 2048
+    },
+    {
+      "actual_context": 8192,
+      "actual_native_hits": 64,
+      "recorded_tracker_native_hits": 0,
+      "scheduled_tokens": 8128,
+      "store_start": 0,
+      "store_end": 7936,
+      "stored_tokens": 7936
+    },
+    {
+      "actual_context": 8192,
+      "actual_native_hits": 64,
+      "recorded_tracker_native_hits": 64,
+      "scheduled_tokens": 8128,
+      "store_start": 0,
+      "store_end": 8192,
+      "stored_tokens": 8192
+    }
+  ],
+  "diagnosis": "Externalmiss earlyreturn skips tracker nativehit assignment. Native64hit is missingfromcomputed upperbound, exporting completeprefix minus last256chunk. Not a ceil-start loss."
+}

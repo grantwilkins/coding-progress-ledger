@@ -1,0 +1,33 @@
+{
+  "config": {
+    "host": "127.0.0.1",
+    "src_port": 18100,
+    "sink_port": 18200,
+    "api_proxy_port": 18400,
+    "sink_lmc_http_port": 18081,
+    "src_lmc_http_port": 18080,
+    "src_lmc_port": 15557,
+    "sink_lmc_port": 15556,
+    "lmc_port": 15655,
+    "kv_proxy_port": 18300,
+    "model": "openai/gpt-oss-20b"
+  },
+  "stack_root": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack",
+  "bandwidth_mbps": 1000,
+  "proxy_clock": "coordinator_monotonic",
+  "source": {
+    "gpu_uuid": "GPU-d809b3d2-a896-24d6-65b3-48aae6e5ab86",
+    "gpu_name": "NVIDIA A100 80GB PCIe",
+    "reference_runtime_verified": true,
+    "identity_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-identity.json",
+    "runtime_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-runtime.json"
+  },
+  "destination": {
+    "gpu_uuid": "GPU-427d22f2-8e58-888c-37be-a9a42e38d271",
+    "gpu_name": "NVIDIA A100 80GB PCIe",
+    "reference_runtime_verified": true,
+    "identity_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-identity.json",
+    "runtime_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-runtime.json"
+  },
+  "deadline_wall_ns": 1789005132050105138
+}

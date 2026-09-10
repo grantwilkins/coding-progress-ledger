@@ -1,0 +1,373 @@
+{
+  "campaign_ready": false,
+  "recommendation": "Do not launch full simulations as validated SLO-feasible shedding. The bounded acquisition and corrective work are complete; the missing measurements remain explicit.",
+  "scope": "Initial evidence is preserved. This user-authorized continuation adds bounded controlled-source measurements, not a replacement agentic resident campaign.",
+  "initial_acquisition": {
+    "report": "outputs/a100-replay-live-20260909T1920/report.json",
+    "elapsed_s": 8914.842082686,
+    "cap_s": 9000
+  },
+  "supplemental_budget": {
+    "plan": "supplemental-plan.json",
+    "start": {
+      "start_wall_ns": 1789003377050105138,
+      "deadline_wall_ns": 1789005177050105138,
+      "pid": 17467,
+      "argv": [
+        "outputs/a100-replay-completion-20260910T0116/launch-source.py"
+      ]
+    },
+    "source_stop": {
+      "wall_ns": 1789005150176709127,
+      "elapsed_s": 1773.12660474,
+      "owned": [
+        {
+          "name": "redis",
+          "pid": 17519,
+          "command": [
+            "valkey-server",
+            "--bind",
+            "127.0.0.1",
+            "--port",
+            "15655",
+            "--save",
+            "",
+            "--appendonly",
+            "no"
+          ],
+          "wall_ns": 1789003607173236623
+        },
+        {
+          "name": "proxy",
+          "pid": 17551,
+          "command": [
+            "/tmp/qh-replay-completion-runtime/bin/python",
+            "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py",
+            "proxy",
+            "--routes-json",
+            "[{\"name\": \"kv\", \"listen_host\": \"0.0.0.0\", \"listen_port\": 18300, \"target_host\": \"127.0.0.1\", \"target_port\": 15655, \"protocol\": \"resp\"}, {\"name\": \"api\", \"listen_host\": \"127.0.0.1\", \"listen_port\": 18400, \"target_host\": \"127.0.0.1\", \"target_port\": 18200, \"protocol\": \"raw\"}]",
+            "--aggregate-mbps",
+            "1000",
+            "--log",
+            "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/proxy_bytes.csv"
+          ],
+          "wall_ns": 1789003608174467997
+        },
+        {
+          "name": "lmcache-source",
+          "pid": 17553,
+          "command": [
+            "bash",
+            "-lc",
+            "export PATH=/tmp/qh-replay-completion-runtime/bin:$PATH\nexport CUDA_VISIBLE_DEVICES=\nlmcache server --instance-id queue-haul-source --host 127.0.0.1 --port 15557 --http-host 127.0.0.1 --http-port 18080 --l1-size-gb 16 --eviction-policy LRU --chunk-size 256 --max-workers 8 --supported-transfer-mode engine_driven --l2-adapter '{\"type\":\"resp\",\"host\":\"127.0.0.1\",\"port\":18300,\"num_workers\":8}'"
+          ],
+          "wall_ns": 1789003609176501460
+        },
+        {
+          "name": "source-export-fixed",
+          "pid": 37312,
+          "command": [
+            "env",
+            "CUDA_VISIBLE_DEVICES=0",
+            "bash",
+            "-lc",
+            "export PATH=/tmp/qh-replay-completion-runtime/bin:$PATH\nmkdir -p /tmp/qh-src-17467 /tmp/qh-replay-completion-cache/stage1b-src/xdg /tmp/qh-replay-completion-cache/stage1b-src/torch_extensions /tmp/qh-replay-completion-cache/stage1b-src/torchinductor /tmp/qh-replay-completion-cache/stage1b-src/triton\nexport QH_MODEL=openai/gpt-oss-20b\nexport PYTHONHASHSEED=0\nexport VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=900\nexport VLLM_SERVER_DEV_MODE=1\nexport VLLM_USE_FLASHINFER_SAMPLER=0\nexport TMPDIR=/tmp/qh-src-17467\nexport VLLM_RPC_BASE_PATH=/tmp/qh-src-17467\nexport HF_HOME=/datadrive\nexport HF_HUB_OFFLINE=1\nexport TRANSFORMERS_OFFLINE=1\nexport LMCACHE_REMOTE_URL=lm://127.0.0.1:15655\nexport LMCACHE_REMOTE_SERDE=naive\nexport LMCACHE_LMCACHE_INSTANCE_ID=stage1b_src\nexport LMCACHE_CHUNK_SIZE=256\nexport LMCACHE_LOCAL_CPU=False\nexport LMCACHE_MAX_LOCAL_CPU_SIZE=4\nexport QH_KV_GEOMETRY_EVIDENCE=0\nexport QH_LMCACHE_SEPARATE_OBJECT_GROUPS=0\nexport XDG_CACHE_HOME=/tmp/qh-replay-completion-cache/stage1b-src/xdg\nexport TORCH_EXTENSIONS_DIR=/tmp/qh-replay-completion-cache/stage1b-src/torch_extensions\nexport TORCHINDUCTOR_CACHE_DIR=/tmp/qh-replay-completion-cache/stage1b-src/torchinductor\nexport TRITON_CACHE_DIR=/tmp/qh-replay-completion-cache/stage1b-src/triton\nexport PYTHONPATH=/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/lmcache_compat\nvllm serve /datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee --host 127.0.0.1 --port 18100 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --block-size 16 --enable-chunked-prefill --enable-prefix-caching --enforce-eager --gpu-memory-utilization 0.75 --disable-hybrid-kv-cache-manager --enable-prompt-tokens-details --kv-transfer-config '{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"connector_patch\",\"engine_id\":\"s0\",\"kv_role\":\"kv_producer\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"tcp://127.0.0.1\",\"lmcache.mp.port\":15557,\"lmcache.mp.mp_transfer_mode\":\"engine_driven\"}}'"
+          ]
+        }
+      ]
+    },
+    "destination_stop": "destination-reconnected-cleanup.json",
+    "cap_s": 1800,
+    "scope": "Wall time includes startup corrections and cleanup. Both GPUs released before cutoff; this is not GPU busy time."
+  },
+  "observations": {
+    "scope": "Supplemental controlled-source append checks. Not original recorded agentic shared-resident episodes. All original/corrective failures preserved; no simulator timing coefficients fitted.",
+    "counts": {
+      "paired": {
+        "scenario_statuses": {
+          "failed": 5,
+          "complete": 3
+        },
+        "requests_started": 231,
+        "http_complete_exact_requests": 231,
+        "state_valid_requests": 229
+      },
+      "paired-corrected": {
+        "scenario_statuses": {
+          "timeout": 1,
+          "unmeasured_after_timeout": 1
+        },
+        "requests_started": 17,
+        "http_complete_exact_requests": 16,
+        "state_valid_requests": 16
+      }
+    },
+    "valid_replay_conditions": [
+      {
+        "scenario": "paired-7101-30000-replay",
+        "seed": 7101,
+        "method": "replay",
+        "target_context": 30000,
+        "target_append": 2048,
+        "requests_started": 40,
+        "exact_timing_requests": 40,
+        "state_valid_requests": 40,
+        "block": "paired",
+        "initial_span_s": 33.745476291,
+        "catchup_span_s": 6.945464797,
+        "complete_switch_span_s": 36.38335548,
+        "updated_context_range": [
+          32075,
+          32088
+        ],
+        "initial_native_cached_tokens": [
+          64
+        ],
+        "catchup_cached_tokens": [
+          29984
+        ],
+        "maximum_pause_to_idle_ms": 0.455455,
+        "source_requests_overlapping_initial": 8
+      },
+      {
+        "scenario": "paired-7102-8192-replay",
+        "seed": 7102,
+        "method": "replay",
+        "target_context": 8192,
+        "target_append": 32,
+        "requests_started": 40,
+        "exact_timing_requests": 40,
+        "state_valid_requests": 40,
+        "block": "paired",
+        "initial_span_s": 5.664573071,
+        "catchup_span_s": 1.229152365,
+        "complete_switch_span_s": 6.435812786,
+        "updated_context_range": [
+          8252,
+          8257
+        ],
+        "initial_native_cached_tokens": [
+          64
+        ],
+        "catchup_cached_tokens": [
+          8176
+        ],
+        "maximum_pause_to_idle_ms": 0.540285,
+        "source_requests_overlapping_initial": 8
+      },
+      {
+        "scenario": "paired-7102-30000-replay",
+        "seed": 7102,
+        "method": "replay",
+        "target_context": 30000,
+        "target_append": 2048,
+        "requests_started": 40,
+        "exact_timing_requests": 40,
+        "state_valid_requests": 40,
+        "block": "paired",
+        "initial_span_s": 35.539889317,
+        "catchup_span_s": 5.315111221,
+        "complete_switch_span_s": 36.996035972,
+        "updated_context_range": [
+          32077,
+          32088
+        ],
+        "initial_native_cached_tokens": [
+          64
+        ],
+        "catchup_cached_tokens": [
+          29984
+        ],
+        "maximum_pause_to_idle_ms": 0.253566,
+        "source_requests_overlapping_initial": 8
+      }
+    ],
+    "corrected_kv": {
+      "status": "timeout_at_global_cutoff; invalid",
+      "second_seed": "unmeasured_after_timeout; budget omission",
+      "requests_started": 17,
+      "source_http_complete_exact_state_valid_requests": 16,
+      "usable_exact_timing_fraction_of_started": 0.9411764705882353,
+      "destination_requests_started": 1,
+      "destination_requests_completed": 0,
+      "destination_stream_events_before_cutoff": 13,
+      "source_unique_set_keys": 264,
+      "source_set_request_body_sizes": {
+        "12583084": 264
+      },
+      "unique_get_keys": 45,
+      "get_payload_sizes": {
+        "12582912": 45
+      },
+      "wire": {
+        "unique_get_keys": 45,
+        "unique_get_payload_bytes": 566231040,
+        "get_transfers": 45,
+        "actual_get_payload_bytes_including_repeated_keys": 566231040,
+        "get_request_protocol_bytes": 8550,
+        "get_response_protocol_bytes": 566231625,
+        "get_first_start_ns": 2659571146782,
+        "get_last_end_ns": 2664287134025,
+        "whole_proxy_bucket_bytes_by_direction": {
+          "kv/client_to_target": 3322052030,
+          "kv/target_to_client": 528486250,
+          "api/client_to_target": 16728,
+          "api/target_to_client": 41578
+        },
+        "window_ns": [
+          null,
+          null
+        ],
+        "scope": "Whole intersecting transfer records and proxy buckets, never prorated; phase windows may overlap. Scenario totals count each record once. Unique payload does not count retransfers; actual GET payload does."
+      },
+      "destination_engine": {
+        "samples": 25,
+        "interval_ns": [
+          "2649868182924",
+          "2664078786865"
+        ],
+        "counter_deltas": {
+          "prefix_cache_queries_total": 8192.0,
+          "prefix_cache_hits_total": 0.0,
+          "external_prefix_cache_hits_total": 8192.0,
+          "request_queue_time_seconds_sum": 0.0,
+          "request_prefill_time_seconds_sum": 0.0,
+          "request_decode_time_seconds_sum": 0.0,
+          "request_prefill_kv_computed_tokens_sum": 0.0,
+          "num_preemptions_total": 0.0
+        }
+      },
+      "verified": "Destination log reports Retrieved8192tokens in0.019s, matching +8192external cache-hit tokens and zero native hits. Source produced264unique SET keys after source-export fix. This demonstrates actual external retrieval on one unfinished request.",
+      "unvalidated": "No completed KV initial request, pause/catchup/commit or successful KV handoff. Partial RESP bytes do not establish a full32768-token wire anchor.16/17exact completed requests falls below99%coverage.",
+      "byte_coverage": "RESP transfer records log after client drain; proxy buckets flush separately. At cutoff45complete GETpayload records exceed copied proxy bucket bytes. Preserve both amounts; do not force equality or call proxy bucket coverage complete."
+    },
+    "modeling_status": {
+      "warm_full_source_evolved_catchup": "verified for24lanes across3valid replay conditions; full messages and original512token probe retained",
+      "source_activity_overlap": "24valid source requests overlap initial replay; maximum measured pause-to-idle<0.55ms because source work finished before pause. Long in-flight quiescence remains unmeasured.",
+      "source_error_safety": "Data exposed stale-state switch after invalid source output; two-line wait_idle guard plus regression applied after original block. Invalid original switches remain failures.",
+      "kv_path": "Source-export alignment corrected from observation; partial corrected run demonstrates8192external retrievedtokens, not a successful migration.",
+      "wire_anchor": "Observed GETchunk12,582,912B per256tokens equals49,152B/token native geometry. Extrapolation to32768=1,610,612,736B is native geometry, not measured full-context effective wire.0.80GB remains separate and unvalidated.",
+      "fleet_readiness": false
+    },
+    "reproduction": [
+      "python3 outputs/a100-replay-completion-20260910T0116/reduce-paired.py outputs/a100-replay-completion-20260910T0116/paired",
+      "python3 outputs/a100-replay-completion-20260910T0116/reduce-paired.py outputs/a100-replay-completion-20260910T0116/paired-corrected",
+      "python3 outputs/a100-replay-completion-20260910T0116/combine-paired.py"
+    ],
+    "input_sha256": {
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired/paired-analysis.json": "e5abb343cedb0f145adc9a4ab413da1d70ee40df118f6fae53718a6e769aea25",
+      "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired-corrected/paired-analysis.json": "be41cc23f64b6573be02d61f548ae29526c858575de84ccf3ce644209a649439"
+    }
+  },
+  "corrections": [
+    {
+      "commit": "7a4ce911",
+      "file": "migration_profiler.py",
+      "change": "Reject failed source activity before returning idle state and allowing ownership commit.",
+      "evidence": "paired/paired-7101-8192-replay/events.jsonl: invalid source final response was followed by a stale-generation switch; entire old episode remains invalid.",
+      "validation": "80 migration/driver tests passed; wait-idle-fix.patch and regression evidence retained."
+    },
+    {
+      "commit": "e0f197bd",
+      "file": "lmcache_compat/connector_patch.py",
+      "change": "Preserve aligned native-prefix hit count before external lookup can return zero.",
+      "evidence": "A 2048-token source request with64native hits exported1792tokens. native-prefix-export-diagnosis.json reproduces the missing256-token tail. Corrected source block exported256initialchunks plus8appendchunks.",
+      "validation": "9 compatibility tests passed; corrected destination reported8192external cached tokens. Completed KV handoff/timing validation remains open."
+    }
+  ],
+  "simulator_changes": [],
+  "simulator_verification": {
+    "evaluations": 20,
+    "rerun": false,
+    "reason": "No simulator coefficients or policy rules changed; reuse the completed bounded comparison and existing holdouts.",
+    "table": "outputs/a100-replay-live-20260909T1920/policy-comparison.csv",
+    "source_gpus": 6666,
+    "destination_gpus_each": 6666,
+    "gpus_per_node": 8,
+    "shared_wan_gbps": 1000,
+    "effective_wire_bytes_per_32768": 800000000,
+    "native_geometry_bytes_per_32768": 1610612736,
+    "resident_memory_accounting": "unchanged",
+    "latency_validated": false
+  },
+  "wire_interpretation": "Observed256-token storage chunks contain12582912payload bytes. This agrees with49152native bytes/token. Completed GET payloads, RESP protocol responses and flushed proxy buckets remain separate; incomplete buckets are not exact wire accounting. No successful complete migration validates the800000000-byte effective-wire anchor.",
+  "timing_interpretation": "Use per-request exact token events including reasoning. The corrected block has16exact complete requests of17started (94.12%); its unfinished destination request cannot support a99%-coverage latency conclusion. Controller/proxy timestamps share the source clock; destination engine/power samples retain their own clock.",
+  "gaps": [
+    {
+      "gap": "Full-context replay and naturally warm catch-up",
+      "status": "verified locally, including valid source-evolved controlled append cases",
+      "missing": "Matched recorded agentic service with physical inventory and cache placement."
+    },
+    {
+      "gap": "Failed source state reaching ownership switch",
+      "status": "corrected and regression-tested",
+      "missing": null
+    },
+    {
+      "gap": "Native-prefix hit lost during KV export",
+      "status": "corrected, unit-tested and live export/retrieval observed",
+      "missing": "Completed paired migration repeats after the fix."
+    },
+    {
+      "gap": "Source quiescence under continuing traffic",
+      "status": "source activity overlapped initial migration; valid measured pauses were already idle",
+      "missing": "Positive in-flight wait and preserved queued arrivals using evolving recorded agentic demand."
+    },
+    {
+      "gap": "Paired KV completion and0.80GBwire anchor",
+      "status": "partial native retrieval observed; zero validated complete KV handoffs",
+      "missing": "Clean paired KV repeats with full validation responses, payload/protocol accounting and no censoring; both corrected long cases and second short repeat remain unmeasured."
+    },
+    {
+      "gap": "Resident service normalization and physical cache placement",
+      "status": "open; initial scout rates retained as tested points, not capacity fractions",
+      "missing": "Inventory-matched agentic rate bracket and shared-service control/replay/KV episodes."
+    },
+    {
+      "gap": "Divisible GPU work, latency and recovery mapping",
+      "status": "local packing/queue counterexamples preserved; no fleet mapping validated",
+      "missing": "Matched physical placement and longer paired recovery/latency windows with at least99%usable exact timing."
+    },
+    {
+      "gap": "Full SLO-feasible five-policy campaign",
+      "status": "not ready",
+      "missing": "Resolve the preceding service, placement and paired-KV gaps; a policy handoff fraction is not latency feasibility."
+    }
+  ],
+  "prerequisite_failures": [
+    "Wrong source cache port at first startup; preserved in invalid-source-port-startup.",
+    "Immutable configuration assignment failed before requests; old plan retained.",
+    "Cold response omitted cache field; it stays unknown, with independent engine cache counters.",
+    "Destination Redis pool lost connections across source startup correction; identical-config restart restored8connections; native adapter discarded the historical error string.",
+    "First source reload omitted MP environment and failed initialization; log retained and environment corrected within the same cutoff.",
+    "Corrected acquisition reached its global cutoff after14.6seconds; timeout remains failure and second repeat unmeasured."
+  ],
+  "runtime": {
+    "source": "source-runtime.json",
+    "destination": "destination-runtime.json",
+    "identities": "inventory.json",
+    "differences": "Both vLLM0.22.0/LMCache0.5.1; sourceTransformers5.17.0 versus destination5.15.1. Tested prompt rendered identical8192token IDs. Same FIFO event patch; unpatched performance equivalence is not established.",
+    "model_hashes": "destination-model-comparison.json",
+    "exact_launches": [
+      "source-launches.json",
+      "source-engine-reload.json",
+      "stack/remote-commands.json",
+      "stack/remote-reconnect-launch.json",
+      "paired/paired-launch.json",
+      "paired-corrected/paired-launch.json"
+    ]
+  },
+  "tests": {
+    "migration_guard": "80passed: wait-idle-fix-tests.log",
+    "connector_export": "9passed: native-prefix-export-host-tests.log",
+    "package": "14passed: final-package-tests.log",
+    "initial_focused_simulator": "181passed,3deselected in previous acquisition; original instrumentation timing failure remains retained there.",
+    "additional": "Per-task driver/reducer/FIFO test records retained; sandbox-only permissions or stalled attempts are not claimed as passes."
+  },
+  "reproduce": [
+    "python3 outputs/a100-replay-completion-20260910T0116/reduce-paired.py outputs/a100-replay-completion-20260910T0116/paired",
+    "python3 outputs/a100-replay-completion-20260910T0116/reduce-paired.py outputs/a100-replay-completion-20260910T0116/paired-corrected",
+    "python3 outputs/a100-replay-completion-20260910T0116/combine-paired.py",
+    "python3 outputs/a100-replay-completion-20260910T0116/finalize.py"
+  ]
+}

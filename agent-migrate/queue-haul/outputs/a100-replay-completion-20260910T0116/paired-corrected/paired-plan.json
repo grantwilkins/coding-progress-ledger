@@ -1,0 +1,345 @@
+{
+  "scope": "controlled source append and paired KV diagnostics; not recorded agentic service",
+  "total_limit_s": 1200,
+  "per_scenario_limit_s": 180,
+  "method": "kv_transfer",
+  "context": 8192,
+  "deadline_wall_ns": 1789005132050105138,
+  "scenarios": [
+    {
+      "scenario_id": "paired-7101-8192-kv_transfer",
+      "seed": 7101,
+      "kind": "migration",
+      "method": "kv_transfer",
+      "context_size": 8192,
+      "activity": "one_turn",
+      "activity_tokens": 32,
+      "request_schedule": [
+        {
+          "at_s": 0,
+          "append_tokens": 32
+        }
+      ],
+      "sessions": [
+        {
+          "session_id": "paired-7101-8192-kv_transfer-0",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 0
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-1",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 1
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-2",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 2
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-3",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 3
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-4",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 4
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-5",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 5
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-6",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 6
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-7",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 7
+        }
+      ],
+      "moves": [
+        {
+          "session_id": "paired-7101-8192-kv_transfer-0",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 0,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-1",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 1,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-2",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 2,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-3",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 3,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-4",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 4,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-5",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 5,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-6",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 6,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7101-8192-kv_transfer-7",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 7,
+          "method": "kv_transfer"
+        }
+      ],
+      "concurrency": 8,
+      "move_concurrency": 8,
+      "serving_concurrency": 8,
+      "warm_concurrency": 8,
+      "prestage_all": true,
+      "copy_policy": "initial_final",
+      "reset_caches": false,
+      "wait_cache_idle": false,
+      "sample_power": false,
+      "final_state": "awake",
+      "deadline_s": 180
+    },
+    {
+      "scenario_id": "paired-7102-8192-kv_transfer",
+      "seed": 7102,
+      "kind": "migration",
+      "method": "kv_transfer",
+      "context_size": 8192,
+      "activity": "one_turn",
+      "activity_tokens": 32,
+      "request_schedule": [
+        {
+          "at_s": 0,
+          "append_tokens": 32
+        }
+      ],
+      "sessions": [
+        {
+          "session_id": "paired-7102-8192-kv_transfer-0",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 0
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-1",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 1
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-2",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 2
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-3",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 3
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-4",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 4
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-5",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 5
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-6",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 6
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-7",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 7
+        }
+      ],
+      "moves": [
+        {
+          "session_id": "paired-7102-8192-kv_transfer-0",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 0,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-1",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 1,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-2",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 2,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-3",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 3,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-4",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 4,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-5",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 5,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-6",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 6,
+          "method": "kv_transfer"
+        },
+        {
+          "session_id": "paired-7102-8192-kv_transfer-7",
+          "turn_index": 0,
+          "initial_tokens": 8192,
+          "order": 7,
+          "method": "kv_transfer"
+        }
+      ],
+      "concurrency": 8,
+      "move_concurrency": 8,
+      "serving_concurrency": 8,
+      "warm_concurrency": 8,
+      "prestage_all": true,
+      "copy_policy": "initial_final",
+      "reset_caches": false,
+      "wait_cache_idle": false,
+      "sample_power": false,
+      "final_state": "awake",
+      "deadline_s": 180
+    }
+  ],
+  "input_sha256": {
+    "outputs/a100-replay-completion-20260910T0116/corrected-inventory.json": "886e709399b34947eee46cf980c01f50d7d148cab8e628ebc80d0c5e57700325",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_profiler.py": "ed759c8e564b0abc7d92b97a2811a2e060b8d5f454419cb8d074c2542714eae9",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/migration_testbed.py": "777b24b0a943c1f85b14c3fbc7a5c4648e09c58a40fd6bfa1a3773c98238c9f4",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-identity.json": "6e0bcab376eb0bca3039eb813885ff2f0307bb875944f1278b6b0dda971e7994",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-runtime.json": "656304a24259866bd69d26e81f07aabb93e371ff62ef0646b2798170764982b0",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-identity.json": "3e4e17fd4d22a9c9d73ef4ad3a0feb3ac531ab6ade964da7a44e2a1f43f499ee",
+    "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-runtime.json": "5421d984830205b05aa3a8651037602cce033d2ccc0aeea64850a5e9b7f9f8cc"
+  },
+  "driver_sha256": "790f64aa90729dff779dd80e0afef24331092d7b4bd1620f60089f365147ce63",
+  "argv": [
+    "pool_replay_paired.py",
+    "freeze",
+    "--inventory",
+    "outputs/a100-replay-completion-20260910T0116/corrected-inventory.json",
+    "--out",
+    "outputs/a100-replay-completion-20260910T0116/paired-corrected",
+    "--method",
+    "kv_transfer",
+    "--context",
+    "8192"
+  ],
+  "commit": "18ad6d34d874d7ca82a227ad12a16539df78e9df",
+  "dirty": "?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/cache-check-events.jsonl\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/cache-check-metrics.prom\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/cache-check-status.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/cache-check.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/corrected-inventory.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/corrected-kv-amendment.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-engine-metrics.jsonl\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-power.csv\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-pre-reconnect/\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/first-kv-prefetch-status-readback.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/first-kv-structural-diagnosis.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/invalid-source-port-startup/\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/inventory.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/kv-retrieval-check-events.jsonl\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/kv-runtime-comparison.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/launch-source.py\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/native-prefix-export-diagnosis.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/native-redis-readonly-diagnostic.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired-run.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/paired/\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/reload-source-engine.py\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/runtime-install.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-destination-render-comparison.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-engine-reload.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-identity.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-launcher-tests.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-launches.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-port-correction-tests.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-ready.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-reload-corrected.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-reload-environment-tests.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-reload-tests.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-reload.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-runtime.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-stop.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-stream-patch.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-supervisor.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/lmcache-sink.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/lmcache-source.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/proxy.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/proxy_bytes.csv\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/proxy_connections.csv\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/redis.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/resp_transfers.csv\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/sink.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/source-before-export-fix.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/source-before-reload-1789005040644479496.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/stack/source.log\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/supplemental-plan.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/supplemental-plan.sha256\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/supplemental-start.json\n?? agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/wait-idle-fix-tests.log\n",
+  "arrival_schedule": "assumed one controlled source append at migration epoch; no production-arrival claim",
+  "pairing": "same target context/append/width, independent unique histories between methods; counterbalanced order",
+  "source_gpu": {
+    "gpu_uuid": "GPU-d809b3d2-a896-24d6-65b3-48aae6e5ab86",
+    "gpu_name": "NVIDIA A100 80GB PCIe",
+    "reference_runtime_verified": true,
+    "identity_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-identity.json",
+    "runtime_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/source-runtime.json"
+  },
+  "destination_gpu": {
+    "gpu_uuid": "GPU-427d22f2-8e58-888c-37be-a9a42e38d271",
+    "gpu_name": "NVIDIA A100 80GB PCIe",
+    "reference_runtime_verified": true,
+    "identity_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-identity.json",
+    "runtime_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/destination-runtime.json"
+  },
+  "runtime_config": {
+    "model": "openai/gpt-oss-20b",
+    "sandbox": "/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif",
+    "hf_home": "/datadrive",
+    "scratch_bind": "/scratch/users/gfw",
+    "cache_root": "/scratch/users/gfw/ptsim/cache",
+    "host": "127.0.0.1",
+    "src_port": 18100,
+    "sink_port": 18200,
+    "lmc_port": 15655,
+    "kv_proxy_port": 18300,
+    "api_proxy_port": 18400,
+    "smoke_port": 18120,
+    "src_lmc_port": 15557,
+    "sink_lmc_port": 15556,
+    "src_lmc_http_port": 18080,
+    "sink_lmc_http_port": 18081,
+    "max_model_len": 32768,
+    "max_num_seqs": 256,
+    "max_num_batched_tokens": 8192,
+    "architecture_campaign": false,
+    "capacity_discovery": false,
+    "matched_prefill": false,
+    "literal_token_timing": false,
+    "timing_only": false,
+    "enforce_eager": true
+  }
+}

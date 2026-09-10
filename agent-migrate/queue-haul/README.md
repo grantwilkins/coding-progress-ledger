@@ -224,6 +224,30 @@ metrics, power traces and reproduction commands are linked from the run report.
 and the twenty evaluations. The saved 96.3% audit uses a different candidate union
 and is not a controlled reproduction of this bounded comparison.
 
+The [2026-09-10 supplemental completion](outputs/a100-replay-completion-20260910T0116/report.json)
+used separate A100s in Sweden and Germany under a separately frozen 30-minute
+cutoff. Eight controlled source-active replay/KV attempts were retained. Valid
+replay cases confirmed full-message catch-up with source-evolved history; these
+controlled append checks do not replace the recorded agentic service episodes.
+Two data-supported correctness fixes were made: failed source activity now blocks
+ownership transfer, and the LMCache connector preserves native-prefix hit counts
+when external lookup misses. The latter bug exported only 1,792 tokens from a
+2,048-token request with 64 native hits. It changes neither simulator timing
+coefficients nor an assumed cache fraction.
+
+The first KV attempts had a broken destination Redis connection pool after a
+source startup correction. Reconnecting it and fixing native-prefix export
+produced complete source chunks and an observed 8,192-token external retrieval.
+The corrected validation response was unfinished at the cutoff; the second
+corrected repeat was unmeasured. Neither is a passing KV handoff or latency result.
+Observed storage chunks contain 12,582,912 payload bytes per 256 tokens, matching
+native serialized geometry; this does not validate the 0.80-GB effective-wire
+anchor for a complete migration. Both GPUs were released within the supplemental
+cutoff. Original failed attempts and the initial 148.6-minute acquisition remain
+unchanged. The twenty-policy diagnostic remains the bounded simulator comparison;
+full SLO-feasibility campaigns remain unready, with the remaining measurements
+listed in the supplemental report.
+
 Source load is 0.8; destination loads are 0.25, 0.50, 0.75, 0.90, and 0.95.
 At equal source/destination sizes, the standing-service shed ceiling
 is `min(1, 2 * (1 - destination_load) / 0.8)`: 100% at 50% destination load,

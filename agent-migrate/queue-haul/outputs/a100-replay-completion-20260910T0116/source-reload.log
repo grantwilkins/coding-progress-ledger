@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/reload-source-engine.py", line 33, in <module>
+    raise RuntimeError('corrected source engine exited')
+RuntimeError: corrected source engine exited
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-replay-completion-20260910T0116/reload-source-engine.py", line 37, in <module>
+    os.killpg(r['pid'],signal.SIGTERM)
+ProcessLookupError: [Errno 3] No such process
