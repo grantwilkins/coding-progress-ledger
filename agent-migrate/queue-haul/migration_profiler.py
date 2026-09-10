@@ -1222,6 +1222,8 @@ class LiveRuntime:
                         f"activity timed out for {session.session_id}"
                     )
                 session.activity_condition.wait(remaining)
+            if session.activity_error:
+                raise session.activity_error
             state = SessionState(
                 session.session_id, session.generation,
                 tuple(session.messages), messages_hash(session.messages),
