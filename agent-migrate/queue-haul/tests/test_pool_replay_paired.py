@@ -94,6 +94,8 @@ def test_method_filter_keeps_four_original_conditions_in_order():
 def test_method_filter_is_frozen_with_runtime_dependency_hashes(monkeypatch,tmp_path):
     import json
     from pathlib import Path
+    monkeypatch.setenv('QH_LMCACHE_MODE','mp')
+    monkeypatch.setenv('QH_RUNTIME','native')
     evidence=tmp_path/'identity.json'; evidence.write_text('{}')
     inventory=tmp_path/'inventory.json'
     inventory.write_text(json.dumps({role:{'identity_evidence':str(evidence),'runtime_evidence':str(evidence)} for role in ('source','destination')}))
