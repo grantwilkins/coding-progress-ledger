@@ -425,19 +425,21 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
             matrix = np.vstack((matrix, np.cumsum(service[:, ::-1], axis=1)[:, ::-1].reshape(2 * bins, -1)))
             limits = np.r_[limits, np.maximum(remaining_service, 0.).ravel()]
         gains = table.gains[original] * (finish <= table.deadline + 1e-10)
+        if engine.require_local_recovery:
+            gains *= (data["resident_debt"][:, -1] + data["buffer_debt"][:, -1]).sum(0) <= 1e-9
         debt = (data["replay"] * loads[:, :, None] * loss[:, None, None] + data["kv"] * loads[:, :, None] + data["buffers"]).sum((0, 1))
-        if engine.affinity:
-            debt_history = np.column_stack((aggregate["resident_debt"].T, aggregate["buffer_debt"].T))
-            predicted = aggregate["resident_debt"][:, -1] + aggregate["buffer_debt"][:, -1]
-            updated = np.broadcast_to(engine.initial_load[:, None], (2, bins)).copy()
-        elif fleet.metadata.get("protect_resident"):
+        if fleet.metadata.get("protect_resident"):
             debt = (data["replay"] + data["kv"] + data["recovery"]).sum((0, 1))
         debt += destination_gpus(fleet) * table.gains[original] * (finish - engine.now) / max(table.deadline - engine.now, 1e-30) * 1e-6
         chosen = _choose(matrix, limits, gains, debt, fleet, policy == "greedy") if len(original) else np.zeros(0)
         residual = max(residual, float(np.max((matrix @ chosen - limits) / np.maximum(limits, 1.), initial=0.)))
         aggregate = {name: fixed[name] + data[name] @ chosen for name in data}
         buffer_groups.extend((r, k, work, float(chosen[v])) for r, k, work, v in future_buffers if chosen[v] > 1e-12)
-        if fleet.metadata.get("protect_resident"):
+        if engine.affinity:
+            debt_history = np.column_stack((aggregate["resident_debt"].T, aggregate["buffer_debt"].T))
+            predicted = aggregate["resident_debt"][:, -1] + aggregate["buffer_debt"][:, -1]
+            updated = np.broadcast_to(engine.initial_load[:, None], (2, bins)).copy()
+        elif fleet.metadata.get("protect_resident"):
             updated = np.minimum(1., engine.loads[:, None] + aggregate["service_peak"] / (destination_gpus(fleet) * dt))
             pending = np.maximum(queued[:, None] + np.cumsum(aggregate["buffers"] - aggregate["recovery"], axis=1), 0.)
             predicted, debt_history = pending[:, -1], np.column_stack((np.zeros((bins, 2)), pending.T))
@@ -456,4 +458,5 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         "fixed_point_residual": change, "fixed_obligation_overload": overload,
         "mandatory_forecast_finish_s": fixed_finish.tolist(),
         "predicted_shed_fraction": float(gains @ chosen), "variables": len(original),
-        "time_bins": bins, "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; handoff objective"}
+        "time_bins": bins, "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; " +
+        ("handoff candidates require projected same-replica queue clearance by deadline; forecast criterion, not execution guarantee" if engine.require_local_recovery else "handoff objective")}

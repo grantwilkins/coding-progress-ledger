@@ -82,14 +82,18 @@ def source_snapshot(fleet, now, cache=None):
     context, completed = fleet.context.copy(), np.zeros(len(fleet.count), int)
     cadence, cycle = fleet.metadata.get("source_session_rps", 0.), fleet.metadata.get("sequence_cycle", False)
     if paced_source(fleet) and cadence:
+        causal = fleet.metadata.get("causal_source", False)
+        if causal:
+            from pool_shed_resident_queue import source_turns
+            _, actual_completed, _ = source_turns(fleet, now, cache)
         started = _started_turns(fleet, now)
         phases = fleet.metadata.get("source_phase_s", np.zeros(len(context)))
         for i, sequence in enumerate(fleet.metadata["turn_sequences"]):
             if not sequence:
                 continue
             offset = fleet.metadata.get("turn_offset", [0] * len(context))[i] if cycle else 0
-            n = started[i]
-            if cycle or n <= len(sequence):
+            n = actual_completed[i] if causal else started[i]
+            if not causal and (cycle or n <= len(sequence)):
                 duration = fleet.metadata["turn_duration_s"][i][(offset + n - 1) % len(sequence)]
                 n -= (n - 1) / cadence - phases[i] + duration > now + 1e-10
             completed[i] = n if cycle else min(n, len(sequence))
@@ -151,8 +155,12 @@ def _quiesce(fleet, counts, now, cache=None, origin_turn=None):
     if cycle and np.any(lengths == 0):
         raise ValueError("cannot cycle an empty source trace")
     paced = paced_source(fleet)
+    causal = fleet.metadata.get("causal_source", False)
     if paced and cadence:
         steps = _started_turns(fleet, now)
+        if causal:
+            from pool_shed_resident_queue import source_turns
+            steps, _, finishes = source_turns(fleet, now, cache)
     origin_turn = np.zeros(len(fleet.count), int) if origin_turn is None else origin_turn
     key = ("quiesce", counts.astype(float, copy=False).tobytes(), steps.tobytes(), origin_turn.tobytes())
     if cache is not None and key in cache:
@@ -160,7 +168,9 @@ def _quiesce(fleet, counts, now, cache=None, origin_turn=None):
         return max(now, end), context, reset, terminal
     completed = steps[active] if cycle else np.minimum(lengths, steps[active])
     end = 0. if paced or not cadence else float(completed.max(initial=0) / cadence)
-    if paced and cadence:
+    if paced and cadence and causal:
+        end = float(finishes[active].max(initial=-np.inf))
+    elif paced and cadence:
         durations = fleet.metadata["turn_duration_s"]
         phases = fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count)))
         for i, n, length in zip(active, completed, lengths):
@@ -190,6 +200,9 @@ def _buffered(fleet, counts, start, end, calibration, cache=None, quiescing=Fals
     cadence = fleet.metadata.get("source_session_rps", 0.)
     phases = np.asarray(fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count))))
     first = _started_turns(fleet, start) if quiescing else np.ceil((start + phases) * cadence - 1e-9).astype(int)
+    if quiescing and fleet.metadata.get("causal_source", False):
+        from pool_shed_resident_queue import source_turns
+        first = source_turns(fleet, start, cache)[0]
     last = np.maximum(first, np.ceil((end + phases) * cadence - 1e-9).astype(int))
     if cache is not None:
         key = ("buffer", counts.astype(float, copy=False).tobytes(), first.tobytes(), last.tobytes())
@@ -269,6 +282,9 @@ class PooledExecution:
         self.gpus = destination_gpus(self.fleet)
         self.protected = self.fleet.metadata.get("protect_resident", False)
         self.affinity = self.fleet.metadata.get("resident_affinity", False)
+        self.require_local_recovery = self.fleet.metadata.get("require_local_recovery", False)
+        if self.require_local_recovery and not self.affinity:
+            raise ValueError("local recovery admission requires resident affinity")
         if self.affinity and (self.protected or "resident_replay_loss" not in self.timing):
             raise ValueError("resident affinity requires measured interference and unprotected migration")
         self.paced = paced_source(self.fleet)
@@ -636,6 +652,7 @@ class PooledExecution:
                 "resident_displaced_work_s": self.resident_displaced.tolist(),
                 "resident_pool_compensation_work_s": np.maximum(self.resident_displaced - self.resident_generated, 0.).tolist(),
                 "resident_affinity": bool(self.affinity),
+                "require_local_recovery": bool(self.require_local_recovery),
                 "recovered_handoff_fraction": float(sum(recovered_fractions)) if self.affinity else None,
                 "recovered_action_fractions": recovered_fractions if self.affinity else None,
                 "reserved_destination_replicas": [float(self.mass[self.route == r].sum()) for r in (0, 1)] if self.affinity else None,
@@ -660,7 +677,7 @@ class PooledExecution:
                 "dispatch_chunks": int(self.chunks), "dispatch_wave_count": self.n,
                 "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; " + ("capture current source state at each wave's first dispatch" if self.paced else "frozen initial snapshot while source continues"),
                 "execution_model": "independent_event_fluid_batch_mass_finite_trace",
-                "source_pacing": ("paced recorded trajectories with contextual request-duration proxy and declared arrival phases" if self.paced else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
+                "source_pacing": ("sequential histories with server-timed generation; offered turns wait for their predecessor" if self.fleet.metadata.get("causal_source") else "paced recorded trajectories with contextual request-duration proxy and declared arrival phases" if self.paced else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
                                   else "finite recorded turns at explicit equal cadence; terminal context retained"),
                 "compute_scope": ("one action pack per permanently reserved replica cohort; measured slowdown uses that replica's initial resident load; no ingestion" if self.affinity else "shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion" if self.protected else "fractional batch processor sharing; dynamic measured load factor; no ingestion"),
                 "backlog_scope": ("incoming standing service remains on its action replica; local headroom repays resident debt before source buffers" if self.affinity else "ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears" if self.protected else "migration reduces ordinary service; spare capacity repays resident debt before source buffers; recovery utilization enters the measured migration load factor"),
