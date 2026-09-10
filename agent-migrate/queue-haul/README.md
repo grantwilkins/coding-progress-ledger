@@ -397,7 +397,10 @@ stopped until replica-local service behavior is validated**.
 
 The [raw archive manifest](outputs/a100-replay-final-20260910T0352/raw-telemetry-archive.json)
 provides lossless restoration commands and verified member hashes, including ignored
-events. The [artifact manifest](outputs/a100-replay-final-20260910T0352/artifact-sha256.json)
+events. The oversized `request-events.jsonl`, `requests.jsonl`, and
+`destination-engine-metrics.jsonl` are ignored locally and retained in the tracked
+`raw-telemetry.tar.zst`; use the manifest's restoration command to unpack them.
+The [artifact manifest](outputs/a100-replay-final-20260910T0352/artifact-sha256.json)
 maps every raw file to its archived copy; authoritative Germany originals also reside
 in [destination-final-raw.tar.gz](outputs/a100-replay-final-20260910T0352/destination-final-raw.tar.gz).
 The frozen plan, amendments, exact launches, verified/open modeling gaps and
