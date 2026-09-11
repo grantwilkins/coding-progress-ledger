@@ -92,8 +92,9 @@ finite lookahead. These results are not a global placement optimum. High
 bandwidth can stop helping when per-wave endpoint limits, fixed host shares or
 destination packing bind.
 
-`greedy_priced` adds an optional **QH Priced Greedy** temporal allocator; the
-original `greedy` and five-policy defaults retain their archived behavior.
+`greedy_priced` is an optional **QH Priced Greedy** accuracy reference for the
+temporal allocator. The original `greedy` remains the fast baseline, and the
+five-policy defaults retain their archived behavior.
 The old score equals the gain from exhausting one candidate against the
 remaining resources. Exhausting a source cohort can eliminate overlapping,
 more efficient packs; each accepted pack then permanently reserves a GPU.
@@ -120,9 +121,9 @@ fixed. It saves 12 identical-matrix comparisons (two workloads, 30/120 s,
 uv run python pool_shed_greedy_quality.py --mode both --out outputs/a100-greedy-quality-reproduction
 ```
 
-For the next conditional bandwidth sweep, select the refinement explicitly:
-`--policies queue_haul greedy_priced kv_only replay_only isolated_fastest`
-with `pool_shed_bandwidth_sweep.py` and a fresh `--out` directory.
+Use the existing five-policy defaults for conditional bandwidth comparisons.
+The priced variant's latency disqualifies it from serving as the fast greedy
+baseline; retain it only for explicitly selected accuracy experiments.
 
 The largest observed initial-matrix shortfall from LP is **0.0666 percentage
 points**. Across the six executions it is **0.0680 points**; all 42 feedback admission
@@ -141,8 +142,8 @@ Priced greedy exceeds feedback LP by 0.5336 points in one case: the common
 finite-lookahead controller does not make either execution globally optimal.
 The refinement also costs more: identical-matrix solves take **1.8–6.1 s**,
 versus **17–30 ms for LP** and **2.4–5.9 ms for old greedy**. These compressed
-matrices have only 1,428–1,494 columns, so LP remains the faster admission
-solver here. The six new feedback evaluations total 222.49 s, including
+matrices have only 1,428–1,494 columns, and the priced refinement is much slower
+than LP here. The six new feedback evaluations total 222.49 s, including
 planning but excluding table construction and validation. No new resident
 TTFT checks were run for these changed allocations; the full campaign remains
 stopped. The [packing diagnosis](outputs/a100-greedy-quality-20260911/validation/baseline-packing.json)
@@ -150,6 +151,18 @@ checks all 48 old greedy cases: all destination GPUs are reserved within 1 s
 and every admitted wave completes. The [155 focused tests](outputs/a100-greedy-quality-20260911/validation/focused-tests.log)
 pass; the independent [artifact review](outputs/a100-greedy-quality-20260911/validation/review.json)
 checks all 54 admission certificates and the saved execution/resource accounting.
+
+The [bounded speed audit](outputs/a100-greedy-quality-20260911/validation/speed/summary.json)
+tests cheaper repairs on those same 12 matrices. Removing a few inefficient
+packs and refilling takes **5.7–11.1 ms**, but leaves shortfalls up to **11.83
+percentage points**. Coordinated pair swaps leave up to **13.00 points**;
+the best of nine bounded pricing variants still leaves **7.03 points**.
+All retain the original constraints and incumbent quality. Repair timings
+include constructing the incumbent; LP timings are stored single-run references.
+None meets the 0.1-point quality target across these cases, so none is promoted.
+A scalable replacement must demonstrate both speed and quality on identical
+inputs with growing distinct cohorts, candidate columns and nonzeros. Increasing
+represented GPU count alone does not enlarge this compressed packing problem.
 
 The checker reconstructs every migration wave, including initial replay,
 full-context catch-up, handoff and continued incoming service. It checks initial

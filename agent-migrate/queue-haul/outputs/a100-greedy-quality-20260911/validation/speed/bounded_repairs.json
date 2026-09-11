@@ -1,0 +1,330 @@
+{
+  "scope": "Twelve saved fixed matrices; two bounded heuristics; all constraints retained. Three repeats include incumbent construction; stored LP timings are single-run references. No LP/policy solves or model changes.",
+  "script_sha256": "4afdacd643569b3b42898eef8d7304036f93224c6ffb158ff4eec37ad897fb0e",
+  "rows": [
+    {
+      "case": "coding-d120-b1",
+      "input_sha256": "f803397597c8c5729a8bd5ac4f97f860e1592735c0e3ae5649b505b9b8dc2b28",
+      "lp_gain": 0.9786721635844643,
+      "lp_wall_ms": 29.810749925673008,
+      "old_gain": 0.8809373555265961,
+      "pair_exchange": {
+        "gain": 0.8818172255810903,
+        "gap_pp": 9.685493800337397,
+        "relative_gap_percent": 9.896566144135033,
+        "wall_ms_median": 47.77450021356344,
+        "wall_ms_range": [
+          47.466957941651344,
+          51.079874858260155
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.8809373555265961,
+        "gap_pp": 9.773480805786816,
+        "relative_gap_percent": 9.986470617485088,
+        "wall_ms_median": 11.083874851465225,
+        "wall_ms_range": [
+          10.64020860940218,
+          12.005291879177094
+        ]
+      }
+    },
+    {
+      "case": "coding-d120-b10",
+      "input_sha256": "16b650ce5044e60c736491f0d4a3922f97a830b68c20f719ecf0d5653b73cc21",
+      "lp_gain": 0.9999999988005982,
+      "lp_wall_ms": 27.470167726278305,
+      "old_gain": 0.8851036202582551,
+      "pair_exchange": {
+        "gain": 0.8861258607817003,
+        "gap_pp": 11.387413801889789,
+        "relative_gap_percent": 11.387413815547875,
+        "wall_ms_median": 51.78475007414818,
+        "wall_ms_range": [
+          51.48795805871487,
+          54.39466703683138
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.8851036202582551,
+        "gap_pp": 11.489637854234314,
+        "relative_gap_percent": 11.489637868015002,
+        "wall_ms_median": 8.879125118255615,
+        "wall_ms_range": [
+          8.859999477863312,
+          9.4763757660985
+        ]
+      }
+    },
+    {
+      "case": "coding-d120-b100",
+      "input_sha256": "4486f56b48cc71df2b653f60bcf7c7b654fe3d2560fc4c90b4d0e713ad2bc326",
+      "lp_gain": 0.9999999988005981,
+      "lp_wall_ms": 25.089208967983723,
+      "old_gain": 0.8852631458141378,
+      "pair_exchange": {
+        "gain": 0.8864101943217415,
+        "gap_pp": 11.358980447885658,
+        "relative_gap_percent": 11.358980461509638,
+        "wall_ms_median": 59.187375009059906,
+        "wall_ms_range": [
+          54.23604231327772,
+          60.42437441647053
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.8852631458141378,
+        "gap_pp": 11.47368529864603,
+        "relative_gap_percent": 11.47368531240759,
+        "wall_ms_median": 9.549332782626152,
+        "wall_ms_range": [
+          9.043790400028229,
+          10.482458397746086
+        ]
+      }
+    },
+    {
+      "case": "coding-d30-b1",
+      "input_sha256": "ffe49b2e429305338e9091aa75efb43fd445f70e3717d4ea15689edd77482838",
+      "lp_gain": 0.879489137837834,
+      "lp_wall_ms": 22.474625147879124,
+      "old_gain": 0.8277243853944407,
+      "pair_exchange": {
+        "gain": 0.8291977286321704,
+        "gap_pp": 5.0291409205663555,
+        "relative_gap_percent": 5.718252453839467,
+        "wall_ms_median": 25.278957560658455,
+        "wall_ms_range": [
+          25.08625015616417,
+          25.723707862198353
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.8277243853944407,
+        "gap_pp": 5.176475244339329,
+        "relative_gap_percent": 5.885775072862587,
+        "wall_ms_median": 7.53620732575655,
+        "wall_ms_range": [
+          7.360916584730148,
+          7.8707505017519
+        ]
+      }
+    },
+    {
+      "case": "coding-d30-b10",
+      "input_sha256": "60850c62fb9081e5a682d443b46452bffecdcb12013ce9ce226bb62911e94866",
+      "lp_gain": 0.9835755629948326,
+      "lp_wall_ms": 20.693750120699406,
+      "old_gain": 0.8517731455854264,
+      "pair_exchange": {
+        "gain": 0.853565873016918,
+        "gap_pp": 13.000968997791462,
+        "relative_gap_percent": 13.21806832838095,
+        "wall_ms_median": 26.553083211183548,
+        "wall_ms_range": [
+          26.305208913981915,
+          27.14887447655201
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.8652541017053228,
+        "gap_pp": 11.832146128950981,
+        "relative_gap_percent": 12.02972763264264,
+        "wall_ms_median": 7.102125324308872,
+        "wall_ms_range": [
+          6.588916294276714,
+          7.475915364921093
+        ]
+      }
+    },
+    {
+      "case": "coding-d30-b100",
+      "input_sha256": "adf331347920776ee0cedad5c602d29f8eeedc773576d833c738ec0a93fcb06f",
+      "lp_gain": 0.9904383643842297,
+      "lp_wall_ms": 19.57416720688343,
+      "old_gain": 0.9043288595814477,
+      "pair_exchange": {
+        "gain": 0.9049730559391999,
+        "gap_pp": 8.546530844502986,
+        "relative_gap_percent": 8.629038566995018,
+        "wall_ms_median": 25.784208439290524,
+        "wall_ms_range": [
+          23.630792275071144,
+          26.942082680761814
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.9043288595814477,
+        "gap_pp": 8.610950480278202,
+        "relative_gap_percent": 8.694080106268665,
+        "wall_ms_median": 7.516584359109402,
+        "wall_ms_range": [
+          7.465791888535023,
+          7.530249655246735
+        ]
+      }
+    },
+    {
+      "case": "coding_long-d120-b1",
+      "input_sha256": "5239379460b0ca788d0939166346c888edfe00fb4e8d4b5b44ccf7ffe9b195f2",
+      "lp_gain": 0.939522891431404,
+      "lp_wall_ms": 30.351375229656696,
+      "old_gain": 0.8877115815027624,
+      "pair_exchange": {
+        "gain": 0.8889135376950736,
+        "gap_pp": 5.060935373633035,
+        "relative_gap_percent": 5.386707891621967,
+        "wall_ms_median": 31.48812521249056,
+        "wall_ms_range": [
+          30.193500220775604,
+          32.5285829603672
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.8877115815027624,
+        "gap_pp": 5.1811309928641585,
+        "relative_gap_percent": 5.514640505427682,
+        "wall_ms_median": 10.554499924182892,
+        "wall_ms_range": [
+          10.293000377714634,
+          10.918167419731617
+        ]
+      }
+    },
+    {
+      "case": "coding_long-d120-b10",
+      "input_sha256": "dc361edf39040e815c575bb7112a1c7c9f76cf151f978d90e1968ebc1f8eb0da",
+      "lp_gain": 0.9881960560004074,
+      "lp_wall_ms": 28.27537525445223,
+      "old_gain": 0.9092691946113414,
+      "pair_exchange": {
+        "gain": 0.9105587396196174,
+        "gap_pp": 7.763731638078997,
+        "relative_gap_percent": 7.85646895769011,
+        "wall_ms_median": 28.95570918917656,
+        "wall_ms_range": [
+          28.873708099126816,
+          29.116124846041203
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.9092691946113414,
+        "gap_pp": 7.892686138906601,
+        "relative_gap_percent": 7.986963812475844,
+        "wall_ms_median": 8.534042164683342,
+        "wall_ms_range": [
+          8.282875642180443,
+          8.77454038709402
+        ]
+      }
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "input_sha256": "d560eb14303c281d4278eb71b1047c7a32bd8b0a1faec6546da77abdfc9e1a61",
+      "lp_gain": 0.9881960560004075,
+      "lp_wall_ms": 26.07570867985487,
+      "old_gain": 0.9360989346719408,
+      "pair_exchange": {
+        "gain": 0.937349439192157,
+        "gap_pp": 5.084661680825054,
+        "relative_gap_percent": 5.145397666738871,
+        "wall_ms_median": 30.646749772131443,
+        "wall_ms_range": [
+          29.871957376599312,
+          30.734291300177574
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.9360989346719408,
+        "gap_pp": 5.209712132846667,
+        "relative_gap_percent": 5.2719418390843265,
+        "wall_ms_median": 8.560792542994022,
+        "wall_ms_range": [
+          8.500458672642708,
+          9.203082881867886
+        ]
+      }
+    },
+    {
+      "case": "coding_long-d30-b1",
+      "input_sha256": "e1758aeb3536455d3ebf1376100176799afcb7fddd510995d29d247e8d53b6ea",
+      "lp_gain": 0.7356651570729076,
+      "lp_wall_ms": 18.716707825660706,
+      "old_gain": 0.7089641905718966,
+      "pair_exchange": {
+        "gain": 0.7098588103969312,
+        "gap_pp": 2.5806346675976366,
+        "relative_gap_percent": 3.507893017341701,
+        "wall_ms_median": 19.886833615601063,
+        "wall_ms_range": [
+          17.458374612033367,
+          20.01445833593607
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.7089641905718966,
+        "gap_pp": 2.6700966501010948,
+        "relative_gap_percent": 3.6294999490324886,
+        "wall_ms_median": 5.695125088095665,
+        "wall_ms_range": [
+          5.545041523873806,
+          5.814208649098873
+        ]
+      }
+    },
+    {
+      "case": "coding_long-d30-b10",
+      "input_sha256": "dc50d87d2352045b6a70b8e5b12b2010119dc8696120e4e23d3bab38802a45f8",
+      "lp_gain": 0.8884867907612399,
+      "lp_wall_ms": 17.413457855582237,
+      "old_gain": 0.8103646357339647,
+      "pair_exchange": {
+        "gain": 0.8104684297451777,
+        "gap_pp": 7.801836101606218,
+        "relative_gap_percent": 8.781037808026094,
+        "wall_ms_median": 19.505041651427746,
+        "wall_ms_range": [
+          17.766375094652176,
+          19.652416929602623
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.8103646357339647,
+        "gap_pp": 7.812215502727526,
+        "relative_gap_percent": 8.792719918811798,
+        "wall_ms_median": 6.620666012167931,
+        "wall_ms_range": [
+          5.856875330209732,
+          6.984124891459942
+        ]
+      }
+    },
+    {
+      "case": "coding_long-d30-b100",
+      "input_sha256": "fdf482ea2565631afc23d37f46fce5a276fac6c18abfaf8d742be22eb9182d05",
+      "lp_gain": 0.9598784764414312,
+      "lp_wall_ms": 18.962125293910503,
+      "old_gain": 0.9534469044499537,
+      "pair_exchange": {
+        "gain": 0.9536448363664135,
+        "gap_pp": 0.6233640075017699,
+        "relative_gap_percent": 0.6494197159340187,
+        "wall_ms_median": 18.101833760738373,
+        "wall_ms_range": [
+          17.48520787805319,
+          18.294082954525948
+        ]
+      },
+      "joint_refill": {
+        "gain": 0.9537116882440914,
+        "gap_pp": 0.6166788197339845,
+        "relative_gap_percent": 0.6424550970454135,
+        "wall_ms_median": 7.036125287413597,
+        "wall_ms_range": [
+          6.872500292956829,
+          9.021375328302383
+        ]
+      }
+    }
+  ]
+}

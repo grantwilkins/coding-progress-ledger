@@ -1,0 +1,285 @@
+{
+  "scope": "Bounded negative tests on 12 archived initial-admission matrices. This is neither a fleet execution campaign nor a scalability benchmark. No tested repair is promoted to a policy.",
+  "current_commit": "a4580f3e7fa526b01a14ffb2edd35bc44b2fa1df",
+  "source_sha256": {
+    "pool_shed_planner.py": "b1c13cf04ac14c58d5d38ede79cfad01ebe5d3b75b6fb9db8ffa448ff3279303",
+    "pool_shed_campaign.py": "f94bdda958a0e9eb2f66e5d3aed58a00bb00d51a55f8ed584117b8b10c22b3e8"
+  },
+  "input_sha256": {
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d120-b1.npz": "f803397597c8c5729a8bd5ac4f97f860e1592735c0e3ae5649b505b9b8dc2b28",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d120-b10.npz": "16b650ce5044e60c736491f0d4a3922f97a830b68c20f719ecf0d5653b73cc21",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d120-b100.npz": "4486f56b48cc71df2b653f60bcf7c7b654fe3d2560fc4c90b4d0e713ad2bc326",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d30-b1.npz": "ffe49b2e429305338e9091aa75efb43fd445f70e3717d4ea15689edd77482838",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d30-b10.npz": "60850c62fb9081e5a682d443b46452bffecdcb12013ce9ce226bb62911e94866",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d30-b100.npz": "adf331347920776ee0cedad5c602d29f8eeedc773576d833c738ec0a93fcb06f",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d120-b1.npz": "5239379460b0ca788d0939166346c888edfe00fb4e8d4b5b44ccf7ffe9b195f2",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d120-b10.npz": "dc361edf39040e815c575bb7112a1c7c9f76cf151f978d90e1968ebc1f8eb0da",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d120-b100.npz": "d560eb14303c281d4278eb71b1047c7a32bd8b0a1faec6546da77abdfc9e1a61",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d30-b1.npz": "e1758aeb3536455d3ebf1376100176799afcb7fddd510995d29d247e8d53b6ea",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d30-b10.npz": "dc50d87d2352045b6a70b8e5b12b2010119dc8696120e4e23d3bab38802a45f8",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d30-b100.npz": "fdf482ea2565631afc23d37f46fce5a276fac6c18abfaf8d742be22eb9182d05"
+  },
+  "artifact_sha256": {
+    "bounded_prices.json": "747338e5c4a29475bd686eaf07cf834432744bc76781bf5f67763abbb2b78b28",
+    "bounded_prices.py": "41ecc996a37aef18f0f8904e8dc7fd3e669d346025c391de6ab74b2111f618ce",
+    "bounded_repairs.json": "96fede598740f269b4fd989e2b5056446354ac214ce793277f1145eed2912686",
+    "bounded_repairs.py": "4afdacd643569b3b42898eef8d7304036f93224c6ffb158ff4eec37ad897fb0e"
+  },
+  "timing_scope": {
+    "repairs": "Sequential run; three repeats per case and method, including fresh old-greedy incumbent and repair setup, excluding final validation. LP times are stored single-run references from the original archive.",
+    "prices": "Sequential run after repairs; one run per case and price blend. Cumulative times include intermediate validation and incumbent scans, exclude shared matrix normalization and final validation. Exploratory timings only.",
+    "comparison": "No new LP timing measurements. These small matrices do not establish an advantage at large candidate counts."
+  },
+  "archived_wall_ms_ranges": {
+    "old": [
+      2.3856665939092636,
+      5.876333452761173
+    ],
+    "lp": [
+      17.413457855582237,
+      30.351375229656696
+    ],
+    "priced": [
+      1801.7832087352872,
+      6097.985000349581
+    ]
+  },
+  "archived_priced_iteration_range": [
+    52548.0,
+    195027.0
+  ],
+  "bounded_repairs": {
+    "pair_exchange": {
+      "gap_pp_range": [
+        0.6233640075017699,
+        13.000968997791462
+      ],
+      "median_wall_ms_range": [
+        18.101833760738373,
+        59.187375009059906
+      ],
+      "improved_cases": 12,
+      "faster_than_stored_lp_cases": 1
+    },
+    "joint_refill": {
+      "gap_pp_range": [
+        0.6166788197339845,
+        11.832146128950981
+      ],
+      "median_wall_ms_range": [
+        5.695125088095665,
+        11.083874851465225
+      ],
+      "improved_cases": 2,
+      "faster_than_stored_lp_cases": 12
+    }
+  },
+  "bounded_prices": [
+    {
+      "alpha": 1.0,
+      "passes": 3,
+      "max_gap_pp": 13.180241740940613,
+      "wall_ms_range": [
+        3.5868333652615547,
+        11.35791651904583
+      ]
+    },
+    {
+      "alpha": 1.0,
+      "passes": 5,
+      "max_gap_pp": 12.824077051689509,
+      "wall_ms_range": [
+        6.111792288720608,
+        18.35879124701023
+      ]
+    },
+    {
+      "alpha": 1.0,
+      "passes": 9,
+      "max_gap_pp": 11.58591922886223,
+      "wall_ms_range": [
+        10.789750143885612,
+        32.463958486914635
+      ]
+    },
+    {
+      "alpha": 0.5,
+      "passes": 3,
+      "max_gap_pp": 13.180241740940613,
+      "wall_ms_range": [
+        3.269750624895096,
+        11.366124264895916
+      ]
+    },
+    {
+      "alpha": 0.5,
+      "passes": 5,
+      "max_gap_pp": 12.672575013958854,
+      "wall_ms_range": [
+        7.220500148832798,
+        18.684749491512775
+      ]
+    },
+    {
+      "alpha": 0.5,
+      "passes": 9,
+      "max_gap_pp": 7.032870429486904,
+      "wall_ms_range": [
+        14.990832656621933,
+        34.28841661661863
+      ]
+    },
+    {
+      "alpha": 0.2,
+      "passes": 3,
+      "max_gap_pp": 13.180241740940613,
+      "wall_ms_range": [
+        2.6915417984128,
+        11.658000759780407
+      ]
+    },
+    {
+      "alpha": 0.2,
+      "passes": 5,
+      "max_gap_pp": 10.829389593458528,
+      "wall_ms_range": [
+        6.8860407918691635,
+        19.708209671080112
+      ]
+    },
+    {
+      "alpha": 0.2,
+      "passes": 9,
+      "max_gap_pp": 9.546973551360338,
+      "wall_ms_range": [
+        14.646290801465511,
+        34.81425065547228
+      ]
+    }
+  ],
+  "best_price_variant_by_worst_gap": {
+    "alpha": 0.5,
+    "passes": 9,
+    "max_gap_pp": 7.032870429486904,
+    "wall_ms_range": [
+      14.990832656621933,
+      34.28841661661863
+    ]
+  },
+  "matrix_dimensions": [
+    {
+      "case": "coding-d120-b1",
+      "shape": [
+        142,
+        1494
+      ],
+      "nonzeros": 27547,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding-d120-b10",
+      "shape": [
+        142,
+        1494
+      ],
+      "nonzeros": 27547,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding-d120-b100",
+      "shape": [
+        142,
+        1494
+      ],
+      "nonzeros": 27547,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding-d30-b1",
+      "shape": [
+        114,
+        1494
+      ],
+      "nonzeros": 27547,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding-d30-b10",
+      "shape": [
+        114,
+        1494
+      ],
+      "nonzeros": 27547,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding-d30-b100",
+      "shape": [
+        114,
+        1494
+      ],
+      "nonzeros": 27547,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding_long-d120-b1",
+      "shape": [
+        142,
+        1428
+      ],
+      "nonzeros": 32443,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding_long-d120-b10",
+      "shape": [
+        142,
+        1428
+      ],
+      "nonzeros": 32443,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "shape": [
+        142,
+        1428
+      ],
+      "nonzeros": 32443,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding_long-d30-b1",
+      "shape": [
+        114,
+        1428
+      ],
+      "nonzeros": 32386,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding_long-d30-b10",
+      "shape": [
+        114,
+        1428
+      ],
+      "nonzeros": 32386,
+      "source_cohorts": 24
+    },
+    {
+      "case": "coding_long-d30-b100",
+      "shape": [
+        114,
+        1428
+      ],
+      "nonzeros": 32386,
+      "source_cohorts": 24
+    }
+  ],
+  "validation": "Both scripts completed with hard checks for nonnegative finite allocations, all original capacity rows, objective >= old greedy and <= saved LP within numerical tolerances. Repairs forbid the generic policy LP call. Prices import no optimizer. Exactly 12 matrices and 108 pricing records required.",
+  "result": "No tested bounded method attains <=0.1 percentage point shortfall across all 12 matrices. The priced reference reaches that accuracy at a cost of seconds versus milliseconds for LP. Keep original greedy as the fast baseline; accuracy and speed together remain unresolved.",
+  "scalability_requirement": "Increase distinct cohorts, candidate columns and nonzeros when measuring scaling. Increasing represented GPU count alone does not enlarge the compressed optimization problem.",
+  "production_policy_changes": false,
+  "resident_latency_validated": false,
+  "full_campaign_run": false
+}
