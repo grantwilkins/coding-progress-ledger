@@ -760,7 +760,7 @@ def execute_feedback(table, realized, policy, timing, measured, chunks=DISPATCH_
             "max_relative_residual": max((d["max_relative_residual"] for d in diagnostics), default=0.),
             "planning_steps": len(diagnostics), "planning_s": planning_s,
             "planning_diagnostics": diagnostics,
-            "solver_status": "feedback_greedy" if policy == "greedy" else "receding_horizon_lp",
+            "solver_status": "feedback_priced_greedy" if policy == "greedy_priced" else "feedback_greedy" if policy == "greedy" else "receding_horizon_lp",
             "planning_scope": "common observed queue feedback; central future rates; iterative temporal approximation, no global execution optimality guarantee"}
 
 

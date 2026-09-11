@@ -373,7 +373,7 @@ if __name__ == "__main__":
     parser.add_argument("--workloads", nargs="+", choices=("coding", "coding_long"), default=["coding", "coding_long"])
     parser.add_argument("--bandwidths", nargs="+", type=float, default=list(BANDWIDTHS))
     parser.add_argument("--deadlines", nargs="+", type=int, default=list(DEADLINES))
-    parser.add_argument("--policies", nargs="+", choices=q.POLICIES, default=list(q.POLICIES))
+    parser.add_argument("--policies", nargs="+", choices=(*q.POLICIES, "greedy_priced"), default=list(q.POLICIES))
     args = parser.parse_args()
     if any(not np.isfinite(b) or b <= 0 for b in args.bandwidths) or any(d <= 0 for d in args.deadlines):
         parser.error("positive finite bandwidths and deadlines required")

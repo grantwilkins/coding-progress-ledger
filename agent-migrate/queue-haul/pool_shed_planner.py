@@ -223,7 +223,7 @@ def _allowed(table, policy, fastest=None):
     if policy == "isolated_fastest":
         fastest = table.fastest if fastest is None else fastest
         return ~np.any((table.replay > 0) & ~fastest, axis=1) & ~np.any((table.kv > 0) & fastest, axis=1)
-    if policy not in ("queue_haul", "greedy"):
+    if policy not in ("queue_haul", "greedy", "greedy_priced"):
         raise ValueError(policy)
     return np.ones(len(table.route), bool)
 
@@ -253,6 +253,28 @@ def _choose(matrix, capacity, gains, debt, fleet, greedy):
         chosen[j] += take
         remaining = np.maximum(remaining - take * normalized[:, j], 0.)
     raise RuntimeError("temporal greedy failed to exhaust a constraint")
+
+
+def _choose_priced(matrix, capacity, gains, debt, fleet):
+    from pool_shed_priced_greedy import priced_greedy
+
+    incumbent = _choose(matrix, capacity, gains, debt, fleet, True)
+    # Gains are fractions of all source work: certify at most 0.1 percentage point per admission matrix.
+    chosen, certificate = priced_greedy(matrix, capacity, gains, incumbent, debt, tolerance=1e-12, absolute_tolerance=.001)
+    chosen += _choose(matrix, np.maximum(capacity - matrix @ chosen, 0.), gains, debt, fleet, True)
+    objective, bound = float(gains @ chosen), certificate["upper_bound"]
+    usage = matrix @ chosen
+    if (np.any(usage[capacity == 0] > 0)
+            or np.max(usage[capacity > 0] / capacity[capacity > 0], initial=0.) > 1 + 1e-8
+            or objective > bound * (1 + 1e-10)):
+        raise RuntimeError("priced greedy residual fill failed its certificate")
+    gap = max(0., bound - objective)
+    certificate.update(objective=objective, absolute_gap=gap, relative_gap=gap / bound if bound else 0.)
+    certificate["absolute_tolerance"] = .001
+    certificate["converged"] = gap <= .001
+    if not certificate["converged"]:
+        raise RuntimeError(f"priced greedy did not close its admission gap: {certificate}")
+    return chosen, certificate
 
 
 def mandatory_profile(engine, table, timing, calibration, edges):
@@ -351,6 +373,7 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
     active_mass = np.array([engine.mass[active[engine.route[active] == r]].sum() for r in (0, 1)])
     reserved_load = engine.loads + np.array([engine.mass[(engine.route == r) & (engine.state < 6)] @ engine.demand[(engine.route == r) & (engine.state < 6)] for r in (0, 1)]) / destination_gpus(fleet)
     fixed_sharing = np.minimum(1., destination_gpus(fleet) * np.maximum(1 - reserved_load if protected else np.ones(2), 0.) / np.maximum(active_mass, 1e-30))
+    pricing_certificates = []
     for iteration in range(iterations):
         fields = PROFILES + (("resident_debt", "buffer_debt") if engine.affinity else ())
         fixed = {name: np.zeros((2, bins)) for name in fields}
@@ -435,7 +458,11 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         if fleet.metadata.get("protect_resident"):
             debt = (data["replay"] + data["kv"] + data["recovery"]).sum((0, 1))
         debt += destination_gpus(fleet) * table.gains[original] * (finish - engine.now) / max(table.deadline - engine.now, 1e-30) * 1e-6
-        chosen = _choose(matrix, limits, gains, debt, fleet, policy == "greedy") if len(original) else np.zeros(0)
+        if policy == "greedy_priced":
+            chosen, certificate = _choose_priced(matrix, limits, gains, debt, fleet)
+            pricing_certificates.append(certificate)
+        else:
+            chosen = _choose(matrix, limits, gains, debt, fleet, policy == "greedy") if len(original) else np.zeros(0)
         residual = max(residual, float(np.max((matrix @ chosen - limits) / np.maximum(limits, 1.), initial=0.)))
         aggregate = {name: fixed[name] + data[name] @ chosen for name in data}
         buffer_groups.extend((r, k, work, float(chosen[v])) for r, k, work, v in future_buffers if chosen[v] > 1e-12)
@@ -462,5 +489,6 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         "fixed_point_residual": change, "fixed_obligation_overload": overload,
         "mandatory_forecast_finish_s": fixed_finish.tolist(),
         "predicted_shed_fraction": float(gains @ chosen), "variables": len(original),
-        "time_bins": bins, "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; " +
+        "time_bins": bins, **({"pricing_certificates": pricing_certificates} if pricing_certificates else {}),
+        "planning_scope": "central mandatory continuation (deadline+1 denotes unfinished); candidate temporal LPs with bounded load iteration, compute peak envelopes and network volumes; " +
         ("handoff candidates require projected same-replica queue clearance by deadline; forecast criterion, not execution guarantee" if engine.require_local_recovery else "handoff objective")}

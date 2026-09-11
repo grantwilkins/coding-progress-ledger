@@ -56,6 +56,11 @@ POLICY_LINESTYLES[REFERENCE] = "-"
 POLICY_NAMES["per_session_greedy"] = "Per-session greedy"
 POLICY_COLORS["per_session_greedy"] = POLICY_COLORS["isolated_fastest"]
 POLICY_LINESTYLES["per_session_greedy"] = POLICY_LINESTYLES["isolated_fastest"]
+for names in (POLICY_NAMES, STRESS_POLICY_NAMES, COMPACT_POLICY_NAMES, PAPER_POLICY_NAMES, SHORT_POLICY_NAMES):
+    names["greedy_priced"] = "QH Priced Greedy"
+POLICY_COLORS["greedy_priced"] = "#882255"
+POLICY_MARKERS["greedy_priced"] = "h"
+POLICY_LINESTYLES["greedy_priced"] = POLICY_LINESTYLES["greedy"]
 ACTION_NAMES = {
     "replay": "Replay", "kv_transfer": "KV transfer",
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",

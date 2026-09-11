@@ -92,6 +92,65 @@ finite lookahead. These results are not a global placement optimum. High
 bandwidth can stop helping when per-wave endpoint limits, fixed host shares or
 destination packing bind.
 
+`greedy_priced` adds an optional **QH Priced Greedy** temporal allocator; the
+original `greedy` and five-policy defaults retain their archived behavior.
+The old score equals the gain from exhausting one candidate against the
+remaining resources. Exhausting a source cohort can eliminate overlapping,
+more efficient packs; each accepted pack then permanently reserves a GPU.
+At 10 Tb/s and 30 s on `coding`, old greedy averages 3.004 sessions per
+destination GPU versus LP's 3.891, handing off 85.18% versus 98.36% of work.
+
+The priced variant repeatedly increases prices for scarce resources, revisits
+all candidate packs before admission, retains its best feasible allocation,
+and fills residual capacity with the original greedy. It calls no generic LP
+solver. A feasible resource-price upper bound must be within **0.001 of total
+source work (0.1 percentage point)** of each admission allocation; otherwise
+planning fails. Actual relative gaps remain recorded, including larger relative
+gaps on tiny late replans. This certifies the primary fractional packing
+objective only: debt is a tie-break, and neither LP's secondary minimization
+nor the evolving execution plan or resident TTFT is certified.
+
+The [bounded comparison](outputs/a100-greedy-quality-20260911/summary.json)
+holds the measured timing, fleet, candidate packs, bandwidth and planning clocks
+fixed. It saves 12 identical-matrix comparisons (two workloads, 30/120 s,
+1/10/100 Tb/s) and six feedback executions (each workload at 30 s/10 Tb/s,
+120 s/1 Tb/s and 120 s/100 Tb/s), with action mixes and runtime. Reproduce it with:
+
+```bash
+uv run python pool_shed_greedy_quality.py --mode both --out outputs/a100-greedy-quality-reproduction
+```
+
+For the next conditional bandwidth sweep, select the refinement explicitly:
+`--policies queue_haul greedy_priced kv_only replay_only isolated_fastest`
+with `pool_shed_bandwidth_sweep.py` and a fresh `--out` directory.
+
+The largest observed initial-matrix shortfall from LP is **0.0666 percentage
+points**. Across the six executions it is **0.0680 points**; all 42 feedback admission
+certificates meet the stated absolute bound. Final handoff work is:
+
+| Workload | Deadline | Shared Tb/s | Old greedy | Priced greedy | QH LP |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| coding | 30 s | 10 | 85.1773% | 98.3241% | 98.3576% |
+| coding | 120 s | 1 | 88.0937% | 98.4008% | 97.8672% |
+| coding | 120 s | 100 | 88.5263% | 99.9420% | 100.0000% |
+| coding_long | 30 s | 10 | 81.0365% | 88.8316% | 88.8487% |
+| coding_long | 120 s | 1 | 88.7712% | 93.8935% | 93.9614% |
+| coding_long | 120 s | 100 | 93.6099% | 98.7652% | 98.8196% |
+
+Priced greedy exceeds feedback LP by 0.5336 points in one case: the common
+finite-lookahead controller does not make either execution globally optimal.
+The refinement also costs more: identical-matrix solves take **1.8–6.1 s**,
+versus **17–30 ms for LP** and **2.4–5.9 ms for old greedy**. These compressed
+matrices have only 1,428–1,494 columns, so LP remains the faster admission
+solver here. The six new feedback evaluations total 222.49 s, including
+planning but excluding table construction and validation. No new resident
+TTFT checks were run for these changed allocations; the full campaign remains
+stopped. The [packing diagnosis](outputs/a100-greedy-quality-20260911/validation/baseline-packing.json)
+checks all 48 old greedy cases: all destination GPUs are reserved within 1 s
+and every admitted wave completes. The [155 focused tests](outputs/a100-greedy-quality-20260911/validation/focused-tests.log)
+pass; the independent [artifact review](outputs/a100-greedy-quality-20260911/validation/review.json)
+checks all 54 admission certificates and the saved execution/resource accounting.
+
 The checker reconstructs every migration wave, including initial replay,
 full-context catch-up, handoff and continued incoming service. It checks initial
 readiness before source pause, catch-up GPU completion before switch entry, and
@@ -2871,10 +2930,11 @@ deterministic fixed-price scans and reports a miss if none reaches the target.
 Regenerate it with
 `uv run python plot_workload_policy_attainment.py`.
 
-| Internal name | Display name | Okabe–Ito | Line |
+| Internal name | Display name | Color | Line |
 |---|---|---:|---|
 | `queue_haul` | Queue-Haul LP | `#0072B2` | solid |
 | `greedy` | Queue-Haul Greedy | `#E69F00` | dashed |
+| `greedy_priced` | QH Priced Greedy | `#882255` | dashed |
 | `greedy_lagrangian` | Queue-Haul Lagrangian Greedy | `#F0E442` | dash-dot-dot |
 | `isolated_fastest` | Isolated Fastest | `#D55E00` | long dash |
 | `kv_only` | KV Migrate Only | `#56B4E9` | dash-dot |

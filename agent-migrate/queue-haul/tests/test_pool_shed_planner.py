@@ -329,12 +329,58 @@ def test_observed_debt_changes_replay_handoff_feasibility():
 def test_all_policies_obey_action_masks_and_same_feedback_clock():
     table, timing, calibration = case()
     times = []
-    for policy, forbidden in (("replay_only", [1, 3]), ("kv_only", [0, 2]), ("isolated_fastest", [0, 2]), ("greedy", [])):
+    for policy, forbidden in (("replay_only", [1, 3]), ("kv_only", [0, 2]), ("isolated_fastest", [0, 2]), ("greedy", []), ("greedy_priced", [])):
         engine = PooledExecution(table, timing, calibration)
-        chosen, when, _ = plan_admission(engine, table, policy, calibration=calibration)
+        chosen, when, audit = plan_admission(engine, table, policy, calibration=calibration)
         assert chosen[forbidden].sum() == 0
+        if policy == "greedy_priced":
+            assert len(audit["pricing_certificates"]) == audit["iterations"]
+            for certificate in audit["pricing_certificates"]:
+                assert certificate["converged"] and 0 <= certificate["absolute_gap"] <= .001
+                assert 0 <= certificate["objective"] <= certificate["upper_bound"]
+        else:
+            assert "pricing_certificates" not in audit
         times.append(when)
     assert len(set(times)) == 1
+
+
+def test_priced_greedy_wrapper_escapes_the_resource_trap_without_a_generic_solver(monkeypatch):
+    import highspy
+    import scipy.optimize
+    import pool_shed_campaign as campaign
+    from pool_shed_planner import _choose, _choose_priced
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("generic solver called")
+
+    for module, name in ((highspy, "Highs"), (scipy.optimize, "linprog"),
+                         (scipy.optimize, "minimize"), (campaign, "solve_lp"), (campaign, "_bounded_lp")):
+        monkeypatch.setattr(module, name, forbidden)
+    matrix = np.column_stack((np.ones(16), np.eye(16)))
+    capacity, gains, debt, fleet = np.ones(16), np.r_[1.001, np.ones(16)], np.zeros(17), SimpleNamespace(gpus=1)
+    old = _choose(matrix, capacity, gains, debt, fleet, True)
+    chosen, certificate = _choose_priced(matrix, capacity, gains, debt, fleet)
+    assert gains @ old == pytest.approx(1.001)
+    assert chosen == pytest.approx(np.r_[0., np.ones(16)])
+    assert matrix @ chosen == pytest.approx(capacity)
+    assert certificate["objective"] == pytest.approx(16.)
+    assert certificate["upper_bound"] >= 16.
+    assert certificate["converged"] and certificate["relative_gap"] <= .001
+
+
+@pytest.mark.parametrize("bound,error", [(16., "did not close its admission gap"), (1., "failed its certificate")])
+def test_priced_greedy_wrapper_rejects_a_false_convergence_certificate(monkeypatch, bound, error):
+    import pool_shed_priced_greedy as pricing
+    from pool_shed_planner import _choose_priced
+
+    def false_certificate(matrix, capacity, gains, incumbent, debt, **kwargs):
+        return incumbent.copy(), dict(objective=float(gains @ incumbent), upper_bound=bound,
+            absolute_gap=0., relative_gap=0., iterations=0, converged=True)
+
+    monkeypatch.setattr(pricing, "priced_greedy", false_certificate)
+    with pytest.raises(RuntimeError, match=error):
+        _choose_priced(np.column_stack((np.ones(16), np.eye(16))), np.ones(16),
+                       np.r_[1.001, np.ones(16)], np.zeros(17), SimpleNamespace(gpus=1))
 
 
 def test_isolated_fastest_refreshes_action_ranking_from_current_debt():
