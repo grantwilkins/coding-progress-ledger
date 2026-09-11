@@ -71,17 +71,24 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path, monkeypatch):
     assert len(queue) == 15
     assert (tmp_path / "power_handoff.png").is_file()
     axis = p.plt.gcf().axes[0]
-    assert axis.get_xlim() == (0, 1)
-    assert axis.get_ylabel() == "Normalized Power (%)"
+    assert axis.get_xlim() == (-1, 1)
+    assert p.plt.gcf()._supylabel.get_text() == "Normalized Power (%)"
     source = next(line for line in axis.lines
                   if line.get_label() == "sweden-central")
-    region_lines = axis.lines[:3]
-    assert [line.get_color() for line in region_lines] \
-        == list(p.plt.get_cmap("tab10").colors[:3])
-    assert [line.get_linewidth() for line in region_lines] == [2, 2, 2]
-    assert axis.get_legend().get_texts()[0].get_fontsize() == 14
-    assert list(source.get_xdata()) == [.25, .75]
-    assert list(source.get_ydata()) == [100 * 230 / 300, 100 * 120 / 300]
+    axes = p.plt.gcf().axes
+    assert len(axes) == 3
+    assert [ax.lines[0].get_color() for ax in axes] == [
+        p.COLORS[node] for node in ("sweden", "east", "germany")]
+    assert all(ax.lines[0].get_linewidth() == p.plot_style.LINE_WIDTH for ax in axes)
+    assert all(ax.get_legend() is None for ax in axes)
+    assert {text.get_text() for text in axis.texts} >= {
+        "Migration", "Barrier", "Sleep", "Migration begins"}
+    for ax in axes:
+        start = next(line for line in ax.lines if line.get_label() == "Migration begins")
+        assert list(start.get_xdata()) == [0, 0]
+        assert start.get_linestyle() == ":"
+    assert list(source.get_xdata()) == [-.25, .25, .75]
+    assert list(source.get_ydata()) == [100 * 220 / 300, 100 * 230 / 300, 100 * 120 / 300]
     cutover = next(line for line in axis.lines
                    if line.get_label() == "Switch")
     assert list(cutover.get_xdata()) == [.5001, .5001]

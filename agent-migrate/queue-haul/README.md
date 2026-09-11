@@ -3081,7 +3081,9 @@ destination. Queue Haul admitted all eight sessions in 29.669 s and KV-only in
 25.159 s; replay-only admitted six before the fixed 30-second deadline. The
 bundle includes raw `power.csv`, load and transfer telemetry, and separate 500
 ms mean regional-power plots cropped from session-state preparation through GPU
-sleep. Each trace reports percent of the 300 W per-GPU TDP and marks Migration,
+sleep. The Queue-Haul figure stacks the three regions and includes five seconds
+before migration, a dotted migration-start marker, and phase labels above the
+plot. Each trace reports percent of the 300 W per-GPU TDP and marks Migration,
 Switch, Barrier, and Sleep. The bundle also retains the exact plan and composed
 non-formal calibration used.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV

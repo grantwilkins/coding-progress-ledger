@@ -14,11 +14,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-TAB10 = plt.get_cmap("tab10").colors
-COLORS = {"sweden": TAB10[0], "east": TAB10[1],
-          "west": TAB10[2], "germany": TAB10[2]}
-REGIONS = {"sweden": "sweden-central", "east": "eastus-2",
-           "west": "west-europe", "germany": "germany-west-central"}
+import plot_style
+
+
+COLORS = plot_style.REGION_COLORS
+REGIONS = plot_style.REGION_NAMES
 SPANS = (
     ("Migration", "handoff_start", "handoff_end", "#BCBD22", .12),
     ("Barrier", "traffic_switched", "source_drained", "#7F7F7F", .18),
@@ -115,28 +115,38 @@ def reduce(run_root: Path) -> list[dict]:
     marker = {name: (phase["wall_ns"] - base) / 1e9
               for name, phase in phases.items()}
     plot_start, plot_end = marker["handoff_start"], marker["sleep_ready"]
-    plt.style.use("default")
-    figure, axis = plt.subplots(figsize=(9, 4))
-    for node, points in power.items():
+    left = max(marker["pre_start"] - plot_start, -5)
+    plot_style.apply()
+    figure, axes = plt.subplots(len(power), 1, figsize=(10, 7),
+                                sharex=True, sharey=True)
+    for axis, (node, points) in zip(axes, power.items()):
         x, y = bin_mean(points)
         selected = [(seconds - plot_start, 100 * watts / TDP_W)
                     for seconds, watts in zip(x, y)
-                    if plot_start <= seconds <= plot_end]
-        axis.plot(*zip(*selected), lw=2,
-                  color=COLORS[node], label=REGIONS[node])
-    for label, span_start, span_end, color, alpha in SPANS:
-        if span_start in marker and span_end in marker:
-            axis.axvspan(marker[span_start] - plot_start,
-                         marker[span_end] - plot_start,
-                         color=color, alpha=alpha, label=label)
-    if "traffic_switched" in marker:
-        axis.axvline(marker["traffic_switched"] - marker["handoff_start"],
-                    color="#D62728", lw=1.5, ls="--",
-                    label="Switch")
-    style(axis, (0, plot_end - plot_start), "Normalized Power (%)")
-    axis.set_xlabel("Time since migration began (s)", size=16)
-    axis.legend(frameon=False, fontsize=14, loc="upper center",
-                bbox_to_anchor=(.5, -.2), ncol=3)
+                    if plot_start + left <= seconds <= plot_end]
+        axis.plot(*zip(*selected), color=COLORS[node],
+                  ls=plot_style.REGION_LINESTYLES[node], label=REGIONS[node])
+        for label, span_start, span_end, color, alpha in SPANS:
+            if span_start in marker and span_end in marker:
+                start, end = marker[span_start] - plot_start, marker[span_end] - plot_start
+                axis.axvspan(start, end, color=color, alpha=alpha, label=label)
+                if axis is axes[0]:
+                    axis.text((start + end) / 2, 1.08, label,
+                              transform=axis.get_xaxis_transform(),
+                              ha="center", va="bottom", fontsize=12)
+        axis.axvline(0, color="black", lw=1.5, ls=":", label="Migration begins")
+        if "traffic_switched" in marker:
+            axis.axvline(marker["traffic_switched"] - plot_start,
+                        color="#D62728", lw=1.5, ls="--", label="Switch")
+        style(axis, (left, plot_end - plot_start), "")
+        axis.text(.99, .88, REGIONS[node], transform=axis.transAxes,
+                  ha="right", va="top", fontsize=12)
+    axes[0].annotate("Migration begins", (0, 1),
+                     xycoords=axes[0].get_xaxis_transform(),
+                     xytext=(0, 40), textcoords="offset points", ha="center",
+                     fontsize=11, arrowprops={"arrowstyle": "-", "ls": ":"})
+    figure.supylabel("Normalized Power (%)")
+    axes[-1].set_xlabel("Time since migration began (s)")
     figure.tight_layout()
     for suffix in ("png", "pdf"):
         figure.savefig(run_root / f"power_handoff.{suffix}", dpi=220,

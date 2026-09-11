@@ -20,6 +20,11 @@ LARGE_LEGEND_FONT_SIZE = 12
 LARGE_ANNOTATION_FONT_SIZE = 13
 LINE_WIDTH = 3
 SAVE_DPI = 220
+REGION_NAMES = {"sweden": "sweden-central", "east": "eastus-2",
+                "west": "west-europe", "germany": "germany-west-central"}
+REGION_COLORS = {"sweden": "#1F77B4", "east": "#FF7F0E",
+                 "west": "#2CA02C", "germany": "#2CA02C"}
+REGION_LINESTYLES = dict.fromkeys(REGION_NAMES, "-")
 POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "isolated_fastest",
     "kv_only", "replay_only", "queue_haul_power_blind",
