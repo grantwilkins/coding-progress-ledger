@@ -129,8 +129,10 @@ def reduce(run_root: Path) -> list[dict]:
         for label, span_start, span_end, color, alpha in SPANS:
             if span_start in marker and span_end in marker:
                 start, end = marker[span_start] - plot_start, marker[span_end] - plot_start
+                if label == "Sleep" and axis is not axes[0]:
+                    label, alpha = "Resume Sessions", 0
                 axis.axvspan(start, end, color=color, alpha=alpha, label=label)
-                if axis is axes[0]:
+                if axis is axes[0] or label == "Resume Sessions":
                     axis.text((start + end) / 2, 1.08, label,
                               transform=axis.get_xaxis_transform(),
                               ha="center", va="bottom", fontsize=16)
