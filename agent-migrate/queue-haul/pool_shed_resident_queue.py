@@ -67,7 +67,9 @@ def simulate(requests, coefficients, until, token_budget=8192, max_sequences=256
     """Run insertion-ordered partial prefills/decodes, with FIFO waiting requests.
 
     Coefficients price an iteration, not whole-request serialization. Client
-    overhead is applied to token delivery and does not occupy the GPU.
+    overhead is applied to delivery and does not occupy the GPU. Optional
+    release_s delays eligibility without erasing original-arrival latency.
+    Zero-output requests finish after prefill and have no first-token latency.
     """
     if (not math.isfinite(until) or until <= 0 or not isinstance(token_budget, int)
             or isinstance(token_budget, bool) or token_budget < 1 or not isinstance(max_sequences, int)
@@ -85,8 +87,9 @@ def simulate(requests, coefficients, until, token_budget=8192, max_sequences=256
             raise ValueError("duplicate request ID")
         identities.add(r["request_id"])
         if (not math.isfinite(r["arrival_s"]) or r["arrival_s"] < 0
+                or not math.isfinite(r.get("release_s", 0.)) or r.get("release_s", 0.) < 0
                 or any(not isinstance(r[k], int) or isinstance(r[k], bool) for k in ("prompt_tokens", "cached_tokens", "output_tokens"))
-                or not 0 <= r["cached_tokens"] < r["prompt_tokens"] or r["output_tokens"] < 1):
+                or not 0 <= r["cached_tokens"] < r["prompt_tokens"] or r["output_tokens"] < 0):
             raise ValueError("request needs known supported prompt, cache, generation and arrival")
         if placement.setdefault(r["history"], r["gpu"]) != r["gpu"]:
             raise ValueError("resident history cannot change GPU without an explicit KV migration")
@@ -107,7 +110,7 @@ def _gpu(rows, c, until, token_budget, max_sequences, endpoint_before_fraction):
         if r["history"] in last:
             following[last[r["history"]]] = i
         else:
-            heapq.heappush(pending, (r["arrival_s"] + before, i))
+            heapq.heappush(pending, (max(r["arrival_s"], r.get("release_s", 0.)) + before, i))
         last[r["history"]] = i
     result = [{**r, "eligible_s": None, "admitted_s": None, "first_s": None,
                "last_token_s": None, "end_s": None, "server_end_s": None,
@@ -156,13 +159,14 @@ def _gpu(rows, c, until, token_budget, max_sequences, endpoint_before_fraction):
                 remaining[i] -= q
                 result[i]["computed_prompt_tokens"] += q
             if not remaining[i]:
-                generated[i] += 1
                 delivered = now + after
-                if delivered <= until:
-                    if result[i]["first_s"] is None:
-                        result[i]["first_s"] = delivered
-                    result[i]["last_token_s"] = delivered
-                    result[i]["generated_tokens"] += 1
+                if rows[i]["output_tokens"]:
+                    generated[i] += 1
+                    if delivered <= until:
+                        if result[i]["first_s"] is None:
+                            result[i]["first_s"] = delivered
+                        result[i]["last_token_s"] = delivered
+                        result[i]["generated_tokens"] += 1
                 if generated[i] == rows[i]["output_tokens"]:
                     finished.add(i)
                     result[i]["server_end_s"] = now
@@ -170,7 +174,7 @@ def _gpu(rows, c, until, token_budget, max_sequences, endpoint_before_fraction):
                         result[i]["end_s"], result[i]["done"] = delivered, True
                     if i in following:
                         j = following[i]
-                        result[j]["eligible_s"] = max(rows[j]["arrival_s"], delivered) + before
+                        result[j]["eligible_s"] = max(rows[j]["arrival_s"], rows[j].get("release_s", 0.), delivered) + before
                         heapq.heappush(pending, (result[j]["eligible_s"], j))
         active = [i for i in active if i not in finished]
     for r in result:

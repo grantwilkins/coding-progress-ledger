@@ -899,3 +899,183 @@ def test_zero_byte_source_image_captures_before_entering_quiescence():
     engine.advance(2.)
     assert engine.result()["last_completion_s"] == pytest.approx(.75)
     assert engine.result()["transferred_bytes"] == [5., 0., 5.]
+
+
+def test_wave_records_keep_repeated_chunk_admissions_without_changing_execution():
+    from pool_shed_execution import PooledExecution
+    results = []
+    for record in (False, True):
+        table, timing, calibration = case(deadline=30., demand=(0., 0.))
+        table.fleet.metadata["record_wave_schedules"] = record
+        engine = PooledExecution(table, timing, calibration, chunks=2)
+        engine.admit([.5, 0.])
+        engine.advance(1.)
+        engine.admit([.5, 0.])
+        engine.advance(30.)
+        results.append(engine.result())
+    records = results[1].pop("wave_schedules")
+    assert results[0] == results[1]
+    assert len(results[0]["completion_events"]) == 1
+    assert [r["wave_id"] for r in records] == [0, 1, 2, 3]
+    assert [r["admitted_s"] for r in records] == [0., 0., 1., 1.]
+    assert all(r["column"] == 0 and r["mass"] == .25 and r["state"] == 6 for r in records)
+    assert all(r["phase_enter_s"][0] == r["admitted_s"] and r["phase_enter_s"][7] is None for r in records)
+
+
+def test_wave_records_keep_uncaptured_origins_and_clone_arrays_independent():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
+                                      demand=(0., 0.), deadline=20.)
+    table.fleet.count[0] = 2.
+    table.fleet.metadata.update(record_wave_schedules=True, protect_resident=True, source_session_rps=1., sequence_cycle=True,
+        turn_sequences=[[{"context": 0, "prompt": 10, "output": 0, "reset": True}], []],
+        turn_duration_s=[[.1], []], turn_work_s=[[0.], []])
+    engine = PooledExecution(table, timing, calibration, chunks=2)
+    engine.admit([2.])
+    engine.advance(9.9)
+    before = engine.result()["wave_schedules"]
+    assert before[1]["admitted_s"] == 0. and before[1]["origin_s"] is None
+    assert before[1]["phase_enter_s"] == [0., None, None, None, None, None, None, None]
+    assert before[1]["pause_requested_s"] is None and before[1]["origin_context"] is None
+    clone = engine.nominal_continuation(table, timing, calibration)
+    assert not np.shares_memory(engine.phase_enter_s, clone.phase_enter_s)
+    assert not np.shares_memory(engine.admitted_s, clone.admitted_s)
+    clone.advance(20.)
+    assert engine.result()["wave_schedules"] == before
+    engine.advance(20.)
+    assert engine.result() == clone.result()
+    second = engine.result()["wave_schedules"][1]
+    assert second["origin_s"] == pytest.approx(10.)
+    assert second["origin_context"][0] == 10. and second["origin_turn"][0] == 10
+    assert second["phase_enter_s"][1] is None  # KV has no initial compute phase.
+
+
+def test_wave_records_pause_source_turns_before_future_handoff_and_stamp_zero_work():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(context=(0., 0.), replay=((0., 0.),), kv=((1., 0.),),
+                                      route=(0,), demand=(0., 0.), deadline=4.)
+    table.fleet.kv[0] = 0.
+    table.fleet.metadata.update(record_wave_schedules=True, paced_source=True, causal_source=True,
+        source_session_rps=1., sequence_cycle=True, source_phase_s=[0., 0.],
+        turn_sequences=[[{"context": 0, "prompt": 5, "output": 0}], []],
+        turn_duration_s=[[.25], []], turn_work_s=[[0.], []])
+    calibration["switch_s"] = 2.
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1.])
+    engine.advance(.1)
+    row = engine.result()["wave_schedules"][0]
+    assert row["state"] == 2 and row["phase_enter_s"][:3] == [0., None, 0.]
+    assert row["origin_turn"][0] == 0 and row["paused_turns"][0] == 1
+    assert row["pause_requested_s"] == 0. and row["quiesced_s"] == .25
+    assert row["quiesced_context"][0] == 5.
+    engine.advance(4.)
+    row = engine.result()["wave_schedules"][0]
+    assert row["phase_enter_s"] == pytest.approx([0., None, 0., .25, .75, .75, 2.75, None])
+    assert row["paused_turns"][0] == 1  # Not source_turns(future handoff), which would be three.
+
+
+def test_wave_records_memory_blocked_entry_remains_unfinished():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(context=(40., 40.), replay=((0., 0.),), kv=((1., 0.),),
+                                      route=(0,), deadline=30.)
+    table.fleet.kv[0], table.fleet.kv_capacity = 1., 60.
+    table.fleet.metadata.update(record_wave_schedules=True, source_session_rps=1.,
+                               turn_sequences=[[{"context": 40, "prompt": 30, "output": 0}], []])
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1.])
+    engine.advance(30.)
+    row = engine.result()["wave_schedules"][0]
+    assert row["state"] == 7 and row["phase_enter_s"][7] == pytest.approx(.1)
+    assert row["phase_enter_s"][2:7] == [None] * 5
+    assert row["quiesced_context"][0] == 70 and row["paused_turns"][0] == 1
+
+
+@pytest.mark.parametrize("action", [0, 1])
+def test_fixed_host_history_shares_cap_initial_payload_without_idle_borrowing(action):
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((8. if not action else 0., 0.),),
+        kv=((8. if action else 0., 0.),), route=(0,), work=(0., 0.), demand=(0., 0.), gpus=8, deadline=110.)
+    table.fleet.gpus_per_node, table.fleet.count[0] = 8, 8
+    table.fleet.log[0] = 100.
+    table.fleet.metadata.update(resident_affinity=True, fixed_host_shares=True, host_migration_gbps=512e-9)
+    timing["resident_replay_loss"] = 0.
+    table.endpoint[:], table.budgets[:] = 1e6, 1e6
+    engine = PooledExecution(table, timing, calibration, chunks=4)
+    engine.admit([1.])
+    usage = engine.advance(50., collect=True)
+    assert usage["network"] == pytest.approx([400., 0., 400.])
+    assert engine.result()["shed_fraction"] == 0.
+    engine.advance(110.)
+    assert engine.result()["last_completion_s"] == pytest.approx(100.)
+    assert engine.result()["transferred_bytes"] == pytest.approx([800., 0., 800.])
+
+
+def test_fixed_host_worker_pool_uses_gpu_equivalents_and_legacy_retains_nodes():
+    from pool_shed_execution import PooledExecution
+    transferred = []
+    for enabled in (False, True):
+        table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),),
+            route=(0,), demand=(0., 0.), gpus=8)
+        table.fleet.gpus_per_node, table.fleet.count[0] = 8, 8
+        table.fleet.metadata.update(resident_affinity=True, fixed_host_shares=enabled, host_migration_gbps=512e-9)
+        timing.update(resident_replay_loss=0., regional_kv_bytes_per_s=[.5, .5])
+        table.endpoint[:], table.budgets[:] = 1e6, 1e6
+        engine = PooledExecution(table, timing, calibration)
+        engine.admit([8.])
+        transferred.append(engine.advance(1., collect=True)["application"][0])
+    assert transferred == pytest.approx([.5, 4.])
+
+
+def test_fixed_host_delta_and_queued_snapshot_caps_keep_frozen_origins_in_clone():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(context=(10., 10.), replay=((0., 0.),), kv=((1., 1.),),
+        route=(0,), demand=(0., 0.), gpus=8, deadline=120.)
+    table.fleet.gpus_per_node, table.fleet.kv[:] = 8, 10.
+    table.fleet.metadata.update(resident_affinity=True, fixed_host_shares=True, host_migration_gbps=512e-9,
+        paced_source=True, causal_source=True, source_session_rps=1., record_wave_schedules=True,
+        turn_sequences=[[{"context": 100, "prompt": 0, "output": 0}], []],
+        turn_duration_s=[[5.], []], turn_work_s=[[0.], []])
+    timing["resident_replay_loss"] = 0.
+    table.endpoint[:], table.budgets[:] = 1e6, 1.
+    engine = PooledExecution(table, timing, calibration, chunks=2)
+    engine.admit([1.])
+    engine.advance(9.)
+    assert engine.origin_time[0] == 0. and np.isnan(engine.origin_time[1])
+    engine.advance(10.5)
+    assert engine.state.tolist() == [3, 0]
+    assert engine.origin_time.tolist() == pytest.approx([0., 10.])
+    assert [engine.network_cap(i) for i in (0, 1)] == pytest.approx([1., 1.1])
+    assert engine.remaining.tolist() == pytest.approx([89.5, 109.5])
+    clone = engine.nominal_continuation(table, timing, calibration)
+    engine.advance(11.)
+    clone.advance(11.)
+    assert engine.result() == clone.result()
+
+
+def test_fixed_host_execution_rejects_invalid_shares_and_zero_work_payloads():
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,), gpus=8)
+    table.fleet.gpus_per_node = 8
+    table.fleet.metadata.update(resident_affinity=True, fixed_host_shares=True, host_migration_gbps=512e-9)
+    timing["resident_replay_loss"] = 0.
+    for invalid in (-1., np.nan, np.inf):
+        table.fleet.kv[0] = invalid
+        with pytest.raises(ValueError):
+            PooledExecution(table, timing, calibration).admit([1.])
+    table.fleet.kv[0] = 100.
+    for invalid in (-1., np.nan, np.inf):
+        table.fleet.metadata["host_migration_gbps"] = invalid
+        with pytest.raises(ValueError):
+            PooledExecution(table, timing, calibration)
+
+
+def test_fixed_host_fractional_rate_survives_integer_endpoint_inputs():
+    table, timing, calibration = case(replay=((0., 0.),), kv=((1., 0.),), route=(0,),
+        demand=(0., 0.), gpus=8, deadline=250.)
+    table.fleet.gpus_per_node = 8
+    table.fleet.metadata.update(resident_affinity=True, fixed_host_shares=True, host_migration_gbps=256e-9)
+    timing["resident_replay_loss"] = 0.
+    table.endpoint, table.budgets = np.array([1000, 1000]), np.array([1000, 1000, 1000])
+    result = run(table, timing, calibration)
+    assert result["last_completion_s"] == pytest.approx(200.)
+    assert result["transferred_bytes"] == pytest.approx([100., 0., 100.])

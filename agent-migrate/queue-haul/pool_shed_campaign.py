@@ -20,7 +20,8 @@ import numpy as np
 from scipy.sparse import csr_matrix
 
 from pool_shed_calibration import calibration, regional_check, replay_seconds, kv_state, loaded_execution_check, resident_execution_check, service_work, source_power
-from pool_shed_execution import DISPATCH_CHUNKS, destination_gpus, network_nodes
+from pool_shed_execution import DISPATCH_CHUNKS, destination_gpus
+from pool_shed_network import history_bytes, phase_rate_cap, transport_workers
 from pool_shed_planner import PLANNING_ITERATIONS, PLANNING_RESOLUTION
 
 ROOT = Path(__file__).resolve().parent
@@ -281,23 +282,25 @@ def nominal_action(fleet, counts, action, route, rate, timing, measured):
         return 0., 0., 0., 0.
     origin, turns = source_snapshot(fleet, 0.)
     volume, work = initial_work(fleet, counts, action, route, origin, timing, measured)
+    initial_rate = min(rate, phase_rate_cap(fleet, counts, history_bytes(fleet, origin, action, measured))) if fleet.metadata.get("fixed_host_shares") else rate
     load_factor = np.exp(timing["beta"] * measured["forecast_load"] * fleet.metadata.get("timing_load_factor", 1.))
-    pause_requested = volume / rate + work * load_factor
+    pause_requested = volume / initial_rate + work * load_factor
     pause, context, reset, _ = _quiesce(fleet, counts, pause_requested, origin_turn=turns)
     delta, tail = catchup(fleet, counts, action, route, context, reset, timing, measured, origin_context=origin)
-    commit = pause + delta / rate + tail * load_factor + measured.get("switch_s", 0.)
+    delta_rate = min(rate, phase_rate_cap(fleet, counts, history_bytes(fleet, context, action, measured, origin, reset))) if fleet.metadata.get("fixed_host_shares") else rate
+    commit = pause + delta / delta_rate + tail * load_factor + measured.get("switch_s", 0.)
     quiescing = fleet.metadata.get("paced_source", False)
     _, buffered = _buffered(fleet, counts, pause_requested if quiescing else pause, commit, measured, quiescing=quiescing)
     return volume + delta, (work + tail) * load_factor, commit, buffered
 
 
 def isolated_methods(fleet, load, endpoint, budgets, timing):
-    budgets = np.minimum(budgets, endpoint * network_nodes(fleet))
+    budgets = np.minimum(budgets, endpoint * transport_workers(fleet))
     rates = np.minimum(endpoint[:2], np.minimum(budgets[:2], budgets[2]))
     kv_rates = np.minimum(rates, timing.get("regional_kv_bytes_per_s", rates))
     replay = fleet.log / rates[:, None] + fleet.t1 * np.exp(timing["beta"] * load * fleet.metadata.get("timing_load_factor", 1.)) * np.asarray(timing.get("regional_replay_factor", [1., 1.]))[:, None]
     kv = fleet.kv / kv_rates[:, None] + (timing["kv_completion_s"] + np.asarray(fleet.metadata.get("kv_partial_s", np.zeros(len(fleet.count))))) * np.exp(timing["beta"] * load * fleet.metadata.get("timing_load_factor", 1.))
-    if "turn_sequences" in fleet.metadata:
+    if "turn_sequences" in fleet.metadata or fleet.metadata.get("fixed_host_shares"):
         measured = {**calibration(0), "forecast_load": load}
         shapes = np.eye(len(fleet.count))
         replay = np.array([[nominal_action(fleet, c, 0, route, rates[route], timing, measured)[2] for c in shapes] for route in (0, 1)])
@@ -323,7 +326,7 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
             or not np.isfinite(np.r_[deadline, load, tails, endpoint, budgets]).all()
             or np.any(replay < 0) or np.any(kv < 0) or np.any(kv != np.floor(kv)) or replay.shape != kv.shape):
         raise ValueError("invalid scheduling inputs")
-    budgets = np.minimum(budgets, endpoint * network_nodes(fleet))
+    budgets = np.minimum(budgets, endpoint * transport_workers(fleet))
     fastest = isolated_methods(fleet, load, endpoint, budgets, timing)
     r, k = np.tile(replay, (2, 1)), np.tile(kv, (2, 1))
     route = np.repeat([0, 1], len(replay))
@@ -340,7 +343,7 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
     kv_per_batch = np.minimum(per_batch, np.asarray(timing.get("regional_kv_bytes_per_s", endpoint[:2]))[route])
     r_commit, k_commit = logs / per_batch + duration, state / kv_per_batch + deadline - kv_release
     buffered = np.zeros(len(route))
-    if "turn_sequences" in fleet.metadata:
+    if "turn_sequences" in fleet.metadata or fleet.metadata.get("fixed_host_shares"):
         measured, cache = {**calibration(0), "forecast_load": load}, {}
         estimates = []
         for action, counts, speed in ((0, r, per_batch), (1, k, kv_per_batch)):
@@ -372,7 +375,7 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
     gpus = destination_gpus(fleet)
     capacities = np.r_[fleet.count, [gpus * deadline] * 2, [gpus * (1 - load)] * 2,
                        [(fleet.kv_capacity - fleet.baseline_kv) * gpus / fleet.gpus] * 2, budgets[:2],
-                       np.asarray(timing.get("regional_kv_bytes_per_s", endpoint[:2])) * network_nodes(fleet)[:2], budgets[2]]
+                       np.asarray(timing.get("regional_kv_bytes_per_s", endpoint[:2])) * transport_workers(fleet)[:2], budgets[2]]
     if fleet.metadata.get("resident_affinity"):
         from pool_shed_execution import replica_feasible
         eligible &= replica_feasible(fleet, r, k, load)
@@ -587,7 +590,7 @@ def cells(config):
 
 
 def provenance(c):
-    paths = [Path(__file__), ROOT / "pool_shed_calibration.py", ROOT / "pool_shed_execution.py", ROOT / "pool_shed_planner.py", ROOT / "plot_style.py", NETWORK, MANIFEST]
+    paths = [Path(__file__), ROOT / "pool_shed_calibration.py", ROOT / "pool_shed_execution.py", ROOT / "pool_shed_planner.py", ROOT / "pool_shed_network.py", ROOT / "plot_style.py", NETWORK, MANIFEST]
     return {**c["sources"], **{str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
 
 
@@ -695,7 +698,7 @@ def forecast(workload, snapshot, gpus, gpus_per_node, load, wan, deadline, expan
     samples = network_samples()
     endpoint = np.r_[np.median(samples[:, :2], axis=0), 0.]
     endpoint[2] = endpoint[:2].sum()
-    budgets = bandwidth(endpoint, fleet.nodes, wan)
+    budgets = bandwidth(endpoint, transport_workers(fleet)[2], wan)
     r, k = patterns(workload, snapshot, fleet.gpus, expanded)
     timing = calibration(0)["timing"][0]
     fastest = isolated_methods(fleet, load, endpoint, budgets, timing)
@@ -769,7 +772,7 @@ def run_cell(plan, cell, expanded=False):
         plan["config"]["gpus_per_node"], load, wan, deadline, expanded, plan["config"]["require_recovery"])
     build_s = time.perf_counter() - start
     endpoint = network_samples()[plan["network_indices"][draw]].copy() if draw else table.endpoint
-    budgets = np.minimum(bandwidth(endpoint, table.fleet.nodes, wan), endpoint * network_nodes(table.fleet))
+    budgets = np.minimum(bandwidth(endpoint, transport_workers(table.fleet)[2], wan), endpoint * transport_workers(table.fleet))
     realized = replace(table, endpoint=endpoint, budgets=budgets)
     start = time.perf_counter()
     results = {}

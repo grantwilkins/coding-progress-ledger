@@ -23,6 +23,55 @@ remains a hardware-validation workload. The default output is
 `outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped: fleet
 resident latency and the extrapolated network configuration are not validated.
 
+The September 11 [bandwidth sweep](outputs/a100-bandwidth-ttft-20260911/summary.json)
+compares both agentic workloads and all five policies at **0.1, 0.4, 1, 2, 5,
+10, 25.6 and 100 Tb/s**, with **30/60/120 s** deadlines. Reproduce its 240
+conditional policy evaluations with:
+
+```bash
+uv run python pool_shed_bandwidth_sweep.py --out outputs/a100-bandwidth-ttft-reproduction
+```
+
+It freezes candidate batches, source trajectories, resident calendars and
+planning clocks across bandwidths. Both destination routes share the stated
+site allocation. Solver wall time is recorded but does not consume the modeled
+migration deadline. This is one source snapshot with two resident phase samples,
+without a fleet confidence interval. Eight GPUs share an assumed **80 Gb/s host migration budget**:
+each source history reserves 1.25 Gb/s and each destination GPU reserves
+10 Gb/s, without borrowing idle shares. These conservative reservations enforce
+host ceilings without asserting a measured host placement. Independent per-GPU
+transport-worker equivalents are an unmeasured scaling assumption; measured
+per-wave goodput and application limits still apply. This is not Azure A100's
+published IP configuration. Requested and effective budgets are saved separately.
+
+The [power–deadline plot](outputs/a100-bandwidth-ttft-20260911/power_deadline_frontier.pdf)
+and [30 s action mix](outputs/a100-bandwidth-ttft-20260911/action_mix_d30.pdf)
+show **frozen fleet-model estimates**, not achieved SLO-safe shed. The separate
+[resident TTFT plot](outputs/a100-bandwidth-ttft-20260911/resident_ttft_attainment.pdf)
+reports the worst trigger-aligned 30 s window, retaining original offered times,
+source-pause waiting and missing first tokens. Two fixed synthetic calendars per
+replica start with eight warm histories and develop a 60 s baseline; unused
+destination GPUs contribute resident-only controls. The calendars use nominal
+50% fleet pacing, not the higher coding acquisition rate. Full-context migration
+replay has no cache discount; only ordinary same-history service reuses KV.
+
+The checker reconstructs every migration wave, including initial replay,
+full-context catch-up, handoff and continued incoming service. It checks initial
+readiness before source pause, catch-up GPU completion before switch entry, and
+delivery before handoff. Some long-context fleet replay costs are roughly half
+a second faster than the request scheduler **even without residents**. This
+context-dependent disagreement requires a common readiness primitive before a
+jointly scheduled, SLO-valid frontier can be claimed; adding a uniform penalty
+would not resolve it. Admission must then use the same queue timing and resident
+latency targets. Timing-compatible and locally passing subsets are
+diagnostics, not attainable alternative plans. The fleet planner still uses its
+existing fluid recovery criterion; it does not optimize TTFT. The
+[regression evidence](outputs/a100-bandwidth-ttft-20260911/validation/germany-regression.json)
+reproduces all 80 archived Germany variants exactly, and the
+[East checks](outputs/a100-bandwidth-ttft-20260911/validation/east-regression.json)
+retain the same conditional successes and failures. No new GPU run is required
+to reproduce this comparison.
+
 The September 10 server records are sufficient for the bounded correction; no
 new GPU campaign is needed to explain fast replay. The
 [server-conditioned validation](outputs/a100-replay-queue-resolution-20260910/server-heldout.json)
@@ -79,7 +128,7 @@ Full-context migration replay, historical regional factors, offered rates and
 the 0.80 GB/32K wire anchor stay unchanged. Source retained prefixes are assumed
 cached; additional contention between source histories remains omitted.
 
-The bounded comparison separates raw handoff from handoff whose local resident
+The earlier bounded comparison separates raw handoff from handoff whose local resident
 and source queues have cleared. Its second mode requires predicted local queue
 clearance by the deadline for every policy; execution independently checks actual
 clearance. It adds no pre-handoff pause or synthetic replay penalty. These are

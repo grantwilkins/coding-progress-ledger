@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from pool_shed_execution import _buffered, _quiesce, catchup, flow_rates, compute_allocation, source_snapshot, initial_work, paced_source, destination_gpus, network_nodes, replica_feasible
+from pool_shed_execution import _buffered, _quiesce, catchup, flow_rates, compute_allocation, source_snapshot, initial_work, paced_source, destination_gpus, replica_feasible
+from pool_shed_network import history_bytes, phase_rate_cap, transport_workers
 
 PLANNING_RESOLUTION = .5
 PLANNING_ITERATIONS = 3
@@ -94,13 +95,14 @@ def phase_profile(table, counts, action, route, start, edges, loads, timing, cal
     origin_context, origin_turn = source_snapshot(fleet, start, primitive_cache) if paced_source(fleet) else (None, None)
     initial_bytes, initial_compute = initial_work(fleet, counts, action, route, origin_context, timing, calibration, primitive_cache)
 
-    def phase(work, compute=False):
+    def phase(work, compute=False, network_cap=np.inf):
         nonlocal now
         if not compute:
             if causal_network and work > 0 and now < edges[-1]:
                 now = max(now, float(edges[np.searchsorted(edges, now - 1e-10, side="left")]))
-            end = now + max(work, 0.) / endpoint
-            sent = _overlap(edges, now, end) * endpoint
+            transfer_rate = min(endpoint, network_cap)
+            end = now + max(work, 0.) / transfer_rate
+            sent = _overlap(edges, now, end) * transfer_rate
             profile["network"] += sent
             if action:
                 profile["application"] += sent
@@ -125,7 +127,8 @@ def phase_profile(table, counts, action, route, start, edges, loads, timing, cal
             now += left * np.exp(timing["beta"] * (local_load if affinity else loads[route, -1]) * fleet.metadata.get("timing_load_factor", 1.)) / sharing
 
     if state == 0:
-        phase(initial_bytes - transferred)
+        cap = phase_rate_cap(fleet, counts, history_bytes(fleet, origin_context, action, calibration)) if fleet.metadata.get("fixed_host_shares") else np.inf
+        phase(initial_bytes - transferred, network_cap=cap)
     if state <= 1 and not action:
         phase(initial_compute - (completed_work if state == 1 else 0.), True)
     if now > edges[-1]:
@@ -140,7 +143,8 @@ def phase_profile(table, counts, action, route, start, edges, loads, timing, cal
             now = max(now, quiesced)
     delta, tail = catchup(fleet, counts, action, route, context, reset, timing, calibration, primitive_cache, origin_context=origin_context)
     if state <= 3:
-        phase(delta - (transferred if state == 3 else 0.))
+        cap = phase_rate_cap(fleet, counts, history_bytes(fleet, context, action, calibration, origin_context, reset)) if fleet.metadata.get("fixed_host_shares") else np.inf
+        phase(delta - (transferred if state == 3 else 0.), network_cap=cap)
     if state <= 4:
         phase(tail - (completed_work if state == 4 else 0.), True)
     if fleet.metadata.get("protect_resident"):
@@ -354,7 +358,7 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
             fixed = mandatory
         active_rate = flow_rates(active_mass, np.arange(2), table.endpoint[:2], table.budgets)
         active_kv = np.array([engine.mass[active[(engine.route[active] == r) & (engine.action[active] == 1)]].sum() for r in (0, 1)])
-        app = np.asarray(timing.get("regional_kv_bytes_per_s", table.endpoint[:2])) * network_nodes(fleet)[:2]
+        app = np.asarray(timing.get("regional_kv_bytes_per_s", table.endpoint[:2])) * transport_workers(fleet)[:2]
         active_rate = np.minimum(active_rate, app / np.maximum(active_kv, 1e-30))
         buffer_groups = [(int(engine.route[i]), -1, float(engine.backlog[i]), float(engine.mass[i]))
                          for i in np.flatnonzero(engine.backlog > 1e-12)]
@@ -409,7 +413,7 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
                               data["network"].sum(0), data["application"].reshape(2 * bins, -1)))
         fixed_resource = np.r_[fixed_compute.ravel(), fixed["network"].ravel(),
                                fixed["network"].sum(0), fixed["application"].ravel()]
-        budgets = np.minimum(table.budgets, table.endpoint * network_nodes(fleet))
+        budgets = np.minimum(table.budgets, table.endpoint * transport_workers(fleet))
         limit = np.r_[compute_limit, (budgets[:2, None] * dt).ravel(), budgets[2] * dt, (app[:, None] * dt).ravel()]
         overload = max(overload, float(np.max((fixed_resource - limit) / np.maximum(limit, 1.), initial=0.)))
         matrix = np.vstack((static[:, original], resource))

@@ -51,7 +51,7 @@ def test_scheduler_limits_and_known_input_validation():
     a, b = result["requests"]
     assert b["admitted_s"] == pytest.approx(a["server_end_s"])
     assert b["admitted_s"] < a["end_s"]
-    for rows in ([request("x"), request("x")], [request("x", cached=1)], [request("x", output=0)]):
+    for rows in ([request("x"), request("x")], [request("x", cached=1)], [request("x", output=-1)]):
         with pytest.raises(ValueError):
             simulate(rows, C, 10)
 
@@ -79,6 +79,32 @@ def test_arrivals_during_final_censored_iteration_remain_visible_in_queue():
     result = simulate(rows, {**C, "prefill_token_s": 1.}, 2.)["requests"]
     assert result[1]["eligible_s"] == 1.
     assert result[1]["admitted_s"] is None and not result[1]["done"]
+
+
+def test_release_keeps_original_wait_and_history_order():
+    rows = [{**request("first", history="h"), "release_s": 3.},
+            {**request("next", arrival=1., history="h"), "release_s": 2.}]
+    first, following = simulate(rows, C, 10)["requests"]
+    assert first["admitted_s"] == 3.
+    assert first["ttft_s"] == pytest.approx(3.4)
+    assert following["admitted_s"] == pytest.approx(first["end_s"])
+    for release in (-1., np.nan, np.inf):
+        with pytest.raises(ValueError):
+            simulate([{**rows[0], "release_s": release}], C, 10)
+
+
+def test_zero_output_prefill_releases_followers_without_inventing_tokens():
+    rows = [request("prefill_only", output=0, prompt=3, history="h"),
+            request("follower", arrival=.1, history="h")]
+    first, following = simulate(rows, C, 10, token_budget=2)["requests"]
+    assert first["done"] and first["computed_prompt_tokens"] == 3
+    assert first["end_s"] == pytest.approx(.7)
+    assert first["generated_tokens"] == 0
+    assert first["first_s"] is first["last_token_s"] is first["ttft_s"] is None
+    assert following["admitted_s"] == pytest.approx(first["end_s"])
+    censored = simulate(rows, C, .4, token_budget=2)["requests"]
+    assert not censored[0]["done"] and censored[0]["computed_prompt_tokens"] == 2
+    assert censored[1]["admitted_s"] is None
 
 
 def source_fleet(durations, **metadata):
