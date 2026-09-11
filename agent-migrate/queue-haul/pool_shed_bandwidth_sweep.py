@@ -288,13 +288,13 @@ def plot(rows, out):
     workloads = list(dict.fromkeys(r["workload"] for r in rows))
     deadlines = sorted({r["deadline_s"] for r in rows})
     policies = list(dict.fromkeys(r["policy"] for r in rows))
-    for metric, label, limit in (("handoff_fraction", "Frozen model: handoff work by deadline (%)", (0, 102)),
+    for metric, label, limit in (("handoff_fraction", "Handoff work by deadline (%)\nFrozen fleet model", (0, 102)),
         ("power_shed_mw", "Source power shed proxy (MW)", None),
-        ("kv_share_of_moved", "KV share of completed sessions (%)", (0, 102)),
-        ("resident_ttft_attainment", "Worst 30 s resident TTFT attainment (%)", (0, 102)),
-        ("timing_consistent_handoff_fraction", "Request timing compatible subset (%)", (0, 102))):
+        ("kv_share_of_moved", "KV share of completed\nsessions (%)", (0, 102)),
+        ("resident_ttft_attainment", "Resident TTFT attainment (%)\nWorst 30 s window", (0, 102)),
+        ("timing_consistent_handoff_fraction", "Request timing compatible\nhandoff subset (%)", (0, 102))):
         fig, axes = plt.subplots(len(workloads), len(deadlines), squeeze=False,
-                                 figsize=(5 * len(deadlines), 3.8 * len(workloads)), sharex=True, sharey=True)
+                                 figsize=(max(12, 5 * len(deadlines)), 4.2 * len(workloads)), sharex=True, sharey=True)
         for i, workload in enumerate(workloads):
             for j, deadline in enumerate(deadlines):
                 ax = axes[i, j]
@@ -305,20 +305,23 @@ def plot(rows, out):
                         marker=style.POLICY_MARKERS[policy], markersize=5, **style.policy_style(policy, style.PAPER_POLICY_NAMES))
                 ax.set(xscale="log", title=f"{workload} · {deadline} s", xlabel="Shared site migration allocation (Tb/s)")
                 if j == 0:
-                    ax.set_ylabel(label)
+                    ax.set_ylabel(label, fontsize=12)
                 if limit:
                     ax.set_ylim(*limit)
+                if metric == "resident_ttft_attainment":
+                    ax.axhline(90, color=style.SLO_COLOR, linestyle=style.SLO_LINESTYLE, linewidth=1.5)
+                    ax.text(.015, 90, f"90% {style.SLO_NAME}", transform=ax.get_yaxis_transform(), fontsize=10, va="bottom")
                 ax.grid(True, alpha=.25)
         handles, labels = axes[0, 0].get_legend_handles_labels()
         fig.legend(handles, labels, loc="lower center", ncol=len(policies), frameon=False)
-        fig.suptitle("2 MW source / 2 MW per destination · conditional simulation", fontsize=15)
+        fig.suptitle("2 MW installed at source and each destination · conditional simulation", fontsize=15)
         fig.tight_layout(rect=(0, .08, 1, .95))
         for suffix in ("png", "pdf"):
             fig.savefig(out / f"{metric}.{suffix}")
         plt.close(fig)
     for deadline in deadlines:
         fig, axes = plt.subplots(len(workloads), len(policies), squeeze=False,
-                                 figsize=(3.4 * len(policies), 3.4 * len(workloads)), sharey=True)
+                                 figsize=(max(12, 3.4 * len(policies)), 3.4 * len(workloads)), sharey=True)
         for i, workload in enumerate(workloads):
             for j, policy in enumerate(policies):
                 ax = axes[i, j]
@@ -342,7 +345,7 @@ def plot(rows, out):
     bandwidths = sorted({r["bandwidth_tbps"] for r in rows})
     shown = sorted({bandwidths[0], bandwidths[-1], *({1., 10.} & set(bandwidths))})
     fig, axes = plt.subplots(len(workloads), len(shown), squeeze=False,
-                             figsize=(4.2 * len(shown), 3.8 * len(workloads)), sharex=True, sharey=True)
+                             figsize=(max(12, 4.2 * len(shown)), 3.8 * len(workloads)), sharex=True, sharey=True)
     for i, workload in enumerate(workloads):
         for j, bw in enumerate(shown):
             ax = axes[i, j]
@@ -351,8 +354,9 @@ def plot(rows, out):
                 ax.plot([r["deadline_s"] for r in selected], [r["power_shed_mw"] for r in selected],
                         marker=style.POLICY_MARKERS[policy], **style.policy_style(policy, style.PAPER_POLICY_NAMES))
             ax.set(title=f"{workload} · {bw:g} Tb/s", xlabel="Deadline (s)", ylim=(0, .47))
+            ax.set_xticks(deadlines)
             if j == 0:
-                ax.set_ylabel("Source power shed proxy (MW)")
+                ax.set_ylabel("Source power shed\nproxy (MW)", fontsize=12)
             ax.grid(True, alpha=.25)
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=len(policies), frameon=False)

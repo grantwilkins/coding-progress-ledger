@@ -1,0 +1,32 @@
+{
+  "archived_code_sha256": {
+    "pool_shed_resident_data.py": "9a4e3194c558631f9468fdb9c3e2f9d59dfe0c8abb9ab33954ad6989ccd7beba",
+    "pool_shed_resident_fit.py": "1a97f767524be2eae4d9ba6183b480c1ad3ed79b7acdccc5764e539f266cf9b5",
+    "pool_shed_resident_queue.py": "45692a18e782d7776e9b576056bc0c0b070ab910fbccfb84f988a076ba872ffa",
+    "pool_shed_resident_validation.py": "bdcc8332d85116b7cc15c429fd3561b6750d2d5397ee8312e8d25ad70e27aca5"
+  },
+  "comparison": "For each archived episode/endpoint/cache variant, call pool_shed_resident_validation.evaluate with the archived fit.coefficients, verified compact rows and matching destination engine samples; remove predictions and require exact dictionary equality with the archived episode. All window metrics, migration spans, burst drain, counts and GPU summaries match.",
+  "conditional_heldout_gate_pass": false,
+  "conditional_stress_gate_pass": false,
+  "current_code_sha256": {
+    "pool_shed_resident_data.py": "9a4e3194c558631f9468fdb9c3e2f9d59dfe0c8abb9ab33954ad6989ccd7beba",
+    "pool_shed_resident_fit.py": "bd9a802e0f63d1b591cdb4255238b1f0b24483e2518acf5207005972ed69b596",
+    "pool_shed_resident_queue.py": "3550df3b12878d2daf65b372bec142aa9e9a38aee891a24ee1431821459134a4",
+    "pool_shed_resident_validation.py": "b21037278eb0e90d1ec71b550e7a6b02f094d6f90c601abf0b8153840c875f8b"
+  },
+  "current_queue_sha256": "3550df3b12878d2daf65b372bec142aa9e9a38aee891a24ee1431821459134a4",
+  "episode_variants": 80,
+  "episodes": 20,
+  "exact_archived_episode_equality": true,
+  "frozen_report_sha256": "f51303d3462c0b036dd11cb4c25cd20a8c47a13d11b6cc5da7ad5cc2218ea8b0",
+  "input_sha256": {
+    "outputs/a100-resident-queues-20260910/data-manifest.json": "bffd7f3a78da7b487cf83e6c37013c1dc7011e6c54dbd6267e590020dcfb8667",
+    "outputs/a100-resident-queues-20260910/engine.csv": "4c846220f10c9a969daed3f9ad1bd413b59d94f9f313f78d10db7c6e62f7024d",
+    "outputs/a100-resident-queues-20260910/migration-events.csv": "cfc12a47c9529008e71fd5097856df064f690d3ea11cb797e62adec220a93ce7",
+    "outputs/a100-resident-queues-20260910/report.json": "f51303d3462c0b036dd11cb4c25cd20a8c47a13d11b6cc5da7ad5cc2218ea8b0",
+    "outputs/a100-resident-queues-20260910/requests.csv": "dd7f0a3953cb767caadce8743752757d0811c199ccdb97cb13b378dbb8658d77"
+  },
+  "schema": "a100-ttft-germany-compatibility-v1",
+  "scope": "Backward compatibility of the conditional measured-input checker. This neither validates synthesized fleet resident calendars nor repairs the existing held-out/stress failures.",
+  "window_variants": 368
+}

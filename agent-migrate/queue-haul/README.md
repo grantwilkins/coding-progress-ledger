@@ -32,6 +32,22 @@ conditional policy evaluations with:
 uv run python pool_shed_bandwidth_sweep.py --out outputs/a100-bandwidth-ttft-reproduction
 ```
 
+The numerical generator is commit `f91bf094`; the later
+[rendering change](outputs/a100-bandwidth-ttft-20260911/validation/rendering.json)
+only improves figure labels and layout. Frozen source and measurement hashes
+are in `config.json`. Recorded per-case runtimes total **27.71 min of simulation**
+and **22.01 min of TTFT checking** (49.72 min combined, excluding setup and rendering).
+
+KV-only and replay-only also use the common LP admission scheduler with their
+action restricted; they are optimized single-action baselines. The migration
+contract is **one-token readiness**, followed by real agentic service. Hardware
+validation probes requested up to 512 output tokens and typically produced all
+512. At the frozen 35.486 ms decode cadence, the additional 511 steps take about
+18.13 s per sequence; sequences may decode concurrently. That probe-DONE time is
+not charged to the modeled handoff, and must not be confused with replay's
+intrinsic context-rebuild time. A probe-completion comparison requires matching
+this contract for both methods.
+
 It freezes candidate batches, source trajectories, resident calendars and
 planning clocks across bandwidths. Both destination routes share the stated
 site allocation. Solver wall time is recorded but does not consume the modeled
@@ -55,6 +71,27 @@ destination GPUs contribute resident-only controls. The calendars use nominal
 50% fleet pacing, not the higher coding acquisition rate. Full-context migration
 replay has no cache discount; only ordinary same-history service reuses KV.
 
+At a **30 s deadline**, the saved estimates show the bandwidth-dependent mix:
+
+| Workload | Shared Tb/s | QH handoff work | Replay-only handoff work | QH KV share of completed sessions | QH resident TTFT attainment |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| coding | 1 | 87.95% | 85.87% | 5.25% | 86.54% |
+| coding | 10 | 98.36% | 85.87% | 56.23% | 94.06% |
+| coding | 100 | 99.04% | 85.87% | 93.01% | 98.42% |
+| coding_long | 1 | 73.58% | 70.77% | 7.58% | 76.52% |
+| coding_long | 10 | 88.85% | 70.77% | 70.28% | 88.40% |
+| coding_long | 100 | 95.99% | 70.77% | 95.28% | 97.76% |
+
+TTFT attainment means the fraction receiving a first token within 1 s; the
+target is 90%. At 10 Tb/s and 30 s, KV-only hands off **90.03%** of long-context
+work, slightly more than QH's **88.85%**, while QH misses that resident target.
+The [network review](outputs/a100-bandwidth-ttft-20260911/validation/network-review.json)
+also explains greedy's smaller packs and the nonmonotonic controller outcomes:
+each incoming pack permanently reserves a destination GPU, and admission uses
+finite lookahead. These results are not a global placement optimum. High
+bandwidth can stop helping when per-wave endpoint limits, fixed host shares or
+destination packing bind.
+
 The checker reconstructs every migration wave, including initial replay,
 full-context catch-up, handoff and continued incoming service. It checks initial
 readiness before source pause, catch-up GPU completion before switch entry, and
@@ -70,7 +107,10 @@ existing fluid recovery criterion; it does not optimize TTFT. The
 reproduces all 80 archived Germany variants exactly, and the
 [East checks](outputs/a100-bandwidth-ttft-20260911/validation/east-regression.json)
 retain the same conditional successes and failures. No new GPU run is required
-to reproduce this comparison.
+to reproduce this comparison. All
+[228 focused tests](outputs/a100-bandwidth-ttft-20260911/validation/focused-tests.json)
+pass; the independent [sweep review](outputs/a100-bandwidth-ttft-20260911/validation/sweep-review.json)
+checks all 240 records and their common inputs.
 
 The September 10 server records are sufficient for the bounded correction; no
 new GPU campaign is needed to explain fast replay. The
@@ -126,7 +166,9 @@ Source turns use measured server cadence and wait for predecessor completion;
 the longest sampled turn takes 43.97 s rather than a short throughput proxy.
 Full-context migration replay, historical regional factors, offered rates and
 the 0.80 GB/32K wire anchor stay unchanged. Source retained prefixes are assumed
-cached; additional contention between source histories remains omitted.
+cached, with incremental source prefill even on recorded reset/wrap turns;
+additional contention between source histories remains omitted. This source
+timing is an optimistic floor, not the destination checker's cold-reset model.
 
 The earlier bounded comparison separates raw handoff from handoff whose local resident
 and source queues have cleared. Its second mode requires predicted local queue

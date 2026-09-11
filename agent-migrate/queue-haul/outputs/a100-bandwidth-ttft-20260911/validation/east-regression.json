@@ -1,0 +1,73 @@
+{
+  "archived_code_sha256": {
+    "pool_shed_resident_data.py": "9a4e3194c558631f9468fdb9c3e2f9d59dfe0c8abb9ab33954ad6989ccd7beba",
+    "pool_shed_resident_fit.py": "bd9a802e0f63d1b591cdb4255238b1f0b24483e2518acf5207005972ed69b596",
+    "pool_shed_resident_queue.py": "6674e1f75647ddbb0e5c551f4248c1f2db36695e85345dabc59a0cfbf006bf23",
+    "pool_shed_resident_validation.py": "b21037278eb0e90d1ec71b550e7a6b02f094d6f90c601abf0b8153840c875f8b"
+  },
+  "client_primary_checks": 176,
+  "client_primary_failed_checks": 30,
+  "comparison": "pool_shed_resident_validation.validate_server freshly verifies and joins the captured East request, engine and server streams, repeats the complete validation, and exactly reproduces every archived top-level value except code_sha256.",
+  "current_code_sha256": {
+    "pool_shed_resident_data.py": "9a4e3194c558631f9468fdb9c3e2f9d59dfe0c8abb9ab33954ad6989ccd7beba",
+    "pool_shed_resident_fit.py": "bd9a802e0f63d1b591cdb4255238b1f0b24483e2518acf5207005972ed69b596",
+    "pool_shed_resident_queue.py": "3550df3b12878d2daf65b372bec142aa9e9a38aee891a24ee1431821459134a4",
+    "pool_shed_resident_validation.py": "b21037278eb0e90d1ec71b550e7a6b02f094d6f90c601abf0b8153840c875f8b"
+  },
+  "current_queue_sha256": "3550df3b12878d2daf65b372bec142aa9e9a38aee891a24ee1431821459134a4",
+  "exact_archived_report_equality_except_code_hashes": true,
+  "frozen_report_sha256": "5453af6eeebb8af60ec24c21b6cec772ef8b29e3dbc65515f73e959158aab12e",
+  "global_telemetry_accepted": false,
+  "input_sha256": {
+    "outputs/a100-replay-queue-resolution-20260910/server-heldout.json": "5453af6eeebb8af60ec24c21b6cec772ef8b29e3dbc65515f73e959158aab12e",
+    "outputs/a100-resident-queues-20260910/report.json": "f51303d3462c0b036dd11cb4c25cd20a8c47a13d11b6cc5da7ad5cc2218ea8b0",
+    "outputs/a100-resident-server-timing-20260910T1723/compression-manifest.json": "12ff6fdce00d33a51fc41e970382fd4b1f7231ee4d159b0201b7193aafbc01f5",
+    "outputs/a100-resident-server-timing-20260910T1723/critic-warm-certificate.json": "f18528a4f90720e73a32d8793d206626c3565cc73514fbe20c736e4f3d64ae64",
+    "outputs/a100-resident-server-timing-20260910T1723/destination/instrumentation/manifest.json": "1a115183979d7e7f34553f7e6d10405a13d8dcc6610e1bc63121d1ce9f94f298",
+    "outputs/a100-resident-server-timing-20260910T1723/destination/instrumentation/vllm/entrypoints/openai/completion/serving.py": "4a9fd6608075f2342e4ffddf8be992bc845f9bb38ebfff9e3aa13ab8b4f93e7a",
+    "outputs/a100-resident-server-timing-20260910T1723/destination/instrumentation/vllm/v1/engine/output_processor.py": "aecde82b8d2c71a9cca130330974d5160af9c8966f4b60dcf9471bfa0736762e",
+    "outputs/a100-resident-server-timing-20260910T1723/destination/launches.jsonl": "d1ce36ef6e3467daa6fe0d545abaa96dea2cba084a4428dbf9000cf28507806d",
+    "outputs/a100-resident-server-timing-20260910T1723/destination/runtime.json": "1b1f6eb1fbaa23fb1de56977764fb4c18b6eafbc5410190404a9bf2c9f091bd5",
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7195.jsonl.gz": "4381c8c3fdbf3541a0fe1efdf25a1ba7c31e7d624f56a2f5bcd1102c4d6566ad",
+    "outputs/a100-resident-server-timing-20260910T1723/destination/timing/vmssae9f0000000-7625.jsonl.gz": "cfc408260de42473a5b351135d86e50c3761abd837a410ca50ba3b609674e42d",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding-0-control-7102/engine.csv": "3199793f6632974bc6976fa90734523bf7b808192c66bf61073e50f964b8c4bf",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding-0-control-7102/offered-trace.json": "c6dc8df5508a59569b7b0039a378d847dcd1eef98b8d92c462c245437a296245",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding-0-control-7102/physical-workload.json": "51134ccc31049d1bce548175c280266e101b123ad927e3c1508823f1aa9f73b1",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding-0-control-7102/result.json": "8a7e44cc304e0d5bb82067c48f507765b952f3f297f3ddec5ae889a4bf9ee6fc",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding-0-replay-7102/engine.csv": "0379c5c02a80176748086c9d8873188cd5cdcc12b6714569dcf8254420f03c84",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding-0-replay-7102/offered-trace.json": "c6dc8df5508a59569b7b0039a378d847dcd1eef98b8d92c462c245437a296245",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding-0-replay-7102/physical-workload.json": "51134ccc31049d1bce548175c280266e101b123ad927e3c1508823f1aa9f73b1",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding-0-replay-7102/result.json": "052eb6f43ec085ec8f43fc9584f2a166386028c8677244b756e22289c384b1cf",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding_long-0-control-7101/engine.csv": "a47c0c72369860485b90a43b9388ff2e6f890045cc391f6728257932ce716b4b",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding_long-0-control-7101/offered-trace.json": "e08145b7d6326f157feace23f24be7eb6f3abc003b39377a857d282b18e2e033",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding_long-0-control-7101/physical-workload.json": "c24922d8e624af10920290b3d87b0d5fc08a048820790eed83a627be63d68a6a",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding_long-0-control-7101/result.json": "0c100db75de6ae3066dce593e7c8ddd76f952fb760ada82aab1cbc25ce16aaef",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding_long-0-replay-7101/engine.csv": "e942ac7616a9674044f36a21bd3aca1d76d1f26405118d1bf876d0e66c323873",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding_long-0-replay-7101/offered-trace.json": "e08145b7d6326f157feace23f24be7eb6f3abc003b39377a857d282b18e2e033",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding_long-0-replay-7101/physical-workload.json": "c24922d8e624af10920290b3d87b0d5fc08a048820790eed83a627be63d68a6a",
+    "outputs/a100-resident-server-timing-20260910T1723/episodes-coding_long-0-replay-7101/result.json": "3b32d58c11f01bc5e6b9c0b11694bdcf4a8dd227c57ff8c63980461334150b0e",
+    "outputs/a100-resident-server-timing-20260910T1723/instrumentation/manifest.json": "1a115183979d7e7f34553f7e6d10405a13d8dcc6610e1bc63121d1ce9f94f298",
+    "outputs/a100-resident-server-timing-20260910T1723/instrumentation/vllm/entrypoints/openai/completion/serving.py": "4a9fd6608075f2342e4ffddf8be992bc845f9bb38ebfff9e3aa13ab8b4f93e7a",
+    "outputs/a100-resident-server-timing-20260910T1723/instrumentation/vllm/v1/engine/output_processor.py": "aecde82b8d2c71a9cca130330974d5160af9c8966f4b60dcf9471bfa0736762e",
+    "outputs/a100-resident-server-timing-20260910T1723/plan.json": "90b68d831d0b6aeabed852d075b38780080b6b7ef28613ba86cce09c841a7ffb",
+    "outputs/a100-resident-server-timing-20260910T1723/report.json": "e03bd8cbdee40e457fea56519952f05ce30a84b92522bfd9442df37498362b5d",
+    "outputs/a100-resident-server-timing-20260910T1723/request-events.jsonl.gz": "9e253890da0842202b9fb195527c08f6ee56658fd4ae8bce8c833f9651ad3dda",
+    "outputs/a100-resident-server-timing-20260910T1723/requests.jsonl.gz": "0c89ec0bffdc7378b4707a01019a7bdb994d37edc1bdc86075416a4312d94d0b",
+    "outputs/a100-resident-server-timing-20260910T1723/sha256-manifest.json": "76338cccf0f8b9a77c3a7d39c1cf87533e59c68d07a750a771e2eda774f8ed2f",
+    "outputs/a100-resident-server-timing-20260910T1723/source/runtime.json": "5b4710468cccc2eca774f966931ba92e4150dd5983db1639d200390fb9106742",
+    "outputs/a100-resident-server-timing-20260910T1723/stack/launches.jsonl": "715bbdc6f8d18f4527e1577f707d86ccc78e33af2ca99d2b56c0a59ae1ee50f8"
+  },
+  "output_sha256": {
+    "server-heldout-current.json": "fdb23bce3d2d6594e3899dc7a28babf1f620c7c93a023e32a0dc487f2c908813"
+  },
+  "reproduction": {
+    "call": "pool_shed_resident_validation.validate_server(source, frozen_report, out)",
+    "frozen_report": "outputs/a100-resident-queues-20260910/report.json",
+    "source": "outputs/a100-resident-server-timing-20260910T1723"
+  },
+  "resident_latency_validated": false,
+  "schema": "a100-ttft-east-compatibility-v1",
+  "scope": "Backward compatibility with the four held-out East conditional checks, including all previously failed client gates, worker-only generated demand and failed global telemetry. No new GPU measurements or fleet SLO certification.",
+  "server_episodes": 4,
+  "server_request_rows": 755
+}

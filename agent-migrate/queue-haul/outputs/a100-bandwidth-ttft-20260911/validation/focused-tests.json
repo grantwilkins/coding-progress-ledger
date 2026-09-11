@@ -1,0 +1,7 @@
+{
+  "command": "uv run --offline --no-sync --with aiohttp --with torch --with blake3 pytest tests/test_pool_shed_bandwidth_sweep.py tests/test_pool_shed_execution.py tests/test_pool_shed_network.py tests/test_pool_shed_planner.py tests/test_pool_shed_ttft.py tests/test_pool_shed_resident_queue.py -q",
+  "passed": 228,
+  "warnings": 9,
+  "seconds": 23.89,
+  "warning_scope": "Existing tests deliberately exercise solver fallback; original constraints remain checked after solving."
+}
