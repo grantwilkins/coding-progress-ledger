@@ -193,6 +193,63 @@ is retained: it took 37 s and missed the quality target at 64 long-context
 blocks. The diagonal penalties and symmetric sweeps resolve that recorded
 failure without changing the packing constraints or acceptance tolerance.
 
+The pooled bandwidth sweep now keeps candidate ownership and resource matrices
+sparse through preparation and admission. Phase calculations visit only the
+histories in each pack; dispatch waves share immutable pack counts. Dense
+inputs remain supported for historical reproduction. Full-context replay,
+source resets, resident constraints, host limits and the 64-wave dispatch
+resolution are unchanged.
+
+`planner_sparse_scaling.py` reproduces the planning-time comparison for this
+pooled planner, using one source constraint per individual history. It repeats
+a fixed 64-history measured coding sample, preserving its phases and workload
+mix while scaling source and destination capacity proportionally. The
+[new figure](outputs/a100-sparse-planning-20260911/planner_scaling.png) separates
+preparation plus first admission from primary selection. Both policies receive
+identical sparse matrices; total LP time includes its secondary minimization.
+The saved inputs and primal/dual witnesses accompany three serial paired
+repeats per size. Calibration/imports, later feedback and DES are excluded.
+
+Recorded median seconds are:
+
+| Individual histories | Native selection | LP primary | Native total | LP total |
+| ---: | ---: | ---: | ---: | ---: |
+| 64 | 0.0209 | 0.0196 | 1.787 | 1.834 |
+| 128 | 0.0418 | 0.0438 | 3.604 | 3.661 |
+| 256 | 0.0839 | 0.1125 | 7.182 | 7.355 |
+| 512 | 0.1695 | 0.2519 | 14.399 | 15.046 |
+| 1,024 | 0.3491 | 0.8647 | 28.890 | 30.585 |
+
+At 1,024 histories, LP's complete selection takes 1.954 s: native selection is
+5.60× faster than that helper and 2.48× faster than primary LP alone. Common
+physical-profile construction dominates total planning, so the total speedup
+is only 1.06×. Native selection grows 16.7× for 16× more histories over this
+range. The largest matrix has 1,114 rows, 54,624 columns and 1,030,784 nonzeros.
+All 15 paired cases pass, with worst primary shortfall **0.0470 percentage
+points** and worst certified bound **0.0917 points**. The
+[339 focused tests](outputs/a100-sparse-planning-20260911/validation/focused-tests.log)
+pass; [independent source review](outputs/a100-sparse-planning-20260911/validation/source-review.json)
+records representation checks and an unrelated pre-existing stale batch-test
+expectation.
+
+The [four production feedback checks](outputs/a100-sparse-planning-20260911/validation/feedback/review.json)
+also pass the original resource and wave-accounting checks at 2 MW per site,
+30 s and 10 Tb/s. Dense-to-sparse LP handoff differs only by roundoff;
+native handoff changes from 98.30327% to 98.29534%, a 0.00793-point decrease.
+Floating-point reductions can change selected packs and action mix, so complete
+schedules are not promised identical. This check adds no resident TTFT claim.
+
+```bash
+uv run python planner_sparse_scaling.py run --out outputs/a100-sparse-planning-reproduction
+```
+
+This is a fractional admission benchmark, separate from the older
+`planner_scaling_campaign.py` 25%-power-target contract. Sparse storage removes
+the histories-by-candidates and histories-by-waves allocations on the new path;
+it does not establish linear total simulator runtime. Explicit full-history
+wave telemetry still expands those output records, and event processing and
+solver iteration counts can grow faster than the candidate count.
+
 The [earlier Python comparison](outputs/a100-greedy-quality-20260911/summary.json)
 and [cheap-repair audit](outputs/a100-greedy-quality-20260911/validation/speed/summary.json)
 remain historical results. The Python refinement took seconds per solve; it is
@@ -3248,8 +3305,8 @@ misses the target hard-fails rather than reporting a fallback's timing, which is
 what makes `outputs/scaling_1_to_100k_20260720_greedy` unusable for this
 comparison: past 32 sessions its 50% request is out of reach.
 
-`planner_scaling_campaign.py` is the apples-to-apples production-front-end
-comparison. It gives LP and greedy the same deterministic fleet and attainable
+`planner_scaling_campaign.py` is the historical production-front-end
+comparison for the per-session planner. It gives LP and greedy the same deterministic fleet and attainable
 25% removable-power target, times candidate generation plus selection in fresh
 processes, disables LP integral recovery, and excludes common fleet setup,
 packing, and DES. Three repeats run through 100K sessions and one thereafter.

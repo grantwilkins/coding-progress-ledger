@@ -10,6 +10,8 @@ import json
 import subprocess
 import time
 import warnings
+from collections import Counter
+from copy import copy
 from dataclasses import dataclass, replace
 from functools import cache, lru_cache
 from itertools import product
@@ -17,7 +19,7 @@ from pathlib import Path
 
 import highspy
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, issparse, vstack as sparse_vstack
 
 from pool_shed_calibration import calibration, regional_check, replay_seconds, kv_state, loaded_execution_check, resident_execution_check, service_work, source_power
 from pool_shed_execution import DISPATCH_CHUNKS, destination_gpus
@@ -105,6 +107,28 @@ class Fleet:
     def memory_tokens(self):
         peak = self.metadata.get("peak_context", self.context)
         return np.ceil(np.maximum(self.context, peak) / 16) * 16
+
+
+def compact_fleet(fleet, ids):
+    """Phase-only history view; global admission/memory checks use the original fleet."""
+    ids = np.asarray(ids)
+    if ids.ndim != 1 or ids.dtype.kind not in "iu" or np.any(ids < 0) or np.any(ids >= len(fleet.count)):
+        raise ValueError("compact history indices must be an in-range integer vector")
+    metadata = fleet.metadata.copy()
+    for key in ("turn_sequences", "turn_work_s", "turn_duration_s", "turn_offset", "source_phase_s",
+                "kv_partial_s", "peak_context", "serving_work_s", "sampled_states",
+                "replay_cached_tokens", "kv_shared_tokens"):
+        if key in metadata and (key not in ("replay_cached_tokens", "kv_shared_tokens")
+                                or not (np.isscalar(metadata[key]) or getattr(metadata[key], "ndim", 1) == 0)):
+            if len(metadata[key]) != len(fleet.count):
+                raise ValueError(f"{key} must have one entry per source history")
+            metadata[key] = [metadata[key][i] for i in ids]
+    view = copy(fleet)
+    for key in ("count", "context", "prompt", "output", "t1", "kv", "log", "demand", "gain", "memory_tokens"):
+        if key in vars(fleet):
+            setattr(view, key, np.asarray(getattr(fleet, key))[ids])
+    view.templates, view.metadata = [], metadata
+    return view
 
 
 @cache
@@ -214,19 +238,27 @@ def batch_time(replay, t1, beta, kappa, load):
 
 
 @cache
-def patterns(workload, snapshot=0, gpus=GPUS, expanded=False):
-    return library(sample_fleet(workload, snapshot, gpus), expanded)
+def patterns(workload, snapshot=0, gpus=GPUS, expanded=False, sparse=False):
+    return library(sample_fleet(workload, snapshot, gpus), expanded, sparse)
 
 
-def library(fleet, expanded=False):
+def _candidate_arrays(found, n, sparse):
+    rows = sorted(found, key=lambda row: tuple((-i, value) for i, value in row))
+    entries = [entry for row in rows for entry in row]
+    values = csr_matrix(([value for _, value in entries], [i for i, _ in entries],
+                         np.r_[0, np.cumsum([len(row) for row in rows])]), shape=(len(rows), 2 * n))
+    pair = values[:, :n], values[:, n:]
+    return pair if sparse else tuple(part.toarray() for part in pair)
+
+
+def library(fleet, expanded=False, sparse=False):
     n = len(fleet.count)
     found = set()
     def add(selected, replayed):
-        r, k = np.zeros(n, int), np.zeros(n, int)
-        np.add.at(r, replayed, 1)
-        np.add.at(k, selected, 1)
-        k -= r
-        found.add(tuple(np.r_[r, k]))
+        r = Counter(replayed)
+        for offset, counts in ((0, r), (n, Counter(selected) - r)):
+            if counts:
+                found.add(tuple((i + offset, float(counts[i])) for i in sorted(counts)))
     for i in range(n):
         add([i], [])
         add([i], [i])
@@ -243,8 +275,7 @@ def library(fleet, expanded=False):
                 for sequence in (ranked, ranked[::-1]) if expanded else (ranked,):
                     for cut in range(width + 1):
                         add(selected, sequence[:cut])
-    values = np.array(sorted(found), dtype=float)
-    return action_closure(values[:, :n], values[:, n:])
+    return _candidate_arrays(found, n, sparse)
 
 
 @dataclass
@@ -294,7 +325,7 @@ def nominal_action(fleet, counts, action, route, rate, timing, measured):
     return volume + delta, (work + tail) * load_factor, commit, buffered
 
 
-def isolated_methods(fleet, load, endpoint, budgets, timing):
+def isolated_methods(fleet, load, endpoint, budgets, timing, compact=False):
     budgets = np.minimum(budgets, endpoint * transport_workers(fleet))
     rates = np.minimum(endpoint[:2], np.minimum(budgets[:2], budgets[2]))
     kv_rates = np.minimum(rates, timing.get("regional_kv_bytes_per_s", rates))
@@ -302,13 +333,29 @@ def isolated_methods(fleet, load, endpoint, budgets, timing):
     kv = fleet.kv / kv_rates[:, None] + (timing["kv_completion_s"] + np.asarray(fleet.metadata.get("kv_partial_s", np.zeros(len(fleet.count))))) * np.exp(timing["beta"] * load * fleet.metadata.get("timing_load_factor", 1.))
     if "turn_sequences" in fleet.metadata or fleet.metadata.get("fixed_host_shares"):
         measured = {**calibration(0), "forecast_load": load}
-        shapes = np.eye(len(fleet.count))
-        replay = np.array([[nominal_action(fleet, c, 0, route, rates[route], timing, measured)[2] for c in shapes] for route in (0, 1)])
-        kv = np.array([[nominal_action(fleet, c, 1, route, kv_rates[route], timing, measured)[2] for c in shapes] for route in (0, 1)])
+        views = [(compact_fleet(fleet, [i]), np.ones(1)) for i in range(len(fleet.count))] if compact else [(fleet, row) for row in np.eye(len(fleet.count))]
+        replay = np.array([[nominal_action(view, counts, 0, route, rates[route], timing, measured)[2] for view, counts in views] for route in (0, 1)])
+        kv = np.array([[nominal_action(view, counts, 1, route, kv_rates[route], timing, measured)[2] for view, counts in views] for route in (0, 1)])
     return replay.min(0) < kv.min(0)
 
 
 def action_closure(replay, kv):
+    if issparse(replay) or issparse(kv):
+        if replay.shape != kv.shape:
+            raise ValueError("candidate action shapes must match")
+        found, n = set(), replay.shape[1]
+        for offset, counts in ((0, replay), (n, kv)):
+            values = counts.tocoo(copy=False).data if issparse(counts) else np.asarray(counts)
+            if not np.isfinite(values).all() or np.any(values < 0):
+                raise ValueError("candidate counts must be finite and nonnegative")
+            counts = csr_matrix(counts, copy=True)
+            counts.sum_duplicates()
+            counts.eliminate_zeros()
+            counts.sort_indices()
+            for a, b in zip(counts.indptr[:-1], counts.indptr[1:]):
+                if a != b:
+                    found.add(tuple(zip(counts.indices[a:b] + offset, counts.data[a:b])))
+        return _candidate_arrays(found, n, True)
     zero = np.zeros_like(replay)
     values = np.unique(np.vstack((np.c_[replay, zero], np.c_[zero, kv])), axis=0)
     return np.split(values[values.sum(1) > 0], 2, axis=1)
@@ -316,27 +363,48 @@ def action_closure(replay, kv):
 
 def include_isolated(replay, kv, fastest):
     total = replay + kv
+    if issparse(total):
+        return action_closure(sparse_vstack((replay, total.multiply(fastest))),
+                              sparse_vstack((kv, total.multiply(~fastest))))
     return action_closure(np.vstack((replay, total * fastest)), np.vstack((kv, total * ~fastest)))
 
 
 def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing):
     endpoint, budgets = np.asarray(endpoint), np.asarray(budgets)
     tails = np.array([timing["kv_completion_s"], timing["kv_batch_completion_s"]])
+    sparse = issparse(replay) or issparse(kv)
+    rv, kvv = [counts.tocoo(copy=False).data if issparse(counts) else np.asarray(counts) for counts in (replay, kv)]
     if (not 0 <= load < 1 or deadline <= 0 or np.any(tails < 0) or np.any(endpoint <= 0) or np.any(budgets <= 0)
             or not np.isfinite(np.r_[deadline, load, tails, endpoint, budgets]).all()
-            or np.any(replay < 0) or np.any(kv < 0) or np.any(kv != np.floor(kv)) or replay.shape != kv.shape):
+            or not np.isfinite(rv).all() or not np.isfinite(kvv).all()
+            or np.any(rv < 0) or np.any(kvv < 0) or np.any(kvv != np.floor(kvv)) or replay.shape != kv.shape):
         raise ValueError("invalid scheduling inputs")
     budgets = np.minimum(budgets, endpoint * transport_workers(fleet))
-    fastest = isolated_methods(fleet, load, endpoint, budgets, timing)
-    r, k = np.tile(replay, (2, 1)), np.tile(kv, (2, 1))
-    route = np.repeat([0, 1], len(replay))
-    long_context = np.any((r > 0) & (fleet.context > fleet.metadata.get("batch_context_limit", np.inf)), axis=1)
+    fastest = isolated_methods(fleet, load, endpoint, budgets, timing, compact=sparse)
+    r, k = [sparse_vstack((counts, counts), format="csr") if sparse else np.tile(counts, (2, 1)) for counts in (replay, kv)]
+    route = np.repeat([0, 1], replay.shape[0])
+    beyond = fleet.context > fleet.metadata.get("batch_context_limit", np.inf)
     knots = fleet.metadata.get("packing_context_tokens")
     kappa = np.interp(fleet.context, knots, timing["packing_kappa"]) if knots else timing["kappa"]
-    duration = batch_time(r, fleet.t1, timing["beta"], np.where(long_context[:, None], 1., kappa), load * fleet.metadata.get("timing_load_factor", 1.))
+    if sparse:
+        for counts in (r, k):
+            counts.sum_duplicates()
+            counts.eliminate_zeros()
+            counts.sort_indices()
+        kappa = np.broadcast_to(kappa, fleet.t1.shape)
+        if (np.any(rv != np.floor(rv)) or np.any(fleet.t1 <= 0) or np.any((kappa < 0) | (kappa > 1))
+                or not np.isfinite(np.r_[timing["beta"], kappa, fleet.t1, load * fleet.metadata.get("timing_load_factor", 1.)]).all()):
+            raise ValueError("invalid measured batch inputs")
+        maximum = np.zeros(r.shape[0])
+        np.maximum.at(maximum, np.repeat(np.arange(r.shape[0]), np.diff(r.indptr)), ((1 - kappa) * fleet.t1)[r.indices])
+        duration = np.exp(timing["beta"] * load * fleet.metadata.get("timing_load_factor", 1.)) * np.where(
+            r @ beyond > 0, r @ fleet.t1, r @ (kappa * fleet.t1) + maximum)
+    else:
+        long_context = np.any((r > 0) & beyond, axis=1)
+        duration = batch_time(r, fleet.t1, timing["beta"], np.where(long_context[:, None], 1., kappa), load * fleet.metadata.get("timing_load_factor", 1.))
     duration *= np.asarray(timing.get("regional_replay_factor", [1., 1.]))[route]
     release = deadline - duration
-    kv_release = deadline - (np.interp(k.sum(1), [0, 1, 8], [0, *tails]) + k @ np.asarray(fleet.metadata.get("kv_partial_s", np.zeros(len(fleet.count))))) * np.exp(timing["beta"] * load * fleet.metadata.get("timing_load_factor", 1.))
+    kv_release = deadline - (np.interp(np.asarray(k.sum(1)).ravel(), [0, 1, 8], [0, *tails]) + k @ np.asarray(fleet.metadata.get("kv_partial_s", np.zeros(len(fleet.count))))) * np.exp(timing["beta"] * load * fleet.metadata.get("timing_load_factor", 1.))
     logs, state = r @ fleet.log, k @ fleet.kv
     rates = (logs + state) / deadline
     per_batch = np.minimum(endpoint[route], np.minimum(budgets[route], budgets[2]))
@@ -348,10 +416,17 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
         estimates = []
         for action, counts, speed in ((0, r, per_batch), (1, k, kv_per_batch)):
             rows = []
-            for j, c in enumerate(counts):
-                key = (action, int(route[j]), tuple(c))
+            for j in range(counts.shape[0]):
+                if sparse:
+                    a, b = counts.indptr[j:j + 2]
+                    ids, c = counts.indices[a:b], counts.data[a:b]
+                    key = (action, int(route[j]), tuple(ids), tuple(c))
+                else:
+                    c = counts[j]
+                    key = (action, int(route[j]), tuple(c))
                 if key not in cache:
-                    cache[key] = nominal_action(fleet, c, action, route[j], speed[j], timing, measured)
+                    view = compact_fleet(fleet, ids) if sparse and c.size else fleet
+                    cache[key] = nominal_action(view, c, action, route[j], speed[j], timing, measured)
                 rows.append(cache[key])
             estimates.append(np.array(rows).T)
         logs, duration, r_commit, r_buffer = estimates[0]
@@ -370,7 +445,8 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
     service_time = ((1 - load * (1 - loss)) * duration + deadline - kv_release + buffered
                     + (r @ fleet.demand) * np.maximum(deadline - r_commit, 0)
                     + (k @ fleet.demand) * np.maximum(deadline - k_commit, 0))
-    matrix = np.vstack((total.T, row_masks * compute, row_masks * (total @ fleet.demand),
+    stack = sparse_vstack if sparse else np.vstack
+    matrix = stack((total.T, row_masks * compute, row_masks * (total @ fleet.demand),
                         row_masks * (total @ fleet.memory_tokens), row_masks * rates, row_masks * (state / deadline), rates))
     gpus = destination_gpus(fleet)
     capacities = np.r_[fleet.count, [gpus * deadline] * 2, [gpus * (1 - load)] * 2,
@@ -379,15 +455,17 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
     if fleet.metadata.get("resident_affinity"):
         from pool_shed_execution import replica_feasible
         eligible &= replica_feasible(fleet, r, k, load)
-        replicas = (r.sum(1) > 0).astype(int) + (k.sum(1) > 0)
-        matrix, capacities = np.vstack((matrix, row_masks * replicas)), np.r_[capacities, [gpus] * 2]
+        replicas = (np.asarray(r.sum(1)).ravel() > 0).astype(int) + (np.asarray(k.sum(1)).ravel() > 0)
+        matrix, capacities = stack((matrix, row_masks * replicas)), np.r_[capacities, [gpus] * 2]
     if fleet.metadata.get("protect_resident"):
         service_time = compute + buffered + (r @ fleet.demand) * np.maximum(deadline - r_commit, 0) + (k @ fleet.demand) * np.maximum(deadline - k_commit, 0)
-        matrix = np.vstack((matrix, row_masks * service_time))
+        matrix = stack((matrix, row_masks * service_time))
         capacities = np.r_[capacities, [gpus * (1 - load) * deadline] * 2]
         debt = compute + buffered
     if np.any(capacities < 0):
         raise ValueError("resident state exceeds pooled KV capacity")
+    if sparse:
+        matrix = matrix.tocsr()
     return Table(fleet, r, k, route, duration, release, kv_release, logs, state, rates, eligible, fastest,
                  matrix, capacities, total @ fleet.gain, deadline, load, endpoint, budgets, timing,
                  debt, np.maximum(r_commit, k_commit), service_time)
@@ -396,12 +474,16 @@ def schedule_table(fleet, replay, kv, load, deadline, endpoint, budgets, timing)
 def policy_mask(table, policy):
     mask = table.eligible.copy()
     if policy == "kv_only":
-        mask &= table.replay.sum(1) == 0
+        mask &= np.asarray(table.replay.sum(1)).ravel() == 0
     elif policy == "replay_only":
-        mask &= table.kv.sum(1) == 0
+        mask &= np.asarray(table.kv.sum(1)).ravel() == 0
     elif policy == "isolated_fastest":
-        mask &= ~np.any((table.replay > 0) & ~table.fastest, axis=1)
-        mask &= ~np.any((table.kv > 0) & table.fastest, axis=1)
+        if issparse(table.replay):
+            mask &= table.replay @ ~table.fastest == 0
+            mask &= table.kv @ table.fastest == 0
+        else:
+            mask &= ~np.any((table.replay > 0) & ~table.fastest, axis=1)
+            mask &= ~np.any((table.kv > 0) & table.fastest, axis=1)
     elif policy not in POLICIES:
         raise ValueError(policy)
     return mask
@@ -440,22 +522,38 @@ def _bounded_lp(cost, matrix, rhs, upper, certificate=None):
 
 
 def solve_lp(table, allowed, objective, primary=None):
+    from scipy.sparse import issparse, vstack
+
     chosen = np.zeros(len(table.gains))
-    ids = np.flatnonzero(allowed & ~np.any((table.matrix > 0) & (table.capacities[:, None] == 0), axis=0))
+    blocked = np.asarray((table.matrix[table.capacities == 0] > 0).sum(0)).ravel() > 0
+    ids = np.flatnonzero(allowed & ~blocked)
     if not len(ids):
         if primary is not None and primary > PRIMARY_TOL:
             raise RuntimeError("positive primary objective has no feasible variables")
         return chosen
     scale = np.where(table.capacities > 0, table.capacities, 1)
-    matrix = table.matrix[:, ids] * table.fleet.gpus / scale[:, None]
-    column_scale = np.maximum(matrix.max(0), 1.)
+    sparse = issparse(table.matrix)
+    if sparse:
+        matrix = (table.matrix[:, ids] * table.fleet.gpus).astype(float).tocsr()
+        matrix.data /= np.repeat(scale, np.diff(matrix.indptr))
+        column_scale = np.maximum(matrix.max(0).toarray().ravel(), 1.)
+        constraints = matrix.tocsc()
+        constraints.data /= np.repeat(column_scale, np.diff(constraints.indptr))
+    else:
+        matrix = table.matrix[:, ids] * table.fleet.gpus / scale[:, None]
+        column_scale = np.maximum(matrix.max(0), 1.)
+        constraints = matrix / column_scale
     cost = objective[ids] * table.fleet.gpus / column_scale
-    constraints, limits = matrix / column_scale, (table.capacities > 0).astype(float)
-    upper = np.min(np.divide(limits[:, None], constraints, out=np.full_like(constraints, np.inf), where=constraints > 0), axis=0)
+    limits = (table.capacities > 0).astype(float)
+    if sparse:
+        maximum = constraints.max(0).toarray().ravel()
+        upper = np.divide(1., maximum, out=np.full(len(ids), np.inf), where=maximum > 0)
+    else:
+        upper = np.min(np.divide(limits[:, None], constraints, out=np.full_like(constraints, np.inf), where=constraints > 0), axis=0)
     if primary is not None:
         primary_row = table.gains[ids] * table.fleet.gpus / column_scale
         primary_scale = max(abs(primary_row).max(), 1e-30)
-        constraints = np.vstack((constraints, -primary_row / primary_scale))
+        constraints = vstack((constraints, -primary_row / primary_scale), format="csr") if sparse else np.vstack((constraints, -primary_row / primary_scale))
         # Keep the secondary face away from a numerically singular boundary; bound absolute shed loss.
         limits = np.r_[limits, -max(0., primary - PRIMARY_TOL) / primary_scale + min(PRIMARY_ROW_TOL, PRIMARY_TOL / primary_scale)]
     def certificate(result):
@@ -496,7 +594,7 @@ def select(table, policy):
     if not allowed.any():
         return chosen
     scale = np.where(table.capacities > 0, table.capacities, 1)
-    matrix = table.matrix * table.fleet.gpus / scale[:, None]
+    matrix = (table.matrix.toarray() if issparse(table.matrix) else table.matrix) * table.fleet.gpus / scale[:, None]
     limits = (table.capacities > 0).astype(float)
     gains = table.gains * table.fleet.gpus
     if policy == "greedy":
@@ -553,7 +651,8 @@ def certify(table, chosen):
                 - destination_gpus(table.fleet) * (1 - table.load) * table.deadline) for r in (0, 1)],
             "scope": "nominal volume/work plan including catch-up and shared service occupancy; no execution certificate",
             "patterns": [{"column": int(j), "multiplicity": float(chosen[j]), "route": int(table.route[j]),
-                          "replay_counts": table.replay[j].tolist(), "kv_counts": table.kv[j].tolist(),
+                          "replay_counts": (table.replay[j].toarray().ravel() if issparse(table.replay) else table.replay[j]).tolist(),
+                          "kv_counts": (table.kv[j].toarray().ravel() if issparse(table.kv) else table.kv[j]).tolist(),
                           "replay_release_s": float(table.release[j]), "batch_duration_s": float(table.duration[j]),
                           "kv_completion_start_s": float(table.kv_release[j]),
                           "reserved_bytes_per_s": float(table.rate[j])} for j in np.flatnonzero(active)]}

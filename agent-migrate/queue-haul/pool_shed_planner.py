@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+from scipy.sparse import eye, issparse, vstack
 
 from pool_shed_execution import _buffered, _quiesce, catchup, flow_rates, compute_allocation, source_snapshot, initial_work, paced_source, destination_gpus, replica_feasible
 from pool_shed_network import history_bytes, phase_rate_cap, transport_workers
@@ -73,6 +74,16 @@ def phase_profile(table, counts, action, route, start, edges, loads, timing, cal
                   state=0, quiesced=0., transferred=0., completed_work=0., elapsed=0., rate=None, sharing=1., buffer_remaining=None,
                   compute_after=0., recovery_sharing=1., primitive_cache=None, causal_network=False):
     """One central-calibration batch; phase dependencies and source resets remain causal."""
+    if issparse(counts):
+        from pool_shed_campaign import compact_fleet
+
+        row = counts.tocsr()
+        key = ("active_histories", tuple(row.indices))
+        views = {} if primitive_cache is None else primitive_cache
+        if key not in views:
+            views[key] = SimpleNamespace(**{**vars(table), "fleet": compact_fleet(table.fleet, row.indices)}), {}
+        table, primitive_cache = views[key]
+        counts = row.data
     fleet, bins = table.fleet, len(edges) - 1
     if paced_source(fleet) and any((state, transferred, completed_work, elapsed)):
         raise ValueError("active protected migrations require their observed-origin engine continuation")
@@ -217,11 +228,13 @@ def project_queues(edges, initial_load, resident, buffered, replay, kv, serving,
 
 def _allowed(table, policy, fastest=None):
     if policy == "kv_only":
-        return table.replay.sum(1) == 0
+        return np.asarray(table.replay.sum(1)).ravel() == 0
     if policy == "replay_only":
-        return table.kv.sum(1) == 0
+        return np.asarray(table.kv.sum(1)).ravel() == 0
     if policy == "isolated_fastest":
         fastest = table.fastest if fastest is None else fastest
+        if issparse(table.replay):
+            return (np.asarray(table.replay.multiply(~fastest).sum(1)).ravel() == 0) & (np.asarray(table.kv.multiply(fastest).sum(1)).ravel() == 0)
         return ~np.any((table.replay > 0) & ~fastest, axis=1) & ~np.any((table.kv > 0) & fastest, axis=1)
     if policy not in ("queue_haul", "greedy", "greedy_priced"):
         raise ValueError(policy)
@@ -236,6 +249,7 @@ def _choose(matrix, capacity, gains, debt, fleet, greedy):
     if not greedy:
         chosen = solve_lp(table, allowed, -gains)
         return solve_lp(table, allowed, debt, float(gains @ chosen)) if debt.any() else chosen
+    matrix = matrix.toarray() if issparse(matrix) else matrix
     scale = np.maximum(capacity, 1.)
     normalized, remaining = matrix / scale[:, None], capacity / scale
     chosen = np.zeros(len(gains))
@@ -321,13 +335,15 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
     available = np.maximum(fleet.count - total.T @ engine.selected_total, 0.)
     serving = route_masks * (total @ fleet.demand)
     memory = route_masks * (total @ fleet.memory_tokens)
-    static = np.vstack((total.T, serving, memory))
+    sparse = issparse(total)
+    stack = lambda parts: vstack(parts, format="csr") if sparse else np.vstack(parts)
+    static = stack((total.T, serving, memory))
     capacity = np.r_[available, destination_gpus(fleet) * (1 - engine.initial_load) - serving @ engine.selected_total,
                      np.full(2, engine.free_memory) - np.array([engine.reserved[engine.route == r].sum() for r in (0, 1)])]
     static_scale = np.maximum(np.r_[fleet.count, [destination_gpus(fleet)] * 2, [fleet.kv_capacity * engine.gpus / fleet.gpus] * 2], 1.)
     if engine.affinity:
-        replicas = route_masks * ((table.replay.sum(1) > 0).astype(int) + (table.kv.sum(1) > 0))
-        static = np.vstack((static, replicas))
+        replicas = route_masks * ((np.asarray(table.replay.sum(1)).ravel() > 0).astype(int) + (np.asarray(table.kv.sum(1)).ravel() > 0))
+        static = stack((static, replicas))
         capacity = np.r_[capacity, engine.gpus - replicas @ engine.selected_total]
         static_scale = np.r_[static_scale, [engine.gpus] * 2]
     if np.min(capacity / static_scale) < -1e-8:
@@ -345,10 +361,13 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
     fastest = table.fastest
     if policy == "isolated_fastest":
         isolated_load = np.broadcast_to(observed[:, None], (2, bins))
+        singletons = eye(len(fleet.count), format="csr") if sparse else np.eye(len(fleet.count))
         finish = np.array([[[phase_profile(table, counts, action, route, engine.now, edges, isolated_load, timing, calibration, primitive_cache=primitive_cache)["finish"]
-                            for counts in np.eye(len(fleet.count))] for route in (0, 1)] for action in (0, 1)])
+                            for counts in singletons] for route in (0, 1)] for action in (0, 1)])
         fastest = finish[0].min(0) < finish[1].min(0)
-    allowed = _allowed(table, policy, fastest) & ~np.any((static > 0) & (capacity[:, None] <= 1e-10 * static_scale[:, None]), axis=0)
+    exhausted = capacity <= 1e-10 * static_scale
+    blocked = np.asarray((static[exhausted] > 0).sum(0)).ravel() > 0
+    allowed = _allowed(table, policy, fastest) & ~blocked
     if engine.affinity:
         allowed &= replica_feasible(fleet, table.replay, table.kv, engine.initial_load[table.route])
     ids = np.flatnonzero(allowed)
@@ -411,9 +430,9 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         profiles, future_buffers = {}, []
         for v, (k, j) in enumerate(zip(starts, original)):
             for action, counts in enumerate((table.replay[j], table.kv[j])):
-                if not counts.any():
+                if not (counts.nnz if issparse(counts) else counts.any()):
                     continue
-                key = (int(k), int(action), int(table.route[j]), counts.tobytes())
+                key = (int(k), int(action), int(table.route[j]), (counts.indices.tobytes(), counts.data.tobytes()) if sparse else counts.tobytes())
                 if key not in profiles:
                     profiles[key] = phase_profile(table, counts, action, table.route[j], edges[k], edges, loads, timing, calibration,
                         compute_after=compute_after[table.route[j]],
@@ -439,7 +458,7 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
         budgets = np.minimum(table.budgets, table.endpoint * transport_workers(fleet))
         limit = np.r_[compute_limit, (budgets[:2, None] * dt).ravel(), budgets[2] * dt, (app[:, None] * dt).ravel()]
         overload = max(overload, float(np.max((fixed_resource - limit) / np.maximum(limit, 1.), initial=0.)))
-        matrix = np.vstack((static[:, original], resource))
+        matrix = stack((static[:, original], resource))
         limits = np.r_[capacity, np.where(limit - fixed_resource > 1e-10 * np.maximum(limit, 1.), limit - fixed_resource, 0.)]
         if fleet.metadata.get("paced_source") and not protected and not engine.affinity:
             cost = 1 - loads * (1 - loss[:, None])
@@ -449,7 +468,7 @@ def plan_admission(engine, nominal_table, policy, timing=None, calibration=None,
             # Idle service cannot be banked: every suffix must have time to drain its queued work.
             remaining_service = engine.gpus * (1 - engine.loads[:, None]) * (edges[-1] - edges[:-1])
             remaining_service -= np.cumsum(obligations[:, ::-1], axis=1)[:, ::-1]
-            matrix = np.vstack((matrix, np.cumsum(service[:, ::-1], axis=1)[:, ::-1].reshape(2 * bins, -1)))
+            matrix = stack((matrix, np.cumsum(service[:, ::-1], axis=1)[:, ::-1].reshape(2 * bins, -1)))
             limits = np.r_[limits, np.maximum(remaining_service, 0.).ravel()]
         gains = table.gains[original] * (finish <= table.deadline + 1e-10)
         if engine.require_local_recovery:

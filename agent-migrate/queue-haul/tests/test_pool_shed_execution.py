@@ -1026,7 +1026,8 @@ def test_fixed_host_worker_pool_uses_gpu_equivalents_and_legacy_retains_nodes():
     assert transferred == pytest.approx([.5, 4.])
 
 
-def test_fixed_host_delta_and_queued_snapshot_caps_keep_frozen_origins_in_clone():
+@pytest.mark.parametrize("sparse", [False, True])
+def test_fixed_host_delta_and_queued_snapshot_caps_keep_frozen_origins_in_clone(sparse):
     from pool_shed_execution import PooledExecution
     table, timing, calibration = case(context=(10., 10.), replay=((0., 0.),), kv=((1., 1.),),
         route=(0,), demand=(0., 0.), gpus=8, deadline=120.)
@@ -1037,6 +1038,9 @@ def test_fixed_host_delta_and_queued_snapshot_caps_keep_frozen_origins_in_clone(
         turn_duration_s=[[5.], []], turn_work_s=[[0.], []])
     timing["resident_replay_loss"] = 0.
     table.endpoint[:], table.budgets[:] = 1e6, 1.
+    if sparse:
+        from scipy.sparse import csr_matrix
+        table.replay, table.kv = csr_matrix(table.replay), csr_matrix(table.kv)
     engine = PooledExecution(table, timing, calibration, chunks=2)
     engine.admit([1.])
     engine.advance(9.)
@@ -1133,3 +1137,95 @@ def test_fixed_host_fractional_rate_survives_integer_endpoint_inputs():
     result = run(table, timing, calibration)
     assert result["last_completion_s"] == pytest.approx(200.)
     assert result["transferred_bytes"] == pytest.approx([100., 0., 100.])
+
+
+@pytest.mark.parametrize("sparse", [False, True])
+def test_wave_counts_share_immutable_groups_across_clones_and_later_admission(sparse):
+    from scipy.sparse import csr_matrix, issparse
+    from pool_shed_execution import PooledExecution
+
+    table, timing, calibration = case(replay=((1., 0.), (0., 0.)), kv=((0., 1.), (1., 0.)),
+        route=(0, 1), gpus=8, load=.25, demand=(.1, .05), work=(1., 3.), deadline=30.)
+    table.fleet.metadata.update(record_wave_schedules=True, resident_affinity=True)
+    timing["resident_replay_loss"] = .75
+    expected = PooledExecution(table, timing, calibration, chunks=64)
+    expected.admit([.25, .25])
+    expected.advance(.1)
+    expected.admit([.25, .25])
+    expected.advance(30.)
+    if sparse:
+        table.replay, table.kv = csr_matrix(table.replay), csr_matrix(table.kv)
+    engine = PooledExecution(table, timing, calibration, chunks=64)
+    engine.admit([.25, .25])
+    assert len(engine.counts) == 192
+    assert len({id(c) for c in engine.counts}) == 3
+    for i, (_, _, counts) in enumerate(engine.selected):
+        assert counts is engine.counts[i]
+        assert not (counts.data if issparse(counts) else counts).flags.writeable
+    with pytest.raises(ValueError, match="read-only"):
+        (engine.counts[0].data if sparse else engine.counts[0])[0] = 5
+    engine.advance(.1)
+    clone = engine.nominal_continuation(table, timing, calibration)
+    assert clone.counts is not engine.counts
+    assert all(a is b for a, b in zip(clone.counts, engine.counts))
+    clone.admit([.25, .25])
+    assert len(engine.counts) == 192 and len(clone.counts) == 384
+    engine.admit([.25, .25])
+    engine.advance(30.)
+    clone.advance(30.)
+    assert engine.result() == clone.result() == expected.result()
+
+
+def test_sparse_execution_rejects_invalid_or_duplicated_count_mass():
+    from scipy.sparse import csr_matrix
+    from pool_shed_execution import PooledExecution
+
+    table, timing, calibration = case()
+    table.replay, table.kv = csr_matrix(table.replay), csr_matrix(table.kv)
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1., 0.])
+    with pytest.raises(ValueError, match="duplicated source"):
+        engine.admit([1., 0.])
+    for invalid in (-1., .5, np.nan):
+        table.replay.data[0] = invalid
+        with pytest.raises(ValueError, match="invalid independent"):
+            PooledExecution(table, timing, calibration)
+
+
+@pytest.mark.parametrize("record", [False, True])
+def test_sparse_action_views_keep_history_cache_and_global_host_capacity(record, monkeypatch):
+    from scipy.sparse import csr_matrix
+    from pool_shed_execution import PooledExecution
+
+    table, timing, calibration = case(context=(10., 10.), replay=((0., 0.), (0., 0.)),
+        kv=((1., 0.), (0., 1.)), route=(0, 0), gpus=8, demand=(0., 0.), deadline=40.)
+    table.fleet.gpus_per_node, table.fleet.kv[:] = 8, 10.
+    table.fleet.metadata.update(record_wave_schedules=record, resident_affinity=True, fixed_host_shares=True,
+        host_migration_gbps=512e-9, paced_source=True, causal_source=True, source_session_rps=1.,
+        turn_sequences=[[{"context": 20, "prompt": 0, "output": 0}], [{"context": 30, "prompt": 0, "output": 0}]],
+        turn_duration_s=[[3.], [5.]], turn_work_s=[[0.], [0.]])
+    timing["resident_replay_loss"] = 0.
+    table.endpoint[:], table.budgets[:] = 1e6, 1e6
+    expected = PooledExecution(table, timing, calibration, chunks=4)
+    expected.admit([1., 1.])
+    expected.advance(12.)
+    expected.advance(40.)
+    table.replay, table.kv = csr_matrix(table.replay), csr_matrix(table.kv)
+    if not record:
+        def no_dense_counts(*args, **kwargs):
+            raise AssertionError("sparse execution expanded the cohort dimension")
+        monkeypatch.setattr(csr_matrix, "toarray", no_dense_counts)
+    engine = PooledExecution(table, timing, calibration, chunks=4)
+    engine.admit([1., 1.])
+    left, right = [engine.action_view(engine.counts[i]) for i in (0, 4)]
+    assert left[0].gpus == right[0].gpus == 8 and len(left[0].count) == len(right[0].count) == 1
+    assert left[2] is not right[2] and all(c.nnz == 1 for c in engine.counts)
+    engine.advance(12.)
+    assert [engine.network_cap(i) for i in (0, 4)] == [1., 1.]
+    clone = engine.nominal_continuation(table, timing, calibration)
+    assert clone.action_view(clone.counts[0])[2] is not left[2]
+    engine.advance(40.)
+    clone.advance(40.)
+    assert engine.result() == clone.result() == expected.result()
+    assert engine.result()["transferred_bytes"] == [50., 0., 50.]
+    assert engine.result()["last_completion_s"] == 30.

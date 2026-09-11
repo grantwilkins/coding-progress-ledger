@@ -7,11 +7,15 @@ from pool_shed_execution import PooledExecution
 from pool_shed_planner import phase_profile, plan_admission, planning_grid, project_queues, recovery_prefix
 
 
-def test_secondary_lp_preserves_primary_below_solver_coefficient_cutoff():
+@pytest.mark.parametrize("sparse", [False, True])
+def test_secondary_lp_preserves_primary_below_solver_coefficient_cutoff(sparse):
     from pool_shed_campaign import PRIMARY_TOL, solve_lp
+    from scipy.sparse import csr_matrix
 
     table = SimpleNamespace(matrix=np.ones((1, 1)), capacities=np.array([1e6]),
                             gains=np.array([1e-10]), fleet=SimpleNamespace(gpus=1))
+    if sparse:
+        table.matrix = csr_matrix(table.matrix)
     allowed = np.array([True])
     primary = table.gains @ solve_lp(table, allowed, -table.gains)
     chosen = solve_lp(table, allowed, np.ones(1), primary)
@@ -19,8 +23,10 @@ def test_secondary_lp_preserves_primary_below_solver_coefficient_cutoff():
     assert np.all(table.matrix @ chosen <= table.capacities)
 
 
-def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypatch):
+@pytest.mark.parametrize("sparse", [False, True])
+def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypatch, sparse):
     import pool_shed_campaign as campaign
+    from scipy.sparse import csr_matrix
 
     original, bounds = campaign._bounded_lp, []
 
@@ -29,8 +35,10 @@ def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypa
         return original(cost, matrix, rhs, upper, certificate)
 
     monkeypatch.setattr(campaign, "_bounded_lp", record)
-    table = SimpleNamespace(matrix=np.eye(2), capacities=np.array([1e6, 0.]),
+    table = SimpleNamespace(matrix=np.eye(2, dtype=int), capacities=np.array([1e6, 0.]),
                             gains=np.array([1e-10, 1.]), fleet=SimpleNamespace(gpus=1))
+    if sparse:
+        table.matrix = csr_matrix(table.matrix)
     primary = table.gains @ campaign.solve_lp(table, np.ones(2, bool), -table.gains)
     chosen = campaign.solve_lp(table, np.ones(2, bool), np.ones(2), primary)
     assert bounds == pytest.approx(np.array([[1e6], [1e6]]))
@@ -97,6 +105,29 @@ def case(deadline=20.):
         deadline=deadline, endpoint=np.array([100., 100., 200.]), budgets=np.array([200., 200., 200.]),
         timing=timing, nominal_commit=np.array([6., 3., 6., 3.]), gains=np.full(4, .1), fastest=np.array([False]))
     return table, timing, calibration
+
+
+@pytest.mark.parametrize("policy", ["queue_haul", "greedy_priced", "greedy", "kv_only", "replay_only", "isolated_fastest"])
+def test_sparse_admission_matches_dense_resources_and_schedule(monkeypatch, policy):
+    from copy import copy
+    from scipy.sparse import csr_matrix, issparse
+    import pool_shed_planner as planner
+
+    table, timing, calibration = case()
+    expected = plan_admission(PooledExecution(table, timing, calibration), table, policy)
+    sparse = copy(table)
+    sparse.replay, sparse.kv = csr_matrix(table.replay), csr_matrix(table.kv)
+    name = "_choose_priced" if policy == "greedy_priced" else "_choose"
+    original = getattr(planner, name)
+    def check(matrix, *args):
+        assert issparse(matrix)
+        return original(matrix, *args)
+    monkeypatch.setattr(planner, name, check)
+    actual = plan_admission(PooledExecution(sparse, timing, calibration), sparse, policy)
+    np.testing.assert_allclose(actual[0], expected[0], rtol=1e-9, atol=1e-9)
+    assert actual[1] == expected[1]
+    assert actual[2]["predicted_shed_fraction"] == pytest.approx(expected[2]["predicted_shed_fraction"], abs=1e-9)
+    assert actual[2]["max_relative_residual"] <= 1e-8
 
 
 def test_fixed_clock_keeps_replay_control_independent_of_kv_costs():

@@ -210,7 +210,7 @@ def run(out, workloads, bandwidths, deadlines, policies):
     fleets = {workload: fleet_for(workload, measured) for workload in workloads}
     sources = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in q.ROOT.glob("pool_shed*.py")}
     config = dict(workloads=workloads, bandwidths_tbps=bandwidths, deadlines_s=deadlines, policies=policies,
-        scope=SCOPE, source_sha256=sources, measurement_sha256=q.provenance(measured),
+        scope=SCOPE, candidate_encoding="csr-v1", source_sha256=sources, measurement_sha256=q.provenance(measured),
         environment=dict(python=platform.python_version(), platform=platform.platform(), numpy=np.__version__),
         fleet_contract_sha256={name: q.digest(dict(metadata=f.metadata, count=f.count.tolist(), context=f.context.tolist()))
                                for name, f in fleets.items()})
@@ -230,8 +230,9 @@ def run(out, workloads, bandwidths, deadlines, policies):
     rows = []
     for workload in workloads:
         fleet = fleets[workload]
-        r, k = q.include_isolated(*q.library(fleet), q.isolated_methods(fleet, LOAD, endpoint, np.full(3, 1e12 / 8), measured["timing"][0]))
-        candidates = q.digest(dict(replay=r.tolist(), kv=k.tolist()))
+        r, k = q.include_isolated(*q.library(fleet, sparse=True), q.isolated_methods(fleet, LOAD, endpoint, np.full(3, 1e12 / 8), measured["timing"][0], compact=True))
+        candidates = q.digest({name: dict(shape=value.shape, indptr=value.indptr.tolist(),
+            indices=value.indices.tolist(), data=value.data.tolist()) for name, value in (("replay", r), ("kv", k))})
         for deadline in deadlines:
             until = BASELINE + deadline + FOLLOWUP
             templates = [resident_templates(fleet, LOAD, seed, until, BASELINE) for seed in SEEDS]
