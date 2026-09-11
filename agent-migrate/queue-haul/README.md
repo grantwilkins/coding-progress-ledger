@@ -34,6 +34,41 @@ All 246 resident TPOT checks pass their existing bands. Some coding request and
 client checks still fail; this is conditional queue validation, not a fleet SLO
 certificate. Incomplete final-cell telemetry is excluded from the fit.
 
+The [initial-state audit](outputs/a100-log-state-audit-20260910/initial-state.json)
+and [continued-service audit](outputs/a100-log-state-audit-20260910/recovery.json)
+reconstruct the existing twenty Germany episodes without new GPU runs or policy
+evaluations. All twelve main episodes have no resident requests awaiting client
+dispatch at the migration snapshot and no server waiting requests in the nearest
+preceding destination sample. Long-context residents are also idle then; their
+next arrival follows replay's snapshot by 6.46 or 8.23 s. This quiet start is
+measured, but does not establish the distribution of fleet queue states.
+Completed baseline resident requests report 94.7–99.5% of prompt tokens cached
+across the four replay episodes; empty engine queues do not imply empty caches.
+
+Replay still causes substantial resident delays. For arrivals in the first
+30 seconds after the nominal migration trigger, with observations retained
+through the 300-second episode boundary:
+
+| Workload / seed | Control P90 arrival TTFT | Replay P90 arrival TTFT | Replay arrivals exceeding 1 s |
+| --- | ---: | ---: | ---: |
+| coding / 7101 | 0.406 s | 10.569 s | 7 / 15 |
+| coding / 7102 | 0.384 s | 3.319 s | 3 / 11 |
+| coding_long / 7101 | 0.287 s | 21.428 s | 7 / 7 |
+| coding_long / 7102 | 0.262 s | 7.849 s | 2 / 5 |
+
+All first tokens in these windows are observed; matched control and KV windows
+have zero violations. KV handoff takes longer under the acquisition's 1 Gb/s
+GET cap. East US 2 server records independently show 17.55 s P90 waiting until
+first scheduling during the long replay burst, versus 0.026 s in control.
+After replay handoff, the already-offered resident cohort clears in 0–8.90 s;
+this does not undo its latency violations or certify steady service. One long
+episode has only one new resident arrival in the next 30 s. The fleet's scalar
+queue-clearance criterion therefore cannot certify the posted 1 s P90 TTFT
+target. The coding acquisition also offers twice the fleet's nominal-50% RPS;
+workload shape and cache state prevent interpreting either label as GPU busy time.
+Reproduce these reductions with `uv run python outputs/a100-log-state-audit-20260910/initial-state.py`
+and `uv run python outputs/a100-log-state-audit-20260910/recovery.py`.
+
 `replica_fleet()` enables the corrected scenario without changing archived
 pooled defaults. Each incoming action pack reserves its own destination GPU
 cohort, keeps its KV and ongoing service there, and repays resident backlog only
@@ -130,6 +165,24 @@ Eight-GPU endpoint sharing still caps aggregate effective KV transport at
 With one measured endpoint per GPU, QH's handed-off work is 57.70% KV for coding
 and 57.99% KV for coding_long. Its queue-cleared source-power allocation is
 0.444 MW and 0.405 MW, respectively. GPU counts and replay calibration stay fixed.
+
+The [host/network scope audit](outputs/a100-log-state-audit-20260910/network-scope.json)
+records the requested next scenario: eight GPUs per host, an explicit 80 Gb/s
+shared host IP budget, and one 10 Tb/s migration allocation across both routes,
+without a fixed half split. These are distinct from measured application goodput.
+[Azure's A100 NDm v4 specification](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndma100v4-series)
+lists 24 Gb/s aggregate VM bandwidth; the
+[H100 v5 specification](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndh100v5-series)
+lists 80 Gb/s. Thus 80 Gb/s remains a declared scenario assumption for A100.
+At least 125 actively sending hosts would be needed to reach 10 Tb/s at that
+allocation, before other limits. Current fleet code has no physical host
+membership and pools application capacity from installed hosts, so the existing
+curves do not implement this host contract. Source/destination host assignments
+and consistent planner/executor constraints must accompany separate route,
+destination ingress and shared-segment budgets; omitted local uplinks require an
+explicit nonblocking-fabric assumption. Azure's outbound quota alone does not
+establish receiver throughput. Published WAN capacity is not spare migration
+capacity, and raising the host ceiling does not raise measured application goodput.
 
 The [hardware audit](outputs/a100-power-frontier-20260910/kv-evidence-audit.json)
 finds KV faster in all 72 matched July long/agentic width-eight episodes at
@@ -336,8 +389,9 @@ The independent cold-burst evidence also shows real queueing: at 32,256 prompt
 tokens, the A100 had at most ten GPT-OSS requests running concurrently, and a
 width-16 burst had 65.03-second P90 TTFT. Those requests generated 32 output
 tokens; their timing cannot be substituted directly for a migration probe.
-Source request durations in the simulator remain throughput-derived proxies.
-They are not validated per-request latencies or a source queue model.
+Those archived pooled-mode source durations are throughput-derived proxies.
+The current `replica_fleet()` instead uses server-measured generation cadence
+and predecessor completion, while still omitting contention among source histories.
 
 The primary references support separating prefill contention, decode latency and
 actual prefix reuse. [vLLM's scheduler documentation](https://docs.vllm.ai/en/stable/configuration/optimization/)

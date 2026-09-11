@@ -1,0 +1,304 @@
+{
+  "schema": "queue-haul-network-scope-audit-v1",
+  "audit_date": "2026-09-10",
+  "git_revision_at_read": "506e04eaaf28b6a9ca66f6d8e3fbf46f21044456",
+  "production_parameters_changed": false,
+  "new_gpu_jobs": 0,
+  "new_policy_evaluations": 0,
+  "scope": "Read-only audit of the current aggregate network model and the requested physical-host boundary. This artifact does not implement or certify host-aware scheduling.",
+  "requested_contract": {
+    "gpus_per_physical_host": 8,
+    "host_ip_aggregate_gbps": 80,
+    "host_ip_scope": "Explicit user-selected modeled host budget, shared by all eight GPUs and both destinations. It is not the published Azure A100-v4 SKU limit. Other host IP traffic must be counted or explicitly assumed absent.",
+    "source_site_migration_allocation_gbps": 10000,
+    "site_scope": "One migration allocation shared across both destination routes, not 10Tbps per destination and not a guaranteed achieved throughput.",
+    "route_cap_gbps": {
+      "east": null,
+      "germany": null
+    },
+    "destination_site_ingress_cap_gbps": {
+      "east": null,
+      "germany": null
+    },
+    "shared_segments": null,
+    "unspecified_budget_scope": "Route, destination ingress and common-segment budgets remain separate user/environment inputs; null means not yet specified in this audit, not measured infinity.",
+    "local_fabric_if_omitted": "Explicit nonblocking local-fabric scenario assumption; source and destination host constraints still apply.",
+    "routing_rule": "No fixed 5/5Tbps split. Both routes compete for the common 10Tbps allocation under their own path and ingress limits.",
+    "application_goodput_rule": "Retain measured transfer/application caps. An 80Gbps host budget is an additional ceiling; it does not replace observed approximately 1-5Gbps application goodput or prove eight GPU processes scale independently."
+  },
+  "verified_primary_sources": [
+    {
+      "title": "Microsoft Azure NDm_A100_v4 sizes",
+      "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndma100v4-series",
+      "facts": "Standard_ND96amsr_A100_v4 has eight A100 80GB GPUs. Its Network table lists 24,000Mbps maximum aggregate VM bandwidth across all NICs and destinations; upper limits are not guaranteed. The InfiniBand scale-set fabric is described separately and is not a WAN egress allocation.",
+      "published_vm_ip_gbps": 24,
+      "use": "Do not attribute the modeled 80Gbps host value to this A100 SKU."
+    },
+    {
+      "title": "Microsoft Azure ND-H100-v5 sizes",
+      "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndh100v5-series",
+      "facts": "Standard_ND96isr_H100_v5 lists eight H100 GPUs and 80,000Mbps aggregate VM network bandwidth.",
+      "use": "Explains the public 80Gbps reference, but transferring this specification to A100 hardware is a scenario assumption."
+    },
+    {
+      "title": "Azure virtual machine network bandwidth",
+      "url": "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-machine-network-throughput",
+      "facts": "The VM allocation counts all outbound traffic across all interfaces, protocols and destinations. Adding NICs or accelerated networking does not raise it. Ingress is not directly limited by this outbound allocation; receive CPU/storage and other constraints can still limit delivery.",
+      "use": "Share source-host egress across both routes. Treat destination ingress as its own measured or declared capacity, not a copied Azure outbound quota."
+    },
+    {
+      "title": "B4: Experience with a Globally-Deployed Software Defined WAN",
+      "url": "https://cseweb.ucsd.edu/~vahdat/papers/b4-sigcomm13.pdf",
+      "publisher_page": "https://research.google/pubs/b4-experience-with-a-globally-deployed-software-defined-wan/",
+      "facts": "B4 coordinates elastic inter-datacenter traffic using edge demand measurement/rate control, application priorities and multipath traffic engineering. It reports some links near full utilization and a lower network-wide long-term average. Its site-edge aggregation relies on distributing traffic across constituent links.",
+      "use": "Supports explicitly allocated and shared WAN capacity; does not imply a dedicated 10Tbps migration budget, 100% achievable application throughput, or interchangeable host bandwidth."
+    },
+    {
+      "title": "Achieving High Utilization with Software-Driven WAN (SWAN)",
+      "url": "https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/swan-sigcomm13.pdf",
+      "facts": "SWAN centrally allocates service sending rates and paths subject to link capacity, service priorities and approximate max-min fairness. Reconfiguration manages transient congestion, including reserved capacity.",
+      "use": "Supports separating available migration allocation from total installed WAN capacity. Neither paper supplies this scenario's host, route or 10Tbps allocation values."
+    },
+    {
+      "title": "B4 and After: Managing Hierarchy, Partitioning, and Asymmetry for Availability and Scale in Google's Software-Defined WAN",
+      "url": "https://courses.grainger.illinois.edu/ECE598HPN/fa2023/papers/b4after.pdf",
+      "locator": "SIGCOMM 2018, Table 2 and section 3.2 (PDF pages 4-5)",
+      "facts": "Table 2 lists Saturn WAN capacity as 5.12/6.4 Tbps, JPOP as 10.24 Tbps shared by WAN and sidelinks, and Stargate as 81.92 Tbps shared by WAN, cluster connections and sidelinks. Section 3.2 describes the latter as site-external capacity whose ports can be allocated across those uses.",
+      "use": "These installed fabric capacities provide scale context, not a measured spare migration allocation or an end-to-end host/application rate. The requested 10 Tbps remains an explicit scenario budget."
+    }
+  ],
+  "current_model": {
+    "gpus_per_site": 6666,
+    "gpus_per_network_node": 8,
+    "installed_hosts_per_site": 834,
+    "active_host_count_available": false,
+    "source_host_ids_available": false,
+    "destination_host_ids_available": false,
+    "endpoint_selection": "Same paired route medians used by pool_shed_network_audit; shared endpoint equals their sum.",
+    "measured_bulk_endpoint_gbps": [
+      2.280176174037911,
+      8.73331359588583,
+      11.01348976992374
+    ],
+    "fitted_application_gbps_per_modeled_node": [
+      1.3040594092253421,
+      4.204152068517806
+    ],
+    "current_budgets_with_10tbps_scalar_gbps": [
+      1901.6669291476178,
+      7283.583538968783,
+      9185.250468116401
+    ],
+    "current_application_site_limits_gbps": [
+      1087.5855472939354,
+      3506.2628251438505
+    ],
+    "current_total_application_limit_gbps": 4593.848372437786,
+    "application_scaling_scope": "One-node regional episode fits are used as both per-wave caps and installed-node aggregate limits. Multi-GPU/process scaling and its source/destination host ownership are assumptions, not directly measured by these fits.",
+    "line_findings": [
+      {
+        "path": "pool_shed_execution.py",
+        "line": 19,
+        "finding": "Installed hosts are ceil(GPUs/GPUs_per_node). Route multipliers use min(source hosts,destination hosts); the shared multiplier uses source hosts. No active-host count or mapping is stored."
+      },
+      {
+        "path": "pool_shed_campaign.py",
+        "line": 69,
+        "finding": "One endpoint vector is multiplied by installed node count and clipped componentwise by one WAN scalar. This does not name separate physical host IP, route, destination ingress, or segment allocations."
+      },
+      {
+        "path": "pool_shed_execution.py",
+        "line": 57,
+        "finding": "Weighted max-min allocation enforces two route rows, one shared row, per-wave caps and optional route-level KV application rows. There are no source-host or destination-host incidence rows."
+      },
+      {
+        "path": "pool_shed_execution.py",
+        "line": 492,
+        "finding": "KV application allowance scales the fitted one-node rate by all installed hosts. Active wave caps limit total demand, but an idle host is not removed from pooled capacity."
+      },
+      {
+        "path": "pool_shed_execution.py",
+        "line": 500,
+        "finding": "Each initial transfer wave is capped by the minimum of measured bulk endpoint and application rates. These measured caps remain distinct from any proposed hardware NIC ceiling."
+      },
+      {
+        "path": "pool_shed_campaign.py",
+        "line": 295,
+        "finding": "Static planning reuses installed-host endpoint multiplication, and the schedule table contains route/shared and KV application rows."
+      },
+      {
+        "path": "pool_shed_planner.py",
+        "line": 89,
+        "finding": "Future phase profiles use the same measured endpoint, route/shared, and application minimum; a host model must not change this only in execution."
+      },
+      {
+        "path": "pool_shed_planner.py",
+        "line": 357,
+        "finding": "Admission planning also multiplies fitted application rates by installed host counts."
+      },
+      {
+        "path": "pool_shed_planner.py",
+        "line": 413,
+        "finding": "Time-bin network limits include route, shared, and application totals; no physical host membership or independently named shared segments exist."
+      },
+      {
+        "path": "pool_shed_calibration.py",
+        "line": 224,
+        "finding": "The calibration explicitly calls regional rates effective node rates with software transport overhead, not backbone capacity or a measured ingest constraint."
+      }
+    ]
+  },
+  "active_host_bounds": {
+    "formula": "active_source_hosts >= ceil(site_migration_gbps / host_ip_gbps) is necessary, not sufficient. Actual rate <= min(site allocation, sum of active host residual budgets, relevant route/segment/destination limits, active application goodput).",
+    "at_user_80gbps": 125,
+    "at_published_a100_24gbps": 417,
+    "installed_host_ip_total_at_80_gbps": 66720,
+    "installed_host_ip_total_at_24_gbps": 20016,
+    "qualification": "Only hosts actually owning bytes being transmitted contribute. Low per-transfer goodput, insufficient concurrent transfers, contention and inactive hosts can prevent saturation even above the necessary host count."
+  },
+  "allocator_counterexamples": {
+    "scope": "Network-only bounded calls to the existing allocator, with all waves routed to Germany. Hypothetically co-locating these waves on one source host is invisible to the allocator because no host memberships are inputs; these are representation tests, not claims about archived placements.",
+    "rows": [
+      {
+        "active_batch_mass": 1,
+        "current_total_gbps": 4.204152068517806,
+        "per_batch_gbps": 4.204152068517806,
+        "source_host_membership_passed_to_allocator": false
+      },
+      {
+        "active_batch_mass": 8,
+        "current_total_gbps": 33.63321654814245,
+        "per_batch_gbps": 4.204152068517806,
+        "source_host_membership_passed_to_allocator": false
+      },
+      {
+        "active_batch_mass": 64,
+        "current_total_gbps": 269.06573238513965,
+        "per_batch_gbps": 4.204152068517806,
+        "source_host_membership_passed_to_allocator": false
+      }
+    ],
+    "interpretation": "Eight current capped waves total about 33.63Gbps, already above the published 24Gbps A100 VM limit if co-located. Sixty-four waves total about 269.07Gbps, above the requested 80Gbps budget if co-located. Site totals pass because all installed hosts contribute to pooled capacity."
+  },
+  "minimum_sound_model_boundary": {
+    "classification": "Linear network capacity constraints for fixed host/path memberships. Choosing integer placement jointly adds a separate discrete decision.",
+    "rate_definition": "rate_i denotes actual aggregate bytes per second. For a weighted cohort, the aggregate flow rate and cap are mass_i times their per-replica values; preserve these weights in every incidence row. Host budgets are shared and are not multiplied by their GPU count.",
+    "retain": "Keep measured per-wave bulk/application caps and their original units and measurement scope. Keep the current archive-reproduction path unchanged.",
+    "required_state": [
+      "Source bytes/cohorts assigned to physical source hosts; a wave drawing from multiple source hosts needs explicit byte fractions or separate flows.",
+      "Incoming replicas assigned to physical destination hosts, eight GPUs per host, with persistent standing-service ownership preserved.",
+      "Only active transfers consume their source/destination host and shared-path budgets; all routes share each source host's total outbound allowance.",
+      "Named route, destination ingress, source-site migration and shared-segment budgets, with consistent planner and executor incidence."
+    ],
+    "constraints": [
+      "0 <= rate_i <= measured_effective_cap_i",
+      "For each source host h: sum_i source_incidence[h,i] * rate_i <= residual_host_egress[h]",
+      "For each destination host h: sum_i destination_incidence[h,i] * rate_i <= declared_or_measured_receive_capacity[h]",
+      "For each route r: sum_i route_incidence[r,i] * rate_i <= route_allocation[r]",
+      "For each destination site d: sum_i destination_incidence[d,i] * rate_i <= destination_ingress[d]",
+      "sum_i rate_i <= 10e12/8 bytes per second across both routes",
+      "For each common segment s: sum_i segment_incidence[s,i] * rate_i <= segment_allocation[s]"
+    ],
+    "constant_limit_reduction": "Several constant limits may be combined with min only when they constrain exactly the same flow set. Preserve the original named limits in diagnostics so the binding cause is not lost.",
+    "aggregate_fallback": "Without host memberships, label results as pooled or explicitly balanced fluid striping; they cannot certify host-local contention or determine active hosts. Do not infer active source hosts from destination replica mass, or replace gpus_per_node with 1 while describing eight-GPU hosts.",
+    "minimal_validation_cases": [
+      "Two routes leaving the same host share one outbound cap.",
+      "Different source hosts add independent capacity until the common site/segment limit binds.",
+      "Inactive hosts add no bandwidth.",
+      "Measured application caps remain binding below NIC capability.",
+      "Unequal route/ingress limits redistribute traffic without a fixed half split.",
+      "Planner and executor enforce identical capacity incidences, including catch-up priority and source/destination host lifetime."
+    ]
+  },
+  "local_sources_sha256": {
+    "pool_shed_campaign.py": "f2afb77307c7673923757e8ac09b716cca4d36748533ac1478367ab40b727f82",
+    "pool_shed_execution.py": "e44220c67ef280feaad87acb457f12e778dbe179cda9080c858170b7c885feef",
+    "pool_shed_planner.py": "c06734197a36c9bb8fb4e86c37827030dfd127c25a3576e567b1f818d5a55d42",
+    "pool_shed_network_audit.py": "1b697b073052a0ae338148da94894aa4b48a203e7c526f1cfc52f10beb65925b",
+    "pool_shed_calibration.py": "1ddbfb512d4038ad2557154c78b388d320e5ca8b7a132511cfe275de7e9a4e15",
+    "outputs/east-germany-frontier-20260808/control/calibration-east-germany-frontier-001.json": "16e1abb3c6e0a4a24b9dd84be12d4e8d4e604955b8a15dc144d98fa17ac1577a"
+  },
+  "regional_fit_sources_sha256": {
+    "outputs/a100-parity-20260907/timing/plan.json": "f7b1f2646741d3465317ee9c8c633290c98724f0ee687807429a9680d9e86015",
+    "outputs/a100-parity-20260907/timing/scale-protocol.json": "9c0ba44a9163267869c6a0d67093260fb297d2f8405716c5311a061be040ad73",
+    "outputs/a100-parity-20260907/timing/scale-fit.json": "40ad5bcfae2eafb4e962832fdee905210feb3897f27d06ef5bdece9cda68a6a6",
+    "outputs/a100-parity-20260907/timing/results.csv": "d2c8c5c7b6e58686b438d64a11b4eef2ed870bd8c0a098b76cd111c17cb3ad96",
+    "outputs/a100-parity-20260907/timing/scenarios/5e19c10f47fa0204/attempt-0001/result.json": "ada0f132b6987a5688388ab11299c95db6d0261d578becb687c0d865b19f3a5c",
+    "outputs/a100-parity-20260907/timing/scenarios/23a72a106e2a7034/attempt-0001/result.json": "d58291d2ffc4af075acda1381ef5743ab4bde483b58e9b725acb198350f5f384",
+    "outputs/a100-parity-20260907/timing/scenarios/46d879e878d8bae5/attempt-0001/result.json": "0cc4904d52844080f7c935c8de620c169ba12250ede81c3412266c59abedc854",
+    "outputs/a100-parity-20260907/timing/scenarios/6c976fd2a76d2617/attempt-0001/result.json": "cd4dadfe74a7b7b5c942e6cc513f46ff27e389254eb7230daaaf85b71fbe03b8",
+    "outputs/a100-parity-20260907/timing/scenarios/568228eaa5443785/attempt-0001/result.json": "6043dad2c834e5b4a885594cdd205d1ae005067b4fa89b11057957d500090cc9",
+    "outputs/a100-parity-20260907/timing/scenarios/97b136f62064c0cd/attempt-0001/result.json": "de1521b5e8a92160fa6b5a8b4cc1d45910a95f329f2f3319ed25a1454df6d3d0",
+    "outputs/a100-parity-20260907/timing/scenarios/9be4464a60680e7c/attempt-0001/result.json": "6792f153f5039d30e13204df89cd5d62de28b37cae5ffe46813471ac5cf5fc33",
+    "outputs/a100-parity-20260907/timing/scenarios/d8b002060654b701/attempt-0001/result.json": "a85be59aa7c03cfff9da3ed3874da66055d90adaf71fcce9d49a7e2768cd0b47",
+    "outputs/a100-parity-20260907/timing/scenarios/2053d93676da8102/attempt-0001/result.json": "6d9846b830b1663020514526b3ccff6b973c47306f8f9d9e11a1fc3214692f97",
+    "outputs/a100-parity-20260907/timing/scenarios/c193127b8694cb1f/attempt-0001/result.json": "82605f5a96b37ba80b9da89f3ab7b818f23eb58118421ac5be9b2439c7dca6a2",
+    "outputs/a100-parity-20260907/timing/scenarios/3ef1a50a4c9045ae/attempt-0001/result.json": "7c213f354e0bf03baf54b0b7c22285e68d0d9cbd490e9a036f341eaefcbb2f67",
+    "outputs/a100-parity-20260907/timing/scenarios/ed8200dbbfc933aa/attempt-0001/result.json": "0bd9a80b282dd1309474fac57e3110cf8e57be547c9ee603bf85a6be0758f876",
+    "outputs/a100-parity-20260907/timing/scenarios/c798848b580b7008/attempt-0001/result.json": "780bba3df9f4ffacb5ce908ecaaed2745eee16ffbc715afc0c9af11d7cd22e34",
+    "outputs/a100-parity-20260907/timing/scenarios/ab1aedf902a9d60a/attempt-0001/result.json": "c34b1d8e5619264a32ce511b2af574fdda95e0aeb80c61cd9f9217ab24d4ab52",
+    "outputs/a100-parity-20260907/timing/scenarios/c36e41db15f6eac1/attempt-0001/result.json": "87bf657d6f842453b2b141ac0b6d55acc2d89ee0778e57abbe8fdff010f26f6b",
+    "outputs/a100-parity-20260907/timing/scenarios/4fd34b26108ece6a/attempt-0001/result.json": "cd73611c20413c2a73b0c1c82a203eaa3b45a2c96db870eca6fc25dbd6f11fdf",
+    "outputs/a100-parity-20260907/timing/scenarios/2393590ee86583a4/attempt-0001/result.json": "07ccbc4e1dd131d2277bb89882966a554705d72780a1da6cc4b690be6fae818f",
+    "outputs/a100-parity-20260907/timing/scenarios/8d76fece27467b2d/attempt-0001/result.json": "425c01803a24f2f42b2da7b18127c9b83e9ea8dd399776284d5aa8d37a91e96f",
+    "outputs/a100-parity-20260907/timing/scenarios/360f6ccaf00a2e1d/attempt-0001/result.json": "fe5f7c769c5cb21b7ce763048dc0c5d3b9b0e0bfcb8161dc874648c357b14a73",
+    "outputs/a100-parity-20260907/timing/scenarios/1930fd3f87924497/attempt-0001/result.json": "05e5d80f5508bbf67d4146446972fe25becf1e6e09f02caf6760145f2d996b84",
+    "outputs/a100-parity-20260907/timing/scenarios/73c41bd81232f954/attempt-0001/result.json": "824c19db1b2cfefa26eae92cc3ceb7a94fba696be421ee92be27f535cc51bdc9",
+    "outputs/a100-parity-20260907/timing/scenarios/2d8c0fdae0d14545/attempt-0002/result.json": "df91e370f803be5b3f5e14e22ba909a603ec18bbc936b71368303eb0ee90d067",
+    "outputs/a100-parity-20260907/timing/scenarios/758eb7c1b2624440/attempt-0001/result.json": "1923ff7bbfdc039a9656c003631ead8edeef64bca8ee752e6dff8c1d5b0f9d8c",
+    "outputs/a100-parity-20260907/timing/scenarios/5d9f805095f6b266/attempt-0001/result.json": "eecb491e5f8f387a5db0f28e4d797f4b244ee75099d7fa94957a9cbb4e88eb91",
+    "outputs/a100-parity-20260907/timing/scenarios/b53a03f0b2944ae4/attempt-0001/result.json": "49224c5a272a382d6549eaa790653adacd433aba6d2c0ba025a4c5892ae56713",
+    "outputs/a100-parity-20260907/timing/scenarios/0917cb3f6f582d29/attempt-0001/result.json": "0e9933152c885c77803fb6a92f48863eeaad00067fbd83318723a1e985963431",
+    "outputs/a100-parity-20260907/timing/scenarios/f6cd57a993e3fe57/attempt-0001/result.json": "ad6d0e9bc8987cbd1255512a86909fa70728ed91e2d12e5c657af1e33c1a5ac1",
+    "outputs/a100-parity-20260907/timing/scenarios/8dff545c8dfa133b/attempt-0001/result.json": "424541bf50ccddf9a2eea619e6b2b196db10e6065cc398db44ae4088f27bad4e",
+    "outputs/a100-parity-20260907/timing/scenarios/387199f333964c0a/attempt-0001/result.json": "cb2982f693277311f1794018f7929ac947d67ae757a810c1790a63027b60a5c0",
+    "outputs/a100-parity-20260907/timing/scenarios/479b9dae4bd778bc/attempt-0001/result.json": "955a258b6dcb8c6b6473f5ad39a4ddefd0666f7974a3ef3c110e5d5608612b98",
+    "outputs/a100-parity-20260907/timing/scenarios/1a3963bef2203690/attempt-0001/result.json": "4f7e6581adfd3224d7dc9ab03bbc47197820311cad0b67ed90aacc0f7db8db99",
+    "outputs/a100-parity-20260907/timing/scenarios/94b1d3561e834671/attempt-0001/result.json": "ef9fb9877d7364e2158910c44c708bd89d9593c9e45c68f56fbbf830f7393cdd",
+    "outputs/a100-parity-20260907/timing/scenarios/63cfdae678a6412b/attempt-0001/result.json": "8f8acc1bade0dbc660f8ec8250458e51d2e03a13ee6bd37563369072b8a000ab",
+    "outputs/a100-parity-20260907/timing/scenarios/f7132cbec590b2d2/attempt-0001/result.json": "d8f39e771bbdfe6bf6b0111dd0b5be107bca89d88b84d62cffd6b2255b34fcb1",
+    "outputs/a100-parity-20260907/timing/scenarios/4f992fb7a0e3c6c4/attempt-0001/result.json": "12e6bb4a42e5d5b450c385b45e853cf831e04c40c88e262491386468276bdf1b",
+    "outputs/a100-parity-20260907/timing/scenarios/c0480444f9bbd01a/attempt-0001/result.json": "d0289b3914bfd47b171eb0eeb423882085d2cc0141133296616fd3e73f24814d",
+    "outputs/a100-parity-20260907/timing/scenarios/6eb46c1a2dec5163/attempt-0001/result.json": "03a0610cbcfa5a4e4e00646c4e619e653a178c1f1f718f83a0289430139ea56a",
+    "outputs/a100-parity-20260907/timing/scenarios/9a23e981525c927c/attempt-0001/result.json": "48caf3d66390bb13ec5f55ec82c53ef925734f47c8ce20eb6d4ac45132aac3a1",
+    "outputs/a100-parity-20260907/timing/scenarios/ae527e5518fcc601/attempt-0001/result.json": "fff0ccada53ce669ac4e1cb9b216ab1531c574346a4954c5745ee977de77abad",
+    "outputs/a100-parity-20260907/timing/scenarios/85bc419a0d0a9f94/attempt-0001/result.json": "017209ab25a5855ce6f42f9bd750229cf9f00680bc8af3b39a8f62c73362f994",
+    "outputs/a100-parity-20260907/timing/scenarios/66258acb292bae92/attempt-0001/result.json": "ad6a2e15e514ebac95627d6d7e8336b8aa46c8d4b1b6e5734caf369cab3a2757",
+    "outputs/a100-parity-20260907/timing/scenarios/fa5d50c7b554a377/attempt-0001/result.json": "4969460b529bbe6afdfbc1f0eb21aff6d3b4a46ae42dcbbaeb7fe280c3f5984b",
+    "outputs/a100-parity-20260907/timing/scenarios/bf64c857ee2eb660/attempt-0001/result.json": "77475f3f605d02b7f368879ce0c0a74344fba367836106b7afa71e44695d78b5",
+    "outputs/a100-parity-20260907/timing/scenarios/5ab56a08fac430c8/attempt-0001/result.json": "3b909f546167fc679878a70dba854c10d41013e8516af5da59a1560970a32432",
+    "outputs/a100-parity-20260907/timing/scenarios/987720414bb89051/attempt-0001/result.json": "c65ffb077243371f919b98ff6eceeeda4fe86ea34a72e76b517eb7527a339dd1",
+    "outputs/a100-parity-20260907/timing/scenarios/a43b93215be0bc7f/attempt-0001/result.json": "fbaec494ee01238e1f18681bf0c40a62f3851190a644e9a3888abf9ba2389d3a",
+    "outputs/a100-parity-20260907/timing/scenarios/d1a6373c17afa2e5/attempt-0001/result.json": "0ca0082997ee1b768215330c44a17e318fa22d88b7066e7783076ab5e35e95b1",
+    "outputs/a100-parity-20260907/timing/scenarios/aceaa615ccdb7188/attempt-0001/result.json": "4481ad8d7e780857f207a36ff32b87c53aa5ae87c8de28fdc002d1a446621a6d",
+    "outputs/a100-parity-20260907/timing/scenarios/463bd84722532b81/attempt-0001/result.json": "6734073ed9cf06d35e042b4dbd7fb246423f0b27b09acbfc52f88a9aacaa874a",
+    "outputs/a100-parity-20260907/timing/scenarios/659749070e7b5cae/attempt-0001/result.json": "3b5fcf0edd6318b513a89e3e745f8425a04571493628b9dbe57780fc2e682414",
+    "outputs/a100-parity-20260907/timing/scenarios/7ffc45ed2a11f4f4/attempt-0001/result.json": "16e45011518f128e0dd2091ecc2e6c4b3fab701723a502a11987f47cb4f3fdd8",
+    "outputs/a100-parity-20260907/timing/scenarios/b79ad78fd0b6948c/attempt-0001/result.json": "31b5ede414b0f09e2cd18e78af357dd3a7a61656141ef2c25a5123d61e0ce8c2",
+    "outputs/a100-parity-20260907/timing/scenarios/c5c5432c1e7eaad6/attempt-0001/result.json": "d19a10f035f74cd82263e9329660d0e1b6e0730a2933b1d49d684c8eb9baa46e",
+    "outputs/a100-parity-20260907/timing/scenarios/8bb95bac8d5d8d35/attempt-0001/result.json": "b7efe9f8859e002250dca371d46d6ac6d9a1d27c3b523235e777a0e90c969c91",
+    "outputs/a100-parity-20260907/timing/scenarios/3af1441a7d99ee83/attempt-0001/result.json": "c9bc35ab66e78440748bb456e430212374799e144254ab45f3b5a2ce896b5dfc",
+    "outputs/a100-parity-20260907/timing/scenarios/f145036e2f68b787/attempt-0001/result.json": "1efc7d16ef3fb05e8152f8b6d807a2ebeab32fd743050dfc8174d786d6c57c88",
+    "outputs/a100-parity-20260907/timing/scenarios/d19a99a6a2d90702/attempt-0001/result.json": "219848e2c8a4eff04b0de05e29c9eed19b99336eaf22b580d021b20c9975c0c6",
+    "outputs/a100-parity-20260907/timing/scenarios/26f483708fa9f714/attempt-0001/result.json": "022877b0231f7bdca27e7b86d61f316f1ebce6d07a666302b110611a25c8dc12",
+    "outputs/a100-parity-20260907/timing/scenarios/ba22eb224f837290/attempt-0001/result.json": "19a0cade9485c56d8967ca826046300992e5e2ee154ec1c41d853fc867697502",
+    "outputs/a100-parity-20260907/timing/scenarios/99a23061fb2017af/attempt-0001/result.json": "e0a98aa0ce0c9a8b4bf857ba8c33ebd73efb170b2ee2ea0161b699229ad7fcab",
+    "outputs/a100-parity-20260907/timing/scenarios/9cee79e3acd12e04/attempt-0001/result.json": "c538c2dd528e9f1c79eb5a09e59cff7b38792595074aa3fdf2249c252aa5d03d",
+    "outputs/a100-parity-20260907/timing/scenarios/898696a260b305a4/attempt-0001/result.json": "f4949e088a62fbbcc525c1b8688e4ccb293aaa8d7e16ca76091fec47026ddb15",
+    "outputs/a100-parity-20260907/timing/scenarios/cfba119c1cfccb1f/attempt-0001/result.json": "38ffc98ce4905e927e473aa761288fbe29883234d8682e00e224fbf5ac37dcc3",
+    "outputs/a100-parity-20260907/timing/scenarios/7118dcd2f78a4a99/attempt-0001/result.json": "9e2716a9079d10ffb22340d07060af1646866346e990edb226d36219ca101639",
+    "outputs/a100-parity-20260907/timing/scenarios/c3b34a509c59fce4/attempt-0001/result.json": "1973de9161c4b8e23c430846abc2cce9d8635b1f732ebde206de44474288eb6b",
+    "outputs/a100-parity-20260907/timing/scenarios/3ca29a40db5aba48/attempt-0001/result.json": "2ea1a4b4a7016c07ba5921e47cd37e3b9eb9113d760d0086f2e1e290b8569f8e",
+    "outputs/a100-parity-20260907/timing/scenarios/7212c84eb3d87ac3/attempt-0001/result.json": "05cc8ba8e73de1d3d21fa553ba14db30c5dfdb1574d1693a2a976fc7edac1cde",
+    "outputs/a100-parity-20260907/timing/scenarios/e4f89330a779b5c4/attempt-0001/result.json": "9dcc0f861ed9ad651e879d447aae44d44d86605e514e89e9dbfe4a5ffa761dc6",
+    "outputs/a100-parity-20260907/timing/scenarios/16a7f6b3ca984e83/attempt-0001/result.json": "3cf12cbc3748a19c2c7878c50a4e6b643bebf95f53131d74eec8e0b5e74e778e",
+    "outputs/a100-parity-20260907/timing/scenarios/32a254656fa3e819/attempt-0001/result.json": "1fb86821a7b2e234b1639c94a17bbfe42650655427d7c7fb0483b6c84b1f6878",
+    "outputs/a100-parity-20260907/timing/scenarios/200a93458c005703/attempt-0001/result.json": "aaf0cc064424f3d4b03755995e1934ada5a8d2c417687b12e6ce9aae833bb03b",
+    "outputs/a100-parity-20260907/timing/scenarios/b664fc498a8b63d4/attempt-0001/result.json": "78f437c1e9949114aeeeabbcfd31b043ddc2f018f55757a32443e30055292937",
+    "outputs/a100-parity-20260907/timing/scenarios/d62b91689e88c3cc/attempt-0001/result.json": "955c69f6445029c62040491381b1758025916a362e0e139c02d4f26bb927d327",
+    "outputs/a100-parity-20260907/timing/scenarios/492e184b6cd8bb97/attempt-0001/result.json": "1204c83af6c62d35e4a4f8dd269763c7028be4c869bcbca63172185c28f2c614",
+    "outputs/a100-parity-20260907/timing/scenarios/fab83dae8fce03ff/attempt-0001/result.json": "09fc0e3ed801861de1d05f842fab242359f05fcf0e314768a35b2de38dee40a2",
+    "outputs/a100-parity-20260907/timing/scenarios/adb19a6ea181c250/attempt-0001/result.json": "a44e80054d68ab60c4cd79f6938fd6ebae9d2d6dbdcdc6fbe0f6a995397ec31a",
+    "outputs/a100-parity-20260907/timing/scenarios/b9ea7c02f14c9495/attempt-0001/result.json": "186d357d1697608bac2700eaf027b0f5a8c54ddae82a08fc3c950e0fec2aa8f2"
+  }
+}
