@@ -1,0 +1,1774 @@
+{
+  "complete": true,
+  "input_sha256": {
+    "outputs/a100-native-greedy-20260911/validation/scaling.py": "8a1c957751f9a0d7cb08944908f0a36c050f50bf087065b913ed1feb85b278b6",
+    "pool_shed_priced_greedy.py": "10323a7c01ac4840cebf9b44d47858b37d4cafe8cbeefea3996c3098c553e4cb",
+    "/Users/grantwilkins/houdini/agent-migrate/.venv/lib/python3.10/site-packages/_queue_haul_native/_queue_haul_native.cpython-310-darwin.so": "7ffad5fa9d7789840700029cec4acbeda831079ce39b0be640372a89584411fc",
+    "native/src/lib.rs": "48231c20ebc2c3170e406a15db20c95109753c33330cdb3be227cfdc90117c22",
+    "native/src/packing.rs": "dbc0b04729bd51ead52f4a361d58d36332248e4be9a0be24c0dc7560781d3bf7",
+    "native/Cargo.toml": "af8a00617da3c08001e9d111b6fd525ed6382f0f026372a8e449f0d0b5f5bc1e",
+    "native/Cargo.lock": "c81b978f1cb7ec7d0a48affb3fd3b722750f99c9620baee6756960805c1f661c",
+    "native/pyproject.toml": "3517842836f8709b3e6906575c08c0fb9fe21fdeb7e2a4411e10b42ea9a1b1cb",
+    "native/rust-toolchain.toml": "75cd8d73777ba32f23fcf6d5a7f49019b4a7c8ebe34a06ceb5a40d1c21ab8ffc",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d30-b10.npz": "60850c62fb9081e5a682d443b46452bffecdcb12013ce9ce226bb62911e94866",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d120-b100.npz": "d560eb14303c281d4278eb71b1047c7a32bd8b0a1faec6546da77abdfc9e1a61"
+  },
+  "records": [
+    {
+      "case": "coding-d30-b10",
+      "factor": 1,
+      "source_rows": 24,
+      "shared_rows": 90,
+      "source_capacity": 53328.0,
+      "original_shape": [
+        114,
+        1494
+      ],
+      "original_nnz": 27547,
+      "normalized_shape": [
+        114,
+        1179
+      ],
+      "normalized_nnz": 21262,
+      "zero_gain_columns_removed": 315,
+      "file_load_s": 0.0035102497786283493,
+      "assembly_s": 0.0006402507424354553,
+      "common_preparation_s": 0.0006969999521970749,
+      "common_input_array_sha256": {
+        "csc_data": "bcaa6b77900e7a22c9c327bfed977b752cf3028ee50e4e6f9625977cf216702b",
+        "csc_indices": "d18c45ec915de9df7ffd48de366a2cf7505996c8f6555d5f82c1ec8b0cf3ff94",
+        "csc_indptr": "7feb02f9a93e57e8a36210d43492d23b6878d023aaa6c86855c55aded98900d2",
+        "csc_shape": "2c2012fe782822dedd35b910d5af5599e7778d9b9a8f285ba6b7bbb37df56914",
+        "gains": "b7637c164d1130a793e5816eb0d1077965ddc14bac85a2e816540d392ac09bae",
+        "debt": "13d97c95aa05ad9fc5c114daa9731923b96d5de9645641f6b4ffcec930b09333",
+        "capacity": "23ddd4a1d8e32e3590bc57c75a8febad246f7c2b2bb1cf362e30bade9c6e15a4"
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9834784129150307,
+            "upper_bound": 0.9841200964590983,
+            "absolute_gap": 0.0006416835440675728,
+            "relative_gap": 0.0006520378421052214,
+            "iterations": 211,
+            "converged": true,
+            "max_relative_constraint_residual": 1.3322676295501878e-15,
+            "max_constraint_residual": 3.183231456205249e-12,
+            "positive_variables": 26,
+            "variables_above_executor_mass_threshold": 25,
+            "primal_sha256": "06477ae9e1dd15ef8cf2a2d0a59c8b26c9df0c477fffc58113c64f1c99fba914",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "6162821fac038e222adb1274517350719343f0c50a66f6eb2ec7ecfaa7323491",
+            "elapsed_s": 0.007139666937291622,
+            "external_original_unit_check_s": 0.00017979182302951813
+          },
+          "lp": {
+            "objective": 0.9835755641878767,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 24,
+            "variables_above_executor_mass_threshold": 24,
+            "primal_sha256": "6d694ed132265483e69f2a47c1a746423355e9b6bb7bd111e2d1879143b30465",
+            "upper_bound": 0.9835755641878771,
+            "absolute_gap": 3.3306690738754696e-16,
+            "relative_gap": 3.3862869261352086e-16,
+            "max_relative_dual_deficit": 1.1102230246251565e-16,
+            "dual_certified": true,
+            "dual_sha256": "4ee5f84ffcb749b45d6de85a549400645637276bdbfed4b2bc5a2162d3f31132",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.0000000000000002,
+            "objective_cost_scale": 0.1930443075819607,
+            "simplex_iterations": 273,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.016837583854794502,
+            "external_original_unit_check_s": 0.00014562532305717468
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 9.715127284604108e-05,
+            "lower_bound": 9.715127284604108e-05,
+            "upper_bound": 9.715127284637415e-05,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 2,
+          "order": [
+            "lp",
+            "native"
+          ],
+          "lp": {
+            "objective": 0.9835755641878767,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 24,
+            "variables_above_executor_mass_threshold": 24,
+            "primal_sha256": "6d694ed132265483e69f2a47c1a746423355e9b6bb7bd111e2d1879143b30465",
+            "upper_bound": 0.9835755641878771,
+            "absolute_gap": 3.3306690738754696e-16,
+            "relative_gap": 3.3862869261352086e-16,
+            "max_relative_dual_deficit": 1.1102230246251565e-16,
+            "dual_certified": true,
+            "dual_sha256": "4ee5f84ffcb749b45d6de85a549400645637276bdbfed4b2bc5a2162d3f31132",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.0000000000000002,
+            "objective_cost_scale": 0.1930443075819607,
+            "simplex_iterations": 273,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.013865792192518711,
+            "external_original_unit_check_s": 0.00013200007379055023
+          },
+          "native": {
+            "objective": 0.9834784129150307,
+            "upper_bound": 0.9841200964590983,
+            "absolute_gap": 0.0006416835440675728,
+            "relative_gap": 0.0006520378421052214,
+            "iterations": 211,
+            "converged": true,
+            "max_relative_constraint_residual": 1.3322676295501878e-15,
+            "max_constraint_residual": 3.183231456205249e-12,
+            "positive_variables": 26,
+            "variables_above_executor_mass_threshold": 25,
+            "primal_sha256": "06477ae9e1dd15ef8cf2a2d0a59c8b26c9df0c477fffc58113c64f1c99fba914",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "6162821fac038e222adb1274517350719343f0c50a66f6eb2ec7ecfaa7323491",
+            "elapsed_s": 0.006665708497166634,
+            "external_original_unit_check_s": 0.0001338338479399681
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 9.715127284604108e-05,
+            "lower_bound": 9.715127284604108e-05,
+            "upper_bound": 9.715127284637415e-05,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 3,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9834784129150307,
+            "upper_bound": 0.9841200964590983,
+            "absolute_gap": 0.0006416835440675728,
+            "relative_gap": 0.0006520378421052214,
+            "iterations": 211,
+            "converged": true,
+            "max_relative_constraint_residual": 1.3322676295501878e-15,
+            "max_constraint_residual": 3.183231456205249e-12,
+            "positive_variables": 26,
+            "variables_above_executor_mass_threshold": 25,
+            "primal_sha256": "06477ae9e1dd15ef8cf2a2d0a59c8b26c9df0c477fffc58113c64f1c99fba914",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "6162821fac038e222adb1274517350719343f0c50a66f6eb2ec7ecfaa7323491",
+            "elapsed_s": 0.006925124675035477,
+            "external_original_unit_check_s": 0.00018187426030635834
+          },
+          "lp": {
+            "objective": 0.9835755641878767,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 24,
+            "variables_above_executor_mass_threshold": 24,
+            "primal_sha256": "6d694ed132265483e69f2a47c1a746423355e9b6bb7bd111e2d1879143b30465",
+            "upper_bound": 0.9835755641878771,
+            "absolute_gap": 3.3306690738754696e-16,
+            "relative_gap": 3.3862869261352086e-16,
+            "max_relative_dual_deficit": 1.1102230246251565e-16,
+            "dual_certified": true,
+            "dual_sha256": "4ee5f84ffcb749b45d6de85a549400645637276bdbfed4b2bc5a2162d3f31132",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.0000000000000002,
+            "objective_cost_scale": 0.1930443075819607,
+            "simplex_iterations": 273,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.014200958423316479,
+            "external_original_unit_check_s": 0.00013849977403879166
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 9.715127284604108e-05,
+            "lower_bound": 9.715127284604108e-05,
+            "upper_bound": 9.715127284637415e-05,
+            "lp_reference_optimal": true
+          }
+        }
+      ],
+      "best_witness_repeat": {
+        "native": 1,
+        "lp": 1
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding-d30-b10-x1.npz",
+      "witness_file_sha256": "9d6eecbc5c30a7aa6b42103854644f7bbda8e82a1f9be036cfce3f9200660bc0"
+    },
+    {
+      "case": "coding-d30-b10",
+      "factor": 4,
+      "source_rows": 96,
+      "shared_rows": 90,
+      "source_capacity": 53328.0,
+      "original_shape": [
+        186,
+        5976
+      ],
+      "original_nnz": 110188,
+      "normalized_shape": [
+        186,
+        4716
+      ],
+      "normalized_nnz": 85048,
+      "zero_gain_columns_removed": 1260,
+      "file_load_s": 0.0035102497786283493,
+      "assembly_s": 0.0012214994058012962,
+      "common_preparation_s": 0.0015923744067549706,
+      "common_input_array_sha256": {
+        "csc_data": "8440e93c887369e352de2bf2dfc08c8a6393bedcca6bc4b5c8fd0ff11d93d565",
+        "csc_indices": "2ed2937da0f56ccb25996d0653a6fff3ea7e288bd1442f25d48b08fa20fbc7e2",
+        "csc_indptr": "f460c371ab3a5ca9c18a8a89b8d2cba237f2a2fae7c2e8f76e0ac32e8a0b5a12",
+        "csc_shape": "a8c8663fb6d54b7f024ea06f88044c1ec14151c9595bf28099932e6c9bce0df0",
+        "gains": "b4009f337453f581856de12b1953cdd2bcc1ef98d6bd47b5e4c36ca459538b71",
+        "debt": "f95d22f9427bdac3be04187a057ce528ee2102449a59985943f044d076a10e4f",
+        "capacity": "9ff95dd743fc4aa26f7666dda66cf556d8091710d2096efa247a65e7f808b00f"
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9831651022919263,
+            "upper_bound": 0.9836384540118224,
+            "absolute_gap": 0.0004733517198960424,
+            "relative_gap": 0.00048122530993522256,
+            "iterations": 241,
+            "converged": true,
+            "max_relative_constraint_residual": 5.551115123125783e-15,
+            "max_constraint_residual": 0.00048828125,
+            "positive_variables": 90,
+            "variables_above_executor_mass_threshold": 89,
+            "primal_sha256": "23a2dd9b96814e9a898a2736a91df1b4c6ebe6874ce5b151d2581acb1b8c032c",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "e3142b7ec17be43e25ad19025bdb890eefcdecd53524a7b17a14ce492a21480c",
+            "elapsed_s": 0.028182500042021275,
+            "external_original_unit_check_s": 0.0003147497773170471
+          },
+          "lp": {
+            "objective": 0.9835755641878765,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 86,
+            "variables_above_executor_mass_threshold": 86,
+            "primal_sha256": "a88a385a65886e31a422eecbf607f8ee377c7265152d714064092387409e417c",
+            "upper_bound": 0.9835755641878774,
+            "absolute_gap": 8.881784197001252e-16,
+            "relative_gap": 9.030098469693886e-16,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "960affbb75a4f66306e9346515c6b8960ef49ae9905f92b9dce75e4e736985a2",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000004,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.048261076895490175,
+            "simplex_iterations": 300,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.05082612484693527,
+            "external_original_unit_check_s": 0.0002966253086924553
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.000410461895950176,
+            "lower_bound": 0.000410461895950176,
+            "upper_bound": 0.0004104618959510642,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 2,
+          "order": [
+            "lp",
+            "native"
+          ],
+          "lp": {
+            "objective": 0.9835755641878765,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 86,
+            "variables_above_executor_mass_threshold": 86,
+            "primal_sha256": "a88a385a65886e31a422eecbf607f8ee377c7265152d714064092387409e417c",
+            "upper_bound": 0.9835755641878774,
+            "absolute_gap": 8.881784197001252e-16,
+            "relative_gap": 9.030098469693886e-16,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "960affbb75a4f66306e9346515c6b8960ef49ae9905f92b9dce75e4e736985a2",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000004,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.048261076895490175,
+            "simplex_iterations": 300,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.05090925004333258,
+            "external_original_unit_check_s": 0.0003132093697786331
+          },
+          "native": {
+            "objective": 0.9831651022919263,
+            "upper_bound": 0.9836384540118224,
+            "absolute_gap": 0.0004733517198960424,
+            "relative_gap": 0.00048122530993522256,
+            "iterations": 241,
+            "converged": true,
+            "max_relative_constraint_residual": 5.551115123125783e-15,
+            "max_constraint_residual": 0.00048828125,
+            "positive_variables": 90,
+            "variables_above_executor_mass_threshold": 89,
+            "primal_sha256": "23a2dd9b96814e9a898a2736a91df1b4c6ebe6874ce5b151d2581acb1b8c032c",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "e3142b7ec17be43e25ad19025bdb890eefcdecd53524a7b17a14ce492a21480c",
+            "elapsed_s": 0.029103958979249,
+            "external_original_unit_check_s": 0.00031716562807559967
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.000410461895950176,
+            "lower_bound": 0.000410461895950176,
+            "upper_bound": 0.0004104618959510642,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 3,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9831651022919263,
+            "upper_bound": 0.9836384540118224,
+            "absolute_gap": 0.0004733517198960424,
+            "relative_gap": 0.00048122530993522256,
+            "iterations": 241,
+            "converged": true,
+            "max_relative_constraint_residual": 5.551115123125783e-15,
+            "max_constraint_residual": 0.00048828125,
+            "positive_variables": 90,
+            "variables_above_executor_mass_threshold": 89,
+            "primal_sha256": "23a2dd9b96814e9a898a2736a91df1b4c6ebe6874ce5b151d2581acb1b8c032c",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "e3142b7ec17be43e25ad19025bdb890eefcdecd53524a7b17a14ce492a21480c",
+            "elapsed_s": 0.028808708302676678,
+            "external_original_unit_check_s": 0.00030625052750110626
+          },
+          "lp": {
+            "objective": 0.9835755641878765,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 86,
+            "variables_above_executor_mass_threshold": 86,
+            "primal_sha256": "a88a385a65886e31a422eecbf607f8ee377c7265152d714064092387409e417c",
+            "upper_bound": 0.9835755641878774,
+            "absolute_gap": 8.881784197001252e-16,
+            "relative_gap": 9.030098469693886e-16,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "960affbb75a4f66306e9346515c6b8960ef49ae9905f92b9dce75e4e736985a2",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000004,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.048261076895490175,
+            "simplex_iterations": 300,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.05171237513422966,
+            "external_original_unit_check_s": 0.0002976665273308754
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.000410461895950176,
+            "lower_bound": 0.000410461895950176,
+            "upper_bound": 0.0004104618959510642,
+            "lp_reference_optimal": true
+          }
+        }
+      ],
+      "best_witness_repeat": {
+        "native": 1,
+        "lp": 1
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding-d30-b10-x4.npz",
+      "witness_file_sha256": "d3b59dc83b9dd0ac92b11b5af4c325393f61d0b9b51998f7b2f90d2390ca6995"
+    },
+    {
+      "case": "coding-d30-b10",
+      "factor": 16,
+      "source_rows": 384,
+      "shared_rows": 90,
+      "source_capacity": 53328.0,
+      "original_shape": [
+        474,
+        23904
+      ],
+      "original_nnz": 440752,
+      "normalized_shape": [
+        474,
+        18864
+      ],
+      "normalized_nnz": 340192,
+      "zero_gain_columns_removed": 5040,
+      "file_load_s": 0.0035102497786283493,
+      "assembly_s": 0.004009542055428028,
+      "common_preparation_s": 0.0064284587278962135,
+      "common_input_array_sha256": {
+        "csc_data": "ba89aaf7620bab10487cd76b6c2b57e9e6a99d0e7c174b41a800256e68a0fc29",
+        "csc_indices": "5886dfa8d04776a53b9098355195b49cd6fde794c50bb00fd5509ff7bae69f6a",
+        "csc_indptr": "a0d69b9d74626eff0f6187f906fa7256fb7d7887527005ef6fdaf6cfdfe6c0b9",
+        "csc_shape": "cd0bf01dbdee40fd0df1b71a1cf129f558e1c14072aa35656c27dc9510b32dce",
+        "gains": "bee69c6e11548bd84b45d75b8adef63207491e707ab2e96d28f85143ff0f488a",
+        "debt": "52ba52f7e406e25ad2305a5bb5400712598680e0cd78e0bdb397a3c301f4a455",
+        "capacity": "9f718a113648912432cc484486a4faddebf63de84d9dbdcc59555ca7e4ec5675"
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9831755107634209,
+            "upper_bound": 0.9837215773467485,
+            "absolute_gap": 0.0005460665833275646,
+            "relative_gap": 0.0005551027810128877,
+            "iterations": 701,
+            "converged": true,
+            "max_relative_constraint_residual": 3.5083047578154947e-14,
+            "max_constraint_residual": 0.0006103515625,
+            "positive_variables": 366,
+            "variables_above_executor_mass_threshold": 366,
+            "primal_sha256": "f42fe66e1f22224f6380191472d6d0c8b05f036c3ecfbb1e040fa6ea8525be1c",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "7c0dc4725dc30e002fdb952beac163659e042e32b0ef0f38c28804abd8126122",
+            "elapsed_s": 0.3180107083171606,
+            "external_original_unit_check_s": 0.0009909579530358315
+          },
+          "lp": {
+            "objective": 0.9835755641878517,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 344,
+            "variables_above_executor_mass_threshold": 344,
+            "primal_sha256": "32e8de40a59cd2fa1cbc2e2f695997d298830e8ce220a6bf12908b8655f0141d",
+            "upper_bound": 0.983575564187958,
+            "absolute_gap": 1.0624834345662748e-13,
+            "relative_gap": 1.0802255294370426e-13,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "b9576cf803d78ac42b1c0cd4a7bd3f2d71f3ff3ff8732bc1ebefbac1577f7b45",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000264,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.012065269223872544,
+            "simplex_iterations": 2829,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.9321893332526088,
+            "external_original_unit_check_s": 0.001191415823996067
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.00040005342443083514,
+            "lower_bound": 0.00040005342443083514,
+            "upper_bound": 0.0004000534245370835,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 2,
+          "order": [
+            "lp",
+            "native"
+          ],
+          "lp": {
+            "objective": 0.9835755641878517,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 344,
+            "variables_above_executor_mass_threshold": 344,
+            "primal_sha256": "32e8de40a59cd2fa1cbc2e2f695997d298830e8ce220a6bf12908b8655f0141d",
+            "upper_bound": 0.983575564187958,
+            "absolute_gap": 1.0624834345662748e-13,
+            "relative_gap": 1.0802255294370426e-13,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "b9576cf803d78ac42b1c0cd4a7bd3f2d71f3ff3ff8732bc1ebefbac1577f7b45",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000264,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.012065269223872544,
+            "simplex_iterations": 2829,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.9287199173122644,
+            "external_original_unit_check_s": 0.0011129174381494522
+          },
+          "native": {
+            "objective": 0.9831755107634209,
+            "upper_bound": 0.9837215773467485,
+            "absolute_gap": 0.0005460665833275646,
+            "relative_gap": 0.0005551027810128877,
+            "iterations": 701,
+            "converged": true,
+            "max_relative_constraint_residual": 3.5083047578154947e-14,
+            "max_constraint_residual": 0.0006103515625,
+            "positive_variables": 366,
+            "variables_above_executor_mass_threshold": 366,
+            "primal_sha256": "f42fe66e1f22224f6380191472d6d0c8b05f036c3ecfbb1e040fa6ea8525be1c",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "7c0dc4725dc30e002fdb952beac163659e042e32b0ef0f38c28804abd8126122",
+            "elapsed_s": 0.31505466625094414,
+            "external_original_unit_check_s": 0.0008928747847676277
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.00040005342443083514,
+            "lower_bound": 0.00040005342443083514,
+            "upper_bound": 0.0004000534245370835,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 3,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9831755107634209,
+            "upper_bound": 0.9837215773467485,
+            "absolute_gap": 0.0005460665833275646,
+            "relative_gap": 0.0005551027810128877,
+            "iterations": 701,
+            "converged": true,
+            "max_relative_constraint_residual": 3.5083047578154947e-14,
+            "max_constraint_residual": 0.0006103515625,
+            "positive_variables": 366,
+            "variables_above_executor_mass_threshold": 366,
+            "primal_sha256": "f42fe66e1f22224f6380191472d6d0c8b05f036c3ecfbb1e040fa6ea8525be1c",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "7c0dc4725dc30e002fdb952beac163659e042e32b0ef0f38c28804abd8126122",
+            "elapsed_s": 0.3147251671180129,
+            "external_original_unit_check_s": 0.0009183743968605995
+          },
+          "lp": {
+            "objective": 0.9835755641878517,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 344,
+            "variables_above_executor_mass_threshold": 344,
+            "primal_sha256": "32e8de40a59cd2fa1cbc2e2f695997d298830e8ce220a6bf12908b8655f0141d",
+            "upper_bound": 0.983575564187958,
+            "absolute_gap": 1.0624834345662748e-13,
+            "relative_gap": 1.0802255294370426e-13,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "b9576cf803d78ac42b1c0cd4a7bd3f2d71f3ff3ff8732bc1ebefbac1577f7b45",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000264,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.012065269223872544,
+            "simplex_iterations": 2829,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.9458983754739165,
+            "external_original_unit_check_s": 0.0008944999426603317
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.00040005342443083514,
+            "lower_bound": 0.00040005342443083514,
+            "upper_bound": 0.0004000534245370835,
+            "lp_reference_optimal": true
+          }
+        }
+      ],
+      "best_witness_repeat": {
+        "native": 1,
+        "lp": 1
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding-d30-b10-x16.npz",
+      "witness_file_sha256": "5b6ddcfaf5bd2882e0cfb8124198174326a1c95489a374f30ff2455653a27404"
+    },
+    {
+      "case": "coding-d30-b10",
+      "factor": 64,
+      "source_rows": 1536,
+      "shared_rows": 90,
+      "source_capacity": 53328.0,
+      "original_shape": [
+        1626,
+        95616
+      ],
+      "original_nnz": 1763008,
+      "normalized_shape": [
+        1626,
+        75456
+      ],
+      "normalized_nnz": 1360768,
+      "zero_gain_columns_removed": 20160,
+      "file_load_s": 0.0035102497786283493,
+      "assembly_s": 0.014476917684078217,
+      "common_preparation_s": 0.028173333033919334,
+      "common_input_array_sha256": {
+        "csc_data": "9a86356ac11fcd48a5fa511929a0f10c5d60303982958f338dbd52a14883b09a",
+        "csc_indices": "955f8db2f9fcd2a3013fab8f0d0e68e169f6090c878c0f43ff7eed7461489917",
+        "csc_indptr": "78fcaf8e7c3b4ce65fd2a821fa99ac7ae41478497586177946c243a399edacf0",
+        "csc_shape": "c6afbca06c55205de368899d0f438fe71d97d04105441a1b08c3fae2c51f86e8",
+        "gains": "04239248248342e150bd006679cf2298237cd1db976c82dba9966f430af758c7",
+        "debt": "04f5f15d72adbd0a8c1fd8230f8ef5e1766a870157e4e008fae5fb4703b0b3ad",
+        "capacity": "23871f457417d2b3995cf5c291beaf28f314593d0e11956f70e29204a8e3943b"
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9830455249008628,
+            "upper_bound": 0.9836175436725136,
+            "absolute_gap": 0.0005720187716508063,
+            "relative_gap": 0.0005815459223257354,
+            "iterations": 2291,
+            "converged": true,
+            "max_relative_constraint_residual": 4.518607710224387e-13,
+            "max_constraint_residual": 0.001953125,
+            "positive_variables": 1549,
+            "variables_above_executor_mass_threshold": 1549,
+            "primal_sha256": "c8bb90411a69afc8aaf18c54a65069ddfb089d9bc3ce5afb4c8dbaefa6917fb0",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "5072cf60ce681a53537f081e9dc14cea6beba11472953ff2b1640730494b5f5c",
+            "elapsed_s": 5.213317750021815,
+            "external_original_unit_check_s": 0.004779624752700329
+          },
+          "lp": {
+            "objective": 0.9835755641872099,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 1376,
+            "variables_above_executor_mass_threshold": 1376,
+            "primal_sha256": "aa8fd6af3a5db4ae22f5bfb15df280f28ca485de1f48a2b677141b9198c2d255",
+            "upper_bound": 0.9835755641878776,
+            "absolute_gap": 6.676881270095691e-13,
+            "relative_gap": 6.788376524592378e-13,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "5d0991f679f0956d2494bcc81d69d987a8145615e433a921fbe95e81e8dcfb60",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000006797,
+            "dual_repair_scale": 1.0000000000000009,
+            "objective_cost_scale": 0.003016317305968136,
+            "simplex_iterations": 3995,
+            "ipm_iterations": 0,
+            "elapsed_s": 5.29951012507081,
+            "external_original_unit_check_s": 0.004036333411931992
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0005300392863470949,
+            "lower_bound": 0.0005300392863470949,
+            "upper_bound": 0.000530039287014783,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 2,
+          "order": [
+            "lp",
+            "native"
+          ],
+          "lp": {
+            "objective": 0.9835755641872099,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 1376,
+            "variables_above_executor_mass_threshold": 1376,
+            "primal_sha256": "aa8fd6af3a5db4ae22f5bfb15df280f28ca485de1f48a2b677141b9198c2d255",
+            "upper_bound": 0.9835755641878776,
+            "absolute_gap": 6.676881270095691e-13,
+            "relative_gap": 6.788376524592378e-13,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "5d0991f679f0956d2494bcc81d69d987a8145615e433a921fbe95e81e8dcfb60",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000006797,
+            "dual_repair_scale": 1.0000000000000009,
+            "objective_cost_scale": 0.003016317305968136,
+            "simplex_iterations": 3995,
+            "ipm_iterations": 0,
+            "elapsed_s": 5.317938834428787,
+            "external_original_unit_check_s": 0.004136165603995323
+          },
+          "native": {
+            "objective": 0.9830455249008628,
+            "upper_bound": 0.9836175436725136,
+            "absolute_gap": 0.0005720187716508063,
+            "relative_gap": 0.0005815459223257354,
+            "iterations": 2291,
+            "converged": true,
+            "max_relative_constraint_residual": 4.518607710224387e-13,
+            "max_constraint_residual": 0.001953125,
+            "positive_variables": 1549,
+            "variables_above_executor_mass_threshold": 1549,
+            "primal_sha256": "c8bb90411a69afc8aaf18c54a65069ddfb089d9bc3ce5afb4c8dbaefa6917fb0",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "5072cf60ce681a53537f081e9dc14cea6beba11472953ff2b1640730494b5f5c",
+            "elapsed_s": 5.358750791288912,
+            "external_original_unit_check_s": 0.003983958624303341
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0005300392863470949,
+            "lower_bound": 0.0005300392863470949,
+            "upper_bound": 0.000530039287014783,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 3,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9830455249008628,
+            "upper_bound": 0.9836175436725136,
+            "absolute_gap": 0.0005720187716508063,
+            "relative_gap": 0.0005815459223257354,
+            "iterations": 2291,
+            "converged": true,
+            "max_relative_constraint_residual": 4.518607710224387e-13,
+            "max_constraint_residual": 0.001953125,
+            "positive_variables": 1549,
+            "variables_above_executor_mass_threshold": 1549,
+            "primal_sha256": "c8bb90411a69afc8aaf18c54a65069ddfb089d9bc3ce5afb4c8dbaefa6917fb0",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "5072cf60ce681a53537f081e9dc14cea6beba11472953ff2b1640730494b5f5c",
+            "elapsed_s": 5.040994415991008,
+            "external_original_unit_check_s": 0.003670165315270424
+          },
+          "lp": {
+            "objective": 0.9835755641872099,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 1376,
+            "variables_above_executor_mass_threshold": 1376,
+            "primal_sha256": "aa8fd6af3a5db4ae22f5bfb15df280f28ca485de1f48a2b677141b9198c2d255",
+            "upper_bound": 0.9835755641878776,
+            "absolute_gap": 6.676881270095691e-13,
+            "relative_gap": 6.788376524592378e-13,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "5d0991f679f0956d2494bcc81d69d987a8145615e433a921fbe95e81e8dcfb60",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kOk",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000006797,
+            "dual_repair_scale": 1.0000000000000009,
+            "objective_cost_scale": 0.003016317305968136,
+            "simplex_iterations": 3995,
+            "ipm_iterations": 0,
+            "elapsed_s": 5.172532833181322,
+            "external_original_unit_check_s": 0.0034577082842588425
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0005300392863470949,
+            "lower_bound": 0.0005300392863470949,
+            "upper_bound": 0.000530039287014783,
+            "lp_reference_optimal": true
+          }
+        }
+      ],
+      "best_witness_repeat": {
+        "native": 1,
+        "lp": 1
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding-d30-b10-x64.npz",
+      "witness_file_sha256": "2978a298e43d0c0c3a44445379674819f11c4861481ae953a6ad1e3a2a5cc145"
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "factor": 1,
+      "source_rows": 24,
+      "shared_rows": 118,
+      "source_capacity": 53328.0,
+      "original_shape": [
+        142,
+        1428
+      ],
+      "original_nnz": 32443,
+      "normalized_shape": [
+        142,
+        1234
+      ],
+      "normalized_nnz": 27967,
+      "zero_gain_columns_removed": 194,
+      "file_load_s": 0.003124167211353779,
+      "assembly_s": 0.000564957968890667,
+      "common_preparation_s": 0.000638292171061039,
+      "common_input_array_sha256": {
+        "csc_data": "94166ef119012fa93f1b8c39fe3f3d7de3e7e9e3bba46bcce010e7a311ff9b0d",
+        "csc_indices": "a8817d6e507f2137b8089621ccfba4cbb2a11a807f8611794951b3396680be3d",
+        "csc_indptr": "186c4987d53a05b8cf62e3a04e0688fb0102e59e4c75b7690d68ebd334f48b77",
+        "csc_shape": "8767d88fd6fbce7290c2763ebc62b858a080feea67f4e1b9e3f925a660605dc4",
+        "gains": "4a962a0b3db73044b15a705becce0b0bdd373ecc3e9a489fc296ad44e81a0c83",
+        "debt": "37bcd60f424f7ade3505f3862c0551d03987f9ec9645175713d0a0c21d71cb93",
+        "capacity": "be3203c213d97a92c44a87041eae3ff1fc491f7fce8e79abf3429ebd77cc611a"
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9876984134518785,
+            "upper_bound": 0.9881987882022172,
+            "absolute_gap": 0.0005003747503387057,
+            "relative_gap": 0.0005063502974426973,
+            "iterations": 321,
+            "converged": true,
+            "max_relative_constraint_residual": 1.5543122344752192e-15,
+            "max_constraint_residual": 3.637978807091713e-12,
+            "positive_variables": 20,
+            "variables_above_executor_mass_threshold": 20,
+            "primal_sha256": "266ad8deba25fb95d52a14af1466782bdc5ca5dee4b68d420d6bc89b2820edb2",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "2b539052865bb5a5a423226a6afb4dc025ad4970a6f4965e3f8ff6e89b678c0a",
+            "elapsed_s": 0.01896987482905388,
+            "external_original_unit_check_s": 0.00014691613614559174
+          },
+          "lp": {
+            "objective": 0.9881960571935627,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 22,
+            "variables_above_executor_mass_threshold": 22,
+            "primal_sha256": "41ad0dcd1690fac49e1cecb8586309e9f10444b2515ff806336cad1ff66ccf47",
+            "upper_bound": 0.9881960571935631,
+            "absolute_gap": 3.3306690738754696e-16,
+            "relative_gap": 3.3704537167800843e-16,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "d248777be04cba7a39142ef08b9520d6feaebf795972c1fc16f4fceef04cdee6",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.19315520832661467,
+            "simplex_iterations": 113,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.014177709817886353,
+            "external_original_unit_check_s": 0.00013395771384239197
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0004976437416842616,
+            "lower_bound": 0.0004976437416842616,
+            "upper_bound": 0.0004976437416845947,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 2,
+          "order": [
+            "lp",
+            "native"
+          ],
+          "lp": {
+            "objective": 0.9881960571935627,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 22,
+            "variables_above_executor_mass_threshold": 22,
+            "primal_sha256": "41ad0dcd1690fac49e1cecb8586309e9f10444b2515ff806336cad1ff66ccf47",
+            "upper_bound": 0.9881960571935631,
+            "absolute_gap": 3.3306690738754696e-16,
+            "relative_gap": 3.3704537167800843e-16,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "d248777be04cba7a39142ef08b9520d6feaebf795972c1fc16f4fceef04cdee6",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.19315520832661467,
+            "simplex_iterations": 113,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.013265457935631275,
+            "external_original_unit_check_s": 0.0001293746754527092
+          },
+          "native": {
+            "objective": 0.9876984134518785,
+            "upper_bound": 0.9881987882022172,
+            "absolute_gap": 0.0005003747503387057,
+            "relative_gap": 0.0005063502974426973,
+            "iterations": 321,
+            "converged": true,
+            "max_relative_constraint_residual": 1.5543122344752192e-15,
+            "max_constraint_residual": 3.637978807091713e-12,
+            "positive_variables": 20,
+            "variables_above_executor_mass_threshold": 20,
+            "primal_sha256": "266ad8deba25fb95d52a14af1466782bdc5ca5dee4b68d420d6bc89b2820edb2",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "2b539052865bb5a5a423226a6afb4dc025ad4970a6f4965e3f8ff6e89b678c0a",
+            "elapsed_s": 0.018592000007629395,
+            "external_original_unit_check_s": 0.00012595858424901962
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0004976437416842616,
+            "lower_bound": 0.0004976437416842616,
+            "upper_bound": 0.0004976437416845947,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 3,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9876984134518785,
+            "upper_bound": 0.9881987882022172,
+            "absolute_gap": 0.0005003747503387057,
+            "relative_gap": 0.0005063502974426973,
+            "iterations": 321,
+            "converged": true,
+            "max_relative_constraint_residual": 1.5543122344752192e-15,
+            "max_constraint_residual": 3.637978807091713e-12,
+            "positive_variables": 20,
+            "variables_above_executor_mass_threshold": 20,
+            "primal_sha256": "266ad8deba25fb95d52a14af1466782bdc5ca5dee4b68d420d6bc89b2820edb2",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "2b539052865bb5a5a423226a6afb4dc025ad4970a6f4965e3f8ff6e89b678c0a",
+            "elapsed_s": 0.018608292564749718,
+            "external_original_unit_check_s": 0.00012162420898675919
+          },
+          "lp": {
+            "objective": 0.9881960571935627,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 22,
+            "variables_above_executor_mass_threshold": 22,
+            "primal_sha256": "41ad0dcd1690fac49e1cecb8586309e9f10444b2515ff806336cad1ff66ccf47",
+            "upper_bound": 0.9881960571935631,
+            "absolute_gap": 3.3306690738754696e-16,
+            "relative_gap": 3.3704537167800843e-16,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "d248777be04cba7a39142ef08b9520d6feaebf795972c1fc16f4fceef04cdee6",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0,
+            "dual_repair_scale": 1.0000000000000004,
+            "objective_cost_scale": 0.19315520832661467,
+            "simplex_iterations": 113,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.013289333321154118,
+            "external_original_unit_check_s": 0.0001244163140654564
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0004976437416842616,
+            "lower_bound": 0.0004976437416842616,
+            "upper_bound": 0.0004976437416845947,
+            "lp_reference_optimal": true
+          }
+        }
+      ],
+      "best_witness_repeat": {
+        "native": 1,
+        "lp": 1
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding_long-d120-b100-x1.npz",
+      "witness_file_sha256": "712f273a55841f4c8d299a9804058daffb8ccceec46d8cf514aaab0656c39384"
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "factor": 4,
+      "source_rows": 96,
+      "shared_rows": 118,
+      "source_capacity": 53328.0,
+      "original_shape": [
+        214,
+        5712
+      ],
+      "original_nnz": 129772,
+      "normalized_shape": [
+        214,
+        4936
+      ],
+      "normalized_nnz": 111868,
+      "zero_gain_columns_removed": 776,
+      "file_load_s": 0.003124167211353779,
+      "assembly_s": 0.0012779571115970612,
+      "common_preparation_s": 0.0020217495039105415,
+      "common_input_array_sha256": {
+        "csc_data": "682950a6c1c4319c79f2dba434ddfa98665e3ddf4e2d7beb442ce1e6c182ad6d",
+        "csc_indices": "c7747d66a738578f1451646effec68b9896f886c19f1d32bac759aeef75d39ce",
+        "csc_indptr": "4cee5fc536cb334c6a0df4818e51da64f2e4dd3cbd8e4a6f151ba72518b4318e",
+        "csc_shape": "eb350a1478651df0faf318f354b8754ee2c13721e1e58d4d1f2ae8a76681e8c3",
+        "gains": "844724dd0fa40ab22f1fafca41740e45abf21d0e67bdbe64c013e8bdf3ebd81c",
+        "debt": "1aaa810172c04a69bf88d9982ba934ebda159038cb8c452c20d01e8acb683bcb",
+        "capacity": "5130248cf070c1b8b0942bada948dd4cdb7a4a5877e08a4c14784d8f38ee9d7e"
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9873276547839,
+            "upper_bound": 0.9881975957126401,
+            "absolute_gap": 0.0008699409287400428,
+            "relative_gap": 0.0008803309505248124,
+            "iterations": 821,
+            "converged": true,
+            "max_relative_constraint_residual": 1.5543122344752192e-15,
+            "max_constraint_residual": 2.7284841053187847e-12,
+            "positive_variables": 89,
+            "variables_above_executor_mass_threshold": 89,
+            "primal_sha256": "c14eb8dccf475379bf2df8c47a5cb6f05cbdf8e3e0e0933d9221af4862623a41",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "83c3e9788b1efbed65756e03fca2e5e85b5ae40dd389505e75d22ce9c6cfd92a",
+            "elapsed_s": 0.18394983373582363,
+            "external_original_unit_check_s": 0.0003471672534942627
+          },
+          "lp": {
+            "objective": 0.9881960571935625,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 82,
+            "variables_above_executor_mass_threshold": 82,
+            "primal_sha256": "b455f3b4f5485dc57fa0370bab1d82c860ba501cd28049755d925fa9dc66f1ec",
+            "upper_bound": 0.988196057193564,
+            "absolute_gap": 1.4432899320127035e-15,
+            "relative_gap": 1.4605299439380354e-15,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "344db4720648bc4bdbe62facf4d714aa26e87705f9efb12c8938f6f844a2c5e4",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.0000000000000013,
+            "objective_cost_scale": 0.04828880208165367,
+            "simplex_iterations": 314,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.07042612507939339,
+            "external_original_unit_check_s": 0.0003167092800140381
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.000868402409662461,
+            "lower_bound": 0.000868402409662461,
+            "upper_bound": 0.0008684024096639043,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 2,
+          "order": [
+            "lp",
+            "native"
+          ],
+          "lp": {
+            "objective": 0.9881960571935625,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 82,
+            "variables_above_executor_mass_threshold": 82,
+            "primal_sha256": "b455f3b4f5485dc57fa0370bab1d82c860ba501cd28049755d925fa9dc66f1ec",
+            "upper_bound": 0.988196057193564,
+            "absolute_gap": 1.4432899320127035e-15,
+            "relative_gap": 1.4605299439380354e-15,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "344db4720648bc4bdbe62facf4d714aa26e87705f9efb12c8938f6f844a2c5e4",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.0000000000000013,
+            "objective_cost_scale": 0.04828880208165367,
+            "simplex_iterations": 314,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.07121775019913912,
+            "external_original_unit_check_s": 0.00031795818358659744
+          },
+          "native": {
+            "objective": 0.9873276547839,
+            "upper_bound": 0.9881975957126401,
+            "absolute_gap": 0.0008699409287400428,
+            "relative_gap": 0.0008803309505248124,
+            "iterations": 821,
+            "converged": true,
+            "max_relative_constraint_residual": 1.5543122344752192e-15,
+            "max_constraint_residual": 2.7284841053187847e-12,
+            "positive_variables": 89,
+            "variables_above_executor_mass_threshold": 89,
+            "primal_sha256": "c14eb8dccf475379bf2df8c47a5cb6f05cbdf8e3e0e0933d9221af4862623a41",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "83c3e9788b1efbed65756e03fca2e5e85b5ae40dd389505e75d22ce9c6cfd92a",
+            "elapsed_s": 0.18100654054433107,
+            "external_original_unit_check_s": 0.00039512570947408676
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.000868402409662461,
+            "lower_bound": 0.000868402409662461,
+            "upper_bound": 0.0008684024096639043,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 3,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9873276547839,
+            "upper_bound": 0.9881975957126401,
+            "absolute_gap": 0.0008699409287400428,
+            "relative_gap": 0.0008803309505248124,
+            "iterations": 821,
+            "converged": true,
+            "max_relative_constraint_residual": 1.5543122344752192e-15,
+            "max_constraint_residual": 2.7284841053187847e-12,
+            "positive_variables": 89,
+            "variables_above_executor_mass_threshold": 89,
+            "primal_sha256": "c14eb8dccf475379bf2df8c47a5cb6f05cbdf8e3e0e0933d9221af4862623a41",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "83c3e9788b1efbed65756e03fca2e5e85b5ae40dd389505e75d22ce9c6cfd92a",
+            "elapsed_s": 0.17968429159373045,
+            "external_original_unit_check_s": 0.0003247922286391258
+          },
+          "lp": {
+            "objective": 0.9881960571935625,
+            "max_relative_constraint_residual": 0.0,
+            "max_constraint_residual": 0.0,
+            "positive_variables": 82,
+            "variables_above_executor_mass_threshold": 82,
+            "primal_sha256": "b455f3b4f5485dc57fa0370bab1d82c860ba501cd28049755d925fa9dc66f1ec",
+            "upper_bound": 0.988196057193564,
+            "absolute_gap": 1.4432899320127035e-15,
+            "relative_gap": 1.4605299439380354e-15,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "344db4720648bc4bdbe62facf4d714aa26e87705f9efb12c8938f6f844a2c5e4",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.0000000000000013,
+            "objective_cost_scale": 0.04828880208165367,
+            "simplex_iterations": 314,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.06654166709631681,
+            "external_original_unit_check_s": 0.0002960003912448883
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.000868402409662461,
+            "lower_bound": 0.000868402409662461,
+            "upper_bound": 0.0008684024096639043,
+            "lp_reference_optimal": true
+          }
+        }
+      ],
+      "best_witness_repeat": {
+        "native": 1,
+        "lp": 1
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding_long-d120-b100-x4.npz",
+      "witness_file_sha256": "58a693cdd02223d73b0225a4eba8701a0c0e528d6908a63eb64a09c4cce8138d"
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "factor": 16,
+      "source_rows": 384,
+      "shared_rows": 118,
+      "source_capacity": 53328.0,
+      "original_shape": [
+        502,
+        22848
+      ],
+      "original_nnz": 519088,
+      "normalized_shape": [
+        502,
+        19744
+      ],
+      "normalized_nnz": 447472,
+      "zero_gain_columns_removed": 3104,
+      "file_load_s": 0.003124167211353779,
+      "assembly_s": 0.004330707713961601,
+      "common_preparation_s": 0.008199125528335571,
+      "common_input_array_sha256": {
+        "csc_data": "f7a68f8c0bd931bb6978c12b35d86e5711cf6ff40dfa3e4a57b8214e3bf925cf",
+        "csc_indices": "65d2105495cb984861b1a9d24edfc8d459c4b083de9e493a50195a135e85794a",
+        "csc_indptr": "0e4df3efd688f1d0cdd8e3ec47fa22831d237b40ab666a6e161a858c356a1771",
+        "csc_shape": "c798cbe6ce6bd5b05357b5035a3da2d6a1a78634cffb9c41cd902e2cbae549b5",
+        "gains": "d7bd39df9dc85fed0f4fcb0a8aa6673f8f1f44b1681a033684063a82086fe8c7",
+        "debt": "6b2fc87009eb4dbadd4062e3afcaaa0dab1ffbc288504102558cf70ba28d7b93",
+        "capacity": "e1f723964dfc74a877d2ea1da1a46fab8e858430070cba64b920b2be2833b8df"
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9874087248631316,
+            "upper_bound": 0.988196309907682,
+            "absolute_gap": 0.000787585044550454,
+            "relative_gap": 0.0007969924969908365,
+            "iterations": 3641,
+            "converged": true,
+            "max_relative_constraint_residual": 2.886579864025407e-15,
+            "max_constraint_residual": 1.8189894035458565e-12,
+            "positive_variables": 366,
+            "variables_above_executor_mass_threshold": 366,
+            "primal_sha256": "6fd9bbc8303e0cbf044dd3e93d6583975ac7f24e435c1b48cda7423f03d31d7b",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "446d86af5110771d9c39f3cd74351a1e00ef920d2efcb11cf5979feaf718b645",
+            "elapsed_s": 3.155721915885806,
+            "external_original_unit_check_s": 0.0015496667474508286
+          },
+          "lp": {
+            "objective": 0.9881960571935626,
+            "max_relative_constraint_residual": 8.881784197001252e-16,
+            "max_constraint_residual": 5.4569682106375694e-12,
+            "positive_variables": 322,
+            "variables_above_executor_mass_threshold": 322,
+            "primal_sha256": "66fad83005fe759d532d16b436bd9f62ecf8010f20551d0d25491f7c6890a94e",
+            "upper_bound": 0.988196057193564,
+            "absolute_gap": 1.3322676295501878e-15,
+            "relative_gap": 1.3481814867120326e-15,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "53f21099a501757c01235253b849e3541c1e7a6e27c257c071d70fef0bc1d71e",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.000000000000001,
+            "objective_cost_scale": 0.012072200520413417,
+            "simplex_iterations": 623,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.34255170822143555,
+            "external_original_unit_check_s": 0.0009261257946491241
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0007873323304310453,
+            "lower_bound": 0.0007873323304310453,
+            "upper_bound": 0.0007873323304323776,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 2,
+          "order": [
+            "lp",
+            "native"
+          ],
+          "lp": {
+            "objective": 0.9881960571935626,
+            "max_relative_constraint_residual": 8.881784197001252e-16,
+            "max_constraint_residual": 5.4569682106375694e-12,
+            "positive_variables": 322,
+            "variables_above_executor_mass_threshold": 322,
+            "primal_sha256": "66fad83005fe759d532d16b436bd9f62ecf8010f20551d0d25491f7c6890a94e",
+            "upper_bound": 0.988196057193564,
+            "absolute_gap": 1.3322676295501878e-15,
+            "relative_gap": 1.3481814867120326e-15,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "53f21099a501757c01235253b849e3541c1e7a6e27c257c071d70fef0bc1d71e",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.000000000000001,
+            "objective_cost_scale": 0.012072200520413417,
+            "simplex_iterations": 623,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.34271166753023863,
+            "external_original_unit_check_s": 0.0009377077221870422
+          },
+          "native": {
+            "objective": 0.9874087248631316,
+            "upper_bound": 0.988196309907682,
+            "absolute_gap": 0.000787585044550454,
+            "relative_gap": 0.0007969924969908365,
+            "iterations": 3641,
+            "converged": true,
+            "max_relative_constraint_residual": 2.886579864025407e-15,
+            "max_constraint_residual": 1.8189894035458565e-12,
+            "positive_variables": 366,
+            "variables_above_executor_mass_threshold": 366,
+            "primal_sha256": "6fd9bbc8303e0cbf044dd3e93d6583975ac7f24e435c1b48cda7423f03d31d7b",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "446d86af5110771d9c39f3cd74351a1e00ef920d2efcb11cf5979feaf718b645",
+            "elapsed_s": 3.1501302495598793,
+            "external_original_unit_check_s": 0.000987917184829712
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0007873323304310453,
+            "lower_bound": 0.0007873323304310453,
+            "upper_bound": 0.0007873323304323776,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 3,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9874087248631316,
+            "upper_bound": 0.988196309907682,
+            "absolute_gap": 0.000787585044550454,
+            "relative_gap": 0.0007969924969908365,
+            "iterations": 3641,
+            "converged": true,
+            "max_relative_constraint_residual": 2.886579864025407e-15,
+            "max_constraint_residual": 1.8189894035458565e-12,
+            "positive_variables": 366,
+            "variables_above_executor_mass_threshold": 366,
+            "primal_sha256": "6fd9bbc8303e0cbf044dd3e93d6583975ac7f24e435c1b48cda7423f03d31d7b",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "446d86af5110771d9c39f3cd74351a1e00ef920d2efcb11cf5979feaf718b645",
+            "elapsed_s": 3.1184161249548197,
+            "external_original_unit_check_s": 0.001147916540503502
+          },
+          "lp": {
+            "objective": 0.9881960571935626,
+            "max_relative_constraint_residual": 8.881784197001252e-16,
+            "max_constraint_residual": 5.4569682106375694e-12,
+            "positive_variables": 322,
+            "variables_above_executor_mass_threshold": 322,
+            "primal_sha256": "66fad83005fe759d532d16b436bd9f62ecf8010f20551d0d25491f7c6890a94e",
+            "upper_bound": 0.988196057193564,
+            "absolute_gap": 1.3322676295501878e-15,
+            "relative_gap": 1.3481814867120326e-15,
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "53f21099a501757c01235253b849e3541c1e7a6e27c257c071d70fef0bc1d71e",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000002,
+            "dual_repair_scale": 1.000000000000001,
+            "objective_cost_scale": 0.012072200520413417,
+            "simplex_iterations": 623,
+            "ipm_iterations": 0,
+            "elapsed_s": 0.3424232918769121,
+            "external_original_unit_check_s": 0.0010949578136205673
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.0007873323304310453,
+            "lower_bound": 0.0007873323304310453,
+            "upper_bound": 0.0007873323304323776,
+            "lp_reference_optimal": true
+          }
+        }
+      ],
+      "best_witness_repeat": {
+        "native": 1,
+        "lp": 1
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding_long-d120-b100-x16.npz",
+      "witness_file_sha256": "46bc7897b47957fee3d423d3da5ce2cbd523cde0b37e73ad731a403a0947a7ae"
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "factor": 64,
+      "source_rows": 1536,
+      "shared_rows": 118,
+      "source_capacity": 53328.0,
+      "original_shape": [
+        1654,
+        91392
+      ],
+      "original_nnz": 2076352,
+      "normalized_shape": [
+        1654,
+        78976
+      ],
+      "normalized_nnz": 1789888,
+      "zero_gain_columns_removed": 12416,
+      "file_load_s": 0.003124167211353779,
+      "assembly_s": 0.016025500372052193,
+      "common_preparation_s": 0.03172325063496828,
+      "common_input_array_sha256": {
+        "csc_data": "6d66b9020330bf59ebce682da65560dbce358e9bd4c2136a9fa5f8a6e6fa1669",
+        "csc_indices": "a88e9cfd0d6ec9a4cd0b33437984244dccb88e216c487e6b84c8873e24e3e982",
+        "csc_indptr": "ad39c2e94deb50e33dc7eab29a67724d4c73a5a494bacf349604714780275bc0",
+        "csc_shape": "d853902170363211780ef4b78d3696c808e12d6c8639f15a8ed40d04b1c67b0c",
+        "gains": "498fc03eacfa256f312a0550734f05d419983b6376a10f5650545ee8df011f2b",
+        "debt": "0ff82a8dcf2c9d541bfdc35f1b1d422ccacc8173009104860d54ff972e776069",
+        "capacity": "62cec0a6ad9e24d6f5ba8a601a2ad030cf003731310f36d9f767fec6191c9fe8"
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9867891719013897,
+            "upper_bound": 0.9882622960278316,
+            "absolute_gap": 0.0014731241264418493,
+            "relative_gap": 0.001490620589658075,
+            "iterations": 10000,
+            "converged": false,
+            "max_relative_constraint_residual": 3.774758283725532e-15,
+            "max_constraint_residual": 1.3500311979441904e-13,
+            "positive_variables": 1389,
+            "variables_above_executor_mass_threshold": 1389,
+            "primal_sha256": "355fc5ecffc025dfa486e34a26f0475716cc577c160470e11aed56a86319203f",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "8ad3d3ab8da2624552f9c258d3fb15cf3eb320c865aeb45d9811c5e35fff2b31",
+            "elapsed_s": 36.09958616644144,
+            "external_original_unit_check_s": 0.003511750139296055
+          },
+          "lp": {
+            "objective": 0.988196057193561,
+            "max_relative_constraint_residual": 5.10702591327572e-15,
+            "max_constraint_residual": 3.3651303965598345e-11,
+            "positive_variables": 1282,
+            "variables_above_executor_mass_threshold": 1282,
+            "primal_sha256": "83d30f016d10a9231e6d89b99b4cd166b9636b570dbbfb94005568e4e7c08e71",
+            "upper_bound": 0.9881960571935644,
+            "absolute_gap": 3.4416913763379853e-15,
+            "relative_gap": 3.4828021740060827e-15,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "94f2562454e707def47fd3548517e81bd4db32018d1c79f9b46f78349ce21844",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000022,
+            "dual_repair_scale": 1.0000000000000013,
+            "objective_cost_scale": 0.0030180501301033543,
+            "simplex_iterations": 2932,
+            "ipm_iterations": 0,
+            "elapsed_s": 3.8052131654694676,
+            "external_original_unit_check_s": 0.005153042264282703
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.001406885292171256,
+            "lower_bound": 0.001406885292171256,
+            "upper_bound": 0.0014068852921746977,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 2,
+          "order": [
+            "lp",
+            "native"
+          ],
+          "lp": {
+            "objective": 0.988196057193561,
+            "max_relative_constraint_residual": 5.10702591327572e-15,
+            "max_constraint_residual": 3.3651303965598345e-11,
+            "positive_variables": 1282,
+            "variables_above_executor_mass_threshold": 1282,
+            "primal_sha256": "83d30f016d10a9231e6d89b99b4cd166b9636b570dbbfb94005568e4e7c08e71",
+            "upper_bound": 0.9881960571935644,
+            "absolute_gap": 3.4416913763379853e-15,
+            "relative_gap": 3.4828021740060827e-15,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "94f2562454e707def47fd3548517e81bd4db32018d1c79f9b46f78349ce21844",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000022,
+            "dual_repair_scale": 1.0000000000000013,
+            "objective_cost_scale": 0.0030180501301033543,
+            "simplex_iterations": 2932,
+            "ipm_iterations": 0,
+            "elapsed_s": 3.9935972904786468,
+            "external_original_unit_check_s": 0.004115290939807892
+          },
+          "native": {
+            "objective": 0.9867891719013897,
+            "upper_bound": 0.9882622960278316,
+            "absolute_gap": 0.0014731241264418493,
+            "relative_gap": 0.001490620589658075,
+            "iterations": 10000,
+            "converged": false,
+            "max_relative_constraint_residual": 3.774758283725532e-15,
+            "max_constraint_residual": 1.3500311979441904e-13,
+            "positive_variables": 1389,
+            "variables_above_executor_mass_threshold": 1389,
+            "primal_sha256": "355fc5ecffc025dfa486e34a26f0475716cc577c160470e11aed56a86319203f",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "8ad3d3ab8da2624552f9c258d3fb15cf3eb320c865aeb45d9811c5e35fff2b31",
+            "elapsed_s": 37.41401879116893,
+            "external_original_unit_check_s": 0.005775333382189274
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.001406885292171256,
+            "lower_bound": 0.001406885292171256,
+            "upper_bound": 0.0014068852921746977,
+            "lp_reference_optimal": true
+          }
+        },
+        {
+          "repeat": 3,
+          "order": [
+            "native",
+            "lp"
+          ],
+          "native": {
+            "objective": 0.9867891719013897,
+            "upper_bound": 0.9882622960278316,
+            "absolute_gap": 0.0014731241264418493,
+            "relative_gap": 0.001490620589658075,
+            "iterations": 10000,
+            "converged": false,
+            "max_relative_constraint_residual": 3.774758283725532e-15,
+            "max_constraint_residual": 1.3500311979441904e-13,
+            "positive_variables": 1389,
+            "variables_above_executor_mass_threshold": 1389,
+            "primal_sha256": "355fc5ecffc025dfa486e34a26f0475716cc577c160470e11aed56a86319203f",
+            "max_relative_dual_deficit": 0.0,
+            "dual_certified": true,
+            "dual_sha256": "8ad3d3ab8da2624552f9c258d3fb15cf3eb320c865aeb45d9811c5e35fff2b31",
+            "elapsed_s": 37.95698849949986,
+            "external_original_unit_check_s": 0.003661917522549629
+          },
+          "lp": {
+            "objective": 0.988196057193561,
+            "max_relative_constraint_residual": 5.10702591327572e-15,
+            "max_constraint_residual": 3.3651303965598345e-11,
+            "positive_variables": 1282,
+            "variables_above_executor_mass_threshold": 1282,
+            "primal_sha256": "83d30f016d10a9231e6d89b99b4cd166b9636b570dbbfb94005568e4e7c08e71",
+            "upper_bound": 0.9881960571935644,
+            "absolute_gap": 3.4416913763379853e-15,
+            "relative_gap": 3.4828021740060827e-15,
+            "max_relative_dual_deficit": 2.220446049250313e-16,
+            "dual_certified": true,
+            "dual_sha256": "94f2562454e707def47fd3548517e81bd4db32018d1c79f9b46f78349ce21844",
+            "model_status": "HighsModelStatus.kOptimal",
+            "run_status": "HighsStatus.kOk",
+            "import_status": "HighsStatus.kWarning",
+            "optimal": true,
+            "solver_primal_available": true,
+            "solver_dual_available": true,
+            "primal_repair_scale": 1.0000000000000022,
+            "dual_repair_scale": 1.0000000000000013,
+            "objective_cost_scale": 0.0030180501301033543,
+            "simplex_iterations": 2932,
+            "ipm_iterations": 0,
+            "elapsed_s": 3.8684965828433633,
+            "external_original_unit_check_s": 0.004072667099535465
+          },
+          "native_objective_shortfall": {
+            "signed_to_lp_primal": 0.001406885292171256,
+            "lower_bound": 0.001406885292171256,
+            "upper_bound": 0.0014068852921746977,
+            "lp_reference_optimal": true
+          }
+        }
+      ],
+      "best_witness_repeat": {
+        "native": 1,
+        "lp": 1
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding_long-d120-b100-x64.npz",
+      "witness_file_sha256": "e2e64269be6a5ea70dd67f4dbb8d0a961828f2706a77c5d3b84f13a19d87ad9f"
+    }
+  ],
+  "environment": {
+    "python": "3.10.19 (main, Feb 12 2026, 00:36:33) [Clang 21.1.4 ]",
+    "platform": "macOS-14.3.1-arm64-arm-64bit",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3",
+    "highspy": "1.14.0",
+    "threads": 1,
+    "thread_env": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "parameters": {
+    "cases": [
+      "coding-d30-b10",
+      "coding_long-d120-b100"
+    ],
+    "factors": [
+      1,
+      4,
+      16,
+      64
+    ],
+    "serial_repeats": 3,
+    "native_relative_tolerance": 1e-12,
+    "native_absolute_tolerance": 0.001,
+    "native_max_iterations": 10000,
+    "lp_time_limit_s": 10.0
+  },
+  "scope": [
+    "Solver stress, not a datacenter simulation, new measured workload diversity, or a physical scaling forecast.",
+    "Each block has independent source-ownership rows; every original destination, WAN, memory, standing and temporal row stays shared. Total source capacity is fixed; capacities split fractionally among repeated coefficient blocks.",
+    "Both solvers receive the same canonical CSC matrix and primary objective. Zero-gain columns are removed and capacities/columns normalized once in common preparation. Native performs its own production validation and normalization inside its timed call.",
+    "Native timing includes zero-incumbent allocation, native greedy seed, refinement, fill and its primal/dual certificate. Direct LP timing includes fresh model assembly, import, single-thread primary solve and full supplied-matrix witness checks; no stored solution, secondary solve or warm start is used.",
+    "Common input loading, block assembly, preparation and external original-unit audits are reported separately. Python/module imports are outside solver timings. Three serial paired repeats alternate solver order; no GPU work is launched.",
+    "Absolute native tolerance .001 is 0.1 percentage point of the fixed total-source objective, not a guarantee of 0.1 percent relative error. Actual relative gaps and budget exhaustion are retained.",
+    "Returned positive-variable counts are recorded before and after the executor's 1e-10 mass threshold. They describe primal support, not measured execution-wave counts or end-to-end simulation runtime.",
+    "HiGHS receives a 10-second solver limit and max-cost objective normalization. Tiny-coefficient import warnings are retained; primal and dual witnesses are checked against all input coefficients, repaired only by recorded feasibility/coverage scalings. Nonoptimal references remain explicitly qualified.",
+    "Each NPZ retains common normalized inputs plus the best primal and its matching native dual, and best LP primal/dual when available. Original matrices are reproducible from the hashed archived input and source-ownership construction."
+  ],
+  "wall_s": 171.20888470858335,
+  "unconverged_native_repeats": [
+    [
+      "coding_long-d120-b100",
+      64,
+      1
+    ],
+    [
+      "coding_long-d120-b100",
+      64,
+      2
+    ],
+    [
+      "coding_long-d120-b100",
+      64,
+      3
+    ]
+  ],
+  "nonoptimal_lp_repeats": []
+}

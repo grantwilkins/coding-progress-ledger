@@ -145,3 +145,21 @@ def test_source_timeline_requires_valid_duration_and_offered_pacing():
         source_turns(source_fleet([[1.]], source_session_rps=0.), 0.)
     with pytest.raises(ValueError, match='time must be finite'):
         source_turns(source_fleet([[1.]]), np.inf)
+
+
+def test_exact_source_queries_reuse_work_without_aliasing_returned_arrays(monkeypatch):
+    import pool_shed_resident_queue as queue
+
+    fleet, cache = source_fleet([[45., 2., 3.]]), {}
+    before = np.nextafter(45., -np.inf)
+    assert source_turns(fleet, before, cache)[0][0] == 1
+    expected = source_turns(fleet, 45.)
+    first = source_turns(fleet, 45., cache)
+    first[0][:] = 999
+    source_turns(fleet, 200., cache)
+    monkeypatch.setattr(queue, 'bisect_right', lambda *args: pytest.fail('recomputed a cached source query'))
+    for _ in range(2):
+        result = source_turns(fleet, 45., cache)
+        for actual, reference in zip(result, expected):
+            np.testing.assert_array_equal(actual, reference)
+        result[1][:] = 999

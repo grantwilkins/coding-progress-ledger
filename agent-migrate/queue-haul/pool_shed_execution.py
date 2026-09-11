@@ -208,9 +208,8 @@ def _buffered(fleet, counts, start, end, calibration, cache=None, quiescing=Fals
     last = np.maximum(first, np.ceil((end + phases) * cadence - 1e-9).astype(int))
     if cache is not None:
         key = ("buffer", counts.astype(float, copy=False).tobytes(), first.tobytes(), last.tobytes())
-        if key not in cache:
-            cache[key] = _buffered(fleet, counts, start, end, calibration, quiescing=quiescing)
-        return cache[key]
+        if key in cache:
+            return cache[key]
     number, work = 0., 0.
     for i in np.flatnonzero(counts):
         sequence = fleet.metadata["turn_sequences"][i]
@@ -233,6 +232,8 @@ def _buffered(fleet, counts, start, end, calibration, cache=None, quiescing=Fals
             a, b = min(first[i], len(values)), min(last[i], len(values))
             work += counts[i] * (prefix[b] - prefix[a])
             number += counts[i] * (b - a)
+    if cache is not None:
+        cache[key] = number, work
     return number, work
 
 
@@ -314,6 +315,7 @@ class PooledExecution:
         self.n = len(self.selected)
         self.group, self.initial_ready = np.arange(self.n) // self.chunks, np.zeros(self.n, bool)
         self.origin_time = np.zeros(self.n)
+        self.captured_caps = np.full((self.n, 2), np.nan)
         self.state, self.remaining, self.release = np.zeros(self.n, int), np.zeros(self.n), np.zeros(self.n)
         self.tail, self.delta, self.compute_used, self.idle_work = np.zeros(self.n), np.zeros(self.n), np.zeros(2), np.zeros(2)
         self.quiesced, self.buffered, self.backlog, self.backlog_total = (np.zeros(self.n) for _ in range(4))
@@ -376,6 +378,7 @@ class PooledExecution:
                       counts=counts, demand=demand, memory=memory, reserved=mass * memory,
                       group=np.arange(self.n, self.n + n) // self.chunks, initial_ready=np.zeros(n, bool), gated=np.zeros(n, bool),
                       origin_time=np.full(n, np.nan if self.paced else 0.),
+                      captured_caps=np.full((n, 2), np.nan),
                       state=np.zeros(n, int), remaining=remaining, tail=tail, phase_started=np.full(n, self.now))
         if self.record_wave_schedules:
             values.update(admitted_s=np.full(n, self.now), phase_enter_s=np.column_stack((np.full(n, self.now), np.full((n, 7), np.nan))))
@@ -420,6 +423,21 @@ class PooledExecution:
         return _buffered(self.fleet, self.counts[i], self.pause_requested[i] if quiescing else self.quiesced[i],
                          until, self.calibration, self.primitive_cache, quiescing=quiescing)
 
+    def network_caps(self, ids):
+        states, captured = self.state[ids], np.isfinite(self.origin_time[ids])
+        if np.any(~np.isin(states, [0, 3])) or np.any((states == 3) & ~captured):
+            raise ValueError("phase caps require initial or captured catch-up transfers")
+        phases = states // 3
+        caps = self.captured_caps[ids, phases]
+        for k in np.flatnonzero(captured & np.isnan(caps)):
+            caps[k] = self.network_cap(ids[k])
+        self.captured_caps[ids[captured], phases[captured]] = caps[captured]
+        waiting = np.flatnonzero(~captured)
+        if len(waiting):
+            _, first, inverse = np.unique(self.group[ids[waiting]], return_index=True, return_inverse=True)
+            caps[waiting] = np.array([self.network_cap(i) for i in ids[waiting[first]]])[inverse]
+        return caps
+
     def nominal_continuation(self, table, timing, calibration):
         central = PooledExecution(table, timing, calibration, self.chunks)
         clone = copy(self)
@@ -428,6 +446,7 @@ class PooledExecution:
             setattr(clone, name, getattr(central, name))
         clone.events, clone.selected = {key: value.copy() for key, value in self.events.items()}, self.selected.copy()
         clone.network_key, clone.network_rates = None, np.zeros(self.n)
+        clone.captured_caps = np.full((self.n, 2), np.nan)
         clone.remaining[:], clone.tail[:], clone.delta[:] = 0., 0., 0.
         for i in np.flatnonzero(self.state < 6):
             c, a, r, phase = clone.counts[i], clone.action[i], clone.route[i], clone.state[i]
@@ -532,7 +551,7 @@ class PooledExecution:
                         caps = np.where(actions == 1, np.minimum(endpoint[routes], np.asarray(application)[routes]), endpoint[routes])
                         if self.fixed_host_shares:
                             caps = caps.astype(float)
-                            np.minimum.at(caps, self.group[ids], [self.network_cap(i) for i in ids])
+                            np.minimum.at(caps, self.group[ids], self.network_caps(ids))
                         pending = np.bincount(self.group[ids], weights=self.mass[ids], minlength=self.n // self.chunks)
                         virtual = _flow_with_caps(pending, routes, caps, residual, actions == 1, app_residual / nodes, nodes)
                         active = ids[self.initial_ready[ids]]
@@ -554,7 +573,7 @@ class PooledExecution:
                             break
                     caps = np.where(self.action[ids] == 1, np.minimum(endpoint[self.route[ids]], np.asarray(application)[self.route[ids]]), endpoint[self.route[ids]])
                     if self.fixed_host_shares:
-                        caps = np.minimum(caps, [self.network_cap(i) for i in ids])
+                        caps = np.minimum(caps, self.network_caps(ids))
                     rates[ids] = _flow_with_caps(self.mass[ids], self.route[ids], caps, residual, self.action[ids] == 1, app_residual / nodes, nodes)
                     used = self.mass[ids] * rates[ids]
                     residual = np.maximum(residual - np.r_[[used[self.route[ids] == r].sum() for r in (0, 1)], used.sum()], 0.)

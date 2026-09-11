@@ -258,13 +258,13 @@ def _choose(matrix, capacity, gains, debt, fleet, greedy):
 def _choose_priced(matrix, capacity, gains, debt, fleet):
     from pool_shed_priced_greedy import priced_greedy
 
-    incumbent = _choose(matrix, capacity, gains, debt, fleet, True)
     # Gains are fractions of all source work: certify at most 0.1 percentage point per admission matrix.
-    chosen, certificate = priced_greedy(matrix, capacity, gains, incumbent, debt, tolerance=1e-12, absolute_tolerance=.001)
-    chosen += _choose(matrix, np.maximum(capacity - matrix @ chosen, 0.), gains, debt, fleet, True)
+    chosen, certificate = priced_greedy(matrix, capacity, gains, np.zeros(len(gains)), debt,
+                                        tolerance=1e-12, absolute_tolerance=.001)
     objective, bound = float(gains @ chosen), certificate["upper_bound"]
     usage = matrix @ chosen
-    if (np.any(usage[capacity == 0] > 0)
+    if (not np.isfinite(chosen).all() or np.any(chosen < 0) or not np.isfinite(usage).all()
+            or not np.isfinite(bound) or bound < 0 or np.any(usage[capacity == 0] > 0)
             or np.max(usage[capacity > 0] / capacity[capacity > 0], initial=0.) > 1 + 1e-8
             or objective > bound * (1 + 1e-10)):
         raise RuntimeError("priced greedy residual fill failed its certificate")

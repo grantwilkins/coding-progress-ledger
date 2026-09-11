@@ -6,6 +6,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+mod packing;
+
 const FEATURES: usize = 7;
 
 fn greedy_order(costs: &[f64], gains: &[f64], candidates: &[usize], recovery: u8) -> Vec<usize> {
@@ -1018,5 +1020,6 @@ fn _queue_haul_native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PricingOracle>()?;
     module.add_function(wrap_pyfunction!(greedy_compact, module)?)?;
     module.add_function(wrap_pyfunction!(greedy_csc, module)?)?;
+    module.add_function(wrap_pyfunction!(packing::packing_coordinate, module)?)?;
     Ok(())
 }

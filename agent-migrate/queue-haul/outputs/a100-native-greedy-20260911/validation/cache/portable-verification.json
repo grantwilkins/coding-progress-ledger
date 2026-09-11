@@ -1,0 +1,59 @@
+{
+  "arrays_per_variant": 12,
+  "command": "uv run --no-sync python outputs/a100-native-greedy-20260911/validation/cache/reproduce.py --reproduce",
+  "exact_witness_equality": true,
+  "result_fields_per_variant": 51,
+  "scope": "Packaging verification using frozen sources and prepared input, run sequentially before root benchmarks; each subprocess asserted exact equality of all 12 arrays and all canonical result-field hashes. These cProfile times are verification observations, not controlled performance measurements.",
+  "variants": [
+    {
+      "profile": {
+        "calls": {
+          "_buffered": {
+            "calls": 11928,
+            "cumulative_s": 0.606897314
+          },
+          "network_cap": {
+            "calls": 3669993,
+            "cumulative_s": 4.8419139840000005
+          },
+          "source_turns": {
+            "calls": 24007,
+            "cumulative_s": 0.688142801
+          }
+        },
+        "cprofile_s": 10.469622459,
+        "prefix_wall_s": 3.136684666387737
+      },
+      "result_sha256": "226b7eddae2c85aa4bb70b1d39f3a1eec0fbbf8d0ee6e00f94209a516f15790e",
+      "variant": "before",
+      "wave_count": 12288
+    },
+    {
+      "profile": {
+        "calls": {
+          "_buffered": {
+            "calls": 11776,
+            "cumulative_s": 0.265581083
+          },
+          "network_cap": {
+            "calls": 13509,
+            "cumulative_s": 0.068892559
+          },
+          "network_caps": {
+            "calls": 1004,
+            "cumulative_s": 0.187658401
+          },
+          "source_turns": {
+            "calls": 23855,
+            "cumulative_s": 0.074233434
+          }
+        },
+        "cprofile_s": 4.6298975830000035,
+        "prefix_wall_s": 1.0984339574351907
+      },
+      "result_sha256": "226b7eddae2c85aa4bb70b1d39f3a1eec0fbbf8d0ee6e00f94209a516f15790e",
+      "variant": "after",
+      "wave_count": 12288
+    }
+  ]
+}

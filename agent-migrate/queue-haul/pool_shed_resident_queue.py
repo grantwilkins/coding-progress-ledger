@@ -17,6 +17,9 @@ def source_turns(fleet, now, cache=None):
     """
     if not math.isfinite(now):
         raise ValueError('source observation time must be finite')
+    query = ('source_turn_query', id(fleet), float(now))
+    if cache is not None and query in cache:
+        return tuple(value.copy() for value in cache[query])
     key = ('source_turn_timeline', id(fleet))
     state = None if cache is None else cache.get(key)
     if state is None:
@@ -60,7 +63,10 @@ def source_turns(fleet, now, cache=None):
         started[i], completed[i] = bisect_right(starts[i], now), bisect_right(finishes[i], now)
         if started[i]:
             finish[i] = finishes[i][started[i] - 1]
-    return started, completed, finish
+    result = started, completed, finish
+    if cache is not None:
+        cache[query] = tuple(value.copy() for value in result)
+    return result
 
 
 def simulate(requests, coefficients, until, token_budget=8192, max_sequences=256, endpoint_before_fraction=0.):

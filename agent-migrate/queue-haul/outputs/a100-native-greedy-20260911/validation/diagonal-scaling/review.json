@@ -1,0 +1,416 @@
+{
+  "verdict": "approved",
+  "input_sha256": {
+    "outputs/a100-native-greedy-20260911/validation/scaling.py": "b471039a7e310ce57ff3a08795d6cf2774150a5ca3d1ecc9478f2d54a64831f1",
+    "pool_shed_priced_greedy.py": "10323a7c01ac4840cebf9b44d47858b37d4cafe8cbeefea3996c3098c553e4cb",
+    "/Users/grantwilkins/houdini/agent-migrate/.venv/lib/python3.10/site-packages/_queue_haul_native/_queue_haul_native.cpython-310-darwin.so": "8f291f50cd036cfd2734acda41578f013296f4b6305f685c635cdb00c38dd666",
+    "native/src/lib.rs": "48231c20ebc2c3170e406a15db20c95109753c33330cdb3be227cfdc90117c22",
+    "native/src/packing.rs": "8f9235c1833466c47b1d970234e14df49fbdbd05cf425b417aea2c33e84500ac",
+    "native/Cargo.toml": "af8a00617da3c08001e9d111b6fd525ed6382f0f026372a8e449f0d0b5f5bc1e",
+    "native/Cargo.lock": "c81b978f1cb7ec7d0a48affb3fd3b722750f99c9620baee6756960805c1f661c",
+    "native/pyproject.toml": "3517842836f8709b3e6906575c08c0fb9fe21fdeb7e2a4411e10b42ea9a1b1cb",
+    "native/rust-toolchain.toml": "75cd8d73777ba32f23fcf6d5a7f49019b4a7c8ebe34a06ceb5a40d1c21ab8ffc",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d30-b10.npz": "60850c62fb9081e5a682d443b46452bffecdcb12013ce9ce226bb62911e94866",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d120-b100.npz": "d560eb14303c281d4278eb71b1047c7a32bd8b0a1faec6546da77abdfc9e1a61"
+  },
+  "report_sha256": "403cae4c0dde4130a0509d865f0a422714aaa8bcbe273bdd32c42fe4a61ff49e",
+  "run_log_sha256": "add2aa19f4a1b353da37400c71507ec6ba62d92eb47e30821eaa85e5865a36b4",
+  "scalar_report_sha256": "235cf07d186dee6f2d46deb05372c5b572a603f966fc56eac821e50bf50c01c7",
+  "scalar_sources_sha256": "58aefe4651e48c485b9aeb21ded9300eaaf990c01257be7e2afb1d978c52bd28",
+  "scalar_witness_files_verified": 8,
+  "frozen_source_texts_verified": 8,
+  "numerical_harness_function_asts_unchanged_from_scalar": true,
+  "native_repeat_witnesses_verified": 24,
+  "lp_repeat_witnesses_verified": 24,
+  "solver_runs_performed_by_this_audit": 0,
+  "benchmark_wall_s": 41.19461220968515,
+  "records": [
+    {
+      "case": "coding-d30-b10",
+      "factor": 1,
+      "original_shape": [
+        114,
+        1494
+      ],
+      "original_nnz": 27547,
+      "normalized_shape": [
+        114,
+        1179
+      ],
+      "normalized_nnz": 21262,
+      "native_median_s": 0.012714083306491375,
+      "lp_median_s": 0.014449958689510822,
+      "lp_over_native_median": 1.1365316980527544,
+      "actual_lp_shortfall_pp": 0.012096159100027926,
+      "actual_lp_shortfall_upper_pp": 0.012096159100061232,
+      "checked": {
+        "native": {
+          "objective": 0.9834546025968764,
+          "upper_bound": 0.9841710271024621,
+          "certificate_gap_pp": 0.07164245055856222,
+          "max_relative_constraint_residual": 7.993605777301127e-15,
+          "max_constraint_residual": 0.0001220703125,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 25,
+          "primal_sha256": "8297ccfb1727aed70670c3712232a2c8d036cd594c0b10e058933d5a3ffc0a19",
+          "dual_sha256": "cec2cfffb012e5650ec476c1911eeb7203cff68bb127a5fb327e4aba01c32ce0",
+          "saved_witness_matches_all_three_repeats": true
+        },
+        "lp": {
+          "objective": 0.9835755641878767,
+          "upper_bound": 0.9835755641878771,
+          "certificate_gap_pp": 3.3306690738754696e-14,
+          "max_relative_constraint_residual": 0.0,
+          "max_constraint_residual": 0.0,
+          "max_relative_dual_deficit": 1.1102230246251565e-16,
+          "positive_variables": 24,
+          "primal_sha256": "6d694ed132265483e69f2a47c1a746423355e9b6bb7bd111e2d1879143b30465",
+          "dual_sha256": "4ee5f84ffcb749b45d6de85a549400645637276bdbfed4b2bc5a2162d3f31132",
+          "saved_witness_matches_all_three_repeats": true
+        }
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling-coding-d30-b10-x1.npz",
+      "witness_sha256": "59dd54a929b5afc3a28b80939c0cd6784724e887587f135e70d7ba398720f74e"
+    },
+    {
+      "case": "coding-d30-b10",
+      "factor": 4,
+      "original_shape": [
+        186,
+        5976
+      ],
+      "original_nnz": 110188,
+      "normalized_shape": [
+        186,
+        4716
+      ],
+      "normalized_nnz": 85048,
+      "native_median_s": 0.07524374965578318,
+      "lp_median_s": 0.05195374973118305,
+      "lp_over_native_median": 0.6904726302032441,
+      "actual_lp_shortfall_pp": 0.023320156052020202,
+      "actual_lp_shortfall_upper_pp": 0.02332015605210902,
+      "checked": {
+        "native": {
+          "objective": 0.9833423626273563,
+          "upper_bound": 0.9838628698962655,
+          "certificate_gap_pp": 0.05205072689091761,
+          "max_relative_constraint_residual": 5.551115123125783e-15,
+          "max_constraint_residual": 0.00048828125,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 92,
+          "primal_sha256": "c3e1e52fdec9b8a28cd9e9b756f91c77c29bdb95667f053d22a08a0207f2baa2",
+          "dual_sha256": "b092f5e44f5eb8a0e188de2bbd4e9ed05653234a8b4758ee7bdd4c5121c59c97",
+          "saved_witness_matches_all_three_repeats": true
+        },
+        "lp": {
+          "objective": 0.9835755641878765,
+          "upper_bound": 0.9835755641878774,
+          "certificate_gap_pp": 8.881784197001252e-14,
+          "max_relative_constraint_residual": 0.0,
+          "max_constraint_residual": 0.0,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 86,
+          "primal_sha256": "a88a385a65886e31a422eecbf607f8ee377c7265152d714064092387409e417c",
+          "dual_sha256": "960affbb75a4f66306e9346515c6b8960ef49ae9905f92b9dce75e4e736985a2",
+          "saved_witness_matches_all_three_repeats": true
+        }
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling-coding-d30-b10-x4.npz",
+      "witness_sha256": "82947d88ea9c7e43b961fdf82bf2845092d56390206fb0de9b916df7b711829c"
+    },
+    {
+      "case": "coding-d30-b10",
+      "factor": 16,
+      "original_shape": [
+        474,
+        23904
+      ],
+      "original_nnz": 440752,
+      "normalized_shape": [
+        474,
+        18864
+      ],
+      "normalized_nnz": 340192,
+      "native_median_s": 0.3259863341227174,
+      "lp_median_s": 0.9433746244758368,
+      "lp_over_native_median": 2.893908503908952,
+      "actual_lp_shortfall_pp": 0.04536655979231474,
+      "actual_lp_shortfall_upper_pp": 0.04536655980293958,
+      "checked": {
+        "native": {
+          "objective": 0.9831218985899286,
+          "upper_bound": 0.9839020130698471,
+          "certificate_gap_pp": 0.07801144799185478,
+          "max_relative_constraint_residual": 4.218847493575595e-15,
+          "max_constraint_residual": 9.094947017729282e-12,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 365,
+          "primal_sha256": "a0f3168fd8472bfabfee53764fb1c7d111d73312b2cc2e3e9133743553da60d9",
+          "dual_sha256": "25415d8b656eb23cf6f182273c82a26e8511634fc5641470670615a817f674ac",
+          "saved_witness_matches_all_three_repeats": true
+        },
+        "lp": {
+          "objective": 0.9835755641878517,
+          "upper_bound": 0.983575564187958,
+          "certificate_gap_pp": 1.0624834345662748e-11,
+          "max_relative_constraint_residual": 0.0,
+          "max_constraint_residual": 0.0,
+          "max_relative_dual_deficit": 2.220446049250313e-16,
+          "positive_variables": 344,
+          "primal_sha256": "32e8de40a59cd2fa1cbc2e2f695997d298830e8ce220a6bf12908b8655f0141d",
+          "dual_sha256": "b9576cf803d78ac42b1c0cd4a7bd3f2d71f3ff3ff8732bc1ebefbac1577f7b45",
+          "saved_witness_matches_all_three_repeats": true
+        }
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling-coding-d30-b10-x16.npz",
+      "witness_sha256": "8e2c3fe09243db3a1dba7e5a2e5e1aaf85a130f3a371174d4c3d71e12fe6ad61"
+    },
+    {
+      "case": "coding-d30-b10",
+      "factor": 64,
+      "original_shape": [
+        1626,
+        95616
+      ],
+      "original_nnz": 1763008,
+      "normalized_shape": [
+        1626,
+        75456
+      ],
+      "normalized_nnz": 1360768,
+      "native_median_s": 1.3895555417984724,
+      "lp_median_s": 5.149052916094661,
+      "lp_over_native_median": 3.7055394773427697,
+      "actual_lp_shortfall_pp": 0.0466548446056092,
+      "actual_lp_shortfall_upper_pp": 0.046654844672378015,
+      "checked": {
+        "native": {
+          "objective": 0.9831090157411538,
+          "upper_bound": 0.9839325246533548,
+          "certificate_gap_pp": 0.08235089122009542,
+          "max_relative_constraint_residual": 7.105427357601002e-15,
+          "max_constraint_residual": 0.001708984375,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 1480,
+          "primal_sha256": "017af4296e62915b776468dab985f4cad287eb1a79b23a40f05a365b5d1791f9",
+          "dual_sha256": "6608b7320cc55d6e31a9ae45b35f3570239b98122da417033443d88254e07bf1",
+          "saved_witness_matches_all_three_repeats": true
+        },
+        "lp": {
+          "objective": 0.9835755641872099,
+          "upper_bound": 0.9835755641878776,
+          "certificate_gap_pp": 6.676881270095691e-11,
+          "max_relative_constraint_residual": 0.0,
+          "max_constraint_residual": 0.0,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 1376,
+          "primal_sha256": "aa8fd6af3a5db4ae22f5bfb15df280f28ca485de1f48a2b677141b9198c2d255",
+          "dual_sha256": "5d0991f679f0956d2494bcc81d69d987a8145615e433a921fbe95e81e8dcfb60",
+          "saved_witness_matches_all_three_repeats": true
+        }
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling-coding-d30-b10-x64.npz",
+      "witness_sha256": "9984109d65611a0a62955070c15da8e744ab9eb563797f753eed8010760706b7"
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "factor": 1,
+      "original_shape": [
+        142,
+        1428
+      ],
+      "original_nnz": 32443,
+      "normalized_shape": [
+        142,
+        1234
+      ],
+      "normalized_nnz": 27967,
+      "native_median_s": 0.014553291723132133,
+      "lp_median_s": 0.014347000047564507,
+      "lp_over_native_median": 0.9858250848335754,
+      "actual_lp_shortfall_pp": 0.09381080097621286,
+      "actual_lp_shortfall_upper_pp": 0.09381080097624617,
+      "checked": {
+        "native": {
+          "objective": 0.9872579491838006,
+          "upper_bound": 0.9882045368689696,
+          "certificate_gap_pp": 0.09465876851689758,
+          "max_relative_constraint_residual": 1.1102230246251565e-15,
+          "max_constraint_residual": 2.2737367544323206e-12,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 19,
+          "primal_sha256": "3fe70171ad426b033cee23ea024394434851d4b6eef2e5166cfad5a460b6011f",
+          "dual_sha256": "7619e9c7e6b83c1adfcbe6a75a77481f028727f38bf31e6ecd34dc464ddad0ce",
+          "saved_witness_matches_all_three_repeats": true
+        },
+        "lp": {
+          "objective": 0.9881960571935627,
+          "upper_bound": 0.9881960571935631,
+          "certificate_gap_pp": 3.3306690738754696e-14,
+          "max_relative_constraint_residual": 0.0,
+          "max_constraint_residual": 0.0,
+          "max_relative_dual_deficit": 2.220446049250313e-16,
+          "positive_variables": 22,
+          "primal_sha256": "41ad0dcd1690fac49e1cecb8586309e9f10444b2515ff806336cad1ff66ccf47",
+          "dual_sha256": "d248777be04cba7a39142ef08b9520d6feaebf795972c1fc16f4fceef04cdee6",
+          "saved_witness_matches_all_three_repeats": true
+        }
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling-coding_long-d120-b100-x1.npz",
+      "witness_sha256": "7c5c5346c6e83949f483ad4c13462ef747c4adcde2e33edb61bb18fcd49412a1"
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "factor": 4,
+      "original_shape": [
+        214,
+        5712
+      ],
+      "original_nnz": 129772,
+      "normalized_shape": [
+        214,
+        4936
+      ],
+      "normalized_nnz": 111868,
+      "native_median_s": 0.05055862478911877,
+      "lp_median_s": 0.07070162519812584,
+      "lp_over_native_median": 1.3984087876801239,
+      "actual_lp_shortfall_pp": 0.07482537405169021,
+      "actual_lp_shortfall_upper_pp": 0.07482537405183454,
+      "checked": {
+        "native": {
+          "objective": 0.9874478034530456,
+          "upper_bound": 0.9882002343913743,
+          "certificate_gap_pp": 0.07524309383286631,
+          "max_relative_constraint_residual": 1.5543122344752192e-15,
+          "max_constraint_residual": 9.094947017729282e-13,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 92,
+          "primal_sha256": "c21723c774c942f952288917ed48eba0473738d5e0bab69ca8b56620dfb65d5e",
+          "dual_sha256": "6f30ee6e77b217c795c1123130d3dff5bf7789ad5003569419a77c9b50a80982",
+          "saved_witness_matches_all_three_repeats": true
+        },
+        "lp": {
+          "objective": 0.9881960571935625,
+          "upper_bound": 0.988196057193564,
+          "certificate_gap_pp": 1.4432899320127035e-13,
+          "max_relative_constraint_residual": 0.0,
+          "max_constraint_residual": 0.0,
+          "max_relative_dual_deficit": 2.220446049250313e-16,
+          "positive_variables": 82,
+          "primal_sha256": "b455f3b4f5485dc57fa0370bab1d82c860ba501cd28049755d925fa9dc66f1ec",
+          "dual_sha256": "344db4720648bc4bdbe62facf4d714aa26e87705f9efb12c8938f6f844a2c5e4",
+          "saved_witness_matches_all_three_repeats": true
+        }
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling-coding_long-d120-b100-x4.npz",
+      "witness_sha256": "3f99e1d39cd8f6d161b4f7a92886351f49bbe3aa83d7d1972ed14b40da70bf1c"
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "factor": 16,
+      "original_shape": [
+        502,
+        22848
+      ],
+      "original_nnz": 519088,
+      "normalized_shape": [
+        502,
+        19744
+      ],
+      "normalized_nnz": 447472,
+      "native_median_s": 0.18440329190343618,
+      "lp_median_s": 0.3546125004068017,
+      "lp_over_native_median": 1.9230269522113332,
+      "actual_lp_shortfall_pp": 0.09597992400655064,
+      "actual_lp_shortfall_upper_pp": 0.09597992400668387,
+      "checked": {
+        "native": {
+          "objective": 0.9872362579534971,
+          "upper_bound": 0.9882095260278603,
+          "certificate_gap_pp": 0.09732680743631539,
+          "max_relative_constraint_residual": 2.6645352591003757e-15,
+          "max_constraint_residual": 1.7280399333685637e-11,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 374,
+          "primal_sha256": "28abea06a5e49cbe720caa70cf5c1568fdc31889e60a5956a678907f1dbc137e",
+          "dual_sha256": "805c2bd7b24ba9d6d30ea6d1ec67801094e409e9119f8c56f79567395b686129",
+          "saved_witness_matches_all_three_repeats": true
+        },
+        "lp": {
+          "objective": 0.9881960571935626,
+          "upper_bound": 0.988196057193564,
+          "certificate_gap_pp": 1.3322676295501878e-13,
+          "max_relative_constraint_residual": 8.881784197001252e-16,
+          "max_constraint_residual": 5.4569682106375694e-12,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 322,
+          "primal_sha256": "66fad83005fe759d532d16b436bd9f62ecf8010f20551d0d25491f7c6890a94e",
+          "dual_sha256": "53f21099a501757c01235253b849e3541c1e7a6e27c257c071d70fef0bc1d71e",
+          "saved_witness_matches_all_three_repeats": true
+        }
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling-coding_long-d120-b100-x16.npz",
+      "witness_sha256": "3eadc879837a3fd0c1cd5a8e23d8e474138a25406fd6c547cbe7d90b1ae43de4"
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "factor": 64,
+      "original_shape": [
+        1654,
+        91392
+      ],
+      "original_nnz": 2076352,
+      "normalized_shape": [
+        1654,
+        78976
+      ],
+      "normalized_nnz": 1789888,
+      "native_median_s": 0.8597844168543816,
+      "lp_median_s": 3.7591262916103005,
+      "lp_over_native_median": 4.372173091207548,
+      "actual_lp_shortfall_pp": 0.04425653680160124,
+      "actual_lp_shortfall_upper_pp": 0.04425653680194541,
+      "checked": {
+        "native": {
+          "objective": 0.987753491825545,
+          "upper_bound": 0.9882084155773168,
+          "certificate_gap_pp": 0.045492375177180744,
+          "max_relative_constraint_residual": 2.6645352591003757e-15,
+          "max_constraint_residual": 9.237055564881302e-14,
+          "max_relative_dual_deficit": 0.0,
+          "positive_variables": 1647,
+          "primal_sha256": "7a3fd8a1f5f7210bdbc2d379579ae9e6951f58d99662de088a0f7c333be3182f",
+          "dual_sha256": "81236d4f3634cfac060af178fef1a2105ab94ddc0d7ca305d8c902702901cb84",
+          "saved_witness_matches_all_three_repeats": true
+        },
+        "lp": {
+          "objective": 0.988196057193561,
+          "upper_bound": 0.9881960571935644,
+          "certificate_gap_pp": 3.4416913763379853e-13,
+          "max_relative_constraint_residual": 5.10702591327572e-15,
+          "max_constraint_residual": 3.3651303965598345e-11,
+          "max_relative_dual_deficit": 2.220446049250313e-16,
+          "positive_variables": 1282,
+          "primal_sha256": "83d30f016d10a9231e6d89b99b4cd166b9636b570dbbfb94005568e4e7c08e71",
+          "dual_sha256": "94f2562454e707def47fd3548517e81bd4db32018d1c79f9b46f78349ce21844",
+          "saved_witness_matches_all_three_repeats": true
+        }
+      },
+      "witness_file": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling-coding_long-d120-b100-x64.npz",
+      "witness_sha256": "d2bfde868f718f299bfeb8c77277aee931ccfe9066d4bd213672ca74425e0f46"
+    }
+  ],
+  "scope": [
+    "All saved native and LP original-unit witnesses were independently checked against matrices reconstructed through COO row/column remapping, without calling the benchmark constructor or any solver.",
+    "Each saved primal and dual hash matches all three corresponding repeats, so these checks cover all 24 native and 24 LP outputs, not only eight selected repeats.",
+    "Common normalized CSC arrays and normalization maps reproduce exactly. Eleven recorded input/source/binary hashes, eight final witness files, eight historical scalar witness files and eight frozen source texts are verified.",
+    "This increases independent source ownership constraints using repeated measured coefficient blocks and fixed total source capacity; it is solver stress rather than additional trace diversity or physical scaling evidence.",
+    "Native whole-helper timing includes validation, normalization, seed, refinement, fill, support compression and certification. The comparator is fresh single-thread primary-only HiGHS with identical supplied inputs. Common assembly/preparation and external checks are separately recorded.",
+    "The acceptance target is 0.1 percentage point of total source work. It does not guarantee 0.1 percent relative error, optimize secondary work, or validate evolving fleet decisions or resident TTFT.",
+    "HiGHS tiny-coefficient import warnings are retained; these certificates use every coefficient in the original matrix. Raw absolute residuals mix resource units; relative residuals are the comparable numerical measure.",
+    "Three serial paired timings are reported honestly, including two small cases where native was slower. No universal speedup or convergence guarantee follows."
+  ],
+  "reproduce_python": "import ast\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport statistics\n\nfor key in ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):\n    os.environ[key] = '1'\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\n\nROOT = Path.cwd()\nOUT = ROOT / 'outputs/a100-native-greedy-20260911/validation/diagonal-scaling'\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\n\n\ndef array_sha(a):\n    a = np.ascontiguousarray(a)\n    return hashlib.sha256(str((a.dtype.str, a.shape)).encode() + a.tobytes()).hexdigest()\n\n\ndef audit():\n    report = json.loads((OUT / 'scaling.json').read_text())\n    assert report['complete'] and not report['unconverged_native_repeats'] and not report['nonoptimal_lp_repeats']\n    assert len(report['records']) == 8\n    assert {(r['case'], r['factor']) for r in report['records']} == {\n        (c, k) for c in ('coding-d30-b10', 'coding_long-d120-b100') for k in (1, 4, 16, 64)}\n    assert report['environment']['threads'] == 1\n    assert set(report['environment']['thread_env'].values()) == {'1'}\n    for path, digest in report['input_sha256'].items():\n        assert sha(ROOT / path) == digest, path\n    scalar_path, sources_path = OUT.parent / 'scaling.json', OUT.parent / 'scaling-sources.json'\n    assert sha(scalar_path) == '235cf07d186dee6f2d46deb05372c5b572a603f966fc56eac821e50bf50c01c7'\n    assert sha(sources_path) == '58aefe4651e48c485b9aeb21ded9300eaaf990c01257be7e2afb1d978c52bd28'\n    scalar, frozen = json.loads(scalar_path.read_text()), json.loads(sources_path.read_text())\n    for r in scalar['records']:\n        assert sha(ROOT / r['witness_file']) == r['witness_file_sha256']\n    for source in frozen['source'].values():\n        assert hashlib.sha256(source['text'].encode()).hexdigest() == source['sha256']\n    source_name = 'outputs/a100-native-greedy-20260911/validation/scaling.py'\n    function_asts = lambda code: {n.name: ast.dump(n) for n in ast.parse(code).body\n                                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name != 'main'}\n    assert function_asts(frozen['source'][source_name]['text']) == function_asts((ROOT / source_name).read_text())\n    rows = []\n    for record in report['records']:\n        case, factor = record['case'], record['factor']\n        with np.load(ROOT / f'outputs/a100-greedy-quality-20260911/matrix/{case}.npz') as raw:\n            base = coo_matrix(raw['matrix'])\n            source = raw['replay'].shape[1]\n            row = np.concatenate([np.where(base.row < source, base.row + k * source,\n                                          base.row + (factor - 1) * source) for k in range(factor)])\n            col = np.concatenate([base.col + k * base.shape[1] for k in range(factor)])\n            shape = (base.shape[0] + (factor - 1) * source, base.shape[1] * factor)\n            A = coo_matrix((np.tile(base.data, factor), (row, col)), shape=shape).tocsc()\n            b = np.r_[np.tile(raw['capacity'][:source] / factor, factor), raw['capacity'][source:]]\n            g, debt = np.tile(raw['gains'], factor), np.tile(raw['debt'], factor)\n            assert b[:source * factor].sum() == raw['capacity'][:source].sum() == 53328.\n        assert list(A.shape) == record['original_shape'] and A.nnz == record['original_nnz']\n        assert record['source_rows'] == source * factor and record['shared_rows'] == base.shape[0] - source\n        ids = np.flatnonzero(g > 0)\n        B = A[:, ids].multiply((1 / b)[:, None]).tocsc()\n        upper = 1 / B.max(axis=0).toarray().ravel()\n        B.data *= np.repeat(upper, np.diff(B.indptr))\n        B.sum_duplicates(); B.eliminate_zeros(); B.sort_indices()\n        B.indices, B.indptr = np.asarray(B.indices, np.int32), np.asarray(B.indptr, np.int32)\n        common = dict(csc_data=B.data, csc_indices=B.indices, csc_indptr=B.indptr,\n                      csc_shape=np.asarray(B.shape), capacity=np.ones(B.shape[0]),\n                      gains=g[ids] * upper, debt=debt[ids] * upper)\n        assert list(B.shape) == record['normalized_shape'] and B.nnz == record['normalized_nnz']\n        assert {k: array_sha(v) for k, v in common.items()} == record['common_input_array_sha256']\n        path = ROOT / record['witness_file']\n        assert sha(path) == record['witness_file_sha256']\n        checked = {}\n        with np.load(path) as saved:\n            for key, value in {**common, 'original_capacity': b, 'original_gains': g,\n                               'retained_columns': ids, 'column_upper': upper,\n                               'original_shape': np.asarray(A.shape)}.items():\n                np.testing.assert_array_equal(saved[key], value)\n            assert [t['repeat'] for t in record['repeats']] == [1, 2, 3]\n            for name in ('native', 'lp'):\n                x, y = saved[f'{name}_primal'], saved[f'{name}_dual']\n                assert x.shape == g.shape and y.shape == b.shape\n                assert np.isfinite(x).all() and np.isfinite(y).all() and np.all(x >= 0) and np.all(y >= 0)\n                usage, coverage, objective, bound = A @ x, A.T @ y, float(g @ x), float(b @ y)\n                relative_residual = float(max(0., np.max(usage / b - 1)))\n                relative_deficit = float(max(0., np.max(1 - coverage[g > 0] / g[g > 0])))\n                gap = max(0., bound - objective)\n                assert relative_residual <= 1e-8 and relative_deficit <= 1e-10 and bound >= objective * (1 - 1e-10)\n                assert gap <= (.001 if name == 'native' else 1e-8)\n                for repeat in record['repeats']:\n                    item = repeat[name]\n                    assert item['primal_sha256'] == array_sha(x) and item['dual_sha256'] == array_sha(y)\n                    assert item['dual_certified'] and item['converged' if name == 'native' else 'optimal']\n                    assert np.isclose(objective, item['objective'], rtol=1e-12, atol=1e-14)\n                    assert np.isclose(bound, item['upper_bound'], rtol=1e-12, atol=1e-14)\n                    assert abs(relative_residual - item['max_relative_constraint_residual']) <= 1e-12\n                    assert abs(relative_deficit - item['max_relative_dual_deficit']) <= 1e-12\n                    assert repeat['order'] == (['lp', 'native'] if repeat['repeat'] == 2 else ['native', 'lp'])\n                checked[name] = dict(objective=objective, upper_bound=bound, certificate_gap_pp=100 * gap,\n                                     max_relative_constraint_residual=relative_residual,\n                                     max_constraint_residual=float(max(0., np.max(usage - b))),\n                                     max_relative_dual_deficit=relative_deficit,\n                                     positive_variables=int(np.count_nonzero(x > 0)),\n                                     primal_sha256=array_sha(x), dual_sha256=array_sha(y),\n                                     saved_witness_matches_all_three_repeats=True)\n        native, lp = checked['native'], checked['lp']\n        assert native['objective'] <= lp['upper_bound'] + 1e-8 and lp['objective'] <= native['upper_bound'] + 1e-8\n        shortfall = lp['objective'] - native['objective']\n        upper_shortfall = min(native['upper_bound'], lp['upper_bound']) - native['objective']\n        for repeat in record['repeats']:\n            assert np.isclose(shortfall, repeat['native_objective_shortfall']['signed_to_lp_primal'], atol=1e-14)\n            assert np.isclose(max(0., upper_shortfall), repeat['native_objective_shortfall']['upper_bound'], atol=1e-14)\n        medians = {name: statistics.median(t[name]['elapsed_s'] for t in record['repeats']) for name in ('native', 'lp')}\n        rows.append(dict(case=case, factor=factor, original_shape=list(A.shape), original_nnz=A.nnz,\n                         normalized_shape=list(B.shape), normalized_nnz=B.nnz,\n                         native_median_s=medians['native'], lp_median_s=medians['lp'],\n                         lp_over_native_median=medians['lp'] / medians['native'],\n                         actual_lp_shortfall_pp=100 * shortfall, actual_lp_shortfall_upper_pp=100 * max(0., upper_shortfall),\n                         checked=checked, witness_file=record['witness_file'], witness_sha256=sha(path)))\n    return dict(verdict='approved', input_sha256=report['input_sha256'],\n                report_sha256=sha(OUT / 'scaling.json'), run_log_sha256=sha(OUT / 'run.log'),\n                scalar_report_sha256=sha(scalar_path), scalar_sources_sha256=sha(sources_path),\n                scalar_witness_files_verified=8, frozen_source_texts_verified=len(frozen['source']),\n                numerical_harness_function_asts_unchanged_from_scalar=True,\n                native_repeat_witnesses_verified=24, lp_repeat_witnesses_verified=24,\n                solver_runs_performed_by_this_audit=0, benchmark_wall_s=report['wall_s'], records=rows,\n                scope=['All saved native and LP original-unit witnesses were independently checked against matrices reconstructed through COO row/column remapping, without calling the benchmark constructor or any solver.',\n                       'Each saved primal and dual hash matches all three corresponding repeats, so these checks cover all 24 native and 24 LP outputs, not only eight selected repeats.',\n                       'Common normalized CSC arrays and normalization maps reproduce exactly. Eleven recorded input/source/binary hashes, eight final witness files, eight historical scalar witness files and eight frozen source texts are verified.',\n                       'This increases independent source ownership constraints using repeated measured coefficient blocks and fixed total source capacity; it is solver stress rather than additional trace diversity or physical scaling evidence.',\n                       'Native whole-helper timing includes validation, normalization, seed, refinement, fill, support compression and certification. The comparator is fresh single-thread primary-only HiGHS with identical supplied inputs. Common assembly/preparation and external checks are separately recorded.',\n                       'The acceptance target is 0.1 percentage point of total source work. It does not guarantee 0.1 percent relative error, optimize secondary work, or validate evolving fleet decisions or resident TTFT.',\n                       'HiGHS tiny-coefficient import warnings are retained; these certificates use every coefficient in the original matrix. Raw absolute residuals mix resource units; relative residuals are the comparable numerical measure.',\n                       'Three serial paired timings are reported honestly, including two small cases where native was slower. No universal speedup or convergence guarantee follows.'])\n\n\nif __name__ == '__main__':\n    result = audit()\n    result['reproduce_python'] = Path(__file__).read_text()\n    (OUT / 'review.json').write_text(json.dumps(result, indent=2, allow_nan=False) + '\\n')\n    print(json.dumps({k: v for k, v in result.items() if k not in ('records', 'reproduce_python', 'input_sha256', 'scope')}, indent=2))\n"
+}

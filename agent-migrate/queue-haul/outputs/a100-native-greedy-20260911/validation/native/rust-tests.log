@@ -1,0 +1,10 @@
+   Compiling queue-haul-native v0.1.0 (/Users/grantwilkins/houdini/agent-migrate/queue-haul/native)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.65s
+     Running unittests src/lib.rs (/private/tmp/queue-haul-native-packing-tests/debug/deps/_queue_haul_native-17f7b43b781dc8e9)
+
+running 3 tests
+test packing::tests::compression_rejects_nonfinite_normalization ... ok
+test packing::tests::compression_preserves_primary_on_near_ties ... ok
+test packing::tests::compression_batches_independent_rows_without_losing_shared_constraints ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s

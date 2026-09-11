@@ -29,7 +29,8 @@ compares both agentic workloads and all five policies at **0.1, 0.4, 1, 2, 5,
 conditional policy evaluations with:
 
 ```bash
-uv run python pool_shed_bandwidth_sweep.py --out outputs/a100-bandwidth-ttft-reproduction
+uv run python pool_shed_bandwidth_sweep.py --out outputs/a100-bandwidth-ttft-reproduction \
+  --policies queue_haul greedy kv_only replay_only isolated_fastest
 ```
 
 The numerical generator is commit `f91bf094`; the later
@@ -92,77 +93,111 @@ finite lookahead. These results are not a global placement optimum. High
 bandwidth can stop helping when per-wave endpoint limits, fixed host shares or
 destination packing bind.
 
-`greedy_priced` is an optional **QH Priced Greedy** accuracy reference for the
-temporal allocator. The original `greedy` remains the fast baseline, and the
-five-policy defaults retain their archived behavior.
-The old score equals the gain from exhausting one candidate against the
-remaining resources. Exhausting a source cohort can eliminate overlapping,
-more efficient packs; each accepted pack then permanently reserves a GPU.
-At 10 Tb/s and 30 s on `coding`, old greedy averages 3.004 sessions per
-destination GPU versus LP's 3.891, handing off 85.18% versus 98.36% of work.
+`greedy_priced` is the native **QH Priced Greedy** temporal allocator. New
+bandwidth sweeps select it by default; `--policies` can still select the original
+`greedy` control. Legacy campaign entry points retain their original policies.
+The old greedy score exhausts one candidate against the remaining resources.
+Exhausting a source cohort can eliminate overlapping, more efficient packs;
+each accepted pack permanently reserves a GPU. At 10 Tb/s and 30 s on `coding`,
+old greedy averages 3.004 sessions per destination GPU versus LP's 3.891,
+handing off 85.18% versus 98.36% of work.
 
-The priced variant repeatedly increases prices for scarce resources, revisits
-all candidate packs before admission, retains its best feasible allocation,
-and fills residual capacity with the original greedy. It calls no generic LP
-solver. A feasible resource-price upper bound must be within **0.001 of total
-source work (0.1 percentage point)** of each admission allocation; otherwise
-planning fails. Actual relative gaps remain recorded, including larger relative
-gaps on tiny late replans. This certifies the primary fractional packing
-objective only: debt is a tie-break, and neither LP's secondary minimization
-nor the evolving execution plan or resident TTFT is certified.
+The replacement uses the existing Rust extension: lazy heap seeding, a greedy
+covering-dual bound, sparse coordinate updates, and feasible support compression.
+Row penalties account for the different scales of source and shared resources;
+each multiplier update follows both a forward and a backward coordinate sweep.
+Compression preserves the primary objective within numerical tolerance;
+debt breaks heap ties. Bounded groups of at most
+128 touched resource rows keep its dense basis small; a single column touching
+more rows needs no support reduction. It calls no generic LP solver. The
+coordinate update follows the augmented-Lagrangian approach of
+[Yen et al. (NeurIPS 2015)](https://papers.neurips.cc/paper_files/paper/2015/file/0966289037ad9846c5e994be2a91bafa-Paper.pdf);
+our fixed sweeps and screening are a heuristic, without an inherited convergence
+rate. Every result must pass an independent original-unit feasibility and dual
+coverage check.
 
-The [bounded comparison](outputs/a100-greedy-quality-20260911/summary.json)
-holds the measured timing, fleet, candidate packs, bandwidth and planning clocks
-fixed. It saves 12 identical-matrix comparisons (two workloads, 30/120 s,
-1/10/100 Tb/s) and six feedback executions (each workload at 30 s/10 Tb/s,
-120 s/1 Tb/s and 120 s/100 Tb/s), with action mixes and runtime. Reproduce it with:
+For each fixed admission matrix, a feasible resource-price upper bound must be
+within **0.001 of total source work (0.1 percentage point)** of the returned
+allocation; otherwise planning fails. Actual relative gaps remain recorded,
+including larger relative gaps on tiny late replans. This certifies the primary
+fractional packing objective. It does not certify LP's secondary minimization,
+the evolving execution plan, or resident TTFT. Sparse allocations also avoid
+creating hundreds of unnecessary fractional action groups, each of which would
+otherwise generate 64 migration waves at the unchanged dispatch resolution.
+
+The [native comparison](outputs/a100-native-greedy-20260911/summary.json) saves
+12 identical-matrix comparisons (two workloads, 30/120 s, 1/10/100 Tb/s) and six
+feedback cases (each workload at 30 s/10 Tb/s, 120 s/1 Tb/s and 120 s/100 Tb/s).
+LP and native allocation timings include the complete helper; LP's primary and
+secondary stages are also reported separately. Both feedback methods are rerun
+with the same current execution code. Measured timing, fleet, candidate packs,
+network constraints and planning clocks remain fixed. Exact CPU memoization
+reuses repeated source queries and captured network caps; the
+[fixed-schedule check](outputs/a100-native-greedy-20260911/validation/cache/review.json)
+verifies unchanged work and timestamps.
+
+After pulling native changes, rebuild the extension with rustup Cargo before
+system Cargo on `PATH`, then run the comparison:
 
 ```bash
-uv run python pool_shed_greedy_quality.py --mode both --out outputs/a100-greedy-quality-reproduction
+uv sync --reinstall-package queue-haul-native
+uv run python pool_shed_greedy_quality.py --mode both --out outputs/a100-native-greedy-reproduction
 ```
 
-Use the existing five-policy defaults for conditional bandwidth comparisons.
-The priced variant's latency disqualifies it from serving as the fast greedy
-baseline; retain it only for explicitly selected accuracy experiments.
+On the recorded arm64 CPU, the 12 initial matrices take **6.8–19.4 ms** with
+native pricing versus **16.4–30.4 ms** with LP; median case times are **12.7 ms
+versus 24.0 ms**. Native is faster in all 12 cases. The largest initial-matrix
+shortfall from LP is **0.0938 percentage points**. All 27 feedback admission
+certificates also meet the 0.1-point bound. Final handoff work and complete
+feedback runtime, excluding common table construction and validation, are:
 
-The largest observed initial-matrix shortfall from LP is **0.0666 percentage
-points**. Across the six executions it is **0.0680 points**; all 42 feedback admission
-certificates meet the stated absolute bound. Final handoff work is:
+| Workload | Deadline | Shared Tb/s | Old greedy | Native greedy | QH LP | Native time | LP time |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| coding | 30 s | 10 | 85.1773% | 98.3033% | 98.3576% | 3.18 s | 4.42 s |
+| coding | 120 s | 1 | 88.0937% | 97.8622% | 97.8672% | 10.11 s | 13.37 s |
+| coding | 120 s | 100 | 88.5263% | 100.0000% | 100.0000% | 1.28 s | 3.60 s |
+| coding_long | 30 s | 10 | 81.0365% | 88.8272% | 88.8487% | 2.23 s | 2.32 s |
+| coding_long | 120 s | 1 | 88.7712% | 93.9607% | 93.9614% | 13.28 s | 19.80 s |
+| coding_long | 120 s | 100 | 93.6099% | 98.7346% | 98.8196% | 1.01 s | 5.39 s |
 
-| Workload | Deadline | Shared Tb/s | Old greedy | Priced greedy | QH LP |
+The six native feedback runs total **31.10 s**, versus **48.91 s** for LP,
+and each is faster. Their largest observed handoff shortfall is **0.0850
+percentage points**; this is an empirical comparison, not a global certificate.
+The [282 focused tests](outputs/a100-native-greedy-20260911/validation/focused-tests.log)
+pass, alongside independent native witness, heap-parity and compression checks.
+
+The separate [scaling audit](outputs/a100-native-greedy-20260911/validation/scaling.py)
+grows independently constrained source blocks, candidate columns and nonzeros,
+while retaining the shared resources and total source work. This is a
+computational stress test using existing measured columns, not additional
+measured trajectory diversity. Increasing represented GPU count alone would
+not enlarge the compressed packing problem. Its primary-only LP comparison
+omits LP's secondary solve, and its timings exclude common matrix construction
+and removal of zero-gain columns.
+
+The [final scaling results](outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling.json)
+cover 1, 4, 16 and 64 source blocks for two measured matrices, with three serial
+repeats per case. All 24 native results certify within **0.0974 percentage
+points**; the largest actual LP shortfall is **0.0960 points**. At 64 blocks:
+
+| Matrix | Positive-gain columns | Nonzeros | Native median | Primary LP median | Speedup |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| coding | 30 s | 10 | 85.1773% | 98.3241% | 98.3576% |
-| coding | 120 s | 1 | 88.0937% | 98.4008% | 97.8672% |
-| coding | 120 s | 100 | 88.5263% | 99.9420% | 100.0000% |
-| coding_long | 30 s | 10 | 81.0365% | 88.8316% | 88.8487% |
-| coding_long | 120 s | 1 | 88.7712% | 93.8935% | 93.9614% |
-| coding_long | 120 s | 100 | 93.6099% | 98.7652% | 98.8196% |
+| coding, 30 s, 10 Tb/s | 75,456 | 1,360,768 | 1.390 s | 5.149 s | 3.71× |
+| coding_long, 120 s, 100 Tb/s | 78,976 | 1,789,888 | 0.860 s | 3.759 s | 4.37× |
 
-Priced greedy exceeds feedback LP by 0.5336 points in one case: the common
-finite-lookahead controller does not make either execution globally optimal.
-The refinement also costs more: identical-matrix solves take **1.8–6.1 s**,
-versus **17–30 ms for LP** and **2.4–5.9 ms for old greedy**. These compressed
-matrices have only 1,428–1,494 columns, and the priced refinement is much slower
-than LP here. The six new feedback evaluations total 222.49 s, including
-planning but excluding table construction and validation. No new resident
-TTFT checks were run for these changed allocations; the full campaign remains
-stopped. The [packing diagnosis](outputs/a100-greedy-quality-20260911/validation/baseline-packing.json)
-checks all 48 old greedy cases: all destination GPUs are reserved within 1 s
-and every admitted wave completes. The [155 focused tests](outputs/a100-greedy-quality-20260911/validation/focused-tests.log)
-pass; the independent [artifact review](outputs/a100-greedy-quality-20260911/validation/review.json)
-checks all 54 admission certificates and the saved execution/resource accounting.
+Native is faster in six of the eight scaling cases. The four-block coding case
+takes 75 ms versus LP's 52 ms; the one-block long-context case is nearly tied
+at 14.6 versus 14.3 ms. The
+[earlier scalar-penalty failure](outputs/a100-native-greedy-20260911/validation/scaling.json)
+is retained: it took 37 s and missed the quality target at 64 long-context
+blocks. The diagonal penalties and symmetric sweeps resolve that recorded
+failure without changing the packing constraints or acceptance tolerance.
 
-The [bounded speed audit](outputs/a100-greedy-quality-20260911/validation/speed/summary.json)
-tests cheaper repairs on those same 12 matrices. Removing a few inefficient
-packs and refilling takes **5.7–11.1 ms**, but leaves shortfalls up to **11.83
-percentage points**. Coordinated pair swaps leave up to **13.00 points**;
-the best of nine bounded pricing variants still leaves **7.03 points**.
-All retain the original constraints and incumbent quality. Repair timings
-include constructing the incumbent; LP timings are stored single-run references.
-None meets the 0.1-point quality target across these cases, so none is promoted.
-A scalable replacement must demonstrate both speed and quality on identical
-inputs with growing distinct cohorts, candidate columns and nonzeros. Increasing
-represented GPU count alone does not enlarge this compressed packing problem.
+The [earlier Python comparison](outputs/a100-greedy-quality-20260911/summary.json)
+and [cheap-repair audit](outputs/a100-greedy-quality-20260911/validation/speed/summary.json)
+remain historical results. The Python refinement took seconds per solve; it is
+superseded by the native implementation. No new resident TTFT checks were run
+for these changed allocations, and the full campaign remains stopped.
 
 The checker reconstructs every migration wave, including initial replay,
 full-context catch-up, handoff and continued incoming service. It checks initial

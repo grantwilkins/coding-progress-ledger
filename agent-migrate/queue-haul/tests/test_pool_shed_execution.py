@@ -1045,11 +1045,65 @@ def test_fixed_host_delta_and_queued_snapshot_caps_keep_frozen_origins_in_clone(
     assert engine.state.tolist() == [3, 0]
     assert engine.origin_time.tolist() == pytest.approx([0., 10.])
     assert [engine.network_cap(i) for i in (0, 1)] == pytest.approx([1., 1.1])
+    np.testing.assert_array_equal(engine.network_caps(np.arange(2)), [engine.network_cap(i) for i in (0, 1)])
+    engine.network_caps(np.arange(2))[:] = -1.
+    assert np.all(engine.network_caps(np.arange(2)) > 0)
     assert engine.remaining.tolist() == pytest.approx([89.5, 109.5])
     clone = engine.nominal_continuation(table, timing, calibration)
+    assert np.isnan(clone.captured_caps).all()
+    assert np.isfinite(engine.captured_caps).any()
     engine.advance(11.)
     clone.advance(11.)
     assert engine.result() == clone.result()
+
+
+def test_waiting_phase_caps_share_queries_but_keep_current_source_time(monkeypatch):
+    from pool_shed_execution import PooledExecution
+    table, timing, calibration = case(context=(10., 10.), replay=((0., 0.),), kv=((1., 1.),),
+        route=(0,), demand=(0., 0.), gpus=8, deadline=120.)
+    table.fleet.gpus_per_node, table.fleet.kv[:] = 8, 10.
+    table.fleet.metadata.update(resident_affinity=True, fixed_host_shares=True, host_migration_gbps=512e-9,
+        paced_source=True, causal_source=True, source_session_rps=1.,
+        turn_sequences=[[{"context": 100, "prompt": 0, "output": 0}], []],
+        turn_duration_s=[[5.], []], turn_work_s=[[0.], []])
+    timing['resident_replay_loss'] = 0.
+    engine = PooledExecution(table, timing, calibration, chunks=4)
+    engine.admit([1.])
+    original, calls = engine.network_cap, []
+    def counted(i):
+        calls.append(i)
+        return original(i)
+    monkeypatch.setattr(engine, 'network_cap', counted)
+    first = engine.network_caps(np.arange(4))
+    assert len(calls) == 1 and np.isnan(engine.captured_caps).all()
+    engine.now = 6.
+    later = engine.network_caps(np.arange(4))
+    assert len(calls) == 2 and np.any(first != later)
+    np.testing.assert_array_equal(later, [original(i) for i in range(4)])
+    engine.origin_time[:] = 6.
+    np.testing.assert_array_equal(engine.network_caps(np.arange(4)), later)
+    count = len(calls)
+    engine.now = 7.
+    np.testing.assert_array_equal(engine.network_caps(np.arange(4)), later)
+    assert len(calls) == count
+
+
+def test_buffer_cache_miss_keeps_the_shared_causal_timeline(monkeypatch):
+    import pool_shed_resident_queue as queue
+
+    table, _, calibration = case()
+    table.fleet.metadata.update(paced_source=True, causal_source=True, source_session_rps=1.,
+        turn_sequences=[[{"context": 100, "prompt": 1, "output": 1}] * 3, []],
+        turn_duration_s=[[3., 1., 1.], []], turn_work_s=[[.1, .2, .3], []])
+    counts, cache = np.array([1., 0.]), {}
+    expected = _buffered(table.fleet, counts, 1., 3., calibration, quiescing=True)
+    original = queue.source_turns
+    def checked(fleet, now, shared=None):
+        assert shared is cache
+        return original(fleet, now, shared)
+    monkeypatch.setattr(queue, 'source_turns', checked)
+    assert _buffered(table.fleet, counts, 1., 3., calibration, cache, quiescing=True) == expected
+    assert _buffered(table.fleet, counts, 1., 3., calibration, cache, quiescing=True) == expected
 
 
 def test_fixed_host_execution_rejects_invalid_shares_and_zero_work_payloads():

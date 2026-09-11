@@ -214,6 +214,13 @@ def run(out, workloads, bandwidths, deadlines, policies):
         environment=dict(python=platform.python_version(), platform=platform.platform(), numpy=np.__version__),
         fleet_contract_sha256={name: q.digest(dict(metadata=f.metadata, count=f.count.tolist(), context=f.context.tolist()))
                                for name, f in fleets.items()})
+    if "greedy_priced" in policies:
+        from _queue_haul_native import _queue_haul_native as native
+
+        sources.update({str(p.relative_to(q.ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in [
+            *q.ROOT.glob("native/src/*.rs"), q.ROOT / "native/Cargo.toml", q.ROOT / "native/Cargo.lock",
+            q.ROOT / "native/rust-toolchain.toml"]})
+        config["environment"]["native_binary_sha256"] = hashlib.sha256(Path(native.__file__).read_bytes()).hexdigest()
     identity = q.digest(config)
     if (out / "config.json").exists() and json.loads((out / "config.json").read_text())["identity"] != identity:
         raise ValueError("output configuration changed; choose a fresh output directory")
@@ -276,6 +283,11 @@ def run(out, workloads, bandwidths, deadlines, policies):
                 rows.append(row)
                 q.write_csv(out / "summary.csv", rows)
                 print(json.dumps(row, sort_keys=True), flush=True)
+    if any(hashlib.sha256((q.ROOT / name).read_bytes()).hexdigest() != expected for name, expected in sources.items()):
+        raise ValueError("source changed during bandwidth comparison")
+    if ("greedy_priced" in policies and hashlib.sha256(Path(native.__file__).read_bytes()).hexdigest()
+            != config["environment"]["native_binary_sha256"]):
+        raise ValueError("native binary changed during bandwidth comparison")
     q.write_json(out / "summary.json", dict(identity=identity, scope=SCOPE, rows=rows, resident_latency_validated=False))
     plot(rows, out)
 
@@ -373,7 +385,8 @@ if __name__ == "__main__":
     parser.add_argument("--workloads", nargs="+", choices=("coding", "coding_long"), default=["coding", "coding_long"])
     parser.add_argument("--bandwidths", nargs="+", type=float, default=list(BANDWIDTHS))
     parser.add_argument("--deadlines", nargs="+", type=int, default=list(DEADLINES))
-    parser.add_argument("--policies", nargs="+", choices=(*q.POLICIES, "greedy_priced"), default=list(q.POLICIES))
+    parser.add_argument("--policies", nargs="+", choices=(*q.POLICIES, "greedy_priced"),
+                        default=["greedy_priced" if p == "greedy" else p for p in q.POLICIES])
     args = parser.parse_args()
     if any(not np.isfinite(b) or b <= 0 for b in args.bandwidths) or any(d <= 0 for d in args.deadlines):
         parser.error("positive finite bandwidths and deadlines required")

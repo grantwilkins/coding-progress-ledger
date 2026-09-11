@@ -1,0 +1,144 @@
+{
+  "verdict": "approved_code_review",
+  "recorded_at_utc": "2026-09-11T15:58:10.471886+00:00",
+  "reviewer": "resident_trace",
+  "source_sha256": {
+    "native/src/packing.rs": "8f9235c1833466c47b1d970234e14df49fbdbd05cf425b417aea2c33e84500ac",
+    "native/src/lib.rs": "48231c20ebc2c3170e406a15db20c95109753c33330cdb3be227cfdc90117c22",
+    "native/Cargo.toml": "af8a00617da3c08001e9d111b6fd525ed6382f0f026372a8e449f0d0b5f5bc1e",
+    "native/Cargo.lock": "c81b978f1cb7ec7d0a48affb3fd3b722750f99c9620baee6756960805c1f661c",
+    "native/rust-toolchain.toml": "75cd8d73777ba32f23fcf6d5a7f49019b4a7c8ebe34a06ceb5a40d1c21ab8ffc",
+    "native/pyproject.toml": "3517842836f8709b3e6906575c08c0fb9fe21fdeb7e2a4411e10b42ea9a1b1cb",
+    "pool_shed_priced_greedy.py": "10323a7c01ac4840cebf9b44d47858b37d4cafe8cbeefea3996c3098c553e4cb",
+    "pool_shed_planner.py": "8388cde4815a1e8d645e772b824ee1d95be1a6416742d1bbcfb3dcf758db1231",
+    "/Users/grantwilkins/houdini/agent-migrate/.venv/lib/python3.10/site-packages/_queue_haul_native/_queue_haul_native.cpython-310-darwin.so": "8f291f50cd036cfd2734acda41578f013296f4b6305f685c635cdb00c38dd666"
+  },
+  "checks": {
+    "no_generic_lp_call": true,
+    "original_readonly_inputs_preserved": true,
+    "physical_touched_rows_per_compressed_batch_at_most": 128,
+    "extra_rows_at_most": {
+      "primary_equality": 1
+    },
+    "dense_inverse_dimension_at_most": 129,
+    "wide_singletons_left_unchanged": true,
+    "iteration_zero_seed_behavior_preserved": true,
+    "local_capacity_uses_current_global_usage": true,
+    "all_consumed_resource_rows_retained": true,
+    "local_row_mapping_reset_between_batches": true,
+    "positive_columns_only_and_no_new_zero_support_actions": true,
+    "final_global_objective_and_feasibility_recomputed": true,
+    "same_dual_witness_checked_after_cleanup": true,
+    "python_recomputes_original_unit_final_gap": true,
+    "planner_hard_fails_final_absolute_gap_above": 0.001,
+    "extra_secondary_budget_added": false
+  },
+  "reasoning": [
+    "For each batch, nonnegative action and slack weights represent the augmented equations [A I; c^T 0] z = [capacity; incumbent value]. The column-major inverse and ratio-test pivot preserve these equations while eliminating a nonbasic positive action or replacing a zero basis weight.",
+    "A batch receives (1 - current global usage) + its own usage in normalized resource units; all other actions remain fixed. All rows touched by the batch are retained. This is the full available residual capacity, with subtraction ordered to reduce cancellation.",
+    "Secondary debt remains a greedy-seed tie-break. Support compression does not optimize or bound it; its debt can increase or decrease. This avoids treating an optional extra saturated row as an original physical constraint.",
+    "An unchanged dual remains a valid primary upper bound when the primal representation changes. The Rust boundary rechecks every original normalized resource and dual coverage; Python maps witnesses back and recomputes the actual objective and gap. The planner uses this post-cleanup gap and does not accept a stale pre-cleanup convergence flag.",
+    "The 128-row physical grouping limit plus the primary equality bounds each dense inverse at 129 squared entries. Wide singletons need no support reduction. Total runtime still includes sparse scans and all batches; this bound alone is not a runtime claim."
+  ],
+  "independent_checks": {
+    "prototype_pytest": "21 passed in 0.42s",
+    "prototype_scope": "Frozen C prototype and Python normalization/guard checks; not execution of the rebuilt Rust port.",
+    "prototype_cases": [
+      "16 random/redundant/near-duplicate packing cases with feasibility, primary preservation, support and mutation checks",
+      "3 combined row/column rescalings at objective units 1e-9, 1 and 1e9",
+      "2 false-success injections reject relative overload at capacity1e-12 and relative value loss at objective1e-6"
+    ],
+    "prototype_source_sha256": {
+      "/private/tmp/queue-haul-compression-review/test_compression.py": "f06fd066f3667f9573624334695d9049b2a72ff88a7498d9b3abe3652a36eba6",
+      "/private/tmp/queue-haul-compression-review/fleet_support_compression.c": "3cfe291480dd86a0bf2a491185d5222ecf34bbc53bd7e389eaf08f71ee4e8403",
+      "/private/tmp/queue-haul-compression-review/fleet_support_compression_native.py": "46f8cce42ae15f2d7aeab95ceba0f063e45faf9185666a16a8229d4409b0f4d9",
+      "/private/tmp/queue-haul-compression-review/compression.dylib": "de1d1466718c4a58d2e5b15abe3b05d1b11f6dc1f8f2ebc7aa53b3248d3b3759"
+    },
+    "rust_release_tests": {
+      "reported_by": "root and fleet_affinity_review",
+      "result": "Final source 8f9235c1: 282 focused root tests, 44 native/parity/regression checks and 12 matrix witness checks passed.",
+      "independently_rerun_by_this_reviewer": false
+    },
+    "current_native_archive": {
+      "path": "outputs/a100-native-greedy-20260911/validation/native/review.json",
+      "sha256": "52980849264070a176c5afd3e91fbc47086fe87d31a05b3cd034f44ed3c3fae3"
+    },
+    "completed_scaling_audit": {
+      "path": "outputs/a100-native-greedy-20260911/validation/diagonal-scaling/review.json",
+      "sha256": "afd7c7d49a8343ee2dd3cb50d966991ddd0e9e562da5649d78eff8dff2cab34a",
+      "native_repeat_witnesses_verified": 24,
+      "lp_repeat_witnesses_verified": 24,
+      "solver_runs_performed_by_audit": 0
+    }
+  },
+  "qualifications": [
+    "This is an independent source review plus prototype numerical evidence. The final diagonal scaling benchmark and saved original-unit witness audit have completed; their separate artifact records timings and all 24 native and 24 LP certificates. No timing claim is made by this code review.",
+    "Compression preserves value and feasibility within explicit floating-point tolerances, not bitwise equality. Final helper and planner certificates remain authoritative.",
+    "The secondary-nonincreasing statement from the superseded review is withdrawn. The final contract certifies the primary fractional packing objective and original resource constraints only.",
+    "Per-admission fractional packing quality does not certify the evolving execution plan, future placement choices, resident TTFT, or a global fleet optimum.",
+    "The test named compression_rejects_nonfinite_normalization has a second example with an infeasible starting pair of weights; that example does not isolate normalization underflow. The first example does directly test nonfinite gains.",
+    "The original scalar-penalty scaling failure is retained unchanged in scaling.json and its sources in scaling-sources.json; its failure is not erased by this numerical update."
+  ],
+  "superseded_review": {
+    "sha256": "2333e88e55d0234587af1db98d7ed574e611cffddc7d888f9779516416e6e8f9",
+    "native_source_sha256": "75742036df14e2bc70cd794c9e0a833fdf23132b0b3b3ac73ce2f7c39c1ae86b",
+    "native_binary_sha256": "dddcd347e82f23e74e2149ab1cf954eaf25796428c228eea4814c760c0cc5206",
+    "reason": "The optional added secondary-budget row was numerically ill-conditioned on a later feedback allocation. It was removed; original resources, primary value and certificate tolerances were preserved."
+  },
+  "captured_failure": {
+    "path": "outputs/a100-native-greedy-20260911/validation/native/feedback-regression.npz",
+    "sha256": "068922a42d0c71036cbebee775db06d0cc3b4fbefc6f189e275dee3b4ce85053",
+    "precompression_positive_variables": 15,
+    "precompression_objective": 0.14181424486718844,
+    "precompression_upper_bound": 0.14182783256914652,
+    "precompression_absolute_gap": 1.3587701958084342e-05,
+    "precompression_max_relative_capacity_excess": 2.220446049250313e-16,
+    "precompression_minimum_dual_coverage_ratio": 1.000000000001,
+    "independent_scope": "These scalar certificates were independently recomputed from the captured allocation and dual; no feedback rerun by this reviewer.",
+    "diagnosis_reported_by": "fleet_affinity_review",
+    "diagnosis": "The added saturated secondary row increased the prototype inverse maximum from about9.63e3 to4.69e8 and exposed roundoff. Removing that extra row preserved the primary value and all original constraints. No tolerance was widened and no retry/LP fallback was added."
+  },
+  "scalar_penalty_review": {
+    "sha256": "a4fc6f188c68a50072201a8d65d11f0b1c72d4def7c393a2bf13612a6421af22",
+    "source_sha256": {
+      "native/src/packing.rs": "dbc0b04729bd51ead52f4a361d58d36332248e4be9a0be24c0dc7560781d3bf7",
+      "native/src/lib.rs": "48231c20ebc2c3170e406a15db20c95109753c33330cdb3be227cfdc90117c22",
+      "native/Cargo.toml": "af8a00617da3c08001e9d111b6fd525ed6382f0f026372a8e449f0d0b5f5bc1e",
+      "native/Cargo.lock": "c81b978f1cb7ec7d0a48affb3fd3b722750f99c9620baee6756960805c1f661c",
+      "native/rust-toolchain.toml": "75cd8d73777ba32f23fcf6d5a7f49019b4a7c8ebe34a06ceb5a40d1c21ab8ffc",
+      "native/pyproject.toml": "3517842836f8709b3e6906575c08c0fb9fe21fdeb7e2a4411e10b42ea9a1b1cb",
+      "pool_shed_priced_greedy.py": "10323a7c01ac4840cebf9b44d47858b37d4cafe8cbeefea3996c3098c553e4cb",
+      "pool_shed_planner.py": "8388cde4815a1e8d645e772b824ee1d95be1a6416742d1bbcfb3dcf758db1231",
+      "/Users/grantwilkins/houdini/agent-migrate/.venv/lib/python3.10/site-packages/_queue_haul_native/_queue_haul_native.cpython-310-darwin.so": "7ffad5fa9d7789840700029cec4acbeda831079ce39b0be640372a89584411fc"
+    },
+    "compression_and_seed_prefix_unchanged": true
+  },
+  "coordinate_update_review": {
+    "fixed_row_weight": "w_i = 1 / max(1/n, max_j A_ij) on the normalized CSC input",
+    "effective_penalty": "rho_i = .5*max(c) * w_i",
+    "consistency": "The same rho_i appears in the slack minimizer, weighted coordinate gradient/curvature and dual update. Two sweeps use opposite orders in each outer iteration.",
+    "original_constraints_and_certificate_unchanged": true,
+    "scope": "Fixed positive diagonal penalties and symmetric sweep ordering alter the numerical iteration, not the packing problem. No inherited rate or universal convergence guarantee is claimed; the final original-unit primal/dual certificate remains the acceptance rule."
+  },
+  "covering_bound_review": {
+    "previous_review_sha256": "258690ac51ca18e5f3db658c436b0534ff4c387f82a560c16c24d49209c5ef63",
+    "previous_source_sha256": {
+      "native/src/packing.rs": "3c9502ff97365a7d21f6072ad03675fed0c2907a4e30a4b42d68995fa7edb8ff",
+      "native/src/lib.rs": "48231c20ebc2c3170e406a15db20c95109753c33330cdb3be227cfdc90117c22",
+      "native/Cargo.toml": "af8a00617da3c08001e9d111b6fd525ed6382f0f026372a8e449f0d0b5f5bc1e",
+      "native/Cargo.lock": "c81b978f1cb7ec7d0a48affb3fd3b722750f99c9620baee6756960805c1f661c",
+      "native/rust-toolchain.toml": "75cd8d73777ba32f23fcf6d5a7f49019b4a7c8ebe34a06ceb5a40d1c21ab8ffc",
+      "native/pyproject.toml": "3517842836f8709b3e6906575c08c0fb9fe21fdeb7e2a4411e10b42ea9a1b1cb",
+      "pool_shed_priced_greedy.py": "10323a7c01ac4840cebf9b44d47858b37d4cafe8cbeefea3996c3098c553e4cb",
+      "pool_shed_planner.py": "8388cde4815a1e8d645e772b824ee1d95be1a6416742d1bbcfb3dcf758db1231",
+      "/Users/grantwilkins/houdini/agent-migrate/.venv/lib/python3.10/site-packages/_queue_haul_native/_queue_haul_native.cpython-310-darwin.so": "0eedb9958d8924e9595f0f06e02f5064962e854a385bf9a1010d3655328cc13a"
+    },
+    "proof": "Starting from zero nonnegative prices, process every positive-gain column. If its coverage is short, increase one price by at least deficit divided by its largest positive coefficient. That covers the current column; all coefficients are nonnegative, so previous coverage cannot decrease. The completed vector is a dual-feasible covering witness in exact arithmetic.",
+    "finite_boundary": "Columns are nonempty, sorted, positive and finite. The loop rejects nonfinite sums/increments, includes a 1e-12 increment cushion, and only selects the lower uniform/covering objective after the complete pass. Final native and Python checks validate every original column within the existing tolerance.",
+    "no_generic_lp": true,
+    "original_constraints_unchanged": true,
+    "primary_update_formula_unchanged": true,
+    "same_acceptance_target": 0.001,
+    "scope": "A tighter valid initial bound can stop refinement earlier and change the accepted primal within the same target. It does not claim identical final allocations or optimize the secondary debt."
+  }
+}

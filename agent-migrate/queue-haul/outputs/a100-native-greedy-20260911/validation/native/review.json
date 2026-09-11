@@ -1,0 +1,398 @@
+{
+  "scope": [
+    "Correctness and support checks on 12 frozen initial matrices, identified by case and exact array hashes; no datacenter execution or timing comparison.",
+    "Every original capacity and the current primary dual certificate are checked. Historical scalar allocations are a different coordinate trajectory; their signed objective changes are descriptive. Direct Rust tests separately verify preservation of the current primary value during support cleanup.",
+    "Secondary work is a greedy tie-break only; cleanup can change it.",
+    "Positive columns are grouped by at most 128 touched resource rows; each dense inverse is at most 129\u00d7129 including the primary equality. Wider singleton columns remain unchanged.",
+    "Budget zero and already-certified initial seeds retain their existing behavior. There is no resident TTFT/SLO or global execution-optimum certificate."
+  ],
+  "source_sha256": {
+    "outputs/a100-native-greedy-20260911/validation/native/review.py": "efc0e5cf0ced42a06dbf82848c4dd8f73d4df40cd9e70cacecf83705c66ecc7f",
+    "outputs/a100-native-greedy-20260911/validation/native/test_budget_zero.py": "6467011945dd8c9f18a0d8c0e7d0401211e807b9faac6db31fc7693a51077d36",
+    "outputs/a100-native-greedy-20260911/validation/native/precompression.npz": "fe00a6183aef9a123c0a6b4d309d9c2975a7e7fc1d0b5bde38d2a9996a820079",
+    "outputs/a100-native-greedy-20260911/validation/native/feedback-regression.npz": "068922a42d0c71036cbebee775db06d0cc3b4fbefc6f189e275dee3b4ce85053",
+    "outputs/a100-native-greedy-20260911/validation/native/convergence-regression.npz": "adc6f9013f622eaa4116ef7f31643e1fdef1ca619093775730fa2f5870624f03",
+    "/Users/grantwilkins/houdini/agent-migrate/.venv/lib/python3.10/site-packages/_queue_haul_native/_queue_haul_native.cpython-310-darwin.so": "8f291f50cd036cfd2734acda41578f013296f4b6305f685c635cdb00c38dd666",
+    "native/src/packing.rs": "8f9235c1833466c47b1d970234e14df49fbdbd05cf425b417aea2c33e84500ac",
+    "native/src/lib.rs": "48231c20ebc2c3170e406a15db20c95109753c33330cdb3be227cfdc90117c22",
+    "pool_shed_priced_greedy.py": "10323a7c01ac4840cebf9b44d47858b37d4cafe8cbeefea3996c3098c553e4cb",
+    "pool_shed_planner.py": "8388cde4815a1e8d645e772b824ee1d95be1a6416742d1bbcfb3dcf758db1231",
+    "tests/test_pool_shed_priced_greedy.py": "85aeee598ff1c715b62861497408b1e743e6218faf806b160f14d96f63461c99",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d120-b1.npz": "f803397597c8c5729a8bd5ac4f97f860e1592735c0e3ae5649b505b9b8dc2b28",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d120-b10.npz": "16b650ce5044e60c736491f0d4a3922f97a830b68c20f719ecf0d5653b73cc21",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d120-b100.npz": "4486f56b48cc71df2b653f60bcf7c7b654fe3d2560fc4c90b4d0e713ad2bc326",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d30-b1.npz": "ffe49b2e429305338e9091aa75efb43fd445f70e3717d4ea15689edd77482838",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d30-b10.npz": "60850c62fb9081e5a682d443b46452bffecdcb12013ce9ce226bb62911e94866",
+    "outputs/a100-greedy-quality-20260911/matrix/coding-d30-b100.npz": "adf331347920776ee0cedad5c602d29f8eeedc773576d833c738ec0a93fcb06f",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d120-b1.npz": "5239379460b0ca788d0939166346c888edfe00fb4e8d4b5b44ccf7ffe9b195f2",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d120-b10.npz": "dc361edf39040e815c575bb7112a1c7c9f76cf151f978d90e1968ebc1f8eb0da",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d120-b100.npz": "d560eb14303c281d4278eb71b1047c7a32bd8b0a1faec6546da77abdfc9e1a61",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d30-b1.npz": "e1758aeb3536455d3ebf1376100176799afcb7fddd510995d29d247e8d53b6ea",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d30-b10.npz": "dc50d87d2352045b6a70b8e5b12b2010119dc8696120e4e23d3bab38802a45f8",
+    "outputs/a100-greedy-quality-20260911/matrix/coding_long-d30-b100.npz": "fdf482ea2565631afc23d37f46fce5a276fac6c18abfaf8d742be22eb9182d05"
+  },
+  "witness_file": "outputs/a100-native-greedy-20260911/validation/native/witnesses.npz",
+  "witness_sha256": "1e8dd654fd798fa58eafcc7f0dac0e05e0709ef22993b586d15df78289b701a8",
+  "records": [
+    {
+      "case": "coding-d120-b1",
+      "original_array_sha256": {
+        "matrix": "16c5f67d2cf8203176c66b7443ba3e95a4a0a27875138a093494ad10e13d98f9",
+        "capacity": "951f47256a38ed11332cbf439492b76ca1ee7e56a676b7061b175520d9062da7",
+        "gains": "9be568420700a710f21d3e092ee577d4f81b40dbcab6205838f98d76e8dfc0d3",
+        "debt": "2c2edb9265973fe720e63fcb65d97e834bb75b3bb3cfdf878de3b47307be59a3"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding-d120-b1.npz",
+      "shape": [
+        142,
+        1494
+      ],
+      "scalar_precompression_support": 107,
+      "current_support": 22,
+      "lp_support": 24,
+      "before_source_rows_binding": 1,
+      "after_source_rows_binding": 17,
+      "objective_change_from_scalar_primal": 4.0270651822924e-05,
+      "secondary_before": 54943.66494434801,
+      "secondary_after": 55780.00273421998,
+      "max_relative_primal_residual": 1.1102230246251565e-14,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.9785290278830016,
+      "upper_bound": 0.9793178832418613,
+      "absolute_gap": 0.0007888553588597524,
+      "relative_gap": 0.0008055151165506997,
+      "iterations": 261,
+      "converged": true
+    },
+    {
+      "case": "coding-d120-b10",
+      "original_array_sha256": {
+        "matrix": "16c5f67d2cf8203176c66b7443ba3e95a4a0a27875138a093494ad10e13d98f9",
+        "capacity": "01dbe7d76570a26672f32a3abd5436e0e3e05b74b9721b0e14120b0a34542bc7",
+        "gains": "9be568420700a710f21d3e092ee577d4f81b40dbcab6205838f98d76e8dfc0d3",
+        "debt": "2c2edb9265973fe720e63fcb65d97e834bb75b3bb3cfdf878de3b47307be59a3"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding-d120-b10.npz",
+      "shape": [
+        142,
+        1494
+      ],
+      "scalar_precompression_support": 502,
+      "current_support": 27,
+      "lp_support": 27,
+      "before_source_rows_binding": 24,
+      "after_source_rows_binding": 24,
+      "objective_change_from_scalar_primal": -1.321859288694327e-15,
+      "secondary_before": 34454.47704168483,
+      "secondary_after": 36566.84844796063,
+      "max_relative_primal_residual": 4.440892098500626e-16,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.9999999999999987,
+      "upper_bound": 1.000000000001,
+      "absolute_gap": 1.0014211682118912e-12,
+      "relative_gap": 1.0014211682108897e-12,
+      "iterations": 51,
+      "converged": true
+    },
+    {
+      "case": "coding-d120-b100",
+      "original_array_sha256": {
+        "matrix": "16c5f67d2cf8203176c66b7443ba3e95a4a0a27875138a093494ad10e13d98f9",
+        "capacity": "7b2fbfc414ae11cd358752b1c26793718abaa8bb98c9530779150dbc300507ba",
+        "gains": "9be568420700a710f21d3e092ee577d4f81b40dbcab6205838f98d76e8dfc0d3",
+        "debt": "2c2edb9265973fe720e63fcb65d97e834bb75b3bb3cfdf878de3b47307be59a3"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding-d120-b100.npz",
+      "shape": [
+        142,
+        1494
+      ],
+      "scalar_precompression_support": 799,
+      "current_support": 25,
+      "lp_support": 26,
+      "before_source_rows_binding": 24,
+      "after_source_rows_binding": 24,
+      "objective_change_from_scalar_primal": 3.2612801348363973e-16,
+      "secondary_before": 19248.96211888308,
+      "secondary_after": 15237.831473381648,
+      "max_relative_primal_residual": 4.218847493575595e-15,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 1.0000000000000002,
+      "upper_bound": 1.000000000001,
+      "absolute_gap": 9.99866855977416e-13,
+      "relative_gap": 9.99866855976416e-13,
+      "iterations": 51,
+      "converged": true
+    },
+    {
+      "case": "coding-d30-b1",
+      "original_array_sha256": {
+        "matrix": "cfc998d8c3f4d0f5f246748d1703723596ad2a5f25529446cb91cd4dfb169ed6",
+        "capacity": "8a6f38988c7d7f42972e8b1336073183bfc0ae17bb74eea657b0fd368cb12619",
+        "gains": "0955e44e367b5fbcb384cc6aa0589410c3e36dadb4562e0a62dc06eed15dc51d",
+        "debt": "92ff727d231add4d4543494a885e11f8327bc1e6266377726e345d0dcd9605cb"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding-d30-b1.npz",
+      "shape": [
+        114,
+        1494
+      ],
+      "scalar_precompression_support": 60,
+      "current_support": 18,
+      "lp_support": 21,
+      "before_source_rows_binding": 1,
+      "after_source_rows_binding": 12,
+      "objective_change_from_scalar_primal": 0.00014258104880987554,
+      "secondary_before": 30897.344414845647,
+      "secondary_after": 32065.566947526604,
+      "max_relative_primal_residual": 1.3322676295501878e-15,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.879341690742241,
+      "upper_bound": 0.8801628449476577,
+      "absolute_gap": 0.0008211542054167298,
+      "relative_gap": 0.0009329571341602848,
+      "iterations": 431,
+      "converged": true
+    },
+    {
+      "case": "coding-d30-b10",
+      "original_array_sha256": {
+        "matrix": "cfc998d8c3f4d0f5f246748d1703723596ad2a5f25529446cb91cd4dfb169ed6",
+        "capacity": "40077945b04829acee6057e819c831b890c4fe60d8ac7a3b5f2000244b4c3446",
+        "gains": "0955e44e367b5fbcb384cc6aa0589410c3e36dadb4562e0a62dc06eed15dc51d",
+        "debt": "92ff727d231add4d4543494a885e11f8327bc1e6266377726e345d0dcd9605cb"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding-d30-b10.npz",
+      "shape": [
+        114,
+        1494
+      ],
+      "scalar_precompression_support": 81,
+      "current_support": 25,
+      "lp_support": 26,
+      "before_source_rows_binding": 4,
+      "after_source_rows_binding": 21,
+      "objective_change_from_scalar_primal": -2.3810318154626753e-05,
+      "secondary_before": 20423.195845769922,
+      "secondary_after": 18734.850575534932,
+      "max_relative_primal_residual": 6.217248937900877e-15,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.9834546025968763,
+      "upper_bound": 0.9841710271024605,
+      "absolute_gap": 0.0007164245055841789,
+      "relative_gap": 0.0007279471614739916,
+      "iterations": 371,
+      "converged": true
+    },
+    {
+      "case": "coding-d30-b100",
+      "original_array_sha256": {
+        "matrix": "cfc998d8c3f4d0f5f246748d1703723596ad2a5f25529446cb91cd4dfb169ed6",
+        "capacity": "9186ba57e77b303dbfaf4311e9a01b0ad92fc8deafff4ed208a6e40a65156697",
+        "gains": "0955e44e367b5fbcb384cc6aa0589410c3e36dadb4562e0a62dc06eed15dc51d",
+        "debt": "92ff727d231add4d4543494a885e11f8327bc1e6266377726e345d0dcd9605cb"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding-d30-b100.npz",
+      "shape": [
+        114,
+        1494
+      ],
+      "scalar_precompression_support": 220,
+      "current_support": 24,
+      "lp_support": 25,
+      "before_source_rows_binding": 0,
+      "after_source_rows_binding": 21,
+      "objective_change_from_scalar_primal": 3.2340149026185983e-06,
+      "secondary_before": 13486.354104203554,
+      "secondary_after": 13252.864865213283,
+      "max_relative_primal_residual": 3.774758283725532e-15,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.9897846663197567,
+      "upper_bound": 0.9906637288452689,
+      "absolute_gap": 0.0008790625255121753,
+      "relative_gap": 0.000887347038067925,
+      "iterations": 71,
+      "converged": true
+    },
+    {
+      "case": "coding_long-d120-b1",
+      "original_array_sha256": {
+        "matrix": "980f05e41a041af6ed35be8d99e83f9a4a012f580e97faf2b0b3d667ee7d9043",
+        "capacity": "28e5fb8867b3810107d63956015b5a53bacb2c9892e8069c2609260828bceec6",
+        "gains": "b97ad62dae2422af4a80df2b029813d8eceef64c12a8cc1b287c741bfeaec8ce",
+        "debt": "581227480266ecae10176e9c3b39dbe7fd6c4f3af8f09c2d06b666b2282acc40"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding_long-d120-b1.npz",
+      "shape": [
+        142,
+        1428
+      ],
+      "scalar_precompression_support": 79,
+      "current_support": 21,
+      "lp_support": 23,
+      "before_source_rows_binding": 5,
+      "after_source_rows_binding": 17,
+      "objective_change_from_scalar_primal": 3.054292783971971e-05,
+      "secondary_before": 111109.41553049194,
+      "secondary_after": 111068.24292546284,
+      "max_relative_primal_residual": 5.329070518200751e-15,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.9394687991773178,
+      "upper_bound": 0.9402113727323389,
+      "absolute_gap": 0.0007425735550210533,
+      "relative_gap": 0.0007897942702640021,
+      "iterations": 481,
+      "converged": true
+    },
+    {
+      "case": "coding_long-d120-b10",
+      "original_array_sha256": {
+        "matrix": "980f05e41a041af6ed35be8d99e83f9a4a012f580e97faf2b0b3d667ee7d9043",
+        "capacity": "012a58a4940603c5bc1479bcc86b49d7f980c8f7f4c2ec3030157e3fb49b4480",
+        "gains": "b97ad62dae2422af4a80df2b029813d8eceef64c12a8cc1b287c741bfeaec8ce",
+        "debt": "581227480266ecae10176e9c3b39dbe7fd6c4f3af8f09c2d06b666b2282acc40"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding_long-d120-b10.npz",
+      "shape": [
+        142,
+        1428
+      ],
+      "scalar_precompression_support": 145,
+      "current_support": 21,
+      "lp_support": 24,
+      "before_source_rows_binding": 0,
+      "after_source_rows_binding": 18,
+      "objective_change_from_scalar_primal": 1.705686070999947e-05,
+      "secondary_before": 71753.21445246678,
+      "secondary_after": 80576.19280421358,
+      "max_relative_primal_residual": 4.440892098500626e-16,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.9877094095537118,
+      "upper_bound": 0.9885500197269764,
+      "absolute_gap": 0.0008406101732646443,
+      "relative_gap": 0.0008503466253501355,
+      "iterations": 191,
+      "converged": true
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "original_array_sha256": {
+        "matrix": "980f05e41a041af6ed35be8d99e83f9a4a012f580e97faf2b0b3d667ee7d9043",
+        "capacity": "f4152b7d517940ecbcf032b9c0094414cfecafd6e33c77e2a7e619216b2ecc63",
+        "gains": "b97ad62dae2422af4a80df2b029813d8eceef64c12a8cc1b287c741bfeaec8ce",
+        "debt": "581227480266ecae10176e9c3b39dbe7fd6c4f3af8f09c2d06b666b2282acc40"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding_long-d120-b100.npz",
+      "shape": [
+        142,
+        1428
+      ],
+      "scalar_precompression_support": 183,
+      "current_support": 19,
+      "lp_support": 23,
+      "before_source_rows_binding": 0,
+      "after_source_rows_binding": 17,
+      "objective_change_from_scalar_primal": -0.0004404642680732873,
+      "secondary_before": 23404.71860694706,
+      "secondary_after": 32294.819332004212,
+      "max_relative_primal_residual": 1.3322676295501878e-15,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.9872579491837993,
+      "upper_bound": 0.98820453686897,
+      "absolute_gap": 0.0009465876851707522,
+      "relative_gap": 0.0009578863988723663,
+      "iterations": 211,
+      "converged": true
+    },
+    {
+      "case": "coding_long-d30-b1",
+      "original_array_sha256": {
+        "matrix": "89f127669d8ba847b854f1b6a76fe9499935a658b36b28048836f48411cc1f76",
+        "capacity": "854540e985930dd8f80bbbd0d91e638f8d3fcde02bc3049330da89eb4328199e",
+        "gains": "a9cba5d644fc56554b66b48ff6d10575b60c5e903f5ab0743e926287f25f35ee",
+        "debt": "3a9a9996b57112fc60ef6c20b9d6379dfc296d77899e671bc727cbce2070096f"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding_long-d30-b1.npz",
+      "shape": [
+        114,
+        1428
+      ],
+      "scalar_precompression_support": 54,
+      "current_support": 17,
+      "lp_support": 15,
+      "before_source_rows_binding": 1,
+      "after_source_rows_binding": 10,
+      "objective_change_from_scalar_primal": 0.00013246042229549115,
+      "secondary_before": 44192.49408553631,
+      "secondary_after": 44044.2858582517,
+      "max_relative_primal_residual": 4.440892098500626e-15,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.735578444482029,
+      "upper_bound": 0.7365034605419932,
+      "absolute_gap": 0.000925016059964201,
+      "relative_gap": 0.0012559561624917298,
+      "iterations": 361,
+      "converged": true
+    },
+    {
+      "case": "coding_long-d30-b10",
+      "original_array_sha256": {
+        "matrix": "89f127669d8ba847b854f1b6a76fe9499935a658b36b28048836f48411cc1f76",
+        "capacity": "d0d20d004f91fb5dbb9e1eef3b10f5a38bcc39c956f1496c5f634e6261af1b67",
+        "gains": "a9cba5d644fc56554b66b48ff6d10575b60c5e903f5ab0743e926287f25f35ee",
+        "debt": "3a9a9996b57112fc60ef6c20b9d6379dfc296d77899e671bc727cbce2070096f"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding_long-d30-b10.npz",
+      "shape": [
+        114,
+        1428
+      ],
+      "scalar_precompression_support": 46,
+      "current_support": 15,
+      "lp_support": 15,
+      "before_source_rows_binding": 3,
+      "after_source_rows_binding": 12,
+      "objective_change_from_scalar_primal": -0.0001614439566582082,
+      "secondary_before": 25963.586764233027,
+      "secondary_after": 25926.122671964957,
+      "max_relative_primal_residual": 5.773159728050814e-15,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.8880769347725109,
+      "upper_bound": 0.888840077204335,
+      "absolute_gap": 0.0007631424318240709,
+      "relative_gap": 0.000858582383261092,
+      "iterations": 221,
+      "converged": true
+    },
+    {
+      "case": "coding_long-d30-b100",
+      "original_array_sha256": {
+        "matrix": "89f127669d8ba847b854f1b6a76fe9499935a658b36b28048836f48411cc1f76",
+        "capacity": "f40f76571d326a54f8b541d86a1e9ff936d7fa17535ba9e505487b3417e9097c",
+        "gains": "a9cba5d644fc56554b66b48ff6d10575b60c5e903f5ab0743e926287f25f35ee",
+        "debt": "3a9a9996b57112fc60ef6c20b9d6379dfc296d77899e671bc727cbce2070096f"
+      },
+      "final_matrix_file": "outputs/a100-native-greedy-20260911/matrix/coding_long-d30-b100.npz",
+      "shape": [
+        114,
+        1428
+      ],
+      "scalar_precompression_support": 113,
+      "current_support": 20,
+      "lp_support": 21,
+      "before_source_rows_binding": 1,
+      "after_source_rows_binding": 17,
+      "objective_change_from_scalar_primal": 9.409863583748762e-05,
+      "secondary_before": 16488.727561278898,
+      "secondary_after": 16832.778165118623,
+      "max_relative_primal_residual": 8.881784197001252e-16,
+      "max_relative_dual_deficit": 0.0,
+      "objective": 0.9597103838002106,
+      "upper_bound": 0.9600390195741484,
+      "absolute_gap": 0.0003286357739378243,
+      "relative_gap": 0.0003423150176579278,
+      "iterations": 301,
+      "converged": true
+    }
+  ]
+}

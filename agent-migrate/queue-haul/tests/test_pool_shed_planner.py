@@ -374,13 +374,24 @@ def test_priced_greedy_wrapper_rejects_a_false_convergence_certificate(monkeypat
     from pool_shed_planner import _choose_priced
 
     def false_certificate(matrix, capacity, gains, incumbent, debt, **kwargs):
-        return incumbent.copy(), dict(objective=float(gains @ incumbent), upper_bound=bound,
+        chosen = np.r_[1., np.zeros(len(gains) - 1)]
+        return chosen, dict(objective=float(gains @ chosen), upper_bound=bound,
             absolute_gap=0., relative_gap=0., iterations=0, converged=True)
 
     monkeypatch.setattr(pricing, "priced_greedy", false_certificate)
     with pytest.raises(RuntimeError, match=error):
         _choose_priced(np.column_stack((np.ones(16), np.eye(16))), np.ones(16),
                        np.r_[1.001, np.ones(16)], np.zeros(17), SimpleNamespace(gpus=1))
+
+
+@pytest.mark.parametrize('value,bound', [(np.nan, 1.), (-1., 1.), (0., np.nan), (0., np.inf)])
+def test_priced_wrapper_rejects_nonfinite_or_negative_certificates(monkeypatch, value, bound):
+    import pool_shed_priced_greedy as pricing
+    from pool_shed_planner import _choose_priced
+
+    monkeypatch.setattr(pricing, 'priced_greedy', lambda *a, **k: (np.array([value]), {'upper_bound': bound}))
+    with pytest.raises(RuntimeError, match='failed its certificate'):
+        _choose_priced(np.ones((1, 1)), np.ones(1), np.ones(1), np.zeros(1), None)
 
 
 def test_isolated_fastest_refreshes_action_ranking_from_current_debt():
