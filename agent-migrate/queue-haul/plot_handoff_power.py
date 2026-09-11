@@ -47,8 +47,8 @@ def bin_mean(points: list[tuple[float, float]]) -> tuple[list[float], list[float
 
 def style(axis, xlim: tuple[float, float], ylabel: str) -> None:
     axis.set_xlim(*xlim)
-    axis.set_ylabel(ylabel, size=14)
-    axis.tick_params(labelsize=14)
+    axis.set_ylabel(ylabel, size=18)
+    axis.tick_params(labelsize=18)
     axis.grid(alpha=.25)
     for spine in axis.spines.values():
         spine.set_color("black")
@@ -133,20 +133,20 @@ def reduce(run_root: Path) -> list[dict]:
                 if axis is axes[0]:
                     axis.text((start + end) / 2, 1.08, label,
                               transform=axis.get_xaxis_transform(),
-                              ha="center", va="bottom", fontsize=12)
+                              ha="center", va="bottom", fontsize=16)
         axis.axvline(0, color="black", lw=1.5, ls=":", label="Migration begins")
         if "traffic_switched" in marker:
             axis.axvline(marker["traffic_switched"] - plot_start,
                         color="#D62728", lw=1.5, ls="--", label="Switch")
         style(axis, (left, plot_end - plot_start), "")
         axis.text(.99, .88, REGIONS[node], transform=axis.transAxes,
-                  ha="right", va="top", fontsize=12)
+                  ha="right", va="top", fontsize=16)
     axes[0].annotate("Migration begins", (0, 1),
                      xycoords=axes[0].get_xaxis_transform(),
                      xytext=(0, 40), textcoords="offset points", ha="center",
-                     fontsize=11, arrowprops={"arrowstyle": "-", "ls": ":"})
-    figure.supylabel("Normalized Power (%)")
-    axes[-1].set_xlabel("Time since migration began (s)")
+                     fontsize=16, arrowprops={"arrowstyle": "-", "ls": ":"})
+    figure.supylabel("Normalized Power (%)", fontsize=20)
+    axes[-1].set_xlabel("Time since migration began (s)", fontsize=20)
     figure.tight_layout()
     for suffix in ("png", "pdf"):
         figure.savefig(run_root / f"power_handoff.{suffix}", dpi=220,
