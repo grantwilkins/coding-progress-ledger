@@ -640,7 +640,9 @@ def _bandwidths(contract: dict, label: str) -> dict[str, float]:
 
 
 def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
-              sessions: int = 8, design: str = "joint") -> dict:
+              sessions: int = 8, design: str = "joint", deadline_s: float = 30) -> dict:
+    if not 0 < deadline_s < float("inf") or design != "drain" and deadline_s != 30:
+        raise ValueError("a positive custom deadline requires the drain design")
     manifest = json.loads(manifest_path.read_text())
     profiler.validate_manifest(manifest)
     available = sorted(manifest["sessions"], key=lambda row: row["id"])
@@ -677,6 +679,7 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                 scenarios.append({
                     "scenario_id": _hash([
                         design, condition_index, repeat, session_rows,
+                        *([deadline_s] if deadline_s != 30 else []),
                     ])[:16],
                     "design": design, "condition_index": condition_index,
                     "condition_id": pack, "repeat": repeat,
@@ -684,7 +687,7 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                     "workload": "agentic_tool_loop",
                     "bandwidth": "controlled_40",
                     "bandwidth_mbps": _bandwidths(contract, "controlled_40"),
-                    "deadline_s": 30,
+                    "deadline_s": deadline_s,
                     "background": {node: (0, 0) for node in destinations},
                     "source_load": .8, "requested_shed_fraction": 1.0,
                     "planner_seed": profiler.stable_seed(
@@ -898,6 +901,7 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
             scenarios.extend(rows)
     output = {
         "schema": PLAN_SCHEMA, "design": design, "seed": seed,
+        **({"drain_deadline_s": deadline_s} if deadline_s != 30 else {}),
         "manifest": {"path": str(manifest_path),
                      "sha256": profiler.file_hash(manifest_path)},
         "model_profile": {"path": str(MODEL_PATH),
@@ -963,6 +967,9 @@ def validate_plan(plan: dict) -> None:
         return
     if design == "drain":
         contract = plan["network_contract"]
+        deadline_s = plan.get("drain_deadline_s", 30)
+        if not 0 < deadline_s < float("inf"):
+            raise ValueError("invalid drain deadline")
         if type(plan.get("force_movement", False)) is not bool:
             raise ValueError("force_movement must be boolean")
         groups = {}
@@ -972,13 +979,13 @@ def validate_plan(plan: dict) -> None:
                 for item in row["sessions"]))
             if row["scenario_id"] != _hash([
                     design, row["condition_index"], row["repeat"],
-                    row["sessions"]])[:16] \
+                    row["sessions"], *([deadline_s] if deadline_s != 30 else [])])[:16] \
                     or row.get("force_movement", False) != plan.get("force_movement", False) \
                     or row["policy"] != "greedy" \
                     or row["bandwidth"] != "controlled_40" \
                     or row["bandwidth_mbps"] != _bandwidths(
                         contract, "controlled_40") \
-                    or row["deadline_s"] != 30 \
+                    or row["deadline_s"] != deadline_s \
                     or row["requested_shed_fraction"] != 1 \
                     or row["source_load"] != .8 \
                     or row["stack_block"] != row["repeat"] \
@@ -1868,8 +1875,8 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
             for repeat in range(repeats):
                 for method in ("kv_transfer", "replay"):
                     _clear_cluster(stack)
-                    _warm(stack, messages, session["state_code"],
-                          REQUEST_TIMEOUT_S, prompt_ids)
+                    warm = _warm(stack, messages, session["state_code"],
+                                 REQUEST_TIMEOUT_S, prompt_ids)
                     before = testbed.proxy_counts(
                         run_root / "proxy_bytes.csv")
                     result = _chat(
@@ -1923,6 +1930,10 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                         "passed": valid,
                     }
                     rows.append(row)
+                    write_checkpoint(run_root / "requests" /
+                                     f"{context}-{repeat}-{method}.json", {
+                        "warm": warm, "request": result, "measurement": row,
+                    })
                     write_checkpoint(run_root / "progress.json", {
                         "schema": MIGRATION_TIMING_SCHEMA,
                         "literal_token_timing": True,
@@ -2149,7 +2160,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     missing = tuple(row for row in problem.sessions if row.session_id not in admitted)
     force = scenario.get("design") == "drain" and scenario.get("force_movement", False)
     if missing and scenario.get("design") == "drain" and not force:
-        raise RuntimeError("greedy plan cannot drain all sessions by 30 seconds")
+        raise RuntimeError(f"greedy plan cannot drain all sessions by {scenario['deadline_s']} seconds")
     if missing and force:
         links = {link.link_id: link.bytes_per_s for link in problem.links}
         sessions = {row.session_id: row for row in problem.sessions}
@@ -4887,7 +4898,7 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                     kv_capacity_fraction=scenario.get(
                         "kv_capacity_fraction"),
                     model=model,
-                    literal_token_timing=bool(scenario.get("force_movement")),
+                    literal_token_timing=scenario["design"] == "drain",
                 )
             if timing_only:
                 stack.cfg = replace(stack.cfg, timing_only=True)
@@ -4932,7 +4943,8 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
 
 def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
             out: Path, seed: int = 1, sessions: int = 8,
-            design: str = "joint", force_movement: bool = False) -> dict:
+            design: str = "joint", force_movement: bool = False,
+            deadline_s: float = 30) -> dict:
     if force_movement and design != "drain":
         raise ValueError("force_movement requires a drain design")
     cluster = Cluster.load(cluster_path)
@@ -4940,7 +4952,7 @@ def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
     if design == "drain":
         validate_calibration_cluster(calibration, cluster)
     plan = make_plan(manifest_path, freeze_contract(calibration), seed, sessions,
-                     design)
+                     design, deadline_s)
     if force_movement:
         plan["force_movement"] = True
         for scenario in plan["scenarios"]:
@@ -4972,6 +4984,7 @@ def parse_args(argv=None):
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--seed", type=int, default=1)
     command.add_argument("--sessions", type=int, default=8)
+    command.add_argument("--deadline-s", type=float, default=30)
     command.add_argument("--force-movement", action="store_true",
                          help="execute all eight drain moves, marking planner-rejected fallbacks")
     command.add_argument("--design",
@@ -5079,7 +5092,8 @@ def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
         prepare(args.cluster, args.calibration, args.manifest, args.out,
-                args.seed, args.sessions, args.design, args.force_movement)
+                args.seed, args.sessions, args.design, args.force_movement,
+                args.deadline_s)
     elif args.command == "node-check":
         print(json.dumps(node_report(), sort_keys=True))
     elif args.command == "check":

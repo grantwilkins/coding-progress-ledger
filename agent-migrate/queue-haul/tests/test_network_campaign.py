@@ -591,6 +591,24 @@ def test_drain_plan_is_ten_matched_packs_in_five_fresh_blocks(tmp_path):
         n.validate_plan(changed)
 
 
+def test_drain_deadlines_preserve_packs_and_bind_scenario_identity(tmp_path):
+    manifest = campaign_manifest(tmp_path, 8)
+    plans = [n.make_plan(manifest, constraint_contract(), design="drain",
+                         deadline_s=deadline) for deadline in (15, 30, 60)]
+    for plan in plans:
+        n.validate_plan(plan)
+    assert all([row["sessions"] for row in plan["scenarios"]]
+               == [row["sessions"] for row in plans[0]["scenarios"]]
+               for plan in plans)
+    assert len({row["scenario_id"] for plan in plans
+                for row in plan["scenarios"]}) == 150
+    plans[0]["drain_deadline_s"] = 60
+    with pytest.raises(ValueError, match="drain scenario"):
+        n.validate_plan(plans[0])
+    with pytest.raises(ValueError, match="positive custom deadline"):
+        n.make_plan(manifest, constraint_contract(), design="drain", deadline_s=0)
+
+
 def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(
         monkeypatch, tmp_path):
     monkeypatch.setattr(n, "FRONTIER_PACKS", n.frontier_packs(False))
