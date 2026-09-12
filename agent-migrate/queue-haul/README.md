@@ -1311,7 +1311,7 @@ contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/netw
 [Linux PTP/chrony](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/time-sync),
 and [Spot Scheduled Events](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/scheduled-events).
 
-The H100 path uses West US 3 (`10.11.0.4`) as source and Australia East
+The archived H100 path used West US 3 (`10.11.0.4`) as source and Australia East
 (`10.12.0.4`) plus South Central US (`10.13.0.4`) as destinations via
 `azure_network_cluster_australia_southcentral.json`. Set
 `QH_MODEL_PROFILE=gpt_oss_20b_h100_tp1.json`; the A100 profile remains the
@@ -1332,13 +1332,13 @@ scp -o StrictHostKeyChecking=yes -i ~/.ssh/azrs azrsadmin@10.15.0.4:/datadrive/q
 ```
 
 The SSH host key is recorded on this checkout's host. Other clients need their
-own trusted host-key entry. This is currently a file-transfer endpoint, outside
-the frozen campaign topologies: the Queue-Haul runtime and model cache are not
-installed, and migration/service paths have not been validated. The readiness
-check also found a failed `nvidia-fabricmanager` service and package-trigger
-errors rebuilding an older kernel's initramfs; the running `6.6.150.1-1.azl3`
-kernel has an initramfs and `nvidia-smi` succeeds. GPU workload and reboot
-readiness remain unverified.
+own trusted host-key entry. On 2026-09-12, SSH confirmed an idle H100 NVL,
+490 GiB free on `/datadrive`, the GPT-OSS model cache, and native vLLM
+0.22.0 / LMCache 0.5.1 / Transformers 5.16.1 under
+`/home/azrsadmin/coding-progress-ledger/agent-migrate/.venv`. Southeast Asia
+replaces the unavailable Australia destination for new work; archived plans
+retain their original topology. Cross-host migration readiness remains
+unverified.
 
 The node map across the provided cluster files is:
 
@@ -3252,6 +3252,19 @@ A100 model order rotates inside each of five fresh-stack blocks. The first
 pending episode in every block is a fail-fast smoke.
 Reconstruction forces 128 output tokens and records exact token-event TTFT and
 mean TPOT.
+
+The 2026-09-12 readiness check found that the requested three-model H100
+deadline sweep is blocked: this wrapper supports only GPT-OSS on H100 at
+30 seconds, and no adjacent passing architecture gates are present in this
+checkout. The existing profile collector requires two GPUs on one host;
+its preflight on West US 3 failed with `need 2 GPU(s), saw 1`. West US 3,
+Southeast Asia, and South Central US each expose one H100. Creating the three
+missing profiles requires 1,125 collection scenarios plus three smoke runs
+on suitable hardware, or adapting the collector for cross-host execution.
+No new drain episodes or measured action-mix comparisons have been produced.
+
+The commands below document the original campaign; the H100 example uses the
+now-unavailable Australia destination and is retained only as a historical reference.
 
 ```bash
 uv run python model_hardware_drain_campaign.py a100 --profiles A100_GPT.json A100_QWEN.json A100_GEMMA.json --cluster azure_network_cluster_east_germany.json --calibration A100_CALIBRATION.json --manifest MANIFEST.json --run-root /datadrive/model-hardware-drain-a100

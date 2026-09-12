@@ -1,0 +1,45 @@
+{
+  "checked_at_utc": "2026-09-12",
+  "source_commit": "1fa6c29dcabc48af42a089c0a0c5f9344711ffd2",
+  "ready": false,
+  "completed_drain_episodes": 0,
+  "measured_action_mix_available": false,
+  "hosts": [
+    {"role": "source", "host": "10.11.0.4", "user": "azureuser", "region": "westus3", "ssh_passed": true, "gpu": "NVIDIA H100 NVL", "gpu_count": 1, "gpu_memory_used_mib": 0},
+    {"role": "replacement_destination", "host": "10.15.0.4", "user": "azrsadmin", "region": "southeastasia", "ssh_passed": true, "gpu": "NVIDIA H100 NVL", "gpu_count": 1, "gpu_memory_used_mib": 0},
+    {"role": "second_destination", "host": "10.13.0.4", "user": "azureuser", "region": "southcentralus", "ssh_passed": true, "gpu": "NVIDIA H100 NVL", "gpu_count": 1, "gpu_memory_used_mib": 0}
+  ],
+  "southeastasia_runtime": {
+    "python": "/home/azrsadmin/coding-progress-ledger/agent-migrate/.venv/bin/python",
+    "vllm": "0.22.0",
+    "lmcache": "0.5.1",
+    "transformers": "5.16.1",
+    "cached_models": ["openai/gpt-oss-20b"],
+    "single_gpu_preflight_passed": true,
+    "model_inference_or_migration_tested_this_check": false
+  },
+  "profile_collection_preflight": {
+    "host": "10.11.0.4",
+    "command": "QH_RUNTIME=native QH_LMCACHE_MODE=mp ../.venv/bin/python migration_testbed.py preflight --required-gpus 2 --hf-home /datadrive --cache-root /datadrive/queue-haul-cache",
+    "exit_code": 1,
+    "error": "RuntimeError: need 2 GPU(s), saw 1"
+  },
+  "blockers": [
+    "The requested wrapper accepts only GPT-OSS for H100 and fixes drain deadlines at 30 seconds.",
+    "No repository-local profiles with passing adjacent architecture gates were found.",
+    "The existing architecture collector requires two local GPUs and has no distributed execution path.",
+    "Three new profiles require 1125 collection scenarios plus three smoke scenarios and passing timing/geometry gates.",
+    "Southeast Asia lacks the Qwen and Gemma model caches; Gemma needs a validated compatible runtime.",
+    "The new two-destination topology requires matching formal calibration. The existing Southeast Asia topology has only one destination."
+  ],
+  "critic": {
+    "independent_review_completed": true,
+    "conclusion": "Not ready for a measured three-model H100 deadline sweep; preserve evidence gates.",
+    "acceptance": [
+      "Match context packs across all models and deadlines.",
+      "Report per-deadline destination-by-method action counts with admission, forced-action, and failure counts.",
+      "Measure completed hardware migrations before claiming action-mix differences.",
+      "Check within-model deadline changes and between-model differences; do not substitute planner predictions for hardware evidence."
+    ]
+  }
+}
