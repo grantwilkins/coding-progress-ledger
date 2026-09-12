@@ -295,7 +295,8 @@ class Cluster:
         if not (value.source.region == "swedencentral" and regions <= {
                 "eastus2", "westeurope", "germanywestcentral"} or
                 value.source.region == "westus3" and
-                regions in ({"australiaeast", "southcentralus"}, {"southeastasia"})):
+                regions in ({"australiaeast", "southcentralus"}, {"southeastasia"},
+                            {"southeastasia", "southcentralus"})):
             raise ValueError("cluster regions do not match the frozen topology")
         return value
 
@@ -945,7 +946,7 @@ def validate_plan(plan: dict) -> None:
     scenarios = plan.get("scenarios", [])
     design = plan.get("design")
     expected = 126 if design == "joint" else 54 if design == "isolated" \
-        else DRAIN_PACKS * DRAIN_REPEATS if design == "drain" \
+        else DRAIN_PACKS * DRAIN_REPEATS * len(plan.get("drain_deadlines_s", [30])) if design == "drain" \
         else ((sum(1 if pack[0] == "32x31k" else len(FRONTIER_LOADS)
                    for pack in FRONTIER_PACKS) + 7)
               * len(FRONTIER_POLICIES)
@@ -967,13 +968,17 @@ def validate_plan(plan: dict) -> None:
         return
     if design == "drain":
         contract = plan["network_contract"]
-        deadline_s = plan.get("drain_deadline_s", 30)
-        if not 0 < deadline_s < float("inf"):
+        deadlines = plan.get("drain_deadlines_s", [plan.get("drain_deadline_s", 30)])
+        if not deadlines or len(set(deadlines)) != len(deadlines) \
+                or any(not 0 < value < float("inf") for value in deadlines):
             raise ValueError("invalid drain deadline")
         if type(plan.get("force_movement", False)) is not bool:
             raise ValueError("force_movement must be boolean")
+        if type(plan.get("source_service_normalized", False)) is not bool:
+            raise ValueError("source_service_normalized must be boolean")
         groups = {}
         for row in scenarios:
+            deadline_s = row["deadline_s"]
             groups.setdefault(row["condition_index"], set()).add(tuple(
                 (item["session_id"], item["initial_tokens"])
                 for item in row["sessions"]))
@@ -981,11 +986,12 @@ def validate_plan(plan: dict) -> None:
                     design, row["condition_index"], row["repeat"],
                     row["sessions"], *([deadline_s] if deadline_s != 30 else [])])[:16] \
                     or row.get("force_movement", False) != plan.get("force_movement", False) \
+                    or row.get("source_service_normalized", False) != plan.get("source_service_normalized", False) \
                     or row["policy"] != "greedy" \
                     or row["bandwidth"] != "controlled_40" \
                     or row["bandwidth_mbps"] != _bandwidths(
                         contract, "controlled_40") \
-                    or row["deadline_s"] != deadline_s \
+                    or deadline_s not in deadlines \
                     or row["requested_shed_fraction"] != 1 \
                     or row["source_load"] != .8 \
                     or row["stack_block"] != row["repeat"] \
@@ -997,16 +1003,16 @@ def validate_plan(plan: dict) -> None:
                         plan["seed"], row["condition_index"], row["repeat"],
                         "greedy"):
                 raise ValueError("drain scenario contract changed")
-        expected_cells = {(pack, repeat) for pack in range(DRAIN_PACKS)
-                          for repeat in range(DRAIN_REPEATS)}
+        expected_cells = {(pack, repeat, deadline) for pack in range(DRAIN_PACKS)
+                          for repeat in range(DRAIN_REPEATS) for deadline in deadlines}
         if set(contract["paths"]) != {"east", "germany"} \
                 or plan.get("policies") != ["greedy"] \
-                or {(row["condition_index"], row["repeat"])
+                or {(row["condition_index"], row["repeat"], row["deadline_s"])
                     for row in scenarios} != expected_cells \
                 or any(len(signatures) != 1 for signatures in groups.values()) \
                 or [row["repeat"] for row in scenarios] != [
                     repeat for repeat in range(DRAIN_REPEATS)
-                    for _ in range(DRAIN_PACKS)]:
+                    for _ in range(DRAIN_PACKS * len(deadlines))]:
             raise ValueError("drain blocks are incomplete or unmatched")
         return
     if design == "frontier":
@@ -1826,17 +1832,66 @@ def literal_timing_completion(result: dict) -> bool:
     )
 
 
+def _network_concurrent_smoke(stack: ClusterStack, context: int) -> dict:
+    _clear_cluster(stack)
+    prepared = []
+    for index in range(8):
+        session = {"id": f"gate-{index}", "state_code": f"QHG{index:03d}"}
+        messages = profiler.exact_calibration_messages(
+            stack.cfg, session, context, max_tokens=128)
+        tokens = testbed.mp_chat_tokens(
+            stack.cfg, _probe(stack.cfg, messages, session["state_code"]),
+            max_tokens=128)
+        warm = _warm(stack, messages, session["state_code"], REQUEST_TIMEOUT_S, tokens)
+        prepared.append((session, messages, tokens, warm))
+    before = testbed.proxy_counts(stack.run_root / "proxy_bytes.csv")
+    barrier = threading.Barrier(8)
+
+    def move(index, destination):
+        session, messages, tokens, warm = prepared[index]
+        method = "replay" if index % 2 else "kv_transfer"
+        barrier.wait()
+        request = _chat(stack.cfg, stack.ports[destination.id]["api"], messages,
+                        session["state_code"], REQUEST_TIMEOUT_S, method == "replay",
+                        prompt_ids=tokens)
+        expected = context // testbed.model_chunk_tokens(stack.cfg) \
+            * testbed.model_chunk_tokens(stack.cfg) if method == "kv_transfer" else 0
+        if not literal_timing_completion(request) or request["prompt_tokens"] != context \
+                or request.get("cached_tokens", 0) != expected:
+            raise RuntimeError(f"concurrent network gate failed for {session['id']}")
+        return {"session_id": session["id"], "destination": destination.id,
+                "method": method, "warm": warm, "request": request}
+
+    rows, skews = [], []
+    for destination in stack.cluster.destinations:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            batch = list(pool.map(lambda index: move(index, destination), range(8)))
+        rows.extend(batch)
+        skews.append((max(row["request"]["start_ns"] for row in batch)
+                      - min(row["request"]["start_ns"] for row in batch)) / 1e9)
+    time.sleep(1)
+    delta = testbed.count_delta(before, testbed.proxy_counts(stack.run_root / "proxy_bytes.csv"))
+    skew = max(skews)
+    if skew > DRAIN_DISPATCH_SKEW_S or any(
+            delta.get(f"kv/{node.id}/target_to_client", 0) <= 0
+            for node in stack.cluster.destinations):
+        raise RuntimeError("concurrent network gate lacks synchronized route evidence")
+    return {"passed": True, "context_tokens": context, "sessions": 8,
+            "sessions_per_destination": 8,
+            "dispatch_skew_s": skew, "wire_bytes": delta, "requests": rows}
+
+
 def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                      bandwidth: str, run_root: Path, model: str,
                      contexts: tuple[int, ...] = (4096, 16384, 32256),
-                     repeats: int = 3) -> dict:
-    """Measure both migration methods on one cross-region route.
+                     repeats: int = 3, concurrent_smoke: bool = False) -> dict:
+    """Measure both migration methods on the calibrated cross-region routes.
 
     This path intentionally does not consume a model profile: it produces the
     timing evidence from which a model profile can subsequently be built.
     """
-    if len(cluster.destinations) != 1:
-        raise ValueError("migration timing requires exactly two regions")
+    if not 1 <= len(cluster.destinations) <= 2:
+        raise ValueError("migration timing requires one or two destinations")
     if model not in testbed.MODEL_SPECS:
         raise ValueError("unsupported timing model")
     contexts = tuple(dict.fromkeys(contexts))
@@ -1870,80 +1925,83 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                 raise RuntimeError("timing prompt token count changed")
             prepared[context] = session, messages, prompt_ids
 
-        for context in contexts:
-            session, messages, prompt_ids = prepared[context]
-            for repeat in range(repeats):
-                for method in ("kv_transfer", "replay"):
-                    _clear_cluster(stack)
-                    warm = _warm(stack, messages, session["state_code"],
-                                 REQUEST_TIMEOUT_S, prompt_ids)
-                    before = testbed.proxy_counts(
-                        run_root / "proxy_bytes.csv")
-                    result = _chat(
-                        stack.cfg, stack.ports[destination.id]["api"],
-                        messages, session["state_code"], REQUEST_TIMEOUT_S,
-                        method == "replay", prompt_ids=prompt_ids)
-                    time.sleep(1)
-                    delta = testbed.count_delta(
-                        before, testbed.proxy_counts(
-                            run_root / "proxy_bytes.csv"))
-                    kv_wire = int(delta.get(
-                        f"kv/{destination.id}/target_to_client", 0))
-                    api_wire = int(delta.get(
-                        f"api/{destination.id}/client_to_target", 0))
-                    cached = int(result.get("cached_tokens", 0))
-                    expected_cached = context // chunk * chunk
-                    stream_span_s = (
-                        int(result["last_token_ns"]) - int(result["first_ns"])
-                    ) / 1e9
-                    valid = (
-                        literal_timing_completion(result)
-                        and result.get("prompt_tokens") == context
-                        and api_wire > 0
-                        and (cached == expected_cached and kv_wire > 0
-                             if method == "kv_transfer"
-                             else cached == 0 and kv_wire <= 1_000_000)
-                    )
-                    row = {
-                        "model": model,
-                        "revision": testbed.model_spec(model).revision,
-                        "source": cluster.source.id,
-                        "source_region": cluster.source.region,
-                        "destination": destination.id,
-                        "destination_region": destination.region,
-                        "bandwidth": bandwidth,
-                        "method": method,
-                        "context_tokens": context,
-                        "repeat": repeat,
-                        "chunk_tokens": chunk,
-                        "cached_tokens": cached,
-                        "kv_wire_bytes": kv_wire,
-                        "api_wire_bytes": api_wire,
-                        "destination_ready_s": float(result["ttft_s"]),
-                        "completion_s": (
-                            int(result["end_ns"]) - int(result["start_ns"]))
-                            / 1e9,
-                        "mean_tpot_s": float(result["mean_tpot_s"]),
-                        "stream_span_s": stream_span_s,
-                        "exact_token_timestamps": bool(
-                            result["exact_token_timestamps"]),
-                        "passed": valid,
-                    }
-                    rows.append(row)
-                    write_checkpoint(run_root / "requests" /
-                                     f"{context}-{repeat}-{method}.json", {
-                        "warm": warm, "request": result, "measurement": row,
-                    })
-                    write_checkpoint(run_root / "progress.json", {
-                        "schema": MIGRATION_TIMING_SCHEMA,
-                        "literal_token_timing": True,
-                        "expected": len(contexts) * repeats * 2,
-                        "completed": len(rows), "rows": rows,
-                    })
-                    if not valid:
-                        raise RuntimeError(
-                            f"{method}/{context}/r{repeat} timing gate failed")
+        for destination in cluster.destinations:
+            for context in contexts:
+                session, messages, prompt_ids = prepared[context]
+                for repeat in range(repeats):
+                    for method in ("kv_transfer", "replay"):
+                        _clear_cluster(stack)
+                        warm = _warm(stack, messages, session["state_code"],
+                                     REQUEST_TIMEOUT_S, prompt_ids)
+                        before = testbed.proxy_counts(
+                            run_root / "proxy_bytes.csv")
+                        result = _chat(
+                            stack.cfg, stack.ports[destination.id]["api"],
+                            messages, session["state_code"], REQUEST_TIMEOUT_S,
+                            method == "replay", prompt_ids=prompt_ids)
+                        time.sleep(1)
+                        delta = testbed.count_delta(
+                            before, testbed.proxy_counts(
+                                run_root / "proxy_bytes.csv"))
+                        kv_wire = int(delta.get(
+                            f"kv/{destination.id}/target_to_client", 0))
+                        api_wire = int(delta.get(
+                            f"api/{destination.id}/client_to_target", 0))
+                        cached = int(result.get("cached_tokens", 0))
+                        expected_cached = context // chunk * chunk
+                        stream_span_s = (
+                            int(result["last_token_ns"]) - int(result["first_ns"])
+                        ) / 1e9
+                        valid = (
+                            literal_timing_completion(result)
+                            and result.get("prompt_tokens") == context
+                            and api_wire > 0
+                            and (cached == expected_cached and kv_wire > 0
+                                 if method == "kv_transfer"
+                                 else cached == 0 and kv_wire <= 1_000_000)
+                        )
+                        row = {
+                            "model": model,
+                            "revision": testbed.model_spec(model).revision,
+                            "source": cluster.source.id,
+                            "source_region": cluster.source.region,
+                            "destination": destination.id,
+                            "destination_region": destination.region,
+                            "bandwidth": bandwidth,
+                            "method": method,
+                            "context_tokens": context,
+                            "repeat": repeat,
+                            "chunk_tokens": chunk,
+                            "cached_tokens": cached,
+                            "kv_wire_bytes": kv_wire,
+                            "api_wire_bytes": api_wire,
+                            "destination_ready_s": float(result["ttft_s"]),
+                            "completion_s": (
+                                int(result["end_ns"]) - int(result["start_ns"]))
+                                / 1e9,
+                            "mean_tpot_s": float(result["mean_tpot_s"]),
+                            "stream_span_s": stream_span_s,
+                            "exact_token_timestamps": bool(
+                                result["exact_token_timestamps"]),
+                            "passed": valid,
+                        }
+                        rows.append(row)
+                        write_checkpoint(run_root / "requests" /
+                                         f"{destination.id}-{context}-{repeat}-{method}.json", {
+                            "warm": warm, "request": result, "measurement": row,
+                        })
+                        write_checkpoint(run_root / "progress.json", {
+                            "schema": MIGRATION_TIMING_SCHEMA,
+                            "literal_token_timing": True,
+                            "expected": len(contexts) * repeats * 2 * len(cluster.destinations),
+                            "completed": len(rows), "rows": rows,
+                        })
+                        if not valid:
+                            raise RuntimeError(
+                                f"{method}/{context}/r{repeat} timing gate failed")
 
+        smoke_result = (_network_concurrent_smoke(stack, max(contexts))
+                        if concurrent_smoke else None)
         testbed.set_source_sleep(stack.cfg, True)
         time.sleep(5)
         testbed.set_source_sleep(stack.cfg, False)
@@ -1961,9 +2019,14 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                             "region": destination.region,
                             "host": destination.host},
             "bandwidth": bandwidth,
+            "destinations": [{"id": node.id, "region": node.region, "host": node.host}
+                             for node in cluster.destinations],
+            "network_contract": freeze_contract(calibration),
+            "calibration_sha256": profiler.object_hash(calibration),
+            "concurrent_smoke": smoke_result,
             "contexts": list(contexts),
             "repeats": repeats,
-            "expected": len(contexts) * repeats * 2,
+            "expected": len(contexts) * repeats * 2 * len(cluster.destinations),
             "completed": len(rows),
             "all_passed": all(row["passed"] for row in rows),
             "source_sleep_wake_passed": True,
@@ -2105,7 +2168,7 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
     pools = tuple(DestinationPool(
         f"pool/{node}", types[node].type_id,
         (DestinationReplica(
-            node, destination_background_work(
+            node, (0., 0.) if scenario["background"][node][0] == 0 else destination_background_work(
                 dtype, float(scenario["background"][node][0]))
             if scenario.get("load_normalization") == "destination_service"
             else tuple(dtype.work(
@@ -2274,6 +2337,7 @@ def plan_hardware_gap_scenario(scenario: dict, snapshots: dict[str, dict],
 
 def agentic_demand(records: dict[str, dict], sessions: list[dict],
                    profile: ModelProfile, total_load: float = .4,
+                   context_normalized: bool = False,
                    ) -> dict[str, tuple[float, float]]:
     demand = {}
     for session in sessions:
@@ -2286,7 +2350,12 @@ def agentic_demand(records: dict[str, dict], sessions: list[dict],
             rate * statistics.mean(turn["output_tokens"] for turn in turns),
         )
     case = profile.case()
-    scale = total_load / sum(f / case.F + g / case.G for f, g in demand.values())
+    contexts = {row["session_id"]: row["initial_tokens"] for row in sessions} if context_normalized else {}
+    scale = total_load / sum(
+        f / case.prefill.rate(contexts[session_id], 1)
+        + g / case.decode.rate(contexts[session_id], 1)
+        if context_normalized else f / case.F + g / case.G
+        for session_id, (f, g) in demand.items())
     return {session_id: (f * scale, g * scale)
             for session_id, (f, g) in demand.items()}
 
@@ -2477,7 +2546,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     destination_rates = (
         case.prefill.rate(SINK_LOAD_PREFILL_TOKENS, 1),
         case.decode.rate(SINK_LOAD_PREFILL_TOKENS, 1),
-    )
+    ) if service_load else None
     loads, snapshots, decision = {}, {}, {}
     for node in stack.cluster.destinations:
         compute, kv = scenario["background"].get(node.id, (0, 0))
@@ -2521,7 +2590,8 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 ))
             demand = agentic_demand(
                 sessions, scenario["sessions"], profile,
-                scenario.get("source_load", .4))
+                scenario.get("source_load", .4),
+                scenario.get("source_service_normalized", False))
             if scenario["design"] == "hardware_gap":
                 moves, decision = plan_hardware_gap_scenario(
                     scenario, snapshots, profile, demand)
@@ -2648,6 +2718,8 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                 and row["request"]["cached_tokens"] <= 0 for row in results),
             "load_warnings": load_warnings,
             **decision,
+            "source_service_normalized": scenario.get("source_service_normalized", False),
+            "modeled_aggregate_load": sum(f / case.F + g / case.G for f, g in demand.values()),
         })
     if scenario["design"] == "drain" and not _valid_drain_evidence(
             scenario, result):
@@ -4038,7 +4110,7 @@ def _scenario_problem(scenario: dict, manifest: dict, profile: ModelProfile):
     snapshots = _hardware_gap_snapshots(scenario, snapshots, profile)
     demand = agentic_demand(
         scenario_records(manifest, scenario), scenario["sessions"], profile,
-        scenario["source_load"],
+        scenario["source_load"], scenario.get("source_service_normalized", False),
     )
     return (*joint_problem(scenario, snapshots, profile, demand), demand)
 
@@ -4599,7 +4671,8 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
                     and result["status"] == "complete":
                 demand = agentic_demand(
                     scenario_records(manifest, scenario), scenario["sessions"],
-                    profile, scenario["source_load"])
+                    profile, scenario["source_load"],
+                    scenario.get("source_service_normalized", False))
                 outcomes = diagnostic_outcomes(
                     scenario, result["requests"], demand, profile,
                     result["started_ns"])
@@ -4650,6 +4723,8 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
                                 [move for move in moves if move.get(flag)]).items()})
         rows.append({
             **({"force_movement": scenario.get("force_movement", False)} if drain else {}),
+            **({"source_service_normalized": scenario.get("source_service_normalized", False),
+                "modeled_aggregate_load": result.get("modeled_aggregate_load", "")} if drain else {}),
             "scenario_id": scenario["scenario_id"],
             "plan_order": plan_order,
             "condition_index": scenario["condition_index"],
@@ -4944,24 +5019,41 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
 def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
             out: Path, seed: int = 1, sessions: int = 8,
             design: str = "joint", force_movement: bool = False,
-            deadline_s: float = 30) -> dict:
+            deadline_s: float = 30, source_service: bool = False,
+            deadlines_s: list[float] | None = None) -> dict:
     if force_movement and design != "drain":
         raise ValueError("force_movement requires a drain design")
+    if source_service and design != "drain":
+        raise ValueError("source-service normalization requires a drain design")
     cluster = Cluster.load(cluster_path)
     calibration = json.loads(calibration_path.read_text())
     if design == "drain":
         validate_calibration_cluster(calibration, cluster)
     plan = make_plan(manifest_path, freeze_contract(calibration), seed, sessions,
                      design, deadline_s)
+    if deadlines_s is not None:
+        if design != "drain" or deadline_s != 30 or len(set(deadlines_s)) != len(deadlines_s):
+            raise ValueError("deadline grid requires a drain design and unique deadlines")
+        plans = [make_plan(manifest_path, plan["network_contract"], seed, sessions,
+                           design, deadline) for deadline in deadlines_s]
+        plan["drain_deadlines_s"] = deadlines_s
+        plan["scenarios"] = [row for repeat in range(DRAIN_REPEATS)
+                             for arm in plans for row in arm["scenarios"]
+                             if row["repeat"] == repeat]
     if force_movement:
         plan["force_movement"] = True
         for scenario in plan["scenarios"]:
             scenario["force_movement"] = True
+    if source_service:
+        plan["source_service_normalized"] = True
+        for scenario in plan["scenarios"]:
+            scenario["source_service_normalized"] = True
     plan["cluster"] = cluster.as_dict()
     plan["calibration"] = {
         "path": str(calibration_path),
         "sha256": profiler.file_hash(calibration_path),
     }
+    validate_plan(plan)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n")
     return plan
@@ -4985,6 +5077,8 @@ def parse_args(argv=None):
     command.add_argument("--seed", type=int, default=1)
     command.add_argument("--sessions", type=int, default=8)
     command.add_argument("--deadline-s", type=float, default=30)
+    command.add_argument("--source-service", action="store_true")
+    command.add_argument("--deadlines-s", type=float, nargs="+")
     command.add_argument("--force-movement", action="store_true",
                          help="execute all eight drain moves, marking planner-rejected fallbacks")
     command.add_argument("--design",
@@ -5037,6 +5131,7 @@ def parse_args(argv=None):
     command.add_argument("--contexts", type=int, nargs="+",
                          default=(4096, 16384, 32256))
     command.add_argument("--repeats", type=int, default=3)
+    command.add_argument("--concurrent-smoke", action="store_true")
     command = sub.add_parser("run")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -5093,7 +5188,7 @@ def main(argv=None) -> None:
     if args.command == "prepare":
         prepare(args.cluster, args.calibration, args.manifest, args.out,
                 args.seed, args.sessions, args.design, args.force_movement,
-                args.deadline_s)
+                args.deadline_s, args.source_service, args.deadlines_s)
     elif args.command == "node-check":
         print(json.dumps(node_report(), sort_keys=True))
     elif args.command == "check":
@@ -5119,7 +5214,7 @@ def main(argv=None) -> None:
         print(json.dumps(migration_timing(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
             json.loads(args.calibration.read_text()), args.bandwidth,
-            args.run_root, args.model, tuple(args.contexts), args.repeats,
+            args.run_root, args.model, tuple(args.contexts), args.repeats, args.concurrent_smoke,
         ), indent=2, sort_keys=True))
     elif args.command == "run":
         print(json.dumps(run_campaign(

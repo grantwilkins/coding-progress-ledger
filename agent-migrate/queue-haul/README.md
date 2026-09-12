@@ -1333,12 +1333,13 @@ scp -o StrictHostKeyChecking=yes -i ~/.ssh/azrs azrsadmin@10.15.0.4:/datadrive/q
 
 The SSH host key is recorded on this checkout's host. Other clients need their
 own trusted host-key entry. On 2026-09-12, SSH confirmed an idle H100 NVL,
-490 GiB free on `/datadrive`, the GPT-OSS model cache, and native vLLM
-0.22.0 / LMCache 0.5.1 / Transformers 5.16.1 under
+490 GiB free on `/datadrive`, the GPT-OSS model cache, and the native runtime under
 `/home/azrsadmin/coding-progress-ledger/agent-migrate/.venv`. Southeast Asia
 replaces the unavailable Australia destination for new work; archived plans
 retain their original topology. Cross-host migration readiness remains
-unverified.
+unverified. The new three-model campaign uses vLLM 0.24.0 / LMCache 0.5.1 /
+Transformers 5.16.1 on all three hosts and
+`azure_network_cluster_southeastasia_southcentral.json`.
 
 The node map across the provided cluster files is:
 
@@ -3253,15 +3254,35 @@ pending episode in every block is a fail-fast smoke.
 Reconstruction forces 128 output tokens and records exact token-event TTFT and
 mean TPOT.
 
-The 2026-09-12 readiness check found that the requested three-model H100
-deadline sweep is blocked: this wrapper supports only GPT-OSS on H100 at
-30 seconds, and no adjacent passing architecture gates are present in this
-checkout. The existing profile collector requires two GPUs on one host;
-its preflight on West US 3 failed with `need 2 GPU(s), saw 1`. West US 3,
-Southeast Asia, and South Central US each expose one H100. Creating the three
-missing profiles requires 1,125 collection scenarios plus three smoke runs
-on suitable hardware, or adapting the collector for cross-host execution.
-No new drain episodes or measured action-mix comparisons have been produced.
+The `h100-sweep` command runs all three models over a common deadline grid,
+retaining ten matched context packs and five fresh-stack blocks. Deadlines
+share a stack within each model/block. Its explicit source-service normalization
+scales each pack's trace demand to 0.8 modeled context-conditioned service load;
+it preserves trace ratios and records aggregate F/G load separately. This is
+not measured GPU utilization or ongoing source traffic. Legacy plans keep
+their original aggregate normalization.
+
+The single-GPU-per-host path uses `network_campaign.py migration-timing
+--concurrent-smoke` followed by `freeze-network-profile`. It measures both
+methods on both routes at three contexts and three repeats, retaining raw
+requests, cache evidence, live KV registration, and source sleep/wake. It also
+requires eight simultaneous 32K sessions on each destination. The resulting
+network operational gate hashes its evidence, runtime, profile, and calibration;
+it does not claim the separate two-local-GPU architecture gate passed.
+The fitted profile combines measured cross-host replay/decode/transfer timing
+with historical H100 prefill and phase power. Held-out timing errors and
+inherited action-power assumptions remain explicit. No new drain episodes or
+measured action-mix comparisons have yet been produced.
+
+```bash
+uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json
+uv run python model_hardware_drain_campaign.py h100-sweep --profiles GPT_PROFILE.json QWEN_PROFILE.json GEMMA_PROFILE.json --deadlines-s DEADLINES --cluster azure_network_cluster_southeastasia_southcentral.json --calibration CALIBRATION.json --manifest outputs/coding-manifest.json --run-root /datadrive/d12
+```
+
+Reduction adds `deadline_action_mix.csv`, PNG/PDF plots with physical route
+names and completion counts, and `action_mix_checks.json` for within-model
+deadline changes and between-model differences. Failed episodes are excluded
+from executed-action means and counted explicitly.
 
 The commands below document the original campaign; the H100 example uses the
 now-unavailable Australia destination and is retained only as a historical reference.

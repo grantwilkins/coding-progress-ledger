@@ -8,6 +8,91 @@ import pytest
 import model_hardware_drain_campaign as campaign
 
 
+def test_deadline_plot_reports_completed_action_changes_and_failures(tmp_path):
+    rows = [{"model": model, "deadline_s": str(deadline), "status": "complete",
+             "target_met": "True", "east_region": "southeastasia",
+             "germany_region": "southcentralus", "east_replay": str(replay),
+             "germany_replay": "0", "east_kv_transfer": str(8 - replay),
+             "germany_kv_transfer": "0"}
+            for model, deadline, replay in [
+                ("openai/gpt-oss-20b", 15, 2), ("openai/gpt-oss-20b", 30, 4),
+                ("Qwen/Qwen3.8-27B", 15, 6), ("Qwen/Qwen3.8-27B", 30, 6)]]
+    rows.append({**rows[0], "status": "failed", "east_replay": "8"})
+    result = campaign.deadline_action_mix(rows, tmp_path)
+    assert result["within_model_changes"] == {"openai/gpt-oss-20b": True, "Qwen/Qwen3.8-27B": False}
+    assert all(result["between_model_differences"].values())
+    assert not result["all_episodes_completed"]
+    cell = next(row for row in result["cells"] if row["model"] == "openai/gpt-oss-20b"
+                and row["deadline_s"] == 15)
+    assert (cell["failed"], cell["east_replay"]) == (1, 2)
+    assert (tmp_path / "deadline_action_mix.png").exists()
+
+
+def test_network_profile_uses_live_rates_and_rejects_incomplete_smoke(tmp_path):
+    import network_campaign as network
+    import model_architecture_campaign as architecture
+
+    def request(context, method, index=0):
+        return {"status": 200, "done": True, "finish_reason": "length",
+                "output_tokens": 128, "recorded_output_tokens": 128,
+                "exact_token_timestamps": True, "first_ns": 10**9,
+                "last_token_ns": 3 * 10**9, "start_ns": index * 10**6,
+                "prompt_tokens": context,
+                "cached_tokens": context // 256 * 256 if method == "kv_transfer" else 0}
+
+    contexts, rows, smoke = [4096, 16384, 32256], [], []
+    (tmp_path / "requests").mkdir()
+    registration = {"schema": architecture.KV_GEOMETRY_SCHEMA, "chunk_tokens": 256,
+        "groups": [{"group": "full", "kernel_group": 0, "engine_group": 0,
+                    "object_group": 0, "tokens_per_block": 16, "slots_per_block": 1,
+                    "num_blocks": 100, "block_bytes": 1024,
+                    "capacity_bytes": 102400, "chunk_bytes": 16384}],
+        "object_groups": [{"object_group": 0, "kernel_groups": [0], "chunk_bytes": 16384}]}
+    for node in ("east", "germany"):
+        directory = tmp_path / "nodes" / node
+        directory.mkdir(parents=True)
+        (directory / "sink.log").write_text("QH_KV_GEOMETRY " + json.dumps(registration))
+        for context in contexts:
+            for repeat in range(3):
+                for method in campaign.ACTIONS:
+                    row = {"destination": node, "context_tokens": context, "repeat": repeat,
+                           "method": method, "passed": True, "chunk_tokens": 256,
+                           "destination_ready_s": context / 10000,
+                           "kv_wire_bytes": context * 100 if method == "kv_transfer" else 0,
+                           "mean_tpot_s": .01}
+                    rows.append(row)
+                    (tmp_path / "requests" / f"{node}-{context}-{repeat}-{method}.json").write_text(
+                        json.dumps({"measurement": row, "request": request(context, method)}))
+        smoke.extend({"destination": node, "session_id": f"s{index}",
+                      "method": method, "request": request(32256, method, index)}
+                     for index, method in enumerate(["replay", "kv_transfer"] * 4))
+    report = {"schema": network.MIGRATION_TIMING_SCHEMA, "status": "complete",
+              "model": "openai/gpt-oss-20b", "rows": rows, "contexts": contexts,
+              "all_passed": True, "literal_token_timing": True,
+              "source_sleep_wake_passed": True, "bandwidth": "controlled_40",
+              "repeats": 3, "completed": len(rows),
+              "concurrent_smoke": {"passed": True, "sessions": 8, "context_tokens": 32256,
+                  "requests": smoke, "wire_bytes": {f"kv/{node}/target_to_client": 100
+                                                     for node in ("east", "germany")}},
+              "node_reports": {node: {"kv_capacity_tokens": 400000} for node in ("east", "germany")},
+              "runtime": {"vllm": "0.24.0", "lmcache": "0.5.1"},
+              "calibration_sha256": "c",
+              "network_contract": {"paths": {node: {"controlled_mbps": {"40": 400}}
+                                               for node in ("east", "germany")}}}
+    path = tmp_path / "report.json"
+    path.write_text(json.dumps(report))
+    out = tmp_path / "profile.json"
+    gate = campaign.freeze_network_profile(tmp_path, out)
+    profile = campaign._gated_profile(out, "H100")
+    assert gate["schema"] == campaign.NETWORK_GATE
+    assert profile.case().decode.rate(16384, 1) == pytest.approx(100)
+    assert profile.kv_capacity_tokens == 400000
+    report["concurrent_smoke"]["requests"].pop()
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="incomplete two-route"):
+        campaign.freeze_network_profile(tmp_path, out)
+
+
 def test_a100_command_runs_all_three_arms_end_to_end(monkeypatch, tmp_path):
     models = iter(sorted(campaign.MODELS["A100"]))
     monkeypatch.setattr(campaign, "_profile", lambda path, hardware: (

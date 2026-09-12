@@ -125,6 +125,12 @@ ACTION_HATCHES = {
     "germany_replay": "//", "germany_kv_transfer": "\\\\",
     "not_moved": "--",
 }
+for region, label, slot in (("southeastasia", "Southeast Asia", "east"),
+                            ("southcentralus", "South Central US", "germany")):
+    for action in ("replay", "kv_transfer"):
+        ACTION_NAMES[f"{region}_{action}"] = f"{ACTION_NAMES[action]} → {label}"
+        ACTION_COLORS[f"{region}_{action}"] = ACTION_COLORS[f"{slot}_{action}"]
+        ACTION_HATCHES[f"{region}_{action}"] = ACTION_HATCHES[f"{slot}_{action}"]
 RESOURCE_STATE_NAMES = {
     "none": "None bottlenecked", "bandwidth": "Bandwidth",
     "hbm": "HBM", "bandwidth-hbm": "HBM + bandwidth",

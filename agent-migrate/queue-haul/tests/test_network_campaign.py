@@ -465,8 +465,8 @@ def test_network_smoke_prompt_fits_model_context():
     assert node.literal_token_timing is True
 
 
-def test_regional_migration_timing_requires_two_regions(tmp_path):
-    with pytest.raises(ValueError, match="exactly two regions"):
+def test_regional_migration_timing_requires_formal_route_calibration(tmp_path):
+    with pytest.raises(ValueError, match="formal cluster"):
         n.migration_timing(
             cluster(tmp_path), tmp_path / "key", calibration(), "natural",
             tmp_path / "run", "Qwen/Qwen3.8-27B", (4096,), 1)
@@ -607,6 +607,41 @@ def test_drain_deadlines_preserve_packs_and_bind_scenario_identity(tmp_path):
         n.validate_plan(plans[0])
     with pytest.raises(ValueError, match="positive custom deadline"):
         n.make_plan(manifest, constraint_contract(), design="drain", deadline_s=0)
+
+
+def test_drain_grid_keeps_five_shared_stack_blocks(tmp_path):
+    manifest = campaign_manifest(tmp_path, 8)
+    plans = [n.make_plan(manifest, constraint_contract(), design="drain",
+                         deadline_s=value) for value in (15, 30, 60)]
+    combined = {**plans[1], "drain_deadlines_s": [15, 30, 60],
+                "source_service_normalized": True,
+                "scenarios": [{**row, "source_service_normalized": True}
+                    for repeat in range(5) for plan in plans
+                    for row in plan["scenarios"] if row["repeat"] == repeat]}
+    n.validate_plan(combined)
+    assert len(combined["scenarios"]) == 150
+    assert [row["stack_block"] for row in combined["scenarios"]] == [
+        block for block in range(5) for _ in range(30)]
+    combined["scenarios"][0]["source_service_normalized"] = False
+    with pytest.raises(ValueError, match="drain scenario"):
+        n.validate_plan(combined)
+
+
+def test_context_service_normalization_preserves_trace_ratios(tmp_path):
+    manifest = json.loads(campaign_manifest(tmp_path, 8).read_text())
+    plan = n.make_plan(campaign_manifest(tmp_path, 8), constraint_contract(), design="drain")
+    sessions = plan["scenarios"][0]["sessions"]
+    profile = n.ModelProfile.load(n.MODEL_PATH)
+    records = {row["id"]: row for row in manifest["sessions"]}
+    legacy = n.agentic_demand(records, sessions, profile, .8)
+    demand = n.agentic_demand(records, sessions, profile, .8, True)
+    case = profile.case()
+    assert sum(demand[row["session_id"]][0] / case.prefill.rate(row["initial_tokens"], 1)
+               + demand[row["session_id"]][1] / case.decode.rate(row["initial_tokens"], 1)
+               for row in sessions) == pytest.approx(.8)
+    scales = [value / old for key in demand for value, old in zip(demand[key], legacy[key]) if old]
+    assert all(value == 0 for key in demand for value, old in zip(demand[key], legacy[key]) if not old)
+    assert max(scales) == pytest.approx(min(scales))
 
 
 def test_frontier_plan_is_the_matched_185_episode_natural_bandwidth_pilot(
