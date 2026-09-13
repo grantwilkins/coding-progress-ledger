@@ -225,7 +225,7 @@ HANDOFF_ENV = {
     "QH_REDIS_MAXMEMORY_GB": "32",
 }
 RUNTIME_ENV = (*HANDOFF_ENV, "QH_MODEL_PROFILE", "QH_RUNTIME",
-               "QH_LMCACHE_MODE", "QH_NATIVE_RUNTIME_VERSIONS")
+               "QH_LMCACHE_MODE", "QH_NATIVE_RUNTIME_VERSIONS", "QH_FULL_KV_CONTROL")
 
 
 def configure_handoff_environment(model: str) -> None:

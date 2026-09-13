@@ -115,6 +115,8 @@ def test_compact_prefetch_preserves_offsets_and_releases_partial_hits(monkeypatc
     mamba = type("MambaSpec", (), {"block_size": 784})()
     groups = [SimpleNamespace(kv_cache_spec=mamba, layer_names=["state"])]
     assert kv_cache_groups._resolve_per_layer_sw_sizes(groups, {"state": 0}, 1) == [784]
+    monkeypatch.setenv("QH_FULL_KV_CONTROL", "1")
+    assert kv_cache_groups._resolve_per_layer_sw_sizes(groups, {"state": 0}, 1) == [-1]
 
 
 class FragmentedSocket:

@@ -740,6 +740,8 @@ def patch_window_transfer() -> None:
 
     def windows(groups, indices, count):
         result = original_windows(groups, indices, count)
+        if os.environ.get("QH_FULL_KV_CONTROL") == "1":
+            return result
         for group in groups:
             spec = group.kv_cache_spec
             if any(cls.__name__ == "MambaSpec" for cls in type(spec).__mro__):
