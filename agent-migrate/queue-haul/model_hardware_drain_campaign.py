@@ -112,8 +112,16 @@ def freeze_network_profile(timing_root: Path, out: Path) -> dict:
                    for node in ("east", "germany")):
         raise ValueError("invalid unforced compact-state or wire-byte evidence")
     evidence = [report_path, state_path, source_log, *reference_evidence]
+    measurement_root = Path(report.get("timing_reference", timing_root))
+    if measurement_root != timing_root:
+        metadata_path = timing_root / "timing_metadata.json"
+        if network.timing_reference_rows(measurement_root, json.loads(metadata_path.read_text())) != rows:
+            raise ValueError("changed reused timing evidence")
+        evidence.extend([metadata_path, measurement_root / "timing_metadata.json",
+                         measurement_root / "progress.json", measurement_root / "source.log",
+                         *(measurement_root / "nodes" / node / "sink.log" for node in ("east", "germany"))])
     for row in rows:
-        path = timing_root / "requests" / (
+        path = measurement_root / "requests" / (
             f"{row['destination']}-{row['context_tokens']}-{row['repeat']}-{row['method']}.json")
         request = json.loads(path.read_text())
         if request["measurement"] != row or not row["passed"] \

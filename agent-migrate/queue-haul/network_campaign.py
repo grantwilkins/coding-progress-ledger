@@ -1992,10 +1992,40 @@ def _network_concurrent_smoke(stack: ClusterStack, context: int) -> dict:
             "dispatch_skew_s": skew, "wire_bytes": delta, "requests": rows}
 
 
+def timing_reference_rows(root: Path, metadata: dict) -> list[dict]:
+    saved = json.loads((root / "timing_metadata.json").read_text())
+    if any(saved[key] != value for key, value in metadata.items()):
+        raise ValueError("timing reference configuration changed")
+    for path in [root / "source.log", *(root / "nodes" / node / "sink.log" for node in metadata["destinations"])]:
+        log = path.read_text()
+        if (metadata["revision"] not in log
+                or f"Initializing a V1 LLM engine (v{metadata['runtime']['vllm']})" not in log
+                or f"LMCache v{metadata['runtime']['lmcache']}" not in log):
+            raise ValueError("timing reference checkpoint/runtime changed")
+    progress = json.loads((root / "progress.json").read_text())
+    rows = progress["rows"]
+    expected = {(node, context, repeat, method) for node in metadata["destinations"]
+                for context in metadata["contexts"] for repeat in range(metadata["repeats"])
+                for method in ("kv_transfer", "replay")}
+    if (progress["schema"] != MIGRATION_TIMING_SCHEMA or not progress["literal_token_timing"]
+            or progress["completed"] != len(expected) or progress["expected"] != len(expected)
+            or len(rows) != len(expected) or {(row["destination"], row["context_tokens"],
+                row["repeat"], row["method"]) for row in rows} != expected):
+        raise ValueError("incomplete timing reference")
+    for row in rows:
+        raw = json.loads((root / "requests" / f"{row['destination']}-{row['context_tokens']}-{row['repeat']}-{row['method']}.json").read_text())
+        if (raw["measurement"] != row or not row["passed"] or not literal_timing_completion(raw["request"])
+                or any(row[key] != metadata[key] for key in ("model", "revision", "bandwidth"))
+                or raw["request"]["prompt_tokens"] != row["context_tokens"]):
+            raise ValueError("invalid raw timing reference")
+    return rows
+
+
 def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                      bandwidth: str, run_root: Path, model: str,
                      contexts: tuple[int, ...] = (4096, 16384, 32256),
-                     repeats: int = 3, concurrent_smoke: bool = False, state_reference: Path | None = None) -> dict:
+                     repeats: int = 3, concurrent_smoke: bool = False, state_reference: Path | None = None,
+                     timing_reference: Path | None = None) -> dict:
     """Measure both migration methods on the calibrated cross-region routes.
 
     This path intentionally does not consume a model profile: it produces the
@@ -2011,17 +2041,23 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
         raise ValueError("invalid migration timing contexts or repeats")
     configure_handoff_environment(model)
     validate_calibration_cluster(calibration, cluster)
+    metadata = {"model": model, "revision": testbed.model_spec(model).revision,
+                "bandwidth": bandwidth, "contexts": list(contexts), "repeats": repeats,
+                "destinations": [node.id for node in cluster.destinations],
+                "cluster": asdict(cluster), "calibration_sha256": profiler.object_hash(calibration),
+                "runtime": expected_runtime()}
+    rows = timing_reference_rows(timing_reference, metadata) if timing_reference else []
     host_reports = host_check(cluster, key)
     destination = cluster.destinations[0]
     stack = start_cluster(
         cluster, key, freeze_contract(calibration), bandwidth, run_root,
         model=model, literal_token_timing=True)
-    rows = []
     try:
+        write_checkpoint(run_root / "timing_metadata.json", metadata)
         state_equivalence = _network_state_equivalence(stack, max(contexts), state_reference)
         chunk = testbed.model_chunk_tokens(stack.cfg)
         prepared = {}
-        for context in contexts:
+        for context in (() if timing_reference else contexts):
             session = {
                 "id": f"timing-{context}",
                 "state_code": f"QH{context:05d}",
@@ -2038,7 +2074,7 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
             prepared[context] = session, messages, prompt_ids
 
         for destination in cluster.destinations:
-            for context in contexts:
+            for context in (() if timing_reference else contexts):
                 session, messages, prompt_ids = prepared[context]
                 for repeat in range(repeats):
                     for method in ("kv_transfer", "replay"):
@@ -2151,6 +2187,8 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
             "summary": _timing_summary(rows),
             "rows": rows,
         }
+        if timing_reference:
+            report["timing_reference"] = str(timing_reference.resolve())
         write_checkpoint(run_root / "report.json", report)
         with (run_root / "timings.csv").open("w", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=rows[0])
@@ -5246,6 +5284,7 @@ def parse_args(argv=None):
     command.add_argument("--repeats", type=int, default=3)
     command.add_argument("--concurrent-smoke", action="store_true")
     command.add_argument("--state-reference", type=Path)
+    command.add_argument("--timing-reference", type=Path)
     command = sub.add_parser("run")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -5328,7 +5367,7 @@ def main(argv=None) -> None:
         print(json.dumps(migration_timing(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
             json.loads(args.calibration.read_text()), args.bandwidth,
-            args.run_root, args.model, tuple(args.contexts), args.repeats, args.concurrent_smoke, args.state_reference,
+            args.run_root, args.model, tuple(args.contexts), args.repeats, args.concurrent_smoke, args.state_reference, args.timing_reference,
         ), indent=2, sort_keys=True))
     elif args.command == "run":
         print(json.dumps(run_campaign(

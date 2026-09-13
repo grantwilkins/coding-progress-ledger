@@ -307,3 +307,39 @@ def test_reduce_writes_arm_table_and_both_canonical_figures(monkeypatch, tmp_pat
     with pytest.raises(ValueError, match="incomplete arm set"):
         campaign.reduce([tmp_path / "run"], tmp_path / "partial")
     assert not (tmp_path / "partial").exists()
+
+
+def test_timing_reuse_requires_matching_metadata_and_complete_raw_evidence(tmp_path):
+    import network_campaign as network
+    metadata = {"model": "qwen", "revision": "revision123", "bandwidth": "controlled_40",
+                "contexts": [4096], "repeats": 1, "destinations": ["east"],
+                "runtime": {"vllm": "0.24.0", "lmcache": "0.5.1"}}
+    (tmp_path / "timing_metadata.json").write_text(json.dumps(metadata))
+    log = "revision123 Initializing a V1 LLM engine (v0.24.0) LMCache v0.5.1"
+    (tmp_path / "source.log").write_text(log)
+    (tmp_path / "nodes/east").mkdir(parents=True)
+    (tmp_path / "nodes/east/sink.log").write_text(log)
+    (tmp_path / "requests").mkdir()
+    rows = []
+    for method in ("kv_transfer", "replay"):
+        row = {"destination": "east", "context_tokens": 4096, "repeat": 0,
+               "method": method, "passed": True, **{key: metadata[key] for key in ("model", "revision", "bandwidth")}}
+        rows.append(row)
+        request = {"status": 200, "done": True, "finish_reason": "length", "output_tokens": 128,
+                   "recorded_output_tokens": 128, "exact_token_timestamps": True,
+                   "first_ns": 10**9, "last_token_ns": 3*10**9, "prompt_tokens": 4096}
+        (tmp_path / "requests" / f"east-4096-0-{method}.json").write_text(json.dumps({"measurement": row, "request": request}))
+    progress = {"schema": network.MIGRATION_TIMING_SCHEMA, "literal_token_timing": True,
+                "completed": 2, "expected": 2, "rows": rows}
+    (tmp_path / "progress.json").write_text(json.dumps(progress))
+    assert network.timing_reference_rows(tmp_path, metadata) == rows
+    with pytest.raises(ValueError, match="configuration changed"):
+        network.timing_reference_rows(tmp_path, {**metadata, "bandwidth": "different"})
+    (tmp_path / "source.log").write_text("different revision/runtime")
+    with pytest.raises(ValueError, match="checkpoint/runtime changed"):
+        network.timing_reference_rows(tmp_path, metadata)
+    (tmp_path / "source.log").write_text(log)
+    rows.pop()
+    (tmp_path / "progress.json").write_text(json.dumps(progress))
+    with pytest.raises(ValueError, match="incomplete timing"):
+        network.timing_reference_rows(tmp_path, metadata)

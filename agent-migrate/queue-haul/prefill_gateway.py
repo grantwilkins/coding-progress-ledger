@@ -14,6 +14,10 @@ CONTROL_PATH = "/qh/prefill-control"
 THROTTLED_CLASSES = {"background", "replay"}
 
 
+class GatewayServer(ThreadingHTTPServer):
+    request_queue_size = 128
+
+
 def _usage(body: bytes) -> tuple[int, int]:
     prompt = cached = 0
     for line in body.splitlines():
@@ -180,7 +184,7 @@ class PrefillGateway:
                 else:
                     self._proxy(body)
 
-        self.server = ThreadingHTTPServer((bind_host, bind_port), Handler)
+        self.server = GatewayServer((bind_host, bind_port), Handler)
         self.thread = threading.Thread(
             target=self.server.serve_forever, daemon=True,
             name="qh-prefill-gateway")

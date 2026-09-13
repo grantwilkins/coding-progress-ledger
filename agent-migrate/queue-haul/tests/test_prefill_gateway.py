@@ -97,3 +97,16 @@ def test_unthrottled_gateway_forwards_sse_before_upstream_eof(tmp_path):
         upstream.shutdown()
         upstream.server_close()
         upstream_thread.join(5)
+
+
+def test_gateway_accepts_eight_connections_before_servicing(tmp_path):
+    import socket
+    from contextlib import ExitStack
+    gateway = PrefillGateway("127.0.0.1", 0, "127.0.0.1", 1, tmp_path / "gateway.jsonl")
+    try:
+        with ExitStack() as clients:
+            for _ in range(8):
+                clients.enter_context(socket.create_connection(gateway.server.server_address, timeout=.5))
+    finally:
+        gateway.server.server_close()
+        gateway.log.close()
