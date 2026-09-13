@@ -25,6 +25,48 @@ def test_natural_state_gate_requires_entire_output_and_cold_replay_control():
     assert not state_equivalence_passed(row, 256)
 
 
+def test_full_restore_reference_preserves_cold_replay_difference(tmp_path):
+    from copy import deepcopy
+    from network_campaign import state_equivalence_passed, full_state_reference
+    request = {"status": 200, "done": True, "exact_token_timestamps": True,
+               "finish_reason": "stop", "output_tokens": 3, "recorded_output_tokens": 3,
+               "token_ids": [7, 8, 9], "prompt_tokens": 512, "cached_tokens": 0}
+    rows = []
+    for node in ("east", "germany"):
+        for tokens in (512, 513):
+            row = {"destination": node, "context_tokens": tokens, "warm": {"context_hash": str(tokens)},
+                   "expected_wire_bytes": 2000, "kv_wire_bytes": 2010,
+                   **{key: deepcopy(request) for key in ("kv", "replay", "replay_control")}}
+            for key in ("kv", "replay", "replay_control"):
+                row[key]["prompt_tokens"] = tokens
+            row["kv"]["cached_tokens"] = 512
+            row["kv"]["token_ids"][0] = 10
+            rows.append(row)
+    geometry = {"chunk_tokens": 256, "object_groups": [{"chunk_bytes": 1000, "sw_size_chunks": -1}]}
+    baseline = {"model": "qwen", "geometry": geometry, "rows": rows,
+                "diagnostic_only": True, "ignore_eos": False, "forced_token": None}
+    path = tmp_path / "full.json"
+    path.write_text(json.dumps(baseline))
+    (tmp_path / "source.log").write_text("QH_KV_GEOMETRY " + json.dumps(geometry) + "\n")
+    assert full_state_reference(path, "qwen", 256) == baseline
+    with pytest.raises(ValueError, match="checkpoint/runtime mismatch"):
+        full_state_reference(path, "qwen", 256, tmp_path / "source.log")
+    compact = deepcopy(rows[0])
+    compact.update(expected_wire_bytes=1000, kv_wire_bytes=1010)
+    assert not state_equivalence_passed(compact, 256)
+    assert state_equivalence_passed(compact, 256, rows[0])
+    for key, value in (("kv_wire_bytes", 999), ("destination", "germany"),
+                       ("warm", {"context_hash": "different"})):
+        changed = {**compact, key: value}
+        assert not state_equivalence_passed(changed, 256, rows[0])
+    compact["kv"]["token_ids"][-1] = 20
+    assert not state_equivalence_passed(compact, 256, rows[0])
+    rows[0]["kv_wire_bytes"] = 1
+    path.write_text(json.dumps(baseline))
+    with pytest.raises(ValueError, match="invalid full-history"):
+        full_state_reference(path, "qwen", 256)
+
+
 def test_deadline_plot_reports_completed_action_changes_and_failures(tmp_path):
     rows = [{"model": model, "deadline_s": str(deadline), "status": "complete",
              "target_met": "True", "east_region": "southeastasia",

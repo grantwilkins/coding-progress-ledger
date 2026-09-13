@@ -83,12 +83,26 @@ def freeze_network_profile(timing_root: Path, out: Path) -> dict:
     source_log = timing_root / "source.log"
     geometry = architecture._json_markers(source_log, "QH_KV_GEOMETRY ")[-1]
     state_rows = state.get("rows", [])
+    reference_rows, reference_evidence = {}, []
+    if state.get("reference"):
+        reference = state["reference"]
+        path = Path(reference["path"])
+        if (reference["kind"] != "full-history-restoration"
+                or reference["sha256"] != hashlib.sha256(path.read_bytes()).hexdigest()
+                or reference["source_log_sha256"] != hashlib.sha256((path.parent / "source.log").read_bytes()).hexdigest()):
+            raise ValueError("changed full-history restoration reference")
+        baseline = network.full_state_reference(path, model, geometry["chunk_tokens"], source_log)
+        reference_rows = {(row["destination"], row["context_tokens"]): row for row in baseline["rows"]}
+        if set(reference_rows) != {(row["destination"], row["context_tokens"]) for row in state_rows}:
+            raise ValueError("unmatched full-history restoration cases")
+        reference_evidence = [path, path.parent / "source.log"]
     if state != report.get("state_equivalence") or state.get("forced_token") is not None \
             or state.get("ignore_eos") is not False \
             or not state.get("passed") or state.get("geometry") != geometry \
             or len(state_rows) != 4 \
             or not any(group.get("sw_size_chunks", -1) > 0 for group in geometry["object_groups"]) \
-            or any(not network.state_equivalence_passed(row, geometry["chunk_tokens"])
+            or any(not network.state_equivalence_passed(row, geometry["chunk_tokens"],
+                       reference_rows.get((row["destination"], row["context_tokens"])))
                    or row["expected_wire_bytes"] != sum(group["chunk_bytes"] * (
                        row["context_tokens"] // geometry["chunk_tokens"] if group.get("sw_size_chunks", -1) < 0
                        else min(row["context_tokens"] // geometry["chunk_tokens"], group["sw_size_chunks"]))
@@ -97,7 +111,7 @@ def freeze_network_profile(timing_root: Path, out: Path) -> dict:
                     for row in state_rows if row["destination"] == node} != {True, False}
                    for node in ("east", "germany")):
         raise ValueError("invalid unforced compact-state or wire-byte evidence")
-    evidence = [report_path, state_path, source_log]
+    evidence = [report_path, state_path, source_log, *reference_evidence]
     for row in rows:
         path = timing_root / "requests" / (
             f"{row['destination']}-{row['context_tokens']}-{row['repeat']}-{row['method']}.json")
@@ -184,6 +198,9 @@ def freeze_network_profile(timing_root: Path, out: Path) -> dict:
                         "nominal runtime token capacity; eight-session operation tested on each destination",
                         "historical prefill and phase power; inherited action-specific power overhead",
                         "ongoing service and power shedding are modeled, not measured drain outcomes"]}
+    if reference_rows:
+        gate["state_reference"] = state["reference"]
+        gate["limitations"].append("compact matches full-history restoration; cold replay equivalence is not established")
     out.with_suffix(".gate.json").write_text(json.dumps(gate, indent=2) + "\n")
     return gate
 

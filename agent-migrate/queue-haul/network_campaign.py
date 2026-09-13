@@ -1833,30 +1833,65 @@ def literal_timing_completion(result: dict) -> bool:
     )
 
 
-def state_equivalence_passed(row: dict, chunk: int) -> bool:
+def state_equivalence_passed(row: dict, chunk: int, reference: dict | None = None) -> bool:
     kv, replay = row["kv"], row["replay"]
     requests = (kv, replay, row["replay_control"])
-    return (all(request["status"] == 200 and request["done"] and not request.get("error")
+    def output(request):
+        return request["token_ids"], request["finish_reason"]
+    equivalent = (all(output(request) == output(kv) for request in requests)
+                  if reference is None else
+                  row["destination"] == reference["destination"]
+                  and row["context_tokens"] == reference["context_tokens"]
+                  and row["warm"]["context_hash"] == reference["warm"]["context_hash"]
+                  and all(output(row[key]) == output(reference[key]) for key in ("kv", "replay", "replay_control"))
+                  and output(replay) == output(row["replay_control"]))
+    return (equivalent and all(request["status"] == 200 and request["done"] and not request.get("error")
                 and request["exact_token_timestamps"]
                 and 0 < request["output_tokens"] <= 32
                 and request["recorded_output_tokens"] == request["output_tokens"] == len(request["token_ids"])
                 and (request["finish_reason"] == "stop" or
                      request["finish_reason"] == "length" and request["output_tokens"] == 32)
                 and request["prompt_tokens"] == row["context_tokens"]
-                and request["token_ids"] == kv["token_ids"]
-                and request["finish_reason"] == kv["finish_reason"] for request in requests)
+                for request in requests)
             and kv["cached_tokens"] == row["context_tokens"] // chunk * chunk
             and replay["cached_tokens"] == row["replay_control"]["cached_tokens"] == 0
             and row["expected_wire_bytes"] <= row["kv_wire_bytes"]
             <= row["expected_wire_bytes"] + 1_000_000)
 
 
-def _network_state_equivalence(stack: ClusterStack, context: int) -> dict:
+def full_state_reference(path: Path, model: str, chunk: int, current_log: Path | None = None) -> dict:
+    from model_architecture_campaign import _json_markers
+    report = json.loads(path.read_text())
+    if current_log:
+        patterns = (r"/snapshots/([0-9a-f]{40})", r"Initializing a V1 LLM engine \(v([^)]*)\)", r"LMCache v([0-9.]+)")
+        for pattern in patterns:
+            baseline = set(re.findall(pattern, (path.parent / "source.log").read_text()))
+            if len(baseline) != 1 or baseline != set(re.findall(pattern, current_log.read_text())):
+                raise ValueError("full-history reference checkpoint/runtime mismatch")
+    geometry = report["geometry"]
+    rows = report["rows"]
+    if (report.get("model") != model or report.get("diagnostic_only") is not True
+            or report.get("ignore_eos") is not False or report.get("forced_token") is not None
+            or geometry != _json_markers(path.parent / "source.log", "QH_KV_GEOMETRY ")[-1]
+            or geometry["chunk_tokens"] != chunk
+            or any(group["sw_size_chunks"] != -1 for group in geometry["object_groups"])
+            or len(rows) != 4 or len({(row["destination"], row["context_tokens"]) for row in rows}) != 4
+            or any({row["context_tokens"] % chunk == 0 for row in rows
+                    if row["destination"] == node} != {True, False} for node in ("east", "germany"))
+            or any(not state_equivalence_passed(row, chunk, row)
+                   or row["expected_wire_bytes"] != sum(group["chunk_bytes"] * (row["context_tokens"] // chunk)
+                       for group in geometry["object_groups"]) for row in rows)):
+        raise ValueError("invalid full-history restoration reference")
+    return report
+
+
+def _network_state_equivalence(stack: ClusterStack, context: int, reference_path: Path | None = None) -> dict:
     from model_architecture_campaign import _json_markers
     from destination_runner import completion_payload
 
     geometry = _json_markers(stack.run_root / "source.log", "QH_KV_GEOMETRY ")[-1]
     chunk = geometry["chunk_tokens"]
+    reference = full_state_reference(reference_path, stack.cfg.model, chunk, stack.run_root / "source.log") if reference_path else None
     aligned = context // chunk * chunk
     contexts = sorted({aligned, context if context != aligned else context - 17})
     if not any(group["sw_size_chunks"] > 0 for group in geometry["object_groups"]):
@@ -1889,10 +1924,19 @@ def _network_state_equivalence(stack: ClusterStack, context: int) -> dict:
             row = {"destination": node.id, "context_tokens": tokens, "warm": warm,
                    "kv": kv, **replays, "expected_wire_bytes": expected,
                    "kv_wire_bytes": wire.get(f"kv/{node.id}/target_to_client", 0)}
-            row["passed"] = state_equivalence_passed(row, chunk)
+            baseline = next((item for item in reference["rows"] if
+                (item["destination"], item["context_tokens"]) == (node.id, tokens)), None) if reference else None
+            if reference and baseline is None:
+                raise ValueError("missing full-history reference case")
+            row["kv_replay_equal"] = kv["token_ids"] == replays["replay"]["token_ids"]
+            row["passed"] = state_equivalence_passed(row, chunk, baseline)
             rows.append(row)
             report = {"forced_token": None, "ignore_eos": False, "geometry": geometry, "rows": rows,
                       "passed": all(row["passed"] for row in rows)}
+            if reference_path:
+                report["reference"] = {"kind": "full-history-restoration", "path": str(reference_path.resolve()),
+                    "sha256": hashlib.sha256(reference_path.read_bytes()).hexdigest(),
+                    "source_log_sha256": hashlib.sha256((reference_path.parent / "source.log").read_bytes()).hexdigest()}
             write_checkpoint(stack.run_root / "state_equivalence.json", report)
             if not row["passed"]:
                 raise RuntimeError(f"compact state/byte equivalence failed: {node.id}/{tokens}")
@@ -1951,7 +1995,7 @@ def _network_concurrent_smoke(stack: ClusterStack, context: int) -> dict:
 def migration_timing(cluster: Cluster, key: Path, calibration: dict,
                      bandwidth: str, run_root: Path, model: str,
                      contexts: tuple[int, ...] = (4096, 16384, 32256),
-                     repeats: int = 3, concurrent_smoke: bool = False) -> dict:
+                     repeats: int = 3, concurrent_smoke: bool = False, state_reference: Path | None = None) -> dict:
     """Measure both migration methods on the calibrated cross-region routes.
 
     This path intentionally does not consume a model profile: it produces the
@@ -1974,7 +2018,7 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
         model=model, literal_token_timing=True)
     rows = []
     try:
-        state_equivalence = _network_state_equivalence(stack, max(contexts))
+        state_equivalence = _network_state_equivalence(stack, max(contexts), state_reference)
         chunk = testbed.model_chunk_tokens(stack.cfg)
         prepared = {}
         for context in contexts:
@@ -5201,6 +5245,7 @@ def parse_args(argv=None):
                          default=(4096, 16384, 32256))
     command.add_argument("--repeats", type=int, default=3)
     command.add_argument("--concurrent-smoke", action="store_true")
+    command.add_argument("--state-reference", type=Path)
     command = sub.add_parser("run")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -5283,7 +5328,7 @@ def main(argv=None) -> None:
         print(json.dumps(migration_timing(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
             json.loads(args.calibration.read_text()), args.bandwidth,
-            args.run_root, args.model, tuple(args.contexts), args.repeats, args.concurrent_smoke,
+            args.run_root, args.model, tuple(args.contexts), args.repeats, args.concurrent_smoke, args.state_reference,
         ), indent=2, sort_keys=True))
     elif args.command == "run":
         print(json.dumps(run_campaign(
