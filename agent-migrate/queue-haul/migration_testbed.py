@@ -527,6 +527,8 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
         "--supported-transfer-mode", transfer_mode, "--l2-adapter", adapter,
     ]
     script = "\n".join([
+        f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}",
+        "export QH_LMCACHE_MODE=mp",
         *(["export CUDA_VISIBLE_DEVICES="]
           if transfer_mode == "engine_driven" else []),
         shell(serve),

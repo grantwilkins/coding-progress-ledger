@@ -10,6 +10,7 @@ import torch
 import pytest
 
 from lmcache_compat.connector_patch import (
+    SizedRedisBatches,
     bypass_lmcache,
     independent_transaction,
     kv_geometry_registration,
@@ -18,6 +19,26 @@ from lmcache_compat.connector_patch import (
     patch_on_import,
     restore_page_major_attention,
 )
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_sized_redis_batches_wait_for_all_children_and_preserve_order(failed):
+    submitted, completions = [], []
+    def submit(keys, buffers):
+        assert len({buffer.nbytes for buffer in buffers}) == 1
+        submitted.append(keys)
+        return len(submitted)
+    client = SizedRedisBatches(SimpleNamespace(submit_batch_get=submit,
+        drain_completions=lambda: [completions.pop(0)]))
+    parent = client.submit_batch_get(['a', 'b', 'c'],
+        [memoryview(bytearray(size)) for size in (32, 64, 32)])
+    assert submitted == [['a', 'c'], ['b']]
+    completions.append((2, not failed, 'failure' if failed else '', None))
+    assert client.drain_completions() == []
+    completions.append((1, True, '', [True, False]))
+    assert client.drain_completions() == [(parent, not failed,
+        'failure' if failed else '', [True, not failed, False])]
+    assert not client.children and not client.parents
 
 
 @pytest.mark.parametrize("missing", [0, 1, 7])
@@ -30,7 +51,7 @@ def test_compact_prefetch_preserves_offsets_and_releases_partial_hits(monkeypatc
     from lmcache.v1.distributed.storage_manager import StorageManager
     from lmcache_compat.connector_patch import patch_window_transfer
 
-    keys = [ObjectKey(bytes([chunk]), "test", 0, group)
+    keys = [ObjectKey(bytes([chunk]), "test", ObjectKey.ComputeKVRank(1, 0, 1, 0), group)
             for chunk in range(6) for group in range(2)]
     released, submitted = [], []
     found = list(range(7)) if not missing else [i for i in range(7) if missing == 1 and i != 2]

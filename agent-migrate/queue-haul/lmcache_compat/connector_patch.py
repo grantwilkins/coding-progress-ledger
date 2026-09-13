@@ -616,12 +616,60 @@ def patch_kv_major_attention_groups() -> None:
 
 
 def window_key_indices(keys, windows):
-    if any(key.kv_rank != 0 for key in keys):
+    if any(key.kv_rank != (1 << 24 | 1 << 8) for key in keys):
         raise ValueError("compact KV transfer requires TP1")
     groups = {group: [i for i, key in enumerate(keys) if key.object_group_id == group]
               for group in {key.object_group_id for key in keys}}
     return sorted(i for group, indices in groups.items()
                   for i in (indices if windows[group] < 0 else indices[-windows[group]:]))
+
+
+class SizedRedisBatches:
+    def __init__(self, client):
+        self.client, self.lock, self.children, self.parents = client, threading.Lock(), {}, {}
+
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+    def submit(self, operation, keys, buffers):
+        groups = {}
+        for index, buffer in enumerate(buffers):
+            groups.setdefault(buffer.nbytes, []).append(index)
+        with self.lock:
+            children = [(getattr(self.client, operation)([keys[i] for i in indices],
+                         [buffers[i] for i in indices]), indices) for indices in groups.values()]
+            if len(children) == 1:
+                return children[0][0]
+            parent = children[0][0]
+            self.parents[parent] = [len(children), True, [], [False] * len(keys)]
+            self.children.update({child: (parent, indices) for child, indices in children})
+            return parent
+
+    def submit_batch_get(self, keys, buffers):
+        return self.submit("submit_batch_get", keys, buffers)
+
+    def submit_batch_set(self, keys, buffers):
+        return self.submit("submit_batch_set", keys, buffers)
+
+    def drain_completions(self):
+        with self.lock:
+            completed = []
+            for child, ok, error, found in self.client.drain_completions():
+                if child not in self.children:
+                    completed.append((child, ok, error, found))
+                    continue
+                parent, indices = self.children.pop(child)
+                state = self.parents[parent]
+                state[0] -= 1
+                state[1] &= ok
+                if error:
+                    state[2].append(error)
+                for index, hit in zip(indices, found if found is not None else [ok] * len(indices), strict=True):
+                    state[3][index] = hit
+                if not state[0]:
+                    completed.append((parent, state[1], "; ".join(state[2]), state[3]))
+                    del self.parents[parent]
+            return completed
 
 
 class SkippedWindowObject:
@@ -638,9 +686,12 @@ def patch_window_transfer() -> None:
         DEFAULT_ATTN_WINDOW_DESC, PrefetchHandle, PrefetchMode, TrimPolicy)
     from lmcache.v1.distributed.storage_manager import StorageManager
     from lmcache.integration.vllm import kv_cache_groups
+    from lmcache import lmcache_redis
 
     if getattr(StorageManager, "_qh_window_transfer", False):
         return
+    redis_client = lmcache_redis.LMCacheRedisClient
+    lmcache_redis.LMCacheRedisClient = lambda *args, **kwargs: SizedRedisBatches(redis_client(*args, **kwargs))
 
     @dataclass(frozen=True)
     class WindowHandle(PrefetchHandle):

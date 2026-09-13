@@ -344,6 +344,8 @@ def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
     assert "redis-7.4.2-bookworm.sif" in redis
     assert "--port 5655" in redis
     assert "lmcache server" in source and "--port 5557" in source
+    assert f"export PYTHONPATH={s.LMCACHE_COMPAT}" in source
+    assert "export QH_LMCACHE_MODE=mp" in source
     assert "--supported-transfer-mode lmcache_driven" in source
     assert "--no-separate-object-groups" not in source
     assert '"port":8300' in source
