@@ -106,12 +106,12 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     assert "connector_patch" in source
     assert '"engine_id":"s0"' in source
     assert "lmcache.mp.host" in source and "lmcache.mp.port" in source
-    assert "engine_driven" in source
+    assert "lmcache_driven" in source
     assert "PYTHONPATH=" in source and "lmcache_compat" in source
     assert "cuda-12.9/compat" in source
     assert "--gpu-memory-utilization 0.75" in source
     assert "--block-size 16" in source
-    assert "--disable-hybrid-kv-cache-manager" in source
+    assert "--disable-hybrid-kv-cache-manager" not in source
     assert "--enable-prompt-tokens-details" in source
     assert "--enable-sleep-mode" not in source
     assert s.expected_runtime_versions() == ("0.22.0+cu129", "0.5.1")
@@ -344,13 +344,14 @@ def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
     assert "redis-7.4.2-bookworm.sif" in redis
     assert "--port 5655" in redis
     assert "lmcache server" in source and "--port 5557" in source
-    assert "--supported-transfer-mode engine_driven" in source
+    assert "--supported-transfer-mode lmcache_driven" in source
+    assert "--no-separate-object-groups" not in source
     assert '"port":8300' in source
     assert "--port 5556" in sink
     assert "--l1-size-gb 16" in sink
     assert '"port":8300' in sink
     assert "--http-port 8080" in source and "--http-port 8081" in sink
-    assert "--nv" not in source and "CUDA_VISIBLE_DEVICES=" in source
+    assert "--nv" in source and "CUDA_VISIBLE_DEVICES=" not in source
 
 
 def test_hybrid_mp_cache_uses_gpu_visible_lmcache_driven_transport(monkeypatch):

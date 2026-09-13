@@ -3267,6 +3267,12 @@ The single-GPU-per-host path uses `network_campaign.py migration-timing
 methods on both routes at three contexts and three repeats, retaining raw
 requests, cache evidence, live KV registration, and source sleep/wake. It also
 requires eight simultaneous 32K sessions on each destination. The
+compact path fetches complete global-attention history plus only the required
+sliding-window or aligned recurrent state. Before timing, unforced 32-token
+replay/KV continuations must match at aligned and unaligned contexts on both
+routes, and actual WAN bytes must match the live compact object geometry.
+The roughly 0.81-GB GPT-OSS estimate at 32K is architecture-specific, not a
+shared-prefix discount applicable to every model. The
 Qwen cache allocation is 96 GiB L1 and 80 GiB Redis: its eight-session cache
 requires about 63 GiB, and the inclusive cache tiers cannot be added together.
 Other models retain the 33 GiB L1 and 32 GiB Redis defaults. The resulting

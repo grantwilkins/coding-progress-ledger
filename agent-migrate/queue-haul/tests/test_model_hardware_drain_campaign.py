@@ -47,7 +47,13 @@ def test_network_profile_uses_live_rates_and_rejects_incomplete_smoke(tmp_path):
                     "object_group": 0, "tokens_per_block": 16, "slots_per_block": 1,
                     "num_blocks": 100, "block_bytes": 1024,
                     "capacity_bytes": 102400, "chunk_bytes": 16384}],
-        "object_groups": [{"object_group": 0, "kernel_groups": [0], "chunk_bytes": 16384}]}
+        "object_groups": [{"object_group": 0, "kernel_groups": [0], "chunk_bytes": 16384,
+                           "sw_size_chunks": -1},
+                          {"object_group": 1, "kernel_groups": [1], "chunk_bytes": 512,
+                           "sw_size_chunks": 1}]}
+    registration["groups"].append({**registration["groups"][0], "group": "window",
+        "kernel_group": 1, "engine_group": 1, "object_group": 1,
+        "block_bytes": 32, "capacity_bytes": 3200, "chunk_bytes": 512})
     for node in ("east", "germany"):
         directory = tmp_path / "nodes" / node
         directory.mkdir(parents=True)
@@ -58,7 +64,7 @@ def test_network_profile_uses_live_rates_and_rejects_incomplete_smoke(tmp_path):
                     row = {"destination": node, "context_tokens": context, "repeat": repeat,
                            "method": method, "passed": True, "chunk_tokens": 256,
                            "destination_ready_s": context / 10000,
-                           "kv_wire_bytes": context * 100 if method == "kv_transfer" else 0,
+                           "kv_wire_bytes": context * 64 + 512 if method == "kv_transfer" else 0,
                            "mean_tpot_s": .01}
                     rows.append(row)
                     (tmp_path / "requests" / f"{node}-{context}-{repeat}-{method}.json").write_text(
@@ -80,6 +86,17 @@ def test_network_profile_uses_live_rates_and_rejects_incomplete_smoke(tmp_path):
               "network_contract": {"paths": {node: {"controlled_mbps": {"40": 400}}
                                                for node in ("east", "germany")}}}
     path = tmp_path / "report.json"
+    state = {"forced_token": None, "passed": True, "geometry": registration,
+             "rows": [{"destination": node, "context_tokens": context,
+                       "expected_wire_bytes": context // 256 * 16384 + 512,
+                       "kv_wire_bytes": context // 256 * 16384 + 512,
+                       **{key: {**request(context, method), "token_ids": list(range(32)),
+                                "output_tokens": 32, "recorded_output_tokens": 32}
+                          for key, method in (("kv", "kv_transfer"), ("replay", "replay"))}}
+                      for node in ("east", "germany") for context in (32239, 32256)]}
+    report["state_equivalence"] = state
+    (tmp_path / "state_equivalence.json").write_text(json.dumps(state))
+    (tmp_path / "source.log").write_text("QH_KV_GEOMETRY " + json.dumps(registration))
     path.write_text(json.dumps(report))
     out = tmp_path / "profile.json"
     gate = campaign.freeze_network_profile(tmp_path, out)
@@ -87,6 +104,13 @@ def test_network_profile_uses_live_rates_and_rejects_incomplete_smoke(tmp_path):
     assert gate["schema"] == campaign.NETWORK_GATE
     assert profile.case().decode.rate(16384, 1) == pytest.approx(100)
     assert profile.kv_capacity_tokens == 400000
+    state["rows"][0]["kv"]["token_ids"][0] = -1
+    (tmp_path / "state_equivalence.json").write_text(json.dumps(state))
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError):
+        campaign.freeze_network_profile(tmp_path, out)
+    state["rows"][0]["kv"]["token_ids"][0] = 0
+    (tmp_path / "state_equivalence.json").write_text(json.dumps(state))
     report["concurrent_smoke"]["requests"].pop()
     path.write_text(json.dumps(report))
     with pytest.raises(ValueError, match="incomplete two-route"):

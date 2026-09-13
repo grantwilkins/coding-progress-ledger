@@ -7,6 +7,7 @@ import sys
 from types import SimpleNamespace
 
 import torch
+import pytest
 
 from lmcache_compat.connector_patch import (
     bypass_lmcache,
@@ -17,6 +18,66 @@ from lmcache_compat.connector_patch import (
     patch_on_import,
     restore_page_major_attention,
 )
+
+
+@pytest.mark.parametrize("missing", [0, 1, 7])
+@pytest.mark.parametrize("prefetch_id", [-1, 1])
+def test_compact_prefetch_preserves_offsets_and_releases_partial_hits(monkeypatch, missing, prefetch_id):
+    from contextlib import contextmanager
+    from lmcache.native_storage_ops import Bitmap
+    from lmcache.integration.vllm import kv_cache_groups
+    from lmcache.v1.distributed.api import AttnWindowDesc, ObjectKey, PrefetchHandle, TrimPolicy
+    from lmcache.v1.distributed.storage_manager import StorageManager
+    from lmcache_compat.connector_patch import patch_window_transfer
+
+    keys = [ObjectKey(bytes([chunk]), "test", 0, group)
+            for chunk in range(6) for group in range(2)]
+    released, submitted = [], []
+    found = list(range(7)) if not missing else [i for i in range(7) if missing == 1 and i != 2]
+    result = Bitmap(7)
+    result.batched_set(found)
+    results = iter([result, result if prefetch_id == -1 else None])
+
+    def submit(self, physical, layout, extra, request, policy, *args):
+        assert policy is TrimPolicy.SPARSE
+        submitted.extend(physical)
+        return PrefetchHandle(prefetch_id, request, (), len(physical), 0)
+
+    @contextmanager
+    def read(self, physical):
+        yield [SimpleNamespace(key=key, get_size=lambda: 10) for key in physical]
+
+    monkeypatch.setattr(StorageManager, "_qh_window_transfer", False, raising=False)
+    monkeypatch.setattr(StorageManager, "submit_prefetch_task", submit)
+    monkeypatch.setattr(StorageManager, "query_prefetch_lookup_hits", lambda *args: len(found))
+    monkeypatch.setattr(StorageManager, "query_prefetch_status", lambda *args: next(results))
+    monkeypatch.setattr(StorageManager, "read_prefetched_results", read)
+    monkeypatch.setattr(StorageManager, "finish_read_prefetched",
+                        lambda self, physical, extra_count=0: released.extend(physical))
+    monkeypatch.setattr(kv_cache_groups, "_resolve_per_layer_sw_sizes",
+                        kv_cache_groups._resolve_per_layer_sw_sizes)
+    patch_window_transfer()
+    manager = object.__new__(StorageManager)
+    handle = manager.submit_prefetch_task(keys, None, attn_desc=AttnWindowDesc([-1, 1]))
+    assert submitted == keys[::2] + [keys[-1]]
+    assert manager.query_prefetch_lookup_hits(handle) == (12 if not missing else 0)
+    assert manager.query_prefetch_status(handle).popcount() == (12 if not missing else 0)
+    assert manager.query_prefetch_status(handle) is None
+    if missing:
+        assert released == [submitted[i] for i in found]
+    else:
+        assert not released
+        with manager.read_prefetched_results(keys[1::2]) as objects:
+            assert len(objects) == 6
+            assert [obj.get_size() for obj in objects] == [0] * 5 + [10]
+            assert objects[-1].key == keys[-1]
+            with pytest.raises(RuntimeError, match="obsolete window state"):
+                objects[0].data_ptr()
+        manager.finish_read_prefetched(keys[1::2])
+        assert released == [keys[-1]]
+    mamba = type("MambaSpec", (), {"block_size": 784})()
+    groups = [SimpleNamespace(kv_cache_spec=mamba, layer_names=["state"])]
+    assert kv_cache_groups._resolve_per_layer_sw_sizes(groups, {"state": 0}, 1) == [784]
 
 
 class FragmentedSocket:

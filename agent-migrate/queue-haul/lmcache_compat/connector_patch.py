@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import builtins
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
+from dataclasses import asdict, dataclass, field
 import json
 import os
 import socket
@@ -614,7 +615,130 @@ def patch_kv_major_attention_groups() -> None:
     cls._qh_kv_major_patched = True
 
 
+def window_key_indices(keys, windows):
+    if any(key.kv_rank != 0 for key in keys):
+        raise ValueError("compact KV transfer requires TP1")
+    groups = {group: [i for i, key in enumerate(keys) if key.object_group_id == group]
+              for group in {key.object_group_id for key in keys}}
+    return sorted(i for group, indices in groups.items()
+                  for i in (indices if windows[group] < 0 else indices[-windows[group]:]))
+
+
+class SkippedWindowObject:
+    def get_size(self):
+        return 0
+
+    def __getattr__(self, name):
+        raise RuntimeError(f"obsolete window state reached GPU copy: {name}")
+
+
+def patch_window_transfer() -> None:
+    from lmcache.native_storage_ops import Bitmap
+    from lmcache.v1.distributed.api import (
+        DEFAULT_ATTN_WINDOW_DESC, PrefetchHandle, PrefetchMode, TrimPolicy)
+    from lmcache.v1.distributed.storage_manager import StorageManager
+    from lmcache.integration.vllm import kv_cache_groups
+
+    if getattr(StorageManager, "_qh_window_transfer", False):
+        return
+
+    @dataclass(frozen=True)
+    class WindowHandle(PrefetchHandle):
+        logical_keys: int = 0
+        physical_keys: tuple = ()
+        extra_count: int = 0
+        completed: threading.Event = field(default_factory=threading.Event, compare=False)
+        poll_lock: object = field(default_factory=threading.Lock, compare=False)
+
+    original_submit = StorageManager.submit_prefetch_task
+    original_lookup = StorageManager.query_prefetch_lookup_hits
+    original_status = StorageManager.query_prefetch_status
+    original_read = StorageManager.read_prefetched_results
+    original_finish = StorageManager.finish_read_prefetched
+    original_windows = kv_cache_groups._resolve_per_layer_sw_sizes
+
+    def windows(groups, indices, count):
+        result = original_windows(groups, indices, count)
+        for group in groups:
+            spec = group.kv_cache_spec
+            if any(cls.__name__ == "MambaSpec" for cls in type(spec).__mro__):
+                for name in group.layer_names:
+                    result[indices[name]] = spec.block_size
+        return result
+
+    def selected(self, keys):
+        layout = getattr(self, "_qh_windows", {}).get(keys[0].model_name) if keys else None
+        return window_key_indices(keys, layout) if layout else list(range(len(keys)))
+
+    def submit(self, keys, layout_desc, extra_count=0, external_request_id="",
+               policy=TrimPolicy.PREFIX, attn_desc=DEFAULT_ATTN_WINDOW_DESC,
+               skip_l2=False, mode=PrefetchMode.LOOKUP):
+        bounded = any(w > 0 for w in attn_desc.num_chunks_in_sw)
+        if not keys or not bounded or mode is not PrefetchMode.LOOKUP:
+            return original_submit(self, keys, layout_desc, extra_count,
+                                   external_request_id, policy, attn_desc, skip_l2, mode)
+        if policy is not TrimPolicy.PREFIX or extra_count:
+            raise ValueError("compact KV lookup requires TP1 prefix policy")
+        self._qh_windows = {**getattr(self, "_qh_windows", {}),
+                            keys[0].model_name: attn_desc.num_chunks_in_sw}
+        physical = tuple(keys[i] for i in selected(self, keys))
+        handle = original_submit(self, list(physical), layout_desc, extra_count,
+                                 external_request_id, TrimPolicy.SPARSE,
+                                 attn_desc, skip_l2, mode)
+        return WindowHandle(**asdict(handle), logical_keys=len(keys),
+                            physical_keys=physical, extra_count=extra_count)
+
+    def lookup(self, handle):
+        if isinstance(handle, WindowHandle) and handle.completed.is_set():
+            return None
+        result = original_lookup(self, handle)
+        if not isinstance(handle, WindowHandle) or result is None:
+            return result
+        return handle.logical_keys if result == len(handle.physical_keys) else 0
+
+    def status(self, handle):
+        if not isinstance(handle, WindowHandle):
+            return original_status(self, handle)
+        with handle.poll_lock:
+            if handle.completed.is_set():
+                return None
+            result = original_status(self, handle)
+            if result is None:
+                return None
+            handle.completed.set()
+            complete = result.popcount() == len(handle.physical_keys)
+            if not complete:
+                original_finish(self, [handle.physical_keys[i] for i in
+                                       result.gather(tuple(range(len(handle.physical_keys))))],
+                                extra_count=handle.extra_count)
+            return Bitmap(handle.logical_keys, handle.logical_keys if complete else 0)
+
+    @contextmanager
+    def read(self, keys):
+        indices = selected(self, keys)
+        with original_read(self, [keys[i] for i in indices]) as objects:
+            if objects is None:
+                yield None
+                return
+            padded = [SkippedWindowObject() for _ in keys]
+            for index, obj in zip(indices, objects, strict=True):
+                padded[index] = obj
+            yield padded
+
+    def finish(self, keys, extra_count=0):
+        return original_finish(self, [keys[i] for i in selected(self, keys)], extra_count)
+
+    kv_cache_groups._resolve_per_layer_sw_sizes = windows
+    StorageManager.submit_prefetch_task = submit
+    StorageManager.query_prefetch_lookup_hits = lookup
+    StorageManager.query_prefetch_status = status
+    StorageManager.read_prefetched_results = read
+    StorageManager.finish_read_prefetched = finish
+    StorageManager._qh_window_transfer = True
+
+
 if os.environ.get("QH_LMCACHE_MODE") == "mp":
+    patch_window_transfer()
     patch_kv_major_attention_groups()
     patch_mp_connector()
     from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector

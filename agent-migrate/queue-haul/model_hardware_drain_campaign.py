@@ -78,7 +78,25 @@ def freeze_network_profile(timing_root: Path, out: Path) -> dict:
                            if row["method"] == "kv_transfer" else 0)
                        for row in requests):
             raise ValueError(f"invalid eight-session operational gate: {node}")
-    evidence = [report_path]
+    state_path = timing_root / "state_equivalence.json"
+    state = json.loads(state_path.read_text())
+    source_log = timing_root / "source.log"
+    geometry = architecture._json_markers(source_log, "QH_KV_GEOMETRY ")[-1]
+    state_rows = state.get("rows", [])
+    if state != report.get("state_equivalence") or state.get("forced_token") is not None \
+            or not state.get("passed") or state.get("geometry") != geometry \
+            or len(state_rows) != 4 \
+            or not any(group.get("sw_size_chunks", -1) > 0 for group in geometry["object_groups"]) \
+            or any(not network.state_equivalence_passed(row, geometry["chunk_tokens"])
+                   or row["expected_wire_bytes"] != sum(group["chunk_bytes"] * (
+                       row["context_tokens"] // geometry["chunk_tokens"] if group.get("sw_size_chunks", -1) < 0
+                       else min(row["context_tokens"] // geometry["chunk_tokens"], group["sw_size_chunks"]))
+                       for group in geometry["object_groups"]) for row in state_rows) \
+            or any({row["context_tokens"] % geometry["chunk_tokens"] == 0
+                    for row in state_rows if row["destination"] == node} != {True, False}
+                   for node in ("east", "germany")):
+        raise ValueError("invalid unforced compact-state or wire-byte evidence")
+    evidence = [report_path, state_path, source_log]
     for row in rows:
         path = timing_root / "requests" / (
             f"{row['destination']}-{row['context_tokens']}-{row['repeat']}-{row['method']}.json")
@@ -152,6 +170,7 @@ def freeze_network_profile(timing_root: Path, out: Path) -> dict:
     ModelProfile.load(out)
     evidence.extend((prefill_path, power_path))
     gate = {"schema": NETWORK_GATE, "model": model, "hardware": "H100", "passed": True,
+        "compact_state_equivalence": {"passed": True, "unforced_pairs": len(state_rows)},
         "scope": "cross-host operational readiness; held-out timing errors are diagnostics",
         "launch": {"passed": True, "sessions": 8, "context_tokens": 32256},
         "timing": {"observations": len(rows), "held_out": errors},
@@ -180,6 +199,8 @@ def _gated_profile(path: Path, hardware: str) -> ModelProfile:
             or gate.get("model") != profile.model \
             or hardware.lower() not in gate.get("hardware", "").lower() \
             or not gate.get("passed") or not gate.get("launch", {}).get("passed") \
+            or (gate.get("schema") == NETWORK_GATE and gate.get("compact_state_equivalence")
+                != {"passed": True, "unforced_pairs": 4}) \
             or gate.get("profile_sha256") != hashlib.sha256(
                 path.read_bytes()).hexdigest():
         raise ValueError(f"{path} is not a gated BF16 TP1 {hardware} profile")

@@ -149,7 +149,8 @@ class ModelSpec:
 
 MODEL_SPECS = {
     MODEL: ModelSpec(MODEL_REVISION, vllm_args=(
-        "--hf-overrides", '{"allow_global_per_layer_attribute_access":true}')),
+        "--hf-overrides", '{"allow_global_per_layer_attribute_access":true}'),
+        separate_object_groups=True, hybrid_cache_groups=True),
     "Qwen/Qwen3.8-27B": ModelSpec(
         "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0", 1567, 784,
         ("--language-model-only", "--mamba-cache-mode", "align"), 784,
@@ -157,7 +158,7 @@ MODEL_SPECS = {
     "google/gemma-4-26B-A4B-it": ModelSpec(
         "4d7ae4984b7db7de8f8457170b3f1a419ee76d52",
         vllm_args=("--limit-mm-per-prompt", '{"image":0,"audio":0}'),
-        hybrid_cache_groups=True),
+        separate_object_groups=True, hybrid_cache_groups=True),
 }
 
 
