@@ -2003,6 +2003,7 @@ def validate_timing_geometry(reference: Path, current: Path) -> None:
 
 
 def timing_reference_rows(root: Path, metadata: dict) -> list[dict]:
+    metadata = json.loads(json.dumps(metadata))
     saved = json.loads((root / "timing_metadata.json").read_text())
     if any(saved[key] != value for key, value in metadata.items()):
         raise ValueError("timing reference configuration changed")

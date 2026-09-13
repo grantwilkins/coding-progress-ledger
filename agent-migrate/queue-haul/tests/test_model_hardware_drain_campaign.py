@@ -313,6 +313,7 @@ def test_timing_reuse_requires_matching_metadata_and_complete_raw_evidence(tmp_p
     import network_campaign as network
     metadata = {"model": "qwen", "revision": "revision123", "bandwidth": "controlled_40",
                 "contexts": [4096], "repeats": 1, "destinations": ["east"],
+                "cluster": {"destinations": ({"id": "east"},)},
                 "runtime": {"vllm": "0.24.0", "lmcache": "0.5.1"}}
     (tmp_path / "timing_metadata.json").write_text(json.dumps(metadata))
     log = "revision123 Initializing a V1 LLM engine (v0.24.0) LMCache v0.5.1"
