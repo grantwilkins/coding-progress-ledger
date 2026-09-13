@@ -1727,9 +1727,12 @@ def test_handoff_environment_keeps_qwen_mamba_state_reusable(monkeypatch):
 
     n.configure_handoff_environment("Qwen/Qwen3.8-27B")
     assert n.os.environ["QH_PREFIX_CACHING"] == "on"
+    assert float(n.os.environ["QH_LMCACHE_L1_GB"]) * .8 > 8 * 42 * 205520896 / 2**30
+    assert float(n.os.environ["QH_REDIS_MAXMEMORY_GB"]) > 8 * 42 * 205520896 / 2**30
 
     n.configure_handoff_environment("openai/gpt-oss-20b")
     assert n.os.environ["QH_PREFIX_CACHING"] == "off"
+    assert all(n.os.environ[key] == value for key, value in n.HANDOFF_ENV.items())
 
 
 def test_scenario_timing_excludes_background_load_drain(monkeypatch, tmp_path):

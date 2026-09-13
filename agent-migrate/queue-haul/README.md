@@ -3266,7 +3266,10 @@ The single-GPU-per-host path uses `network_campaign.py migration-timing
 --concurrent-smoke` followed by `freeze-network-profile`. It measures both
 methods on both routes at three contexts and three repeats, retaining raw
 requests, cache evidence, live KV registration, and source sleep/wake. It also
-requires eight simultaneous 32K sessions on each destination. The resulting
+requires eight simultaneous 32K sessions on each destination. The
+Qwen cache allocation is 96 GiB L1 and 80 GiB Redis: its eight-session cache
+requires about 63 GiB, and the inclusive cache tiers cannot be added together.
+Other models retain the 33 GiB L1 and 32 GiB Redis defaults. The resulting
 network operational gate hashes its evidence, runtime, profile, and calibration;
 it does not claim the separate two-local-GPU architecture gate passed.
 The fitted profile combines measured cross-host replay/decode/transfer timing

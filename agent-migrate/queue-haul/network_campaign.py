@@ -233,7 +233,8 @@ def configure_handoff_environment(model: str) -> None:
     # vLLM turns Qwen's aligned reusable Mamba state off when prefix caching
     # is disabled; LMCache then correctly refuses the incomplete cache groups.
     if model == "Qwen/Qwen3.8-27B":
-        os.environ["QH_PREFIX_CACHING"] = "on"
+        os.environ.update(QH_PREFIX_CACHING="on", QH_LMCACHE_L1_GB="96",
+                          QH_REDIS_MAXMEMORY_GB="80")
 
 
 def write_checkpoint(path: Path, value: dict) -> None:
