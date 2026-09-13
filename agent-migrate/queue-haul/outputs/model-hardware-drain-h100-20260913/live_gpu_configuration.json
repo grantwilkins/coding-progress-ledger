@@ -1,0 +1,43 @@
+{
+  "observed_at": "2026-09-13T17:21:07.948958+00:00",
+  "scope": "Live sweep GPU configuration; read-only query",
+  "units": {
+    "memory.total": "MiB",
+    "power.limit": "W",
+    "enforced.power.limit": "W",
+    "clocks.max.sm": "MHz",
+    "clocks.max.memory": "MHz"
+  },
+  "hosts": {
+    "westus3": {
+      "name": "NVIDIA H100 NVL",
+      "uuid": "GPU-f14828c6-e880-6e74-e189-c7576c7851f3",
+      "driver_version": "580.159.04",
+      "memory.total": "95830",
+      "power.limit": "400.00",
+      "enforced.power.limit": "400.00",
+      "clocks.max.sm": "1785",
+      "clocks.max.memory": "2619"
+    },
+    "southeastasia": {
+      "name": "NVIDIA H100 NVL",
+      "uuid": "GPU-ff555ad8-28a6-dcef-caf1-b3e015ca1947",
+      "driver_version": "580.159.04",
+      "memory.total": "95830",
+      "power.limit": "400.00",
+      "enforced.power.limit": "400.00",
+      "clocks.max.sm": "1785",
+      "clocks.max.memory": "2619"
+    },
+    "southcentralus": {
+      "name": "NVIDIA H100 NVL",
+      "uuid": "GPU-9d39e558-d53c-5e58-b86c-15339695cf8f",
+      "driver_version": "580.159.04",
+      "memory.total": "95830",
+      "power.limit": "400.00",
+      "enforced.power.limit": "400.00",
+      "clocks.max.sm": "1785",
+      "clocks.max.memory": "2619"
+    }
+  }
+}

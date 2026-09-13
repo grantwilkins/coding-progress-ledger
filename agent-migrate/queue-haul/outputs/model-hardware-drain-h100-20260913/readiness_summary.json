@@ -640,13 +640,13 @@
     "Sustained offered/completed request-rate capacity sweep",
     "Complete request-linked export/network/install/catch-up/handoff phase timestamps",
     "Matched resident-serving latency during migration",
-    "Measured ongoing-service power shedding at partial drain and awake idle",
-    "Per-GPU power-cap values retained in these artifacts"
+    "Measured ongoing-service power shedding at partial drain and awake idle"
   ],
   "interpretation": [
     "Concurrent readiness is eight-request bursts per destination; destination batches run sequentially",
     "Allocated GPU memory is sampled at250ms; it is not HBM bandwidth",
     "Source service load0.8 and drain-power outcomes are modeled",
     "Qwen compact/full restoration matches; aligned cold-replay equivalence is not established"
-  ]
+  ],
+  "live_gpu_configuration": "live_gpu_configuration.json"
 }
