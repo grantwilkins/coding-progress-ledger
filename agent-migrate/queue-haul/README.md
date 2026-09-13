@@ -3270,19 +3270,31 @@ requires eight simultaneous 32K sessions on each destination. The
 compact path fetches complete global-attention history plus only the required
 sliding-window or aligned recurrent state. Before timing, unforced KV and two cold
 replay continuations must match through EOS or the 32-token limit at aligned and
-unaligned contexts on both routes. Actual WAN bytes must match the live compact
+unaligned contexts on both routes. Qwen uses an explicitly labeled full-history
+restoration reference: compact and full restoration match, while aligned cold
+replay differs. Reference outputs, prompts, revision, runtime, geometry, and hashes
+are checked; this does not establish Qwen cold-replay equivalence. Actual WAN bytes must match the live compact
 object geometry; fixed-length timing probes remain separate from this check.
 The roughly 0.81-GB GPT-OSS estimate at 32K is architecture-specific, not a
 shared-prefix discount applicable to every model. The
-Qwen cache allocation is 96 GiB L1 and 80 GiB Redis: its eight-session cache
-requires about 63 GiB, and the inclusive cache tiers cannot be added together.
-Other models retain the 33 GiB L1 and 32 GiB Redis defaults. The resulting
+Qwen and Gemma cache allocations are 96 GiB L1 and 80 GiB Redis: their local
+eight-session staging needs exceed 32 GiB even with compact WAN transfer.
+The inclusive cache tiers cannot be added together. GPT retains 33 GiB L1 and
+32 GiB Redis. The gateway accepts eight-request bursts with a 128-entry queue. The resulting
 network operational gate hashes its evidence, runtime, profile, and calibration;
 it does not claim the separate two-local-GPU architecture gate passed.
 The fitted profile combines measured cross-host replay/decode/transfer timing
 with historical H100 prefill and phase power. Held-out timing errors and
-inherited action-power assumptions remain explicit. No new drain episodes or
-measured action-mix comparisons have yet been produced.
+inherited action-power assumptions remain explicit. The 2026-09-13 campaign has
+passing operational gates for all three models, 108 isolated timing observations,
+and 48 concurrent readiness requests. The measurement export is in
+[`outputs/model-hardware-drain-h100-20260913/`](outputs/model-hardware-drain-h100-20260913/).
+The full 600-episode sweep is running at `/datadrive/d19` with 51, 59, 60, and
+90-second deadlines on West US 3, Southeast Asia, and South Central US.
+Its first Qwen episode executed the planned five KV and three replay moves with
+zero request failures, but missed its 51-second deadline at 58.7 seconds.
+Deadline misses remain observations. Complete cross-model hardware comparisons
+await the finished sweep; the predicted action mixes are not final outcomes.
 
 ```bash
 uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json
