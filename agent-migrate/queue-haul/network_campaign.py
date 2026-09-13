@@ -232,8 +232,8 @@ def configure_handoff_environment(model: str) -> None:
     os.environ.update(HANDOFF_ENV)
     # vLLM turns Qwen's aligned reusable Mamba state off when prefix caching
     # is disabled; LMCache then correctly refuses the incomplete cache groups.
-    if model == "Qwen/Qwen3.8-27B":
-        os.environ.update(QH_PREFIX_CACHING="on", QH_LMCACHE_L1_GB="96",
+    if model in {"Qwen/Qwen3.8-27B", "google/gemma-4-26B-A4B-it"}:
+        os.environ.update(QH_PREFIX_CACHING="on" if model == "Qwen/Qwen3.8-27B" else "off", QH_LMCACHE_L1_GB="96",
                           QH_REDIS_MAXMEMORY_GB="80")
 
 

@@ -1730,6 +1730,11 @@ def test_handoff_environment_keeps_qwen_mamba_state_reusable(monkeypatch):
     assert float(n.os.environ["QH_LMCACHE_L1_GB"]) * .8 > 8 * 42 * 205520896 / 2**30
     assert float(n.os.environ["QH_REDIS_MAXMEMORY_GB"]) > 8 * 42 * 205520896 / 2**30
 
+    n.configure_handoff_environment("google/gemma-4-26B-A4B-it")
+    assert n.os.environ["QH_PREFIX_CACHING"] == "off"
+    assert float(n.os.environ["QH_LMCACHE_L1_GB"]) * .8 > 8 * 126 * (52428800 + 5242880) / 2**30
+    assert float(n.os.environ["QH_REDIS_MAXMEMORY_GB"]) > 8 * 126 * (52428800 + 5242880) / 2**30
+
     n.configure_handoff_environment("openai/gpt-oss-20b")
     assert n.os.environ["QH_PREFIX_CACHING"] == "off"
     assert all(n.os.environ[key] == value for key, value in n.HANDOFF_ENV.items())
