@@ -71,8 +71,8 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
     assert "QH_KV_GEOMETRY_EVIDENCE=1" in gemma_vllm
 
     gpt = configs["openai/gpt-oss-20b"]
-    assert "engine_driven" in testbed.shell(testbed.vllm_cmd(gpt, "source"))
-    assert "--supported-transfer-mode engine_driven" in testbed.shell(
+    assert "lmcache_driven" in testbed.shell(testbed.vllm_cmd(gpt, "source"))
+    assert "--supported-transfer-mode lmcache_driven" in testbed.shell(
         testbed.mp_server_cmd(gpt, "source"))
 
     for cfg in configs.values():
@@ -83,8 +83,7 @@ def test_campaign_launches_share_controls_but_keep_model_cache_geometry(
         assert "--dtype bfloat16" in command
         assert "--kv-cache-dtype auto" in command
         assert "--gpu-memory-utilization 0.9" in command
-        assert ("--disable-hybrid-kv-cache-manager" in command) == (
-            cfg.model == "openai/gpt-oss-20b")
+        assert "--disable-hybrid-kv-cache-manager" not in command
         assert "speculative" not in command
 
 
