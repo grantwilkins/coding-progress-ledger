@@ -1841,8 +1841,8 @@ def state_equivalence_passed(row: dict, chunk: int) -> bool:
             and len(kv["token_ids"]) == 32 and kv["token_ids"] == replay["token_ids"]
             and kv["cached_tokens"] == row["context_tokens"] // chunk * chunk
             and replay["cached_tokens"] == 0
-            and .99 * row["expected_wire_bytes"] <= row["kv_wire_bytes"]
-            <= 1.1 * row["expected_wire_bytes"] + 1_000_000)
+            and row["expected_wire_bytes"] <= row["kv_wire_bytes"]
+            <= row["expected_wire_bytes"] + 1_000_000)
 
 
 def _network_state_equivalence(stack: ClusterStack, context: int) -> dict:
