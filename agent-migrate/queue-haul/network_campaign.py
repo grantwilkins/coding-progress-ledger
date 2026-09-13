@@ -1992,6 +1992,16 @@ def _network_concurrent_smoke(stack: ClusterStack, context: int) -> dict:
             "dispatch_skew_s": skew, "wire_bytes": delta, "requests": rows}
 
 
+def validate_timing_geometry(reference: Path, current: Path) -> None:
+    from model_architecture_campaign import _json_markers
+    def signature(root):
+        geometry = _json_markers(root / "source.log", "QH_KV_GEOMETRY ")[-1]
+        return geometry["chunk_tokens"], [(group["chunk_bytes"], group["sw_size_chunks"])
+                                          for group in geometry["object_groups"]]
+    if signature(reference) != signature(current):
+        raise ValueError("timing reference compact geometry changed")
+
+
 def timing_reference_rows(root: Path, metadata: dict) -> list[dict]:
     saved = json.loads((root / "timing_metadata.json").read_text())
     if any(saved[key] != value for key, value in metadata.items()):
@@ -2016,7 +2026,10 @@ def timing_reference_rows(root: Path, metadata: dict) -> list[dict]:
         raw = json.loads((root / "requests" / f"{row['destination']}-{row['context_tokens']}-{row['repeat']}-{row['method']}.json").read_text())
         if (raw["measurement"] != row or not row["passed"] or not literal_timing_completion(raw["request"])
                 or any(row[key] != metadata[key] for key in ("model", "revision", "bandwidth"))
-                or raw["request"]["prompt_tokens"] != row["context_tokens"]):
+                or raw["request"]["prompt_tokens"] != row["context_tokens"]
+                or raw["request"]["output_tokens"] != 128
+                or raw["request"]["cached_tokens"] != (row["context_tokens"] // row["chunk_tokens"] * row["chunk_tokens"]
+                    if row["method"] == "kv_transfer" else 0)):
             raise ValueError("invalid raw timing reference")
     return rows
 
@@ -2054,6 +2067,8 @@ def migration_timing(cluster: Cluster, key: Path, calibration: dict,
         model=model, literal_token_timing=True)
     try:
         write_checkpoint(run_root / "timing_metadata.json", metadata)
+        if timing_reference:
+            validate_timing_geometry(timing_reference, run_root)
         state_equivalence = _network_state_equivalence(stack, max(contexts), state_reference)
         chunk = testbed.model_chunk_tokens(stack.cfg)
         prepared = {}

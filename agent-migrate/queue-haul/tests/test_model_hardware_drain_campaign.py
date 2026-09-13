@@ -323,11 +323,12 @@ def test_timing_reuse_requires_matching_metadata_and_complete_raw_evidence(tmp_p
     rows = []
     for method in ("kv_transfer", "replay"):
         row = {"destination": "east", "context_tokens": 4096, "repeat": 0,
-               "method": method, "passed": True, **{key: metadata[key] for key in ("model", "revision", "bandwidth")}}
+               "method": method, "passed": True, "chunk_tokens": 256, **{key: metadata[key] for key in ("model", "revision", "bandwidth")}}
         rows.append(row)
         request = {"status": 200, "done": True, "finish_reason": "length", "output_tokens": 128,
                    "recorded_output_tokens": 128, "exact_token_timestamps": True,
-                   "first_ns": 10**9, "last_token_ns": 3*10**9, "prompt_tokens": 4096}
+                   "first_ns": 10**9, "last_token_ns": 3*10**9, "prompt_tokens": 4096,
+                   "cached_tokens": 4096 if method == "kv_transfer" else 0}
         (tmp_path / "requests" / f"east-4096-0-{method}.json").write_text(json.dumps({"measurement": row, "request": request}))
     progress = {"schema": network.MIGRATION_TIMING_SCHEMA, "literal_token_timing": True,
                 "completed": 2, "expected": 2, "rows": rows}
@@ -343,3 +344,17 @@ def test_timing_reuse_requires_matching_metadata_and_complete_raw_evidence(tmp_p
     (tmp_path / "progress.json").write_text(json.dumps(progress))
     with pytest.raises(ValueError, match="incomplete timing"):
         network.timing_reference_rows(tmp_path, metadata)
+
+
+def test_timing_reuse_rejects_full_history_geometry(tmp_path):
+    from network_campaign import validate_timing_geometry
+    old, fresh = tmp_path / "old", tmp_path / "fresh"
+    old.mkdir(); fresh.mkdir()
+    geometry = {"chunk_tokens": 256, "object_groups": [{"chunk_bytes": 1000, "sw_size_chunks": 1}]}
+    for root in (old, fresh):
+        (root / "source.log").write_text("QH_KV_GEOMETRY " + json.dumps(geometry))
+    validate_timing_geometry(old, fresh)
+    geometry["object_groups"][0]["sw_size_chunks"] = -1
+    (old / "source.log").write_text("QH_KV_GEOMETRY " + json.dumps(geometry))
+    with pytest.raises(ValueError, match="compact geometry changed"):
+        validate_timing_geometry(old, fresh)

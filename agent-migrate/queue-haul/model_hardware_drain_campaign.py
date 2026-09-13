@@ -115,7 +115,11 @@ def freeze_network_profile(timing_root: Path, out: Path) -> dict:
     measurement_root = Path(report.get("timing_reference", timing_root))
     if measurement_root != timing_root:
         metadata_path = timing_root / "timing_metadata.json"
-        if network.timing_reference_rows(measurement_root, json.loads(metadata_path.read_text())) != rows:
+        metadata = json.loads(metadata_path.read_text())
+        network.validate_timing_geometry(measurement_root, timing_root)
+        if (any(metadata[key] != report[key] for key in
+                ("model", "revision", "runtime", "calibration_sha256", "contexts", "repeats", "bandwidth"))
+                or network.timing_reference_rows(measurement_root, metadata) != rows):
             raise ValueError("changed reused timing evidence")
         evidence.extend([metadata_path, measurement_root / "timing_metadata.json",
                          measurement_root / "progress.json", measurement_root / "source.log",
