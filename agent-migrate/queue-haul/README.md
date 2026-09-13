@@ -3268,9 +3268,10 @@ methods on both routes at three contexts and three repeats, retaining raw
 requests, cache evidence, live KV registration, and source sleep/wake. It also
 requires eight simultaneous 32K sessions on each destination. The
 compact path fetches complete global-attention history plus only the required
-sliding-window or aligned recurrent state. Before timing, unforced 32-token
-replay/KV continuations must match at aligned and unaligned contexts on both
-routes, and actual WAN bytes must match the live compact object geometry.
+sliding-window or aligned recurrent state. Before timing, unforced KV and two cold
+replay continuations must match through EOS or the 32-token limit at aligned and
+unaligned contexts on both routes. Actual WAN bytes must match the live compact
+object geometry; fixed-length timing probes remain separate from this check.
 The roughly 0.81-GB GPT-OSS estimate at 32K is architecture-specific, not a
 shared-prefix discount applicable to every model. The
 Qwen cache allocation is 96 GiB L1 and 80 GiB Redis: its eight-session cache

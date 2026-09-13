@@ -8,6 +8,23 @@ import pytest
 import model_hardware_drain_campaign as campaign
 
 
+def test_natural_state_gate_requires_entire_output_and_cold_replay_control():
+    from copy import deepcopy
+    from network_campaign import state_equivalence_passed
+    request = {"status": 200, "done": True, "exact_token_timestamps": True,
+               "finish_reason": "stop", "output_tokens": 3, "recorded_output_tokens": 3,
+               "token_ids": [7, 8, 200002], "prompt_tokens": 32239, "cached_tokens": 0}
+    row = {"context_tokens": 32239, "expected_wire_bytes": 1000, "kv_wire_bytes": 1010,
+           **{key: deepcopy(request) for key in ("kv", "replay", "replay_control")}}
+    row["kv"]["cached_tokens"] = 32000
+    assert state_equivalence_passed(row, 256)
+    row["replay_control"]["token_ids"][0] = 9
+    assert not state_equivalence_passed(row, 256)
+    row["replay_control"]["token_ids"][0] = 7
+    row["kv"]["finish_reason"] = "length"
+    assert not state_equivalence_passed(row, 256)
+
+
 def test_deadline_plot_reports_completed_action_changes_and_failures(tmp_path):
     rows = [{"model": model, "deadline_s": str(deadline), "status": "complete",
              "target_met": "True", "east_region": "southeastasia",
@@ -86,13 +103,14 @@ def test_network_profile_uses_live_rates_and_rejects_incomplete_smoke(tmp_path):
               "network_contract": {"paths": {node: {"controlled_mbps": {"40": 400}}
                                                for node in ("east", "germany")}}}
     path = tmp_path / "report.json"
-    state = {"forced_token": None, "passed": True, "geometry": registration,
+    state = {"forced_token": None, "ignore_eos": False, "passed": True, "geometry": registration,
              "rows": [{"destination": node, "context_tokens": context,
                        "expected_wire_bytes": context // 256 * 16384 + 512,
                        "kv_wire_bytes": context // 256 * 16384 + 512,
                        **{key: {**request(context, method), "token_ids": list(range(32)),
                                 "output_tokens": 32, "recorded_output_tokens": 32}
-                          for key, method in (("kv", "kv_transfer"), ("replay", "replay"))}}
+                          for key, method in (("kv", "kv_transfer"), ("replay", "replay"),
+                                              ("replay_control", "replay"))}}
                       for node in ("east", "germany") for context in (32239, 32256)]}
     report["state_equivalence"] = state
     (tmp_path / "state_equivalence.json").write_text(json.dumps(state))

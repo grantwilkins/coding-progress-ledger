@@ -1835,18 +1835,25 @@ def literal_timing_completion(result: dict) -> bool:
 
 def state_equivalence_passed(row: dict, chunk: int) -> bool:
     kv, replay = row["kv"], row["replay"]
-    return (all(exact_completion(request) and request["output_tokens"] == 32
+    requests = (kv, replay, row["replay_control"])
+    return (all(request["status"] == 200 and request["done"] and not request.get("error")
+                and request["exact_token_timestamps"]
+                and 0 < request["output_tokens"] <= 32
+                and request["recorded_output_tokens"] == request["output_tokens"] == len(request["token_ids"])
+                and (request["finish_reason"] == "stop" or
+                     request["finish_reason"] == "length" and request["output_tokens"] == 32)
                 and request["prompt_tokens"] == row["context_tokens"]
-                for request in (kv, replay))
-            and len(kv["token_ids"]) == 32 and kv["token_ids"] == replay["token_ids"]
+                and request["token_ids"] == kv["token_ids"]
+                and request["finish_reason"] == kv["finish_reason"] for request in requests)
             and kv["cached_tokens"] == row["context_tokens"] // chunk * chunk
-            and replay["cached_tokens"] == 0
+            and replay["cached_tokens"] == row["replay_control"]["cached_tokens"] == 0
             and row["expected_wire_bytes"] <= row["kv_wire_bytes"]
             <= row["expected_wire_bytes"] + 1_000_000)
 
 
 def _network_state_equivalence(stack: ClusterStack, context: int) -> dict:
     from model_architecture_campaign import _json_markers
+    from destination_runner import completion_payload
 
     geometry = _json_markers(stack.run_root / "source.log", "QH_KV_GEOMETRY ")[-1]
     chunk = geometry["chunk_tokens"]
@@ -1863,23 +1870,28 @@ def _network_state_equivalence(stack: ClusterStack, context: int) -> dict:
             prompt = testbed.mp_chat_tokens(stack.cfg, _probe(stack.cfg, messages, session["state_code"]), max_tokens=128)
             warm = _warm(stack, messages, session["state_code"], REQUEST_TIMEOUT_S, prompt)
             before = testbed.proxy_counts(stack.run_root / "proxy_bytes.csv")
+            payload = completion_payload(stack.cfg.model, prompt, 32, None)
+            payload["ignore_eos"] = False
             kv = _completion(stack.cfg.host, stack.ports[node.id]["api"], stack.cfg.model,
-                             prompt, 32, None, REQUEST_TIMEOUT_S)
+                             prompt, 32, None, REQUEST_TIMEOUT_S, prepared_body=json.dumps(payload))
             time.sleep(1)
             wire = testbed.count_delta(before, testbed.proxy_counts(stack.run_root / "proxy_bytes.csv"))
-            testbed.http_text(node.host, stack.cfg.sink_lmc_http_port, "POST", "/cache/clear")
-            testbed.http_text(node.host, stack.cfg.sink_port, "POST", "/reset_prefix_cache")
-            replay = _completion(stack.cfg.host, stack.ports[node.id]["api"], stack.cfg.model,
-                                 prompt, 32, None, REQUEST_TIMEOUT_S, True)
+            replays = {}
+            payload["kv_transfer_params"] = {"qh_bypass_lmcache": True, "lmcache.skip_save": True}
+            for method in ("replay", "replay_control"):
+                testbed.http_text(node.host, stack.cfg.sink_lmc_http_port, "POST", "/cache/clear")
+                testbed.http_text(node.host, stack.cfg.sink_port, "POST", "/reset_prefix_cache")
+                replays[method] = _completion(stack.cfg.host, stack.ports[node.id]["api"], stack.cfg.model,
+                    prompt, 32, None, REQUEST_TIMEOUT_S, True, prepared_body=json.dumps(payload))
             expected = sum(group["chunk_bytes"] * (tokens // chunk if group["sw_size_chunks"] < 0
                            else min(tokens // chunk, group["sw_size_chunks"]))
                            for group in geometry["object_groups"])
             row = {"destination": node.id, "context_tokens": tokens, "warm": warm,
-                   "kv": kv, "replay": replay, "expected_wire_bytes": expected,
+                   "kv": kv, **replays, "expected_wire_bytes": expected,
                    "kv_wire_bytes": wire.get(f"kv/{node.id}/target_to_client", 0)}
             row["passed"] = state_equivalence_passed(row, chunk)
             rows.append(row)
-            report = {"forced_token": None, "geometry": geometry, "rows": rows,
+            report = {"forced_token": None, "ignore_eos": False, "geometry": geometry, "rows": rows,
                       "passed": all(row["passed"] for row in rows)}
             write_checkpoint(stack.run_root / "state_equivalence.json", report)
             if not row["passed"]:

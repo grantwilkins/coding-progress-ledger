@@ -84,6 +84,7 @@ def freeze_network_profile(timing_root: Path, out: Path) -> dict:
     geometry = architecture._json_markers(source_log, "QH_KV_GEOMETRY ")[-1]
     state_rows = state.get("rows", [])
     if state != report.get("state_equivalence") or state.get("forced_token") is not None \
+            or state.get("ignore_eos") is not False \
             or not state.get("passed") or state.get("geometry") != geometry \
             or len(state_rows) != 4 \
             or not any(group.get("sw_size_chunks", -1) > 0 for group in geometry["object_groups"]) \
