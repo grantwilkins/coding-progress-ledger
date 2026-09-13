@@ -683,8 +683,10 @@ class SkippedWindowObject:
 def patch_window_transfer() -> None:
     from lmcache.native_storage_ops import Bitmap
     from lmcache.v1.distributed.api import (
-        DEFAULT_ATTN_WINDOW_DESC, PrefetchHandle, PrefetchMode, TrimPolicy)
+        DEFAULT_ATTN_WINDOW_DESC, MemoryLayoutDesc, PrefetchHandle, PrefetchMode, TrimPolicy)
+    from lmcache.v1.distributed.l1_manager import L1Manager
     from lmcache.v1.distributed.storage_manager import StorageManager
+    from lmcache.v1.multiprocess.modules import lmcache_driven_transfer
     from lmcache.integration.vllm import kv_cache_groups
     from lmcache import lmcache_redis
 
@@ -692,6 +694,34 @@ def patch_window_transfer() -> None:
         return
     redis_client = lmcache_redis.LMCacheRedisClient
     lmcache_redis.LMCacheRedisClient = lambda *args, **kwargs: SizedRedisBatches(redis_client(*args, **kwargs))
+
+    @dataclass(frozen=True)
+    class GroupLayouts(MemoryLayoutDesc):
+        groups: tuple = ()
+
+    original_layout = lmcache_driven_transfer.get_layout_desc
+    original_reserve = L1Manager.reserve_write
+
+    def layout(context, chunk_size, object_group_id=0):
+        result = original_layout(context, chunk_size, object_group_id)
+        if object_group_id:
+            return result
+        groups = tuple(original_layout(context, chunk_size, i)
+                       for i in range(len(context.kv_layer_groups_manager.object_groups)))
+        return GroupLayouts(result.shapes, result.dtypes, groups)
+
+    def reserve(self, keys, is_temporary, layout_desc, mode="all"):
+        if not isinstance(layout_desc, GroupLayouts):
+            return original_reserve(self, keys, is_temporary, layout_desc, mode)
+        result = {}
+        for group in sorted({key.object_group_id for key in keys}):
+            indices = [i for i, key in enumerate(keys) if key.object_group_id == group]
+            result.update(original_reserve(self, [keys[i] for i in indices],
+                          [is_temporary[i] for i in indices], layout_desc.groups[group], mode))
+        return result
+
+    lmcache_driven_transfer.get_layout_desc = layout
+    L1Manager.reserve_write = reserve
 
     @dataclass(frozen=True)
     class WindowHandle(PrefetchHandle):

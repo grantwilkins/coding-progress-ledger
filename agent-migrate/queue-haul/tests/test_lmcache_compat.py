@@ -49,6 +49,9 @@ def test_compact_prefetch_preserves_offsets_and_releases_partial_hits(monkeypatc
     from lmcache.integration.vllm import kv_cache_groups
     from lmcache.v1.distributed.api import AttnWindowDesc, ObjectKey, PrefetchHandle, TrimPolicy
     from lmcache.v1.distributed.storage_manager import StorageManager
+    from lmcache.v1.distributed.l1_manager import L1Manager
+    from lmcache.v1.distributed.api import MemoryLayoutDesc
+    from lmcache.v1.multiprocess.modules import lmcache_driven_transfer
     from lmcache_compat.connector_patch import patch_window_transfer
 
     keys = [ObjectKey(bytes([chunk]), "test", ObjectKey.ComputeKVRank(1, 0, 1, 0), group)
@@ -77,7 +80,20 @@ def test_compact_prefetch_preserves_offsets_and_releases_partial_hits(monkeypatc
                         lambda self, physical, extra_count=0: released.extend(physical))
     monkeypatch.setattr(kv_cache_groups, "_resolve_per_layer_sw_sizes",
                         kv_cache_groups._resolve_per_layer_sw_sizes)
+    layouts = [MemoryLayoutDesc([torch.Size([size])], [torch.bfloat16]) for size in (32, 64)]
+    monkeypatch.setattr(lmcache_driven_transfer, "get_layout_desc", lambda context, chunk, group: layouts[group])
+    reservations = []
+    def reserve(self, selected, temporary, layout, mode):
+        reservations.append((selected, temporary, layout, mode))
+        return {key: layout for key in selected}
+    monkeypatch.setattr(L1Manager, "reserve_write", reserve)
     patch_window_transfer()
+    context = SimpleNamespace(kv_layer_groups_manager=SimpleNamespace(object_groups=[0, 1]))
+    layout = lmcache_driven_transfer.get_layout_desc(context, 256, 0)
+    reserved = L1Manager.reserve_write(None, keys, [False, True] * 6, layout, 'new')
+    assert all(reserved[key] is layouts[key.object_group_id] for key in keys)
+    assert reservations == [(keys[::2], [False] * 6, layouts[0], 'new'),
+                            (keys[1::2], [True] * 6, layouts[1], 'new')]
     manager = object.__new__(StorageManager)
     handle = manager.submit_prefetch_task(keys, None, attn_desc=AttnWindowDesc([-1, 1]))
     assert submitted == keys[::2] + [keys[-1]]
