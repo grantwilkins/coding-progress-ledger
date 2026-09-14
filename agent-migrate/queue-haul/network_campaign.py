@@ -296,7 +296,7 @@ class Cluster:
         if not (value.source.region == "swedencentral" and regions <= {
                 "eastus2", "westeurope", "germanywestcentral"} or
                 value.source.region == "westus3" and
-                regions in ({"australiaeast", "southcentralus"}, {"southeastasia"},
+                regions in ({"australiaeast", "southcentralus"}, {"southeastasia"}, {"southcentralus"},
                             {"southeastasia", "southcentralus"})):
             raise ValueError("cluster regions do not match the frozen topology")
         return value
@@ -1397,11 +1397,11 @@ def vllm_kv_capacity(path: Path) -> int:
 def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
                run_root: Path, power_interval_s: float = .25,
                kv_blocks: int | None = None, model: str | None = None,
-               literal_token_timing: bool = False) -> None:
+               literal_token_timing: bool = False, serving: bool = False) -> None:
     import migration_profiler
 
     cfg = (testbed.model_campaign_config(
-        model, literal_token_timing=literal_token_timing)
+        model, literal_token_timing=literal_token_timing, serving=serving)
         if model else testbed.Config(host="127.0.0.1"))
     testbed.preflight(cfg, 1)
     run_root.mkdir(parents=True, exist_ok=False)
@@ -1560,12 +1560,12 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                   power_interval_s: float = .25,
                   kv_capacity_fraction: dict[str, float] | None = None,
                   model: str | None = None,
-                  literal_token_timing: bool = False,
+                  literal_token_timing: bool = False, serving: bool = False,
                   ) -> ClusterStack:
     import migration_profiler
 
     cfg = (testbed.model_campaign_config(
-        model, literal_token_timing=literal_token_timing)
+        model, literal_token_timing=literal_token_timing, serving=serving)
         if model else testbed.Config(host="127.0.0.1"))
     testbed.preflight(cfg, 1)
     run_root.mkdir(parents=True, exist_ok=False)
@@ -1629,6 +1629,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                 "--power-interval-s", str(power_interval_s),
                 *(["--model", model] if model else []),
                 *(["--literal-token-timing"] if literal_token_timing else []),
+                *(["--serving"] if serving else []),
                 *(["--kv-blocks", str(round(
                     profile_capacity * fractions[node_id] / KV_BLOCK_SIZE))]
                   if fractions.get(node_id, 1) < 1 else []),
@@ -5275,6 +5276,7 @@ def parse_args(argv=None):
     command.add_argument("--kv-blocks", type=int)
     command.add_argument("--model", choices=tuple(testbed.MODEL_SPECS))
     command.add_argument("--literal-token-timing", action="store_true")
+    command.add_argument("--serving", action="store_true")
     command = sub.add_parser("smoke")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -5372,7 +5374,7 @@ def main(argv=None) -> None:
     elif args.command == "node-serve":
         node_serve(args.node_id, args.bind_host, args.source_host,
                    args.kv_port, args.run_root, args.power_interval_s,
-                   args.kv_blocks, args.model, args.literal_token_timing)
+                   args.kv_blocks, args.model, args.literal_token_timing, args.serving)
     elif args.command == "smoke":
         print(json.dumps(smoke(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),

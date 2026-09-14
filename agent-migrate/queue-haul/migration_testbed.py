@@ -187,6 +187,7 @@ class Config:
     capacity_discovery: bool = False
     matched_prefill: bool = False
     literal_token_timing: bool = False
+    serving_campaign: bool = False
     timing_only: bool = False
     enforce_eager: bool = True
 
@@ -263,12 +264,13 @@ def model_path(cfg: Config) -> Path:
 
 
 def model_campaign_config(model: str, *,
-                          literal_token_timing: bool = False) -> Config:
+                          literal_token_timing: bool = False, serving: bool = False) -> Config:
     spec = model_spec(model)
-    return Config(model=model, max_num_seqs=8,
+    return Config(model=model, max_num_seqs=256 if serving else 8,
                   max_num_batched_tokens=spec.batched_tokens,
                   architecture_campaign=True,
-                  literal_token_timing=literal_token_timing)
+                  literal_token_timing=literal_token_timing,
+                  serving_campaign=serving, enforce_eager=not serving)
 
 
 def model_chunk_tokens(cfg: Config) -> int:
@@ -303,7 +305,7 @@ def validate_model_runtime(cfg: Config) -> None:
         return
     spec = model_spec(cfg.model)
     if (cfg.max_model_len, cfg.max_num_seqs, cfg.max_num_batched_tokens) != (
-            32768, 8, spec.batched_tokens):
+            32768, 256 if cfg.serving_campaign else 8, spec.batched_tokens):
         raise ValueError("architecture-campaign runtime geometry changed")
     if lmcache_mode() != "mp":
         raise ValueError("architecture campaign requires QH_LMCACHE_MODE=mp")
@@ -587,6 +589,8 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         *(["--no-async-scheduling", "--stream-interval", 1]
           if cfg.literal_token_timing else []),
         *(["--enforce-eager"] if cfg.enforce_eager else []),
+        *(["--attention-backend", "TRITON_ATTN"]
+          if cfg.serving_campaign and cfg.model == MODEL else []),
         *(["--enable-sleep-mode"] if role == "source" and (
             sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
         ) else []),
