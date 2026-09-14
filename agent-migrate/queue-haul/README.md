@@ -3786,7 +3786,9 @@ its live state is `/datadrive/d19-resume-20260914.json`. The launcher is now an
 enabled persistent system service running as `azureuser` after a source reboot
 removed its transient unit and left the user-service bus unavailable.
 The launcher waits up to six hours for destination SSH readiness before each job.
-Validation failures still stop the queue for review. The older resume service
+Startup reads destination readiness without buffered line waits and fails promptly
+if any destination process exits. Validation failures still stop the queue for
+review. The older resume service
 remains disabled.
 
 The [2026-09-14 existing-data audit](outputs/h100-evidence-audit-20260914/audit.json)

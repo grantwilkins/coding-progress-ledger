@@ -1656,20 +1656,63 @@ def test_remote_stop_signals_recorded_node_serve_pid(monkeypatch, tmp_path):
     assert calls[-1] == ("wait", 30)
 
 
-def test_remote_readiness_waits_in_parallel(monkeypatch):
-    started = []
-    both_started = threading.Event()
+@pytest.fixture
+def readiness_pipes():
+    import os
+    handles = []
+    def create():
+        reader, writer = os.pipe()
+        stream = os.fdopen(reader, "r")
+        handles.append((stream, writer))
+        return SimpleNamespace(stdout=stream, poll=lambda: None), writer
+    yield create
+    for stream, writer in handles:
+        stream.close()
+        os.close(writer)
 
-    def ready(process, timeout):
-        started.append((process, timeout))
-        if len(started) == 2:
-            both_started.set()
-        assert both_started.wait(1)
 
-    monkeypatch.setattr(n, "_remote_ready", ready)
-    n._wait_remote_ready({"east": "east", "west": "west"}, 300)
+def test_remote_readiness_drains_banner_and_ready_in_one_write(readiness_pipes):
+    import os
+    east, ew = readiness_pipes()
+    west, ww = readiness_pipes()
+    os.write(ew, b'banner\n{"status":"ready","node":"east"}\n')
+    os.write(ww, b'{"status":"ready","node":"west"}\n')
+    result = n._wait_remote_ready({"west": west, "east": east}, 1)
+    assert list(result) == ["east", "west"]
+    assert result["east"]["node"] == "east"
 
-    assert sorted(started) == [("east", 300), ("west", 300)]
+
+def test_remote_readiness_fails_other_exit_without_waiting(readiness_pipes, monkeypatch):
+    east, _ = readiness_pipes()
+    west, _ = readiness_pipes()
+    west.poll = lambda: 1
+    monkeypatch.setattr(n.select, "select", lambda *args: pytest.fail("must detect exit before blocking"))
+    with pytest.raises(RuntimeError, match="west"):
+        n._wait_remote_ready({"east": east, "west": west}, 3600)
+
+
+def test_remote_readiness_preserves_partial_lines(readiness_pipes, monkeypatch):
+    process, _ = readiness_pipes()
+    fd = process.stdout.fileno()
+    chunks = iter((b'banner\n{"sta', b'tus":"rea', b'dy"}\n'))
+    monkeypatch.setattr(n.select, "select", lambda *args: ([fd], [], []))
+    monkeypatch.setattr(n.os, "read", lambda *args: next(chunks))
+    assert n._remote_ready(process, 1) == {"status": "ready"}
+
+
+def test_remote_readiness_uses_shared_deadline(readiness_pipes, monkeypatch):
+    east, _ = readiness_pipes()
+    west, _ = readiness_pipes()
+    ticks = iter((10, 10.5, 11.1))
+    monkeypatch.setattr(n.time, "monotonic", lambda: next(ticks))
+    waits = []
+    def select(readers, _w, _e, timeout):
+        waits.append(timeout)
+        return [], [], []
+    monkeypatch.setattr(n.select, "select", select)
+    with pytest.raises(TimeoutError):
+        n._wait_remote_ready({"east": east, "west": west}, 1)
+    assert waits == [.5]
 
 
 def test_serve_window_routes_every_session(monkeypatch):

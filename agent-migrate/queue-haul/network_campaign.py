@@ -1520,29 +1520,39 @@ def set_live_prefill(stack: ClusterStack,
 
 
 def _remote_ready(process: subprocess.Popen, timeout_s: float) -> dict:
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise RuntimeError("remote sink exited before readiness")
-        ready, _, _ = select.select([process.stdout], [], [], 1)
-        if ready:
-            line = process.stdout.readline()
-            try:
-                report = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if report.get("status") == "ready":
-                return report
-    raise TimeoutError("remote sink readiness timed out")
+    return _wait_remote_ready({"remote": process}, timeout_s)["remote"]
 
 
 def _wait_remote_ready(remote: dict[str, subprocess.Popen],
                        timeout_s: float) -> dict[str, dict]:
-    with ThreadPoolExecutor(max_workers=len(remote)) as pool:
-        futures = {node_id: pool.submit(_remote_ready, process, timeout_s)
-                   for node_id, process in remote.items()}
-        return {node_id: futures[node_id].result()
-                for node_id in sorted(futures)}
+    deadline = time.monotonic() + timeout_s
+    pending = {process.stdout.fileno(): node for node, process in remote.items()}
+    buffers, reports = {fd: b"" for fd in pending}, {}
+    while pending:
+        for node, process in remote.items():
+            if process.poll() is not None:
+                raise RuntimeError(f"remote sink exited before cluster readiness: {node}")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("remote sink readiness timed out")
+        ready, _, _ = select.select(list(pending), [], [], min(1, remaining))
+        for fd in ready:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                raise RuntimeError(f"remote sink closed readiness stream: {pending[fd]}")
+            buffers[fd] += chunk
+            while b"\n" in buffers[fd]:
+                line, buffers[fd] = buffers[fd].split(b"\n", 1)
+                try:
+                    report = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(report, dict) and report.get("status") == "ready":
+                    reports[pending.pop(fd)] = report
+                    break
+    if any(process.poll() is not None for process in remote.values()):
+        raise RuntimeError("remote sink exited before cluster readiness")
+    return {node: reports[node] for node in sorted(reports)}
 
 
 def _stop_remote(node: Node, key: Path, root: Path,
