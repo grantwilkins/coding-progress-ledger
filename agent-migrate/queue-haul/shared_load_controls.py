@@ -49,7 +49,7 @@ def run(model, cluster, calibration, root, key, resident_rps, context=16384,
             "destination_power_sensor": "NVML standard power usage: one-second average",
         })
         power.start(); started = True
-        gate = network._network_state_equivalence(stack, 32256, reference)
+        gate = network._network_state_equivalence(stack, 32256 if reference else context, reference)
         from transformers import AutoTokenizer
         vocabulary = AutoTokenizer.from_pretrained(str(testbed.model_path(stack.cfg))).vocab_size
         sessions = [serving.Session(f"resident-{i}", context - 1, 1, 128,
