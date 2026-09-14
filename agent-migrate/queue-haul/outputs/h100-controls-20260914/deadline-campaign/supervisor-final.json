@@ -1,0 +1,116 @@
+{
+  "jobs": {
+    "gemma_repeat_zero": {
+      "returncode": 0,
+      "recovered_from": "Validated saved results and previously observed successful supervisor completion; original timestamps unavailable in emptied state file"
+    },
+    "gpt_sea_full_reference": {
+      "returncode": 0,
+      "recovered_from": "Validated saved results and previously observed successful supervisor completion; original timestamps unavailable in emptied state file"
+    },
+    "gpt_sea_compact_reference_check": {
+      "returncode": 0,
+      "recovered_from": "Validated saved results and previously observed successful supervisor completion; original timestamps unavailable in emptied state file"
+    },
+    "gpt_repeat_zero": {
+      "started_wall_ns": 1789415251913385757,
+      "command": [
+        "/datadrive/qh0912/.venv/bin/python",
+        "network_campaign.py",
+        "run",
+        "--cluster",
+        "/datadrive/qh0912/queue-haul/azure_network_cluster_southeastasia_southcentral.json",
+        "--current-calibration",
+        "/datadrive/c12.json",
+        "--plan",
+        "/datadrive/d19/plans/m2.json",
+        "--run-root",
+        "/datadrive/d19/arms/m2",
+        "--stack-block",
+        "0"
+      ],
+      "returncode": 0,
+      "ended_wall_ns": 1789420678040814099
+    },
+    "reduce_qwen": {
+      "started_wall_ns": 1789420678041110042,
+      "command": [
+        "/datadrive/qh0912/.venv/bin/python",
+        "network_campaign.py",
+        "reduce",
+        "--plan",
+        "/datadrive/d19/plans/m0.json",
+        "--run-root",
+        "/datadrive/d19/arms/m0"
+      ],
+      "returncode": 0,
+      "ended_wall_ns": 1789420680140120608
+    },
+    "reduce_gemma": {
+      "started_wall_ns": 1789420680140389570,
+      "command": [
+        "/datadrive/qh0912/.venv/bin/python",
+        "network_campaign.py",
+        "reduce",
+        "--plan",
+        "/datadrive/d19/plans/m1.json",
+        "--run-root",
+        "/datadrive/d19/arms/m1"
+      ],
+      "returncode": 0,
+      "ended_wall_ns": 1789420682151657029
+    },
+    "reduce_gpt": {
+      "started_wall_ns": 1789420682151932691,
+      "command": [
+        "/datadrive/qh0912/.venv/bin/python",
+        "network_campaign.py",
+        "reduce",
+        "--plan",
+        "/datadrive/d19/plans/m2.json",
+        "--run-root",
+        "/datadrive/d19/arms/m2"
+      ],
+      "returncode": 0,
+      "ended_wall_ns": 1789420684093183305
+    },
+    "reduce_comparison": {
+      "returncode": 0,
+      "ended_wall_ns": 1789422080651822175,
+      "invocation": "model_hardware_drain_campaign.reduce([Path(/datadrive/d19)], Path(/datadrive/d19), expected={(Qwen/Qwen3.8-27B,H100),(google/gemma-4-26B-A4B-it,H100),(openai/gpt-oss-20b,H100)}, repeats=1)"
+    }
+  },
+  "repeats": 1,
+  "status": "selected_episodes_resolved_and_reduced",
+  "reviews": [
+    {
+      "wall_ns": 1789415246897446169,
+      "job": "gpt_repeat_zero",
+      "resolution": "Recovered empty supervisor state following source reboot. GPT results contain 16 complete and 3 failed episodes, including explicit Azure Spot Preempt at 19:33:38 GMT. Preserve every existing result and resume 21 unresolved episodes. No destination workers remain. Prior supervisor attempt history lost from empty file; earlier tool records retain it."
+    },
+    {
+      "wall_ns": 1789422080651823275,
+      "resolution": "Default comparison expected A100 arms; used existing explicit expected parameter for exact three requested H100 models. All strict evidence checks retained."
+    }
+  ],
+  "current_job": "reduce_comparison",
+  "previous_job_attempts": [
+    {
+      "name": "reduce_comparison",
+      "started_wall_ns": 1789420684093465708,
+      "command": [
+        "/datadrive/qh0912/.venv/bin/python",
+        "model_hardware_drain_campaign.py",
+        "reduce",
+        "--run-root",
+        "/datadrive/d19",
+        "--out",
+        "/datadrive/d19",
+        "--repeats",
+        "1"
+      ],
+      "returncode": 1,
+      "ended_wall_ns": 1789420684460383195
+    }
+  ]
+}

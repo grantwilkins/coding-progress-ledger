@@ -1,0 +1,32 @@
+{
+  "Qwen/Qwen3.8-27B / H100": {
+    "action_mix_episodes": 39,
+    "completed_episodes": 37,
+    "drain_deadline_attainment": 0.2,
+    "episodes": 40,
+    "excluded_attempts": 0,
+    "failed_episodes": 3,
+    "modeled_power_deadline_attainment": 0.2,
+    "retried_episodes": 0
+  },
+  "google/gemma-4-26B-A4B-it / H100": {
+    "action_mix_episodes": 40,
+    "completed_episodes": 39,
+    "drain_deadline_attainment": 0.975,
+    "episodes": 40,
+    "excluded_attempts": 0,
+    "failed_episodes": 1,
+    "modeled_power_deadline_attainment": 0.975,
+    "retried_episodes": 0
+  },
+  "openai/gpt-oss-20b / H100": {
+    "action_mix_episodes": 39,
+    "completed_episodes": 37,
+    "drain_deadline_attainment": 0.925,
+    "episodes": 40,
+    "excluded_attempts": 0,
+    "failed_episodes": 3,
+    "modeled_power_deadline_attainment": 0.925,
+    "retried_episodes": 0
+  }
+}

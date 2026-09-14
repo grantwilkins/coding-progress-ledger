@@ -1,0 +1,161 @@
+{
+  "within_model_changes": {
+    "Qwen/Qwen3.8-27B": true,
+    "google/gemma-4-26B-A4B-it": false,
+    "openai/gpt-oss-20b": false
+  },
+  "between_model_differences": {
+    "51.0": true,
+    "59.0": true,
+    "60.0": true,
+    "90.0": true
+  },
+  "all_episodes_completed": false,
+  "any_action_mix_change": true,
+  "cells": [
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "deadline_s": 51.0,
+      "episodes": 10,
+      "completed": 10,
+      "failed": 0,
+      "attained": 0,
+      "east_replay": 0.7,
+      "germany_replay": 2.6,
+      "east_kv_transfer": 0.7,
+      "germany_kv_transfer": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "deadline_s": 59.0,
+      "episodes": 10,
+      "completed": 10,
+      "failed": 0,
+      "attained": 0,
+      "east_replay": 0.7,
+      "germany_replay": 2.6,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 4.7
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "deadline_s": 60.0,
+      "episodes": 10,
+      "completed": 9,
+      "failed": 1,
+      "attained": 0,
+      "east_replay": 0.4444444444444444,
+      "germany_replay": 2.888888888888889,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 4.666666666666667
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "deadline_s": 90.0,
+      "episodes": 10,
+      "completed": 8,
+      "failed": 2,
+      "attained": 8,
+      "east_replay": 0,
+      "germany_replay": 2.5,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 5.5
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "deadline_s": 51.0,
+      "episodes": 10,
+      "completed": 10,
+      "failed": 0,
+      "attained": 10,
+      "east_replay": 0,
+      "germany_replay": 8,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 0
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "deadline_s": 59.0,
+      "episodes": 10,
+      "completed": 10,
+      "failed": 0,
+      "attained": 10,
+      "east_replay": 0,
+      "germany_replay": 8,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 0
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "deadline_s": 60.0,
+      "episodes": 10,
+      "completed": 10,
+      "failed": 0,
+      "attained": 10,
+      "east_replay": 0,
+      "germany_replay": 8,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 0
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "deadline_s": 90.0,
+      "episodes": 10,
+      "completed": 9,
+      "failed": 1,
+      "attained": 9,
+      "east_replay": 0,
+      "germany_replay": 8,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 0
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "deadline_s": 51.0,
+      "episodes": 10,
+      "completed": 10,
+      "failed": 0,
+      "attained": 10,
+      "east_replay": 0,
+      "germany_replay": 0,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "deadline_s": 59.0,
+      "episodes": 10,
+      "completed": 7,
+      "failed": 3,
+      "attained": 7,
+      "east_replay": 0,
+      "germany_replay": 0,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "deadline_s": 60.0,
+      "episodes": 10,
+      "completed": 10,
+      "failed": 0,
+      "attained": 10,
+      "east_replay": 0,
+      "germany_replay": 0,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "deadline_s": 90.0,
+      "episodes": 10,
+      "completed": 10,
+      "failed": 0,
+      "attained": 10,
+      "east_replay": 0,
+      "germany_replay": 0,
+      "east_kv_transfer": 0,
+      "germany_kv_transfer": 8
+    }
+  ]
+}
