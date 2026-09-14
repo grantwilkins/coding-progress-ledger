@@ -1,0 +1,16 @@
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+[32;20m[2026-09-10 20:02:43,374] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/home/azureuser/coding-progress-ledger/agent-migrate/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-09-10 20:02:43,394] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-09-10 20:02:43,545] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-10 20:02:43,545] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-10 20:02:43,547] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-09-10 20:02:48,195] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+Traceback (most recent call last):
+  File "/tmp/queue-haul-southeastasia-readiness.py", line 38, in <module>
+    source = request(stack.cfg.src_port)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/queue-haul-southeastasia-readiness.py", line 33, in request
+    assert response.status == 200, data
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'error': {'message': 'EngineCore encountered an issue. See stack trace (above) for the root cause.', 'type': 'InternalServerError', 'param': None, 'code': 500}}

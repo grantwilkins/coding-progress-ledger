@@ -1,0 +1,47 @@
+{
+  "east": {
+    "clock_uncertainty_ms": 0.035580999999999995,
+    "datadrive": true,
+    "dirty": false,
+    "git_sha": "6e51f74845c6199eb72c4da66baa10d84f53caa3",
+    "gpu": "NVIDIA H100 NVL",
+    "gpu_memory_mib": 95830,
+    "lmcache": "0.5.1",
+    "priority": "Spot",
+    "private_ip": "10.15.0.4",
+    "ptp": "/dev/ptp0",
+    "region": "southeastasia",
+    "vllm": "0.24.0",
+    "vm_size": "Standard_NC40ads_H100_v5"
+  },
+  "germany": {
+    "clock_uncertainty_ms": 0.01033,
+    "datadrive": true,
+    "dirty": false,
+    "git_sha": "6e51f74845c6199eb72c4da66baa10d84f53caa3",
+    "gpu": "NVIDIA H100 NVL",
+    "gpu_memory_mib": 95830,
+    "lmcache": "0.5.1",
+    "priority": "Spot",
+    "private_ip": "10.13.0.4",
+    "ptp": "/dev/ptp0",
+    "region": "southcentralus",
+    "vllm": "0.24.0",
+    "vm_size": "Standard_NC40ads_H100_v5"
+  },
+  "westus3": {
+    "clock_uncertainty_ms": 0.020523999999999997,
+    "datadrive": true,
+    "dirty": false,
+    "git_sha": "6e51f74845c6199eb72c4da66baa10d84f53caa3",
+    "gpu": "NVIDIA H100 NVL",
+    "gpu_memory_mib": 95830,
+    "lmcache": "0.5.1",
+    "priority": "Spot",
+    "private_ip": "10.11.0.4",
+    "ptp": "/dev/ptp0",
+    "region": "WestUS3",
+    "vllm": "0.24.0",
+    "vm_size": "Standard_NC40ads_H100_v5"
+  }
+}
