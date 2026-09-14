@@ -23,9 +23,11 @@ def actions(arm, count=8):
 
 
 def run(model, cluster, calibration, root, key, resident_rps, context=16384,
-        seconds=120., warmup=30., reference=None):
+        seconds=120., warmup=30., reference=None, arms=("none", "replay", "kv", "mixed")):
     if len(cluster.destinations) != 1 or not 0 < warmup < seconds or resident_rps <= 0:
         raise ValueError("need one destination and positive resident rate/observation windows")
+    if not arms or len(set(arms)) != len(arms) or set(arms) - {"none", "replay", "kv", "mixed"}:
+        raise ValueError("invalid matched control arms")
     network.configure_handoff_environment(model)
     contract = network.freeze_contract(calibration)
     node = cluster.destinations[0]
@@ -42,7 +44,7 @@ def run(model, cluster, calibration, root, key, resident_rps, context=16384,
             "config": json.loads(json.dumps(asdict(stack.cfg), default=str)), "hosts": hosts, "cluster": asdict(cluster),
             "runtime": network.expected_runtime(), "resident_rps": resident_rps,
             "context_tokens": context, "migration_count": 8, "repeats": 1,
-            "seconds": seconds, "warmup_s": warmup,
+            "seconds": seconds, "warmup_s": warmup, "arms": list(arms),
             "scope": "Destination interference at an explicit offered rate, not a claim of 50% utilization or source-drain power relief. Synthetic resident inputs. Source histories are idle after export.",
             "network": "Natural South Central route; prior two-route envelope subset, not a new independent route calibration.",
             "calibration_sha256": network.profiler.object_hash(calibration),
@@ -54,7 +56,7 @@ def run(model, cluster, calibration, root, key, resident_rps, context=16384,
         vocabulary = AutoTokenizer.from_pretrained(str(testbed.model_path(stack.cfg))).vocab_size
         sessions = [serving.Session(f"resident-{i}", context - 1, 1, 128,
                                     vocabulary, 0, force_output=False) for i in range(8)]
-        for arm in ("none", "replay", "kv", "mixed"):
+        for arm in arms:
             arm_root = root / arm; arm_root.mkdir()
             network._clear_cluster(stack)
             prepared = []
@@ -139,6 +141,10 @@ if __name__ == "__main__":
     p.add_argument("--ssh-key", type=Path, default=Path.home() / ".ssh/azrs")
     p.add_argument("--resident-rps", type=float, required=True)
     p.add_argument("--state-reference", type=Path)
+    p.add_argument("--arms", nargs="+", choices=("none", "replay", "kv", "mixed"), default=("none", "replay", "kv", "mixed"))
+    p.add_argument("--seconds", type=float, default=120)
+    p.add_argument("--warmup-s", type=float, default=30)
     a = p.parse_args()
     run(a.model, network.Cluster.load(a.cluster), json.loads(a.calibration.read_text()),
-        a.run_root, a.ssh_key, a.resident_rps, reference=a.state_reference)
+        a.run_root, a.ssh_key, a.resident_rps, seconds=a.seconds, warmup=a.warmup_s,
+        reference=a.state_reference, arms=tuple(a.arms))
