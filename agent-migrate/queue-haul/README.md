@@ -3315,7 +3315,8 @@ Its coding subset averaged 152 W; eight-concurrency prefill, decode, and mixed
 controls averaged about 383 W, with adjacent loaded-idle windows around 92–112 W.
 Only two complete recorded histories fit the pinned 32K limit; the subset is explicit.
 These finite synthetic-token controls do not establish sustained SLO capacity or
-net migration relief. Qwen and Gemma power controls were launched in the same batch.
+net migration relief. [Qwen](outputs/h100-controls-20260914/qwen/summary.json)
+and [Gemma](outputs/h100-controls-20260914/gemma/summary.json) also completed all four power controls.
 The queued shared-load batch uses 16K contexts, eight migrations, 0.25 offered
 resident requests/s, and none/replay/KV/mixed arms for each model. It measures
 destination interference with the existing eager timing runtime; it does not
@@ -3323,6 +3324,11 @@ claim 50% utilization or continued source service. The optimized power-control
 runtime is recorded separately. Replay bypasses LMCache; each arm starts with
 cleared caches. Schedule violations and compact-byte bound failures remain invalid
 measurements with retained raw events.
+The first GPT shared-load launch stopped before any arms: its 32,256-token
+KV output differed from two matching cold replays despite correct wire bytes;
+[the failed gate](outputs/h100-controls-20260914/gpt-32k-failed-gate.json) is preserved.
+Qwen/Gemma were relaunched independently, and GPT continuation was queued with a
+strict check at the actual 16K experimental context. This does not validate 32K.
 
 ```bash
 uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json
