@@ -1,5 +1,5 @@
 {
-  "as_of_utc": "2026-09-14T12:36:02.876107+00:00",
+  "as_of_utc": "2026-09-14T13:34:49.197922+00:00",
   "completed": {
     "power_controls": [
       "gpt",
@@ -20,10 +20,7 @@
       ]
     }
   },
-  "restarted": {
-    "gpt_mixed": "/datadrive/shared-gpt-finish-20260914",
-    "gemma": "/datadrive/shared-gemma-finish-20260914"
-  },
+  "restarted": {},
   "queued": {
     "qwen_resident_baseline": {
       "root": "/datadrive/shared-qwen-baseline005-20260914",
@@ -52,5 +49,17 @@
     "not_before_utc": "2026-09-14 11:47:02",
     "evidence": "shared-gpt-partial/raw/nodes/germany/scheduled_events.jsonl.gz",
     "gpt_mixed_valid_completions": 0
+  },
+  "queue": {
+    "unit": "qh-shared-resume-20260914.service",
+    "status": "waiting_for_southcentral",
+    "order": [
+      "gemma four arms",
+      "gpt mixed",
+      "qwen lower-load baseline"
+    ],
+    "supervisor": "resume_controls.py",
+    "startup": "source and destination model loading overlap after network services are ready",
+    "resume_policy": "Skip completed request arms; retain each interrupted attempt; do not retry explicit validation failures; telemetry reduction remains separate."
   }
 }

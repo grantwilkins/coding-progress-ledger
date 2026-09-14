@@ -3345,6 +3345,13 @@ explicitly marks the overall run incomplete. Resident mean TTFT was
 preemption at 11:47 UTC and has zero valid completions. Only mixed and the
 unstarted Gemma arms were restarted after the host returned; completed arms
 remain unchanged.
+After another connection loss, the remaining queue was placed under
+`resume_controls.py`: Gemma first, then GPT mixed, then the lower-load baseline.
+It waits for South Central before deployment, resumes unfinished request arms,
+and retains explicit validation failures for review. Source and destination model
+startup now overlap after Redis/proxy readiness. Request-arm completion remains
+separate from final telemetry collection and reduction.
+
 
 ```bash
 uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json
