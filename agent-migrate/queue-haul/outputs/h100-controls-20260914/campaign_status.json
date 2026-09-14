@@ -1,5 +1,5 @@
 {
-  "as_of_utc": "2026-09-14T14:20:35.073975+00:00",
+  "as_of_utc": "2026-09-14T14:43:43.747347+00:00",
   "completed": {
     "power_controls": [
       "gpt",
@@ -29,19 +29,18 @@
     "validated_shared_requests": {
       "resident": 360,
       "migration": 72
+    },
+    "qwen_lowload_baseline": {
+      "archive": "shared-qwen-lowload",
+      "offered_rps": 0.05,
+      "duration_s": 240,
+      "resident_requests": 12,
+      "peak_waiting": 0
     }
   },
   "restarted": {},
-  "queued": {
-    "qwen_resident_baseline": {
-      "root": "/datadrive/shared-qwen-baseline005-20260914",
-      "offered_rps": 0.05,
-      "duration_s": 240,
-      "warmup_s": 60
-    }
-  },
+  "queued": {},
   "remaining": [
-    "Finish and assess the lower-load baseline before steady/50%-load claims.",
     "Measure source work continuing at destination before net drain-power claims.",
     "Deadline-dependent planner action-mix campaign remains incomplete; fixed-arm post-hoc deadline counts are available."
   ],
@@ -62,7 +61,7 @@
   },
   "queue": {
     "unit": "qh-shared-resume-20260914.service",
-    "status": "running_qwen_lower_load_baseline",
+    "status": "complete_and_reduced",
     "order": [
       "gemma four arms",
       "gpt mixed",
@@ -71,5 +70,8 @@
     "supervisor": "resume_controls.py",
     "startup": "source and destination model loading overlap after network services are ready",
     "resume_policy": "Skip completed request arms; retain each interrupted attempt; do not retry explicit validation failures; telemetry reduction remains separate."
-  }
+  },
+  "limitations": [
+    "Lower-load baseline is a finite 12-request observation, not a sustained SLO or 50% utilization calibration."
+  ]
 }

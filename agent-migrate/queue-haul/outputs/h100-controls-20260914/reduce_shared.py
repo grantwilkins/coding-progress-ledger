@@ -60,7 +60,8 @@ for arm in summary['selected_arms']:
     row['queue_at_migration'] = {k: float(before[-1][k]) for k in ('vllm:num_requests_running', 'vllm:num_requests_waiting')}
     row['peak_waiting'] = max(float(r['vllm:num_requests_waiting']) for r in metrics)
     row['power_windows'] = {}
-    for name, start, finish in [('common_arrival_window', epoch, epoch + int(metadata['seconds'] * 1e9)), ('completion_tail', epoch + int(metadata['seconds'] * 1e9), end)]:
+    last_request_end = max(r['end_ns'] for r in events if r['event'] == 'completion')
+    for name, start, finish in [('common_arrival_window', epoch, epoch + int(metadata['seconds'] * 1e9)), ('completion_tail', epoch + int(metadata['seconds'] * 1e9), last_request_end)]:
         if finish <= start: continue
         src = [r['average_power_mw']['value'] / 1000 for r in source_power if start <= r['query_start_monotonic_ns'] < finish and r['average_power_mw']['status'] == 'ok']
         dst = [float(r['power_w']) for r in destination_power if wall + start - epoch <= int(r['wall_ns']) < wall + finish - epoch and r['valid'] == '1']

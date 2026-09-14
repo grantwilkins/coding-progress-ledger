@@ -3359,7 +3359,11 @@ had no queue, unlike overloaded GPT/Qwen. Gemma migration mean TTFT favored repl
 (4.90 s versus KV 7.68 s), while KV better protected resident latency.
 [Fixed-arm deadline counts](outputs/h100-controls-20260914/fixed_arm_deadline_counts.csv)
 threshold the observed timings; they are not executed deadline-dependent policy
-choices. The lower-load Qwen baseline is tracked separately in the timestamped status.
+choices. The [lower-load Qwen baseline](outputs/h100-controls-20260914/shared-qwen-lowload/summary.json)
+also completed: 12 requests at 0.05 RPS over 240 seconds, zero failures, no observed
+queue, and mean TTFT 8.26 seconds. This finite observation does not establish
+sustained SLO capacity or 50% utilization. The controls batch is complete; the
+original deadline-policy sweep and net source-drain power validation remain incomplete.
 
 
 
