@@ -11,6 +11,7 @@ from scipy.optimize import nnls
 
 ROOT = Path(__file__).parent
 UNLOADED = ROOT / 'outputs/a100-replay-live-20260909T1920/unloaded-analysis.json'
+SERVER_REPORT = ROOT / 'outputs/a100-resident-server-timing-20260910T1723/report.json'
 TOKEN_BUDGET = 8192
 
 
@@ -27,6 +28,54 @@ def errors(observed, predicted):
     return {'samples': len(delta), 'rmse_s': float(np.sqrt(np.mean(delta ** 2))),
             'median_absolute_error_s': float(np.median(abs(delta))),
             'max_absolute_error_s': float(max(abs(delta)))}
+
+
+def calibrate_server_decode(report_path=SERVER_REPORT):
+    """Condition East decode cadence on complete local evidence; hold out repeat 2."""
+    report_path = Path(report_path)
+    source = report_path.read_bytes()
+    report = json.loads(source)
+    if report['schema'] != 'a100-east-resident-server-timing-report-v1' or report['tokens_per_decode_request'] != 1536:
+        raise ValueError('expected the bounded East A100 server timing report')
+    expected = {f'warm-c{context}-n{width}-r{repeat}': width
+                for repeat in (1, 2) for context in (8192, 30000) for width in (1, 8, 16)}
+    cells = {c['cell']: c for c in report['warm_cells']}
+    if len(cells) != len(report['warm_cells']) or cells.keys() != expected.keys():
+        raise ValueError('expected twelve unique warm decode cells')
+    complete = {}
+    for name, width in expected.items():
+        cell = cells[name]
+        if cell['request_evidence_complete'] is not True:
+            continue
+        timing = cell['server_ready_tpot_s']
+        if cell['reasons'] or cell['request_count'] != width or timing['n'] != width or not math.isfinite(timing['median']) or timing['median'] <= 0:
+            raise ValueError('invalid complete server decode evidence: ' + name)
+        complete[name] = timing['median']
+    training = {k: v for k, v in complete.items() if k.endswith('-r1')}
+    heldout = {k: v for k, v in complete.items() if k.endswith('-r2')}
+    if len(training) != 6 or set(heldout) != {k for k in expected if k.endswith('-r2') and k != 'warm-c30000-n16-r2'}:
+        raise ValueError('six complete training cells and five complete heldout cells required')
+    step = float(np.median(list(training.values())))
+    splits = {}
+    for label, values in (('training', training), ('heldout', heldout)):
+        observed = list(values.values())
+        splits[label] = {'cells': list(values), 'server_ready_tpot_s': observed,
+                         'error': dict(errors(observed, [step] * len(observed)),
+                             max_relative_error=float(max(abs(step - v) / v for v in observed)))}
+    source_name = str(report_path.relative_to(ROOT) if report_path.is_relative_to(ROOT) else report_path)
+    return {'coefficients': {'decode_step_s': step, 'decode_attention_s': 0.0},
+            'input_sha256': {source_name: hashlib.sha256(source).hexdigest()},
+            'aggregation': 'Median of repeat-1 cell medians; equal weight per context/concurrency cell.',
+            **splits, 'excluded_cells': [{'cell': k, 'reasons': c['reasons']} for k, c in cells.items() if k not in complete],
+            'destination': report['destination'],
+            'global_telemetry_accepted': report['global_telemetry_accepted'],
+            'telemetry_error_counts': report['telemetry_error_counts'],
+            'automatic_regional_substitution': False,
+            'scope': ['Conditional East A100 calibration accepts complete local token evidence despite failed global telemetry acceptance.',
+                'Server output-ready mean TPOT estimates effective shared iteration cadence, including scheduling and host gaps; it is not exclusive GPU busy time.',
+                'The fit covers warm 8192/30000-token contexts, concurrency 1/8/16 and 1536-token outputs; a zero attention slope avoids fitting an unsupported trend.',
+                'Repeat 2 is held out, and its incomplete 30000-token/concurrency-16 cell is excluded from fitting and validation.',
+                'Prefill and endpoint coefficients are unchanged. No regional substitution, mixed-prefill interference fit, or fleet SLO certification is implied.']}
 
 
 def calibrate(rows, *, request_sha256, unloaded_path=UNLOADED):

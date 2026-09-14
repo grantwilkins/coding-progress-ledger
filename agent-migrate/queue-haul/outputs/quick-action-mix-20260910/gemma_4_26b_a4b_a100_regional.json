@@ -1,0 +1,379 @@
+{
+  "cases": {
+    "central": {
+      "F": 17375.71057531725,
+      "G": 985.6643841558596,
+      "action_power_w": {
+        "catch_up": {
+          "1": [
+            0.0,
+            12.017662108262115
+          ],
+          "2": [
+            0.0,
+            14.954266414141408
+          ],
+          "4": [
+            0.0,
+            18.239915841129545
+          ],
+          "8": [
+            0.0,
+            20.283268712278655
+          ]
+        },
+        "kv_transfer": {
+          "1": [
+            0.0,
+            12.017662108262115
+          ],
+          "2": [
+            0.0,
+            14.954266414141408
+          ],
+          "4": [
+            0.0,
+            18.239915841129545
+          ],
+          "8": [
+            0.0,
+            20.283268712278655
+          ]
+        },
+        "off": {
+          "1": [
+            0,
+            0
+          ]
+        },
+        "replay": {
+          "1": [
+            0.0,
+            24.88152076878945
+          ],
+          "2": [
+            0.0,
+            33.725654022988486
+          ],
+          "4": [
+            0.0,
+            53.54504600289196
+          ],
+          "8": [
+            0.0,
+            60.14455213618158
+          ]
+        },
+        "replay_on_request": {
+          "1": [
+            0.0,
+            24.88152076878945
+          ]
+        },
+        "sleep": {
+          "1": [
+            0,
+            0
+          ]
+        }
+      },
+      "decode_tps": {
+        "1": [
+          [
+            4096,
+            15.81612521132767
+          ],
+          [
+            8192,
+            15.377531072476183
+          ],
+          [
+            16384,
+            15.591510710627752
+          ],
+          [
+            24576,
+            15.269110475446716
+          ],
+          [
+            32256,
+            15.517943318497728
+          ]
+        ]
+      },
+      "kv_transfer": {
+        "block_bytes": 57671680,
+        "block_tokens": 256,
+        "bytes_by_context": [
+          [
+            4096,
+            922746880
+          ],
+          [
+            8192,
+            1845493760
+          ],
+          [
+            16384,
+            3690987520
+          ],
+          [
+            24576,
+            5536481280
+          ],
+          [
+            32256,
+            7266631680
+          ]
+        ],
+        "catch_up_fixed_s": 1.052118278,
+        "destination_bytes_per_s": 217972211.66637412,
+        "initial_completion_s": 0.7472470372499993,
+        "setup_s": 0,
+        "tail_replay_tps": 919.4260924435412
+      },
+      "phase_power": {
+        "a_s_per_prefill_token": 0.0006754110756270533,
+        "b_s_per_decode_token": 0.04228833306888255,
+        "bootstrap": [],
+        "delta_w": 191.77730851952595,
+        "grouped_cv_rmse_w": 4.908438985750166,
+        "p0_w": 115.27135416666667,
+        "provenance_sha256": "a718639a0e424d95cd455fc647f3d4c477d0ebd147586327d79ed8c60cfb25b5",
+        "valid_hull": [
+          [
+            492.8321920779298,
+            985.6643841558596
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            8064.644941059848,
+            0.28127249375906277
+          ],
+          [
+            13548.007864159468,
+            1.6538095537304038
+          ],
+          [
+            17375.71057531725,
+            8.484233679354126
+          ],
+          [
+            6443.01826121866,
+            682.7039217185336
+          ]
+        ],
+        "within_5w_fraction": 0.5416666666666666
+      },
+      "power_curve": [
+        [
+          0,
+          115.27135416666667
+        ],
+        [
+          42.01496809227299,
+          307.04866268619264
+        ]
+      ],
+      "prefill_tps": {
+        "1": [
+          [
+            4096,
+            14181.160426008015
+          ],
+          [
+            8192,
+            12949.915956594627
+          ],
+          [
+            16384,
+            10133.136311782137
+          ],
+          [
+            24576,
+            8429.933496036492
+          ],
+          [
+            32256,
+            7267.488405263661
+          ]
+        ]
+      },
+      "replay_completion_s": 0,
+      "replay_tps": {
+        "1": [
+          [
+            4096,
+            10354.393726005184
+          ],
+          [
+            8192,
+            10525.961444533648
+          ],
+          [
+            16384,
+            9158.80370036506
+          ],
+          [
+            24576,
+            7898.970082395952
+          ],
+          [
+            32256,
+            6988.044110733223
+          ]
+        ]
+      },
+      "shutdown_s": null,
+      "sleep_power_delta_w": 0.015758548702308417,
+      "sleep_s": 3.2890054985,
+      "switch_s": 0.000173443
+    }
+  },
+  "gpus_per_node": 1,
+  "hardware": "NVIDIA A100 80GB PCIe",
+  "kv_capacity_tokens": 847886,
+  "kv_geometry": {
+    "capacity_bytes": [
+      22877306880,
+      22877306880,
+      22877306880,
+      22877306880,
+      22877306880,
+      22877306880,
+      22877306880
+    ],
+    "groups": [
+      "kernel-0:engine-0",
+      "kernel-1:engine-1",
+      "kernel-2:engine-2",
+      "kernel-3:engine-3",
+      "kernel-4:engine-4",
+      "kernel-5:engine-5",
+      "shared-allocator-budget"
+    ],
+    "resident_bytes": [
+      [
+        4096,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        83886080,
+        293601280
+      ],
+      [
+        8192,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        167772160,
+        377487360
+      ],
+      [
+        16384,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        335544320,
+        545259520
+      ],
+      [
+        24576,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        503316480,
+        713031680
+      ],
+      [
+        32256,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        660602880,
+        870318080
+      ]
+    ]
+  },
+  "max_destination_kv_streams": 8,
+  "max_destination_replays": 1,
+  "max_ell": 1.0634392761026565,
+  "max_power_load": 42.01496809227299,
+  "model": "google/gemma-4-26B-A4B-it",
+  "power_scope": "gpu",
+  "power_window_s": 5.0,
+  "precision": "bf16",
+  "profile_id": "google-gemma-4-26b-a4b-it-a100-regional-architecture-92616cf9",
+  "schema": "queue-haul-model-profile-v6",
+  "sources": {
+    "capacity": {
+      "kind": "measured",
+      "reference": "/datadrive/gemma-launch-east-20260908-004 distributed evidence; timing roots /datadrive/gemma-regional-timing-germany-20260907-005",
+      "relative_error": 0,
+      "valid_range": [
+        0,
+        847886
+      ]
+    },
+    "kv_transfer": {
+      "kind": "measured",
+      "reference": "/datadrive/gemma-launch-east-20260908-004 distributed evidence; timing roots /datadrive/gemma-regional-timing-germany-20260907-005",
+      "relative_error": 0,
+      "valid_range": [
+        922746880,
+        7266631680
+      ]
+    },
+    "power": {
+      "kind": "measured",
+      "reference": "outputs/a100-drain-readiness-20260907/gemma-power-fit.json",
+      "relative_error": 0.015985866679271776,
+      "valid_range": [
+        0,
+        42.01496809227299
+      ]
+    },
+    "replay": {
+      "kind": "measured",
+      "reference": "/datadrive/gemma-launch-east-20260908-004 distributed evidence; timing roots /datadrive/gemma-regional-timing-germany-20260907-005",
+      "relative_error": 0,
+      "valid_range": [
+        4096,
+        32256
+      ]
+    },
+    "service": {
+      "kind": "measured",
+      "reference": "/datadrive/gemma-concurrency-20260908-001,/datadrive/gemma-launch-east-20260908-004 source warm requests and power-run throughput",
+      "relative_error": 0,
+      "valid_range": [
+        4096,
+        32256
+      ]
+    },
+    "transitions": {
+      "kind": "assumed",
+      "reference": "Legacy A100 transition parameters; drain experiment leaves the source awake.",
+      "relative_error": 1.0,
+      "valid_range": [
+        0.0,
+        300.0
+      ]
+    }
+  },
+  "status": "fitted",
+  "tensor_parallel": 1
+}

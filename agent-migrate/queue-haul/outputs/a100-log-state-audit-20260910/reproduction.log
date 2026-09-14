@@ -1,0 +1,8 @@
+uv run --offline --no-sync --with aiohttp --with torch --with blake3 python outputs/a100-log-state-audit-20260910/initial-state.py
+{"episodes": 20, "active_service_requests": 35, "output": "outputs/a100-log-state-audit-20260910/initial-state.json", "sha256": "4ed3b7164bc765a7569c945b3bb80342355dd508b13608ab3eac3ccfea1edfcc"}
+
+Byte-for-byte reproduction passed: initial-state 4ed3b7164bc765a7569c945b3bb80342355dd508b13608ab3eac3ccfea1edfcc
+uv run --offline --no-sync --with aiohttp --with torch --with blake3 python outputs/a100-log-state-audit-20260910/recovery.py
+{"episodes": 20, "primary_rows": 12, "path": "outputs/a100-log-state-audit-20260910/recovery.json"}
+
+Byte-for-byte reproduction passed: recovery 3a50296dae799686181f88c8be1ece33dbf1669545e6b798a116b50d7d87d3c3

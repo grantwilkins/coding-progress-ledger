@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/tmp/qh-timing-code/outputs/a100-resident-server-timing-20260910T1723/verify-node.py", line 9, in <module>
+    actual = {name: {'sha256': hashlib.file_digest((model/name).open('rb'), 'sha256').hexdigest(), 'bytes': (model/name).stat().st_size} for name in expected}
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/pathlib.py", line 1013, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee/original/model.safetensors'

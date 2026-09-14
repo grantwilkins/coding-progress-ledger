@@ -49,3 +49,9 @@ outputs/a100-pooled-service-pre-certificate-retry/native-runtimes/
 outputs/a100-pooled-service-pre-certificate-retry/group-logs/
 outputs/a100-pooled-service-pre-certificate-retry/cpu-staging/
 outputs/a100-pooled-service-pre-certificate-retry/recovery/group-*.log
+
+# Oversized raw telemetry; keep compressed archives in Git.
+/outputs/a100-replay-final-20260910T0352/request-events.jsonl
+/outputs/a100-replay-final-20260910T0352/destination-engine-metrics.jsonl
+/outputs/a100-replay-final-20260910T0352/requests.jsonl
+/outputs/a100-resident-server-timing-20260910T1723/request-events.jsonl

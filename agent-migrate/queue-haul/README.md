@@ -20,8 +20,447 @@ excluding CPUs and peripherals. This is the requested A100 study, not the
 original H100 configuration. Eight GPUs share each modeled node. The next campaign
 uses the recorded `coding` and `coding_long` agentic trajectories; `measured_pack`
 remains a hardware-validation workload. The default output is
-`outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped: the replay
-diagnosis below is complete, but fleet resident latency is not validated.
+`outputs/a100-pooled-agentic-2mw`. The full campaign remains stopped: fleet
+resident latency and the extrapolated network configuration are not validated.
+
+The September 11 [bandwidth sweep](outputs/a100-bandwidth-ttft-20260911/summary.json)
+compares both agentic workloads and all five policies at **0.1, 0.4, 1, 2, 5,
+10, 25.6 and 100 Tb/s**, with **30/60/120 s** deadlines. Reproduce its 240
+conditional policy evaluations with:
+
+```bash
+uv run python pool_shed_bandwidth_sweep.py --out outputs/a100-bandwidth-ttft-reproduction \
+  --policies queue_haul greedy kv_only replay_only isolated_fastest
+```
+
+The numerical generator is commit `f91bf094`; the later
+[rendering change](outputs/a100-bandwidth-ttft-20260911/validation/rendering.json)
+only improves figure labels and layout. Frozen source and measurement hashes
+are in `config.json`. Recorded per-case runtimes total **27.71 min of simulation**
+and **22.01 min of TTFT checking** (49.72 min combined, excluding setup and rendering).
+
+KV-only and replay-only also use the common LP admission scheduler with their
+action restricted; they are optimized single-action baselines. The migration
+contract is **one-token readiness**, followed by real agentic service. Hardware
+validation probes requested up to 512 output tokens and typically produced all
+512. At the frozen 35.486 ms decode cadence, the additional 511 steps take about
+18.13 s per sequence; sequences may decode concurrently. That probe-DONE time is
+not charged to the modeled handoff, and must not be confused with replay's
+intrinsic context-rebuild time. A probe-completion comparison requires matching
+this contract for both methods.
+
+It freezes candidate batches, source trajectories, resident calendars and
+planning clocks across bandwidths. Both destination routes share the stated
+site allocation. Solver wall time is recorded but does not consume the modeled
+migration deadline. This is one source snapshot with two resident phase samples,
+without a fleet confidence interval. Eight GPUs share an assumed **80 Gb/s host migration budget**:
+each source history reserves 1.25 Gb/s and each destination GPU reserves
+10 Gb/s, without borrowing idle shares. These conservative reservations enforce
+host ceilings without asserting a measured host placement. Independent per-GPU
+transport-worker equivalents are an unmeasured scaling assumption; measured
+per-wave goodput and application limits still apply. This is not Azure A100's
+published IP configuration. Requested and effective budgets are saved separately.
+
+The [power–deadline plot](outputs/a100-bandwidth-ttft-20260911/power_deadline_frontier.pdf)
+and [30 s action mix](outputs/a100-bandwidth-ttft-20260911/action_mix_d30.pdf)
+show **frozen fleet-model estimates**, not achieved SLO-safe shed. The separate
+[resident TTFT plot](outputs/a100-bandwidth-ttft-20260911/resident_ttft_attainment.pdf)
+reports the worst trigger-aligned 30 s window, retaining original offered times,
+source-pause waiting and missing first tokens. Two fixed synthetic calendars per
+replica start with eight warm histories and develop a 60 s baseline; unused
+destination GPUs contribute resident-only controls. The calendars use nominal
+50% fleet pacing, not the higher coding acquisition rate. Full-context migration
+replay has no cache discount; only ordinary same-history service reuses KV.
+
+At a **30 s deadline**, the saved estimates show the bandwidth-dependent mix:
+
+| Workload | Shared Tb/s | QH handoff work | Replay-only handoff work | QH KV share of completed sessions | QH resident TTFT attainment |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| coding | 1 | 87.95% | 85.87% | 5.25% | 86.54% |
+| coding | 10 | 98.36% | 85.87% | 56.23% | 94.06% |
+| coding | 100 | 99.04% | 85.87% | 93.01% | 98.42% |
+| coding_long | 1 | 73.58% | 70.77% | 7.58% | 76.52% |
+| coding_long | 10 | 88.85% | 70.77% | 70.28% | 88.40% |
+| coding_long | 100 | 95.99% | 70.77% | 95.28% | 97.76% |
+
+TTFT attainment means the fraction receiving a first token within 1 s; the
+target is 90%. At 10 Tb/s and 30 s, KV-only hands off **90.03%** of long-context
+work, slightly more than QH's **88.85%**, while QH misses that resident target.
+The [network review](outputs/a100-bandwidth-ttft-20260911/validation/network-review.json)
+also explains greedy's smaller packs and the nonmonotonic controller outcomes:
+each incoming pack permanently reserves a destination GPU, and admission uses
+finite lookahead. These results are not a global placement optimum. High
+bandwidth can stop helping when per-wave endpoint limits, fixed host shares or
+destination packing bind.
+
+`greedy_priced` is the native **QH Priced Greedy** temporal allocator. New
+bandwidth sweeps select it by default; `--policies` can still select the original
+`greedy` control. Legacy campaign entry points retain their original policies.
+The old greedy score exhausts one candidate against the remaining resources.
+Exhausting a source cohort can eliminate overlapping, more efficient packs;
+each accepted pack permanently reserves a GPU. At 10 Tb/s and 30 s on `coding`,
+old greedy averages 3.004 sessions per destination GPU versus LP's 3.891,
+handing off 85.18% versus 98.36% of work.
+
+The replacement uses the existing Rust extension: lazy heap seeding, a greedy
+covering-dual bound, sparse coordinate updates, and feasible support compression.
+Row penalties account for the different scales of source and shared resources;
+each multiplier update follows both a forward and a backward coordinate sweep.
+Compression preserves the primary objective within numerical tolerance;
+debt breaks heap ties. Bounded groups of at most
+128 touched resource rows keep its dense basis small; a single column touching
+more rows needs no support reduction. It calls no generic LP solver. The
+coordinate update follows the augmented-Lagrangian approach of
+[Yen et al. (NeurIPS 2015)](https://papers.neurips.cc/paper_files/paper/2015/file/0966289037ad9846c5e994be2a91bafa-Paper.pdf);
+our fixed sweeps and screening are a heuristic, without an inherited convergence
+rate. Every result must pass an independent original-unit feasibility and dual
+coverage check.
+
+For each fixed admission matrix, a feasible resource-price upper bound must be
+within **0.001 of total source work (0.1 percentage point)** of the returned
+allocation; otherwise planning fails. Actual relative gaps remain recorded,
+including larger relative gaps on tiny late replans. This certifies the primary
+fractional packing objective. It does not certify LP's secondary minimization,
+the evolving execution plan, or resident TTFT. Sparse allocations also avoid
+creating hundreds of unnecessary fractional action groups, each of which would
+otherwise generate 64 migration waves at the unchanged dispatch resolution.
+
+The [native comparison](outputs/a100-native-greedy-20260911/summary.json) saves
+12 identical-matrix comparisons (two workloads, 30/120 s, 1/10/100 Tb/s) and six
+feedback cases (each workload at 30 s/10 Tb/s, 120 s/1 Tb/s and 120 s/100 Tb/s).
+LP and native allocation timings include the complete helper; LP's primary and
+secondary stages are also reported separately. Both feedback methods are rerun
+with the same current execution code. Measured timing, fleet, candidate packs,
+network constraints and planning clocks remain fixed. Exact CPU memoization
+reuses repeated source queries and captured network caps; the
+[fixed-schedule check](outputs/a100-native-greedy-20260911/validation/cache/review.json)
+verifies unchanged work and timestamps.
+
+After pulling native changes, rebuild the extension with rustup Cargo before
+system Cargo on `PATH`, then run the comparison:
+
+```bash
+uv sync --reinstall-package queue-haul-native
+uv run python pool_shed_greedy_quality.py --mode both --out outputs/a100-native-greedy-reproduction
+```
+
+On the recorded arm64 CPU, the 12 initial matrices take **6.8–19.4 ms** with
+native pricing versus **16.4–30.4 ms** with LP; median case times are **12.7 ms
+versus 24.0 ms**. Native is faster in all 12 cases. The largest initial-matrix
+shortfall from LP is **0.0938 percentage points**. All 27 feedback admission
+certificates also meet the 0.1-point bound. Final handoff work and complete
+feedback runtime, excluding common table construction and validation, are:
+
+| Workload | Deadline | Shared Tb/s | Old greedy | Native greedy | QH LP | Native time | LP time |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| coding | 30 s | 10 | 85.1773% | 98.3033% | 98.3576% | 3.18 s | 4.42 s |
+| coding | 120 s | 1 | 88.0937% | 97.8622% | 97.8672% | 10.11 s | 13.37 s |
+| coding | 120 s | 100 | 88.5263% | 100.0000% | 100.0000% | 1.28 s | 3.60 s |
+| coding_long | 30 s | 10 | 81.0365% | 88.8272% | 88.8487% | 2.23 s | 2.32 s |
+| coding_long | 120 s | 1 | 88.7712% | 93.9607% | 93.9614% | 13.28 s | 19.80 s |
+| coding_long | 120 s | 100 | 93.6099% | 98.7346% | 98.8196% | 1.01 s | 5.39 s |
+
+The six native feedback runs total **31.10 s**, versus **48.91 s** for LP,
+and each is faster. Their largest observed handoff shortfall is **0.0850
+percentage points**; this is an empirical comparison, not a global certificate.
+The [282 focused tests](outputs/a100-native-greedy-20260911/validation/focused-tests.log)
+pass, alongside independent native witness, heap-parity and compression checks.
+
+The separate [scaling audit](outputs/a100-native-greedy-20260911/validation/scaling.py)
+grows independently constrained source blocks, candidate columns and nonzeros,
+while retaining the shared resources and total source work. This is a
+computational stress test using existing measured columns, not additional
+measured trajectory diversity. Increasing represented GPU count alone would
+not enlarge the compressed packing problem. Its primary-only LP comparison
+omits LP's secondary solve, and its timings exclude common matrix construction
+and removal of zero-gain columns.
+
+The [final scaling results](outputs/a100-native-greedy-20260911/validation/diagonal-scaling/scaling.json)
+cover 1, 4, 16 and 64 source blocks for two measured matrices, with three serial
+repeats per case. All 24 native results certify within **0.0974 percentage
+points**; the largest actual LP shortfall is **0.0960 points**. At 64 blocks:
+
+| Matrix | Positive-gain columns | Nonzeros | Native median | Primary LP median | Speedup |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| coding, 30 s, 10 Tb/s | 75,456 | 1,360,768 | 1.390 s | 5.149 s | 3.71× |
+| coding_long, 120 s, 100 Tb/s | 78,976 | 1,789,888 | 0.860 s | 3.759 s | 4.37× |
+
+Native is faster in six of the eight scaling cases. The four-block coding case
+takes 75 ms versus LP's 52 ms; the one-block long-context case is nearly tied
+at 14.6 versus 14.3 ms. The
+[earlier scalar-penalty failure](outputs/a100-native-greedy-20260911/validation/scaling.json)
+is retained: it took 37 s and missed the quality target at 64 long-context
+blocks. The diagonal penalties and symmetric sweeps resolve that recorded
+failure without changing the packing constraints or acceptance tolerance.
+
+The pooled bandwidth sweep now keeps candidate ownership and resource matrices
+sparse through preparation and admission. Phase calculations visit only the
+histories in each pack; dispatch waves share immutable pack counts. Dense
+inputs remain supported for historical reproduction. Full-context replay,
+source resets, resident constraints, host limits and the 64-wave dispatch
+resolution are unchanged.
+
+`planner_sparse_scaling.py` reproduces the planning-time comparison for this
+pooled planner, using one source constraint per individual history. It repeats
+a fixed 64-history measured coding sample, preserving its phases and workload
+mix while scaling source and destination capacity proportionally. The
+[new figure](outputs/a100-sparse-planning-20260911/planner_scaling.png) separates
+preparation plus first admission from primary selection. Both policies receive
+identical sparse matrices; total LP time includes its secondary minimization.
+The saved inputs and primal/dual witnesses accompany three serial paired
+repeats per size. Calibration/imports, later feedback and DES are excluded.
+
+Recorded median seconds are:
+
+| Individual histories | Native selection | LP primary | Native total | LP total |
+| ---: | ---: | ---: | ---: | ---: |
+| 64 | 0.0209 | 0.0196 | 1.787 | 1.834 |
+| 128 | 0.0418 | 0.0438 | 3.604 | 3.661 |
+| 256 | 0.0839 | 0.1125 | 7.182 | 7.355 |
+| 512 | 0.1695 | 0.2519 | 14.399 | 15.046 |
+| 1,024 | 0.3491 | 0.8647 | 28.890 | 30.585 |
+
+At 1,024 histories, LP's complete selection takes 1.954 s: native selection is
+5.60× faster than that helper and 2.48× faster than primary LP alone. Common
+physical-profile construction dominates total planning, so the total speedup
+is only 1.06×. Native selection grows 16.7× for 16× more histories over this
+range. The largest matrix has 1,114 rows, 54,624 columns and 1,030,784 nonzeros.
+All 15 paired cases pass, with worst primary shortfall **0.0470 percentage
+points** and worst certified bound **0.0917 points**. The
+[339 focused tests](outputs/a100-sparse-planning-20260911/validation/focused-tests.log)
+pass; [independent source review](outputs/a100-sparse-planning-20260911/validation/source-review.json)
+records representation checks and an unrelated pre-existing stale batch-test
+expectation.
+
+The [four production feedback checks](outputs/a100-sparse-planning-20260911/validation/feedback/review.json)
+also pass the original resource and wave-accounting checks at 2 MW per site,
+30 s and 10 Tb/s. Dense-to-sparse LP handoff differs only by roundoff;
+native handoff changes from 98.30327% to 98.29534%, a 0.00793-point decrease.
+Floating-point reductions can change selected packs and action mix, so complete
+schedules are not promised identical. This check adds no resident TTFT claim.
+
+```bash
+uv run python planner_sparse_scaling.py run --out outputs/a100-sparse-planning-reproduction
+```
+
+This is a fractional admission benchmark, separate from the older
+`planner_scaling_campaign.py` 25%-power-target contract. Sparse storage removes
+the histories-by-candidates and histories-by-waves allocations on the new path;
+it does not establish linear total simulator runtime. Explicit full-history
+wave telemetry still expands those output records, and event processing and
+solver iteration counts can grow faster than the candidate count.
+
+The [earlier Python comparison](outputs/a100-greedy-quality-20260911/summary.json)
+and [cheap-repair audit](outputs/a100-greedy-quality-20260911/validation/speed/summary.json)
+remain historical results. The Python refinement took seconds per solve; it is
+superseded by the native implementation. No new resident TTFT checks were run
+for these changed allocations, and the full campaign remains stopped.
+
+The checker reconstructs every migration wave, including initial replay,
+full-context catch-up, handoff and continued incoming service. It checks initial
+readiness before source pause, catch-up GPU completion before switch entry, and
+delivery before handoff. Some long-context fleet replay costs are roughly half
+a second faster than the request scheduler **even without residents**. This
+context-dependent disagreement requires a common readiness primitive before a
+jointly scheduled, SLO-valid frontier can be claimed; adding a uniform penalty
+would not resolve it. Admission must then use the same queue timing and resident
+latency targets. Timing-compatible and locally passing subsets are
+diagnostics, not attainable alternative plans. The fleet planner still uses its
+existing fluid recovery criterion; it does not optimize TTFT. The
+[regression evidence](outputs/a100-bandwidth-ttft-20260911/validation/germany-regression.json)
+reproduces all 80 archived Germany variants exactly, and the
+[East checks](outputs/a100-bandwidth-ttft-20260911/validation/east-regression.json)
+retain the same conditional successes and failures. No new GPU run is required
+to reproduce this comparison. All
+[228 focused tests](outputs/a100-bandwidth-ttft-20260911/validation/focused-tests.json)
+pass; the independent [sweep review](outputs/a100-bandwidth-ttft-20260911/validation/sweep-review.json)
+checks all 240 records and their common inputs.
+
+The September 10 server records are sufficient for the bounded correction; no
+new GPU campaign is needed to explain fast replay. The
+[server-conditioned validation](outputs/a100-replay-queue-resolution-20260910/server-heldout.json)
+fits decode cadence only on six complete warm repeat-1 cells: **35.486 ms/token**,
+with at most **1.98%** error on five complete repeat-2 cells. Frozen prefill and
+endpoint coefficients remain unchanged. The held-out long-replay resident P90
+from registration to first output is **10.267 s measured versus 10.147 s modeled**.
+All 246 resident TPOT checks pass their existing bands. Some coding request and
+client checks still fail; this is conditional queue validation, not a fleet SLO
+certificate. Incomplete final-cell telemetry is excluded from the fit.
+
+The [initial-state audit](outputs/a100-log-state-audit-20260910/initial-state.json)
+and [continued-service audit](outputs/a100-log-state-audit-20260910/recovery.json)
+reconstruct the existing twenty Germany episodes without new GPU runs or policy
+evaluations. All twelve main episodes have no resident requests awaiting client
+dispatch at the migration snapshot and no server waiting requests in the nearest
+preceding destination sample. Long-context residents are also idle then; their
+next arrival follows replay's snapshot by 6.46 or 8.23 s. This quiet start is
+measured, but does not establish the distribution of fleet queue states.
+Completed baseline resident requests report 94.7–99.5% of prompt tokens cached
+across the four replay episodes; empty engine queues do not imply empty caches.
+
+Replay still causes substantial resident delays. For arrivals in the first
+30 seconds after the nominal migration trigger, with observations retained
+through the 300-second episode boundary:
+
+| Workload / seed | Control P90 arrival TTFT | Replay P90 arrival TTFT | Replay arrivals exceeding 1 s |
+| --- | ---: | ---: | ---: |
+| coding / 7101 | 0.406 s | 10.569 s | 7 / 15 |
+| coding / 7102 | 0.384 s | 3.319 s | 3 / 11 |
+| coding_long / 7101 | 0.287 s | 21.428 s | 7 / 7 |
+| coding_long / 7102 | 0.262 s | 7.849 s | 2 / 5 |
+
+All first tokens in these windows are observed; matched control and KV windows
+have zero violations. KV handoff takes longer under the acquisition's 1 Gb/s
+GET cap. East US 2 server records independently show 17.55 s P90 waiting until
+first scheduling during the long replay burst, versus 0.026 s in control.
+After replay handoff, the already-offered resident cohort clears in 0–8.90 s;
+this does not undo its latency violations or certify steady service. One long
+episode has only one new resident arrival in the next 30 s. The fleet's scalar
+queue-clearance criterion therefore cannot certify the posted 1 s P90 TTFT
+target. The coding acquisition also offers twice the fleet's nominal-50% RPS;
+workload shape and cache state prevent interpreting either label as GPU busy time.
+Reproduce these reductions with `uv run python outputs/a100-log-state-audit-20260910/initial-state.py`
+and `uv run python outputs/a100-log-state-audit-20260910/recovery.py`.
+
+`replica_fleet()` enables the corrected scenario without changing archived
+pooled defaults. Each incoming action pack reserves its own destination GPU
+cohort, keeps its KV and ongoing service there, and repays resident backlog only
+with that GPU's headroom. Packs must fit local service and memory capacity.
+Source turns use measured server cadence and wait for predecessor completion;
+the longest sampled turn takes 43.97 s rather than a short throughput proxy.
+Full-context migration replay, historical regional factors, offered rates and
+the 0.80 GB/32K wire anchor stay unchanged. Source retained prefixes are assumed
+cached, with incremental source prefill even on recorded reset/wrap turns;
+additional contention between source histories remains omitted. This source
+timing is an optimistic floor, not the destination checker's cold-reset model.
+
+The earlier bounded comparison separates raw handoff from handoff whose local resident
+and source queues have cleared. Its second mode requires predicted local queue
+clearance by the deadline for every policy; execution independently checks actual
+clearance. It adds no pre-handoff pause or synthetic replay penalty. These are
+continuous fixed-replica scenarios, not optimal placement or resident SLO bounds:
+
+```bash
+uv run python pool_shed_queue_frontier.py --out outputs/a100-replay-queue-resolution-20260910/raw-handoff
+uv run python pool_shed_queue_frontier.py --require-local-recovery --out outputs/a100-replay-queue-resolution-20260910/local-recovery
+```
+
+Each command evaluates both agentic workloads and all five policies at
+30/60/120 s, writing JSON, CSV and PNG/SVG/PDF figures. Use fresh output paths
+when reproducing frozen results. **100% handoff is not 2 MW released**: the
+measured active-to-idle allocation proxy for full handoff is approximately
+0.45 MW; installed GPU IT remains 2 MW per site.
+
+The completed 60-evaluation comparison includes [raw-handoff results](outputs/a100-replay-queue-resolution-20260910/raw-handoff/frontier.json),
+[local-recovery results](outputs/a100-replay-queue-resolution-20260910/local-recovery/frontier.json)
+and a [presentation figure](outputs/a100-replay-queue-resolution-20260910/local-recovery/frontier.pdf).
+These curves assume **1 Tb/s shared WAN** and give each eight-GPU node the
+transport capacity measured on a **one-GPU VM**. This substantially reduces
+bandwidth per GPU compared with the hardware experiments; see the controlled
+network comparison below before interpreting KV's low selection rate.
+It shows why the metric matters. Under the raw-handoff objective, long replay at
+30 s hands off **97.69%** but only **7.57%** has cleared its local queues.
+With the common predicted-clearance admission criterion, independently executed
+**recovered handoff** is:
+
+| Agentic workload | Deadline | QH LP | QH greedy | KV only | Replay only | Isolated fastest |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| coding | 30 s | 84.65% | 76.57% | 31.75% | 81.50% | 51.81% |
+| coding | 60 s | 95.10% | 84.42% | 53.95% | 92.67% | 60.97% |
+| coding | 120 s | 96.84% | 84.80% | 60.59% | 94.24% | 65.48% |
+| coding_long | 30 s | 72.15% | 68.56% | 21.10% | 68.54% | 23.04% |
+| coding_long | 60 s | 84.06% | 78.62% | 38.26% | 82.34% | 40.24% |
+| coding_long | 120 s | 93.24% | 84.41% | 61.06% | 92.29% | 57.51% |
+
+QH's KV share of handed-off work is 7.58% for coding and 8.71% for coding_long
+at 30 s; replay remains the majority action. The advantage is modest and no
+policy advantage was used for calibration. Predicted clearance is not guaranteed:
+for coding at 120 s, KV-only hands off 65.62%, of which 60.59 percentage points
+actually clear by the deadline. Shared WAN execution and source buffering account
+for this forecast gap. Full results retain both metrics and remaining work;
+these single-snapshot curves have no statistical confidence interval.
+
+The [network audit](outputs/a100-network-balance-audit-20260910/network-sensitivity.json)
+holds the trajectories, source/destination GPU counts, resident load, timing,
+0.80 GB/32K payloads, candidate batches and planning time fixed. Its 24 CPU
+evaluations change only the number of GPUs sharing each measured network
+endpoint and the shared WAN cap. At **30 s**, queue-cleared handoff is:
+
+| Workload | Network assumption | QH LP | KV only | Replay only |
+| --- | --- | ---: | ---: | ---: |
+| coding | Current eight-GPU nodes, 1 Tb/s shared | 84.65% | 31.75% | 81.50% |
+| coding | Measured network capacity replicated per GPU | 99.69% | 99.67% | 81.50% |
+| coding_long | Current eight-GPU nodes, 1 Tb/s shared | 72.15% | 21.10% | 68.54% |
+| coding_long | Measured network capacity replicated per GPU | 97.40% | 97.40% | 68.54% |
+
+The latter scenario has 73.42 Tb/s aggregate bulk capacity and 36.72 Tb/s
+aggregate effective application capacity. It isolates the hardware-to-fleet
+network ratio; its datacenter deployment feasibility is unvalidated. QH then
+uses 99.83% KV for coding and 100% KV for coding_long. Replay calibration and
+handoff are unchanged.
+Removing only the shared WAN cap while retaining eight-GPU endpoint sharing
+raises KV-only to 53.79% and 53.98%; both scaling assumptions matter. Transferring
+the complete time-zero snapshots over 1 Tb/s takes at least 155 s and 293 s
+before endpoint work or catch-up; future context resets can change those volumes.
+
+The [10 Tb/s check](outputs/a100-network-balance-audit-20260910/network-10000gbps.json)
+adds 12 evaluations with the same controls, using
+`uv run python pool_shed_network_audit.py --wan-gbps 10000`.
+At 30 s, queue-cleared handoff is:
+
+| Workload | GPUs sharing each measured endpoint | QH LP | KV only | Replay only |
+| --- | ---: | ---: | ---: | ---: |
+| coding | 8 | 87.06% | 53.79% | 81.50% |
+| coding | 1 | 98.54% | 85.15% | 81.50% |
+| coding_long | 8 | 77.17% | 53.98% | 68.54% |
+| coding_long | 1 | 90.70% | 76.17% | 68.54% |
+
+Eight-GPU endpoint sharing still caps aggregate effective KV transport at
+4.59 Tb/s, so its results exactly match the earlier endpoint-limited case.
+With one measured endpoint per GPU, QH's handed-off work is 57.70% KV for coding
+and 57.99% KV for coding_long. Its queue-cleared source-power allocation is
+0.444 MW and 0.405 MW, respectively. GPU counts and replay calibration stay fixed.
+
+The [host/network scope audit](outputs/a100-log-state-audit-20260910/network-scope.json)
+records the requested next scenario: eight GPUs per host, an explicit 80 Gb/s
+shared host IP budget, and one 10 Tb/s migration allocation across both routes,
+without a fixed half split. These are distinct from measured application goodput.
+[Azure's A100 NDm v4 specification](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndma100v4-series)
+lists 24 Gb/s aggregate VM bandwidth; the
+[H100 v5 specification](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndh100v5-series)
+lists 80 Gb/s. Thus 80 Gb/s remains a declared scenario assumption for A100.
+At least 125 actively sending hosts would be needed to reach 10 Tb/s at that
+allocation, before other limits. Current fleet code has no physical host
+membership and pools application capacity from installed hosts, so the existing
+curves do not implement this host contract. Source/destination host assignments
+and consistent planner/executor constraints must accompany separate route,
+destination ingress and shared-segment budgets; omitted local uplinks require an
+explicit nonblocking-fabric assumption. Azure's outbound quota alone does not
+establish receiver throughput. Published WAN capacity is not spare migration
+capacity, and raising the host ceiling does not raise measured application goodput.
+
+The [hardware audit](outputs/a100-power-frontier-20260910/kv-evidence-audit.json)
+finds KV faster in all 72 matched July long/agentic width-eight episodes at
+5–10 Gb/s; the September 1 Gb/s tests contain the opposite ordering. The
+[scenario reconciliation](outputs/a100-power-frontier-20260910/scenario-reconciliation.json)
+also reproduces the current one-GPU Germany primitive comparison: eight 16K
+contexts take 6.875 s with the user-provided effective KV measurement versus
+10.468 s for replay. It distinguishes measured transfers, analytic payloads,
+modeled H100 decisions, and historical versus restored quick-model endpoint delays.
+
+The [power-versus-deadline figure](outputs/a100-power-frontier-20260910/power-frontier.pdf)
+and [CSV](outputs/a100-power-frontier-20260910/power-frontier.csv) export the
+existing 1 Tb/s results in MW without rerunning policies. Both raw and locally
+queue-cleared handoff use the existing measured active-to-awake-idle allocation.
+The figure labels its network and placement assumptions explicitly.
+
+The [greedy audit](outputs/a100-power-frontier-20260910/greedy-audit.json)
+also reproduces the six 120-second QH/greedy/replay cases. Pure-action baselines
+use LP allocation. Greedy exhausts all destination replicas with smaller packs
+(about 2.85 histories per GPU versus QH's 3.55–3.76); placements remain occupied
+after migration ends. On identical initial admission matrices, LP already
+explains 94.5%/99.8% of the final QH–greedy gap. This reflects heuristic packing
+under the one-incoming-pack-per-GPU scenario, rather than slow greedy execution.
 
 The [GPU-local queue pilot](outputs/a100-resident-queues-20260910/report.json)
 now reconstructs all 2,865 offered service requests from 20 episodes, including
@@ -39,7 +478,9 @@ resident turn, a small decode-rate error advances completion by 2.1–4.4 s and
 then advances dependent turns. Some client streams also compress token delivery:
 an 18-token response contains nine sub-millisecond gaps. Client TPOT therefore
 does not identify physical GPU iteration timing, even with individual token
-frames. The fit remains frozen; the pilot is **not installed in fleet execution**.
+frames. This historical client fit remains frozen. The new server-conditioned
+check above uses the warm-trained cadence; fleet recovery still uses a fluid
+throughput-loss model rather than this request-level scheduler.
 
 Reproduce the compact extraction and bounded CPU validation with:
 
@@ -48,12 +489,10 @@ uv run python pool_shed_resident_data.py
 uv run python pool_shed_resident_validation.py
 ```
 
-The remaining timing ambiguity is server scheduling/generation versus buffered
-client delivery. The [bounded GPU handoff](#bounded-resident-server-timing-handoff)
-freezes twelve warm-decode cells and four agentic episodes to resolve it. Another
-GPU measurement is only essential if existing timing uncertainty changes the
-end-to-end conclusions; GPU-local KV placement, causal source queues and bounded
-validation still need integration either way. Failed transport/dependency scout
+The completed [bounded GPU handoff](#bounded-resident-server-timing-handoff)
+separates server generation from client delivery using twelve warm-decode cells
+and four agentic episodes. Its complete local records support the correction
+above despite missing shutdown telemetry. Failed transport/dependency scout
 cases do not establish GPU capacity. Full `run` calls hard-fail while resident
 latency is unvalidated; `prepare`, historical reduction, smoke runs and bounded
 `run_cell` audits remain available.
@@ -64,7 +503,8 @@ request buffers. Requests arriving after source quiescence are buffered and move
 to the destination at handoff. There is no default isolation reservation or
 pre-handoff buffer gate. The planner reserves recovery work over every remaining
 time interval so earlier idle service cannot pay for later arrivals. This is an
-aggregate recovery approximation: executed handoff, `service_ready_s`,
+aggregate recovery approximation in the archived pooled mode; the new replica
+mode confines recovery to each assigned GPU. Executed handoff, `service_ready_s`,
 `service_recovered_by_deadline`, and resident latency validity are separate
 outputs. **Resident TTFT/TPOT is not validated.** KV network waiting uses no
 compute; KV ingest is omitted.
@@ -204,8 +644,9 @@ The independent cold-burst evidence also shows real queueing: at 32,256 prompt
 tokens, the A100 had at most ten GPT-OSS requests running concurrently, and a
 width-16 burst had 65.03-second P90 TTFT. Those requests generated 32 output
 tokens; their timing cannot be substituted directly for a migration probe.
-Source request durations in the simulator remain throughput-derived proxies.
-They are not validated per-request latencies or a source queue model.
+Those archived pooled-mode source durations are throughput-derived proxies.
+The current `replica_fleet()` instead uses server-measured generation cadence
+and predecessor completion, while still omitting contention among source histories.
 
 The primary references support separating prefill contention, decode latency and
 actual prefix reuse. [vLLM's scheduler documentation](https://docs.vllm.ai/en/stable/configuration/optimization/)
@@ -397,7 +838,10 @@ stopped until replica-local service behavior is validated**.
 
 The [raw archive manifest](outputs/a100-replay-final-20260910T0352/raw-telemetry-archive.json)
 provides lossless restoration commands and verified member hashes, including ignored
-events. The [artifact manifest](outputs/a100-replay-final-20260910T0352/artifact-sha256.json)
+events. The oversized `request-events.jsonl`, `requests.jsonl`, and
+`destination-engine-metrics.jsonl` are ignored locally and retained in the tracked
+`raw-telemetry.tar.zst`; use the manifest's restoration command to unpack them.
+The [artifact manifest](outputs/a100-replay-final-20260910T0352/artifact-sha256.json)
 maps every raw file to its archived copy; authoritative Germany originals also reside
 in [destination-final-raw.tar.gz](outputs/a100-replay-final-20260910T0352/destination-final-raw.tar.gz).
 The frozen plan, amendments, exact launches, verified/open modeling gaps and
@@ -771,11 +1215,43 @@ campaign is archived under `outputs/a100-pooled-execution`.
 
 ### Bounded resident server timing handoff
 
-The node agent should pull `policy-hardware-width8-pilot` and use
+The [East US 2 acquisition](outputs/a100-resident-server-timing-20260910T1723/report.json)
+completed four 300-second source-active episodes and all twelve decode cells in
+43.28 minutes, including startup and cleanup. Both A100 80GB PCIe GPUs used a
+300 W power limit; Sweden was the source. The sole permitted overhead repeat passed:
+instrumentation differed by 0.30% in median duration and 0.03% in output rate.
+All 100 decode requests returned exactly 1,536 tokens with the required native
+cache hits. Independent server-token joins establish 32 scheduled prompt tokens,
+zero external hits and no preemptions for 84 requests across the first eleven
+cells. **Global telemetry acceptance failed:** both EngineCore logs lack final
+records, and the last 30K/concurrency-sixteen cell is missing 245 worker token
+records. Client completion does not make that cell valid for server timing fits.
+The likely shutdown signal race is documented; the measured evidence is unchanged.
+
+The episodes retain all 772 service arrivals: 768 successful, two timeout failures
+at the observation boundary and two censored. Long-context replay raised resident
+P90 arrival TTFT from 0.893 s to 11.345 s. The worst 21.148 s request includes
+17.619 s from server registration to scheduling, versus 2.504 s from scheduling
+to output readiness. The 1,233-token coding control turn has 36.81 ms server-ready
+and 36.78 ms client mean TPOT, demonstrating actual generation time. All four
+workload/arrival hash pairs match their frozen references; 55 focused tests passed.
+The broad suite remains unresolved as recorded in the report. Both GPU stacks
+were stopped. Acquisition itself did not fit coefficients; the subsequent
+warm-only decode fit and held-out queue checks are described above. The full-fleet
+readiness guard remains in place. Raw gzip files preserve verified uncompressed hashes, and
+`pool_replay_server_reduce.py` reads them directly.
+
+The following is the completed acquisition procedure, retained for reproducibility;
+it is not a request for another GPU run. The node agent used `policy-hardware-width8-pilot` and
 [this frozen acquisition plan](outputs/a100-resident-server-timing-plan/plan.json).
-It is a **plan, not a ready-to-run acquisition CLI**: add the small timing hooks
-and bounded launcher on the installed reference stack before starting acquisition.
-Reuse the current harness and token-stream collector. This follow-up measures
+`pool_replay_server_timing.py` generates six guarded patches for vLLM 0.22.0;
+install them in an isolated reference runtime with the preserved FIFO collector.
+`pool_replay_server_acquire.py --out RUN --inventory RUN/inventory.json` attaches
+to an owned two-GPU stack with its original startup clock and cleanup commands.
+It enforces the frozen overhead gate, cell order and time limits.
+`pool_replay_server_reduce.py` checks raw server/client joins after shutdown;
+launcher completion alone does not establish telemetry acceptance.
+These tools reuse the current harness and token-stream collector. This follow-up measures
 resident decode and queueing; the fleet study remains 2 MW source / 2 MW at each
 of two destinations. Do not rerun scouts, the broad KV/WAN sweep or fleet policies.
 
@@ -922,10 +1398,10 @@ of two destinations. Do not rerun scouts, the broad KV/WAN sweep or fleet polici
    tolerances frozen while collecting; all four new agentic episodes are
    validation only. Data quality is the GPU acceptance test, not a QH advantage.
 
-After the data returns, CPU work remains: calibrate only identifiable timing
-terms, integrate GPU-local resident queues and KV placement plus causal source
-queues, then run bounded end-to-end policy and uncertainty checks. Remove the
-full-campaign guard only after those checks support resident-service validity.
+The returned data now supports warm-only server cadence calibration, the
+four-episode conditional scheduler check, causal source turns and fixed-replica
+fleet recovery. Bounded policy comparisons are documented above. The full-campaign
+guard still distinguishes those conditional results from validated resident SLOs.
 
 ## Current evidence
 
@@ -2583,10 +3059,11 @@ deterministic fixed-price scans and reports a miss if none reaches the target.
 Regenerate it with
 `uv run python plot_workload_policy_attainment.py`.
 
-| Internal name | Display name | Okabe–Ito | Line |
+| Internal name | Display name | Color | Line |
 |---|---|---:|---|
 | `queue_haul` | Queue-Haul LP | `#0072B2` | solid |
 | `greedy` | Queue-Haul Greedy | `#E69F00` | dashed |
+| `greedy_priced` | QH Priced Greedy | `#882255` | dashed |
 | `greedy_lagrangian` | Queue-Haul Lagrangian Greedy | `#F0E442` | dash-dot-dot |
 | `isolated_fastest` | Isolated Fastest | `#D55E00` | long dash |
 | `kv_only` | KV Migrate Only | `#56B4E9` | dash-dot |
@@ -2733,7 +3210,9 @@ destination. Queue Haul admitted all eight sessions in 29.669 s and KV-only in
 25.159 s; replay-only admitted six before the fixed 30-second deadline. The
 bundle includes raw `power.csv`, load and transfer telemetry, and separate 500
 ms mean regional-power plots cropped from session-state preparation through GPU
-sleep. Each trace reports percent of the 300 W per-GPU TDP and marks Migration,
+sleep. The Queue-Haul figure stacks the three regions and includes five seconds
+before migration, a dotted migration-start marker, and phase labels above the
+plot. Each trace reports percent of the 300 W per-GPU TDP and marks Migration,
 Switch, Barrier, and Sleep. The bundle also retains the exact plan and composed
 non-formal calibration used.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
@@ -2850,8 +3329,8 @@ misses the target hard-fails rather than reporting a fallback's timing, which is
 what makes `outputs/scaling_1_to_100k_20260720_greedy` unusable for this
 comparison: past 32 sessions its 50% request is out of reach.
 
-`planner_scaling_campaign.py` is the apples-to-apples production-front-end
-comparison. It gives LP and greedy the same deterministic fleet and attainable
+`planner_scaling_campaign.py` is the historical production-front-end
+comparison for the per-session planner. It gives LP and greedy the same deterministic fleet and attainable
 25% removable-power target, times candidate generation plus selection in fresh
 processes, disables LP integral recovery, and excludes common fleet setup,
 packing, and DES. Three repeats run through 100K sessions and one thereafter.
@@ -3749,14 +4228,11 @@ five-second power window. This agrees with archived on-time attainment and
 extends late completions beyond the horizontal 30-second deadline.
 
 True Greedy's 0% and 100% KV episodes are the observed all-eight-replay
-and all-eight-KV executions for those same cases. Pure-action markers overlay those same
-endpoint observations, sharing both their times and their display offsets.
-The CSV records each source episode once; the overlays are reused timings,
-not extra baseline measurements. The separately recorded deadline-admitted
+and all-eight-KV executions for those same cases. Only QH LP, QH Greedy,
+and True Greedy are plotted; the CSV records each source episode once. The separately recorded deadline-admitted
 KV-only/replay-only policies move only subsets and are excluded from this
 full-plan comparison. Four all-KV WAN endpoints are back-of-the-envelope
-estimates, shown as hollow squares labeled `KV only` and recorded separately
-in `wan_kv_estimates.csv`. The frozen pack has 12,381,585,408 KV bytes. The
+estimates, recorded separately in `wan_kv_estimates.csv` but not plotted. The frozen pack has 12,381,585,408 KV bytes. The
 13 all-KV 10 Gb/s control runs average 13.4219 s to completion, giving a fixed
 overhead of 3.5166 s after subtracting byte-transfer time. Thus estimated
 attainment is `8 * KV_bytes / bandwidth_bps + 3.5166 + 5` seconds: 48.14,
@@ -3765,3 +4241,33 @@ same byte volume, saturated shared WAN, and bandwidth-independent overhead;
 these four estimates are not additional measured repeats. The control anchors
 the estimate rather than providing an independent validation. Colors and
 distinct policy markers come from `plot_style.py`.
+
+`uv run python quick_action_mix.py --out /tmp/quick-action-mix` reproduces
+the deadline-sweep bar plot from the measured inputs captured in
+`outputs/quick-action-mix-20260910/report.json`; `--inputs` selects another snapshot.
+The snapshot includes private KV geometry, A100 prefill curves, natural link
+rates, and 100 matched eight-session context draws and orders, so reproduction
+does not require the original `/datadrive` checkout or its profiling helpers.
+The calculation uses the existing pooled QH Greedy planner and event simulator.
+The adjacent frozen regional profiles provide measured memory limits and are
+verified against the original profile hashes. Normal single-request P50 prefill
+is used for replay. KV timing adds each frozen profile's initial-completion
+delay to private bytes divided by VM-to-VM bandwidth: 0.773091 s for GPT-OSS,
+0.747247 s for Gemma, and 5.362352 s for Qwen. The fixed catch-up term
+(1.052118 s) is retained but does not execute in these static, tail-free cases.
+No destination-rate cap is applied.
+This static, idle-destination estimate gives every session equal selection
+credit using a synthetic linear power curve and negligible bookkeeping demand.
+It includes those KV endpoint terms but excludes KV tail recomputation, decode,
+ongoing traffic, and replay endpoint residuals;
+it does not estimate the original physical-demand campaign's power attainment.
+The existing five-second power reserve is added to the internal planner deadline,
+so the migration budget remains exactly 5, 10, 20, or 30 seconds. Bars count
+simulator commits by that migration deadline; remain includes unselected or
+late sessions. The report retains selected counts, destination mixes, late
+counts, and the fraction of draws where all eight complete.
+
+This supersedes the earliest-finish heuristic in commit `3a7d90a8`, whose deadline
+only rejected late actions and could not alter choices after all eight fit.
+The report records the endpoint delays used for every model.
+These are simulator predictions under the stated assumptions, not live readiness.

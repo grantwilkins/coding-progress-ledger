@@ -1,6 +1,9 @@
+from types import SimpleNamespace
+
+import numpy as np
 import pytest
 
-from pool_shed_resident_queue import simulate
+from pool_shed_resident_queue import simulate, source_turns
 
 
 C = dict(prefill_step_s=.1, prefill_token_s=.1, prefill_attention_s=0., decode_step_s=.1, decode_attention_s=0., endpoint_s=.2)
@@ -48,7 +51,7 @@ def test_scheduler_limits_and_known_input_validation():
     a, b = result["requests"]
     assert b["admitted_s"] == pytest.approx(a["server_end_s"])
     assert b["admitted_s"] < a["end_s"]
-    for rows in ([request("x"), request("x")], [request("x", cached=1)], [request("x", output=0)]):
+    for rows in ([request("x"), request("x")], [request("x", cached=1)], [request("x", output=-1)]):
         with pytest.raises(ValueError):
             simulate(rows, C, 10)
 
@@ -76,3 +79,87 @@ def test_arrivals_during_final_censored_iteration_remain_visible_in_queue():
     result = simulate(rows, {**C, "prefill_token_s": 1.}, 2.)["requests"]
     assert result[1]["eligible_s"] == 1.
     assert result[1]["admitted_s"] is None and not result[1]["done"]
+
+
+def test_release_keeps_original_wait_and_history_order():
+    rows = [{**request("first", history="h"), "release_s": 3.},
+            {**request("next", arrival=1., history="h"), "release_s": 2.}]
+    first, following = simulate(rows, C, 10)["requests"]
+    assert first["admitted_s"] == 3.
+    assert first["ttft_s"] == pytest.approx(3.4)
+    assert following["admitted_s"] == pytest.approx(first["end_s"])
+    for release in (-1., np.nan, np.inf):
+        with pytest.raises(ValueError):
+            simulate([{**rows[0], "release_s": release}], C, 10)
+
+
+def test_zero_output_prefill_releases_followers_without_inventing_tokens():
+    rows = [request("prefill_only", output=0, prompt=3, history="h"),
+            request("follower", arrival=.1, history="h")]
+    first, following = simulate(rows, C, 10, token_budget=2)["requests"]
+    assert first["done"] and first["computed_prompt_tokens"] == 3
+    assert first["end_s"] == pytest.approx(.7)
+    assert first["generated_tokens"] == 0
+    assert first["first_s"] is first["last_token_s"] is first["ttft_s"] is None
+    assert following["admitted_s"] == pytest.approx(first["end_s"])
+    censored = simulate(rows, C, .4, token_budget=2)["requests"]
+    assert not censored[0]["done"] and censored[0]["computed_prompt_tokens"] == 2
+    assert censored[1]["admitted_s"] is None
+
+
+def source_fleet(durations, **metadata):
+    return SimpleNamespace(count=np.ones(len(durations)), metadata={
+        'turn_sequences': [[{} for _ in row] for row in durations],
+        'turn_duration_s': durations, 'source_session_rps': 1 / 22, **metadata})
+
+
+def test_long_source_generation_queues_later_offers_and_finite_trace_ends():
+    fleet = source_fleet([[45., 2., 3.], []])
+    for now, expected in ((44., (1, 0, 45.)), (45., (2, 1, 47.)),
+                          (47., (3, 2, 50.)), (200., (3, 3, 50.))):
+        started, completed, finish = source_turns(fleet, now)
+        assert (started[0], completed[0], finish[0]) == expected
+        assert started[1] == completed[1] == 0 and finish[1] == -np.inf
+
+
+def test_source_timeline_cache_preserves_phases_offsets_and_arbitrary_query_order():
+    fleet = source_fleet([[45., 2., 3.]], sequence_cycle=True, turn_offset=[1], source_phase_s=[1.])
+    cache = {}
+    for now, expected in ((88., (4, 3, 90.)), (-2., (0, 0, -np.inf)), (0., (1, 0, 1.)),
+                          (1., (1, 1, 1.)), (10., (1, 1, 1.)), (66., (3, 2, 88.))):
+        cached = source_turns(fleet, now, cache)
+        assert tuple(v[0] for v in cached) == expected
+        for a, b in zip(cached, source_turns(fleet, now)):
+            np.testing.assert_array_equal(a, b)
+    other = source_fleet([[1.]], sequence_cycle=True)
+    assert tuple(v[0] for v in source_turns(other, 0., cache)) == (1, 0, 1.)
+
+
+def test_source_timeline_requires_valid_duration_and_offered_pacing():
+    for duration in (0., -1., np.nan, np.inf):
+        with pytest.raises(ValueError, match='positive durations'):
+            source_turns(source_fleet([[duration]]), 0.)
+    with pytest.raises(ValueError, match='within one offered period'):
+        source_turns(source_fleet([[1.]], source_phase_s=[22.]), 0.)
+    with pytest.raises(ValueError, match='invalid source trace pacing'):
+        source_turns(source_fleet([[1.]], source_session_rps=0.), 0.)
+    with pytest.raises(ValueError, match='time must be finite'):
+        source_turns(source_fleet([[1.]]), np.inf)
+
+
+def test_exact_source_queries_reuse_work_without_aliasing_returned_arrays(monkeypatch):
+    import pool_shed_resident_queue as queue
+
+    fleet, cache = source_fleet([[45., 2., 3.]]), {}
+    before = np.nextafter(45., -np.inf)
+    assert source_turns(fleet, before, cache)[0][0] == 1
+    expected = source_turns(fleet, 45.)
+    first = source_turns(fleet, 45., cache)
+    first[0][:] = 999
+    source_turns(fleet, 200., cache)
+    monkeypatch.setattr(queue, 'bisect_right', lambda *args: pytest.fail('recomputed a cached source query'))
+    for _ in range(2):
+        result = source_turns(fleet, 45., cache)
+        for actual, reference in zip(result, expected):
+            np.testing.assert_array_equal(actual, reference)
+        result[1][:] = 999

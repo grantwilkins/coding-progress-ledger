@@ -1,0 +1,70 @@
+{
+  "policy_evaluations": 60,
+  "modes": [
+    "raw-handoff",
+    "local-recovery"
+  ],
+  "workloads": [
+    "coding",
+    "coding_long"
+  ],
+  "deadlines_s": [
+    30,
+    60,
+    120
+  ],
+  "focused_tests": {
+    "passed": 223,
+    "deselected": 6,
+    "duration_s": 100.24,
+    "scope": "Affected execution/planning, request data/queue/fit/validation, server logging, campaign tests. Existing costly campaign tests excluded; no claim of a complete repository-suite pass.",
+    "selection": "not execution_draws_preserve_initial_information and not campaign_reduction_checks_all_cells and not independent_regional_fidelity and not native_scaling and not loaded_coding_secondary"
+  },
+  "verified": [
+    "Input/code hashes match saved reports",
+    "All 60 policy results conserve resident work without cross-GPU compensation",
+    "Same candidate library for both admission criteria at each workload/deadline",
+    "Per-site reserved replica count <=6666",
+    "Completed handoffs occur by deadline",
+    "Recovered action fractions sum to recovered handoff",
+    "Pure-action masks preserved",
+    "CSV agrees with JSON; canonical plots visually reviewed",
+    "Independent reviews of source timing, fleet accounting, conditional server joins and result interpretation"
+  ],
+  "original_client_gate": {
+    "checks": 176,
+    "failures": 30
+  },
+  "global_telemetry_accepted": false,
+  "fleet_resident_slo_validated": false,
+  "new_gpu_runs": 0,
+  "sha256": {
+    "focused-tests.log": "79d5994a063bbeb7b10bb6fa44aa51afc4afa747facac5fc3511e7801886f4c5",
+    "local-recovery/coding-120.json": "ce8cf7582640151f20796c47976b88faf65d839d276a59dc4deba90726817df6",
+    "local-recovery/coding-30.json": "2711a362da886865b886e9550fda9d629ac316226fec37c8444a8cc9bdf0365a",
+    "local-recovery/coding-60.json": "fdc24b2f33d0b9aeeab7c6c9404630985a97233d0c156c74f8069588942007b9",
+    "local-recovery/coding_long-120.json": "7f32d9785476ec0be63f769b78b8257909f5b80bd59fe10969ad5f59f4201223",
+    "local-recovery/coding_long-30.json": "60c4cc6a2ae6b9192ef36425961e9c34959fa88674395b7a4e4b913a982b5a2d",
+    "local-recovery/coding_long-60.json": "5b5cddafe29b9c32bb2fab93677f2f2cf14fba19715c62bde11888e128e7114d",
+    "local-recovery/frontier.csv": "988ceebc661bf9e3cbec24aca36fa54563687a855345bbcbfd9ebc82b77fbb06",
+    "local-recovery/frontier.json": "44c4b64a9d4f35429d407f69e1506b8c0f1947f0580359fb86ab4a0edbd2ad07",
+    "local-recovery/frontier.pdf": "0497e289ceea9cdecb1e9afedcf066e4e8bcf9e9660ae892ae0f06213c71d429",
+    "local-recovery/frontier.png": "655ac39780b056e9aaae0b125fd202e0933d5cea6fcdc7c8c3dbe7ee05e32cb7",
+    "local-recovery/frontier.svg": "c2f829c03d0a5d8d3129dfda2b301fe7752c44d8fe92242022e918a877c0ec16",
+    "local-recovery/run.log": "effad8435064572d25c620b396cccd538e9914f71e77ec43b552cc7a59227fdc",
+    "raw-handoff/coding-120.json": "8bd8cd5e725a6d8c58882a768c6040a19778fc8a0a94de3eff1fd6ad5d8a1d8c",
+    "raw-handoff/coding-30.json": "9717edac035bc868370919e2e863392d34968778d41d1199feff16905993536d",
+    "raw-handoff/coding-60.json": "5100ac0bb38a44da178099dc26334c2a55a6f659b0912727aefcd2903b747f6c",
+    "raw-handoff/coding_long-120.json": "83bf7dbdb5a199c74bbbf80106bd8ebdb58ac123185c344c2f585b4f9430fc44",
+    "raw-handoff/coding_long-30.json": "fd762e7abb07c76019e3135593cad8005fa8500a531695d7be4240c2d7690d86",
+    "raw-handoff/coding_long-60.json": "e41a2d6761c8d3039144454a4b559ea1a2a1d741224392b7698aed6c222b4ad6",
+    "raw-handoff/frontier.csv": "a87a0dd5d5f7bd2bd33ace22f6beaef31e019492a4d809d028e344e948fe24e2",
+    "raw-handoff/frontier.json": "5e12aaa7335959531fbe45ee11b1ccc4f101f6a1ef9d2d7e07c318b938a6dbc0",
+    "raw-handoff/frontier.pdf": "4ef3fa65dbe17aa3b094250d5f1731c441ce3165f367da6839f74375046d71ad",
+    "raw-handoff/frontier.png": "7f3c328794c31d80a252e464d79d23701d91bbe401c9dbce54666695d797d24e",
+    "raw-handoff/frontier.svg": "126b60918ac6a7ec29c1ebf2d8875e42d7686229e40044086cb80c0c817c0825",
+    "raw-handoff/run.log": "9e64f23da2dbc2cadb9373d28f2aca7b330c6f84970ff778261029ac72613346",
+    "server-heldout.json": "5453af6eeebb8af60ec24c21b6cec772ef8b29e3dbc65515f73e959158aab12e"
+  },
+  "asset_normalization": "Generated SVG trailing whitespace removed; parsed drawing attributes and text verified equivalent."
+}

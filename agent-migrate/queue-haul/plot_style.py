@@ -20,6 +20,11 @@ LARGE_LEGEND_FONT_SIZE = 12
 LARGE_ANNOTATION_FONT_SIZE = 13
 LINE_WIDTH = 3
 SAVE_DPI = 220
+REGION_NAMES = {"sweden": "sweden-central", "east": "eastus-2",
+                "west": "west-europe", "germany": "germany-west-central"}
+REGION_COLORS = {"sweden": "#1F77B4", "east": "#FF7F0E",
+                 "west": "#2CA02C", "germany": "#2CA02C"}
+REGION_LINESTYLES = dict.fromkeys(REGION_NAMES, "-")
 POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "isolated_fastest",
     "kv_only", "replay_only", "queue_haul_power_blind",
@@ -56,6 +61,11 @@ POLICY_LINESTYLES[REFERENCE] = "-"
 POLICY_NAMES["per_session_greedy"] = "Per-session greedy"
 POLICY_COLORS["per_session_greedy"] = POLICY_COLORS["isolated_fastest"]
 POLICY_LINESTYLES["per_session_greedy"] = POLICY_LINESTYLES["isolated_fastest"]
+for names in (POLICY_NAMES, STRESS_POLICY_NAMES, COMPACT_POLICY_NAMES, PAPER_POLICY_NAMES, SHORT_POLICY_NAMES):
+    names["greedy_priced"] = "QH Priced Greedy"
+POLICY_COLORS["greedy_priced"] = "#882255"
+POLICY_MARKERS["greedy_priced"] = "h"
+POLICY_LINESTYLES["greedy_priced"] = POLICY_LINESTYLES["greedy"]
 ACTION_NAMES = {
     "replay": "Replay", "kv_transfer": "KV transfer",
     "east_replay": "Replay → East", "east_kv_transfer": "KV transfer → East",

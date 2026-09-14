@@ -1,0 +1,44 @@
+{
+  "status": "source review approved",
+  "reviewers": [
+    "queue_physics_review",
+    "fleet_affinity_review"
+  ],
+  "focused_tests": {
+    "passed": 339,
+    "warnings": 9,
+    "log": "focused-tests.log"
+  },
+  "checks": [
+    "Independent dense candidate construction matches sparse ordering and multiplicities, including repeated histories.",
+    "Dense and sparse admission fixtures agree for six policies; integer CSR LP bounds and secondary objective retention pass.",
+    "Measured compact primitives retain full-context replay, source resets, host caps and resident semantics within floating-point roundoff.",
+    "Execution reviewer reports 15 old-module, current dense and CSR fixtures matching complete results and phase timestamps at dispatch counts 1, 4 and 64.",
+    "Sparse local caches are namespaced by original history IDs; global source, GPU, replica and memory limits remain global.",
+    "Bandwidth sweep uses the production sparse path and a versioned structural candidate hash.",
+    "Benchmark uses individually constrained count-one histories, proportional capacity, matched inputs and production selection."
+  ],
+  "remaining_scope_limits": [
+    "Legacy greedy explicitly densifies; the native greedy and LP path stay sparse.",
+    "Explicit full-history wave telemetry expands records; event processing and solver iterations are not proven linear.",
+    "First-admission timing excludes later feedback, DES progression and resident request auditing."
+  ],
+  "unrelated_baseline_failure": {
+    "test": "tests/test_batch_shed.py:322:test_nominal_forecast_includes_final_delta_and_buffered_turns",
+    "status": "unchanged; excluded from the reviewer batch run",
+    "stale_incremental_expected": [
+      20,
+      1.1,
+      1.3,
+      2
+    ],
+    "existing_full_context_actual": [
+      220,
+      2.1,
+      4.3,
+      2
+    ],
+    "evidence": "Reviewer compared source against pre-change HEAD: nominal_action, initial_work, catchup, source_snapshot, _quiesce and _buffered are unchanged.",
+    "reviewer_batch_result": "47 passed, 1 deselected"
+  }
+}

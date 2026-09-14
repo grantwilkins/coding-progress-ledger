@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from pool_shed_resident_fit import calibrate, prefill_seconds
+from pool_shed_resident_fit import SERVER_REPORT, calibrate, calibrate_server_decode, prefill_seconds
 
 
 def evidence(tmp_path):
@@ -57,3 +57,41 @@ def test_control_materialization_prevents_false_isolation(tmp_path):
     path.write_text(json.dumps(bad))
     with pytest.raises(ValueError, match='invalid singleton'):
         calibrate(rows, request_sha256='0' * 64, unloaded_path=path)
+
+
+def test_server_decode_fit_ignores_heldout_outcomes(tmp_path):
+    report = json.loads(SERVER_REPORT.read_text())
+    path = tmp_path / 'report.json'
+    path.write_text(json.dumps(report))
+    fitted = calibrate_server_decode(path)
+    assert fitted['coefficients'] == {'decode_step_s': pytest.approx(.03548622490944625), 'decode_attention_s': 0.0}
+    assert len(fitted['training']['cells']) == 6
+    assert len(fitted['heldout']['cells']) == 5
+    assert fitted['heldout']['error']['max_relative_error'] < .02
+    assert not fitted['global_telemetry_accepted'] and not fitted['automatic_regional_substitution']
+    for cell in report['warm_cells']:
+        if cell['cell'].endswith('-r2'):
+            cell['server_ready_tpot_s']['median'] = 1000.
+    path.write_text(json.dumps(report))
+    poisoned = calibrate_server_decode(path)
+    assert poisoned['coefficients'] == fitted['coefficients']
+    assert poisoned['heldout']['error']['rmse_s'] > 999.
+    assert poisoned['input_sha256'] != fitted['input_sha256']
+
+
+def test_incomplete_server_cells_cannot_enter_calibration(tmp_path):
+    report = json.loads(SERVER_REPORT.read_text())
+    path = tmp_path / 'report.json'
+    report['warm_cells'][-1]['server_ready_tpot_s']['median'] = None
+    path.write_text(json.dumps(report))
+    fitted = calibrate_server_decode(path)
+    assert [c['cell'] for c in fitted['excluded_cells']] == ['warm-c30000-n16-r2']
+    report['warm_cells'][0]['request_evidence_complete'] = False
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match='six complete training'):
+        calibrate_server_decode(path)
+    report['warm_cells'][0]['request_evidence_complete'] = True
+    report['warm_cells'][0]['server_ready_tpot_s']['n'] = 0
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match='invalid complete server decode evidence'):
+        calibrate_server_decode(path)

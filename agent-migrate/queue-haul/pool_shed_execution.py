@@ -5,6 +5,9 @@ from __future__ import annotations
 from copy import copy
 
 import numpy as np
+from scipy.sparse import issparse, vstack
+
+from pool_shed_network import history_bytes, phase_rate_cap, transport_workers
 
 DISPATCH_CHUNKS = 64
 
@@ -41,6 +44,14 @@ def compute_allocation(load, replay_mass, kv_mass, gpus, loss=None, protected=Fa
     return sharing, max(0., gpus - sharing * cost)
 
 
+def replica_feasible(fleet, replay, kv, load):
+    """Each nonempty action pack remains on its own resident-bearing replica."""
+    free = (fleet.kv_capacity - fleet.baseline_kv) / fleet.gpus
+    return np.logical_and.reduce([(counts @ fleet.demand <= 1 - np.asarray(load) + 1e-8)
+                                  & (counts @ fleet.memory_tokens <= free + 1e-8 * max(free, 1.))
+                                  for counts in (replay, kv)])
+
+
 def flow_rates(mass, route, endpoint, budgets):
     """Weighted max-min per-batch rates under endpoint, route and shared caps."""
     return _flow_with_caps(mass, route, np.asarray(endpoint)[route], budgets)
@@ -74,14 +85,18 @@ def source_snapshot(fleet, now, cache=None):
     context, completed = fleet.context.copy(), np.zeros(len(fleet.count), int)
     cadence, cycle = fleet.metadata.get("source_session_rps", 0.), fleet.metadata.get("sequence_cycle", False)
     if paced_source(fleet) and cadence:
+        causal = fleet.metadata.get("causal_source", False)
+        if causal:
+            from pool_shed_resident_queue import source_turns
+            _, actual_completed, _ = source_turns(fleet, now, cache)
         started = _started_turns(fleet, now)
         phases = fleet.metadata.get("source_phase_s", np.zeros(len(context)))
         for i, sequence in enumerate(fleet.metadata["turn_sequences"]):
             if not sequence:
                 continue
             offset = fleet.metadata.get("turn_offset", [0] * len(context))[i] if cycle else 0
-            n = started[i]
-            if cycle or n <= len(sequence):
+            n = actual_completed[i] if causal else started[i]
+            if not causal and (cycle or n <= len(sequence)):
                 duration = fleet.metadata["turn_duration_s"][i][(offset + n - 1) % len(sequence)]
                 n -= (n - 1) / cadence - phases[i] + duration > now + 1e-10
             completed[i] = n if cycle else min(n, len(sequence))
@@ -143,8 +158,12 @@ def _quiesce(fleet, counts, now, cache=None, origin_turn=None):
     if cycle and np.any(lengths == 0):
         raise ValueError("cannot cycle an empty source trace")
     paced = paced_source(fleet)
+    causal = fleet.metadata.get("causal_source", False)
     if paced and cadence:
         steps = _started_turns(fleet, now)
+        if causal:
+            from pool_shed_resident_queue import source_turns
+            steps, _, finishes = source_turns(fleet, now, cache)
     origin_turn = np.zeros(len(fleet.count), int) if origin_turn is None else origin_turn
     key = ("quiesce", counts.astype(float, copy=False).tobytes(), steps.tobytes(), origin_turn.tobytes())
     if cache is not None and key in cache:
@@ -152,7 +171,9 @@ def _quiesce(fleet, counts, now, cache=None, origin_turn=None):
         return max(now, end), context, reset, terminal
     completed = steps[active] if cycle else np.minimum(lengths, steps[active])
     end = 0. if paced or not cadence else float(completed.max(initial=0) / cadence)
-    if paced and cadence:
+    if paced and cadence and causal:
+        end = float(finishes[active].max(initial=-np.inf))
+    elif paced and cadence:
         durations = fleet.metadata["turn_duration_s"]
         phases = fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count)))
         for i, n, length in zip(active, completed, lengths):
@@ -182,12 +203,14 @@ def _buffered(fleet, counts, start, end, calibration, cache=None, quiescing=Fals
     cadence = fleet.metadata.get("source_session_rps", 0.)
     phases = np.asarray(fleet.metadata.get("source_phase_s", np.zeros(len(fleet.count))))
     first = _started_turns(fleet, start) if quiescing else np.ceil((start + phases) * cadence - 1e-9).astype(int)
+    if quiescing and fleet.metadata.get("causal_source", False):
+        from pool_shed_resident_queue import source_turns
+        first = source_turns(fleet, start, cache)[0]
     last = np.maximum(first, np.ceil((end + phases) * cadence - 1e-9).astype(int))
     if cache is not None:
         key = ("buffer", counts.astype(float, copy=False).tobytes(), first.tobytes(), last.tobytes())
-        if key not in cache:
-            cache[key] = _buffered(fleet, counts, start, end, calibration, quiescing=quiescing)
-        return cache[key]
+        if key in cache:
+            return cache[key]
     number, work = 0., 0.
     for i in np.flatnonzero(counts):
         sequence = fleet.metadata["turn_sequences"][i]
@@ -210,6 +233,8 @@ def _buffered(fleet, counts, start, end, calibration, cache=None, quiescing=Fals
             a, b = min(first[i], len(values)), min(last[i], len(values))
             work += counts[i] * (prefix[b] - prefix[a])
             number += counts[i] * (b - a)
+    if cache is not None:
+        cache[key] = number, work
     return number, work
 
 
@@ -259,7 +284,15 @@ class PooledExecution:
         self.primitive_cache = {}  # One fixed fleet, timing and calibration for this execution.
         self.fleet = table.fleet
         self.gpus = destination_gpus(self.fleet)
+        transport_workers(self.fleet)  # Validate the opt-in physical reservation contract.
+        self.fixed_host_shares = self.fleet.metadata.get("fixed_host_shares", False)
         self.protected = self.fleet.metadata.get("protect_resident", False)
+        self.affinity = self.fleet.metadata.get("resident_affinity", False)
+        self.require_local_recovery = self.fleet.metadata.get("require_local_recovery", False)
+        if self.require_local_recovery and not self.affinity:
+            raise ValueError("local recovery admission requires resident affinity")
+        if self.affinity and (self.protected or "resident_replay_loss" not in self.timing):
+            raise ValueError("resident affinity requires measured interference and unprotected migration")
         self.paced = paced_source(self.fleet)
         self.timing_load_factor = self.fleet.metadata.get("timing_load_factor", 1.)
         if not np.isfinite(self.timing_load_factor) or self.timing_load_factor <= 0:
@@ -270,25 +303,28 @@ class PooledExecution:
                 or not np.isfinite(np.r_[np.ravel(self.table.load), self.table.deadline, self.table.endpoint, self.table.budgets, self.timing["beta"]]).all()
                 or np.any(np.asarray(self.table.load) < 0) or np.any(np.asarray(self.table.load) > 1)
                 or np.any(np.asarray(self.table.endpoint) <= 0) or np.any(np.asarray(self.table.budgets) <= 0)
-                or np.any(self.table.replay < 0) or np.any(self.table.kv < 0)
-                or np.any(self.table.replay != np.floor(self.table.replay)) or np.any(self.table.kv != np.floor(self.table.kv))):
+                or any(np.any(values < 0) or np.any(values != np.floor(values))
+                       for action in (self.table.replay, self.table.kv)
+                       for values in (action.data if issparse(action) else action,))):
             raise ValueError("invalid independent execution primitives")
         self.selected, self.mass = [], np.zeros(0)
         self.route, self.action = np.zeros(0, int), np.zeros(0, int)
-        self.counts = np.zeros((0, len(self.fleet.count)))
+        self.counts = np.empty(0, object)  # Immutable group vectors shared by their dispatch waves.
         self.memory_tokens = self.fleet.memory_tokens
         self.free_memory = (self.fleet.kv_capacity - self.fleet.baseline_kv) * self.gpus / self.fleet.gpus
-        self.demand, self.memory = self.counts @ self.fleet.demand, self.counts @ self.memory_tokens
+        self.demand, self.memory, self.width, self.gain = (np.zeros(0) for _ in range(4))
         self.initial_load = np.broadcast_to(np.asarray(self.table.load), (2,)).astype(float)
         self.n = len(self.selected)
         self.group, self.initial_ready = np.arange(self.n) // self.chunks, np.zeros(self.n, bool)
         self.origin_time = np.zeros(self.n)
+        self.captured_caps = np.full((self.n, 2), np.nan)
         self.state, self.remaining, self.release = np.zeros(self.n, int), np.zeros(self.n), np.zeros(self.n)
         self.tail, self.delta, self.compute_used, self.idle_work = np.zeros(self.n), np.zeros(self.n), np.zeros(2), np.zeros(2)
         self.quiesced, self.buffered, self.backlog, self.backlog_total = (np.zeros(self.n) for _ in range(4))
         self.pause_requested = np.zeros(self.n)
         self.gated = np.zeros(self.n, bool)
         self.resident_debt, self.resident_generated, self.resident_recovered = (np.zeros(2) for _ in range(3))
+        self.replica_debt = np.zeros(self.n)
         self.resident_displaced, self.peak_migration_replicas = np.zeros(2), np.zeros(2)
         self.resident_loss = np.broadcast_to(np.asarray(self.timing.get("resident_replay_loss", 0.)), (2,))
         if not np.isfinite(self.resident_loss).all() or np.any((self.resident_loss < 0) | (self.resident_loss > 1)):
@@ -302,6 +338,9 @@ class PooledExecution:
             raise ValueError("positive tail service and deadline required")
         self.nominal_beta = self.calibration.get("timing", [self.timing])[0]["beta"]
         self.phase_started, self.phase_replica_seconds, self.phase_transferred_bytes, self.phase_nominal_work = (np.zeros(self.n) for _ in range(4))
+        self.record_wave_schedules = bool(self.fleet.metadata.get("record_wave_schedules", False))
+        if self.record_wave_schedules:
+            self.admitted_s, self.phase_enter_s = np.zeros(0), np.empty((0, 8))
         self.now = 0.
         self.network_key, self.network_rates = None, np.zeros(self.n)
         self.selected_total = np.zeros(len(self.table.route))
@@ -313,30 +352,56 @@ class PooledExecution:
         if (chosen.shape != self.selected_total.shape or not np.isfinite(chosen).all() or np.any(chosen < 0)
                 or np.any((self.table.replay + self.table.kv).T @ total > self.fleet.count * (1 + 1e-8) + 1e-8)):
             raise ValueError("invalid or duplicated source migration mass")
-        selected = [(j, a, c) for j in np.flatnonzero(chosen > 1e-10)
-                    for a, c in enumerate((self.table.replay[j], self.table.kv[j])) if c.any()
-                    for _ in range(self.chunks)]
-        if not selected:
+        groups = [(j, a, c) for j in np.flatnonzero(chosen > 1e-10)
+                  for a, action in enumerate((self.table.replay, self.table.kv))
+                  for c in (action[j],) if (c.count_nonzero() if issparse(c) else c.any())]
+        if not groups:
             return
+        counts = (vstack([c if issparse(c) else c[None, :] for _, _, c in groups], format="csr")
+                  if any(issparse(c) for _, _, c in groups) else np.array([c for _, _, c in groups]))
+        if issparse(counts):
+            counts.sum_duplicates()
+            counts.eliminate_zeros()
+            counts.sort_indices()
+            group_counts = [counts[i] for i in range(len(groups))]
+            for row in group_counts:
+                for values in (row.data, row.indices, row.indptr):
+                    values.flags.writeable = False
+        else:
+            counts.flags.writeable = False
+            group_counts = counts
+        selected = [(j, a, c) for (j, a, _), c in zip(groups, group_counts) for _ in range(self.chunks)]
         mass = np.array([chosen[j] / self.chunks for j, _, _ in selected])
-        counts = np.array([c for _, _, c in selected])
         route = np.array([self.table.route[j] for j, _, _ in selected], int)
-        demand, memory = counts @ self.fleet.demand, counts @ self.memory_tokens
+        demand, memory = (np.repeat(counts @ values, self.chunks) for values in (self.fleet.demand, self.memory_tokens))
+        if self.affinity and not replica_feasible(self.fleet, counts, counts * 0 if issparse(counts) else np.zeros_like(counts), self.initial_load[route[::self.chunks]]).all():
+            raise ValueError("action pack exceeds its destination replica serving or memory capacity")
         for r in (0, 1):
             ids, old = route == r, self.route == r
+            if self.affinity and mass[ids].sum() + self.mass[old].sum() > self.gpus * (1 + 1e-8):
+                raise ValueError("selected migrations exceed permanently reserved destination replicas")
             if (mass[ids] @ demand[ids] + self.mass[old] @ self.demand[old] > self.gpus * (1 - self.initial_load[r]) + 1e-7 * self.gpus
                     or mass[ids] @ memory[ids] + self.reserved[old].sum() > self.free_memory + 1e-7 * self.fleet.kv_capacity):
                 raise ValueError("selected migrations exceed destination serving or memory capacity")
         n = len(selected)
-        remaining, tail = np.zeros(n), np.zeros(n)
-        for i, (_, a, c) in enumerate(selected):
-            remaining[i], tail[i] = initial_work(self.fleet, c, a, route[i], None, self.timing, self.calibration, self.primitive_cache)
+        remaining, tail = np.zeros(len(groups)), np.zeros(len(groups))
+        for i, ((j, a, _), row) in enumerate(zip(groups, group_counts)):
+            fleet, c, cache = self.action_view(row)
+            if self.fixed_host_shares:
+                phase_rate_cap(fleet, c, history_bytes(fleet, None, a, self.calibration))
+            remaining[i], tail[i] = initial_work(fleet, c, a, self.table.route[j], None, self.timing, self.calibration, cache)
+        wave_counts = np.empty(n, object)
+        wave_counts[:] = [c for _, _, c in selected]
         values = dict(mass=mass, route=route, action=np.array([a for _, a, _ in selected], int),
-                      counts=counts, demand=demand, memory=memory, reserved=mass * memory,
+                      counts=wave_counts, demand=demand, memory=memory, reserved=mass * memory,
+                      width=np.repeat(np.asarray(counts.sum(1)).ravel(), self.chunks), gain=np.repeat(counts @ self.fleet.gain, self.chunks),
                       group=np.arange(self.n, self.n + n) // self.chunks, initial_ready=np.zeros(n, bool), gated=np.zeros(n, bool),
                       origin_time=np.full(n, np.nan if self.paced else 0.),
-                      state=np.zeros(n, int), remaining=remaining, tail=tail, phase_started=np.full(n, self.now))
-        for name in ("release", "delta", "quiesced", "pause_requested", "buffered", "backlog", "backlog_total", "phase_replica_seconds", "phase_transferred_bytes", "phase_nominal_work"):
+                      captured_caps=np.full((n, 2), np.nan),
+                      state=np.zeros(n, int), remaining=np.repeat(remaining, self.chunks), tail=np.repeat(tail, self.chunks), phase_started=np.full(n, self.now))
+        if self.record_wave_schedules:
+            values.update(admitted_s=np.full(n, self.now), phase_enter_s=np.column_stack((np.full(n, self.now), np.full((n, 7), np.nan))))
+        for name in ("release", "delta", "quiesced", "pause_requested", "buffered", "backlog", "backlog_total", "phase_replica_seconds", "phase_transferred_bytes", "phase_nominal_work", "replica_debt"):
             values[name] = np.zeros(n)
         for name, value in values.items():
             setattr(self, name, np.concatenate((getattr(self, name), value)))
@@ -354,13 +419,56 @@ class PooledExecution:
             raise RuntimeError("handoff gate exceeded safe serving capacity")
         return np.minimum(1., load)
 
-    def origin(self, i):
-        return source_snapshot(self.fleet, self.origin_time[i], self.primitive_cache) if self.paced and np.isfinite(self.origin_time[i]) else (self.fleet.context, np.zeros(len(self.fleet.count), int))
+    def action_view(self, counts):
+        if not issparse(counts):
+            return self.fleet, counts, self.primitive_cache
+        key = ("execution_histories", tuple(counts.indices))
+        if key not in self.primitive_cache:
+            from pool_shed_campaign import compact_fleet
+            self.primitive_cache[key] = compact_fleet(self.fleet, counts.indices), {}
+        fleet, cache = self.primitive_cache[key]
+        return fleet, counts.data, cache
+
+    def origin(self, i, full=False):
+        fleet, _, cache = (self.fleet, None, self.primitive_cache) if full else self.action_view(self.counts[i])
+        return source_snapshot(fleet, self.origin_time[i], cache) if self.paced and np.isfinite(self.origin_time[i]) else (fleet.context, np.zeros(len(fleet.count), int))
+
+    def network_cap(self, i):
+        fleet, counts, cache = self.action_view(self.counts[i])
+        captured = np.isfinite(self.origin_time[i])
+        key = ("network_cap", counts.tobytes(), int(self.action[i]), int(self.state[i]),
+               float(self.origin_time[i] if captured else self.now), float(self.pause_requested[i]))
+        if key not in cache:
+            origin, turns = self.origin(i) if captured else source_snapshot(fleet, self.now, cache)
+            context, reset = origin, None
+            if self.state[i] == 3:
+                _, context, reset, _ = _quiesce(fleet, counts, self.pause_requested[i], cache, origin_turn=turns)
+            elif self.state[i] != 0:
+                raise ValueError("network cap requires an initial or catch-up transfer")
+            volume = history_bytes(fleet, context, self.action[i], self.calibration, origin_context=origin if reset is not None else None, reset=reset)
+            cache[key] = phase_rate_cap(fleet, counts, volume)
+        return cache[key]
 
     def buffered_work(self, i, until):
+        fleet, counts, cache = self.action_view(self.counts[i])
         quiescing = self.fleet.metadata.get("paced_source", False)
-        return _buffered(self.fleet, self.counts[i], self.pause_requested[i] if quiescing else self.quiesced[i],
-                         until, self.calibration, self.primitive_cache, quiescing=quiescing)
+        return _buffered(fleet, counts, self.pause_requested[i] if quiescing else self.quiesced[i],
+                         until, self.calibration, cache, quiescing=quiescing)
+
+    def network_caps(self, ids):
+        states, captured = self.state[ids], np.isfinite(self.origin_time[ids])
+        if np.any(~np.isin(states, [0, 3])) or np.any((states == 3) & ~captured):
+            raise ValueError("phase caps require initial or captured catch-up transfers")
+        phases = states // 3
+        caps = self.captured_caps[ids, phases]
+        for k in np.flatnonzero(captured & np.isnan(caps)):
+            caps[k] = self.network_cap(ids[k])
+        self.captured_caps[ids[captured], phases[captured]] = caps[captured]
+        waiting = np.flatnonzero(~captured)
+        if len(waiting):
+            _, first, inverse = np.unique(self.group[ids[waiting]], return_index=True, return_inverse=True)
+            caps[waiting] = np.array([self.network_cap(i) for i in ids[waiting[first]]])[inverse]
+        return caps
 
     def nominal_continuation(self, table, timing, calibration):
         central = PooledExecution(table, timing, calibration, self.chunks)
@@ -370,16 +478,18 @@ class PooledExecution:
             setattr(clone, name, getattr(central, name))
         clone.events, clone.selected = {key: value.copy() for key, value in self.events.items()}, self.selected.copy()
         clone.network_key, clone.network_rates = None, np.zeros(self.n)
+        clone.captured_caps = np.full((self.n, 2), np.nan)
         clone.remaining[:], clone.tail[:], clone.delta[:] = 0., 0., 0.
         for i in np.flatnonzero(self.state < 6):
-            c, a, r, phase = clone.counts[i], clone.action[i], clone.route[i], clone.state[i]
+            fleet, c, cache = clone.action_view(clone.counts[i])
+            a, r, phase = clone.action[i], clone.route[i], clone.state[i]
             origin_context, origin_turn = clone.origin(i)
             if phase <= 1:
-                payload, clone.tail[i] = initial_work(clone.fleet, c, a, r, origin_context, timing, calibration, clone.primitive_cache)
+                payload, clone.tail[i] = initial_work(fleet, c, a, r, origin_context, timing, calibration, cache)
                 clone.remaining[i] = max(payload - clone.phase_transferred_bytes[i], 0.) if phase == 0 else max(clone.tail[i] - clone.phase_nominal_work[i], 0.)
             else:
-                _, context, reset, _ = _quiesce(clone.fleet, c, clone.pause_requested[i], clone.primitive_cache, origin_turn=origin_turn)
-                clone.delta[i], clone.tail[i] = catchup(clone.fleet, c, a, r, context, reset, timing, calibration, clone.primitive_cache, origin_context=origin_context)
+                _, context, reset, _ = _quiesce(fleet, c, clone.pause_requested[i], cache, origin_turn=origin_turn)
+                clone.delta[i], clone.tail[i] = catchup(fleet, c, a, r, context, reset, timing, calibration, cache, origin_context=origin_context)
                 if phase == 3:
                     clone.remaining[i] = max(clone.delta[i] - clone.phase_transferred_bytes[i], 0.)
                 elif phase == 4:
@@ -402,23 +512,29 @@ class PooledExecution:
             if len(ready):
                 for i in ready:
                     self.phase_started[i], self.phase_replica_seconds[i], self.phase_transferred_bytes[i], self.phase_nominal_work[i] = self.now, 0., 0., 0.
-                    a, c, r = self.action[i], self.counts[i], self.route[i]
+                    fleet, c, cache = self.action_view(self.counts[i])
+                    a, r = self.action[i], self.route[i]
                     if self.state[i] == 0 and a == 0:
                         self.state[i], self.remaining[i] = 1, self.tail[i]
                     elif self.state[i] in (0, 1):
                         origin_context, origin_turn = self.origin(i)
                         self.pause_requested[i] = self.now
-                        self.release[i], context, reset, terminal = _quiesce(self.fleet, c, self.now, self.primitive_cache, origin_turn=origin_turn)
+                        self.release[i], context, reset, terminal = _quiesce(fleet, c, self.now, cache, origin_turn=origin_turn)
+                        if self.fixed_host_shares:
+                            phase_rate_cap(fleet, c, history_bytes(fleet, context, a, self.calibration, origin_context=origin_context, reset=reset))
                         self.quiesced[i] = self.release[i]
                         self.exhausted += int(terminal)
-                        required = self.mass[i] * (c @ np.maximum(self.memory_tokens, np.ceil(context / 16) * 16))
+                        required = self.mass[i] * (c @ np.maximum(fleet.memory_tokens, np.ceil(context / 16) * 16))
                         occupied = self.reserved[self.route == r].sum() - self.reserved[i] + required
-                        if occupied > self.free_memory + 1e-7:
+                        if (occupied > self.free_memory + 1e-7 or self.affinity
+                                and required / self.mass[i] > self.free_memory / self.gpus + 1e-7):
                             self.state[i], self.reserved[i] = 7, 0.
+                            if self.record_wave_schedules:
+                                self.phase_enter_s[i, 7] = self.now
                             continue
                         self.reserved[i] = required
                         self.peak_memory[r] = max(self.peak_memory[r], occupied)
-                        self.delta[i], self.tail[i] = catchup(self.fleet, c, a, r, context, reset, self.timing, self.calibration, self.primitive_cache, origin_context=origin_context)
+                        self.delta[i], self.tail[i] = catchup(fleet, c, a, r, context, reset, self.timing, self.calibration, cache, origin_context=origin_context)
                         self.state[i], self.remaining[i] = 2, 0.
                     elif self.state[i] == 2:
                         self.state[i], self.remaining[i] = 3, self.delta[i]
@@ -434,7 +550,8 @@ class PooledExecution:
                             if self.backlog[i] > 1e-9:
                                 continue
                         self.state[i] = 6
-                        self.committed[2 * r + a] += self.mass[i] * c
+                        ids = self.counts[i].indices if issparse(self.counts[i]) else slice(None)
+                        self.committed[2 * r + a, ids] += self.mass[i] * c
                         if self.protected and self.loads[r] + self.mass[i] * self.demand[i] / self.gpus > 1 + 1e-8:
                             raise RuntimeError("handoff exceeded safe serving capacity")
                         self.loads[r] = min(1., self.loads[r] + self.mass[i] * self.demand[i] / self.gpus)
@@ -447,6 +564,8 @@ class PooledExecution:
                             "multiplicity": 0., "first_completion_s": float(self.now)})
                         event.update(multiplicity=event["multiplicity"] + float(self.mass[i]), completion_s=float(self.now),
                                      resident_debt_work_s=float(self.resident_debt[r]), source_buffer_work_s=float(self.mass[self.route == r] @ self.backlog[self.route == r]))
+                    if self.record_wave_schedules:
+                        self.phase_enter_s[i, self.state[i]] = self.now
                 continue
             rates = np.zeros(self.n)
             transfers = np.flatnonzero((self.state == 0) | (self.state == 3))
@@ -455,7 +574,7 @@ class PooledExecution:
             # A KV application cap is additional to the measured bulk endpoint cap.
             key = (transfers.tobytes(), self.state[transfers].tobytes())
             if len(transfers) and key != self.network_key:
-                nodes = network_nodes(self.fleet)[:2]
+                nodes = transport_workers(self.fleet)[:2]
                 residual, app_residual = np.array(self.table.budgets, float), np.asarray(application) * nodes
                 captured = False
                 for phase in (3, 0):
@@ -465,6 +584,9 @@ class PooledExecution:
                     if phase == 0:
                         routes, actions = self.route[::self.chunks], self.action[::self.chunks]
                         caps = np.where(actions == 1, np.minimum(endpoint[routes], np.asarray(application)[routes]), endpoint[routes])
+                        if self.fixed_host_shares:
+                            caps = caps.astype(float)
+                            np.minimum.at(caps, self.group[ids], self.network_caps(ids))
                         pending = np.bincount(self.group[ids], weights=self.mass[ids], minlength=self.n // self.chunks)
                         virtual = _flow_with_caps(pending, routes, caps, residual, actions == 1, app_residual / nodes, nodes)
                         active = ids[self.initial_ready[ids]]
@@ -480,11 +602,14 @@ class PooledExecution:
                         for i in ids[~np.isfinite(self.origin_time[ids])]:
                             self.origin_time[i] = self.now
                             context, _ = self.origin(i)
-                            self.remaining[i], self.tail[i] = initial_work(self.fleet, self.counts[i], self.action[i], self.route[i], context, self.timing, self.calibration, self.primitive_cache)
+                            fleet, counts, cache = self.action_view(self.counts[i])
+                            self.remaining[i], self.tail[i] = initial_work(fleet, counts, self.action[i], self.route[i], context, self.timing, self.calibration, cache)
                             captured = True
                         if captured:
                             break
                     caps = np.where(self.action[ids] == 1, np.minimum(endpoint[self.route[ids]], np.asarray(application)[self.route[ids]]), endpoint[self.route[ids]])
+                    if self.fixed_host_shares:
+                        caps = np.minimum(caps, self.network_caps(ids))
                     rates[ids] = _flow_with_caps(self.mass[ids], self.route[ids], caps, residual, self.action[ids] == 1, app_residual / nodes, nodes)
                     used = self.mass[ids] * rates[ids]
                     residual = np.maximum(residual - np.r_[[used[self.route[ids] == r].sum() for r in (0, 1)], used.sum()], 0.)
@@ -497,12 +622,28 @@ class PooledExecution:
             computing = (self.state == 1) | (self.state == 4)
             backlog_rates = np.zeros(self.n)
             resident_growth, resident_recovery, resident_displacement, compute_shares = (np.zeros(2) for _ in range(4))
+            local_growth, local_recovery = np.zeros(self.n), np.zeros(self.n)
             nominal_rates = np.zeros(2)
             serving_load = self.serving_load()
             for r in (0, 1):
                 active = computing & (self.route == r)
                 queued = (self.backlog > 1e-9) & (self.route == r)
                 load = serving_load[r]
+                if self.affinity:
+                    local_load = self.initial_load[r] + self.demand * (self.state == 6)
+                    headroom = np.maximum(1 - local_load, 0.)
+                    recovering = (self.route == r) & ~computing & (self.replica_debt > 1e-9)
+                    local_growth[active] = self.initial_load[r] * np.where(self.action[active] == 0, self.resident_loss[r], 1.)
+                    local_recovery[recovering] = headroom[recovering]
+                    backlog_rates[queued & ~computing] = (headroom - local_recovery)[queued & ~computing]
+                    resident_growth[r] = resident_displacement[r] = float(self.mass[active] @ local_growth[active])
+                    resident_recovery[r] = float(self.mass[recovering] @ local_recovery[recovering])
+                    compute_shares[r] = 1.
+                    self.peak_migration_replicas[r] = max(self.peak_migration_replicas[r], self.mass[active].sum())
+                    self.peak_load[r] = max(self.peak_load[r], load + (resident_recovery[r] + self.mass[queued] @ backlog_rates[queued]) / self.gpus)
+                    rates[active] = np.exp(-self.timing["beta"] * self.initial_load[r] * self.timing_load_factor)
+                    nominal_rates[r] = np.exp(-self.nominal_beta * self.initial_load[r] * self.timing_load_factor)
+                    continue
                 if self.protected:
                     backlog_rates[queued] = min(1., self.gpus * (1 - load) / max(float(self.mass[queued].sum()), 1e-30))
                     load = min(1., load + float(self.mass[queued] @ backlog_rates[queued]) / self.gpus)
@@ -527,6 +668,7 @@ class PooledExecution:
             completions = np.divide(self.remaining, rates, out=np.full(self.n, np.inf), where=rates > 0)
             waiting = ((self.state == 2) | (self.state == 5)) & (self.release > self.now)
             step = min(until - self.now, float(completions.min(initial=np.inf)),
+                       float(np.min(np.divide(self.replica_debt, local_recovery, out=np.full(self.n, np.inf), where=local_recovery > 0), initial=np.inf)) if self.affinity else
                        float(np.min(np.divide(self.resident_debt, resident_recovery, out=np.full(2, np.inf), where=resident_recovery > 0))),
                        float(np.min(np.divide(self.backlog, backlog_rates, out=np.full(self.n, np.inf), where=backlog_rates > 0), initial=np.inf)),
                        float(np.min(self.release[waiting] - self.now, initial=np.inf)))
@@ -557,10 +699,14 @@ class PooledExecution:
             self.resident_generated += resident_growth * step
             self.resident_displaced += resident_displacement * step
             self.resident_recovered += resident_recovery * step
-            self.resident_debt = np.maximum(self.resident_debt + (resident_growth - resident_recovery) * step, 0.)
+            if self.affinity:
+                self.replica_debt = np.maximum(self.replica_debt + (local_growth - local_recovery) * step, 0.)
+                self.resident_debt = np.array([self.mass[self.route == r] @ self.replica_debt[self.route == r] for r in (0, 1)])
+            else:
+                self.resident_debt = np.maximum(self.resident_debt + (resident_growth - resident_recovery) * step, 0.)
             self.backlog = np.maximum(self.backlog - backlog_rates * step, 0)
             gate = (self.state == 5) & self.gated
-            self.buffered[gate] += self.counts[gate].sum(1) * self.fleet.metadata.get("source_session_rps", 0.) * step
+            self.buffered[gate] += self.width[gate] * self.fleet.metadata.get("source_session_rps", 0.) * step
             self.backlog_total[gate] += self.demand[gate] * step
             self.remaining = np.maximum(self.remaining - progress, 0)
             self.now += step
@@ -584,16 +730,24 @@ class PooledExecution:
                                            for i in np.flatnonzero((self.state >= 2) & (self.state < 6) & ~gate)), start=np.zeros(2))
         source_buffered, source_work = source_buffered + gate_pending, source_work + gate_work
         transferred_buffered = float(self.mass @ self.buffered) - gate_pending
+        recovered = (self.state == 6) & (self.replica_debt <= 1e-9) & (self.backlog <= 1e-9)
+        recovered_fractions = [float(self.mass[recovered & (2 * self.route + self.action == a)] @
+                                    self.gain[recovered & (2 * self.route + self.action == a)]) for a in range(4)]
         return {"shed_fraction": float(fractions.sum()), "action_counts": numbers.tolist(),
                 "resident_latency_validated": False,
                 "service_recovered_by_deadline": self.service_ready_s is not None,
-                "service_recovery_scope": "aggregate pooled work only; no resident GPU affinity or TTFT/TPOT guarantee",
+                "service_recovery_scope": ("resident debt and source buffers recover on their permanently assigned replica cohorts; work proxy, no TTFT/TPOT guarantee" if self.affinity else "aggregate pooled work only; no resident GPU affinity or TTFT/TPOT guarantee"),
                 "action_fractions": fractions.tolist(), "completed_sessions": float(numbers.sum()),
                 "last_completion_s": max((e["completion_s"] for e in events), default=0.),
                 "service_ready_s": self.service_ready_s,
                 "resident_debt_generated_work_s": self.resident_generated.tolist(),
                 "resident_displaced_work_s": self.resident_displaced.tolist(),
                 "resident_pool_compensation_work_s": np.maximum(self.resident_displaced - self.resident_generated, 0.).tolist(),
+                "resident_affinity": bool(self.affinity),
+                "require_local_recovery": bool(self.require_local_recovery),
+                "recovered_handoff_fraction": float(sum(recovered_fractions)) if self.affinity else None,
+                "recovered_action_fractions": recovered_fractions if self.affinity else None,
+                "reserved_destination_replicas": [float(self.mass[self.route == r].sum()) for r in (0, 1)] if self.affinity else None,
                 "resident_debt_recovered_work_s": self.resident_recovered.tolist(),
                 "pending_resident_debt_work_s": self.resident_debt.tolist(),
                 "batch_replica_seconds": self.compute_used.tolist(), "migration_idle_work_s": self.idle_work.tolist(),
@@ -613,15 +767,46 @@ class PooledExecution:
                 "unfinished_batch_mass": float(self.mass[self.state != 6].sum()), "memory_blocked_batch_mass": float(self.mass[self.state == 7].sum()),
                 "trace_exhausted_waves": self.exhausted,
                 "dispatch_chunks": int(self.chunks), "dispatch_wave_count": self.n,
-                "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; " + ("capture current source state at each wave's first dispatch" if self.paced else "frozen initial snapshot while source continues"),
+                "dispatch_scope": "bounded waves fill a dynamic fair-share network window independent of wave count; final deltas have priority; " + ("capture current source state at each wave's first dispatch" if self.paced else "frozen initial snapshot while source continues") + ("; fixed host shares cap each transfer, with conservative minimum pending-wave caps for virtual dispatch groups" if self.fixed_host_shares else ""),
                 "execution_model": "independent_event_fluid_batch_mass_finite_trace",
-                "source_pacing": ("paced recorded trajectories with contextual request-duration proxy and declared arrival phases" if self.paced else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
+                "source_pacing": ("sequential histories with server-timed generation; offered turns wait for their predecessor" if self.fleet.metadata.get("causal_source") else "paced recorded trajectories with contextual request-duration proxy and declared arrival phases" if self.paced else "paced recorded trajectories; explicit reset on cyclic wrap" if self.fleet.metadata.get("sequence_cycle")
                                   else "finite recorded turns at explicit equal cadence; terminal context retained"),
-                "compute_scope": ("shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion" if self.protected else "fractional batch processor sharing; dynamic measured load factor; no ingestion"),
-                "backlog_scope": ("ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears" if self.protected else "migration reduces ordinary service; spare capacity repays resident debt before source buffers; recovery utilization enters the measured migration load factor"),
-                "resident_debt_scope": ("resident debt disallowed by the shared safe-occupancy constraint" if self.protected else "site-wide deficit after spare GPUs compensate displaced service; resident_displaced_work_s records the local throughput-loss proxy before compensation; zero ordinary service during KV response compute; network waiting consumes no ordinary service"
+                "compute_scope": ("one action pack per permanently reserved replica cohort; measured slowdown uses that replica's initial resident load; no ingestion" if self.affinity else "shared safe occupancy limits migration; measured replay slowdown uses offered-reference load conversion; aggregate pool transfer, no ingestion" if self.protected else "fractional batch processor sharing; dynamic measured load factor; no ingestion"),
+                "backlog_scope": ("incoming standing service remains on its action replica; local headroom repays resident debt before source buffers" if self.affinity else "ordinary safe occupancy reserved first; pre-handoff buffers use remaining capacity before migration; fresh gate arrivals use reserved demand; no handoff until buffer clears" if self.protected else "migration reduces ordinary service; spare capacity repays resident debt before source buffers; recovery utilization enters the measured migration load factor"),
+                "resident_debt_scope": ("disjoint fluid replica cohorts; measured local throughput loss generates debt during compute, same-replica headroom recovers it outside compute; no cross-GPU compensation; conservative placement, not general bin packing" if self.affinity else "resident debt disallowed by the shared safe-occupancy constraint" if self.protected else "site-wide deficit after spare GPUs compensate displaced service; resident_displaced_work_s records the local throughput-loss proxy before compensation; zero ordinary service during KV response compute; network waiting consumes no ordinary service"
                                         if "resident_replay_loss" in self.timing else "reverse interference disabled in legacy primitive fixture"),
-                "memory_scope": "reserve declared cohort memory, including recorded-cycle peaks, before transfer; grow or reject before catch-up"}
+                "memory_scope": "reserve declared cohort memory, including recorded-cycle peaks, before transfer; grow or reject before catch-up",
+                **({"wave_schedules": self.wave_schedules()} if self.record_wave_schedules else {})}
+
+    def wave_schedules(self):
+        """Full history arrays are expanded only for this explicitly enabled output."""
+        rows = []
+        for i, (column, action, counts) in enumerate(self.selected):
+            counts = counts.toarray().ravel() if issparse(counts) else counts
+            captured, paused = np.isfinite(self.origin_time[i]), self.state[i] >= 2
+            context, turns = self.origin(i, full=True) if captured else (None, None)
+            final_context = reset = next_turn = None
+            if paused:
+                _, final_context, reset, _ = _quiesce(self.fleet, counts, self.pause_requested[i], self.primitive_cache, origin_turn=turns)
+                if self.paced and self.fleet.metadata.get("causal_source"):
+                    from pool_shed_resident_queue import source_turns
+                    next_turn = source_turns(self.fleet, self.pause_requested[i], self.primitive_cache)[0]
+                elif self.paced:
+                    next_turn = _started_turns(self.fleet, self.pause_requested[i])
+                else:
+                    next_turn = np.full(len(counts), int(np.ceil(max(self.pause_requested[i] * self.fleet.metadata.get("source_session_rps", 0.) - 1e-10, 0))))
+                if not self.fleet.metadata.get("sequence_cycle", False):
+                    next_turn = np.minimum(next_turn, list(map(len, self.fleet.metadata["turn_sequences"])))
+            rows.append({"wave_id": i, "column": int(column), "mass": float(self.mass[i]), "route": int(self.route[i]),
+                         "action": "replay" if action == 0 else "kv_transfer", "counts": counts.tolist(),
+                         "admitted_s": float(self.admitted_s[i]), "origin_s": float(self.origin_time[i]) if captured else None,
+                         "phase_enter_s": [float(t) if np.isfinite(t) else None for t in self.phase_enter_s[i]],
+                         "state": int(self.state[i]), "pause_requested_s": float(self.pause_requested[i]) if paused else None,
+                         "quiesced_s": float(self.quiesced[i]) if paused else None,
+                         "origin_context": context.tolist() if captured else None, "origin_turn": turns.tolist() if captured else None,
+                         "quiesced_context": final_context.tolist() if paused else None, "reset": reset.tolist() if paused else None,
+                         "paused_turns": next_turn.tolist() if paused else None})
+        return rows
 
 
 def regional_execution_check(calibration):

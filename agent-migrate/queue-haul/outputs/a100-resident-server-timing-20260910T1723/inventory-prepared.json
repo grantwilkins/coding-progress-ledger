@@ -1,0 +1,31 @@
+{
+  "config": {
+    "host": "127.0.0.1",
+    "src_port": 18100,
+    "sink_port": 18200,
+    "api_proxy_port": 18400,
+    "sink_lmc_http_port": 18081,
+    "src_lmc_http_port": 18080,
+    "src_lmc_port": 15557,
+    "sink_lmc_port": 15556,
+    "lmc_port": 15655,
+    "kv_proxy_port": 18300,
+    "model": "openai/gpt-oss-20b"
+  },
+  "bandwidth_mbps": 1000,
+  "proxy_clock": "coordinator_monotonic",
+  "source": {
+    "gpu_uuid": "GPU-0f9da174-f4d4-80ab-d167-9fea51bf651f",
+    "gpu_name": "NVIDIA A100 80GB PCIe",
+    "reference_runtime_verified": true,
+    "identity_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/source/identity.json",
+    "runtime_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/source/runtime.json"
+  },
+  "destination": {
+    "gpu_uuid": "GPU-ee757c0c-d22b-d7b6-e597-582796b8e965",
+    "gpu_name": "NVIDIA A100 80GB PCIe",
+    "reference_runtime_verified": true,
+    "identity_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/destination/identity.json",
+    "runtime_evidence": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/outputs/a100-resident-server-timing-20260910T1723/destination/runtime.json"
+  }
+}

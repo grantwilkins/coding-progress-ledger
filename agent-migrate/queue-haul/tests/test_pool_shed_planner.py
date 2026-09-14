@@ -7,11 +7,15 @@ from pool_shed_execution import PooledExecution
 from pool_shed_planner import phase_profile, plan_admission, planning_grid, project_queues, recovery_prefix
 
 
-def test_secondary_lp_preserves_primary_below_solver_coefficient_cutoff():
+@pytest.mark.parametrize("sparse", [False, True])
+def test_secondary_lp_preserves_primary_below_solver_coefficient_cutoff(sparse):
     from pool_shed_campaign import PRIMARY_TOL, solve_lp
+    from scipy.sparse import csr_matrix
 
     table = SimpleNamespace(matrix=np.ones((1, 1)), capacities=np.array([1e6]),
                             gains=np.array([1e-10]), fleet=SimpleNamespace(gpus=1))
+    if sparse:
+        table.matrix = csr_matrix(table.matrix)
     allowed = np.array([True])
     primary = table.gains @ solve_lp(table, allowed, -table.gains)
     chosen = solve_lp(table, allowed, np.ones(1), primary)
@@ -19,8 +23,10 @@ def test_secondary_lp_preserves_primary_below_solver_coefficient_cutoff():
     assert np.all(table.matrix @ chosen <= table.capacities)
 
 
-def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypatch):
+@pytest.mark.parametrize("sparse", [False, True])
+def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypatch, sparse):
     import pool_shed_campaign as campaign
+    from scipy.sparse import csr_matrix
 
     original, bounds = campaign._bounded_lp, []
 
@@ -29,8 +35,10 @@ def test_lp_removes_exhausted_columns_and_preserves_exact_scaled_bounds(monkeypa
         return original(cost, matrix, rhs, upper, certificate)
 
     monkeypatch.setattr(campaign, "_bounded_lp", record)
-    table = SimpleNamespace(matrix=np.eye(2), capacities=np.array([1e6, 0.]),
+    table = SimpleNamespace(matrix=np.eye(2, dtype=int), capacities=np.array([1e6, 0.]),
                             gains=np.array([1e-10, 1.]), fleet=SimpleNamespace(gpus=1))
+    if sparse:
+        table.matrix = csr_matrix(table.matrix)
     primary = table.gains @ campaign.solve_lp(table, np.ones(2, bool), -table.gains)
     chosen = campaign.solve_lp(table, np.ones(2, bool), np.ones(2), primary)
     assert bounds == pytest.approx(np.array([[1e6], [1e6]]))
@@ -97,6 +105,29 @@ def case(deadline=20.):
         deadline=deadline, endpoint=np.array([100., 100., 200.]), budgets=np.array([200., 200., 200.]),
         timing=timing, nominal_commit=np.array([6., 3., 6., 3.]), gains=np.full(4, .1), fastest=np.array([False]))
     return table, timing, calibration
+
+
+@pytest.mark.parametrize("policy", ["queue_haul", "greedy_priced", "greedy", "kv_only", "replay_only", "isolated_fastest"])
+def test_sparse_admission_matches_dense_resources_and_schedule(monkeypatch, policy):
+    from copy import copy
+    from scipy.sparse import csr_matrix, issparse
+    import pool_shed_planner as planner
+
+    table, timing, calibration = case()
+    expected = plan_admission(PooledExecution(table, timing, calibration), table, policy)
+    sparse = copy(table)
+    sparse.replay, sparse.kv = csr_matrix(table.replay), csr_matrix(table.kv)
+    name = "_choose_priced" if policy == "greedy_priced" else "_choose"
+    original = getattr(planner, name)
+    def check(matrix, *args):
+        assert issparse(matrix)
+        return original(matrix, *args)
+    monkeypatch.setattr(planner, name, check)
+    actual = plan_admission(PooledExecution(sparse, timing, calibration), sparse, policy)
+    np.testing.assert_allclose(actual[0], expected[0], rtol=1e-9, atol=1e-9)
+    assert actual[1] == expected[1]
+    assert actual[2]["predicted_shed_fraction"] == pytest.approx(expected[2]["predicted_shed_fraction"], abs=1e-9)
+    assert actual[2]["max_relative_residual"] <= 1e-8
 
 
 def test_fixed_clock_keeps_replay_control_independent_of_kv_costs():
@@ -180,6 +211,75 @@ def test_generated_replay_debt_changes_later_calibrated_compute_time():
     assert slow["finish"] > fast["finish"] + 3.
 
 
+def test_affine_queue_profile_preserves_compute_and_recovery_order_inside_bins():
+    from pool_shed_planner import replica_queue_profile
+    profile = replica_queue_profile(np.array([0., 2., 4., 6., 9.]), [(0., 1.), (3., 4.)],
+                                    5., 1., .5, .25, 1.)
+    assert profile["resident_debt"] == pytest.approx([0., .5, 0., 0.])
+    assert profile["buffer_debt"] == pytest.approx([0., 0., .75, 0.])
+    assert profile["recovery"].sum() == pytest.approx(2.)
+
+
+def test_affine_profile_matches_execution_without_idle_gpu_compensation():
+    table, timing, calibration = case()
+    table.fleet.metadata["resident_affinity"] = True
+    edges = np.array([0., 1., 3., 5., 10., 20.])
+    profile = phase_profile(table, np.ones(1), 0, 0, 0., edges, np.full((2, 5), .99), timing, calibration)
+    engine = PooledExecution(table, timing, calibration)
+    engine.admit([1., 0., 0., 0.])
+    for k, until in enumerate(edges[1:]):
+        engine.advance(until)
+        assert engine.resident_debt[0] == pytest.approx(profile["resident_debt"][k], abs=1e-9)
+        assert engine.backlog[0] == pytest.approx(profile["buffer_debt"][k], abs=1e-9)
+    assert profile["finish"] == pytest.approx(engine.result()["last_completion_s"])
+
+
+@pytest.mark.parametrize("policy", ["queue_haul", "greedy", "replay_only", "kv_only", "isolated_fastest"])
+def test_affine_planner_reserves_disjoint_replicas_for_every_policy(policy):
+    table, timing, calibration = case()
+    table.fleet.metadata.update(resident_affinity=True, destination_gpus=1)
+    engine = PooledExecution(table, timing, calibration)
+    chosen, _, audit = plan_admission(engine, table, policy, calibration=calibration)
+    footprint = (table.replay.sum(1) > 0).astype(int) + (table.kv.sum(1) > 0)
+    for route in (0, 1):
+        assert chosen[table.route == route] @ footprint[table.route == route] <= 1 + 1e-8
+    assert chosen.sum() > 0 and audit["max_relative_residual"] <= 1e-8
+    engine.admit(chosen)
+
+
+def test_affine_planner_rejects_local_overload_and_preserves_completed_replica_reservations():
+    table, timing, calibration = case()
+    table.fleet.metadata.update(resident_affinity=True, destination_gpus=1)
+    table.fleet.demand[:] = .3
+    table.replay[[0, 2], 0] = 2.
+    engine = PooledExecution(table, timing, calibration)
+    chosen, _, _ = plan_admission(engine, table, "queue_haul", calibration=calibration)
+    assert chosen[[0, 2]].sum() == 0.
+    engine.admit([0., 1., 0., 0.])
+    engine.advance(5.)
+    assert engine.state[0] == 6
+    chosen, _, _ = plan_admission(engine, table, "queue_haul", calibration=calibration)
+    assert chosen[:2].sum() == 0. and chosen[3] > 0
+    engine.admit(chosen)
+
+
+def test_local_recovery_admission_rejects_handoff_that_leaves_its_own_queue():
+    table, timing, calibration = case(deadline=8.)
+    table.fleet.metadata["resident_affinity"] = True
+    raw, _, _ = plan_admission(PooledExecution(table, timing, calibration), table, "replay_only", calibration=calibration)
+    assert raw.sum() > 0
+    table.fleet.metadata["require_local_recovery"] = True
+    for policy in ("queue_haul", "greedy", "replay_only", "kv_only", "isolated_fastest"):
+        engine = PooledExecution(table, timing, calibration)
+        chosen, _, audit = plan_admission(engine, table, policy, calibration=calibration)
+        assert chosen[[0, 2]].sum() == 0
+        assert chosen[[1, 3]].sum() > 0 if policy != "replay_only" else chosen.sum() == 0
+        assert "forecast criterion" in audit["planning_scope"]
+    del table.fleet.metadata["resident_affinity"]
+    with pytest.raises(ValueError, match="requires resident affinity"):
+        PooledExecution(table, timing, calibration)
+
+
 def test_buffer_recovery_honors_per_batch_cap_and_resident_priority():
     zero, edges = np.zeros((2, 1)), np.array([0., 1.])
     loads, history, debt = project_queues(edges, [0., 0.], [0., 0.], [1., 0.], zero, zero, zero, zero,
@@ -260,12 +360,69 @@ def test_observed_debt_changes_replay_handoff_feasibility():
 def test_all_policies_obey_action_masks_and_same_feedback_clock():
     table, timing, calibration = case()
     times = []
-    for policy, forbidden in (("replay_only", [1, 3]), ("kv_only", [0, 2]), ("isolated_fastest", [0, 2]), ("greedy", [])):
+    for policy, forbidden in (("replay_only", [1, 3]), ("kv_only", [0, 2]), ("isolated_fastest", [0, 2]), ("greedy", []), ("greedy_priced", [])):
         engine = PooledExecution(table, timing, calibration)
-        chosen, when, _ = plan_admission(engine, table, policy, calibration=calibration)
+        chosen, when, audit = plan_admission(engine, table, policy, calibration=calibration)
         assert chosen[forbidden].sum() == 0
+        if policy == "greedy_priced":
+            assert len(audit["pricing_certificates"]) == audit["iterations"]
+            for certificate in audit["pricing_certificates"]:
+                assert certificate["converged"] and 0 <= certificate["absolute_gap"] <= .001
+                assert 0 <= certificate["objective"] <= certificate["upper_bound"]
+        else:
+            assert "pricing_certificates" not in audit
         times.append(when)
     assert len(set(times)) == 1
+
+
+def test_priced_greedy_wrapper_escapes_the_resource_trap_without_a_generic_solver(monkeypatch):
+    import highspy
+    import scipy.optimize
+    import pool_shed_campaign as campaign
+    from pool_shed_planner import _choose, _choose_priced
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("generic solver called")
+
+    for module, name in ((highspy, "Highs"), (scipy.optimize, "linprog"),
+                         (scipy.optimize, "minimize"), (campaign, "solve_lp"), (campaign, "_bounded_lp")):
+        monkeypatch.setattr(module, name, forbidden)
+    matrix = np.column_stack((np.ones(16), np.eye(16)))
+    capacity, gains, debt, fleet = np.ones(16), np.r_[1.001, np.ones(16)], np.zeros(17), SimpleNamespace(gpus=1)
+    old = _choose(matrix, capacity, gains, debt, fleet, True)
+    chosen, certificate = _choose_priced(matrix, capacity, gains, debt, fleet)
+    assert gains @ old == pytest.approx(1.001)
+    assert chosen == pytest.approx(np.r_[0., np.ones(16)])
+    assert matrix @ chosen == pytest.approx(capacity)
+    assert certificate["objective"] == pytest.approx(16.)
+    assert certificate["upper_bound"] >= 16.
+    assert certificate["converged"] and certificate["relative_gap"] <= .001
+
+
+@pytest.mark.parametrize("bound,error", [(16., "did not close its admission gap"), (1., "failed its certificate")])
+def test_priced_greedy_wrapper_rejects_a_false_convergence_certificate(monkeypatch, bound, error):
+    import pool_shed_priced_greedy as pricing
+    from pool_shed_planner import _choose_priced
+
+    def false_certificate(matrix, capacity, gains, incumbent, debt, **kwargs):
+        chosen = np.r_[1., np.zeros(len(gains) - 1)]
+        return chosen, dict(objective=float(gains @ chosen), upper_bound=bound,
+            absolute_gap=0., relative_gap=0., iterations=0, converged=True)
+
+    monkeypatch.setattr(pricing, "priced_greedy", false_certificate)
+    with pytest.raises(RuntimeError, match=error):
+        _choose_priced(np.column_stack((np.ones(16), np.eye(16))), np.ones(16),
+                       np.r_[1.001, np.ones(16)], np.zeros(17), SimpleNamespace(gpus=1))
+
+
+@pytest.mark.parametrize('value,bound', [(np.nan, 1.), (-1., 1.), (0., np.nan), (0., np.inf)])
+def test_priced_wrapper_rejects_nonfinite_or_negative_certificates(monkeypatch, value, bound):
+    import pool_shed_priced_greedy as pricing
+    from pool_shed_planner import _choose_priced
+
+    monkeypatch.setattr(pricing, 'priced_greedy', lambda *a, **k: (np.array([value]), {'upper_bound': bound}))
+    with pytest.raises(RuntimeError, match='failed its certificate'):
+        _choose_priced(np.ones((1, 1)), np.ones(1), np.ones(1), np.zeros(1), None)
 
 
 def test_isolated_fastest_refreshes_action_ranking_from_current_debt():

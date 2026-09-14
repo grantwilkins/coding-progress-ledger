@@ -1,0 +1,1118 @@
+{
+  "after_sources": {
+    "pool_shed_execution.py": "216f26a61e811112a8e0a1288eb8aaa33a0e4dd7132938550b0f4c0ea9f4e16e",
+    "pool_shed_planner.py": "8388cde4815a1e8d645e772b824ee1d95be1a6416742d1bbcfb3dcf758db1231",
+    "pool_shed_resident_queue.py": "e6ceb95fac166e313220e6d9f0e089bfa1dbb1de4e49af2c237d03e1042c8274"
+  },
+  "artifact_sha256": {
+    "forecast.npz": "f8064a89dae20032f7788414403d9ddb6ccd9125930204cb5483b39f70c909bb",
+    "portable-verification.json": "74d5061dfbac8ddd225d4ac7d7088e4cfbb0baf73ad2e98ebdbed520fcb9d4aa",
+    "prepared.pkl.gz": "d07564f8fef0abb2e75eaaa477da49f9dba665f158f8be63e4034eebaeb8d3f9",
+    "reproduce.py": "04a5ae13b3f9c69ba16566ac917a892e7ab882de723e03bb78e2554ddebf11ca",
+    "sources.zip": "0a62aa18bf38a3c97051c3fba0391cc7184dafb4f27ba26bdcae4f78a9daac9c",
+    "tests.log": "d9576c22671c13dcf68f12b3beb7a138d01e3894c7b0b8d0bf6aae98445aa916"
+  },
+  "before_sources": {
+    "pool_shed_execution.py": "39e93e5de0d36a6e6cd8f1cd06d41028a26ff979d73738c81bd0e161e78f5127",
+    "pool_shed_planner.py": "8388cde4815a1e8d645e772b824ee1d95be1a6416742d1bbcfb3dcf758db1231",
+    "pool_shed_resident_queue.py": "3550df3b12878d2daf65b372bec142aa9e9a38aee891a24ee1431821459134a4"
+  },
+  "changes": [
+    "Memoize exact source-turn query times within an immutable fleet cache, returning independent array copies.",
+    "Retain the shared causal source timeline when a buffered-request cache lookup misses.",
+    "Reuse captured per-wave phase caps; deduplicate uncaptured identical groups only at their current exact query time; reset caps for changed-calibration forecast clones."
+  ],
+  "commands": {
+    "reproduce": "uv run --no-sync python outputs/a100-native-greedy-20260911/validation/cache/reproduce.py --reproduce",
+    "verify": "uv run --no-sync python outputs/a100-native-greedy-20260911/validation/cache/reproduce.py"
+  },
+  "comparison": {
+    "array_count": 12,
+    "array_manifest": {
+      "application": {
+        "dtype": "float64",
+        "sha256": "f04a380328e8c0d1e1027f75eae90b92773aa90c71c6aeb1ed1ede3228d7f4cc",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "buffer_debt": {
+        "dtype": "float64",
+        "sha256": "f9bf4a767576add9952fed26125ab383ba88d7b5793e374a551be1860725742d",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "buffers": {
+        "dtype": "float64",
+        "sha256": "181b364921f94ac995febb0c4f1d244ce8a45ea93d95c3b0e8916955dc7f9c3d",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "finish": {
+        "dtype": "float64",
+        "sha256": "17119a363aa2a8e8d108a2aab7ab62407308cdba6567c881f114b5e8a154c218",
+        "shape": [
+          2
+        ]
+      },
+      "kv": {
+        "dtype": "float64",
+        "sha256": "35011079409f9706f6976b502e077e441b6be5af2ba44b011d30885c03963b26",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "network": {
+        "dtype": "float64",
+        "sha256": "eb5f6a3af7a4d8fa5aed950a21a465feb442ef180b717e393c91554f8e063715",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "occupancy": {
+        "dtype": "float64",
+        "sha256": "6fa3084e5cf4d988a31e149e975b8623e89340fc0c560bf140c0f297cee6cfda",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "recovery": {
+        "dtype": "float64",
+        "sha256": "cf5bf76d8dbf11bca63b40b9f77457752be98fc29add0dc3452f85323288767f",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "replay": {
+        "dtype": "float64",
+        "sha256": "0159d4ea4850184a82f76622277f74a1d18da76e0640d0006a16ddf59ec3bf18",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "resident_debt": {
+        "dtype": "float64",
+        "sha256": "e9a5b59a12cd82f3641adf2f5de49d1f3a985399c7b7645eab9e57c1a49d24b6",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "service_peak": {
+        "dtype": "float64",
+        "sha256": "84a2b7e3885d2662cbbbaa0dd248158f2db5c321550715cf51dad8ba7f484bab",
+        "shape": [
+          2,
+          6
+        ]
+      },
+      "serving": {
+        "dtype": "float64",
+        "sha256": "37d331ab8248baa032ed0842a0e2696ef9d99fd151a0a57749037326fef2ffd1",
+        "shape": [
+          2,
+          6
+        ]
+      }
+    },
+    "arrays_exactly_equal": true,
+    "finish_s": 18.186350862329252,
+    "forecast_result_scope": "Full result equality includes all 12,288 wave phase timestamps, contexts, counts, masses, network bytes, debt and recovery counters. Full dictionaries are represented by canonical JSON hashes per field to avoid duplicated wave logs.",
+    "full_result_exactly_equal": true,
+    "planning_edges_s": [
+      4.0,
+      6.0,
+      8.0,
+      12.0,
+      16.0,
+      24.0,
+      30.0
+    ],
+    "result": {
+      "result_field_sha256": {
+        "action_counts": "4b48e94278cd7fb79f139c748e8312065b1874e2159b752c37e639702aa662dc",
+        "action_fractions": "119672e41c7ed0c49fdbf4ec40534cf2091ad7b95f48d0b6189097299ebbb731",
+        "backlog_reference_work_s": "97185f19b593d8e869bdda5ca1ba6ee073fb1e88fca9e4c02d16345531857b96",
+        "backlog_scope": "958bec586b0ae6273810d4c2fdea2c0d9eabf703cf2850d99c3ee5bc8059c0ae",
+        "batch_replica_seconds": "61ec80e57aa046f8cf9a9a7f0f2aefc03625105f20520afc85013f0d0a20732c",
+        "buffered_requests": "44d9c91636562f2517aede105fc66aeeca1d07e7b2bf384a163138cbeb589d9e",
+        "completed_buffered_requests": "44d9c91636562f2517aede105fc66aeeca1d07e7b2bf384a163138cbeb589d9e",
+        "completed_sessions": "fc86f4ddd5a4ea97ddd702bd99b9a6b754d15d3f03b7d77e77da56704f39dae9",
+        "completion_events": "d2c2848db9273252a753bd8223ebbf0e9a9771bc7a95b130c0b97fe1b5a9cbcc",
+        "compute_scope": "e8633fdd762a6f88b7aa4ac38a454626d27e90cbdd2f07936f1ed8c10fd1da66",
+        "dispatch_chunks": "a68b412c4282555f15546cf6e1fc42893b7e07f271557ceb021821098dd66c1b",
+        "dispatch_scope": "11b33bff3a4d72cb64ec79fb0fe1c4153b533d6b36119059cf4e8a325800aceb",
+        "dispatch_wave_count": "36bf10ffbf1b3cfedc393ceb4dc1f8998ebf480e8ad91853bcc1c2b2cb3e6454",
+        "execution_model": "2f51ebb0a335aed5b0bf25305f2ea547776c373ffcf43c7fc0869edeabff986e",
+        "final_destination_load": "a2a01bf452a6c7121f36b37c765a766536678a89f15b15e924cb125f0a23eb5c",
+        "last_completion_s": "42b9becd6f54f5ce55ece13500b1932cb3965fc10f03312c1ac0da36d0e86984",
+        "memory_blocked_batch_mass": "8aed642bf5118b9d3c859bd4be35ecac75b6e873cce34e7b6f554b06f75550d7",
+        "memory_scope": "bf8a373e2c160d7cd793503a1df3c9b4d497ba13908e432a468ba4e1e537adeb",
+        "migration_idle_work_s": "81516241c0916470e345d5609e7b128cb1718eb9424f8213fbc1491b6b4eaf6c",
+        "peak_destination_load": "19265c02cfc509f5b7b1a6b14e950680689cf0019819c7a115ab11a28fce5079",
+        "peak_migration_replicas": "e0d362200aed0b348243c9bc83d719da07e22ad87ed2fed9e3f0356b6a52ee0f",
+        "peak_reserved_kv_tokens": "2cfdca876aed52553ce3dba73ba06f81257ed95aed0dcb9b8e18af865b3d0d8b",
+        "pending_backlog_reference_work_s": "47478db2a96c3c176efdc9bd4cbedfd580532b135a4e7d6dec04039bc54ccb45",
+        "pending_buffered_requests": "9f86967c9e1be081fec7273c1bdbb36c693cf2a3e8df1fa0b980d746a3487846",
+        "pending_buffered_work_s": "47478db2a96c3c176efdc9bd4cbedfd580532b135a4e7d6dec04039bc54ccb45",
+        "pending_destination_buffered_requests": "9f86967c9e1be081fec7273c1bdbb36c693cf2a3e8df1fa0b980d746a3487846",
+        "pending_resident_debt_work_s": "46bcc8e9ef592ae15429c66c64239749425ee11287e502a85cf69b58f4e155cf",
+        "pending_source_buffer_work_s": "8aed642bf5118b9d3c859bd4be35ecac75b6e873cce34e7b6f554b06f75550d7",
+        "protected_serving_load": "a2a01bf452a6c7121f36b37c765a766536678a89f15b15e924cb125f0a23eb5c",
+        "recovered_action_fractions": "817b803a8cc0d66be20a96c89bda9dac26df2fd84b1bf4aa59f29daebc71cfe5",
+        "recovered_handoff_fraction": "0cc63d93c11999749d56bda6671e2ddcd5322d56924ec707f15ff2445819a00e",
+        "require_local_recovery": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "reserved_destination_replicas": "5026e4ed25f5d9b4e6fa16304183a2d0e670b3ce532457425bb7f3e7188ba5bc",
+        "resident_affinity": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "resident_debt_generated_work_s": "4f68519c54237e6a28663f0379bb7fbe321601534a9f2fca665bb7f34f03cf76",
+        "resident_debt_recovered_work_s": "1258b71729553ad73e9789c19b1e8f85c397acf96040f54ab4dc5bda53e287aa",
+        "resident_debt_scope": "6d1b4418429d6be249d0ba6220d5db17abecbf84e22c5a8cd19526d0d54cb27e",
+        "resident_displaced_work_s": "4f68519c54237e6a28663f0379bb7fbe321601534a9f2fca665bb7f34f03cf76",
+        "resident_latency_validated": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+        "resident_pool_compensation_work_s": "f29310de4c3ebf47f2b596ae85f92daedae7a426dd2e145ab2a1ebec019199e6",
+        "service_ready_s": "1d9b315cc68e5626e0acd0c9ecda0ca87177c92bd2f0017164c5f70bf1e52035",
+        "service_recovered_by_deadline": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "service_recovery_scope": "d62b95bceea24ed8e31a80b07b0c5204a8133ac714dbe12202b03f68f87c8418",
+        "shed_fraction": "d379d1c5e2cb62bfa256bbf852753afb9d6effb4a736d1c699961ff7a2dec2e4",
+        "source_buffered_requests": "8aed642bf5118b9d3c859bd4be35ecac75b6e873cce34e7b6f554b06f75550d7",
+        "source_pacing": "d9a2b81a00255994e24685c073c1b01b28f61c1c7cad98a11436921bc63ff2b7",
+        "trace_exhausted_waves": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "transferred_buffered_requests": "44d9c91636562f2517aede105fc66aeeca1d07e7b2bf384a163138cbeb589d9e",
+        "transferred_bytes": "6364235e9717f6b6afc275ff108db885ee6ed6c110ae931a63efdac679d6ad88",
+        "unfinished_batch_mass": "8aed642bf5118b9d3c859bd4be35ecac75b6e873cce34e7b6f554b06f75550d7",
+        "wave_schedules": "d86f1033a5a5bf192740f8297b87d9605083ff6fec06afc0576484ea3a48252c"
+      },
+      "result_sha256": "226b7eddae2c85aa4bb70b1d39f3a1eec0fbbf8d0ee6e00f94209a516f15790e",
+      "wave_count": 12288
+    },
+    "wave_count": 12288
+  },
+  "environment": {
+    "numpy": "2.2.6",
+    "platform": "macOS-14.3.1-arm64-arm-64bit",
+    "python": "3.10.19"
+  },
+  "historical_witness_sha256": {
+    "forecast-after.json.gz": "5b46a2996a4b3533280b82804aa66bc612efbe726e1485a7bf75b3937e953d6b",
+    "forecast-after.npz": "f8064a89dae20032f7788414403d9ddb6ccd9125930204cb5483b39f70c909bb",
+    "forecast-before.json.gz": "1875b5563876cb226ee10f19380dbcf1f65f684fbb258a3244427b4ac64631b1",
+    "forecast-before.npz": "f8064a89dae20032f7788414403d9ddb6ccd9125930204cb5483b39f70c909bb",
+    "profile_forecast.py": "7835c13a7129532ba9ab2d617d1203218c79e762766234dbba3332f19ed8d7f1"
+  },
+  "input": {
+    "admissions": [
+      {
+        "chosen": [
+          [
+            10,
+            317.12245119555223
+          ],
+          [
+            13,
+            0.056515295113401746
+          ],
+          [
+            43,
+            0.13864781054885614
+          ],
+          [
+            44,
+            1284.508985884713
+          ],
+          [
+            77,
+            183.41055186899163
+          ],
+          [
+            87,
+            4.340664445004499
+          ],
+          [
+            91,
+            30.119583817093634
+          ],
+          [
+            94,
+            633.0461222361515
+          ],
+          [
+            99,
+            213.77770636312158
+          ],
+          [
+            119,
+            77.83788053439187
+          ],
+          [
+            134,
+            420.3322272031694
+          ],
+          [
+            179,
+            0.8752595563031315
+          ],
+          [
+            451,
+            424.52190740215985
+          ],
+          [
+            513,
+            727.2532780359575
+          ],
+          [
+            522,
+            773.7313808400867
+          ],
+          [
+            527,
+            33.536989669320256
+          ],
+          [
+            529,
+            0.4164490810263854
+          ],
+          [
+            532,
+            261.97449157593866
+          ],
+          [
+            533,
+            2.833674634437632
+          ],
+          [
+            548,
+            681.1172128303801
+          ],
+          [
+            595,
+            354.6971785618909
+          ],
+          [
+            599,
+            282.1288528369963
+          ],
+          [
+            604,
+            4.523547313388271
+          ],
+          [
+            605,
+            2.966609143929794
+          ],
+          [
+            608,
+            7.981296219304328
+          ],
+          [
+            612,
+            370.855760314014
+          ],
+          [
+            620,
+            2.9442045630553935
+          ],
+          [
+            638,
+            165.378923236578
+          ],
+          [
+            648,
+            0.760168589597092
+          ],
+          [
+            682,
+            321.76584740808715
+          ],
+          [
+            685,
+            8.635551484927193
+          ]
+        ],
+        "time_s": 0.0,
+        "wave_count": 1984
+      },
+      {
+        "chosen": [
+          [
+            10,
+            361.9374318667366
+          ],
+          [
+            13,
+            0.06481463420847264
+          ],
+          [
+            43,
+            2.199761185334477
+          ],
+          [
+            44,
+            145.79931603387783
+          ],
+          [
+            77,
+            63.666519395600226
+          ],
+          [
+            87,
+            44.811298081232145
+          ],
+          [
+            91,
+            102.16081542720949
+          ],
+          [
+            94,
+            54.92955096541592
+          ],
+          [
+            99,
+            6.3416604196009505
+          ],
+          [
+            119,
+            4.030177603376346
+          ],
+          [
+            150,
+            1338.5678790603713
+          ],
+          [
+            451,
+            0.38499963612862154
+          ],
+          [
+            527,
+            3.5905759437855593
+          ],
+          [
+            528,
+            0.8346013432191579
+          ],
+          [
+            529,
+            0.007554610942864576
+          ],
+          [
+            532,
+            264.9663002319451
+          ],
+          [
+            533,
+            26.326252405521654
+          ],
+          [
+            548,
+            21.142978379174764
+          ],
+          [
+            595,
+            104.59170414091238
+          ],
+          [
+            599,
+            512.4339293311787
+          ],
+          [
+            604,
+            14.022771691175937
+          ],
+          [
+            605,
+            16.27353411495764
+          ],
+          [
+            608,
+            2.6812172372664076
+          ],
+          [
+            612,
+            127.37323869076602
+          ],
+          [
+            685,
+            0.13022130822089203
+          ]
+        ],
+        "time_s": 0.5,
+        "wave_count": 1600
+      },
+      {
+        "chosen": [
+          [
+            10,
+            5.794748952624202
+          ],
+          [
+            13,
+            0.0278205724525273
+          ],
+          [
+            43,
+            39.24922763516199
+          ],
+          [
+            44,
+            24.7063837188577
+          ],
+          [
+            77,
+            32.177868309612364
+          ],
+          [
+            91,
+            14.827644979028015
+          ],
+          [
+            94,
+            0.19230402989229492
+          ],
+          [
+            116,
+            303.4517913491816
+          ],
+          [
+            119,
+            0.1504376668925482
+          ],
+          [
+            122,
+            197.12198806805446
+          ],
+          [
+            134,
+            0.04089133343724446
+          ],
+          [
+            150,
+            17.625556343470087
+          ],
+          [
+            162,
+            0.0723476656900496
+          ],
+          [
+            171,
+            0.12549048231235227
+          ],
+          [
+            451,
+            0.1573137275600665
+          ],
+          [
+            461,
+            0.6701963373367572
+          ],
+          [
+            513,
+            0.11867794052435754
+          ],
+          [
+            522,
+            0.27122310376653425
+          ],
+          [
+            528,
+            0.3037094199700501
+          ],
+          [
+            532,
+            800.3855883270132
+          ],
+          [
+            533,
+            1.457385978970641
+          ],
+          [
+            548,
+            1.2969838232578959
+          ],
+          [
+            595,
+            5.7427026233759575
+          ],
+          [
+            599,
+            3.0572072048735297
+          ],
+          [
+            604,
+            11.366482976846623
+          ],
+          [
+            612,
+            6.9767547060050505
+          ],
+          [
+            619,
+            0.0017705016064523205
+          ],
+          [
+            682,
+            28.458213056542693
+          ],
+          [
+            685,
+            47.034261392470825
+          ]
+        ],
+        "time_s": 1.0,
+        "wave_count": 1856
+      },
+      {
+        "chosen": [
+          [
+            8,
+            0.3551243183962234
+          ],
+          [
+            10,
+            0.6537140192915152
+          ],
+          [
+            13,
+            2.755563650549108
+          ],
+          [
+            21,
+            0.18288829077635807
+          ],
+          [
+            44,
+            2.2176174446709753
+          ],
+          [
+            77,
+            5.999016729213789
+          ],
+          [
+            91,
+            5.058514915902854
+          ],
+          [
+            94,
+            1.0545473955391333
+          ],
+          [
+            97,
+            0.0006413613210371975
+          ],
+          [
+            116,
+            87.92550109192405
+          ],
+          [
+            119,
+            2.0149861894780536
+          ],
+          [
+            122,
+            584.268652535027
+          ],
+          [
+            134,
+            0.38389655298400976
+          ],
+          [
+            150,
+            17.887410509370344
+          ],
+          [
+            178,
+            0.9470405925942844
+          ],
+          [
+            182,
+            3.4868788569686533
+          ],
+          [
+            284,
+            1.8424271156562755
+          ],
+          [
+            359,
+            0.0001874831734757032
+          ],
+          [
+            361,
+            0.359744457256436
+          ],
+          [
+            451,
+            1.7623551539110824
+          ],
+          [
+            514,
+            16.319852343888055
+          ],
+          [
+            529,
+            3.3697081945288088
+          ],
+          [
+            532,
+            28.987368679745202
+          ],
+          [
+            533,
+            0.6008766956081525
+          ],
+          [
+            599,
+            2.197279748714279
+          ],
+          [
+            612,
+            43.22407809337862
+          ],
+          [
+            654,
+            0.0974170441401328
+          ],
+          [
+            657,
+            0.47754202311830507
+          ],
+          [
+            682,
+            14.207458204642371
+          ]
+        ],
+        "time_s": 1.5,
+        "wave_count": 1856
+      },
+      {
+        "chosen": [
+          [
+            10,
+            0.11891401312705549
+          ],
+          [
+            11,
+            0.04880192379046318
+          ],
+          [
+            13,
+            0.017843891362190015
+          ],
+          [
+            21,
+            0.006141270930494059
+          ],
+          [
+            44,
+            0.39813754744533186
+          ],
+          [
+            77,
+            0.2687835007125293
+          ],
+          [
+            116,
+            0.4094456157718719
+          ],
+          [
+            150,
+            5.619487414811987
+          ],
+          [
+            162,
+            0.0650669647543041
+          ],
+          [
+            176,
+            1.0424181992818675
+          ],
+          [
+            178,
+            0.494433067994071
+          ],
+          [
+            182,
+            0.0020358878308390604
+          ],
+          [
+            254,
+            2.159602404292803
+          ],
+          [
+            331,
+            5.122824374201027
+          ],
+          [
+            334,
+            0.6030625380810524
+          ],
+          [
+            428,
+            0.010962724895133601
+          ],
+          [
+            451,
+            0.6789395239099392
+          ],
+          [
+            501,
+            2.5154137945950383
+          ],
+          [
+            605,
+            0.051482318003383806
+          ],
+          [
+            682,
+            0.02173775351015075
+          ],
+          [
+            685,
+            0.8158537199608847
+          ]
+        ],
+        "time_s": 2.0,
+        "wave_count": 1344
+      },
+      {
+        "chosen": [
+          [
+            28,
+            0.5373287922695116
+          ],
+          [
+            44,
+            0.20866139715573206
+          ],
+          [
+            94,
+            0.02912041905781622
+          ],
+          [
+            97,
+            0.25101477097138497
+          ],
+          [
+            122,
+            2.6164008200117097
+          ],
+          [
+            143,
+            0.460611343736855
+          ],
+          [
+            162,
+            0.023375829935402728
+          ],
+          [
+            203,
+            1.848895871404517
+          ],
+          [
+            244,
+            0.24562240144665834
+          ],
+          [
+            248,
+            0.3793397195599272
+          ],
+          [
+            254,
+            0.2855205026947558
+          ],
+          [
+            438,
+            0.012650728616044942
+          ],
+          [
+            449,
+            0.004663458400827287
+          ],
+          [
+            501,
+            1.3331961538796138
+          ],
+          [
+            513,
+            0.02028950132997856
+          ],
+          [
+            522,
+            0.0008793680841393759
+          ],
+          [
+            527,
+            0.014605080027934517
+          ],
+          [
+            529,
+            0.14467500614195758
+          ],
+          [
+            533,
+            0.027069768024598023
+          ],
+          [
+            549,
+            24.455392184977363
+          ],
+          [
+            554,
+            9.460115367078435
+          ],
+          [
+            595,
+            0.6162624557658051
+          ],
+          [
+            599,
+            0.1033695534886478
+          ],
+          [
+            605,
+            0.27598555903671823
+          ],
+          [
+            685,
+            7.3651818316556525
+          ]
+        ],
+        "time_s": 3.0,
+        "wave_count": 1600
+      },
+      {
+        "chosen": [
+          [
+            28,
+            0.06179041840661567
+          ],
+          [
+            44,
+            0.0005277023533217115
+          ],
+          [
+            76,
+            2.2245504486787568e-05
+          ],
+          [
+            197,
+            1.604880046223448e-05
+          ],
+          [
+            198,
+            6.87380980729147e-06
+          ],
+          [
+            203,
+            2.6690440068942817e-06
+          ],
+          [
+            354,
+            0.0006940832742350898
+          ],
+          [
+            356,
+            0.0010575609077649554
+          ],
+          [
+            357,
+            0.0022430574618824716
+          ],
+          [
+            360,
+            0.019391962402570108
+          ],
+          [
+            362,
+            0.02014634297208343
+          ],
+          [
+            364,
+            0.02027415001517645
+          ],
+          [
+            379,
+            0.013614380206979476
+          ],
+          [
+            395,
+            0.13540457594944053
+          ],
+          [
+            428,
+            1.1268505480703572
+          ],
+          [
+            435,
+            0.8111404164612148
+          ],
+          [
+            437,
+            0.2269463548564397
+          ],
+          [
+            442,
+            0.1842834563717664
+          ],
+          [
+            443,
+            8.602383892033172
+          ],
+          [
+            466,
+            14.277028937395107
+          ],
+          [
+            470,
+            0.06885924438171823
+          ],
+          [
+            473,
+            0.00878518849553452
+          ],
+          [
+            482,
+            1.3882306420232962
+          ],
+          [
+            485,
+            0.8218063917441664
+          ],
+          [
+            489,
+            1.6742253096059223
+          ],
+          [
+            494,
+            0.004356206377115858
+          ],
+          [
+            501,
+            1.3679682880107829
+          ],
+          [
+            529,
+            0.08985334666777094
+          ],
+          [
+            532,
+            0.5009378676931462
+          ],
+          [
+            548,
+            3.0380066656027744
+          ],
+          [
+            549,
+            7.188170427493102
+          ],
+          [
+            554,
+            2.689701798561168
+          ]
+        ],
+        "time_s": 4.0,
+        "wave_count": 2048
+      }
+    ],
+    "bandwidth_tbps": 10.0,
+    "candidate_sha256": "5a4cebe8c4378b191ee1494c33f456ee1eef6ef8412e045b806095b2fc6c52fe",
+    "deadline_s": 30.0,
+    "fleet_histories": 24,
+    "original_path": "outputs/a100-native-greedy-20260911/feedback/coding-d30-b10.json.gz",
+    "original_sha256": "d322fbc852e91aa14bb1271d9311bc466ad494fa89c31b295f26782de1e05998",
+    "prepared_builder_source_sha256": {
+      "pool_shed_bandwidth_sweep.py": "3b7db2e70208ea403b13b90360e7df2ccc111bbe6f4f44ad2162489026a1b1e7",
+      "pool_shed_campaign.py": "f94bdda958a0e9eb2f66e5d3aed58a00bb00d51a55f8ed584117b8b10c22b3e8"
+    },
+    "prepared_input_sha256": "d07564f8fef0abb2e75eaaa477da49f9dba665f158f8be63e4034eebaeb8d3f9",
+    "prototype_scope": "Incomplete uncompressed native feedback prototype, retained only as source of fixed admissions; not the final compressed feedback result.",
+    "table_columns": 702,
+    "workload": "coding"
+  },
+  "peer_review": {
+    "agent": "resident_trace",
+    "archive_status": "approved",
+    "qualification": "Archive approved read-only after independent verification of 6 artifacts, 10 frozen source members, 12 arrays and the 7-admission/12,288-wave input; no repeated forecast or timing run by the reviewer.",
+    "reviewed_archive_sha256": "b285798a26a73e58fe1d305575ec18b3b0291390ae47ea6616be4c69253e1711",
+    "status": "approved implementation read-only; independently reran four changed/extended focused tests (4 passed, 99 deselected)"
+  },
+  "portable_verification": {
+    "all_exact": true,
+    "arrays_per_variant": 12,
+    "complete": true,
+    "file": "portable-verification.json",
+    "variants": 2,
+    "wave_count_per_variant": 12288
+  },
+  "profiling": {
+    "after": {
+      "calls": {
+        "_buffered": {
+          "calls": 11776,
+          "cumulative_s": 0.250551968
+        },
+        "network_cap": {
+          "calls": 13509,
+          "cumulative_s": 0.067936728
+        },
+        "network_caps": {
+          "calls": 1004,
+          "cumulative_s": 0.18389208
+        },
+        "source_turns": {
+          "calls": 23855,
+          "cumulative_s": 0.068890724
+        }
+      },
+      "cprofile_s": 4.5074195,
+      "prefix_wall_s": 1.07
+    },
+    "before": {
+      "cprofile_s": 10.175,
+      "network_cap": {
+        "calls": 3669993,
+        "cumulative_s": 4.674
+      },
+      "prefix_wall_s": 3.018,
+      "source_turns": {
+        "calls": 24007,
+        "cumulative_s": 0.667
+      }
+    },
+    "scope": "Single sequential cProfile observations, not controlled performance benchmarks or full feedback-run timings. Prefix reconstruction is outside the mandatory forecast profile. Before profile binary was overwritten; before timings below were captured rounded to three decimals in the terminal. After scalar profile statistics were extracted from its retained pstats file. No general speedup guarantee."
+  },
+  "reproduction_scope": "The verified owned pickle contains the prepared table/calibration and compact chosen masses; the table and fixed Fleet properties are materialized as SimpleNamespaces. Frozen modules are isolated for each variant. No original prototype result, source measurements, live planner, native solver or policy solve is required. Exact comparisons target the archived Python/NumPy environment; changes to floating-point libraries may fail rather than silently relax equality.",
+  "schema": "queue-haul-exact-cpu-cache-review-v1",
+  "scope": "One saved admission prefix through t=4s and its mandatory forecast to 30s. No policy solve, waveform change, physical replay-cache discount, or resident-latency validation. Support compression is excluded from this comparison.",
+  "source_member_sha256": {
+    "after/pool_shed_execution.py": "216f26a61e811112a8e0a1288eb8aaa33a0e4dd7132938550b0f4c0ea9f4e16e",
+    "after/pool_shed_planner.py": "8388cde4815a1e8d645e772b824ee1d95be1a6416742d1bbcfb3dcf758db1231",
+    "after/pool_shed_resident_queue.py": "e6ceb95fac166e313220e6d9f0e089bfa1dbb1de4e49af2c237d03e1042c8274",
+    "before/pool_shed_execution.py": "39e93e5de0d36a6e6cd8f1cd06d41028a26ff979d73738c81bd0e161e78f5127",
+    "before/pool_shed_planner.py": "8388cde4815a1e8d645e772b824ee1d95be1a6416742d1bbcfb3dcf758db1231",
+    "before/pool_shed_resident_queue.py": "3550df3b12878d2daf65b372bec142aa9e9a38aee891a24ee1431821459134a4",
+    "common/loaded_service_model.py": "1f62f90dfbb8a780cff4feddfee4172b7c8f941170ce6f7ea82829f7c4d51845",
+    "common/pool_shed_calibration.py": "1ddbfb512d4038ad2557154c78b388d320e5ca8b7a132511cfe275de7e9a4e15",
+    "common/pool_shed_network.py": "3d47374d708b508e355d40131fc99bb36c0f2c083c6f03a2a9a73b36fa47db80",
+    "common/profiles.py": "63a778b03bee30a80eb350714699caf9d922609868ff2e0e7877756beb141cb0"
+  },
+  "tests": {
+    "command": "UV_CACHE_DIR=/private/tmp/uv-queue-review uv run --no-sync pytest tests/test_pool_shed_resident_queue.py tests/test_pool_shed_execution.py -o cache_dir=/private/tmp/qh-pytest-cache",
+    "failed": 0,
+    "log": "tests.log",
+    "passed": 103,
+    "scope": "103 focused queue/execution tests, including exact-time order/caller mutation, buffered cache misses, uncaptured group refresh, captured origin/delta caps and clone isolation. --no-sync reuses the installed environment; normal uv synchronization was unavailable offline.",
+    "source_sha256": {
+      "tests/test_pool_shed_execution.py": "26c5ba7dee6ca447d13271d93c3be6bbf945a5ecc0b3ff7dff68db665604157f",
+      "tests/test_pool_shed_resident_queue.py": "3bc2199a0743f3eb090066e641adb98fd24988b7bb4aa818e4c57586f07176f6"
+    }
+  }
+}

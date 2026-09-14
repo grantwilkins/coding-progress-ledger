@@ -1,0 +1,85 @@
+{
+  "scope": "One correctness check per case; timings are exploratory, not the final serial comparison.",
+  "source_sha256": {
+    "/private/tmp/fleet-cover-final-check.py": "670a16b18c49a436cec2c40864365d952e3c17e6606b429cefffa3e613f6adc5",
+    "/Users/grantwilkins/houdini/agent-migrate/queue-haul/native/src/packing.rs": "8f9235c1833466c47b1d970234e14df49fbdbd05cf425b417aea2c33e84500ac",
+    "/Users/grantwilkins/houdini/agent-migrate/queue-haul/pool_shed_priced_greedy.py": "10323a7c01ac4840cebf9b44d47858b37d4cafe8cbeefea3996c3098c553e4cb",
+    "/Users/grantwilkins/houdini/agent-migrate/queue-haul/outputs/a100-native-greedy-20260911/validation/scaling.py": "b471039a7e310ce57ff3a08795d6cf2774150a5ca3d1ecc9478f2d54a64831f1",
+    "/Users/grantwilkins/houdini/agent-migrate/.venv/lib/python3.10/site-packages/_queue_haul_native/_queue_haul_native.cpython-310-darwin.so": "8f291f50cd036cfd2734acda41578f013296f4b6305f685c635cdb00c38dd666"
+  },
+  "witness_sha256": "94645bd0053f1b2f84f297e1e8d12c2dcbec52a613770ae531b577769d002b87",
+  "records": [
+    {
+      "case": "coding-d30-b10",
+      "input_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding-d30-b10-x64.npz",
+      "input_sha256": "2978a298e43d0c0c3a44445379674819f11c4861481ae953a6ad1e3a2a5cc145",
+      "elapsed_s_exploratory": 1.3832604167982936,
+      "support": 1480,
+      "original_unit_check": {
+        "objective": 0.9831090157411538,
+        "max_relative_constraint_residual": 7.105427357601002e-15,
+        "max_constraint_residual": 0.001708984375,
+        "positive_variables": 1480,
+        "variables_above_executor_mass_threshold": 1479,
+        "primal_sha256": "017af4296e62915b776468dab985f4cad287eb1a79b23a40f05a365b5d1791f9",
+        "upper_bound": 0.9839325246533548,
+        "absolute_gap": 0.0008235089122009542,
+        "relative_gap": 0.000836956693235729,
+        "max_relative_dual_deficit": 0.0,
+        "dual_certified": true,
+        "dual_sha256": "6608b7320cc55d6e31a9ae45b35f3570239b98122da417033443d88254e07bf1"
+      },
+      "objective": 0.9831090157411537,
+      "upper_bound": 0.9839325246533548,
+      "absolute_gap": 0.0008235089122010653,
+      "relative_gap": 0.0008369566932358418,
+      "iterations": 671,
+      "converged": true
+    },
+    {
+      "case": "coding_long-d120-b100",
+      "input_file": "outputs/a100-native-greedy-20260911/validation/scaling-coding_long-d120-b100-x64.npz",
+      "input_sha256": "e2e64269be6a5ea70dd67f4dbb8d0a961828f2706a77c5d3b84f13a19d87ad9f",
+      "elapsed_s_exploratory": 0.8588161254301667,
+      "support": 1647,
+      "original_unit_check": {
+        "objective": 0.987753491825545,
+        "max_relative_constraint_residual": 2.6645352591003757e-15,
+        "max_constraint_residual": 9.237055564881302e-14,
+        "positive_variables": 1647,
+        "variables_above_executor_mass_threshold": 1647,
+        "primal_sha256": "7a3fd8a1f5f7210bdbc2d379579ae9e6951f58d99662de088a0f7c333be3182f",
+        "upper_bound": 0.9882084155773168,
+        "absolute_gap": 0.00045492375177180744,
+        "relative_gap": 0.0004603520316167703,
+        "max_relative_dual_deficit": 0.0,
+        "dual_certified": true,
+        "dual_sha256": "81236d4f3634cfac060af178fef1a2105ab94ddc0d7ca305d8c902702901cb84"
+      },
+      "objective": 0.987753491825545,
+      "upper_bound": 0.9882084155773169,
+      "absolute_gap": 0.00045492375177191846,
+      "relative_gap": 0.00046035203161688264,
+      "iterations": 181,
+      "converged": true
+    },
+    {
+      "case": "late-coding-d120-b1",
+      "input_file": "outputs/a100-native-greedy-20260911/validation/native/convergence-regression.npz",
+      "input_sha256": "adc6f9013f622eaa4116ef7f31643e1fdef1ca619093775730fa2f5870624f03",
+      "elapsed_s_exploratory": 0.001189541071653366,
+      "support": 3,
+      "original_unit_check": {
+        "primal_objective": 0.04698969693842279,
+        "reference_primal_objective": 0.047026993055787926,
+        "reference_dual_bound": 0.04783757790809059
+      },
+      "objective": 0.04698969693842279,
+      "upper_bound": 0.04783757790809059,
+      "absolute_gap": 0.0008478809696677997,
+      "relative_gap": 0.017724161772922888,
+      "iterations": 0,
+      "converged": true
+    }
+  ]
+}

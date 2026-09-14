@@ -1,0 +1,419 @@
+{
+  "cases": {
+    "central": {
+      "F": 3704.0237548411974,
+      "G": 370.8798808594453,
+      "action_power_w": {
+        "catch_up": {
+          "1": [
+            0.0,
+            48.751642105263166
+          ],
+          "2": [
+            0.0,
+            51.565443589743595
+          ],
+          "4": [
+            0.0,
+            72.99945189596716
+          ],
+          "8": [
+            0.0,
+            85.54352863627747
+          ]
+        },
+        "kv_transfer": {
+          "1": [
+            0.0,
+            48.751642105263166
+          ],
+          "2": [
+            0.0,
+            51.565443589743595
+          ],
+          "4": [
+            0.0,
+            72.99945189596716
+          ],
+          "8": [
+            0.0,
+            85.54352863627747
+          ]
+        },
+        "off": {
+          "1": [
+            0,
+            0
+          ]
+        },
+        "replay": {
+          "1": [
+            0.0,
+            112.9446300964187
+          ],
+          "2": [
+            0.0,
+            119.05129298300491
+          ],
+          "4": [
+            0.0,
+            133.3382711871878
+          ],
+          "8": [
+            0.0,
+            152.17441515151512
+          ]
+        },
+        "replay_on_request": {
+          "1": [
+            0.0,
+            112.9446300964187
+          ]
+        },
+        "sleep": {
+          "1": [
+            0,
+            0
+          ]
+        }
+      },
+      "decode_tps": {
+        "1": [
+          [
+            4096,
+            12.136821236325472
+          ],
+          [
+            8192,
+            12.231729604244329
+          ],
+          [
+            16384,
+            12.159964223378358
+          ],
+          [
+            24576,
+            12.107127256416685
+          ],
+          [
+            32256,
+            12.049113717766677
+          ]
+        ]
+      },
+      "kv_transfer": {
+        "block_bytes": 202903120,
+        "block_tokens": 784,
+        "bytes_by_context": [
+          [
+            4096,
+            1027604480
+          ],
+          [
+            8192,
+            2055208960
+          ],
+          [
+            16384,
+            4110417920
+          ],
+          [
+            24576,
+            6371147776
+          ],
+          [
+            32256,
+            8426356736
+          ]
+        ],
+        "catch_up_fixed_s": 1.052118278,
+        "destination_bytes_per_s": 122964247.70807366,
+        "initial_completion_s": 5.362351788577257,
+        "setup_s": 0,
+        "tail_replay_tps": 919.4260924435412
+      },
+      "phase_power": {
+        "a_s_per_prefill_token": 0.00026997667028808595,
+        "b_s_per_decode_token": 0.035137165581278,
+        "bootstrap": [],
+        "delta_w": 189.74249525327647,
+        "grouped_cv_rmse_w": 6.924248764170737,
+        "measured_power_curve": [
+          [
+            0.0,
+            109.46115226337449
+          ],
+          [
+            0.11565302617345577,
+            137.0623299466498
+          ],
+          [
+            0.23128805390222562,
+            160.33761343042522
+          ],
+          [
+            0.501049123268631,
+            203.83208110376248
+          ],
+          [
+            0.7384911013724353,
+            254.17822529533143
+          ],
+          [
+            1.0408592371164158,
+            298.3226206874044
+          ],
+          [
+            1.276559017281544,
+            298.972949085851
+          ],
+          [
+            1.758160520396181,
+            299.20364751665096
+          ],
+          [
+            3.1537642431632693,
+            298.81916633896503
+          ],
+          [
+            3.504551216205857,
+            298.3464652737705
+          ],
+          [
+            6.101994736094812,
+            299.15417052419446
+          ],
+          [
+            6.681926046049257,
+            297.5647347737156
+          ],
+          [
+            11.828680083649111,
+            299.0123049268354
+          ]
+        ],
+        "p0_w": 109.46115226337449,
+        "provenance_sha256": "df4c00ccade71091da3a5f8c58d35e037dc04cb61f1c883c4ae8f59320314032",
+        "valid_hull": [
+          [
+            3738.233333333333,
+            0.9
+          ],
+          [
+            1895.8666666666666,
+            175.6
+          ],
+          [
+            40.3,
+            336.3333333333333
+          ],
+          [
+            4.0,
+            36.3
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            415.3666666666667,
+            0.1
+          ]
+        ],
+        "within_5w_fraction": 0.8333333333333334
+      },
+      "power_curve": [
+        [
+          0,
+          109.46115226337449
+        ],
+        [
+          11.828680083649111,
+          299.20364751665096
+        ]
+      ],
+      "prefill_tps": {
+        "1": [
+          [
+            4096,
+            2812.802164422698
+          ],
+          [
+            8192,
+            2919.327473521702
+          ],
+          [
+            16384,
+            2843.0457125341754
+          ],
+          [
+            24576,
+            2731.986765750317
+          ],
+          [
+            32256,
+            2605.5670483228278
+          ]
+        ]
+      },
+      "replay_completion_s": 0,
+      "replay_tps": {
+        "1": [
+          [
+            4096,
+            2272.079548189099
+          ],
+          [
+            8192,
+            2548.5166019861626
+          ],
+          [
+            16384,
+            2577.950290068598
+          ],
+          [
+            24576,
+            2487.00312314683
+          ],
+          [
+            32256,
+            2506.9486178550533
+          ]
+        ]
+      },
+      "shutdown_s": null,
+      "sleep_power_delta_w": 0.015758548702308417,
+      "sleep_s": 3.2890054985,
+      "switch_s": 0.000173443
+    }
+  },
+  "gpus_per_node": 1,
+  "hardware": "NVIDIA A100 80GB PCIe",
+  "kv_capacity_tokens": 290976,
+  "kv_geometry": {
+    "capacity_bytes": [
+      22247636992,
+      22247636992,
+      22247636992,
+      22247636992,
+      22247636992
+    ],
+    "groups": [
+      "kernel-0:engine-0",
+      "kernel-1:engine-1",
+      "kernel-2:engine-2",
+      "kernel-3:engine-3",
+      "shared-allocator-budget"
+    ],
+    "resident_bytes": [
+      [
+        4096,
+        102760448,
+        102760448,
+        102760448,
+        308281344,
+        616562688
+      ],
+      [
+        8192,
+        102760448,
+        102760448,
+        102760448,
+        565182464,
+        873463808
+      ],
+      [
+        16384,
+        102760448,
+        102760448,
+        102760448,
+        1078984704,
+        1387266048
+      ],
+      [
+        24576,
+        102760448,
+        102760448,
+        102760448,
+        1644167168,
+        1952448512
+      ],
+      [
+        32256,
+        102760448,
+        102760448,
+        102760448,
+        2157969408,
+        2466250752
+      ]
+    ]
+  },
+  "max_destination_kv_streams": 8,
+  "max_destination_replays": 1,
+  "max_ell": 1.0116624497873818,
+  "max_power_load": 11.828680083649111,
+  "model": "Qwen/Qwen3.8-27B",
+  "power_scope": "gpu",
+  "power_window_s": 5.0,
+  "precision": "bf16",
+  "profile_id": "qwen-qwen3.8-27b-a100-regional-architecture-4038f391",
+  "schema": "queue-haul-model-profile-v6",
+  "sources": {
+    "capacity": {
+      "kind": "measured",
+      "reference": "/datadrive/qwen-physical-geometry-east-20260908-001 distributed evidence; timing roots /datadrive/qwen-timing-completion-20260908-002",
+      "relative_error": 0,
+      "valid_range": [
+        0,
+        290976
+      ]
+    },
+    "kv_transfer": {
+      "kind": "measured",
+      "reference": "/datadrive/qwen-physical-geometry-east-20260908-001 distributed evidence; timing roots /datadrive/qwen-timing-completion-20260908-002",
+      "relative_error": 0,
+      "valid_range": [
+        1027604480,
+        8426356736
+      ]
+    },
+    "power": {
+      "kind": "measured",
+      "reference": "/datadrive/qwen-final-power-fit-20260908-001.json",
+      "relative_error": 0.023142260536063136,
+      "valid_range": [
+        0,
+        11.828680083649111
+      ]
+    },
+    "replay": {
+      "kind": "measured",
+      "reference": "/datadrive/qwen-physical-geometry-east-20260908-001 distributed evidence; timing roots /datadrive/qwen-timing-completion-20260908-002",
+      "relative_error": 0,
+      "valid_range": [
+        4096,
+        32256
+      ]
+    },
+    "service": {
+      "kind": "measured",
+      "reference": "/datadrive/qwen-concurrency-20260908-001,/datadrive/qwen-physical-geometry-east-20260908-001 source warm requests and power-run throughput",
+      "relative_error": 0,
+      "valid_range": [
+        4096,
+        32256
+      ]
+    },
+    "transitions": {
+      "kind": "assumed",
+      "reference": "Legacy A100 transition parameters; drain experiment leaves the source awake.",
+      "relative_error": 1.0,
+      "valid_range": [
+        0.0,
+        300.0
+      ]
+    }
+  },
+  "status": "fitted",
+  "tensor_parallel": 1
+}
