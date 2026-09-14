@@ -1,0 +1,20 @@
+[Unit]
+Description=Resume the one-repeat H100 deadline campaign
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=/datadrive
+ConditionPathIsDirectory=/datadrive/d19
+
+[Service]
+User=azureuser
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/datadrive/qh0912/queue-haul
+Environment=PYTHONPATH=/datadrive/qh0912/queue-haul
+ExecStart=/datadrive/qh0912/.venv/bin/python /datadrive/resume_deadline_sweep.py
+StandardOutput=append:/datadrive/d19-resume-20260914.log
+StandardError=append:/datadrive/d19-resume-20260914.log
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target

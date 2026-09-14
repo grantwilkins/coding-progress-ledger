@@ -3782,7 +3782,10 @@ route recheck passed against the original formal envelope. The repeat-zero queue
 resumes Gemma (40 episodes), then validates GPT restoration on Southeast Asia before
 GPT (40 episodes). It preserves Qwen's 37 completed episodes and three sealed
 infrastructure failures. `resume_deadline_sweep.py` performs the final reductions;
-its live state is `/datadrive/d19-resume-20260914.json`. The older resume service
+its live state is `/datadrive/d19-resume-20260914.json`. The launcher is now an
+enabled persistent system service running as `azureuser` after a source reboot
+removed its transient unit and left the user-service bus unavailable.
+Validation failures still stop the queue for review. The older resume service
 remains disabled.
 
 The [2026-09-14 existing-data audit](outputs/h100-evidence-audit-20260914/audit.json)
