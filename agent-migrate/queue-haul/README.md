@@ -3329,6 +3329,15 @@ KV output differed from two matching cold replays despite correct wire bytes;
 [the failed gate](outputs/h100-controls-20260914/gpt-32k-failed-gate.json) is preserved.
 Qwen/Gemma were relaunched independently, and GPT continuation was queued with a
 strict check at the actual 16K experimental context. This does not validate 32K.
+Qwen subsequently completed all four arms: 120 resident and 24 migration requests,
+zero failures. Its [shared-load export](outputs/h100-controls-20260914/shared-qwen/summary.json)
+retains both wire directions and synchronized power windows. Resident mean TTFT
+was 71.39/211.27/94.07/128.30 s for none/replay/KV/mixed. This was an overloaded
+transient, not steady serving. Gemma startup and GPT connection then failed while
+South Central was unavailable. After its restoration on 2026-09-14, the missing
+models were restarted and a lower-rate, none-only Qwen baseline was queued.
+The timestamped [campaign status](outputs/h100-controls-20260914/campaign_status.json)
+records completed evidence and outstanding work.
 
 ```bash
 uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json

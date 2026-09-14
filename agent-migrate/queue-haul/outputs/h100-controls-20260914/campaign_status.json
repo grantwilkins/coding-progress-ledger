@@ -1,0 +1,45 @@
+{
+  "as_of_utc": "2026-09-14T11:19:01.708491+00:00",
+  "completed": {
+    "power_controls": [
+      "gpt",
+      "qwen",
+      "gemma"
+    ],
+    "shared_load_arms": {
+      "qwen": [
+        "none",
+        "replay",
+        "kv",
+        "mixed"
+      ]
+    }
+  },
+  "restarted": {
+    "gpt": "/datadrive/shared-gpt-recovery-20260914",
+    "gemma": "/datadrive/shared-gemma-recovery-20260914"
+  },
+  "queued": {
+    "qwen_resident_baseline": {
+      "root": "/datadrive/shared-qwen-baseline005-20260914",
+      "offered_rps": 0.05,
+      "duration_s": 240,
+      "warmup_s": 60
+    }
+  },
+  "remaining": [
+    "Finish eight GPT/Gemma shared-load arms and reduce comparison.",
+    "Check lower-load queue stability before claiming steady/50% load.",
+    "Measure source work continuing at destination for net drain-power claims.",
+    "Three-model deadline/action-mix campaign remains incomplete; existing Qwen deadline observations preserved."
+  ],
+  "excluded": [
+    "Eight-GPU experiments: unavailable hardware.",
+    "SEA-dependent runs: not used in current two-host controls."
+  ],
+  "failures_preserved": {
+    "gpt_32k": "outputs/h100-controls-20260914/gpt-32k-failed-gate.json",
+    "gemma_startup": "/datadrive/shared-gemma-20260914",
+    "gpt_connectivity": "/datadrive/shared-gpt16k-20260914.log"
+  }
+}

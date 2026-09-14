@@ -1,0 +1,433 @@
+{
+  "metadata": {
+    "calibration_sha256": "4a4e15e7eb445cde499d96f2b8827252aa8345a7f5b2f29a48adeb0aa810381f",
+    "cluster": {
+      "destinations": [
+        {
+          "host": "10.13.0.4",
+          "id": "germany",
+          "region": "southcentralus",
+          "repo_root": "/datadrive/qh0912",
+          "run_root": "/datadrive/queue-haul-network",
+          "ssh_port": 22,
+          "ssh_user": "azureuser"
+        }
+      ],
+      "schema": "queue-haul-azure-cluster-v1",
+      "source": {
+        "host": "10.11.0.4",
+        "id": "westus3",
+        "region": "westus3",
+        "repo_root": "/datadrive/qh0912",
+        "run_root": "/datadrive/queue-haul-network",
+        "ssh_port": 22,
+        "ssh_user": "azureuser"
+      }
+    },
+    "config": {
+      "api_proxy_port": 8400,
+      "architecture_campaign": true,
+      "cache_root": "/datadrive/queue-haul-cache",
+      "capacity_discovery": false,
+      "enforce_eager": true,
+      "hf_home": "/datadrive",
+      "host": "127.0.0.1",
+      "kv_proxy_port": 8300,
+      "literal_token_timing": true,
+      "lmc_port": 5655,
+      "matched_prefill": false,
+      "max_model_len": 32768,
+      "max_num_batched_tokens": 1567,
+      "max_num_seqs": 8,
+      "model": "Qwen/Qwen3.8-27B",
+      "sandbox": "/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif",
+      "scratch_bind": "/scratch/users/gfw",
+      "serving_campaign": false,
+      "sink_lmc_http_port": 8081,
+      "sink_lmc_port": 5556,
+      "sink_port": 8200,
+      "smoke_port": 8120,
+      "src_lmc_http_port": 8080,
+      "src_lmc_port": 5557,
+      "src_port": 8100,
+      "timing_only": false
+    },
+    "context_tokens": 16384,
+    "destination_power_sensor": "NVML standard power usage: one-second average",
+    "hosts": {
+      "germany": {
+        "clock_uncertainty_ms": 0.033176,
+        "datadrive": true,
+        "dirty": false,
+        "git_sha": "2b9cf9ae28d15b703904cd2aeaea326c2fb2988a",
+        "gpu": "NVIDIA H100 NVL",
+        "gpu_memory_mib": 95830,
+        "lmcache": "0.5.1",
+        "priority": "Spot",
+        "private_ip": "10.13.0.4",
+        "ptp": "/dev/ptp0",
+        "region": "southcentralus",
+        "vllm": "0.24.0",
+        "vm_size": "Standard_NC40ads_H100_v5"
+      },
+      "westus3": {
+        "clock_uncertainty_ms": 0.019609,
+        "datadrive": true,
+        "dirty": false,
+        "git_sha": "2b9cf9ae28d15b703904cd2aeaea326c2fb2988a",
+        "gpu": "NVIDIA H100 NVL",
+        "gpu_memory_mib": 95830,
+        "lmcache": "0.5.1",
+        "priority": "Spot",
+        "private_ip": "10.11.0.4",
+        "ptp": "/dev/ptp0",
+        "region": "WestUS3",
+        "vllm": "0.24.0",
+        "vm_size": "Standard_NC40ads_H100_v5"
+      }
+    },
+    "migration_count": 8,
+    "model": "Qwen/Qwen3.8-27B",
+    "network": "Natural South Central route; prior two-route envelope subset, not a new independent route calibration.",
+    "repeats": 1,
+    "resident_rps": 0.25,
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "runtime": {
+      "lmcache": "0.5.1",
+      "vllm": "0.24.0"
+    },
+    "scope": "Destination interference at an explicit offered rate, not a claim of 50% utilization or source-drain power relief. Synthetic resident inputs. Source histories are idle after export.",
+    "seconds": 120.0,
+    "warmup_s": 30.0
+  },
+  "arms": {
+    "none": {
+      "wire_evidence": {
+        "expected_compact_bytes": 0,
+        "max_migration_lateness_s": 0,
+        "max_resident_lateness_s": 0.008316438,
+        "status": "complete",
+        "wire_bytes": {
+          "api/germany/client_to_target": 0,
+          "api/germany/target_to_client": 0,
+          "kv/germany/client_to_target": 0,
+          "kv/germany/target_to_client": 0
+        }
+      },
+      "offered_rps": 0.25,
+      "arrival_window_s": 120.0,
+      "completion_window_s": 219.725389723,
+      "resident": {
+        "completed": 30,
+        "ttft_s": {
+          "count": 30,
+          "mean": 71.38951764866667,
+          "median": 80.547782591,
+          "p90": 84.9932937786
+        },
+        "request_mean_tpot_s": {
+          "count": 30,
+          "mean": 0.32002915773333335,
+          "median": 0.2696362010905512,
+          "p90": 0.5637150321377953
+        },
+        "latency_s": {
+          "count": 30,
+          "mean": 112.03340724136666,
+          "median": 112.855015208,
+          "p90": 117.15719703850002
+        },
+        "finite_completion_rps": 0.13653406207548402
+      },
+      "migration": {
+        "completed": 0,
+        "ttft_s": {
+          "count": 0,
+          "mean": null
+        },
+        "request_mean_tpot_s": {
+          "count": 0,
+          "mean": null
+        },
+        "latency_s": {
+          "count": 0,
+          "mean": null
+        },
+        "finite_completion_rps": 0.0
+      },
+      "queue_at_migration": {
+        "vllm:num_requests_running": 3.0,
+        "vllm:num_requests_waiting": 5.0
+      },
+      "peak_waiting": 19.0,
+      "power_windows": {
+        "common_arrival_window": {
+          "duration_s": 120.0,
+          "source_mean_w": 94.95509399477807,
+          "destination_mean_w": 158.66075,
+          "source_polls": 1149,
+          "destination_polls": 480
+        },
+        "completion_tail": {
+          "duration_s": 99.725389723,
+          "source_mean_w": 91.59828347280335,
+          "destination_mean_w": 138.13035175879398,
+          "source_polls": 956,
+          "destination_polls": 398
+        }
+      }
+    },
+    "replay": {
+      "wire_evidence": {
+        "expected_compact_bytes": 0,
+        "max_migration_lateness_s": 0.020068990999998704,
+        "max_resident_lateness_s": 0.008901112,
+        "status": "complete",
+        "wire_bytes": {
+          "api/germany/client_to_target": 659192,
+          "api/germany/target_to_client": 779760,
+          "kv/germany/client_to_target": 0,
+          "kv/germany/target_to_client": 0
+        }
+      },
+      "offered_rps": 0.25,
+      "arrival_window_s": 120.0,
+      "completion_window_s": 423.010143984,
+      "resident": {
+        "completed": 30,
+        "ttft_s": {
+          "count": 30,
+          "mean": 211.265900797,
+          "median": 273.7817121415,
+          "p90": 288.1360201268
+        },
+        "request_mean_tpot_s": {
+          "count": 30,
+          "mean": 0.44329302117506564,
+          "median": 0.3388592981811024,
+          "p90": 0.728124769415748
+        },
+        "latency_s": {
+          "count": 30,
+          "mean": 267.5642095333667,
+          "median": 314.288834621,
+          "p90": 320.6812924289
+        },
+        "finite_completion_rps": 0.07092028507272564
+      },
+      "migration": {
+        "completed": 8,
+        "ttft_s": {
+          "count": 8,
+          "mean": 144.745916578125,
+          "median": 144.747319023,
+          "p90": 186.3848634959
+        },
+        "request_mean_tpot_s": {
+          "count": 8,
+          "mean": 0.7302034594625985,
+          "median": 0.730188262476378,
+          "p90": 0.7313410034992126
+        },
+        "latency_s": {
+          "count": 8,
+          "mean": 237.48189724112498,
+          "median": 237.4813689285,
+          "p90": 279.2653564414
+        },
+        "finite_completion_rps": 0.018912076019393504
+      },
+      "queue_at_migration": {
+        "vllm:num_requests_running": 3.0,
+        "vllm:num_requests_waiting": 5.0
+      },
+      "peak_waiting": 29.0,
+      "power_windows": {
+        "common_arrival_window": {
+          "duration_s": 120.0,
+          "source_mean_w": 94.97432665505227,
+          "destination_mean_w": 161.679,
+          "source_polls": 1148,
+          "destination_polls": 480
+        },
+        "completion_tail": {
+          "duration_s": 303.010143984,
+          "source_mean_w": 91.89316396830864,
+          "destination_mean_w": 153.5668920032976,
+          "source_polls": 2903,
+          "destination_polls": 1213
+        }
+      }
+    },
+    "kv": {
+      "wire_evidence": {
+        "expected_compact_bytes": 9453961216,
+        "max_migration_lateness_s": 0.017258386999998265,
+        "max_resident_lateness_s": 0.015556652,
+        "status": "complete",
+        "wire_bytes": {
+          "api/germany/client_to_target": 658568,
+          "api/germany/target_to_client": 779792,
+          "kv/germany/client_to_target": 1644234064,
+          "kv/germany/target_to_client": 9453964160
+        }
+      },
+      "offered_rps": 0.25,
+      "arrival_window_s": 120.0,
+      "completion_window_s": 255.813862849,
+      "resident": {
+        "completed": 30,
+        "ttft_s": {
+          "count": 30,
+          "mean": 94.0684541127,
+          "median": 116.016175318,
+          "p90": 120.9887507405
+        },
+        "request_mean_tpot_s": {
+          "count": 30,
+          "mean": 0.32111074907716536,
+          "median": 0.27114560633858265,
+          "p90": 0.5643308822897638
+        },
+        "latency_s": {
+          "count": 30,
+          "mean": 134.84971221986666,
+          "median": 146.25945687,
+          "p90": 153.1674131261
+        },
+        "finite_completion_rps": 0.11727276882452688
+      },
+      "migration": {
+        "completed": 8,
+        "ttft_s": {
+          "count": 8,
+          "mean": 108.270180871,
+          "median": 109.61098950499999,
+          "p90": 124.0516241793
+        },
+        "request_mean_tpot_s": {
+          "count": 8,
+          "mean": 0.27136258632480315,
+          "median": 0.27100428117716535,
+          "p90": 0.2724635568700787
+        },
+        "latency_s": {
+          "count": 8,
+          "mean": 142.733282356,
+          "median": 144.099972079,
+          "p90": 158.466987917
+        },
+        "finite_completion_rps": 0.031272738353207166
+      },
+      "queue_at_migration": {
+        "vllm:num_requests_running": 3.0,
+        "vllm:num_requests_waiting": 5.0
+      },
+      "peak_waiting": 27.0,
+      "power_windows": {
+        "common_arrival_window": {
+          "duration_s": 120.0,
+          "source_mean_w": 95.03022802436902,
+          "destination_mean_w": 159.43245833333333,
+          "source_polls": 1149,
+          "destination_polls": 480
+        },
+        "completion_tail": {
+          "duration_s": 135.813862849,
+          "source_mean_w": 92.16155760368663,
+          "destination_mean_w": 137.23605893186004,
+          "source_polls": 1302,
+          "destination_polls": 543
+        }
+      }
+    },
+    "mixed": {
+      "wire_evidence": {
+        "expected_compact_bytes": 4726980608,
+        "max_migration_lateness_s": 0.00942880699999904,
+        "max_resident_lateness_s": 0.025682425,
+        "status": "complete",
+        "wire_bytes": {
+          "api/germany/client_to_target": 658880,
+          "api/germany/target_to_client": 779886,
+          "kv/germany/client_to_target": 822117032,
+          "kv/germany/target_to_client": 4726982080
+        }
+      },
+      "offered_rps": 0.25,
+      "arrival_window_s": 120.0,
+      "completion_window_s": 297.632734455,
+      "resident": {
+        "completed": 30,
+        "ttft_s": {
+          "count": 30,
+          "mean": 128.3020848348,
+          "median": 157.568898084,
+          "p90": 164.5162334186
+        },
+        "request_mean_tpot_s": {
+          "count": 30,
+          "mean": 0.3528269809850394,
+          "median": 0.2674007448267717,
+          "p90": 0.6509323847204725
+        },
+        "latency_s": {
+          "count": 30,
+          "mean": 173.1112576819,
+          "median": 187.8847111805,
+          "p90": 194.6500565498
+        },
+        "finite_completion_rps": 0.10079536464607455
+      },
+      "migration": {
+        "completed": 8,
+        "ttft_s": {
+          "count": 8,
+          "mean": 122.18996693950001,
+          "median": 123.941387546,
+          "p90": 154.9244871909
+        },
+        "request_mean_tpot_s": {
+          "count": 8,
+          "mean": 0.3954024360393701,
+          "median": 0.38609404444094486,
+          "p90": 0.5268337434291338
+        },
+        "latency_s": {
+          "count": 8,
+          "mean": 172.406137909375,
+          "median": 172.9753707355,
+          "p90": 189.13546567390003
+        },
+        "finite_completion_rps": 0.02687876390561988
+      },
+      "queue_at_migration": {
+        "vllm:num_requests_running": 3.0,
+        "vllm:num_requests_waiting": 5.0
+      },
+      "peak_waiting": 28.0,
+      "power_windows": {
+        "common_arrival_window": {
+          "duration_s": 120.0,
+          "source_mean_w": 95.03526,
+          "destination_mean_w": 159.83795833333335,
+          "source_polls": 1150,
+          "destination_polls": 480
+        },
+        "completion_tail": {
+          "duration_s": 177.632734455,
+          "source_mean_w": 92.08907642563199,
+          "destination_mean_w": 139.34489451476793,
+          "source_polls": 1701,
+          "destination_polls": 711
+        }
+      }
+    }
+  },
+  "limitations": [
+    "One repeat; synthetic resident tokens; eager timing runtime.",
+    "Finite arrivals followed to completion; not sustained SLO capacity.",
+    "Source histories are idle after export: no source-drain savings claim.",
+    "Power windows use sensor averages and recorded host clock bounds; polls are not independent subsecond power measurements."
+  ]
+}
