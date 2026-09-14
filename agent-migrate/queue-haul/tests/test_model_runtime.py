@@ -225,3 +225,13 @@ def test_optimized_runtime_does_not_force_eager(monkeypatch):
 def test_unknown_models_fail_instead_of_inheriting_a_known_revision(tmp_path):
     with pytest.raises(ValueError, match="unsupported model"):
         testbed.model_path(testbed.Config(model="example/unknown", hf_home=tmp_path))
+
+
+def test_gpt_full_state_diagnostic_allocates_full_history(monkeypatch):
+    monkeypatch.setenv('QH_LMCACHE_MODE', 'mp')
+    monkeypatch.setenv('QH_FULL_KV_CONTROL', '1')
+    for role in ('source', 'sink'):
+        assert '--disable-hybrid-kv-cache-manager' in testbed.shell(
+            testbed.vllm_cmd(testbed.model_campaign_config(testbed.MODEL), role))
+    assert '--disable-hybrid-kv-cache-manager' not in testbed.shell(
+        testbed.vllm_cmd(testbed.model_campaign_config('Qwen/Qwen3.8-27B'), 'source'))

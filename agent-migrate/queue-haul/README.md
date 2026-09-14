@@ -3364,6 +3364,13 @@ also completed: 12 requests at 0.05 RPS over 240 seconds, zero failures, no obse
 queue, and mean TTFT 8.26 seconds. This finite observation does not establish
 sustained SLO capacity or 50% utilization. The controls batch is complete; the
 original deadline-policy sweep and net source-drain power validation remain incomplete.
+The sweep now supports a single measured destination with explicit parent-calibration
+provenance. A prediction-only South Central scout selects 70/75/80/90 seconds
+(all ten packs feasible for every model), predicting a Qwen action-mix shift at
+80 seconds. These are new single-route plans, not continuations of `/datadrive/d19`.
+A fresh GPT 32K check on 2026-09-14 reproduced the aligned compact/cold-replay
+output mismatch; a full-history restoration diagnostic is running before admitting
+GPT to the long-context sweep. Southeast Asia runtime restoration is also underway.
 
 
 

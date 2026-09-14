@@ -255,6 +255,24 @@ def _snapshot(source: Path, destination: Path) -> None:
         shutil.copy2(source, destination)
 
 
+def _route_calibration(raw: dict, cluster: dict) -> dict:
+    import network_campaign as network
+
+    routes = {node["id"] for node in cluster["destinations"]}
+    if routes == set(raw["paths"]):
+        return raw
+    if len(routes) != 1 or not routes <= set(raw["paths"]):
+        raise ValueError("campaign routes are absent from gated calibration")
+    node = next(iter(routes))
+    hosts = routes | {cluster["source"]["id"]}
+    return {**raw, "paths": {node: raw["paths"][node]},
+            "hosts": {key: raw["hosts"][key] for key in hosts},
+            "clock_uncertainty_ms": {key: raw["clock_uncertainty_ms"][key] for key in hosts},
+            "aggregate_simultaneous_mbps": raw["paths"][node]["simultaneous_mbps"],
+            "provenance": {"parent_calibration_sha256": network.profiler.object_hash(raw),
+                           "scope": "Selected measured route under the original simultaneous load; not a new single-route calibration."}}
+
+
 def run(hardware: str, profiles: list[Path], cluster: Path,
         calibration: Path, manifest: Path, run_root: Path,
         ssh_key: Path, deadline_s: float = 30, source_service: bool = False,
@@ -270,6 +288,16 @@ def run(hardware: str, profiles: list[Path], cluster: Path,
     if models not in (MODELS[hardware], set(plot_style.MODELS)) \
             or len(loaded) != len(models):
         raise ValueError(f"{hardware} requires exactly {sorted(MODELS[hardware])}")
+    calibrated = json.loads(calibration.read_text())
+    selected = _route_calibration(calibrated, json.loads(cluster.read_text()))
+    execution_calibration = calibration
+    if selected != calibrated:
+        execution_calibration = run_root / "route_calibration.json"
+        execution_calibration.parent.mkdir(parents=True, exist_ok=True)
+        content = json.dumps(selected, indent=2, sort_keys=True) + "\n"
+        if execution_calibration.exists() and execution_calibration.read_text() != content:
+            raise ValueError("selected route calibration changed")
+        execution_calibration.write_text(content)
     prepared = []
     for index, (profile, relative) in enumerate(loaded):
         slug = f"m{index}"
@@ -286,7 +314,6 @@ def run(hardware: str, profiles: list[Path], cluster: Path,
             gate = json.loads(gate_path.read_text())
             if gate.get("schema") == NETWORK_GATE:
                 import network_campaign as network
-                calibrated = json.loads(calibration.read_text())
                 if gate["calibration_sha256"] != network.profiler.object_hash(calibrated) \
                         or gate["network_contract"] != network.freeze_contract(calibrated):
                     raise ValueError("network gate does not match campaign calibration")
@@ -295,7 +322,7 @@ def run(hardware: str, profiles: list[Path], cluster: Path,
         subprocess.run([
             sys.executable, str(ROOT / "network_campaign.py"), "prepare",
             "--design", "drain", "--cluster", str(cluster),
-            "--calibration", str(calibration), "--manifest", str(manifest),
+            "--calibration", str(execution_calibration), "--manifest", str(manifest),
             "--out", str(plan),
             *(["--deadline-s", str(deadline_s)] if deadline_s != 30 else []),
             *(["--source-service"] if source_service else []),
@@ -309,7 +336,7 @@ def run(hardware: str, profiles: list[Path], cluster: Path,
             subprocess.run([
                 sys.executable, str(ROOT / "network_campaign.py"), "run",
                 "--cluster", str(cluster),
-                "--current-calibration", str(calibration),
+                "--current-calibration", str(execution_calibration),
                 "--plan", str(plan), "--run-root", str(arm),
                 "--ssh-key", str(ssh_key), "--stack-block", str(block),
             ], cwd=ROOT, env=env, check=True)
@@ -378,8 +405,8 @@ def _rows(run_roots: list[Path], repeats: int = 5) -> list[dict]:
                            "arm_root": str(arm), "plan_sha256": plan_sha,
                            "profile_sha256": profile_sha,
                            "manifest_sha256": plan["manifest"]["sha256"],
-                           "east_region": regions["east"],
-                           "germany_region": regions["germany"],
+                           "east_region": regions.get("east", ""),
+                           "germany_region": regions.get("germany", ""),
                            **row} for row in rows)
     if not output or len(matrices) != 1:
         raise ValueError("drain arms are absent or unmatched")
@@ -415,6 +442,10 @@ def deadline_action_mix(rows: list[dict], out: Path) -> dict:
         bottom = np.zeros(len(deadlines))
         for column in columns:
             slot, action = column.split("_", 1)
+            if not example[slot + "_region"]:
+                if any(int(row[column]) for row in rows if row["model"] == model):
+                    raise ValueError("executed actions name an absent route")
+                continue
             identity = f"{example[slot + '_region']}_{action}"
             values = np.array([cell[column] or 0 for cell in selected])
             axis.bar(range(len(deadlines)), values, bottom=bottom,

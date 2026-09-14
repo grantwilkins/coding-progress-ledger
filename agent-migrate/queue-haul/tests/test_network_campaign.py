@@ -2021,19 +2021,30 @@ def test_drain_evidence_allows_deadline_misses_but_rejects_dispatch_skew():
         "deadline_met": False,
     }
 
-    assert n._valid_drain_evidence({"sessions": sessions}, result)
+    assert n._valid_drain_evidence({"sessions": sessions, "bandwidth_mbps": {"east": 1, "germany": 1}}, result)
     result["requests"][0].update(deadline_admitted=False, forced_movement=True)
-    assert not n._valid_drain_evidence({"sessions": sessions}, result)
-    assert n._valid_drain_evidence({"sessions": sessions, "force_movement": True}, result)
+    assert not n._valid_drain_evidence({"sessions": sessions, "bandwidth_mbps": {"east": 1, "germany": 1}}, result)
+    assert n._valid_drain_evidence({"sessions": sessions, "bandwidth_mbps": {"east": 1, "germany": 1}, "force_movement": True}, result)
     result["requests"][0].update(deadline_admitted=True, forced_movement=False)
     result["requests"][0].update(method="kv_transfer")
     result["requests"][0]["request"]["cached_tokens"] = 1024
-    assert n._valid_drain_evidence({"sessions": sessions}, result)
+    assert n._valid_drain_evidence({"sessions": sessions, "bandwidth_mbps": {"east": 1, "germany": 1}}, result)
     result["requests"][0]["request"]["cached_tokens"] = 256
-    assert not n._valid_drain_evidence({"sessions": sessions}, result)
+    assert not n._valid_drain_evidence({"sessions": sessions, "bandwidth_mbps": {"east": 1, "germany": 1}}, result)
     result["requests"][0]["request"]["cached_tokens"] = 1024
     result["dispatch_skew_s"] = .101
-    assert not n._valid_drain_evidence({"sessions": sessions}, result)
+    assert not n._valid_drain_evidence({"sessions": sessions, "bandwidth_mbps": {"east": 1, "germany": 1}}, result)
+
+
+    result["dispatch_skew_s"] = .01
+    result["background"] = {"east": {}}
+    scenario = {"sessions": sessions, "bandwidth_mbps": {"east": 1}}
+    assert n._valid_drain_evidence(scenario, result)
+    result["requests"][0]["destination_instance"] = "germany"
+    assert not n._valid_drain_evidence(scenario, result)
+    result["requests"][0]["destination_instance"] = "east"
+    result["background"]["germany"] = {}
+    assert not n._valid_drain_evidence(scenario, result)
 
 
 def test_resume_metadata_allows_audited_commit_change_but_pins_identity():
@@ -2067,3 +2078,19 @@ def test_timing_only_rejects_failed_generation(monkeypatch, status, tokens):
     monkeypatch.setattr(n.profiler, 'stream_chat', lambda *_args: (result, ''))
     with pytest.raises(RuntimeError):
         n._chat(SimpleNamespace(timing_only=True), 1, [], 'CODE', 1)
+
+@pytest.mark.parametrize("route", ["east", "germany"])
+def test_single_destination_drain_preserves_packs_and_route_contract(tmp_path, route):
+    manifest = campaign_manifest(tmp_path, 8)
+    contract = constraint_contract()
+    original = n.make_plan(manifest, contract, design="drain")
+    contract["paths"] = {route: contract["paths"][route]}
+    plan = n.make_plan(manifest, contract, design="drain")
+    n.validate_plan(plan)
+    assert [r["sessions"] for r in plan["scenarios"]] == [r["sessions"] for r in original["scenarios"]]
+    assert all(set(r["background"]) == {route} for r in plan["scenarios"])
+    with pytest.raises(ValueError, match="two destinations"):
+        n.make_plan(manifest, contract, design="joint")
+    plan["scenarios"][0]["background"]["unexpected"] = (0, 0)
+    with pytest.raises(ValueError, match="drain scenario"):
+        n.validate_plan(plan)

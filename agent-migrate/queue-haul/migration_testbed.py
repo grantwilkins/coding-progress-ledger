@@ -596,7 +596,8 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         ) else []),
         *(["--gpu-memory-utilization", 0.9 if (
             cfg.architecture_campaign or cfg.capacity_discovery) else 0.75,
-           *([] if spec.hybrid_cache_groups
+           *([] if spec.hybrid_cache_groups and not (
+               cfg.model == MODEL and os.environ.get("QH_FULL_KV_CONTROL") == "1")
              else ["--disable-hybrid-kv-cache-manager"]),
            "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         *(["--kv-transfer-config", kv_config(

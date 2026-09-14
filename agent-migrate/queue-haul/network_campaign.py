@@ -655,9 +655,9 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
     scenarios = []
     destinations = tuple(sorted(contract["paths"]))
     if design not in {"joint", "isolated", "frontier", "constraint", "separation", "drain"} \
-            or len(destinations) != (
-        2 if design in {"joint", "frontier", "constraint", "separation", "drain"} else 1
-    ):
+            or len(destinations) not in ((1, 2) if design == "drain" else (
+        2 if design in {"joint", "frontier", "constraint", "separation"} else 1,
+    )):
         raise ValueError(f"{design} design requires "
                          f"{'two destinations' if design in {'joint', 'frontier', 'constraint', 'separation', 'drain'} else 'one destination'}")
     drain_conditions = []
@@ -999,6 +999,7 @@ def validate_plan(plan: dict) -> None:
                     or len(row["sessions"]) != 8 \
                     or [item["order"] for item in row["sessions"]] \
                     != list(range(8)) \
+                    or set(row["background"]) != set(contract["paths"]) \
                     or any(any(value) for value in row["background"].values()) \
                     or row["planner_seed"] != profiler.stable_seed(
                         plan["seed"], row["condition_index"], row["repeat"],
@@ -1006,7 +1007,7 @@ def validate_plan(plan: dict) -> None:
                 raise ValueError("drain scenario contract changed")
         expected_cells = {(pack, repeat, deadline) for pack in range(DRAIN_PACKS)
                           for repeat in range(DRAIN_REPEATS) for deadline in deadlines}
-        if set(contract["paths"]) != {"east", "germany"} \
+        if not set(contract["paths"]) or not set(contract["paths"]) <= {"east", "germany"} \
                 or plan.get("policies") != ["greedy"] \
                 or {(row["condition_index"], row["repeat"], row["deadline_s"])
                     for row in scenarios} != expected_cells \
@@ -1871,14 +1872,17 @@ def full_state_reference(path: Path, model: str, chunk: int, current_log: Path |
                 raise ValueError("full-history reference checkpoint/runtime mismatch")
     geometry = report["geometry"]
     rows = report["rows"]
+    destinations = {row["destination"] for row in rows}
     if (report.get("model") != model or report.get("diagnostic_only") is not True
             or report.get("ignore_eos") is not False or report.get("forced_token") is not None
             or geometry != _json_markers(path.parent / "source.log", "QH_KV_GEOMETRY ")[-1]
             or geometry["chunk_tokens"] != chunk
             or any(group["sw_size_chunks"] != -1 for group in geometry["object_groups"])
-            or len(rows) != 4 or len({(row["destination"], row["context_tokens"]) for row in rows}) != 4
+            or not destinations or not destinations <= {"east", "germany"}
+            or len(rows) != 2 * len(destinations)
+            or len({(row["destination"], row["context_tokens"]) for row in rows}) != len(rows)
             or any({row["context_tokens"] % chunk == 0 for row in rows
-                    if row["destination"] == node} != {True, False} for node in ("east", "germany"))
+                    if row["destination"] == node} != {True, False} for node in destinations)
             or any(not state_equivalence_passed(row, chunk, row)
                    or row["expected_wire_bytes"] != sum(group["chunk_bytes"] * (row["context_tokens"] // chunk)
                        for group in geometry["object_groups"]) for row in rows)):
@@ -4699,7 +4703,9 @@ def _valid_drain_evidence(scenario: dict, result: dict) -> bool:
         and result.get("request_failures") == 0 \
         and result.get("kv_evidence_warnings") == 0 \
         and not result.get("load_warnings") \
-        and set(background) == {"east", "germany"} \
+        and set(background) == set(scenario.get("bandwidth_mbps", {})) \
+        and bool(background) and set(background) <= {"east", "germany"} \
+        and all(row["destination_instance"] in background for row in moves) \
         and not any(row.get("warning") for row in background.values()) \
         and result.get("dispatch_skew_s", float("inf")) \
         <= DRAIN_DISPATCH_SKEW_S

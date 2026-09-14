@@ -25,14 +25,15 @@ def test_natural_state_gate_requires_entire_output_and_cold_replay_control():
     assert not state_equivalence_passed(row, 256)
 
 
-def test_full_restore_reference_preserves_cold_replay_difference(tmp_path):
+@pytest.mark.parametrize("nodes", [("east", "germany"), ("germany",), ("east",)])
+def test_full_restore_reference_preserves_cold_replay_difference(tmp_path, nodes):
     from copy import deepcopy
     from network_campaign import state_equivalence_passed, full_state_reference
     request = {"status": 200, "done": True, "exact_token_timestamps": True,
                "finish_reason": "stop", "output_tokens": 3, "recorded_output_tokens": 3,
                "token_ids": [7, 8, 9], "prompt_tokens": 512, "cached_tokens": 0}
     rows = []
-    for node in ("east", "germany"):
+    for node in nodes:
         for tokens in (512, 513):
             row = {"destination": node, "context_tokens": tokens, "warm": {"context_hash": str(tokens)},
                    "expected_wire_bytes": 2000, "kv_wire_bytes": 2010,
@@ -55,12 +56,17 @@ def test_full_restore_reference_preserves_cold_replay_difference(tmp_path):
     compact.update(expected_wire_bytes=1000, kv_wire_bytes=1010)
     assert not state_equivalence_passed(compact, 256)
     assert state_equivalence_passed(compact, 256, rows[0])
-    for key, value in (("kv_wire_bytes", 999), ("destination", "germany"),
+    for key, value in (("kv_wire_bytes", 999), ("destination", "different"),
                        ("warm", {"context_hash": "different"})):
         changed = {**compact, key: value}
         assert not state_equivalence_passed(changed, 256, rows[0])
     compact["kv"]["token_ids"][-1] = 20
     assert not state_equivalence_passed(compact, 256, rows[0])
+    for invalid_rows in (rows[:-1], [rows[0], *rows],
+                         [{**row, "destination": "unknown"} for row in rows]):
+        path.write_text(json.dumps({**baseline, "rows": invalid_rows}))
+        with pytest.raises(ValueError, match="invalid full-history"):
+            full_state_reference(path, "qwen", 256)
     rows[0]["kv_wire_bytes"] = 1
     path.write_text(json.dumps(baseline))
     with pytest.raises(ValueError, match="invalid full-history"):
@@ -178,6 +184,8 @@ def test_network_profile_uses_live_rates_and_rejects_incomplete_smoke(tmp_path):
 
 
 def test_a100_command_runs_all_three_arms_end_to_end(monkeypatch, tmp_path):
+    (tmp_path / "cluster.json").write_text('{"destinations": [{"id": "east"}, {"id": "germany"}]}')
+    (tmp_path / "calibration.json").write_text('{"paths": {"east": {}, "germany": {}}}')
     models = iter(sorted(campaign.MODELS["A100"]))
     monkeypatch.setattr(campaign, "_profile", lambda path, hardware: (
         SimpleNamespace(model=next(models)), path))
@@ -211,6 +219,8 @@ def test_a100_command_runs_all_three_arms_end_to_end(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("repeats", [1, 5])
 def test_h100_is_a_separate_complete_command(monkeypatch, tmp_path, repeats):
+    (tmp_path / "cluster").write_text('{"destinations": [{"id": "east"}, {"id": "germany"}]}')
+    (tmp_path / "calibration").write_text('{"paths": {"east": {}, "germany": {}}}')
     monkeypatch.setattr(campaign, "_profile", lambda path, hardware: (
         SimpleNamespace(model="openai/gpt-oss-20b"), path))
     monkeypatch.setattr(campaign, "_snapshot", lambda *_args: None)
@@ -394,3 +404,32 @@ def test_timing_reuse_rejects_full_history_geometry(tmp_path):
     (old / "source.log").write_text("QH_KV_GEOMETRY " + json.dumps(geometry))
     with pytest.raises(ValueError, match="compact geometry changed"):
         validate_timing_geometry(old, fresh)
+
+
+def test_route_subset_retains_gated_parent_and_measured_envelope():
+    import network_campaign as network
+    raw = {'paths': {'east': {'simultaneous_mbps': [100, 120]},
+                     'germany': {'simultaneous_mbps': [200, 240]}},
+           'hosts': {key: {'id': key} for key in ('source', 'east', 'germany')},
+           'clock_uncertainty_ms': {'source': 1, 'east': 1, 'germany': 1},
+           'aggregate_simultaneous_mbps': [300, 360]}
+    cluster = {'source': {'id': 'source'}, 'destinations': [{'id': 'germany'}]}
+    selected = campaign._route_calibration(raw, cluster)
+    assert selected['paths'] == {'germany': raw['paths']['germany']}
+    assert selected['aggregate_simultaneous_mbps'] == [200, 240]
+    assert set(selected['hosts']) == set(selected['clock_uncertainty_ms']) == {'source', 'germany'}
+    assert selected['provenance']['parent_calibration_sha256'] == network.profiler.object_hash(raw)
+    assert set(raw['paths']) == {'east', 'germany'}
+    with pytest.raises(ValueError, match='absent from gated calibration'):
+        campaign._route_calibration(raw, {**cluster, 'destinations': [{'id': 'unknown'}]})
+
+
+def test_deadline_plot_labels_only_measured_route(tmp_path):
+    row = {'model': 'openai/gpt-oss-20b', 'deadline_s': '30', 'status': 'complete',
+           'target_met': 'True', 'east_region': '', 'germany_region': 'southcentralus',
+           'east_replay': '0', 'east_kv_transfer': '0',
+           'germany_replay': '3', 'germany_kv_transfer': '5'}
+    result = campaign.deadline_action_mix([row], tmp_path)
+    assert result['cells'][0]['germany_replay'] == 3
+    with pytest.raises(ValueError, match='absent route'):
+        campaign.deadline_action_mix([{**row, 'east_replay': '1'}], tmp_path)

@@ -1,5 +1,5 @@
 {
-  "as_of_utc": "2026-09-14T14:43:43.747347+00:00",
+  "as_of_utc": "2026-09-14T14:54:18.224254+00:00",
   "completed": {
     "power_controls": [
       "gpt",
@@ -73,5 +73,19 @@
   },
   "limitations": [
     "Lower-load baseline is a finite 12-request observation, not a sustained SLO or 50% utilization calibration."
-  ]
+  ],
+  "sweep_restart": {
+    "status": "validating_gpt_32k_full_state_reference",
+    "single_route_deadlines_s": [
+      70,
+      75,
+      80,
+      90
+    ],
+    "repeats": 1,
+    "expected_episodes": 120,
+    "gpt_compact_recheck": "gpt-32k-recheck-20260914.json",
+    "full_state_control_root": "/datadrive/gpt32-full-state-20260914-a1",
+    "southeastasia": "background agent restoring runtime after reimage; checkpoints survived"
+  }
 }
