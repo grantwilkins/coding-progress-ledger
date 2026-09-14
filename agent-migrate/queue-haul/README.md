@@ -3785,6 +3785,7 @@ infrastructure failures. `resume_deadline_sweep.py` performs the final reduction
 its live state is `/datadrive/d19-resume-20260914.json`. The launcher is now an
 enabled persistent system service running as `azureuser` after a source reboot
 removed its transient unit and left the user-service bus unavailable.
+The launcher waits up to six hours for destination SSH readiness before each job.
 Validation failures still stop the queue for review. The older resume service
 remains disabled.
 

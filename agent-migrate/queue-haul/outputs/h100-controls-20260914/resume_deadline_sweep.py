@@ -23,6 +23,23 @@ def save(state):
     temporary.replace(STATE)
 
 
+def wait_for_hosts(state):
+    import network_campaign as network
+    deadline = time.monotonic() + 21600
+    while True:
+        missing = [node.id for node in network.Cluster.load(CLUSTER).destinations
+                   if subprocess.run(network.ssh_command(node, Path('/home/azureuser/.ssh/azrs'),
+                       ['test', '-x', str(Path(node.repo_root) / '.venv/bin/python')]),
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode]
+        if not missing:
+            state.pop('waiting_for_hosts', None)
+            return
+        state.update(status='waiting_for_hosts', waiting_for_hosts=missing); save(state)
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f'campaign hosts unavailable for six hours: {missing}')
+        time.sleep(30)
+
+
 def main():
     import model_hardware_drain_campaign as campaign
     import network_campaign as network
@@ -57,6 +74,9 @@ def main():
     for name, slug, command in jobs:
         if state['jobs'].get(name, {}).get('returncode') == 0:
             continue
+        wait_for_hosts(state)
+        if name in state['jobs']:
+            state.setdefault('previous_job_attempts', []).append({'name': name, **state['jobs'][name]})
         state.update(status='running', current_job=name)
         state['jobs'][name] = {'started_wall_ns': time.time_ns(), 'command': command}
         save(state)
