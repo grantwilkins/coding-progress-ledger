@@ -30,7 +30,7 @@ def test_wait_retains_failed_job_until_destination_returns(resume, monkeypatch):
     state = {'jobs': {'gemma_repeat_zero': {'returncode': 1}}}
     resume.wait_for_hosts(state)
     assert sleeps == [30]
-    assert commands == [['test', '-x', '/datadrive/qh0912/.venv/bin/python']] * 2
+    assert commands == [['timeout', '20', 'test', '-x', '/datadrive/qh0912/.venv/bin/python']] * 2
     assert 'waiting_for_hosts' not in state
     assert state['jobs']['gemma_repeat_zero']['returncode'] == 1
 
