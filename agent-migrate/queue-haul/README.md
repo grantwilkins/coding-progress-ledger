@@ -3298,8 +3298,13 @@ Its first Qwen episode executed the planned five KV and three replay moves with
 zero request failures, but missed its 51-second deadline at 58.7 seconds.
 Deadline misses remain observations. Complete cross-model hardware comparisons
 await the finished sweep; the predicted action mixes are not final outcomes.
-This SEA-dependent sweep is paused; its old automatic resume was disabled on
-2026-09-14 while the two-host controls below run.
+After the controls, Southeast Asia was restored and a short, explicitly nonformal
+route recheck passed against the original formal envelope. The repeat-zero queue
+resumes Gemma (40 episodes), then validates GPT restoration on Southeast Asia before
+GPT (40 episodes). It preserves Qwen's 37 completed episodes and three sealed
+infrastructure failures. `resume_deadline_sweep.py` performs the final reductions;
+its live state is `/datadrive/d19-resume-20260914.json`. The older resume service
+remains disabled.
 
 The [2026-09-14 existing-data audit](outputs/h100-evidence-audit-20260914/audit.json)
 exports historical power conditions, optimized GPT finite-episode RPS results,
@@ -3368,9 +3373,11 @@ The sweep now supports a single measured destination with explicit parent-calibr
 provenance. A prediction-only South Central scout selects 70/75/80/90 seconds
 (all ten packs feasible for every model), predicting a Qwen action-mix shift at
 80 seconds. These are new single-route plans, not continuations of `/datadrive/d19`.
-A fresh GPT 32K check on 2026-09-14 reproduced the aligned compact/cold-replay
-output mismatch; a full-history restoration diagnostic is running before admitting
-GPT to the long-context sweep. Southeast Asia runtime restoration is also underway.
+A fresh GPT 32K check reproduced the aligned compact/cold-replay output mismatch.
+The [subsequent full-reference comparison](outputs/h100-controls-20260914/gpt32-restoration-diagnostic/summary.json)
+passes at both 32,239 and 32,256 tokens on South Central; the raw cold-replay failure
+is retained. Southeast Asia is restored, so the original two-destination queue is
+resuming instead of launching the single-route fallback.
 
 
 

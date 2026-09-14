@@ -1,0 +1,23 @@
+{
+  "model": "openai/gpt-oss-20b",
+  "rows": [
+    {
+      "destination": "germany",
+      "context_tokens": 32239,
+      "compact_matches_full_restoration": true,
+      "cold_replay_equivalence": true
+    },
+    {
+      "destination": "germany",
+      "context_tokens": 32256,
+      "compact_matches_full_restoration": true,
+      "cold_replay_equivalence": false
+    }
+  ],
+  "limitations": [
+    "South Central destination only; Southeast Asia has not been checked in this diagnostic.",
+    "Aligned compact output matches full restoration but differs from two matching cold replays.",
+    "Full reference disables hybrid cache allocation; no universal numerical-equivalence claim.",
+    "This validates these state probes, not timing under shared serving or net drain power."
+  ]
+}
