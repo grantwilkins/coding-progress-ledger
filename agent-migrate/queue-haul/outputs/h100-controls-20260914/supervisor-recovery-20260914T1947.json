@@ -1,0 +1,25 @@
+{
+  "jobs": {
+    "gemma_repeat_zero": {
+      "returncode": 0,
+      "recovered_from": "Validated saved results and previously observed successful supervisor completion; original timestamps unavailable in emptied state file"
+    },
+    "gpt_sea_full_reference": {
+      "returncode": 0,
+      "recovered_from": "Validated saved results and previously observed successful supervisor completion; original timestamps unavailable in emptied state file"
+    },
+    "gpt_sea_compact_reference_check": {
+      "returncode": 0,
+      "recovered_from": "Validated saved results and previously observed successful supervisor completion; original timestamps unavailable in emptied state file"
+    }
+  },
+  "repeats": 1,
+  "status": "waiting_for_hosts",
+  "reviews": [
+    {
+      "wall_ns": 1789415246897446169,
+      "job": "gpt_repeat_zero",
+      "resolution": "Recovered empty supervisor state following source reboot. GPT results contain 16 complete and 3 failed episodes, including explicit Azure Spot Preempt at 19:33:38 GMT. Preserve every existing result and resume 21 unresolved episodes. No destination workers remain. Prior supervisor attempt history lost from empty file; earlier tool records retain it."
+    }
+  ]
+}
