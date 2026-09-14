@@ -1,0 +1,153 @@
+{
+  "schema": "queue-haul-existing-h100-evidence-audit-v1",
+  "date": "2026-09-14",
+  "scope": "Existing-data audit; no new workload experiments. The separate deadline campaign remains one repeat / 120 episodes and awaits SEA recovery.",
+  "conclusions": {
+    "power": {
+      "gpt_coding_fitted_idle_w": 93.48877551020408,
+      "gpt_coding_increment_w": 69.23472036891681,
+      "required_reduction_w_per_gpu": [
+        222.64442201508044,
+        296.8592293534406
+      ],
+      "linear_gpt_increment_mw_for_134744_gpus": 9.328963161389327,
+      "interpretation": "Coding-path incremental power is not a universal H100 ceiling. Historical Qwen/Gemma conditions reach near400W, but do not prove optimized GPT or net fleet savings. Destination additional energy must be included."
+    },
+    "capacity": {
+      "optimized_raw_root": "/datadrive/agentic-rps-sweep-h100-quick-v4-gpu-0ec0a705",
+      "episodes": 15,
+      "requests_per_episode": 50,
+      "total_completed_requests": 750,
+      "shape_prompt_output_tokens": [
+        3920,
+        1024
+      ],
+      "last_observed_passing_offered_rps": 8,
+      "first_observed_failing_offered_rps": 10,
+      "slo": {
+        "p90_ttft_s": 1,
+        "p90_request_mean_tpot_s": 0.05
+      },
+      "runtime": "vLLM0.22.0 / LMCache0.5.1; compiled TRITON_ATTN; max_num_seqs256; max_num_batched_tokens8192; prefix cache on; engine_driven KV consumer",
+      "limitations": [
+        "Finite Poisson arrival bursts followed to completion, not a sustained boundary.",
+        "realized_rps is observed arrival rate; finite_episode_completion_rps separately includes draining and is also not sustained capacity.",
+        "Fixed forced-length output; not full coding/long-context/agentic trace playback with location weights and tool delays.",
+        "No power traces in this optimized RPS run.",
+        "Current compact migration uses vLLM0.24.0, eager scheduling,8 sequences and lmcache_driven; do not transfer capacity between configurations."
+      ]
+    },
+    "loaded_migration": {
+      "root": "/datadrive/queue-haul-network/hardware-gap-h100-002",
+      "validated_episodes": 72,
+      "resident_shape_prompt_output_tokens": [
+        604,
+        64
+      ],
+      "resident_trace_files": 144,
+      "power_trace_files": 22,
+      "routes": [
+        "Australia East",
+        "South Central US"
+      ],
+      "runtime": "GPT-OSS / vLLM0.22.0 / LMCache0.5.1",
+      "reuse": "Observed resident response latency, action decisions, actual requests/wire bytes, coarse power before and during migration.",
+      "limits": [
+        "Different workload/runtime/routes/state representation from target optimized SEA experiment.",
+        "Policies admit different migration populations; this is not an equal-work four-action causal comparison.",
+        "No matched no-migration control or end-to-end request-ID-linked queue/install/catch-up spans.",
+        "Independent source background traffic is not the set of histories being drained; power changes do not establish causal source relief.",
+        "Legacy 604/64 background generator has eight workers, so generated load is capped, not unlimited open-loop sustained capacity."
+      ]
+    },
+    "compact_kv": {
+      "observations": 108,
+      "concurrent_readiness_requests": 48,
+      "context_tokens": 32256,
+      "payload_bytes": {
+        "GPT-OSS": 795869184,
+        "Qwen": 2260729856,
+        "Gemma": 870318080
+      },
+      "roots": [
+        "/datadrive/k19-gpt",
+        "/datadrive/k22-qwen",
+        "/datadrive/k23-gemma"
+      ],
+      "reuse": "Actual compact payload/wire bytes, end-to-end readiness/TTFT and cached-prefix service validation.",
+      "limits": [
+        "No destination resident traffic in these gates or d19.",
+        "d19 source load0.8 is modeled; no real source serving stream in drain design.",
+        "Source sleep timestamps in d19 are null; modeled shed watts are not measured active-to-idle transitions.",
+        "Qwen matches full-history restoration; cold-replay equivalence fails for aligned cases and remains an explicit limitation.",
+        "Export, network, installation and catch-up are not all separately request-correlated."
+      ],
+      "restored_cached_tokens": {
+        "GPT-OSS": 32256,
+        "Qwen": 32144,
+        "Gemma": 32256
+      }
+    },
+    "eight_gpu": "No matching eight-active-GPU H100 node evidence found. Single-H100-per-host data does not validate shared-NIC/staging/host-power scaling."
+  },
+  "telemetry": {
+    "collector": "migration_profiler.PowerSampler queries nvidia-smi power.draw; logs monotonic_ns/wall_ns after query, watts, utilization, device framebuffer usage. Historical phase samplers also use power.draw.",
+    "sensor": "NVML power usage on H100 returns a one-second average; polling at0.1/0.25s is not equivalent sensor resolution.",
+    "missing": [
+      "Power field/sensor averaging provenance per historical trace",
+      "Cumulative energy counters in historical traces",
+      "Per-sample GPU UUID, clocks and enforced cap",
+      "Per-host clock error bounds for cross-host alignment"
+    ],
+    "capability_probe": {
+      "hardware": "NVIDIA H100 NVL",
+      "average_w": 60.902,
+      "average_field_timestamp_us": 1789352386982041,
+      "instantaneous_w": 60.893,
+      "instantaneous_field_timestamp_us": 1789352386982059,
+      "total_energy_j": 697263.925,
+      "scope": "Single read-only probe; API support confirmed, update cadence/accuracy not validated."
+    }
+  },
+  "extraction": {
+    "latency": "Successful end-start response latency. before_arrival cohort starts in the30s preceding migration; its crossover count shows requests affected by both phases. completed-before latency is also retained but is survivor-biased. During cohort starts inside migration and is followed through completion; failures reported separately. Do not compare these as randomized treatment effects.",
+    "power": "Arithmetic means of valid samples in30s prewindow or migration window. Source wall-minus-monotonic offset maps source event windows to remote wall timestamps. Explicit stack_id preferred when present; legacy traces match unique source coverage. Clock offset spread and sample-span coverage retained; cross-host clock error not verified. No instantaneous energy or source/net saving inferred. memory.used is sampled device framebuffer usage, not live allocator occupancy or an exact temporary-buffer peak.",
+    "outputs": [
+      "optimized_gpt_rps_reaudit.csv",
+      "historical_power_conditions.csv",
+      "legacy_background_latency.csv",
+      "legacy_background_power.csv"
+    ]
+  },
+  "proposed_next_measurements": {
+    "status": "Design only; not launched and does not increase the one-repeat deadline sweep.",
+    "priority0": "Freeze one optimized GPT runtime with compact-KV correctness validated; record loaded idle, decode, prefill-heavy and mixed steady serving plus active-to-awake-idle transitions. Establish low-load and near-boundary points on that exact runtime using actual trace arrivals, location weights and tool delays.",
+    "first_matched_slice": {
+      "workloads": 1,
+      "contexts": 1,
+      "migration_concurrency": 16,
+      "background_load_points": 2,
+      "actions": [
+        "none",
+        "replay",
+        "kv",
+        "mixed"
+      ],
+      "independent_repetitions": 3,
+      "episodes": 24
+    },
+    "full_requested_grid": "3workloads x2loadpoints x4actions x2contexts x2concurrency labels x3repetitions =288 labeled episodes. Mixed with one migration is impossible under per-session action selection; excluding those36 cells yields252 meaningful episodes. Keep mixed in the16-migration slice.",
+    "required_events": [
+      "Stable request/session/migration IDs; scheduled arrival, send, queue admission, execution start, first token, token events, completion/error/unfinished",
+      "Export start/end with actual state geometry; per-flow transfer start/end/bytes; install start/end; replay start/end; catch-up and first successful destination service",
+      "Continued resident traffic and migrated session placement; preserve tool delays; stop source work only at actual handoff",
+      "All three GPUs: power average/instant, energy counters, sample/query timestamps, GPU UUID, clocks, cap, allocated/peak HBM and engine occupancy",
+      "Net power = matched no-migration total GPU watts minus action total GPU watts; compare energy over common windows and through completion. Separate GPU board energy from host energy."
+    ],
+    "validation": "Three independent repetitions; hold out complete episodes; preserve failures/deadline misses; continue arrivals through claimed deadline and follow unfinished work to completion. Eight-GPU node measurement remains a separate required scale validation."
+  },
+  "references": {
+    "nvml": "https://docs.nvidia.com/deploy/nvml-api/api/group__nvmlDeviceQueries.html",
+    "vllm_metrics": "https://github.com/vllm-project/vllm/blob/main/docs/design/metrics.md"
+  }
+}

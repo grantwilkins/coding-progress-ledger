@@ -3299,6 +3299,12 @@ zero request failures, but missed its 51-second deadline at 58.7 seconds.
 Deadline misses remain observations. Complete cross-model hardware comparisons
 await the finished sweep; the predicted action mixes are not final outcomes.
 
+The [2026-09-14 existing-data audit](outputs/h100-evidence-audit-20260914/audit.json)
+exports historical power conditions, optimized GPT finite-episode RPS results,
+and resident-latency/power windows from 72 older loaded-migration episodes.
+These datasets do not establish optimized-runtime sustained capacity or net
+active-to-idle savings; workload, runtime, sensor, and comparison limits are explicit.
+
 ```bash
 uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json
 uv run python model_hardware_drain_campaign.py h100-sweep --profiles GPT_PROFILE.json QWEN_PROFILE.json GEMMA_PROFILE.json --deadlines-s DEADLINES --repeats 1 --cluster azure_network_cluster_southeastasia_southcentral.json --calibration CALIBRATION.json --manifest outputs/coding-manifest.json --run-root /datadrive/d12
