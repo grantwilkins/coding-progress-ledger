@@ -1608,11 +1608,6 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
         source_log = run_root / "source.log"
         source = testbed.start_logged(testbed.vllm_cmd(
             cfg, "source", gpu_index=0, sleep_mode=True), source_log)
-        testbed.wait_health_process(
-            "127.0.0.1", cfg.src_port, testbed.health_timeout(),
-            source, source_log)
-        testbed.validate_model_runtime_log(cfg, testbed.read_text(source_log))
-        sampler.start()
         remote_roots = {}
         by_id = {node.id: node for node in cluster.destinations}
         for node_id in sorted(by_id):
@@ -1639,6 +1634,11 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                 text=True, start_new_session=True,
             )
             remote[node_id] = process
+        testbed.wait_health_process(
+            "127.0.0.1", cfg.src_port, testbed.health_timeout(),
+            source, source_log)
+        testbed.validate_model_runtime_log(cfg, testbed.read_text(source_log))
+        sampler.start()
         reports = _wait_remote_ready(remote, testbed.health_timeout())
         if any(abs(reports[node]["kv_capacity_tokens"] / profile_capacity
                    - fraction) > .01 for node, fraction in fractions.items()):
