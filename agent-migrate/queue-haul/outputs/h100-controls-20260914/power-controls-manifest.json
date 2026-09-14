@@ -1,0 +1,100 @@
+{
+  "classification": {
+    "turn_rate_q25_hz": 0.007101390097035572,
+    "turn_rate_q75_hz": 0.11638733707859644
+  },
+  "message_generator": "deterministic_trace_tokens_v2",
+  "schema": "queue-haul-migration-manifest-v2",
+  "seed": 0,
+  "sessions": [
+    {
+      "human_fraction": 0.6666666666666666,
+      "id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "job_class": "coding",
+      "rank": 0,
+      "state_code": "36D86849ABD3",
+      "tool_fraction": 0.6666666666666666,
+      "turn_rate_hz": 0.08708146468130888,
+      "turns": [
+        {
+          "append_tokens": 7061,
+          "input_tokens": 21404,
+          "output_tokens": 7,
+          "reset": false,
+          "time_s": 1773419955.861
+        },
+        {
+          "append_tokens": 1484,
+          "input_tokens": 22885,
+          "output_tokens": 203,
+          "reset": false,
+          "time_s": 1773419960.766
+        },
+        {
+          "append_tokens": 251,
+          "input_tokens": 23134,
+          "output_tokens": 1,
+          "reset": false,
+          "time_s": 1773419978.828
+        }
+      ]
+    },
+    {
+      "human_fraction": 0.2,
+      "id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "job_class": "coding",
+      "rank": 4,
+      "state_code": "7EA8C6990E42",
+      "tool_fraction": 1.0,
+      "turn_rate_hz": 0.009220286474827746,
+      "turns": [
+        {
+          "append_tokens": 2749,
+          "input_tokens": 15727,
+          "output_tokens": 4,
+          "reset": false,
+          "time_s": 1780025138.082
+        },
+        {
+          "append_tokens": 4406,
+          "input_tokens": 20130,
+          "output_tokens": 287,
+          "reset": false,
+          "time_s": 1780025170.227
+        },
+        {
+          "append_tokens": 3607,
+          "input_tokens": 20882,
+          "output_tokens": 141,
+          "reset": false,
+          "time_s": 1780025401.004
+        },
+        {
+          "append_tokens": 462,
+          "input_tokens": 21343,
+          "output_tokens": 154,
+          "reset": false,
+          "time_s": 1780025530.193
+        },
+        {
+          "append_tokens": 501,
+          "input_tokens": 21843,
+          "output_tokens": 614,
+          "reset": false,
+          "time_s": 1780025571.908
+        }
+      ]
+    }
+  ],
+  "source": {
+    "path": "/scratch/users/gfw/ptsim/tracelab/syfi_coding_trace.jsonl.gz",
+    "sha256": "9d265eae69a31cae203848bea936f018148eed7ca8bf56050c5abe96da0b4e6b"
+  },
+  "workload": "coding",
+  "control_subset": {
+    "source_sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435",
+    "original_sessions": 8,
+    "retained_sessions": 2,
+    "rule": "Entire sessions whose requests fit 32768 tokens; synthetic token contents"
+  }
+}

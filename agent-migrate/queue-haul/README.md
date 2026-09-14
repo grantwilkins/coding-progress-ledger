@@ -3298,12 +3298,31 @@ Its first Qwen episode executed the planned five KV and three replay moves with
 zero request failures, but missed its 51-second deadline at 58.7 seconds.
 Deadline misses remain observations. Complete cross-model hardware comparisons
 await the finished sweep; the predicted action mixes are not final outcomes.
+This SEA-dependent sweep is paused; its old automatic resume was disabled on
+2026-09-14 while the two-host controls below run.
 
 The [2026-09-14 existing-data audit](outputs/h100-evidence-audit-20260914/audit.json)
 exports historical power conditions, optimized GPT finite-episode RPS results,
 and resident-latency/power windows from 72 older loaded-migration episodes.
 These datasets do not establish optimized-runtime sustained capacity or net
 active-to-idle savings; workload, runtime, sensor, and comparison limits are explicit.
+
+The [2026-09-14 two-host controls](outputs/h100-controls-20260914/launch_provenance.json)
+use West US 3 and the restored South Central H100, one repeat per model.
+The completed [GPT power control](outputs/h100-controls-20260914/gpt/summary.json)
+retains compressed raw power, energy, requests, metrics, runtime logs, and input hashes.
+Its coding subset averaged 152 W; eight-concurrency prefill, decode, and mixed
+controls averaged about 383 W, with adjacent loaded-idle windows around 92–112 W.
+Only two complete recorded histories fit the pinned 32K limit; the subset is explicit.
+These finite synthetic-token controls do not establish sustained SLO capacity or
+net migration relief. Qwen and Gemma power controls were launched in the same batch.
+The queued shared-load batch uses 16K contexts, eight migrations, 0.25 offered
+resident requests/s, and none/replay/KV/mixed arms for each model. It measures
+destination interference with the existing eager timing runtime; it does not
+claim 50% utilization or continued source service. The optimized power-control
+runtime is recorded separately. Replay bypasses LMCache; each arm starts with
+cleared caches. Schedule violations and compact-byte bound failures remain invalid
+measurements with retained raw events.
 
 ```bash
 uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json
@@ -3389,7 +3408,7 @@ The H100 movement plan and 50-episode offline check are in
 `/datadrive/dm09` with log `/datadrive/dm09.log`. The offline check selects 315
 admitted actions and 85 forced actions across the 400 movements. These are
 predictions, not completed hardware observations.
-Launch is pending restoration of South Central (`10.13.0.4`): SSH timed out
+That historical launch was blocked by South Central (`10.13.0.4`): SSH timed out
 during deployment on 2026-09-08, and Azure resource inspection returned HTTP
 403 for the source's managed identity. The reviewed executor is staged at
 `/tmp/qhm09/agent-migrate` on the source and Australia East. Eleven drain tests

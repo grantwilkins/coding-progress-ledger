@@ -1,0 +1,39 @@
+{
+  "power_launch_deployment_commit": "cbdb383",
+  "power_launch_source_commit": "01b52225",
+  "shared_launch_deployment_commit": "2b9cf9a",
+  "shared_launch_source_commit": "b3a7e2fd",
+  "hosts": {
+    "local": "10.11.0.4",
+    "southcentral": "10.13.0.4"
+  },
+  "repeats": 1,
+  "units": {
+    "gpt_power": "qh-power-gpt-20260914.service",
+    "qwen_power": "qh-power-qwen-20260914.service (South Central)",
+    "gemma_power": "qh-power-gemma-20260914.service",
+    "shared_controls": "qh-shared-controls-20260914.service"
+  },
+  "shared_scope": {
+    "context_tokens": 16384,
+    "migrations": 8,
+    "resident_rps": 0.25,
+    "arms": [
+      "none",
+      "replay",
+      "kv",
+      "mixed"
+    ],
+    "models": [
+      "openai/gpt-oss-20b",
+      "Qwen/Qwen3.8-27B",
+      "google/gemma-4-26B-A4B-it"
+    ]
+  },
+  "validation": {
+    "focused_tests_passed": 35,
+    "broad_tests_passed_before_interrupt": 1098,
+    "broad_failures": 7,
+    "broad_failures_review": "critic confirmed failing implementations unchanged from baseline; broad sweep interrupted after691s"
+  }
+}
