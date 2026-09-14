@@ -20,19 +20,23 @@ def stats(values):
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('source', type=Path)
 p.add_argument('output', type=Path)
+p.add_argument('--arms', nargs='+', choices=('none', 'replay', 'kv', 'mixed'))
 a = p.parse_args()
-assert json.loads((a.source / 'complete.json').read_text())['status'] == 'complete'
+complete = a.source / 'complete.json'
+finished = complete.exists() and json.loads(complete.read_text())['status'] == 'complete'
+if not finished and not a.arms:
+    raise ValueError('incomplete runs require explicit completed-arm selection')
 metadata = json.loads((a.source / 'metadata.json').read_text())
 node = metadata['cluster']['destinations'][0]['id']
 source_power = read_events(a.source / 'source-power.jsonl')
 with (a.source / 'nodes' / node / 'power.csv').open() as f:
     destination_power = list(csv.DictReader(f))
-summary = {'metadata': metadata, 'arms': {}, 'limitations': [
+summary = {'run_complete': finished, 'selected_arms': a.arms or metadata.get('arms', ['none', 'replay', 'kv', 'mixed']), 'metadata': metadata, 'arms': {}, 'limitations': [
     'One repeat; synthetic resident tokens; eager timing runtime.',
     'Finite arrivals followed to completion; not sustained SLO capacity.',
     'Source histories are idle after export: no source-drain savings claim.',
     'Power windows use sensor averages and recorded host clock bounds; polls are not independent subsecond power measurements.']}
-for arm in metadata.get('arms', ('none', 'replay', 'kv', 'mixed')):
+for arm in summary['selected_arms']:
     root = a.source / arm
     done = json.loads((root / 'complete.json').read_text())
     assert done['status'] == 'complete'

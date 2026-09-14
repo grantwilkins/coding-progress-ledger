@@ -3338,6 +3338,13 @@ South Central was unavailable. After its restoration on 2026-09-14, the missing
 models were restarted and a lower-rate, none-only Qwen baseline was queued.
 The timestamped [campaign status](outputs/h100-controls-20260914/campaign_status.json)
 records completed evidence and outstanding work.
+GPT then completed none/replay/KV with 90 resident and 16 migration requests;
+[the partial-run export](outputs/h100-controls-20260914/shared-gpt-partial/summary.json)
+explicitly marks the overall run incomplete. Resident mean TTFT was
+94.52/154.07/104.21 s. Its mixed arm was interrupted by a recorded Azure Spot
+preemption at 11:47 UTC and has zero valid completions. Only mixed and the
+unstarted Gemma arms were restarted after the host returned; completed arms
+remain unchanged.
 
 ```bash
 uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json

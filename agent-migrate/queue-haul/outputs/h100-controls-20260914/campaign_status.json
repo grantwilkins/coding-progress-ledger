@@ -1,5 +1,5 @@
 {
-  "as_of_utc": "2026-09-14T11:19:01.708491+00:00",
+  "as_of_utc": "2026-09-14T12:36:02.876107+00:00",
   "completed": {
     "power_controls": [
       "gpt",
@@ -12,12 +12,17 @@
         "replay",
         "kv",
         "mixed"
+      ],
+      "gpt": [
+        "none",
+        "replay",
+        "kv"
       ]
     }
   },
   "restarted": {
-    "gpt": "/datadrive/shared-gpt-recovery-20260914",
-    "gemma": "/datadrive/shared-gemma-recovery-20260914"
+    "gpt_mixed": "/datadrive/shared-gpt-finish-20260914",
+    "gemma": "/datadrive/shared-gemma-finish-20260914"
   },
   "queued": {
     "qwen_resident_baseline": {
@@ -28,7 +33,7 @@
     }
   },
   "remaining": [
-    "Finish eight GPT/Gemma shared-load arms and reduce comparison.",
+    "Finish GPT mixed and four Gemma arms and reduce comparison.",
     "Check lower-load queue stability before claiming steady/50% load.",
     "Measure source work continuing at destination for net drain-power claims.",
     "Three-model deadline/action-mix campaign remains incomplete; existing Qwen deadline observations preserved."
@@ -41,5 +46,11 @@
     "gpt_32k": "outputs/h100-controls-20260914/gpt-32k-failed-gate.json",
     "gemma_startup": "/datadrive/shared-gemma-20260914",
     "gpt_connectivity": "/datadrive/shared-gpt16k-20260914.log"
+  },
+  "interruption": {
+    "kind": "Azure Spot Preempt",
+    "not_before_utc": "2026-09-14 11:47:02",
+    "evidence": "shared-gpt-partial/raw/nodes/germany/scheduled_events.jsonl.gz",
+    "gpt_mixed_valid_completions": 0
   }
 }

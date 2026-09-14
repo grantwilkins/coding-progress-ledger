@@ -1,0 +1,357 @@
+{
+  "run_complete": false,
+  "selected_arms": [
+    "none",
+    "replay",
+    "kv"
+  ],
+  "metadata": {
+    "calibration_sha256": "4a4e15e7eb445cde499d96f2b8827252aa8345a7f5b2f29a48adeb0aa810381f",
+    "cluster": {
+      "destinations": [
+        {
+          "host": "10.13.0.4",
+          "id": "germany",
+          "region": "southcentralus",
+          "repo_root": "/datadrive/qh0912",
+          "run_root": "/datadrive/queue-haul-network",
+          "ssh_port": 22,
+          "ssh_user": "azureuser"
+        }
+      ],
+      "schema": "queue-haul-azure-cluster-v1",
+      "source": {
+        "host": "10.11.0.4",
+        "id": "westus3",
+        "region": "westus3",
+        "repo_root": "/datadrive/qh0912",
+        "run_root": "/datadrive/queue-haul-network",
+        "ssh_port": 22,
+        "ssh_user": "azureuser"
+      }
+    },
+    "config": {
+      "api_proxy_port": 8400,
+      "architecture_campaign": true,
+      "cache_root": "/datadrive/queue-haul-cache",
+      "capacity_discovery": false,
+      "enforce_eager": true,
+      "hf_home": "/datadrive",
+      "host": "127.0.0.1",
+      "kv_proxy_port": 8300,
+      "literal_token_timing": true,
+      "lmc_port": 5655,
+      "matched_prefill": false,
+      "max_model_len": 32768,
+      "max_num_batched_tokens": 8192,
+      "max_num_seqs": 8,
+      "model": "openai/gpt-oss-20b",
+      "sandbox": "/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif",
+      "scratch_bind": "/scratch/users/gfw",
+      "serving_campaign": false,
+      "sink_lmc_http_port": 8081,
+      "sink_lmc_port": 5556,
+      "sink_port": 8200,
+      "smoke_port": 8120,
+      "src_lmc_http_port": 8080,
+      "src_lmc_port": 5557,
+      "src_port": 8100,
+      "timing_only": false
+    },
+    "context_tokens": 16384,
+    "destination_power_sensor": "NVML standard power usage: one-second average",
+    "hosts": {
+      "germany": {
+        "clock_uncertainty_ms": 0.01358,
+        "datadrive": true,
+        "dirty": false,
+        "git_sha": "efbd299eabdffba3c4777fcb71cc963ce3a383e2",
+        "gpu": "NVIDIA H100 NVL",
+        "gpu_memory_mib": 95830,
+        "lmcache": "0.5.1",
+        "priority": "Spot",
+        "private_ip": "10.13.0.4",
+        "ptp": "/dev/ptp0",
+        "region": "southcentralus",
+        "vllm": "0.24.0",
+        "vm_size": "Standard_NC40ads_H100_v5"
+      },
+      "westus3": {
+        "clock_uncertainty_ms": 0.025086,
+        "datadrive": true,
+        "dirty": false,
+        "git_sha": "efbd299eabdffba3c4777fcb71cc963ce3a383e2",
+        "gpu": "NVIDIA H100 NVL",
+        "gpu_memory_mib": 95830,
+        "lmcache": "0.5.1",
+        "priority": "Spot",
+        "private_ip": "10.11.0.4",
+        "ptp": "/dev/ptp0",
+        "region": "WestUS3",
+        "vllm": "0.24.0",
+        "vm_size": "Standard_NC40ads_H100_v5"
+      }
+    },
+    "migration_count": 8,
+    "model": "openai/gpt-oss-20b",
+    "network": "Natural South Central route; prior two-route envelope subset, not a new independent route calibration.",
+    "repeats": 1,
+    "resident_rps": 0.25,
+    "revision": "6cee5e81ee83917806bbde320786a8fb61efebee",
+    "runtime": {
+      "lmcache": "0.5.1",
+      "vllm": "0.24.0"
+    },
+    "scope": "Destination interference at an explicit offered rate, not a claim of 50% utilization or source-drain power relief. Synthetic resident inputs. Source histories are idle after export.",
+    "seconds": 120.0,
+    "warmup_s": 30.0
+  },
+  "arms": {
+    "none": {
+      "wire_evidence": {
+        "expected_compact_bytes": 0,
+        "max_migration_lateness_s": 0,
+        "max_resident_lateness_s": 0.008246455,
+        "status": "complete",
+        "wire_bytes": {
+          "api/germany/client_to_target": 0,
+          "api/germany/target_to_client": 0,
+          "kv/germany/client_to_target": 0,
+          "kv/germany/target_to_client": 0
+        }
+      },
+      "offered_rps": 0.25,
+      "arrival_window_s": 120.0,
+      "completion_window_s": 307.340033694,
+      "resident": {
+        "completed": 30,
+        "ttft_s": {
+          "count": 30,
+          "mean": 94.5233400164,
+          "median": 88.6711021655,
+          "p90": 169.4773697423
+        },
+        "request_mean_tpot_s": {
+          "count": 30,
+          "mean": 0.49569898865669293,
+          "median": 0.5575473228188976,
+          "p90": 0.5744816662771653
+        },
+        "latency_s": {
+          "count": 30,
+          "mean": 157.47723000363334,
+          "median": 160.55493052050002,
+          "p90": 204.7445239432
+        },
+        "finite_completion_rps": 0.09761175477018785
+      },
+      "migration": {
+        "completed": 0,
+        "ttft_s": {
+          "count": 0,
+          "mean": null
+        },
+        "request_mean_tpot_s": {
+          "count": 0,
+          "mean": null
+        },
+        "latency_s": {
+          "count": 0,
+          "mean": null
+        },
+        "finite_completion_rps": 0.0
+      },
+      "queue_at_migration": {
+        "vllm:num_requests_running": 4.0,
+        "vllm:num_requests_waiting": 3.0
+      },
+      "peak_waiting": 17.0,
+      "power_windows": {
+        "common_arrival_window": {
+          "duration_s": 120.0,
+          "source_mean_w": 99.08736869565217,
+          "destination_mean_w": 117.33547916666667,
+          "source_polls": 1150,
+          "destination_polls": 480
+        },
+        "completion_tail": {
+          "duration_s": 187.340033694,
+          "source_mean_w": 98.46687138084633,
+          "destination_mean_w": 118.80955941255007,
+          "source_polls": 1796,
+          "destination_polls": 749
+        }
+      }
+    },
+    "replay": {
+      "wire_evidence": {
+        "expected_compact_bytes": 0,
+        "max_migration_lateness_s": 0.008783414999999906,
+        "max_resident_lateness_s": 0.008444722,
+        "status": "complete",
+        "wire_bytes": {
+          "api/germany/client_to_target": 789802,
+          "api/germany/target_to_client": 912418,
+          "kv/germany/client_to_target": 0,
+          "kv/germany/target_to_client": 0
+        }
+      },
+      "offered_rps": 0.25,
+      "arrival_window_s": 120.0,
+      "completion_window_s": 388.583759858,
+      "resident": {
+        "completed": 30,
+        "ttft_s": {
+          "count": 30,
+          "mean": 154.06835233179999,
+          "median": 169.8860406625,
+          "p90": 250.71562073029995
+        },
+        "request_mean_tpot_s": {
+          "count": 30,
+          "mean": 0.4948451429377953,
+          "median": 0.5572132307952756,
+          "p90": 0.5748198636165356
+        },
+        "latency_s": {
+          "count": 30,
+          "mean": 216.91380916896668,
+          "median": 241.77311376950001,
+          "p90": 285.93189005269994
+        },
+        "finite_completion_rps": 0.07720343230752331
+      },
+      "migration": {
+        "completed": 8,
+        "ttft_s": {
+          "count": 8,
+          "mean": 91.0802642065,
+          "median": 91.6713244215,
+          "p90": 114.9160140015
+        },
+        "request_mean_tpot_s": {
+          "count": 8,
+          "mean": 0.5605917262391732,
+          "median": 0.5562058668779528,
+          "p90": 0.5737970977850393
+        },
+        "latency_s": {
+          "count": 8,
+          "mean": 162.27548981575,
+          "median": 162.3060186705,
+          "p90": 186.1969988068
+        },
+        "finite_completion_rps": 0.020587581948672884
+      },
+      "queue_at_migration": {
+        "vllm:num_requests_running": 4.0,
+        "vllm:num_requests_waiting": 3.0
+      },
+      "peak_waiting": 25.0,
+      "power_windows": {
+        "common_arrival_window": {
+          "duration_s": 120.0,
+          "source_mean_w": 101.86373565217392,
+          "destination_mean_w": 117.46764583333334,
+          "source_polls": 1150,
+          "destination_polls": 480
+        },
+        "completion_tail": {
+          "duration_s": 268.583759858,
+          "source_mean_w": 103.34406959564541,
+          "destination_mean_w": 118.16788640595904,
+          "source_polls": 2572,
+          "destination_polls": 1074
+        }
+      }
+    },
+    "kv": {
+      "wire_evidence": {
+        "expected_compact_bytes": 3246391296,
+        "max_migration_lateness_s": 0.015575318999999865,
+        "max_resident_lateness_s": 0.010608398,
+        "status": "complete",
+        "wire_bytes": {
+          "api/germany/client_to_target": 789178,
+          "api/germany/target_to_client": 912450,
+          "kv/germany/client_to_target": 199160,
+          "kv/germany/target_to_client": 3246399616
+        }
+      },
+      "offered_rps": 0.25,
+      "arrival_window_s": 120.0,
+      "completion_window_s": 322.104974839,
+      "resident": {
+        "completed": 30,
+        "ttft_s": {
+          "count": 30,
+          "mean": 104.2118978536,
+          "median": 103.3665645595,
+          "p90": 184.2351956137
+        },
+        "request_mean_tpot_s": {
+          "count": 30,
+          "mean": 0.43474347199133856,
+          "median": 0.5541462055551181,
+          "p90": 0.5585697875314961
+        },
+        "latency_s": {
+          "count": 30,
+          "mean": 159.42454830423333,
+          "median": 175.266321222,
+          "p90": 219.45484170219999
+        },
+        "finite_completion_rps": 0.09313733826990753
+      },
+      "migration": {
+        "completed": 8,
+        "ttft_s": {
+          "count": 8,
+          "mean": 72.587991913375,
+          "median": 69.0025172925,
+          "p90": 83.5485376704
+        },
+        "request_mean_tpot_s": {
+          "count": 8,
+          "mean": 0.3434404331555118,
+          "median": 0.3452388212047244,
+          "p90": 0.5245040998102363
+        },
+        "latency_s": {
+          "count": 8,
+          "mean": 116.205031521375,
+          "median": 112.84788636100001,
+          "p90": 150.16059130230002
+        },
+        "finite_completion_rps": 0.024836623538642008
+      },
+      "queue_at_migration": {
+        "vllm:num_requests_running": 4.0,
+        "vllm:num_requests_waiting": 3.0
+      },
+      "peak_waiting": 22.0,
+      "power_windows": {
+        "common_arrival_window": {
+          "duration_s": 120.0,
+          "source_mean_w": 99.95321459600348,
+          "destination_mean_w": 117.8118125,
+          "source_polls": 1151,
+          "destination_polls": 480
+        },
+        "completion_tail": {
+          "duration_s": 202.104974839,
+          "source_mean_w": 98.09064876033058,
+          "destination_mean_w": 118.7065760197775,
+          "source_polls": 1936,
+          "destination_polls": 809
+        }
+      }
+    }
+  },
+  "limitations": [
+    "One repeat; synthetic resident tokens; eager timing runtime.",
+    "Finite arrivals followed to completion; not sustained SLO capacity.",
+    "Source histories are idle after export: no source-drain savings claim.",
+    "Power windows use sensor averages and recorded host clock bounds; polls are not independent subsecond power measurements."
+  ]
+}
