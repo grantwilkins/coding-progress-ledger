@@ -258,7 +258,9 @@ def _snapshot(source: Path, destination: Path) -> None:
 def run(hardware: str, profiles: list[Path], cluster: Path,
         calibration: Path, manifest: Path, run_root: Path,
         ssh_key: Path, deadline_s: float = 30, source_service: bool = False,
-        deadlines_s: list[float] | None = None) -> dict:
+        deadlines_s: list[float] | None = None, repeats: int = 5) -> dict:
+    if repeats not in range(1, 6):
+        raise ValueError("drain repeats must be between 1 and 5")
     cluster, calibration, manifest, run_root, ssh_key = (
         path.resolve() for path in
         (cluster, calibration, manifest, run_root, ssh_key))
@@ -300,7 +302,7 @@ def run(hardware: str, profiles: list[Path], cluster: Path,
             *(["--deadlines-s", *map(str, deadlines_s)] if deadlines_s else []),
         ], cwd=ROOT, env=env, check=True)
         prepared.append((plan, arm, env))
-    for block in range(5):
+    for block in range(repeats):
         ordered = prepared[block % len(prepared):] \
             + prepared[:block % len(prepared)]
         for plan, arm, env in ordered:
@@ -317,10 +319,12 @@ def run(hardware: str, profiles: list[Path], cluster: Path,
             "--plan", str(plan), "--run-root", str(arm),
         ], cwd=ROOT, env=env, check=True)
     return reduce([run_root], run_root, {
-        (model, hardware) for model in models})
+        (model, hardware) for model in models}, repeats=repeats)
 
 
-def _rows(run_roots: list[Path]) -> list[dict]:
+def _rows(run_roots: list[Path], repeats: int = 5) -> list[dict]:
+    if repeats not in range(1, 6):
+        raise ValueError("drain repeats must be between 1 and 5")
     output, arms, matrices = [], set(), set()
     for root in run_roots:
         for arm in sorted((root / "arms").glob("*")):
@@ -342,15 +346,22 @@ def _rows(run_roots: list[Path]) -> list[dict]:
                 rows = list(csv.DictReader(stream))
             expected_rows = 50 * len(plan.get("drain_deadlines_s", [30]))
             if plan.get("design") != "drain" or summary.get("expected") != expected_rows \
-                    or summary.get("completed", 0) + summary.get("failed", 0) != expected_rows \
-                    or summary.get("missing") or summary.get("invalid_evidence") \
+                    or sum(summary.get(field, 0) for field in ("completed", "failed", "missing")) != expected_rows \
+                    or summary.get("invalid_evidence") \
                     or metadata.get("plan_sha256") != plan_sha \
                     or profile_sha != plan["model_profile"]["sha256"] \
                     or runtime.get("QH_RUNTIME") != "native" \
                     or runtime.get("QH_LMCACHE_MODE") != "mp" \
                     or len(rows) != expected_rows or key in arms \
                     or sum(row["status"] == "complete" for row in rows) \
-                    != summary.get("completed") \
+                    != summary.get("completed"):
+                raise ValueError(f"invalid drain arm: {arm}")
+            if repeats != 5:
+                rows = [row for row in rows if int(row["repeat"]) < repeats]
+                if {row["scenario_id"] for row in rows} != {
+                        row["scenario_id"] for row in plan["scenarios"] if row["repeat"] < repeats}:
+                    raise ValueError(f"unmatched selected drain episodes: {arm}")
+            if len(rows) != expected_rows * repeats // 5 \
                     or any(row["status"] not in {"complete", "failed"}
                            or int(row.get("attempt", 1)) != 1
                            or int(row.get("excluded_attempts", 0))
@@ -362,7 +373,7 @@ def _rows(run_roots: list[Path]) -> list[dict]:
                 tuple(plan.get("drain_deadlines_s", [plan.get("drain_deadline_s", 30)])), tuple(sorted(
                 (row["condition_index"], row["repeat"], tuple(
                     item["initial_tokens"] for item in row["sessions"]))
-                for row in plan["scenarios"]))))
+                for row in plan["scenarios"] if row["repeat"] < repeats))))
             output.extend({"model": profile.model, "hardware": hardware,
                            "arm_root": str(arm), "plan_sha256": plan_sha,
                            "profile_sha256": profile_sha,
@@ -439,14 +450,16 @@ def deadline_action_mix(rows: list[dict], out: Path) -> dict:
 
 
 def reduce(run_roots: list[Path], out: Path,
-           expected: set[tuple[str, str]] | None = None) -> dict:
-    rows = _rows(run_roots)
+           expected: set[tuple[str, str]] | None = None, repeats: int = 5) -> dict:
+    rows = _rows(run_roots, repeats)
     arms = sorted({(row["model"], row["hardware"]) for row in rows})
     if set(arms) != (expected or {
             (model, hardware) for hardware, models in MODELS.items()
             for model in models}):
         raise ValueError("drain reduction has an incomplete arm set")
     out.mkdir(parents=True, exist_ok=True)
+    (out / "campaign_selection.json").write_text(json.dumps({
+        "repeats": repeats, "expected_episodes": len(rows)}, indent=2) + "\n")
     with (out / "drain_episodes.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, rows[0], lineterminator="\n")
         writer.writeheader()
@@ -540,6 +553,7 @@ def parse_args(argv=None):
                              required=True)
         if name == "h100-sweep":
             command.add_argument("--deadlines-s", type=float, nargs="+", required=True)
+            command.add_argument("--repeats", type=int, choices=range(1, 6), default=5)
         command.add_argument("--cluster", type=Path, required=True)
         command.add_argument("--calibration", type=Path, required=True)
         command.add_argument("--manifest", type=Path, required=True)
@@ -547,6 +561,7 @@ def parse_args(argv=None):
         command.add_argument("--ssh-key", type=Path,
                              default=Path("~/.ssh/azrs").expanduser())
     command = sub.add_parser("reduce")
+    command.add_argument("--repeats", type=int, choices=range(1, 6), default=5)
     command.add_argument("--run-root", type=Path, action="append", required=True)
     command.add_argument("--out", type=Path, required=True)
     command = sub.add_parser("freeze-network-profile")
@@ -558,7 +573,7 @@ def parse_args(argv=None):
 def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "reduce":
-        result = reduce(args.run_root, args.out)
+        result = reduce(args.run_root, args.out, repeats=args.repeats)
     elif args.command == "freeze-network-profile":
         result = freeze_network_profile(args.timing_root, args.out)
     else:
@@ -566,7 +581,8 @@ def main(argv=None) -> None:
         result = run(args.command.split("-")[0].upper(), profiles, args.cluster,
                      args.calibration, args.manifest, args.run_root, args.ssh_key,
                      source_service=args.command == "h100-sweep",
-                     deadlines_s=getattr(args, "deadlines_s", None))
+                     deadlines_s=getattr(args, "deadlines_s", None),
+                     repeats=getattr(args, "repeats", 5))
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

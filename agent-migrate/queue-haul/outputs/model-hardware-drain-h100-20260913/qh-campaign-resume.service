@@ -9,7 +9,7 @@ RemainAfterExit=yes
 WorkingDirectory=/datadrive/qh0912/queue-haul
 Environment=QH_RUNTIME=native QH_LMCACHE_MODE=mp QH_NATIVE_RUNTIME_VERSIONS=0.24.0,0.5.1 HF_HOME=/datadrive QH_CACHE_ROOT=/datadrive/queue-haul-cache
 Environment=PATH=/home/azureuser/.local/bin:/datadrive/qh0912/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/datadrive/qh0912/.venv/bin/python model_hardware_drain_campaign.py h100-sweep --profiles profiles/network-gpt-h100.json profiles/network-qwen-h100.json profiles/network-gemma-h100.json --deadlines-s 51 59 60 90 --cluster azure_network_cluster_southeastasia_southcentral.json --calibration /datadrive/c12.json --manifest outputs/coding-manifest.json --run-root /datadrive/d19
+ExecStart=/datadrive/qh0912/.venv/bin/python model_hardware_drain_campaign.py h100-sweep --profiles profiles/network-gpt-h100.json profiles/network-qwen-h100.json profiles/network-gemma-h100.json --deadlines-s 51 59 60 90 --repeats 1 --cluster azure_network_cluster_southeastasia_southcentral.json --calibration /datadrive/c12.json --manifest outputs/coding-manifest.json --run-root /datadrive/d19
 StandardOutput=append:/datadrive/d19-resume.log
 StandardError=append:/datadrive/d19-resume.log
 TimeoutStartSec=infinity

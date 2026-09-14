@@ -186,7 +186,7 @@ def test_a100_command_runs_all_three_arms_end_to_end(monkeypatch, tmp_path):
     monkeypatch.setattr(campaign.subprocess, "run",
                         lambda command, **kwargs: calls.append((command, kwargs)))
     monkeypatch.setattr(campaign, "reduce",
-                        lambda roots, out, expected: {
+                        lambda roots, out, expected, repeats=5: {
                             "roots": roots, "out": out, "expected": expected})
 
     result = campaign.run(
@@ -209,21 +209,23 @@ def test_a100_command_runs_all_three_arms_end_to_end(monkeypatch, tmp_path):
         (model, "A100") for model in campaign.MODELS["A100"]}
 
 
-def test_h100_is_a_separate_complete_command(monkeypatch, tmp_path):
+@pytest.mark.parametrize("repeats", [1, 5])
+def test_h100_is_a_separate_complete_command(monkeypatch, tmp_path, repeats):
     monkeypatch.setattr(campaign, "_profile", lambda path, hardware: (
         SimpleNamespace(model="openai/gpt-oss-20b"), path))
     monkeypatch.setattr(campaign, "_snapshot", lambda *_args: None)
     calls = []
     monkeypatch.setattr(campaign.subprocess, "run",
                         lambda command, **kwargs: calls.append(command))
-    monkeypatch.setattr(campaign, "reduce", lambda *_args: {})
+    monkeypatch.setattr(campaign, "reduce", lambda *_args, **_kwargs: {})
 
     campaign.run("H100", [tmp_path / "profile.json"],
                  *(tmp_path / name for name in
-                   ("cluster", "calibration", "manifest", "run", "key")))
+                   ("cluster", "calibration", "manifest", "run", "key")), repeats=repeats)
 
-    assert len(calls) == 7
-    assert sum("--stack-block" in call for call in calls) == 5
+    assert len(calls) == 2 + repeats
+    assert [call[call.index("--stack-block") + 1] for call in calls
+            if "--stack-block" in call] == [str(i) for i in range(repeats)]
 
 
 def test_profile_requires_the_adjacent_passing_gate(monkeypatch, tmp_path):
@@ -307,6 +309,39 @@ def test_reduce_writes_arm_table_and_both_canonical_figures(monkeypatch, tmp_pat
     with pytest.raises(ValueError, match="incomplete arm set"):
         campaign.reduce([tmp_path / "run"], tmp_path / "partial")
     assert not (tmp_path / "partial").exists()
+
+    for index, row in enumerate(plan["scenarios"]):
+        row["scenario_id"] = str(index)
+    plan_path.write_text(json.dumps(plan))
+    metadata_path = arm / "run_metadata.json"
+    metadata = json.loads(metadata_path.read_text())
+    metadata["plan_sha256"] = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    metadata_path.write_text(json.dumps(metadata))
+    for index, row in enumerate(rows):
+        row.update(repeat=str(index // 10), scenario_id=str(index))
+        if index >= 10:
+            row.update(status="missing", attempt="0")
+    (arm / "summary.json").write_text(json.dumps({
+        "expected": 50, "completed": 9, "failed": 1, "missing": 40}))
+    def write_rows():
+        with (arm / "results.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, rows[0])
+            writer.writeheader()
+            writer.writerows(rows)
+    write_rows()
+    selected = campaign.reduce([tmp_path / "run"], tmp_path / "single",
+                               {("openai/gpt-oss-20b", "A100")}, repeats=1)
+    assert selected["openai/gpt-oss-20b / A100"]["episodes"] == 10
+    assert selected["openai/gpt-oss-20b / A100"]["failed_episodes"] == 1
+    assert json.loads((tmp_path / "single/campaign_selection.json").read_text()) == {
+        "repeats": 1, "expected_episodes": 10}
+    with pytest.raises(ValueError, match="invalid drain arm"):
+        campaign._rows([tmp_path / "run"])
+    rows[1]["scenario_id"] = "unmatched"
+    write_rows()
+    with pytest.raises(ValueError, match="unmatched selected"):
+        campaign._rows([tmp_path / "run"], repeats=1)
+
 
 
 def test_timing_reuse_requires_matching_metadata_and_complete_raw_evidence(tmp_path):

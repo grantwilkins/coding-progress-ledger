@@ -3289,8 +3289,11 @@ inherited action-power assumptions remain explicit. The 2026-09-13 campaign has
 passing operational gates for all three models, 108 isolated timing observations,
 and 48 concurrent readiness requests. The measurement export is in
 [`outputs/model-hardware-drain-h100-20260913/`](outputs/model-hardware-drain-h100-20260913/).
-The full 600-episode sweep is running at `/datadrive/d19` with 51, 59, 60, and
+The campaign at `/datadrive/d19` is limited to one repeat (`--repeats 1`):
+120 episodes across three models, ten matched packs, and 51, 59, 60, and
 90-second deadlines on West US 3, Southeast Asia, and South Central US.
+Existing results and original five-repeat plans are preserved; execution and
+final reduction select repeat zero only. Infrastructure failures remain counted.
 Its first Qwen episode executed the planned five KV and three replay moves with
 zero request failures, but missed its 51-second deadline at 58.7 seconds.
 Deadline misses remain observations. Complete cross-model hardware comparisons
@@ -3298,7 +3301,7 @@ await the finished sweep; the predicted action mixes are not final outcomes.
 
 ```bash
 uv run python model_hardware_drain_campaign.py freeze-network-profile --timing-root /datadrive/timing-model --out profiles/network-model.json
-uv run python model_hardware_drain_campaign.py h100-sweep --profiles GPT_PROFILE.json QWEN_PROFILE.json GEMMA_PROFILE.json --deadlines-s DEADLINES --cluster azure_network_cluster_southeastasia_southcentral.json --calibration CALIBRATION.json --manifest outputs/coding-manifest.json --run-root /datadrive/d12
+uv run python model_hardware_drain_campaign.py h100-sweep --profiles GPT_PROFILE.json QWEN_PROFILE.json GEMMA_PROFILE.json --deadlines-s DEADLINES --repeats 1 --cluster azure_network_cluster_southeastasia_southcentral.json --calibration CALIBRATION.json --manifest outputs/coding-manifest.json --run-root /datadrive/d12
 ```
 
 Reduction adds `deadline_action_mix.csv`, PNG/PDF plots with physical route
