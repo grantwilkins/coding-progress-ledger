@@ -17,6 +17,19 @@ def reachable():
     return subprocess.run(['timeout', '20', *SSH], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
+def deploy():
+    commands = [
+        ['timeout', '60', 'scp', '-i', '/home/azureuser/.ssh/azrs', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '/datadrive/qh-parallel-start.bundle', 'azureuser@10.13.0.4:/datadrive/qh-parallel-start.bundle'],
+        ['timeout', '60', *SSH[:-1], 'git -C /datadrive/qh0912 fetch /datadrive/qh-parallel-start.bundle HEAD && git -C /datadrive/qh0912 checkout --detach FETCH_HEAD'],
+    ]
+    for command in commands:
+        result = subprocess.run(command)
+        if result.returncode:
+            if not reachable(): return False
+            raise subprocess.CalledProcessError(result.returncode, command)
+    return True
+
+
 def save(state):
     temporary = STATE.with_suffix('.tmp')
     temporary.write_text(json.dumps(state, indent=2) + '\n')
@@ -45,6 +58,10 @@ def main():
                 save(state)
                 if time.monotonic() > deadline: raise TimeoutError('South Central unavailable for six hours')
                 time.sleep(30)
+            if not deploy():
+                state.update(status='waiting_for_southcentral_deployment'); save(state)
+                time.sleep(30)
+                continue
             index = sum(a['job'] == slug for a in state['attempts'])
             root = Path(f'/datadrive/shared-resume-{slug}-20260914-a{index}')
             if root.exists(): raise FileExistsError(root)
