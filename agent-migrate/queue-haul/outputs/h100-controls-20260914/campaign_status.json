@@ -1,5 +1,5 @@
 {
-  "as_of_utc": "2026-09-14T13:34:49.197922+00:00",
+  "as_of_utc": "2026-09-14T14:20:35.073975+00:00",
   "completed": {
     "power_controls": [
       "gpt",
@@ -7,17 +7,28 @@
       "gemma"
     ],
     "shared_load_arms": {
+      "gpt": [
+        "none",
+        "replay",
+        "kv",
+        "mixed"
+      ],
       "qwen": [
         "none",
         "replay",
         "kv",
         "mixed"
       ],
-      "gpt": [
+      "gemma": [
         "none",
         "replay",
-        "kv"
+        "kv",
+        "mixed"
       ]
+    },
+    "validated_shared_requests": {
+      "resident": 360,
+      "migration": 72
     }
   },
   "restarted": {},
@@ -30,10 +41,9 @@
     }
   },
   "remaining": [
-    "Finish GPT mixed and four Gemma arms and reduce comparison.",
-    "Check lower-load queue stability before claiming steady/50% load.",
-    "Measure source work continuing at destination for net drain-power claims.",
-    "Three-model deadline/action-mix campaign remains incomplete; existing Qwen deadline observations preserved."
+    "Finish and assess the lower-load baseline before steady/50%-load claims.",
+    "Measure source work continuing at destination before net drain-power claims.",
+    "Deadline-dependent planner action-mix campaign remains incomplete; fixed-arm post-hoc deadline counts are available."
   ],
   "excluded": [
     "Eight-GPU experiments: unavailable hardware.",
@@ -52,7 +62,7 @@
   },
   "queue": {
     "unit": "qh-shared-resume-20260914.service",
-    "status": "waiting_for_southcentral",
+    "status": "running_qwen_lower_load_baseline",
     "order": [
       "gemma four arms",
       "gpt mixed",

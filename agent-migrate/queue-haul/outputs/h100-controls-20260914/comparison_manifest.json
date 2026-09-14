@@ -1,0 +1,29 @@
+{
+  "inputs": [
+    {
+      "path": "shared-qwen/summary.json",
+      "sha256": "7ffc03db12cccf2e0e9b78d24e3c5509133fc5795122f5351a9628bc06f8dd70"
+    },
+    {
+      "path": "shared-gpt-partial/summary.json",
+      "sha256": "8360d51e74c7dc1d1211f70e28c5cda8764010cca0286580f1ab57658a59f472"
+    },
+    {
+      "path": "shared-gpt-mixed/summary.json",
+      "sha256": "4e69efb4a05d11a9e21869bf0ebbabedd7454ab2317a8bf4bc0a3f625035eb15"
+    },
+    {
+      "path": "shared-gemma/summary.json",
+      "sha256": "a01a58925f3daf3ab520f64d8fb41c42885d3178a32d21549f9ac8bee4be4b7c"
+    }
+  ],
+  "selected_arms": 12,
+  "resident_requests": 360,
+  "migration_requests": 72,
+  "limits": [
+    "One repeat; fixed offered rate, unequal utilization.",
+    "GPT mixed is a separate recovery run.",
+    "Interrupted attempts are preserved outside the selected arms.",
+    "Deadline counts threshold recorded fixed-arm timings; no deadline-dependent planner decisions were executed here."
+  ]
+}

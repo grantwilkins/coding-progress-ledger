@@ -3351,6 +3351,16 @@ It waits for South Central before deployment, resumes unfinished request arms,
 and retains explicit validation failures for review. Source and destination model
 startup now overlap after Redis/proxy readiness. Request-arm completion remains
 separate from final telemetry collection and reduction.
+All 12 selected shared-load arms subsequently completed and were reduced:
+360 resident requests and 72 migration requests. The
+[three-model comparison](outputs/h100-controls-20260914/shared_comparison.csv)
+retains per-arm provenance, including GPT's recovered mixed arm. Gemma's baseline
+had no queue, unlike overloaded GPT/Qwen. Gemma migration mean TTFT favored replay
+(4.90 s versus KV 7.68 s), while KV better protected resident latency.
+[Fixed-arm deadline counts](outputs/h100-controls-20260914/fixed_arm_deadline_counts.csv)
+threshold the observed timings; they are not executed deadline-dependent policy
+choices. The lower-load Qwen baseline is tracked separately in the timestamped status.
+
 
 
 ```bash
