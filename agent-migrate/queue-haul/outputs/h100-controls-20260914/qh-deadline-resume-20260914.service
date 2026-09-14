@@ -11,6 +11,7 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/datadrive/qh0912/queue-haul
 Environment=PYTHONPATH=/datadrive/qh0912/queue-haul
+ExecStartPre=/usr/bin/chronyc waitsync 60 0.001
 ExecStart=/datadrive/qh0912/.venv/bin/python /datadrive/resume_deadline_sweep.py
 StandardOutput=append:/datadrive/d19-resume-20260914.log
 StandardError=append:/datadrive/d19-resume-20260914.log
