@@ -2182,3 +2182,16 @@ def test_empty_max_shed_evidence_requires_all_histories_held():
     assert n._valid_drain_evidence(scenario, result)
     result["held_session_ids"].pop()
     assert not n._valid_drain_evidence(scenario, result)
+
+
+def test_handoff_l1_override_preserves_model_cache_semantics(monkeypatch):
+    monkeypatch.setenv("QH_HANDOFF_L1_GB", "33")
+    for key in n.HANDOFF_ENV:
+        monkeypatch.delenv(key, raising=False)
+    n.configure_handoff_environment("Qwen/Qwen3.8-27B")
+    assert n.os.environ["QH_LMCACHE_L1_GB"] == "33"
+    assert n.os.environ["QH_PREFIX_CACHING"] == "on"
+    assert n.os.environ["QH_REDIS_MAXMEMORY_GB"] == "80"
+    monkeypatch.setenv("QH_HANDOFF_L1_GB", "0")
+    with pytest.raises(ValueError, match="positive"):
+        n.configure_handoff_environment("Qwen/Qwen3.8-27B")

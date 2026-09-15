@@ -235,6 +235,10 @@ def configure_handoff_environment(model: str) -> None:
     if model in {"Qwen/Qwen3.8-27B", "google/gemma-4-26B-A4B-it"}:
         os.environ.update(QH_PREFIX_CACHING="on" if model == "Qwen/Qwen3.8-27B" else "off", QH_LMCACHE_L1_GB="96",
                           QH_REDIS_MAXMEMORY_GB="80")
+    if "QH_HANDOFF_L1_GB" in os.environ:
+        if int(os.environ["QH_HANDOFF_L1_GB"]) <= 0:
+            raise ValueError("handoff L1 capacity must be positive")
+        os.environ["QH_LMCACHE_L1_GB"] = os.environ["QH_HANDOFF_L1_GB"]
 
 
 def write_checkpoint(path: Path, value: dict) -> None:
