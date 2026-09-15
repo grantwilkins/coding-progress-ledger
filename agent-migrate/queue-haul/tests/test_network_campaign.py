@@ -2137,3 +2137,48 @@ def test_single_destination_drain_preserves_packs_and_route_contract(tmp_path, r
     plan["scenarios"][0]["background"]["unexpected"] = (0, 0)
     with pytest.raises(ValueError, match="drain scenario"):
         n.validate_plan(plan)
+
+
+def test_max_shed_samples_are_25_distinct_packs_at_30_seconds(tmp_path):
+    plan = n.make_plan(campaign_manifest(tmp_path, 8), constraint_contract(),
+                       design="drain", drain_packs=25, drain_repeats=1, max_shed=True)
+    assert len(plan["scenarios"]) == 25
+    assert len({tuple(row["initial_tokens"] for row in case["sessions"])
+                for case in plan["scenarios"]}) == 25
+    assert all(case["deadline_s"] == 30 and case["policy"] == "max_shed"
+               and case["repeat"] == 0 for case in plan["scenarios"])
+    plan["scenarios"].pop()
+    with pytest.raises(ValueError, match="25 unique"):
+        n.validate_plan(plan)
+
+
+@pytest.mark.parametrize("selected", [[], ["s0"]])
+def test_max_shed_keeps_partial_or_empty_selection_without_late_fallback(monkeypatch, selected):
+    calls = []
+    def solve(problem, profile, routes, solver, **kwargs):
+        calls.append((problem.deadline_s, solver))
+        return SimpleNamespace(moves=[n.PlannedMove(s, "east", "replay", 0,
+            ("link/east",), destination_pool="pool/east") for s in selected])
+    monkeypatch.setattr(n, "solve", solve)
+    scenario = {"design": "drain", "policy": "max_shed", "deadline_s": 30,
+                "requested_shed_fraction": 1, "source_load": .8,
+                "sessions": [{"session_id": s, "initial_tokens": 8192} for s in ("s0", "s1")],
+                "bandwidth_mbps": {"east": 1000, "germany": 2000},
+                "background": {"east": (0, 0), "germany": (0, 0)}}
+    moves = n.plan_joint_scenario(scenario, {key: {"kv_fraction": 0}
+         for key in scenario["background"]}, n.ModelProfile.load(n.MODEL_PATH), 1)
+    assert [row["session_id"] for row in moves] == selected
+    assert calls == [(30, "max_shed")]
+
+
+def test_empty_max_shed_evidence_requires_all_histories_held():
+    scenario = {"policy": "max_shed", "sessions": [
+        {"session_id": f"s{i}", "initial_tokens": 16384} for i in range(8)],
+        "bandwidth_mbps": {"east": 1000, "germany": 2000}}
+    result = {"requests": [], "selected_session_ids": [],
+              "held_session_ids": [f"s{i}" for i in range(8)],
+              "request_failures": 0, "kv_evidence_warnings": 0,
+              "background": {"east": {}, "germany": {}}, "dispatch_skew_s": None}
+    assert n._valid_drain_evidence(scenario, result)
+    result["held_session_ids"].pop()
+    assert not n._valid_drain_evidence(scenario, result)

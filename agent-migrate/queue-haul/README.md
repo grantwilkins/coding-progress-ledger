@@ -4278,3 +4278,12 @@ This supersedes the earliest-finish heuristic in commit `3a7d90a8`, whose deadli
 only rejected late actions and could not alter choices after all eight fit.
 The report records the endpoint delays used for every model.
 These are simulator predictions under the stated assumptions, not live readiness.
+
+The corrected H100 action-distribution campaign uses
+`model_hardware_drain_campaign.py h100-samples --samples 25` with the three
+validated model profiles. It samples 25 matched eight-history context packs,
+uses one repeat and a fixed 30-second `max_shed` decision, and preserves
+unselected histories as holds. It does not force a full evacuation.
+`sample_episodes.csv` distinguishes chosen actions from requests completed by
+the deadline; `sample_action_mix.json` and its plots report per-pack action
+distributions, excluding failed executions. Source shed values remain modeled.

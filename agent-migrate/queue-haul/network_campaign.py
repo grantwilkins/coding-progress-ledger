@@ -642,9 +642,14 @@ def _bandwidths(contract: dict, label: str) -> dict[str, float]:
 
 
 def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
-              sessions: int = 8, design: str = "joint", deadline_s: float = 30) -> dict:
+              sessions: int = 8, design: str = "joint", deadline_s: float = 30,
+              drain_packs: int = DRAIN_PACKS, drain_repeats: int = DRAIN_REPEATS,
+              max_shed: bool = False) -> dict:
     if not 0 < deadline_s < float("inf") or design != "drain" and deadline_s != 30:
         raise ValueError("a positive custom deadline requires the drain design")
+    if type(drain_packs) is not int or drain_packs < 1 or drain_repeats not in range(1, 6) \
+            or design != "drain" and (max_shed or drain_packs != DRAIN_PACKS or drain_repeats != DRAIN_REPEATS):
+        raise ValueError("invalid drain sample configuration")
     manifest = json.loads(manifest_path.read_text())
     profiler.validate_manifest(manifest)
     available = sorted(manifest["sessions"], key=lambda row: row["id"])
@@ -665,7 +670,7 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         if len(available) != 8:
             raise ValueError("drain design requires eight traces")
         workload = WorkloadProfile.load(WORKLOAD_PATHS["agentic_tool_loop"])
-        for condition_index in range(DRAIN_PACKS):
+        for condition_index in range(drain_packs):
             rng = random.Random(profiler.stable_seed(seed, "drain", condition_index))
             contexts = policy_campaign._context_tokens(
                 workload, "uniform_support", 8, rng)
@@ -676,16 +681,17 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
             } for index, row in enumerate(available)]
             drain_conditions.append({"pack": f"pack-{condition_index:02d}",
                                      "contexts": contexts})
-            for repeat in range(DRAIN_REPEATS):
+            for repeat in range(drain_repeats):
                 pack = f"pack-{condition_index:02d}"
                 scenarios.append({
                     "scenario_id": _hash([
                         design, condition_index, repeat, session_rows,
                         *([deadline_s] if deadline_s != 30 else []),
+                        *(["max_shed"] if max_shed else []),
                     ])[:16],
                     "design": design, "condition_index": condition_index,
                     "condition_id": pack, "repeat": repeat,
-                    "stack_block": repeat, "pack": pack, "policy": "greedy",
+                    "stack_block": repeat, "pack": pack, "policy": "max_shed" if max_shed else "greedy",
                     "workload": "agentic_tool_loop",
                     "bandwidth": "controlled_40",
                     "bandwidth_mbps": _bandwidths(contract, "controlled_40"),
@@ -881,7 +887,7 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
     rng = random.Random(seed)
     if design == "drain":
         blocks = [[row for row in scenarios if row["repeat"] == repeat]
-                  for repeat in range(DRAIN_REPEATS)]
+                  for repeat in range(drain_repeats)]
         for block in blocks:
             rng.shuffle(block)
         scenarios = [row for block in blocks for row in block]
@@ -903,13 +909,14 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
             scenarios.extend(rows)
     output = {
         "schema": PLAN_SCHEMA, "design": design, "seed": seed,
+        **({"drain_packs": drain_packs} if drain_packs != DRAIN_PACKS else {}),
         **({"drain_deadline_s": deadline_s} if deadline_s != 30 else {}),
         "manifest": {"path": str(manifest_path),
                      "sha256": profiler.file_hash(manifest_path)},
         "model_profile": {"path": str(MODEL_PATH),
                           "sha256": profiler.file_hash(MODEL_PATH)},
         "network_contract": contract,
-        "policies": list(["greedy"] if design == "drain" else
+        "policies": list(["max_shed" if max_shed else "greedy"] if design == "drain" else
                          FRONTIER_POLICIES if design == "frontier" else
                          CONSTRAINT_POLICIES if design == "constraint" else
                          SEPARATION_POLICIES if design == "separation" else POLICIES),
@@ -925,7 +932,7 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
               "planning_deadline_s": SEPARATION_PLANNING_DEADLINE_S,
               "requested_shed_fraction": row[4]}
              for row in SEPARATION_CELLS] if design == "separation" else [],
-        "repeats": DRAIN_REPEATS if design == "drain" else
+        "repeats": drain_repeats if design == "drain" else
             1 if design in {"frontier", "constraint"} else
             SEPARATION_REPEATS if design == "separation" else REPEATS,
         "sessions_per_scenario": None if design in {"constraint", "separation"}
@@ -946,8 +953,11 @@ def validate_plan(plan: dict) -> None:
         raise ValueError("invalid network plan schema")
     scenarios = plan.get("scenarios", [])
     design = plan.get("design")
+    packs, repeats = plan.get("drain_packs", DRAIN_PACKS), plan.get("repeats", DRAIN_REPEATS)
+    if design == "drain" and (type(packs) is not int or packs < 1 or type(repeats) is not int or repeats not in range(1, 6)):
+        raise ValueError("invalid drain sample configuration")
     expected = 126 if design == "joint" else 54 if design == "isolated" \
-        else DRAIN_PACKS * DRAIN_REPEATS * len(plan.get("drain_deadlines_s", [30])) if design == "drain" \
+        else packs * repeats * len(plan.get("drain_deadlines_s", [30])) if design == "drain" \
         else ((sum(1 if pack[0] == "32x31k" else len(FRONTIER_LOADS)
                    for pack in FRONTIER_PACKS) + 7)
               * len(FRONTIER_POLICIES)
@@ -969,6 +979,9 @@ def validate_plan(plan: dict) -> None:
         return
     if design == "drain":
         contract = plan["network_contract"]
+        max_shed = plan.get("policies") == ["max_shed"]
+        if max_shed and plan.get("force_movement"):
+            raise ValueError("max shed cannot force movement")
         deadlines = plan.get("drain_deadlines_s", [plan.get("drain_deadline_s", 30)])
         if not deadlines or len(set(deadlines)) != len(deadlines) \
                 or any(not 0 < value < float("inf") for value in deadlines):
@@ -985,10 +998,11 @@ def validate_plan(plan: dict) -> None:
                 for item in row["sessions"]))
             if row["scenario_id"] != _hash([
                     design, row["condition_index"], row["repeat"],
-                    row["sessions"], *([deadline_s] if deadline_s != 30 else [])])[:16] \
+                    row["sessions"], *([deadline_s] if deadline_s != 30 else []),
+                    *(["max_shed"] if max_shed else [])])[:16] \
                     or row.get("force_movement", False) != plan.get("force_movement", False) \
                     or row.get("source_service_normalized", False) != plan.get("source_service_normalized", False) \
-                    or row["policy"] != "greedy" \
+                    or row["policy"] != ("max_shed" if max_shed else "greedy") \
                     or row["bandwidth"] != "controlled_40" \
                     or row["bandwidth_mbps"] != _bandwidths(
                         contract, "controlled_40") \
@@ -1005,16 +1019,16 @@ def validate_plan(plan: dict) -> None:
                         plan["seed"], row["condition_index"], row["repeat"],
                         "greedy"):
                 raise ValueError("drain scenario contract changed")
-        expected_cells = {(pack, repeat, deadline) for pack in range(DRAIN_PACKS)
-                          for repeat in range(DRAIN_REPEATS) for deadline in deadlines}
+        expected_cells = {(pack, repeat, deadline) for pack in range(packs)
+                          for repeat in range(repeats) for deadline in deadlines}
         if not set(contract["paths"]) or not set(contract["paths"]) <= {"east", "germany"} \
-                or plan.get("policies") != ["greedy"] \
+                or plan.get("policies") not in (["greedy"], ["max_shed"]) \
                 or {(row["condition_index"], row["repeat"], row["deadline_s"])
                     for row in scenarios} != expected_cells \
                 or any(len(signatures) != 1 for signatures in groups.values()) \
                 or [row["repeat"] for row in scenarios] != [
-                    repeat for repeat in range(DRAIN_REPEATS)
-                    for _ in range(DRAIN_PACKS * len(deadlines))]:
+                    repeat for repeat in range(repeats)
+                    for _ in range(packs * len(deadlines))]:
             raise ValueError("drain blocks are incomplete or unmatched")
         return
     if design == "frontier":
@@ -2369,7 +2383,7 @@ def joint_problem(scenario: dict, snapshots: dict[str, dict],
 
 def joint_solver(policy: str) -> str:
     return {
-        "queue_haul": "lp_work_first", "greedy": "greedy",
+        "queue_haul": "lp_work_first", "greedy": "greedy", "max_shed": "max_shed",
         "greedy_lagrangian": "greedy_lagrangian", "random": "random",
         "kv_only": "kv_only", "replay_only": "replay_only",
         # The separation cells are built to punish route lock-in, so this
@@ -2388,7 +2402,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     problem, architecture, routes, requested_shed_w = joint_problem(
         scenario, snapshots, profile, demand)
     partial = scenario.get("design") in {
-        "frontier", "constraint", "separation", "hardware_gap"}
+        "frontier", "constraint", "separation", "hardware_gap"} or scenario.get("policy") == "max_shed"
     deadline_blind = scenario["policy"] == DEADLINE_BLIND_POLICY
     solver = joint_solver(scenario["policy"])
     planning_problem = replace(
@@ -2404,7 +2418,7 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     admitted = {move.session_id for move in planned}
     missing = tuple(row for row in problem.sessions if row.session_id not in admitted)
     force = scenario.get("design") == "drain" and scenario.get("force_movement", False)
-    if missing and scenario.get("design") == "drain" and not force:
+    if missing and scenario.get("design") == "drain" and not force and not partial:
         raise RuntimeError(f"greedy plan cannot drain all sessions by {scenario['deadline_s']} seconds")
     if missing and force:
         links = {link.link_id: link.bytes_per_s for link in problem.links}
@@ -2807,7 +2821,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     before = testbed.proxy_counts(stack.run_root / "proxy_bytes.csv")
     start_ns, start_wall_ns = time.monotonic_ns(), time.time_ns()
     load_warnings = []
-    barrier = threading.Barrier(len(moves)) if scenario["design"] == "drain" else None
+    barrier = threading.Barrier(len(moves)) if scenario["design"] == "drain" and moves else None
     try:
         def reconstruct(move):
             if barrier:
@@ -2875,6 +2889,9 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         "stack_id": stack.run_root.name,
         "deadline_met": elapsed <= scenario["deadline_s"],
         "requests": results,
+        **({"selected_session_ids": [row["session_id"] for row in moves],
+            "held_session_ids": sorted(set(sessions) - {row["session_id"] for row in moves})}
+           if scenario.get("policy") == "max_shed" else {}),
         "background": snapshots,
         "wire_bytes": testbed.count_delta(
             before, testbed.proxy_counts(proxy)),
@@ -4696,8 +4713,12 @@ def _valid_drain_evidence(scenario: dict, result: dict) -> bool:
     profile = ModelProfile.load(MODEL_PATH)
     chunk = testbed.model_chunk_tokens(
         testbed.model_campaign_config(profile.model))
-    return len(moves) == len(targets) == 8 \
-        and {row["session_id"] for row in moves} == set(targets) \
+    selected = {row["session_id"] for row in moves}
+    partial = scenario.get("policy") == "max_shed"
+    return len(targets) == 8 and len(moves) == len(selected) \
+        and (selected <= set(targets) if partial else selected == set(targets)) \
+        and (not partial or selected == set(result.get("selected_session_ids", ()))
+             and set(result.get("held_session_ids", ())) == set(targets) - selected) \
         and all((row.get("deadline_admitted") or scenario.get("force_movement")
                  and row.get("forced_movement") is True) and "request" in row
                 and row["request"].get("exact_token_timestamps")
@@ -4717,8 +4738,8 @@ def _valid_drain_evidence(scenario: dict, result: dict) -> bool:
         and bool(background) and set(background) <= {"east", "germany"} \
         and all(row["destination_instance"] in background for row in moves) \
         and not any(row.get("warning") for row in background.values()) \
-        and result.get("dispatch_skew_s", float("inf")) \
-        <= DRAIN_DISPATCH_SKEW_S
+        and (partial and not moves or result.get("dispatch_skew_s", float("inf")) \
+             <= DRAIN_DISPATCH_SKEW_S)
 
 
 def _valid_separation_evidence(scenario: dict, result: dict) -> bool:
@@ -4884,6 +4905,12 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             / f"attempt-{attempt:04d}" / "decision.json"
         if drain and not moves and decision_path.exists():
             moves = json.loads(decision_path.read_text()).get("moves", ())
+        if drain and scenario["policy"] == "max_shed" and result.get("status") == "complete":
+            chosen = json.loads(decision_path.read_text())["moves"]
+            identity = lambda rows: sorted((row["session_id"], row["method"], row["destination_instance"])
+                                           for row in rows)
+            if identity(chosen) != identity(moves):
+                raise ValueError("completed max-shed actions differ from the saved decision")
         destinations = sorted({request.get("destination_instance", "")
                                for request in moves} - {""})
         requests = [row["request"] for row in moves if "request" in row]
@@ -4897,7 +4924,7 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
                 if row.get("mean_tpot_s") is not None
                 or row.get("first_byte_ns") is not None
                 and row.get("output_tokens", 0) > 1]
-        actions = (_constraint_action_counts(moves) if drain and moves
+        actions = (_constraint_action_counts(moves) if drain and (moves or result.get("status") == "complete")
                    else dict.fromkeys(CONSTRAINT_ACTIONS, ""))
         if drain:
             actions.update({f"{kind}_{action}": value if moves else ""
@@ -4910,6 +4937,10 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
             **({"source_service_normalized": scenario.get("source_service_normalized", False),
                 "modeled_aggregate_load": result.get("modeled_aggregate_load", "")} if drain else {}),
             "scenario_id": scenario["scenario_id"],
+            **({"hold": len(scenario["sessions"]) - len(moves) if result.get("status") == "complete" else "",
+                "completed_by_deadline": sum((row["end_ns"] - result["started_ns"]) / 1e9 <= scenario["deadline_s"]
+                                             for row in requests) if result.get("status") == "complete" else ""}
+               if drain and scenario["policy"] == "max_shed" else {}),
             "plan_order": plan_order,
             "condition_index": scenario["condition_index"],
             "repeat": scenario["repeat"], "policy": scenario["policy"],
@@ -5073,7 +5104,7 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
         raise ValueError("timing-only probes require a calibration campaign")
     validate_plan(plan)
     if stack_block is not None and (plan["design"] != "drain"
-                                    or stack_block not in range(DRAIN_REPEATS)):
+                                    or stack_block not in range(plan["repeats"])):
         raise ValueError("stack blocks are only valid for drain campaigns")
     if plan["design"] == "drain":
         configure_handoff_environment(ModelProfile.load(MODEL_PATH).model)
@@ -5204,7 +5235,9 @@ def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
             out: Path, seed: int = 1, sessions: int = 8,
             design: str = "joint", force_movement: bool = False,
             deadline_s: float = 30, source_service: bool = False,
-            deadlines_s: list[float] | None = None) -> dict:
+            deadlines_s: list[float] | None = None,
+            drain_packs: int = DRAIN_PACKS, drain_repeats: int = DRAIN_REPEATS,
+            max_shed: bool = False) -> dict:
     if force_movement and design != "drain":
         raise ValueError("force_movement requires a drain design")
     if source_service and design != "drain":
@@ -5214,14 +5247,14 @@ def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
     if design == "drain":
         validate_calibration_cluster(calibration, cluster)
     plan = make_plan(manifest_path, freeze_contract(calibration), seed, sessions,
-                     design, deadline_s)
+                     design, deadline_s, drain_packs, drain_repeats, max_shed)
     if deadlines_s is not None:
         if design != "drain" or deadline_s != 30 or len(set(deadlines_s)) != len(deadlines_s):
             raise ValueError("deadline grid requires a drain design and unique deadlines")
         plans = [make_plan(manifest_path, plan["network_contract"], seed, sessions,
-                           design, deadline) for deadline in deadlines_s]
+                           design, deadline, drain_packs, drain_repeats, max_shed) for deadline in deadlines_s]
         plan["drain_deadlines_s"] = deadlines_s
-        plan["scenarios"] = [row for repeat in range(DRAIN_REPEATS)
+        plan["scenarios"] = [row for repeat in range(drain_repeats)
                              for arm in plans for row in arm["scenarios"]
                              if row["repeat"] == repeat]
     if force_movement:
@@ -5262,6 +5295,9 @@ def parse_args(argv=None):
     command.add_argument("--sessions", type=int, default=8)
     command.add_argument("--deadline-s", type=float, default=30)
     command.add_argument("--source-service", action="store_true")
+    command.add_argument("--drain-packs", type=int, default=DRAIN_PACKS)
+    command.add_argument("--drain-repeats", type=int, default=DRAIN_REPEATS)
+    command.add_argument("--max-shed", action="store_true")
     command.add_argument("--deadlines-s", type=float, nargs="+")
     command.add_argument("--force-movement", action="store_true",
                          help="execute all eight drain moves, marking planner-rejected fallbacks")
@@ -5375,7 +5411,8 @@ def main(argv=None) -> None:
     if args.command == "prepare":
         prepare(args.cluster, args.calibration, args.manifest, args.out,
                 args.seed, args.sessions, args.design, args.force_movement,
-                args.deadline_s, args.source_service, args.deadlines_s)
+                args.deadline_s, args.source_service, args.deadlines_s,
+                args.drain_packs, args.drain_repeats, args.max_shed)
     elif args.command == "node-check":
         print(json.dumps(node_report(), sort_keys=True))
     elif args.command == "check":

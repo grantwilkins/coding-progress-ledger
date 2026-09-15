@@ -276,7 +276,8 @@ def _route_calibration(raw: dict, cluster: dict) -> dict:
 def run(hardware: str, profiles: list[Path], cluster: Path,
         calibration: Path, manifest: Path, run_root: Path,
         ssh_key: Path, deadline_s: float = 30, source_service: bool = False,
-        deadlines_s: list[float] | None = None, repeats: int = 5) -> dict:
+        deadlines_s: list[float] | None = None, repeats: int = 5,
+        samples: int | None = None) -> dict:
     if repeats not in range(1, 6):
         raise ValueError("drain repeats must be between 1 and 5")
     cluster, calibration, manifest, run_root, ssh_key = (
@@ -326,6 +327,8 @@ def run(hardware: str, profiles: list[Path], cluster: Path,
             "--out", str(plan),
             *(["--deadline-s", str(deadline_s)] if deadline_s != 30 else []),
             *(["--source-service"] if source_service else []),
+            *(["--drain-packs", str(samples), "--drain-repeats", "1", "--max-shed"]
+              if samples is not None else []),
             *(["--deadlines-s", *map(str, deadlines_s)] if deadlines_s else []),
         ], cwd=ROOT, env=env, check=True)
         prepared.append((plan, arm, env))
@@ -371,7 +374,7 @@ def _rows(run_roots: list[Path], repeats: int = 5) -> list[dict]:
                        for node in plan["cluster"]["destinations"]}
             with (arm / "results.csv").open(newline="") as stream:
                 rows = list(csv.DictReader(stream))
-            expected_rows = 50 * len(plan.get("drain_deadlines_s", [30]))
+            expected_rows = plan.get("drain_packs", 10) * plan.get("repeats", 5) * len(plan.get("drain_deadlines_s", [30]))
             if plan.get("design") != "drain" or summary.get("expected") != expected_rows \
                     or sum(summary.get(field, 0) for field in ("completed", "failed", "missing")) != expected_rows \
                     or summary.get("invalid_evidence") \
@@ -388,14 +391,14 @@ def _rows(run_roots: list[Path], repeats: int = 5) -> list[dict]:
                 if {row["scenario_id"] for row in rows} != {
                         row["scenario_id"] for row in plan["scenarios"] if row["repeat"] < repeats}:
                     raise ValueError(f"unmatched selected drain episodes: {arm}")
-            if len(rows) != expected_rows * repeats // 5 \
+            if len(rows) != expected_rows * repeats // plan.get("repeats", 5) \
                     or any(row["status"] not in {"complete", "failed"}
                            or int(row.get("attempt", 1)) != 1
                            or int(row.get("excluded_attempts", 0))
                            for row in rows):
                 raise ValueError(f"invalid drain arm: {arm}")
             arms.add(key)
-            matrices.add((plan["manifest"]["sha256"], plan.get("force_movement", False),
+            matrices.add((plan["manifest"]["sha256"], tuple(plan.get("policies", ["greedy"])), plan.get("force_movement", False),
                 plan.get("source_service_normalized", False),
                 tuple(plan.get("drain_deadlines_s", [plan.get("drain_deadline_s", 30)])), tuple(sorted(
                 (row["condition_index"], row["repeat"], tuple(
@@ -480,6 +483,51 @@ def deadline_action_mix(rows: list[dict], out: Path) -> dict:
     return report
 
 
+def sample_action_mix(rows: list[dict], out: Path) -> dict:
+    """Keep each sampled pack and holds; failures are not action observations."""
+    with (out / "sample_episodes.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, rows[0], lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    summary = {}
+    plot_style.apply()
+    models = sorted({row["model"] for row in rows})
+    figure, axes = plt.subplots(1, len(models), figsize=(12, 3.5), squeeze=False)
+    for axis, model in zip(axes[0], models):
+        selected = [row for row in rows if row["model"] == model]
+        complete = sorted((row for row in selected if row["status"] == "complete"),
+                          key=lambda row: int(row["condition_index"]))
+        mixes, routes = {}, {}
+        for row in complete:
+            replay = sum(int(row[col]) for col in ACTIONS["replay"])
+            kv = sum(int(row[col]) for col in ACTIONS["kv_transfer"])
+            hold = int(row["hold"])
+            if replay + kv + hold != 8 or float(row["deadline_s"]) != 30:
+                raise ValueError("invalid 30-second sample action accounting")
+            key = f"replay={replay},kv={kv},hold={hold}"
+            mixes[key] = mixes.get(key, 0) + 1
+            route_key = ",".join(f"{col}={row[col]}" for fields in ACTIONS.values() for col in fields) + f",hold={hold}"
+            routes[route_key] = routes.get(route_key, 0) + 1
+        summary[model] = {"cases": len(selected), "completed": len(complete),
+                          "failed": len(selected) - len(complete),
+                          "action_mix_distribution": mixes, "route_action_mix_distribution": routes}
+        bottom = np.zeros(len(complete))
+        for action, fields in [*ACTIONS.items(), ("not_selected", ("hold",))]:
+            values = [sum(int(row[field]) for field in fields) for row in complete]
+            axis.bar([int(row["condition_index"]) for row in complete], values, bottom=bottom,
+                     label=plot_style.ACTION_NAMES[action], color=plot_style.ACTION_COLORS[action])
+            bottom += values
+        axis.set(title=plot_style.MODEL_NAMES[model], xlabel="Sampled pack", ylim=(0, 8),
+                 ylabel="Chosen actions / eight histories")
+    axes[0, -1].legend(frameon=False)
+    figure.tight_layout()
+    for suffix in ("png", "pdf"):
+        figure.savefig(out / f"sample_action_mix.{suffix}")
+    plt.close(figure)
+    (out / "sample_action_mix.json").write_text(json.dumps(summary, indent=2) + "\n")
+    return summary
+
+
 def reduce(run_roots: list[Path], out: Path,
            expected: set[tuple[str, str]] | None = None, repeats: int = 5) -> dict:
     rows = _rows(run_roots, repeats)
@@ -489,6 +537,8 @@ def reduce(run_roots: list[Path], out: Path,
             for model in models}):
         raise ValueError("drain reduction has an incomplete arm set")
     out.mkdir(parents=True, exist_ok=True)
+    if all(row.get("policy") == "max_shed" for row in rows):
+        return sample_action_mix(rows, out)
     (out / "campaign_selection.json").write_text(json.dumps({
         "repeats": repeats, "expected_episodes": len(rows)}, indent=2) + "\n")
     with (out / "drain_episodes.csv").open("w", newline="") as stream:
@@ -577,11 +627,14 @@ def reduce(run_roots: list[Path], out: Path,
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("a100", "h100", "h100-sweep"):
+    for name in ("a100", "h100", "h100-sweep", "h100-samples"):
         command = sub.add_parser(name)
         command.add_argument("--profiles" if name != "h100" else "--profile",
                              type=Path, nargs=3 if name != "h100" else None,
                              required=True)
+        if name == "h100-samples":
+            command.add_argument("--samples", type=int, default=25)
+            command.set_defaults(repeats=1)
         if name == "h100-sweep":
             command.add_argument("--deadlines-s", type=float, nargs="+", required=True)
             command.add_argument("--repeats", type=int, choices=range(1, 6), default=5)
@@ -611,9 +664,10 @@ def main(argv=None) -> None:
         profiles = args.profiles if args.command != "h100" else [args.profile]
         result = run(args.command.split("-")[0].upper(), profiles, args.cluster,
                      args.calibration, args.manifest, args.run_root, args.ssh_key,
-                     source_service=args.command == "h100-sweep",
+                     source_service=args.command in {"h100-sweep", "h100-samples"},
                      deadlines_s=getattr(args, "deadlines_s", None),
-                     repeats=getattr(args, "repeats", 5))
+                     repeats=getattr(args, "repeats", 5),
+                     samples=getattr(args, "samples", None))
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

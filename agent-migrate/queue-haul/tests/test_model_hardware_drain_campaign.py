@@ -433,3 +433,15 @@ def test_deadline_plot_labels_only_measured_route(tmp_path):
     assert result['cells'][0]['germany_replay'] == 3
     with pytest.raises(ValueError, match='absent route'):
         campaign.deadline_action_mix([{**row, 'east_replay': '1'}], tmp_path)
+
+
+def test_sample_distribution_counts_holds_and_excludes_failures(tmp_path):
+    rows = [{"model": "openai/gpt-oss-20b", "condition_index": str(i),
+             "status": "complete", "deadline_s": "30", "east_replay": "0",
+             "germany_replay": "2", "east_kv_transfer": "0",
+             "germany_kv_transfer": "3", "hold": "3"} for i in range(2)]
+    rows.append({**rows[0], "status": "failed", "hold": ""})
+    result = campaign.sample_action_mix(rows, tmp_path)["openai/gpt-oss-20b"]
+    assert result == {"cases": 3, "completed": 2, "failed": 1,
+                      "action_mix_distribution": {"replay=2,kv=3,hold=3": 2},
+                      "route_action_mix_distribution": {"east_replay=0,germany_replay=2,east_kv_transfer=0,germany_kv_transfer=3,hold=3": 2}}
