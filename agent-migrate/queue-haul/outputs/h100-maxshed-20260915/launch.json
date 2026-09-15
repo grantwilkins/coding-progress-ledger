@@ -1,0 +1,21 @@
+{
+  "run_root": "/datadrive/maxshed30-20260915",
+  "process_pid": 15607,
+  "execution": "nonpersistent background timeout 8h",
+  "cases_per_model": 25,
+  "deadline_s": 30,
+  "repeats": 1,
+  "policy": "max_shed",
+  "matched_context_packs": true,
+  "distinct_context_vectors": 25,
+  "models": [
+    "Qwen/Qwen3.8-27B",
+    "google/gemma-4-26B-A4B-it",
+    "openai/gpt-oss-20b"
+  ],
+  "destinations": {
+    "southeastasia": "10.15.0.4",
+    "southcentralus": "10.13.0.4"
+  },
+  "status_at_recording": "launched; measurements not yet complete"
+}
