@@ -1,0 +1,889 @@
+{
+  "scope": "Planner-only, frozen25matchedpacks/model, zero measured destination occupancy assumed; not hardware results",
+  "summary": {
+    "Qwen/Qwen3.8-27B": {
+      "totals": {
+        "germany_kv_transfer": 50,
+        "east_replay": 37,
+        "hold": 88,
+        "germany_replay": 17,
+        "east_kv_transfer": 8
+      },
+      "mix_distribution": {
+        "{\"east_replay\": 1, \"germany_kv_transfer\": 2, \"hold\": 5}": 5,
+        "{\"east_kv_transfer\": 1, \"east_replay\": 1, \"germany_kv_transfer\": 2, \"germany_replay\": 2, \"hold\": 2}": 1,
+        "{\"east_replay\": 2, \"germany_kv_transfer\": 2, \"hold\": 4}": 9,
+        "{\"east_kv_transfer\": 1, \"east_replay\": 2, \"germany_kv_transfer\": 2, \"germany_replay\": 1, \"hold\": 2}": 2,
+        "{\"east_kv_transfer\": 1, \"east_replay\": 1, \"germany_kv_transfer\": 2, \"germany_replay\": 1, \"hold\": 3}": 1,
+        "{\"east_kv_transfer\": 1, \"east_replay\": 2, \"germany_kv_transfer\": 2, \"germany_replay\": 2, \"hold\": 1}": 3,
+        "{\"germany_kv_transfer\": 2, \"hold\": 6}": 1,
+        "{\"east_replay\": 1, \"germany_kv_transfer\": 2, \"germany_replay\": 2, \"hold\": 3}": 2,
+        "{\"east_kv_transfer\": 1, \"germany_kv_transfer\": 2, \"germany_replay\": 2, \"hold\": 3}": 1
+      },
+      "selected_range": [
+        2,
+        7
+      ]
+    },
+    "google/gemma-4-26B-A4B-it": {
+      "totals": {
+        "east_replay": 200,
+        "hold": 0
+      },
+      "mix_distribution": {
+        "{\"east_replay\": 8, \"hold\": 0}": 25
+      },
+      "selected_range": [
+        8,
+        8
+      ]
+    },
+    "openai/gpt-oss-20b": {
+      "totals": {
+        "germany_kv_transfer": 148,
+        "east_replay": 42,
+        "hold": 0,
+        "east_kv_transfer": 9,
+        "germany_replay": 1
+      },
+      "mix_distribution": {
+        "{\"east_replay\": 1, \"germany_kv_transfer\": 7, \"hold\": 0}": 2,
+        "{\"east_kv_transfer\": 1, \"east_replay\": 3, \"germany_kv_transfer\": 3, \"germany_replay\": 1, \"hold\": 0}": 1,
+        "{\"east_replay\": 2, \"germany_kv_transfer\": 6, \"hold\": 0}": 9,
+        "{\"east_kv_transfer\": 2, \"east_replay\": 3, \"germany_kv_transfer\": 3, \"hold\": 0}": 1,
+        "{\"east_kv_transfer\": 1, \"east_replay\": 1, \"germany_kv_transfer\": 6, \"hold\": 0}": 3,
+        "{\"east_kv_transfer\": 2, \"east_replay\": 1, \"germany_kv_transfer\": 5, \"hold\": 0}": 1,
+        "{\"east_replay\": 3, \"germany_kv_transfer\": 5, \"hold\": 0}": 4,
+        "{\"germany_kv_transfer\": 8, \"hold\": 0}": 3,
+        "{\"east_kv_transfer\": 1, \"germany_kv_transfer\": 7, \"hold\": 0}": 1
+      },
+      "selected_range": [
+        8,
+        8
+      ]
+    }
+  },
+  "rows": [
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-00",
+      "scenario_id": "09a28a1d051a0511",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "hold": 5
+      },
+      "selected": 3
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-01",
+      "scenario_id": "a896452d7c90649c",
+      "counts": {
+        "germany_replay": 2,
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "east_kv_transfer": 1,
+        "hold": 2
+      },
+      "selected": 6
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-02",
+      "scenario_id": "02f20a026ea3760b",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-03",
+      "scenario_id": "445b93c3101947b9",
+      "counts": {
+        "germany_replay": 1,
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "east_kv_transfer": 1,
+        "hold": 2
+      },
+      "selected": 6
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-04",
+      "scenario_id": "dd164d1abf46e0c5",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "hold": 5
+      },
+      "selected": 3
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-05",
+      "scenario_id": "b72482242ee180c4",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-06",
+      "scenario_id": "46fd928fba038050",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-07",
+      "scenario_id": "0b6e460c4d44a6ea",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "hold": 5
+      },
+      "selected": 3
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-08",
+      "scenario_id": "1e39399c6be47833",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-09",
+      "scenario_id": "0aa2fa2a9e8391ee",
+      "counts": {
+        "east_replay": 2,
+        "germany_kv_transfer": 2,
+        "germany_replay": 1,
+        "east_kv_transfer": 1,
+        "hold": 2
+      },
+      "selected": 6
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-10",
+      "scenario_id": "1ec96c8bf9471764",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-11",
+      "scenario_id": "db1c9c86f7da0ecd",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-12",
+      "scenario_id": "1bb09f6b053c5bfa",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "hold": 5
+      },
+      "selected": 3
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-13",
+      "scenario_id": "549fdf7d0e10e0ed",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "germany_replay": 1,
+        "east_kv_transfer": 1,
+        "hold": 3
+      },
+      "selected": 5
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-14",
+      "scenario_id": "5e64c29c29ca9616",
+      "counts": {
+        "germany_replay": 2,
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "east_kv_transfer": 1,
+        "hold": 1
+      },
+      "selected": 7
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-15",
+      "scenario_id": "ed5e9963b2fe439a",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-16",
+      "scenario_id": "f7ad252d3f7e5d65",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "hold": 6
+      },
+      "selected": 2
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-17",
+      "scenario_id": "eb0fe74cb813ee93",
+      "counts": {
+        "germany_replay": 2,
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "east_kv_transfer": 1,
+        "hold": 1
+      },
+      "selected": 7
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-18",
+      "scenario_id": "6ca2284c64dc2ded",
+      "counts": {
+        "germany_replay": 2,
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "hold": 3
+      },
+      "selected": 5
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-19",
+      "scenario_id": "3af4458ba6acad9e",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-20",
+      "scenario_id": "1e99cea1fa5b6cb9",
+      "counts": {
+        "germany_replay": 2,
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "hold": 3
+      },
+      "selected": 5
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-21",
+      "scenario_id": "e767069761be6733",
+      "counts": {
+        "germany_replay": 2,
+        "germany_kv_transfer": 2,
+        "east_kv_transfer": 1,
+        "hold": 3
+      },
+      "selected": 5
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-22",
+      "scenario_id": "09ab5d1d887b61cb",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "germany_replay": 2,
+        "east_replay": 2,
+        "east_kv_transfer": 1,
+        "hold": 1
+      },
+      "selected": 7
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-23",
+      "scenario_id": "902bf2ff794fb55a",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 1,
+        "hold": 5
+      },
+      "selected": 3
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "pack": "pack-24",
+      "scenario_id": "8ee441ba6df2d1e4",
+      "counts": {
+        "germany_kv_transfer": 2,
+        "east_replay": 2,
+        "hold": 4
+      },
+      "selected": 4
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-00",
+      "scenario_id": "09a28a1d051a0511",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-01",
+      "scenario_id": "a896452d7c90649c",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-02",
+      "scenario_id": "02f20a026ea3760b",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-03",
+      "scenario_id": "445b93c3101947b9",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-04",
+      "scenario_id": "dd164d1abf46e0c5",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-05",
+      "scenario_id": "b72482242ee180c4",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-06",
+      "scenario_id": "46fd928fba038050",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-07",
+      "scenario_id": "0b6e460c4d44a6ea",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-08",
+      "scenario_id": "1e39399c6be47833",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-09",
+      "scenario_id": "0aa2fa2a9e8391ee",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-10",
+      "scenario_id": "1ec96c8bf9471764",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-11",
+      "scenario_id": "db1c9c86f7da0ecd",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-12",
+      "scenario_id": "1bb09f6b053c5bfa",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-13",
+      "scenario_id": "549fdf7d0e10e0ed",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-14",
+      "scenario_id": "5e64c29c29ca9616",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-15",
+      "scenario_id": "ed5e9963b2fe439a",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-16",
+      "scenario_id": "f7ad252d3f7e5d65",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-17",
+      "scenario_id": "eb0fe74cb813ee93",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-18",
+      "scenario_id": "6ca2284c64dc2ded",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-19",
+      "scenario_id": "3af4458ba6acad9e",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-20",
+      "scenario_id": "1e99cea1fa5b6cb9",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-21",
+      "scenario_id": "e767069761be6733",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-22",
+      "scenario_id": "09ab5d1d887b61cb",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-23",
+      "scenario_id": "902bf2ff794fb55a",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "pack": "pack-24",
+      "scenario_id": "8ee441ba6df2d1e4",
+      "counts": {
+        "east_replay": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-00",
+      "scenario_id": "09a28a1d051a0511",
+      "counts": {
+        "germany_kv_transfer": 7,
+        "east_replay": 1,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-01",
+      "scenario_id": "a896452d7c90649c",
+      "counts": {
+        "east_replay": 3,
+        "east_kv_transfer": 1,
+        "germany_kv_transfer": 3,
+        "germany_replay": 1,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-02",
+      "scenario_id": "02f20a026ea3760b",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-03",
+      "scenario_id": "445b93c3101947b9",
+      "counts": {
+        "germany_kv_transfer": 3,
+        "east_kv_transfer": 2,
+        "east_replay": 3,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-04",
+      "scenario_id": "dd164d1abf46e0c5",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 1,
+        "east_kv_transfer": 1,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-05",
+      "scenario_id": "b72482242ee180c4",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-06",
+      "scenario_id": "46fd928fba038050",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-07",
+      "scenario_id": "0b6e460c4d44a6ea",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 1,
+        "east_kv_transfer": 1,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-08",
+      "scenario_id": "1e39399c6be47833",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-09",
+      "scenario_id": "0aa2fa2a9e8391ee",
+      "counts": {
+        "east_kv_transfer": 2,
+        "germany_kv_transfer": 5,
+        "east_replay": 1,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-10",
+      "scenario_id": "1ec96c8bf9471764",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-11",
+      "scenario_id": "db1c9c86f7da0ecd",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-12",
+      "scenario_id": "1bb09f6b053c5bfa",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_kv_transfer": 1,
+        "east_replay": 1,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-13",
+      "scenario_id": "549fdf7d0e10e0ed",
+      "counts": {
+        "germany_kv_transfer": 5,
+        "east_replay": 3,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-14",
+      "scenario_id": "5e64c29c29ca9616",
+      "counts": {
+        "germany_kv_transfer": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-15",
+      "scenario_id": "ed5e9963b2fe439a",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-16",
+      "scenario_id": "f7ad252d3f7e5d65",
+      "counts": {
+        "germany_kv_transfer": 7,
+        "east_kv_transfer": 1,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-17",
+      "scenario_id": "eb0fe74cb813ee93",
+      "counts": {
+        "germany_kv_transfer": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-18",
+      "scenario_id": "6ca2284c64dc2ded",
+      "counts": {
+        "germany_kv_transfer": 5,
+        "east_replay": 3,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-19",
+      "scenario_id": "3af4458ba6acad9e",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-20",
+      "scenario_id": "1e99cea1fa5b6cb9",
+      "counts": {
+        "germany_kv_transfer": 5,
+        "east_replay": 3,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-21",
+      "scenario_id": "e767069761be6733",
+      "counts": {
+        "east_replay": 3,
+        "germany_kv_transfer": 5,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-22",
+      "scenario_id": "09ab5d1d887b61cb",
+      "counts": {
+        "germany_kv_transfer": 8,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-23",
+      "scenario_id": "902bf2ff794fb55a",
+      "counts": {
+        "germany_kv_transfer": 7,
+        "east_replay": 1,
+        "hold": 0
+      },
+      "selected": 8
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "pack": "pack-24",
+      "scenario_id": "8ee441ba6df2d1e4",
+      "counts": {
+        "germany_kv_transfer": 6,
+        "east_replay": 2,
+        "hold": 0
+      },
+      "selected": 8
+    }
+  ],
+  "interpretation": "Solver-chosen max-shed actions; no secondary migration-speed objective, so equal-shed solutions may choose different methods or routes. Hardware measurements remain pending."
+}
