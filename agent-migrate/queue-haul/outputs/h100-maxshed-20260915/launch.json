@@ -1,6 +1,6 @@
 {
-  "run_root": "/datadrive/maxshed30-20260915",
-  "process_pid": 15607,
+  "run_root": "/datadrive/maxshed30-20260915-a1",
+  "process_pid": 31221,
   "execution": "nonpersistent background timeout 8h",
   "cases_per_model": 25,
   "deadline_s": 30,
@@ -17,5 +17,14 @@
     "southeastasia": "10.15.0.4",
     "southcentralus": "10.13.0.4"
   },
-  "status_at_recording": "launched; measurements not yet complete"
+  "status_at_recording": "restarted; startup pending",
+  "startup_attempts": [
+    {
+      "run_root": "/datadrive/maxshed30-20260915",
+      "process_pid": 15607,
+      "outcome": "SEA host OOM killed 96 GiB LMCache during Qwen initialization; zero hardware cases executed"
+    }
+  ],
+  "host_l1_gib": 33,
+  "memory_note": "Qwen compact destination states for eight 32256-token histories require 16.844 GiB; full source exports require 62.781 GiB and retain the existing 80 GiB Redis backing store. Actual cache hits and transferred bytes remain gated."
 }
