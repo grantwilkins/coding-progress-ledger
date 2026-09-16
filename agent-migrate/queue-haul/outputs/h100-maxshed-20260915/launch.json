@@ -1,6 +1,6 @@
 {
   "run_root": "/datadrive/maxshed30-20260915-a1",
-  "process_pid": 4745,
+  "process_pid": 4346,
   "execution": "nonpersistent background timeout 8h",
   "cases_per_model": 25,
   "deadline_s": 30,
@@ -17,7 +17,7 @@
     "southeastasia": "10.15.0.4",
     "southcentralus": "10.13.0.4"
   },
-  "status_at_recording": "resumed after preemption; completed results retained",
+  "status_at_recording": "Resuming both interrupted packs and remaining work after source reboot",
   "startup_attempts": [
     {
       "run_root": "/datadrive/maxshed30-20260915",
@@ -33,6 +33,34 @@
       "process_pid": 4745,
       "completed_qwen_before_resume": 12,
       "run_root": "/datadrive/maxshed30-20260915-a1"
+    }
+  ],
+  "interruption_retries": [
+    {
+      "reason": "User authorized rerunning interrupted cases",
+      "original_result": {
+        "error": "process interrupted before result checkpoint",
+        "failure_class": "interrupted",
+        "scenario_id": "09a28a1d051a0511",
+        "schema": "queue-haul-network-result-v2",
+        "status": "failed"
+      },
+      "replacement_case": "/datadrive/maxshed30-20260915-a1/arms/m0/scenarios/09a28a1d051a0511",
+      "same_frozen_workload_pack": true,
+      "archived_wall_ns": 1789531275890282435
+    },
+    {
+      "reason": "User authorized rerunning interrupted cases",
+      "original_result": {
+        "error": "RuntimeError: Azure Spot event received: [{'EventId': '1475F066-7236-49E9-907B-04D2C9C8CECC', 'EventStatus': 'Scheduled', 'EventType': 'Preempt', 'ResourceType': 'VirtualMachine', 'Resources': ['vmss-h100-v1_0'], 'NotBefore': 'Wed, 16 Sep 2026 03:35:26 GMT', 'Description': '', 'EventSource': 'Platform', 'DurationInSeconds': -1}]",
+        "failure_class": "execution_exception",
+        "scenario_id": "ed5e9963b2fe439a",
+        "schema": "queue-haul-network-result-v2",
+        "status": "failed"
+      },
+      "replacement_case": "/datadrive/maxshed30-20260915-a1/arms/m1/scenarios/ed5e9963b2fe439a",
+      "same_frozen_workload_pack": true,
+      "archived_wall_ns": 1789531275934123752
     }
   ]
 }
