@@ -1,6 +1,6 @@
 {
   "run_root": "/datadrive/maxshed30-20260915-a1",
-  "process_pid": 4299,
+  "process_pid": 4223,
   "execution": "nonpersistent background timeout 8h",
   "cases_per_model": 25,
   "deadline_s": 30,
@@ -17,7 +17,7 @@
     "southeastasia": "10.15.0.4",
     "southcentralus": "10.13.0.4"
   },
-  "status_at_recording": "waiting for South Central after disconnection; 64 cases complete",
+  "status_at_recording": "Resuming after source reboot; 65 completed cases retained",
   "startup_attempts": [
     {
       "run_root": "/datadrive/maxshed30-20260915",
@@ -79,6 +79,11 @@
       "same_frozen_workload_pack": true,
       "replacement_case": "/datadrive/maxshed30-20260915-a1/arms/m2/scenarios/46fd928fba038050",
       "archived_original_error": "RuntimeError: remote sink exited"
+    },
+    {
+      "reason": "Source reboot interrupted attempt before result checkpoint; user authorized retries",
+      "same_frozen_workload_pack": true,
+      "replacement_case": "/datadrive/maxshed30-20260915-a1/arms/m2/scenarios/46fd928fba038050"
     }
   ]
 }
