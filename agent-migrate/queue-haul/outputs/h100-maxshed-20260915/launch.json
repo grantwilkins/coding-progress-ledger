@@ -1,6 +1,6 @@
 {
   "run_root": "/datadrive/maxshed30-20260915-a1",
-  "process_pid": 4346,
+  "process_pid": 4299,
   "execution": "nonpersistent background timeout 8h",
   "cases_per_model": 25,
   "deadline_s": 30,
@@ -33,6 +33,12 @@
       "process_pid": 4745,
       "completed_qwen_before_resume": 12,
       "run_root": "/datadrive/maxshed30-20260915-a1"
+    },
+    {
+      "reason": "Source Spot preemption at 2026-09-16 04:14:21 GMT during preparation before result checkpoint",
+      "archive": "/datadrive/maxshed30-20260915-a1/authorized-interruption-retries/m0/09a28a1d051a0511-preempt-20260916T041421",
+      "completed_total": 43,
+      "wall_ns": 1789532447977366989
     }
   ],
   "interruption_retries": [
