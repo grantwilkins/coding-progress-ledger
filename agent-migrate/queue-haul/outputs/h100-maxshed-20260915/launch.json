@@ -1,6 +1,6 @@
 {
   "run_root": "/datadrive/maxshed30-20260915-a1",
-  "process_pid": 31221,
+  "process_pid": 4745,
   "execution": "nonpersistent background timeout 8h",
   "cases_per_model": 25,
   "deadline_s": 30,
@@ -17,7 +17,7 @@
     "southeastasia": "10.15.0.4",
     "southcentralus": "10.13.0.4"
   },
-  "status_at_recording": "restarted; startup pending",
+  "status_at_recording": "resumed after preemption; completed results retained",
   "startup_attempts": [
     {
       "run_root": "/datadrive/maxshed30-20260915",
@@ -26,5 +26,13 @@
     }
   ],
   "host_l1_gib": 33,
-  "memory_note": "Qwen compact destination states for eight 32256-token histories require 16.844 GiB; full source exports require 62.781 GiB and retain the existing 80 GiB Redis backing store. Actual cache hits and transferred bytes remain gated."
+  "memory_note": "Qwen compact destination states for eight 32256-token histories require 16.844 GiB; full source exports require 62.781 GiB and retain the existing 80 GiB Redis backing store. Actual cache hits and transferred bytes remain gated.",
+  "resumptions": [
+    {
+      "reason": "Source Azure Spot Preempt NotBefore 2026-09-16 00:49:57 GMT; source and South Central subsequently rebooted; terminated verified orphan SEA worker22986",
+      "process_pid": 4745,
+      "completed_qwen_before_resume": 12,
+      "run_root": "/datadrive/maxshed30-20260915-a1"
+    }
+  ]
 }
