@@ -1,0 +1,62 @@
+{
+  "deadline_s": 30,
+  "models": {
+    "Qwen": {
+      "completed_cases": 25,
+      "selected_actions": {
+        "hold": 88,
+        "kv_transfer": 58,
+        "replay": 54
+      },
+      "cases_all_selected_first_token_by_30s": 21,
+      "cases_all_selected_full128_by_30s": 8,
+      "first_token_actions_by_30s": {
+        "kv_transfer": 54,
+        "replay": 54
+      },
+      "full128_actions_by_30s": {
+        "kv_transfer": 28,
+        "replay": 45
+      }
+    },
+    "Gemma": {
+      "completed_cases": 25,
+      "selected_actions": {
+        "hold": 0,
+        "replay": 200
+      },
+      "cases_all_selected_first_token_by_30s": 25,
+      "cases_all_selected_full128_by_30s": 25,
+      "first_token_actions_by_30s": {
+        "replay": 200
+      },
+      "full128_actions_by_30s": {
+        "replay": 200
+      }
+    },
+    "GPT": {
+      "completed_cases": 25,
+      "selected_actions": {
+        "hold": 0,
+        "kv_transfer": 157,
+        "replay": 43
+      },
+      "cases_all_selected_first_token_by_30s": 23,
+      "cases_all_selected_full128_by_30s": 22,
+      "first_token_actions_by_30s": {
+        "kv_transfer": 154,
+        "replay": 43
+      },
+      "full128_actions_by_30s": {
+        "kv_transfer": 153,
+        "replay": 43
+      }
+    }
+  },
+  "archived_interrupted_attempts": 6,
+  "definitions": {
+    "first_token": "First observed destination token relative to simultaneous migration release; not full128 verification completion",
+    "full128": "Complete 128-token verification response relative to migration release"
+  },
+  "scope": "25 matched packs/model; archived interrupted attempts excluded from final25 and preserved in completed-run.tar.gz. Source shed remains modeled."
+}

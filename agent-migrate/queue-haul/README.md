@@ -4287,3 +4287,15 @@ unselected histories as holds. It does not force a full evacuation.
 `sample_episodes.csv` distinguishes chosen actions from requests completed by
 the deadline; `sample_action_mix.json` and its plots report per-pack action
 distributions, excluding failed executions. Source shed values remain modeled.
+
+The corrected [75-case H100 campaign](outputs/h100-maxshed-20260915/sample_action_mix.json)
+is complete: 25 measured cases per model. The
+[deadline summary](outputs/h100-maxshed-20260915/measured_deadline_summary.json)
+separates first destination token from full 128-token verification. First-token
+attainment was 108/112 selected requests for Qwen, 200/200 for Gemma, and 197/200
+for GPT; full verification attainment was 73/112, 200/200, and 196/200. Six
+interrupted attempts across four cases were archived and rerun, preserving the
+same workload packs. Raw archives and their SHA-256 manifest are in the same
+directory, including the initial startup failure. Action choices can be
+equal-shed optima; these data do not establish uniquely fastest actions or
+measured power savings.

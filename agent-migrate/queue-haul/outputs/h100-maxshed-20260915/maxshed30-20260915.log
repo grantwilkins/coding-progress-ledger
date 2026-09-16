@@ -1,0 +1,35 @@
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+[32;20m[2026-09-15 22:57:46,944] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/datadrive/qh0912/.venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-09-15 22:57:46,976] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-09-15 22:57:49,250] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-15 22:57:49,250] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-09-15 22:57:49,304] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-09-15 22:58:09,701] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+Welcome to Microsoft Azure Linux 3.0 (x86_64)
+Traceback (most recent call last):
+  File "/datadrive/qh0912/queue-haul/network_campaign.py", line 5493, in <module>
+    main()
+  File "/datadrive/qh0912/queue-haul/network_campaign.py", line 5444, in main
+    print(json.dumps(run_campaign(
+                     ^^^^^^^^^^^^^
+  File "/datadrive/qh0912/queue-haul/network_campaign.py", line 5183, in run_campaign
+    stack = start_cluster(
+            ^^^^^^^^^^^^^^
+  File "/datadrive/qh0912/queue-haul/network_campaign.py", line 1667, in start_cluster
+    reports = _wait_remote_ready(remote, testbed.health_timeout())
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/datadrive/qh0912/queue-haul/network_campaign.py", line 1556, in _wait_remote_ready
+    raise RuntimeError(f"remote sink closed readiness stream: {pending[fd]}")
+RuntimeError: remote sink closed readiness stream: east
+Traceback (most recent call last):
+  File "/datadrive/qh0912/queue-haul/model_hardware_drain_campaign.py", line 675, in <module>
+    main()
+  File "/datadrive/qh0912/queue-haul/model_hardware_drain_campaign.py", line 665, in main
+    result = run(args.command.split("-")[0].upper(), profiles, args.cluster,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/datadrive/qh0912/queue-haul/model_hardware_drain_campaign.py", line 339, in run
+    subprocess.run([
+  File "/home/azureuser/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/datadrive/qh0912/.venv/bin/python', '/datadrive/qh0912/queue-haul/network_campaign.py', 'run', '--cluster', '/datadrive/qh0912/queue-haul/azure_network_cluster_southeastasia_southcentral.json', '--current-calibration', '/datadrive/c12.json', '--plan', '/datadrive/maxshed30-20260915/plans/m0.json', '--run-root', '/datadrive/maxshed30-20260915/arms/m0', '--ssh-key', '/home/azureuser/.ssh/azrs', '--stack-block', '0']' returned non-zero exit status 1.
